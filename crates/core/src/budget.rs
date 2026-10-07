@@ -22,6 +22,24 @@ pub fn used_percent(consumed: i64, budget: i64) -> Option<u8> {
     })
 }
 
+/// Sum allocated scopes only: a blank allowance excludes its consumption,
+/// whereas an explicit zero still consumes budget. Overflow stays unavailable.
+pub fn allocated_totals(
+    scopes: impl IntoIterator<Item = (Option<i64>, i64)>,
+) -> (Option<i64>, Option<i64>) {
+    let mut has_allocation = false;
+    let mut budget = Some(0_i64);
+    let mut consumed = Some(0_i64);
+    for (allowance, used) in scopes {
+        if let Some(allowance) = allowance {
+            has_allocation = true;
+            budget = budget.and_then(|total| total.checked_add(allowance));
+            consumed = consumed.and_then(|total| total.checked_add(used));
+        }
+    }
+    (budget.filter(|_| has_allocation), consumed)
+}
+
 /// The effective bands: the configured warning percentages plus the implicit
 /// over-budget line, positive-only, sorted and de-duplicated.
 fn effective_bands(thresholds: &[i32]) -> Vec<i32> {
@@ -89,6 +107,40 @@ mod tests {
     use super::*;
 
     const BANDS: &[i32] = &[80, 100];
+
+    #[test]
+    fn allocated_totals_exclude_blank_but_include_zero_allowances() {
+        assert_eq!(
+            allocated_totals([(Some(60), 30), (None, 120)]),
+            (Some(60), Some(30))
+        );
+        assert_eq!(
+            allocated_totals([(Some(60), 30), (Some(0), 120)]),
+            (Some(60), Some(150))
+        );
+        assert_eq!(allocated_totals([(None, 120)]), (None, Some(0)));
+        assert_eq!(allocated_totals([]), (None, Some(0)));
+    }
+
+    #[test]
+    fn allocated_totals_do_not_hide_individual_overruns_or_recover_overflow_as_zero() {
+        assert_eq!(
+            allocated_totals([(Some(60), 120), (Some(180), 0)]),
+            (Some(240), Some(120))
+        );
+        assert_eq!(
+            allocated_totals([(Some(i64::MAX), 0), (Some(1), 0), (Some(0), 0)]),
+            (None, Some(0))
+        );
+        assert_eq!(
+            allocated_totals([(Some(0), i64::MAX), (Some(0), 1), (Some(0), 0)]),
+            (Some(0), None)
+        );
+        assert_eq!(
+            allocated_totals([(Some(i64::MAX), i64::MAX), (None, i64::MAX)]),
+            (Some(i64::MAX), Some(i64::MAX))
+        );
+    }
 
     #[test]
     fn display_percentage_rounds_clamps_and_never_overflows() {

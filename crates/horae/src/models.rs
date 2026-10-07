@@ -28,8 +28,10 @@ pub use invoice::InvoiceLine;
 pub use invoice::{Invoice, InvoiceWithLines};
 pub use jobs::{JobStatus, RetryAvailability};
 pub use organization::OrgBranding;
+#[cfg(any(feature = "server", test))]
+pub use project::ProjectBudgetProgress;
 pub use project::{
-    Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink, ProjectTaskRate,
+    Project, ProjectBudgetOverview, ProjectDetails, ProjectTagLink, ProjectTaskRate,
 };
 pub use task::Task;
 pub use time_entry::TimeEntry;
@@ -41,7 +43,8 @@ pub use user::User;
 pub struct ProjectSpend {
     pub project_id: uuid::Uuid,
     pub spent_minutes: i64,
-    pub spent_cents: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spent_cents: Option<i64>,
 }
 
 // ── Report DTOs ─────────────────────────────────────────────────────────────

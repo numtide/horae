@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.project_id, l.tag_id, t.name\n        FROM project_tag_links l\n        JOIN project_tags t ON t.id = l.tag_id AND t.org_id = l.org_id\n        JOIN projects p ON p.id = l.project_id AND p.org_id = l.org_id\n        LEFT JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id\n        LEFT JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id AND a.user_id = $2\n        LEFT JOIN project_management_assignments management ON management.org_id = p.org_id\n          AND management.project_id = p.id AND management.manager_id = $2\n        LEFT JOIN assignments member ON member.project_id = p.id AND member.user_id = $2\n        LEFT JOIN project_settings settings ON settings.project_id = p.id AND settings.org_id = p.org_id\n        WHERE l.org_id = $1 AND ($3 OR c.id IS NOT NULL)\n          AND CASE WHEN $3 THEN COALESCE(a.can_view_progress, false)\n          ELSE $4 OR ($5 AND management.id IS NOT NULL)\n            OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members') = 'project_members') END\n        ORDER BY lower(t.name), t.id, l.project_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "tag_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "347500e7d03331b5851ae92fa114228f16fd9b4854d6fa2590f39f8333d2df67"
+}

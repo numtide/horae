@@ -24,6 +24,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
   let holdBudget = false;
   let releaseBudget;
   let fixtureProject;
+  let fixtureClient;
+  let requester;
   page.on('pageerror', error => errors.push(error.message));
   try {
     await page.goto(`${base}/auth/login`);
@@ -45,21 +47,21 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
         if (budgetFails) return route.abort();
         return route.fulfill({ json: budgetRows });
       }
-      if (path.startsWith('/api/list_clients')) {
+      if (path.startsWith('/api/get_project_overview')) {
         const response = await route.fetch();
-        const clients = await response.json();
-        assert.ok(clients.length, 'The test instance must contain seeded clients');
-        return route.fulfill({ response, json: [...clients, { ...clients[0],
-          id: '01950000-0000-7000-8000-000000000999', name: 'No projects client', active: true }] });
-      }
-      if (path.startsWith('/api/list_projects')) {
-        const response = await route.fetch();
-        const projects = await response.json();
+        const overview = await response.json();
+        const projects = overview.projects.map(row => row.project);
         assert.ok(projects.length, 'The test instance must contain seeded projects');
+        requester = overview.requester;
+        fixtureClient = overview.projects[0].client;
         fixtureProject = { ...projects[0], id: '01950000-0000-7000-8000-000000000005',
           name: 'Design budget project', code: null, active: true, budget_kind: 'amount',
           budget_amount_cents: 10000, currency: 'EUR' };
-        return route.fulfill({ response, json: empty ? [] : [fixtureProject] });
+        return route.fulfill({ response, json: {
+          ...overview, can_create: role !== 'member', can_import: role === 'admin',
+          can_change_legacy_status: role !== 'member',
+          projects: empty ? [] : [{ project: fixtureProject, client: fixtureClient, can_edit: role !== 'member' }],
+        } });
       }
       if (path.startsWith('/api/get_me')) {
         const response = await route.fetch();
@@ -70,7 +72,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     async function visit() {
       // Finish body decoding before replacing the document (Dioxus 0.7).
       await page.waitForLoadState('networkidle');
-      const ready = page.waitForResponse(r => r.url().includes('/api/list_projects') && r.status() === 200);
+      const ready = page.waitForResponse(r => r.url().includes('/api/get_project_overview') && r.status() === 200);
       const [response] = await Promise.all([ready, page.goto(`${base}/projects`)]);
       await response.finished();
     }
@@ -105,7 +107,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
     await expect(page.getByRole('button', { name: /^Active projects/ })).toBeVisible();
     await page.getByRole('button', { name: /^All clients/ }).click();
-    await page.getByRole('listbox').getByRole('button', { name: 'No projects client', exact: true }).click();
+    await page.getByRole('listbox').getByRole('button', { name: fixtureClient.name, exact: true }).click();
+    await page.getByRole('textbox', { name: 'Search by project or client' }).fill('no matching project');
     await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
     await expect(page.getByRole('button', { name: /^All clients/ })).toBeVisible();
     await expect(page.locator('.proj-row')).toHaveCount(1);
@@ -169,9 +172,10 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await page.locator('.np-footer').getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.getByRole('button', { name: 'Export', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Export projects' });
-    await expect(dialog.getByRole('link', { name: 'Export projects' })).toHaveAttribute('href', '/api/projects/export/csv?scope=active');
+    const binding = `&expected_org_id=${requester.org_id}&expected_user_id=${requester.user_id}`;
+    await expect(dialog.getByRole('link', { name: 'Export projects' })).toHaveAttribute('href', `/api/projects/export/csv?scope=active${binding}`);
     await dialog.getByRole('button', { name: 'Excel', exact: true }).click();
-    await expect(dialog.getByRole('link', { name: 'Export projects' })).toHaveAttribute('href', '/api/projects/export/xlsx?scope=active');
+    await expect(dialog.getByRole('link', { name: 'Export projects' })).toHaveAttribute('href', `/api/projects/export/xlsx?scope=active${binding}`);
     await page.keyboard.press('Escape');
     await expect(dialog).not.toBeVisible();
     await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeFocused();
@@ -204,7 +208,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
       scope: 'project', label: null, kind: 'amount', currency: 'EUR',
       period_key: '2026-09', budget: 10000, consumed: 2500,
     };
-    budgetRows = [configuredBudget];
+    budgetRows = [{ ...configuredBudget, breakdown: [configuredBudget] }];
     holdBudget = true;
     await visit();
     await expect(page.getByRole('status')).toHaveText('Loading project progress…');
@@ -220,10 +224,11 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     await expect(page.locator('[aria-label="Recurring budget"]')).toHaveCount(1);
     console.log('PASS: configured monthly consumption replaces lifetime spend only after loading');
 
-    budgetRows = [
+    const taskBudgets = [
       { ...configuredBudget, scope: 'task', task_id: '01950000-0000-7000-8000-000000000010', label: 'Development', budget: 6000, consumed: 8000 },
       { ...configuredBudget, scope: 'task', task_id: '01950000-0000-7000-8000-000000000011', label: 'Review', budget: 4000, consumed: 0 },
     ];
+    budgetRows = [{ ...configuredBudget, scope: 'task', consumed: 8000, breakdown: taskBudgets }];
     await visit();
     await expect(progress).toHaveAttribute('value', '80');
     const breakdown = page.locator('.proj-row details');

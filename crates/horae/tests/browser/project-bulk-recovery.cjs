@@ -8,7 +8,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
   try {
-    for (const scenario of ['success', 'pending', 'failure']) {
+    for (const scenario of ['success', 'pending', 'pending-navigation', 'failure']) {
       const context = await browser.newContext();
       const page = await context.newPage();
       const errors = [];
@@ -31,17 +31,18 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
             await route.abort();
             throw new Error(`Unexpected mutation: ${path}`);
           }
-          if (path.startsWith('/api/list_projects')) {
+          if (path.startsWith('/api/get_project_overview')) {
+            const overview = await (await route.fetch()).json();
             if (!fixtures) {
-              const projects = await (await route.fetch()).json();
+              const projects = overview.projects.map(row => row.project);
               assert.ok(projects.length);
               fixtures = [1, 2].map(i => ({ ...projects[0],
                 id: `01950000-0000-7000-8000-${String(i).padStart(12, '0')}`,
                 name: `Recovery project ${i}`, code: null, active: true }));
             }
             if (saved && failRefresh) return route.abort();
-            if (saved && scenario === 'pending') await new Promise(resolve => { release = resolve; });
-            return route.fulfill({ json: fixtures });
+            if (saved && scenario.startsWith('pending')) await new Promise(resolve => { release = resolve; });
+            return route.fulfill({ json: { ...overview, projects: fixtures.map(project => ({ ...overview.projects[0], project })) } });
           }
           return route.continue();
         });
@@ -58,25 +59,33 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
         await dialog.getByRole('button', { name: 'Archive projects', exact: true }).focus();
         await page.keyboard.press('Enter');
         await expect(dialog).not.toBeVisible();
-        await expect(page.getByRole('status')).toContainText('Archived 2 projects');
-        await expect(scope).toBeFocused();
-        await expect(trigger).toBeDisabled();
-        if (scenario === 'pending') {
+        await expect(page.getByRole('status').filter({ hasText: 'Archived 2 projects' })).toBeVisible();
+        if (scenario.startsWith('pending')) {
           await expect.poll(() => !!release).toBe(true);
           await expect(page.getByText('Loading projects…', { exact: true })).toBeVisible();
           await expect(page.getByRole('checkbox')).toHaveCount(0);
           await expect(page.locator('.proj-row')).toHaveCount(0);
+          await expect(scope).toHaveCount(0);
+          await expect(page.locator('#project-list-heading')).toBeFocused();
+          if (scenario === 'pending-navigation') await page.getByRole('link', { name: 'Timesheet', exact: true }).focus();
           release();
         }
         if (scenario === 'failure') {
-          const alert = page.getByRole('alert').filter({ hasText: 'Could not load projects' });
+          const alert = page.getByRole('alert').filter({ hasText: 'Project access is unavailable' });
           await expect(alert).toBeVisible();
           await expect(page.getByRole('checkbox')).toHaveCount(0);
+          await expect(page.locator('.proj-row')).toHaveCount(0);
+          await expect(page.locator('#projects-retry-access')).toBeFocused();
           failRefresh = false;
-          await alert.getByRole('button', { name: 'Retry', exact: true }).click();
+          await page.getByRole('button', { name: 'Retry access', exact: true }).click();
           await expect(alert).not.toBeVisible();
+        }
+        if (scenario === 'pending-navigation') {
+          await expect(page.getByRole('link', { name: 'Timesheet', exact: true })).toBeFocused();
+        } else {
           await expect(scope).toBeFocused();
         }
+        await expect(trigger).toBeDisabled();
         await expect(scope).toContainText('Active projects (0)');
         await expect(page.locator('.proj-row')).toHaveCount(0);
         await scope.click();

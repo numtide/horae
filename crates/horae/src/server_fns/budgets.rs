@@ -1,8 +1,14 @@
 //! Configured budgets, separate from the legacy lifetime plugin bands.
 
 use chrono::NaiveDate;
+use horae_core::permissions::catalog::Permission;
+use horae_core::types::BudgetKind;
 use sqlx::PgConnection;
 use uuid::Uuid;
+
+use super::{ServerFnError, server_err};
+use crate::models::permissions::PersonPermissions;
+use crate::models::{ProjectBudgetOverview, ProjectBudgetProgress};
 
 /// Atomically record each reached scope/period/threshold/recipient and its
 /// pending outbox delivery. No private rates or addresses enter the payload.
@@ -140,7 +146,7 @@ pub(super) async fn configured_progress(
     date: NaiveDate,
 ) -> Result<Vec<BudgetProgress>, sqlx::Error> {
     Ok(
-        fetch_progress(connection, org_id, Some(project_id), None, date)
+        fetch_progress(connection, org_id, Some(project_id), None, date, None)
             .await?
             .into_iter()
             .filter(|row| row.kind != horae_core::types::BudgetKind::None)
@@ -160,12 +166,91 @@ pub(super) async fn configured_progress(
 /// Batch overview projection. Authorization is checked against the current
 /// database actor, not a role cached in the session or supplied by the caller.
 pub(super) async fn progress_for_viewer(
-    connection: &mut PgConnection,
+    pool: &sqlx::PgPool,
     org_id: Uuid,
     viewer_id: Uuid,
     date: NaiveDate,
-) -> Result<Vec<crate::models::ProjectBudgetProgress>, sqlx::Error> {
-    fetch_progress(connection, org_id, None, Some(viewer_id), date).await
+) -> Result<Vec<ProjectBudgetOverview>, ServerFnError> {
+    let Some(mut access) =
+        super::projects::read_access::ReadAccess::begin(pool, org_id, viewer_id).await?
+    else {
+        return Ok(Vec::new());
+    };
+    let rows = fetch_progress(
+        &mut access.tx,
+        org_id,
+        None,
+        Some(viewer_id),
+        date,
+        access.permissions.as_ref(),
+    )
+    .await
+    .map_err(server_err)?;
+    let mut grouped = std::collections::BTreeMap::<_, Vec<_>>::new();
+    for row in rows {
+        grouped.entry(row.project_id).or_default().push(row);
+    }
+    let mut overview = Vec::with_capacity(grouped.len());
+    for (project_id, rows) in grouped {
+        let Some(first) = rows.first() else { continue };
+        let visible = first.kind != BudgetKind::Amount || first.can_view_money;
+        let (budget, consumed) = if !visible {
+            (None, None)
+        } else if first.scope == "project" {
+            (first.budget, Some(first.consumed))
+        } else {
+            horae_core::budget::allocated_totals(rows.iter().map(|row| (row.budget, row.consumed)))
+        };
+        let mut project = ProjectBudgetOverview {
+            project_id,
+            scope: first.scope.clone(),
+            kind: first.kind,
+            currency: first.currency.clone(),
+            period_key: first.period_key.clone(),
+            budget,
+            consumed,
+            breakdown: Vec::new(),
+        };
+        project.breakdown = rows
+            .into_iter()
+            .filter(|row| {
+                visible
+                    && (row.can_read_details
+                        || row.scope == "project"
+                        || (row.scope == "person" && row.user_id == Some(viewer_id)))
+            })
+            .map(|row| ProjectBudgetProgress {
+                project_id: row.project_id,
+                task_id: row.task_id,
+                user_id: row.user_id,
+                scope: row.scope,
+                label: row.label,
+                kind: row.kind,
+                currency: row.currency,
+                period_key: row.period_key,
+                budget: row.budget,
+                consumed: row.consumed,
+            })
+            .collect();
+        overview.push(project);
+    }
+    access.tx.commit().await.map_err(server_err)?;
+    Ok(overview)
+}
+
+struct BudgetRow {
+    project_id: Uuid,
+    task_id: Option<Uuid>,
+    user_id: Option<Uuid>,
+    label: Option<String>,
+    scope: String,
+    kind: BudgetKind,
+    currency: String,
+    period_key: String,
+    budget: Option<i64>,
+    consumed: i64,
+    can_view_money: bool,
+    can_read_details: bool,
 }
 
 async fn fetch_progress(
@@ -174,22 +259,30 @@ async fn fetch_progress(
     project_id: Option<Uuid>,
     viewer_id: Option<Uuid>,
     date: NaiveDate,
-) -> Result<Vec<crate::models::ProjectBudgetProgress>, sqlx::Error> {
-    use crate::models::ProjectBudgetProgress;
-    use horae_core::types::BudgetKind;
+    permissions: Option<&PersonPermissions>,
+) -> Result<Vec<BudgetRow>, sqlx::Error> {
+    let has = |permission| permissions.is_some_and(|state| state.grants.contains(permission));
 
     sqlx::query_as!(
-        ProjectBudgetProgress,
+        BudgetRow,
         r#"WITH config AS (
              SELECT p.id, p.budget_kind, p.budget_minutes, p.budget_amount_cents,
                     p.project_type, p.currency, p.rate_cents, p.client_id,
-                    ps.budget_scope, ps.monthly_reset, ps.include_nonbillable, ps.rate_mode
+                    ps.budget_scope, ps.monthly_reset, ps.include_nonbillable, ps.rate_mode,
+                    ($4::uuid IS NULL OR $5 OR $6 OR ($7 AND management.id IS NOT NULL)) AS can_read_details,
+                    ($4::uuid IS NULL OR $5 OR $8 OR ($9 AND management.id IS NOT NULL)) AS can_view_money
              FROM projects p JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id = p.org_id
+             JOIN clients parent ON parent.id=p.client_id AND parent.org_id=p.org_id
+             LEFT JOIN project_management_assignments management ON management.org_id=p.org_id
+               AND management.project_id=p.id AND management.manager_id=$4
+             LEFT JOIN assignments member ON member.project_id=p.id AND member.user_id=$4
              WHERE p.org_id = $1 AND ($2::uuid IS NULL OR p.id = $2)
-               AND ($4::uuid IS NULL OR EXISTS (
+               AND ($4::uuid IS NULL OR CASE WHEN $5 THEN EXISTS (
                  SELECT 1 FROM project_read_access access
                  WHERE access.org_id = p.org_id AND access.project_id = p.id
-                   AND access.user_id = $4 AND access.can_view_progress))
+                   AND access.user_id = $4 AND access.can_view_progress)
+                 ELSE $6 OR ($7 AND management.id IS NOT NULL)
+                   OR (member.id IS NOT NULL AND ps.report_visibility='project_members') END)
            ), scopes AS (
              SELECT c.id AS project_id, NULL::uuid AS task_id, NULL::uuid AS user_id,
                     NULL::text AS label,
@@ -212,11 +305,12 @@ async fn fetch_progress(
              SELECT c.id AS project_id, te.task_id, te.user_id,
                     CASE WHEN c.budget_kind = 'hours'
                       THEN effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)::bigint
-                      ELSE COALESCE(line.amount_cents, line_amount_cents(
+                      WHEN c.can_view_money THEN COALESCE(line.amount_cents, line_amount_cents(
                         COALESCE(resolve_project_rate(c.rate_mode, pt.rate_cents, a.rate_cents, c.rate_cents,
                           CASE WHEN c.currency = o.default_currency THEN u.billable_rate_cents END,
                           CASE WHEN c.currency = cl.currency THEN cl.default_rate_cents END), 0),
                         effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)))
+                      ELSE 0
                     END AS consumed
              FROM config c JOIN time_entries te ON te.project_id = c.id AND te.org_id = $1
              JOIN organizations o ON o.id = te.org_id
@@ -225,16 +319,20 @@ async fn fetch_progress(
              JOIN tasks t ON t.id = te.task_id AND t.org_id = te.org_id
              LEFT JOIN project_tasks pt ON pt.project_id = c.id AND pt.task_id = te.task_id
              LEFT JOIN assignments a ON a.project_id = c.id AND a.user_id = te.user_id
-             LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
+             LEFT JOIN invoices invoice ON invoice.id=te.invoice_id AND invoice.org_id=te.org_id
+             LEFT JOIN invoice_line_items line ON line.invoice_id = invoice.id AND line.time_entry_id = te.id
              WHERE c.budget_kind <> 'none' AND (NOT c.monthly_reset OR (
                       te.spent_date >= date_trunc('month', $3::date)::date
                       AND te.spent_date < (date_trunc('month', $3::date) + interval '1 month')::date))
+               AND (te.invoice_id IS NULL OR invoice.id IS NOT NULL)
                AND (c.include_nonbillable OR c.project_type = 'non_billable'
                     OR (te.billable AND (te.invoice_id IS NOT NULL OR COALESCE(pt.billable, t.billable_default))))
            )
            SELECT c.id AS "project_id!", s.task_id AS "task_id?", s.user_id AS "user_id?",
                   s.label AS "label?", c.budget_scope AS "scope!", c.currency AS "currency!",
-                  c.budget_kind AS "kind!: BudgetKind", s.budget AS "budget?",
+                  c.budget_kind AS "kind!: BudgetKind",
+                  CASE WHEN c.budget_kind <> 'amount' OR c.can_view_money THEN s.budget END AS "budget?",
+                  c.can_view_money AS "can_view_money!", c.can_read_details AS "can_read_details!",
                   CASE WHEN c.monthly_reset THEN to_char($3::date, 'YYYY-MM') ELSE 'lifetime' END AS "period_key!",
                   COALESCE(SUM(e.consumed), 0)::bigint AS "consumed!"
            FROM config c LEFT JOIN scopes s ON s.project_id = c.id
@@ -242,12 +340,17 @@ async fn fetch_progress(
                              AND (s.task_id IS NULL OR e.task_id = s.task_id)
                              AND (s.user_id IS NULL OR e.user_id = s.user_id)
            GROUP BY c.id, c.budget_kind, c.budget_scope, c.currency, c.monthly_reset,
-                    s.task_id, s.user_id, s.label, s.budget
+                    s.task_id, s.user_id, s.label, s.budget, c.can_view_money, c.can_read_details
            ORDER BY c.id, s.label, s.task_id, s.user_id"#,
         org_id,
         project_id,
         date as NaiveDate,
         viewer_id,
+        permissions.is_none(),
+        has(Permission::ProjectReadAll),
+        has(Permission::ProjectReadManaged),
+        has(Permission::BillableRateReadAll),
+        has(Permission::BillableRateReadManaged),
     )
     .fetch_all(connection)
     .await
