@@ -383,7 +383,7 @@ Clients documents are separate and are not silently included in #248.
 | `7f14e4b` | Limit user directory responses to consumed fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `1eb13ec` | Add scoped people directory reads | people-directory | Reader, DTO, session endpoint, seven DB tests and canonical HTTP assertions extracted in draft #253; original cache descriptors preserved, verification pending. Specification owned by #248; legacy HTTP assertions remain with #240 |
 | `981d0e3` | Resolve approval names without directory access | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
-| `6b5dbae` | Authorize identity-only project team choices | project-team-choices | Held in original backup; extraction pending |
+| `6b5dbae` | Authorize identity-only project team choices | project-team-choices | DTO, reader, endpoint, nine DB tests, HTTP tests and ten SQLx descriptors extracted unchanged in draft #254 on #253; formatting/static cache inventory passed, execution pending; specification owned by #248 |
 | `4c00660` | Document project form permission integration boundaries | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `3bb62ac` | Limit session identity responses to display fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `4ac30fa` | Add scoped time-entry reads without financial metadata | time-readers | Held in original backup; extraction pending |
@@ -427,7 +427,7 @@ Clients documents are separate and are not silently included in #248.
 | `2b59b58` | Stream grouped time reports with scoped authorization | time-report-exports | Held in original backup; extraction pending |
 | `ecac66b` | Add scoped individual time reports and nested breakdowns | time-report-consumer | Held in original backup; extraction pending |
 | `de8f9ad` | Filter time reports to active projects | time-report-consumer | Held in original backup; extraction pending |
-| `2497dbe` | Enforce scoped permissions in the project editor | project-editor-permissions | Pure RateEdit code/tests in #221; composable delegation and its transaction tests in `be787ca`; project editor and remaining hunks retained |
+| `2497dbe` | Enforce scoped permissions in the project editor | project-editor-permissions | Pure RateEdit code/tests in #221; composable delegation and its transaction tests in `be787ca`; picker reader now #254 retains its historical web lint expectations, whose removal stays with this pending project editor/UI consumer; remaining hunks retained |
 | `2631186` | Enforce scoped project reads across pages and exports | project-read-permissions | Held in original backup; extraction pending |
 | `1b81680` | Record project permission delivery acceptance | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `f6e8bf1` | Enforce task catalog and tracking read permissions | task-permissions-lifecycle | Held in original backup; extraction pending |
@@ -3659,3 +3659,50 @@ remain required. Next collect both live gates, resolve only demonstrated
 extraction failures, then continue the project-team reader/editor UI groups.
 Original #212 still has its same 18 unpublished paths untouched; #208/#217 and
 all original backups remain preserved. No extraction PR merge or closure.
+
+### Project-team identity reader extracted on the shared cursor prerequisite
+
+Previous iteration was progress: #253 was published with its source ownership,
+preservation proof and a demonstrated cache-dependency fix. Current #253 head
+`3a37538` now PASSES strict server/core Clippy and live SQLx cache checking in
+session `18891`; 189 core tests passed, application tests are still compiling.
+Session `46207` on #250 `c727bc8` remains live: package server/WASM and Clippy
+passed, browser suite is progressing. Neither full gate has finished.
+
+Revalidated #216 MERGED before creating `.worktrees/project-people-picker`,
+branch `feat/project-people-picker`, from #253 `3a37538`. Unsigned/pushed head
+`f498c3f93254cf87dc026b0e0a10c8bd4713d141` is draft PR #254, based on #253 for
+the existing `PeopleCursor` type and inherited permission foundations. It does
+not require editor API #250 or legacy projection #240. No new abstraction was
+introduced just to remove that existing dependency.
+
+The four complete original DTO/reader/DB-test/HTTP-test files are byte-identical
+to source commit `6b5dbae`; exact comparison of its complete session endpoint
+also passes. Adaptations are only module registration and test wiring beside
+already extracted modules. Ten original SQLx descriptors are preserved unchanged.
+The diff is 19 files/1258 additions, with no modifications to legacy operations,
+no UI, no assignment writes, no migrations and no activation. The three DTO
+web-only lint expectations removed by `2497dbe` stay until that original UI
+consumer is extracted; no runtime-content difference is hidden there. Contracts
+and historical specification changes remain owned by #248.
+
+Adversarial source review checked separate create/edit grants, current managed
+project designation, tenant-bound project existence, failure on missing/corrupt
+authority before query validation, active-only candidate filtering, literal
+substring search rather than wildcard expansion, 50-row pages/51-row lookahead,
+100-character search and 500-ID resolution limits, ID/name-only output, session
+requester binding, bounded transactions and cancellation. Original archived
+project behavior is preserved, not reinterpreted. The nine unchanged database
+tests exercise scope, page boundaries, foreign/deleted cursors, unconfigured
+candidates, revocation/deactivation waits, authority held through materialization
+and cancellation/pool-default restoration. Original HTTP tests retain forged
+authority, unauthenticated/denied callers, safe errors and resolution checks.
+Source review is not a substitute for execution or full integration.
+
+Formatting `66398` PASSED with zero changes. A read-only inventory matched all
+47 SQL macro invocations in the new reader/DB/HTTP files to exact cached query
+strings, with zero missing descriptors; this is not a compile/schema test.
+Runtime, server/WASM and full Nix gates for #254 have not started yet, while
+the two existing verification sessions remain live. Next collect #250/#253,
+then run #254's gates and cross-PR compositions before moving to the retained
+time-reader/editor/UI blocks. No merge or closure was requested or performed.
