@@ -155,7 +155,8 @@ Clients MVP as canonical-permission acceptance.
 | Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `4b2c87d`; parent browser corrections propagated with exact expected tree. Full native76300 passed on this head. ARM, wider review, task lifecycle and catalog-management UI remain separate pending work |
 | Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; tests/live-schema SQLx96425 and full native71588 passed. ARM/wider acceptance pending. No lifecycle, catalog UI, later atomic rate creation or activation |
 | Task archive/restore and import preservation, [#276](https://github.com/numtide/horae/pull/276) | `feat/scoped-task-lifecycle`, `.worktrees/scoped-task-lifecycle` | integration/task-lifecycle-prerequisites1955c38 (#275/#269/#258/#223/#224/#231) | Draft at `7e883eb`; tests/live-schema SQLx60667 passed after restoring original descriptor2889c08. Full native95578 running; base full native65768 passed. Catalog/link/UI controls excluded |
-| Existing project-task link authority and currency, [#277](https://github.com/numtide/horae/pull/277) | `feat/scoped-task-links`, `.worktrees/scoped-task-links` | #2767e883eb | Draft at `d1ab522`; original979a594 extracted. Gate23598 passed live-schema SQLx and is executing tests. Full native/ARM gates pending; no UI or activation |
+| Existing project-task link authority and currency, [#277](https://github.com/numtide/horae/pull/277) | `feat/scoped-task-links`, `.worktrees/scoped-task-links` | #2767e883eb | Draft at `d1ab522`; original979a594 extracted. Tests/live-schema SQLx23598 passed. Full native62455 running; ARM pending; no UI or activation |
+| Atomic task creation with an initial rate, [#278](https://github.com/numtide/horae/pull/278) | `feat/atomic-task-creation`, `.worktrees/atomic-task-creation` | #277d1ab522 | Draft at `3d76f99`; original dcadcee backend, tests/cache and legacy caller. Tests/live-schema SQLx63668 running. Catalog UI remains separate |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
 Combine or subdivide only after tracing code and test dependencies. Prefer
@@ -464,7 +465,7 @@ Clients documents are separate and are not silently included in #248.
 | `0591407` | Preserve project task archival across restores and imports | task-permissions-lifecycle | Migration0048, import/checkpoint/lock-order adaptations, editor transport, tracking admission, original tests/descriptors and contract in draft #276924dcbe. Cache correction/fresh gates pending; later UI remains separate |
 | `979a594` | Enforce scoped project task linking and rate currency | task-permissions-lifecycle | Commands, five DB regressions, HTTP matrix, original descriptors and contract extracted in draft #277d1ab522. Live-schema SQLx passed; tests/full gates pending |
 | `5561f14` | Add permission-aware task catalog management | task-consumers | Held in original backup; extraction pending |
-| `dcadcee` | Add atomic task creation to the task catalog | task-consumers | Held in original backup; extraction pending |
+| `dcadcee` | Add atomic task creation to the task catalog | task-consumers | Backend, legacy caller, DB/HTTP tests and descriptors in #2783d76f99; catalog UI/browser/component tests and contract appendix retained for the catalog extraction. Historical progress/quickstart owned by #248/original refs |
 | `8c1bf9b` | Add task archive and restore controls to project editing | task-consumers | Held in original backup; extraction pending |
 | `db3935d` | Filter time reports and downloads by billability | time-report-consumer | DTO/readers and reader tests in #261/#262; export SQL predicates in #263/#264/#266; grouped HTTP route registrations in #266; strict URL transport and original cross-format DB/HTTP fixtures in #267e029a89. UI/browser/component hunks retained for Reports consumer; specification in #248 |
 
@@ -5626,3 +5627,37 @@ still-live #276 body update62777, then start #277's full native gate when the
 current builders release resources. Continue with the original catalog plus
 atomic creation and separate editor controls; never alter a checked worktree
 while its gate is running.
+
+### Atomic task creation and catalog prerequisites — 2026-10-07
+
+The preceding estimate turn yielded new evidence: #277 tests/live-schema SQLx
+23598 finished with exit0, and publication85197 completed with draft #278.
+The current iteration reconfirmed #216 merged at02f7b58 and the original dirty
+worktree unchanged. No GitHub merge, closure, activation or real-data change.
+
+#278 at3d76f9968496ffe38ade1405265f737de15cc39e contains dcadcee's backend,
+legacy caller, DB/HTTP tests and cache. All12 changed-path line sets match the
+selected original delta; all five new descriptors are byte-identical with
+valid query hashes. The replaced insertion descriptor remains in source/parent
+history. Current identity, independent explicit-rate authority, workspace
+currency and optional project authority are checked before an atomic insert;
+events retain committed values while response projection respects rate access.
+No new critical/high finding in the bounded source review. Tests/live-schema
+SQLx63668 is running; full native and ARM acceptance are still pending.
+
+The legacy caller adaptation adds requester loading inside the existing
+AdminUsers form, whereas the original calls that form LegacyAdminUsers after
+#260. Catalog work therefore needs the actual #260 shell/People dependency,
+not a duplicated partial shell. Created integration/task-catalog-prerequisites
+from #278 plus #260f00d8f0. Explicit merge resolutions retain the requester in
+LegacyAdminUsers and the union of both browser registries. This is a local
+verification composition, not a delivery PR or a GitHub merge. The catalog
+worktree will extract5561f14 plus dcadcee's remaining UI and original contract
+appendices on that composition; project activity controls8c1bf9b remain separate.
+
+#276 body update62777 finished successfully. Its tests60667 passed; full95578
+is running. #277 full62455 is running after tests23598 passed. PR descriptions
+were updated successfully in36369 with those exact-head results. Native
+browser progress does not close the ARM import-checkpoint failure or diagnose
+#269's intermittent fixture. Next finish the composition audit, extract the
+catalog, collect existing live gates and continue Clients/shared-hunk accounting.
