@@ -516,6 +516,8 @@ mod project_creation;
 mod project_managers;
 mod projects;
 mod reports;
+#[cfg(feature = "server")]
+pub(crate) mod snapshot;
 mod time_entries;
 mod users;
 

@@ -30,6 +30,9 @@ mod project_managers;
 mod scoped_directory;
 mod scoped_time;
 mod time_reports;
+mod exports;
+mod financial_snapshots;
+mod legacy_readers;
 
 #[cfg(target_os = "linux")]
 mod report_stress;
@@ -128,7 +131,11 @@ impl Api {
                 .iter()
                 .filter(|route| {
                     explicit.map_or_else(
-                        || route.path().contains(&format!("/{name}")),
+                        || {
+                            route.path().split_once(&format!("/{name}")).is_some_and(
+                                |(_, suffix)| suffix.bytes().all(|byte| byte.is_ascii_digit()),
+                            )
+                        },
                         |path| route.path() == path,
                     )
                 })
@@ -204,6 +211,19 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     .await;
     let router = Router::new()
         .register_server_functions()
+        .route("/api/reports/export/xlsx", get(crate::reports::export_xlsx))
+        .route(
+            "/api/projects/export/xlsx",
+            get(crate::reports::export_projects_xlsx),
+        )
+        .route(
+            "/api/invoices/{id}/export/xlsx",
+            get(crate::reports::export_invoice_xlsx),
+        )
+        .route(
+            "/api/invoices/{id}/export/pdf",
+            get(crate::reports::export_invoice_pdf),
+        )
         .route(
             "/api/import/harvest/jobs/{job_id}/errors",
             get(crate::jobs::report::download),
@@ -287,6 +307,9 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     scoped_directory::check(&pool, &api).await;
     scoped_time::check(&pool, &api).await;
     time_reports::check(&pool, &api).await;
+    legacy_readers::check(&pool, &api).await;
+    financial_snapshots::check(&pool, &api).await;
+    exports::check(&pool, &api).await;
     let admin = api.cookie(owner.user_id).await;
     let expired = api.cookie(owner.user_id).await;
     assert_eq!(

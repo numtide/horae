@@ -58,11 +58,7 @@ pub(super) async fn fetch_project_fee_balances(
     if from > to {
         return Err(err(BAD_REQUEST, "Fee period ends before it starts"));
     }
-    let mut tx = pool.begin().await.map_err(server_err)?;
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
-        .execute(&mut *tx)
-        .await
-        .map_err(server_err)?;
+    let mut tx = super::snapshot::manager(pool, org_id, viewer_id).await?;
     let client_id = sqlx::query_scalar!(
         "SELECT p.client_id FROM projects p
          JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id
