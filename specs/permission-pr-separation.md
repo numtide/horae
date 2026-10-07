@@ -128,6 +128,9 @@ implementation remains incomplete. Do not treat
   measurements, plus all auxiliary binaries). Full native flake check79988
   passed on the published head. No Rust assertion or timeout changed, and the CSV failure class is
   not yet considered resolved.
+  Nixbot404 subsequently passed ARM tests and formatting on this exact head:
+  121 core tests,821 server tests and all nine auxiliary binaries passed with
+  an8-thread allocation. Remote VM/full-build acceptance remains pending.
 - Local complete compositiond5c34851 contains both corrections without diagnostic
   logging. Its full gate50229 failed at Clippy: three unused preflight symbols.
   Local compositionf90f60f7 contains #246's function-local lint expectation for this
@@ -8189,3 +8192,32 @@ retain dependency order and compare every resulting tree and review diff.
 Next: collect14504 and402/404; use this verified structural preflight only after
 the candidate's required CI evidence is adequate. Avoid starting another
 repository-wide refresh while that base remains under verification.
+
+### First bounded-runner ARM success — 2026-10-08
+
+The preceding iteration made progress through the75-branch propagation preview
+and published ledgera92c68fd. Confirmed session14504 live and remote402/404
+active, then used timed waits rather than restarting compilation or polling
+all PRs. ARM402 advanced from queued VM checks to building the new guest
+image; it had not yet reached the boot assertions. Its elapsed build time is
+not a new900-second guest-readiness failure.
+
+Nixbot404 now reports checks.aarch64-linux.tests as succeeded. The exact-head
+log records both runners using8 threads,121/121 core tests and821 server tests
+passing with11 existing ignored measurements, followed by all nine auxiliary
+binaries. Four nested child-test summaries are not double-counted. The server
+suite took92.56s; buildPhase6m8s. ARM formatting also succeeded. Evidence is
+captured in `.scratch/nixbot-404-arm-tests-summary.json`, with public log/status
+URLs and the observed head. Updated #285's verification without claiming the
+remaining VM/full-CI result or universal resolution of earlier CSV failures.
+
+Local full composition14504 finished compilation in8m22s and began1489 server
+tests (including the existing11 ignored measurements). The durable CSV
+cancelled-preview, reclaimed-lease and resume-before-EOF cases have passed in
+this wider composition. The full suite and subsequent VM checks are still
+running; source-level framing and rollback corrections remain included.
+No assertion, timeout, branch, dependency or original file was changed.
+
+Next: collect14504 and the402/404 VM results. Keep the propagation preview
+intact and do not publish rewritten extraction heads until their shared base
+has adequate verification. The goal remains active, not complete or blocked.
