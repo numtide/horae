@@ -141,12 +141,12 @@ Clients MVP as canonical-permission acceptance.
 | Scoped detailed time report, [#261](https://github.com/numtide/horae/pull/261) | `feat/scoped-time-report-reader`, `.worktrees/scoped-time-report-reader` | #257 `b30e3cd`, shared time-read admission | Draft at `bf452dd`; final detailed reader,13 original DB tests, reader HTTP/totals assertions and19 original descriptors. Source/provenance/format pass; full native Nix `37229` PASSED; no UI/export/activation |
 | Scoped grouped time report, [#262](https://github.com/numtide/horae/pull/262) | `feat/scoped-time-report-groups`, `.worktrees/scoped-time-report-groups` | #261 `bf452dd`, report contracts/totals and fixture | Draft at `66dbf0b`; final reader and13 DB tests exact; original171-line HTTP fixture and10 original descriptors. Source/provenance/format pass; full native Nix `79456` PASSED,1024 application tests/zero failed/11 inherited ignored plus all remaining gates; no UI/export/activation |
 | Scoped XLSX time exports, [#263](https://github.com/numtide/horae/pull/263) | `feat/scoped-time-xlsx`, `.worktrees/scoped-time-xlsx` | Review base `e8b95cc`, combining #261 and #247 with their existing foundations | Draft at `8cc11c3`; original cbc78a8 materialization/release checks,11 DB tests and HTTP assertions preserved. Final query predicates retained;11 original cache additions/one obsolete descriptor removed. Full native gate48482 PASSED,1064 application tests/zero failed/11 inherited ignored and remaining checks; all ten derivations previously matched clean head. Wider exports/UI composition remains open |
-| Scoped CSV time exports and shared filters, [#264](https://github.com/numtide/horae/pull/264) | `feat/scoped-time-csv`, `.worktrees/scoped-time-csv` | Review base `4e0ed43`, combining #263 and #249 | Draft at `55d362b`; original10 DB tests/five parser tests/two-format HTTP fixture retained; native cursor final predicates, shared XLSX release helpers and17 original descriptors. Source/provenance/format pass; full native gate40286 running; grouped exports/UI/policy binding remain separate |
+| Scoped CSV time exports and shared filters, [#264](https://github.com/numtide/horae/pull/264) | `feat/scoped-time-csv`, `.worktrees/scoped-time-csv` | Review base `4e0ed43`, combining #263 and #249 | Draft at `55d362b`; original10 DB tests/five parser tests/two-format HTTP fixture retained; native cursor final predicates, shared XLSX release helpers and17 original descriptors. Source/provenance/format pass; full native gate40286 PASSED:1095 application tests/zero failed/11 inherited ignored plus all remaining checks; grouped exports/UI/policy binding remain separate |
 | Report access and permission-mode-bound downloads, [#265](https://github.com/numtide/horae/pull/265) | `feat/time-report-access`, `.worktrees/time-report-access` | #26455d362b scoped downloads and shared parser | Draft at `f436a29`;7266abb backend preflight/DTOs and mode binding, original parser/HTTP assertions unchanged; format and source review pass; full native gate1825 running; no UI or activation |
 | Grouped CSV/XLSX time exports, [#266](https://github.com/numtide/horae/pull/266) | `feat/grouped-time-exports`, `.worktrees/grouped-time-exports` | Review base `da493f6` combining #265 and #262 | Draft at `0eec1a4`; original grouped handlers/source/16 DB tests, shared CSV group authorization and18 descriptors; original grouped-filter HTTP fixture retained. Source/format/provenance pass; full native gate40587 running; later URL controls and consumer/browser integration remain open |
 | Time download result filters, [#267](https://github.com/numtide/horae/pull/267) | `feat/time-report-download-filters`, `.worktrees/time-report-download-filters` | #2660eec1a4 and inherited detailed/grouped report/export foundations | Draft at `e029a89`; original active-project/billability URL parser, seven DB tests, strict transport and actual-session fixtures;10 original descriptors. Format/provenance/source review passed; full native gate51012 running; UI/browser filter propagation retained separately |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
-| Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267 `e029a89`, inherited report access/readers and all four export routes | Draft at `810ce57`; original components,15 component tests and538-line isolated Chromium fixture. Format/source/provenance/syntax pass; full native gate50800 running. No CSS/SQL/schema/activation; full T203 remains open |
+| Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267 `e029a89`, inherited report access/readers and all four export routes | Draft at `aef180f`; original components,15 component tests and538-line isolated Chromium fixture. Format/source/provenance/syntax pass; gate50800 failed on two test-only user DTO references; minimal API-matching fix published and new full gate64831 running. No CSS/SQL/schema/activation; full T203 remains open |
 | Cross-PR Reports/Timesheet/People verification only | `integration/reports-permission-check`, `.worktrees/reports-permission-integration` | Combines verified `1a87961` with #268 `810ce57` and its report/export foundations | Local integration merge `b7836d7`, not a delivery PR or GitHub merge. Both HTTP registration sets and all30 unique browser suites retained; dedicated source/test blobs unchanged. Format/syntax/source comparison pass; full native gate25958 running |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -4722,3 +4722,79 @@ record actual outcomes. Continue Project reads/editor, task lifecycle/consumers,
 unpublished Clients preservation and complete hunk accounting; the overall
 separation goal is not complete. Ledger state through #267 was published
 at18489b3 before this iteration. No extraction PR merged or closed.
+
+### Conservation refresh and Project extraction boundaries
+
+Previous iteration was progress: #268 and the wider composition were published.
+Reconfirmed #216 merged at02f7b58; #212db3935d and #217dd141c5 remain open/draft,
+and #20848a4156 remains open and untouched. Original tracked edits still compare
+identically to preserved snapshotd364270; tar comparison of the six original
+untracked files against the private backup also passes.
+
+Read-only conservation audit used the live heads of46 open extraction PRs
+(#219–#268 excluding #229/#230 and the merged build-only #251/#252), plus
+mastered558f6. Compared Git blob IDs against the raw, no-rename9301112..db3935d
+change set:373 non-SQLx paths and867 SQLx paths, including46 removed descriptors.
+Exact final blobs occur in at least one candidate for160 ordinary/tooling files,
+48 specs files and640 surviving SQLx descriptors. Compared with the earlier
+35-PR audit this adds54 ordinary and120 descriptor matches. The158 ordinary,
+seven specs and181 surviving descriptors without a whole-file match still need
+hunk/equivalence ownership; they are not proven lost or absent. These counts
+are conservation evidence, not test completion or a completion percentage.
+Historical cache removals and integration-only branches are not credited as
+delivered exact blobs by this audit.
+
+Project boundary inspection traced2497dbe and2631186 against both the original
+final tree and current extracted code, including the full project-read contract:
+
+- Editor2497dbe: preserve its catalog/protected-field/save transaction, bound
+  form and original tests as an editor responsibility. Existing #254 already
+  carries the delegation/writer foundations; rate evaluator and project
+  management modules compare exactly to the original final blobs even where
+  commit ancestry differs. Do not duplicate those modules or infer a missing
+  dependency solely from ancestry.
+- Reader2631186: keep overview/details/tags/team/spend and configured-budget
+  projections coherent with optional money and the summary/breakdown DTOs.
+  Budget summary must be computed before private-detail filtering, and the
+  trusted alert calculation must retain its unfiltered service semantics.
+- Reader delivery: project CSV/XLSX and compatibility list/count/direct-ID
+  consume the same row/field rules but retain their own bounded release checks.
+  Consumer signature changes must include every caller and component stub,
+  including the two Project-tag adaptations intentionally deferred in #268.
+- Later task activity/canonical catalog work remains separate. The original
+  Project-read fixture at2631186 does not yet register the later406-line task
+  fixture; its final parent changes only that registration and helper visibility.
+  Preserve these later hunks for their task owner rather than silently pulling
+  task lifecycle into the project-reader extraction.
+
+Concrete preservation hazard: replacing project_creation.rs wholesale with
+db3935d would revert master's shared client-profile/default-rate validation to
+the older inline checks. The2497dbe editor patch does not change that function;
+extract its owned hunks and retain master's client validation. No runtime edit
+was made during this inspection.
+
+All six existing full-gate handles remain live. #26440286 has now passed
+1095 application tests, zero failed/11 inherited ignored, and the remaining
+application suites; deployment checks are still running. #2651825 and #26640587
+are building/running tests; #26751012 passed release/Clippy and is in browser;
+#26850800 and composition25958 are building. No restarted or duplicate builds.
+Next extract the existing Project editor on the actual shared foundations,
+collect these terminal outcomes, then finish Project reads/delivery, tasks,
+unpublished Clients classification and complete hunk-level accounting.
+
+During final collection40286 completed successfully on #26455d362b:
+all compatible native checks, including browser, SQLx, Clippy, formatting,
+server/WASM and deployment/OIDC. No pending local gate remains for that head;
+retargeted remote acceptance and wider final composition are still separate.
+
+#26850800 terminated after successful production server/WASM build: Clippy
+found CurrentUser/UserListItem unavailable in its standalone component fixture.
+Those DTOs belong to the identity/directory extractions, not Reports runtime.
+The existing branch APIs both return User. Commit aef180f changes only those
+two test-stub type references to the actual base API; all15 tests/assertions,
+production modules and browser fixture are unchanged. Formatter26328 passed,
+fix pushed, clean-head full64831 launched. Do not credit50800 as a pass.
+The wider b7836d7 composition has the projected DTOs and continues under25958;
+its old test fixture is not silently claimed identical to the corrected #268.
+Reconcile this test-only difference in the next wider composition, preserving
+the actual API types and every assertion. No duplicate live check restarted.
