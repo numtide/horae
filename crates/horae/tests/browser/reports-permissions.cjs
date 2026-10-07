@@ -261,10 +261,12 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
         await openIndividual(dimension, entity);
         await page.locator(`#report-group-${tab}`).click();
         await expect(page.locator(`#report-expand-${row}`)).toHaveAttribute('aria-expanded', 'false');
+        await expect(page.locator(`#report-expand-${row} svg path`)).toHaveAttribute('d', 'M6 4 L10 8 L6 12');
         await page.locator(`#report-expand-${row}`).focus();
         await page.keyboard.press('Enter');
         await expect(page.locator(`#report-expanded-hours-${leaf}`)).toHaveText('503.00');
         await expect(page.locator(`#report-expand-${row}`)).toHaveAttribute('aria-expanded', 'true');
+        await expect(page.locator(`#report-expand-${row} svg path`)).toHaveAttribute('d', 'M4 6 L8 10 L12 6');
         await expect(page.locator(`#report-breakdown-${row}`)).not.toContainText('Private colleague');
         await page.locator(`#report-expanded-hours-${leaf}`).click();
         await expect(page.locator('tbody tr')).toHaveCount(500);
