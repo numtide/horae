@@ -139,8 +139,9 @@ Clients MVP as canonical-permission acceptance.
 | Cross-PR Timesheet/permission verification only | `integration/timesheet-permission-check`, `.worktrees/timesheet-permission-integration` | Combines #240/#241/#250/#253–#262 and inherited foundations | Published at `1a87961`, no delivery PR; all five navigation guards,29 browser suites and both HTTP registries retained.19 navigation/storage tests and formatting passed; current full gate88592 running. Earlier015dcd1 full64407 PASSED but excluded UI/report readers |
 | Cross-PR reader/editor verification only | `integration/permission-readers-editor-check`, `.worktrees/permission-readers-editor-check` | Combines #240 `a19ea63`, #250 `c727bc8`, #253 `3a37538` and #254 `f498c3f` | Published at `7a2d61c`, no delivery PR or merge target; registration conflicts resolved preserving both sides, dedicated source/test blobs unchanged, original combined users module restored exactly. Tests/Clippy/SQLx `24884` and full native Nix `16434` PASSED; exact browser/deployment/OIDC outputs and logs verified after original process terminated. Later #255–#257 not included |
 | Scoped detailed time report, [#261](https://github.com/numtide/horae/pull/261) | `feat/scoped-time-report-reader`, `.worktrees/scoped-time-report-reader` | #257 `b30e3cd`, shared time-read admission | Draft at `bf452dd`; final detailed reader,13 original DB tests, reader HTTP/totals assertions and19 original descriptors. Source/provenance/format pass; full native Nix `37229` PASSED; no UI/export/activation |
-| Scoped grouped time report, [#262](https://github.com/numtide/horae/pull/262) | `feat/scoped-time-report-groups`, `.worktrees/scoped-time-report-groups` | #261 `bf452dd`, report contracts/totals and fixture | Draft at `66dbf0b`; final reader and13 DB tests exact; original171-line HTTP fixture and10 original descriptors. Source/provenance/format pass; full native Nix `79456` running; no UI/export/activation |
+| Scoped grouped time report, [#262](https://github.com/numtide/horae/pull/262) | `feat/scoped-time-report-groups`, `.worktrees/scoped-time-report-groups` | #261 `bf452dd`, report contracts/totals and fixture | Draft at `66dbf0b`; final reader and13 DB tests exact; original171-line HTTP fixture and10 original descriptors. Source/provenance/format pass; full native Nix `79456` PASSED,1024 application tests/zero failed/11 inherited ignored plus all remaining gates; no UI/export/activation |
 | Scoped XLSX time exports, [#263](https://github.com/numtide/horae/pull/263) | `feat/scoped-time-xlsx`, `.worktrees/scoped-time-xlsx` | Review base `e8b95cc`, combining #261 and #247 with their existing foundations | Draft at `8cc11c3`; original cbc78a8 materialization/release checks,11 DB tests and HTTP assertions preserved. Final query predicates retained;11 original cache additions/one obsolete descriptor removed. Format/provenance pass; full native gate48482 running with all ten derivations proven identical to the clean head; CSV/shared filters/groups/UI remain separate |
+| Scoped CSV time exports and shared filters, [#264](https://github.com/numtide/horae/pull/264) | `feat/scoped-time-csv`, `.worktrees/scoped-time-csv` | Review base `4e0ed43`, combining #263 and #249 | Draft at `55d362b`; original10 DB tests/five parser tests/two-format HTTP fixture retained; native cursor final predicates, shared XLSX release helpers and17 original descriptors. Source/provenance/format pass; full native gate40286 running; grouped exports/UI/policy binding remain separate |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -430,8 +431,8 @@ Clients documents are separate and are not silently included in #248.
 | `1b41033` | Record People integration verification and remaining report scope | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `75f13a1` | Add scoped detailed time report reads | time-report-readers | Reader/DTO/endpoint and detailed DB/HTTP assertions in #261 bf452dd; final reader includes totals/filter refinements, grouping separate; specification in #248; full gate pending |
 | `cbc78a8` | Apply scoped permissions to time report spreadsheets | time-report-exports | XLSX reader/release scope,11 unchanged DB tests, HTTP assertions and original snapshot-test adaptation in #2638cc11c3; cache reconciled with final query predicates. Specification preserved in #248; full gate pending |
-| `09bd15f` | Apply scoped permissions to streamed time exports | time-report-exports | Native stored-row decoder in #222; streamed exports and remaining hunks retained |
-| `93aaa68` | Support multi-selection filters in time downloads | time-report-exports | Held in original backup; extraction pending |
+| `09bd15f` | Apply scoped permissions to streamed time exports | time-report-exports | Native stored-row decoder in #222; scoped streaming source/delivery, shared release helpers and10 DB tests/HTTP assertions in #26455d362b; specification in #248 |
+| `93aaa68` | Support multi-selection filters in time downloads | time-report-exports | Shared URL parser, five unit tests and238-line two-format HTTP fixture in #26455d362b; specification in #248 |
 | `a23804f` | Include full-period totals in scoped time reports | time-report-readers | One-statement totals, detailed DB/HTTP pagination assertions and exact cache in #261 bf452dd; specification in #248; full gate pending |
 | `7266abb` | Connect scoped time reports with bound downloads | time-report-consumer | Held in original backup; extraction pending |
 | `41ff137` | Add scoped time report grouping with exact totals | time-report-readers | Grouped reader/contracts,13 final DB tests and original171-line HTTP fixture in #262 66dbf0b; export_filters helper additions stay with exports; specification in #248; full gate pending |
@@ -4505,3 +4506,59 @@ Next collect79456,88592 and48482. Continue09bd15f CSV delivery on the proper
 #249 prerequisite, then shared filters, grouped exports and report consumer;
 retain all deferred original assertions. Projects/tasks, unpublished Clients and
 complete hunk accounting remain required. #212/#217/#208 remain untouched.
+
+### Scoped CSV and shared download filters extracted
+
+Previous turn progressed by publishing #263. This turn #262 gate79456 exited0
+with all compatible native checks passed on66dbf0b:1024 application tests,
+zero failures,11 inherited ignored, remaining suites, browser, SQLx, Clippy,
+format and deployment/OIDC. Its PR body now records the completed evidence.
+Wider combination88592 passed browser and live SQLx and is running application
+tests. XLSX48482 passed release/Clippy and is running browser checks.
+
+Created prerequisite branch/worktree `integration/scoped-time-csv-prerequisites`
+at4e0ed43368fd428538b1f8ee3dc84e6c1c8020c1 from #2638cc11c3 and #24971232dc.
+The sole limits-module conflict retained both time and project registrations;
+automerged HTTP registry retains CSV routes and all reader/XLSX calls. No
+independent base-gate claim. It is a review base, not a delivery merge target.
+
+Draft #26455d362b8aa811a02a9e1f944e2625ab6b52fff0e owns09bd15f and93aaa68's
+CSV delivery and shared URL filters. Source adaptation retains the final193-line
+native cursor, including existing active-project/billability DTO predicates.
+The URL adapter keeps their legacy false/Any defaults; later URL controls,
+expected-policy binding, grouped exports and consumer tests retain other owners.
+Existing #222 native stored-row decoding is reused, not duplicated.
+
+Exact-source comparisons passed for the native cursor,222-line delivery module,
+623-line/10-test DB fixture,149-line/five-test parser fixture and238-line
+CSV/XLSX HTTP filter fixture. Historical HTTP context was adapted only to retain
+#261 full-period totals; no existing pagination, XLSX or legacy assertion removed.
+Shared XLSX authorization helpers match the original09bd15f refactor.
+
+Review covered captured DECLARE authority versus current release authority,
+strict native-state validation before empty sentinels, tenant-qualified parents,
+source reassignment/deletion, exact effective minutes and billability, metadata
+byte limits, pending-context revocation and lock-free capacity waits. Five
+filter dimensions narrow rather than grant authority; malformed/ambiguous keys,
+download cursors, incomplete bindings and switched identities remain denied.
+No new high/critical boundary finding from source review; executable evidence
+for this head remains pending. No UI/schema/dependency/real-data/activation change.
+
+Scoped SQL inventory found47 macros/31 unique queries, with every macro parsed
+and matched to its descriptor.17 absent descriptors were restored byte-for-byte
+fromdb3935d; two obsolete native-cursor descriptors were removed only after
+confirming their SQL no longer appears in remaining Rust sources, recoverable
+from Git. An initial whole-tree heuristic did not handle concatenated macro
+queries; it was not treated as authoritative or used for unrelated deletions.
+The scoped inventory is complete; live SQLx remains the executable gate.
+
+Formatter31607 and whitespace checks passed without edits after staging all
+new files. Commit55d362b is clean and both branches are published. Full native
+Nix gate40286 is running on that exact head; do not claim completion or restart
+without changed evidence. Existing tasks T207–T212 trace this extraction;
+T203, grouped delivery, pickers and financial reporting remain incomplete.
+
+Next collect88592,48482 and40286 without duplicate builds. Extract grouped
+XLSX/CSV and their preserved HTTP assertions, then the Reports consumer on the
+actual reader/export foundations. Continue project/task/Clients extraction and
+complete original-hunk ownership. No extraction merge or closure occurred.
