@@ -8154,3 +8154,38 @@ unfinished work, but required extraction CI/review still prevents completion.
 
 Next: collect14504 and402/404; propagate verified CI prerequisites without
 restarting live jobs, then reconcile readiness against the refreshed heads.
+
+### CI propagation preview without branch rewrites — 2026-10-08
+
+The preceding iteration made progress by publishing the retained-acceptance
+classification at ec38c7b5. Reconfirmed remote402/404 are IN_PROGRESS on the
+same #284/#285 heads. Local composition14504 is still compiling; live rustc
+processes consume CPU, so no timeout or stopped-build inference is warranted.
+
+Inspected the earlier refresh scripts without executing them: their original
+heads, leases, target and recovery namespace are stale. They must not be reused
+blindly. Global rebase.updateRefs remains true; any subsequent rebase must
+explicitly disable it to avoid moving preserved/neighboring refs.
+
+Previewed the candidate CI base15d9ab5b with git merge-tree. The57 code
+extractions compose without conflicts and change only the five expected paths:
+CLI CSV transport/tests, two VM checks and the Rust test runner. A second
+preflight included all18 integration branches currently used as review bases.
+Every one of the75 branches was clean and matched its actual remote ref.
+All75 resulting patches are byte-identical to #282→#285's77 additions/two
+replacements; all57 review diffs remain byte-identical when their corresponding
+bases are updated. No feature hunk, SQLx descriptor, migration or browser
+assertion enters the CI patch. Documentation-only #248/#218 are outside this
+code-refresh preview, and originals #212/#217/#208 are excluded.
+
+Evidence: `.scratch/permission-ci-propagation-preview-20261008.json` records
+each branch, worktree, old/remote head, expected tree, base and review-diff
+comparison. It is a simulation, not an executed rebase, test result or
+authorization to publish without revalidation. Git tree objects were created;
+no refs, worktrees, PR bases or remote branches were changed. Before actual
+propagation, revalidate these heads/leases, preserve fresh recovery refs/bundle,
+retain dependency order and compare every resulting tree and review diff.
+
+Next: collect14504 and402/404; use this verified structural preflight only after
+the candidate's required CI evidence is adequate. Avoid starting another
+repository-wide refresh while that base remains under verification.
