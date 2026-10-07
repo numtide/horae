@@ -75,13 +75,14 @@ fn project_rate_distinguishes_inheritance_zero_and_exact_amounts() {
 #[sqlx::test(migrations = "./migrations")]
 async fn creating_a_project_task_enables_it_with_its_defaults(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
-    let task = create_task_for_project(
+    let (task, _) = create_task_for_project(
         &pool,
         ids.org_id,
         ids.user_id,
         "  Support  ",
         false,
         Some(ids.project_id),
+        &TaskRateEdit::Preserve {},
     )
     .await
     .unwrap();
@@ -109,7 +110,8 @@ async fn failed_project_task_creation_leaves_no_orphan_task(pool: PgPool) {
                 ids.user_id,
                 "Orphan",
                 true,
-                Some(project)
+                Some(project),
+                &TaskRateEdit::Preserve {},
             )
             .await
             .is_err()

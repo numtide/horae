@@ -15,6 +15,210 @@ async fn task_count(pool: &PgPool, org_id: Uuid) -> i64 {
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
+async fn initial_task_rate_requires_global_financial_and_task_authority(pool: PgPool) {
+    for grants in [
+        vec![Permission::TaskWriteAll],
+        vec![Permission::BillableRateWriteAll],
+        vec![Permission::TaskWriteAll, Permission::BillableRateReadAll],
+        vec![
+            Permission::TaskWriteAll,
+            Permission::BillableRateWriteManaged,
+        ],
+        vec![
+            Permission::TaskWriteAll,
+            Permission::ReportProfitabilityRead,
+        ],
+    ] {
+        let (ids, _) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&grants)).await;
+        for rate in [
+            TaskRateEdit::Clear {},
+            TaskRateEdit::Set {
+                amount_cents: 0,
+                currency: "EUR".into(),
+            },
+        ] {
+            let result = create_task_for_project(
+                &pool,
+                ids.org_id,
+                ids.user_id,
+                "Denied rate",
+                true,
+                None,
+                &rate,
+            )
+            .await;
+            assert!(
+                matches!(
+                    result,
+                    Err(ServerFnError::ServerError {
+                        code: FORBIDDEN,
+                        ..
+                    })
+                ),
+                "{grants:?}: {result:?}"
+            );
+            assert_eq!(task_count(&pool, ids.org_id).await, 1);
+        }
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn initial_task_rate_and_project_link_commit_together_with_service_payload(pool: PgPool) {
+    let (ids, _) = fixture(
+        &pool,
+        OrgRole::Member,
+        PermissionSelection::new(&[
+            Permission::TaskWriteAll,
+            Permission::BillableRateWriteAll,
+            Permission::ProjectWriteAll,
+        ]),
+    )
+    .await;
+    sqlx::query!(
+        "UPDATE projects SET currency='EUR' WHERE id=$1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for amount in [0, 12345] {
+        let (task, event) = create_task_for_project(
+            &pool,
+            ids.org_id,
+            ids.user_id,
+            "With initial rate",
+            true,
+            Some(ids.project_id),
+            &TaskRateEdit::Set {
+                amount_cents: amount,
+                currency: " eur ".into(),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(task.default_rate_cents, Some(amount));
+        assert_eq!(event.default_rate_cents, Some(amount));
+        assert_eq!(event.id, task.id);
+        let row = sqlx::query!("SELECT t.default_rate_cents,t.default_rate_currency,pt.rate_cents
+            FROM tasks t JOIN project_tasks pt ON pt.task_id=t.id WHERE t.id=$1 AND pt.project_id=$2",
+            task.id, ids.project_id).fetch_one(&pool).await.unwrap();
+        assert_eq!(
+            (
+                row.default_rate_cents,
+                row.default_rate_currency.as_deref(),
+                row.rate_cents
+            ),
+            (Some(amount), Some("EUR"), Some(amount))
+        );
+    }
+    sqlx::query!(
+        "UPDATE projects SET currency='USD' WHERE id=$1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let result = create_task_for_project(
+        &pool,
+        ids.org_id,
+        ids.user_id,
+        "Incompatible project",
+        true,
+        Some(ids.project_id),
+        &TaskRateEdit::Set {
+            amount_cents: 0,
+            currency: "EUR".into(),
+        },
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(ServerFnError::ServerError { code: CONFLICT, .. })
+    ));
+    assert_eq!(
+        task_count(&pool, ids.org_id).await,
+        3,
+        "The inserted task rolls back with the rejected link"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn initial_task_rate_rechecks_financial_authority_and_currency_after_wait(pool: PgPool) {
+    for change_currency in [false, true] {
+        let (ids, _) = fixture(
+            &pool,
+            OrgRole::Member,
+            PermissionSelection::new(&[Permission::TaskWriteAll, Permission::BillableRateWriteAll]),
+        )
+        .await;
+        let mut hold = pool.begin().await.unwrap();
+        sqlx::query!(
+            "UPDATE organizations SET access_revision=access_revision+1 WHERE id=$1",
+            ids.org_id
+        )
+        .execute(&mut *hold)
+        .await
+        .unwrap();
+        let holder = sqlx::query_scalar!("SELECT pg_backend_pid()")
+            .fetch_one(&mut *hold)
+            .await
+            .unwrap()
+            .unwrap();
+        let pending_pool = pool.clone();
+        let pending = tokio::spawn(async move {
+            create_task_for_project(
+                &pending_pool,
+                ids.org_id,
+                ids.user_id,
+                "Stale creation",
+                true,
+                None,
+                &TaskRateEdit::Set {
+                    amount_cents: 0,
+                    currency: "EUR".into(),
+                },
+            )
+            .await
+        });
+        wait_for_blocked(&pool, holder).await;
+        if change_currency {
+            sqlx::query!(
+                "UPDATE organizations SET default_currency='USD' WHERE id=$1",
+                ids.org_id
+            )
+            .execute(&mut *hold)
+            .await
+            .unwrap();
+        } else {
+            let grants: Vec<String> = serde_json::from_value(
+                serde_json::to_value(PermissionSelection::new(&[Permission::TaskWriteAll]))
+                    .unwrap(),
+            )
+            .unwrap();
+            sqlx::query!(
+                "UPDATE person_permission_states SET grants=$2 WHERE user_id=$1",
+                ids.user_id,
+                &grants
+            )
+            .execute(&mut *hold)
+            .await
+            .unwrap();
+        }
+        hold.commit().await.unwrap();
+        let result = pending.await.unwrap();
+        let expected = if change_currency { CONFLICT } else { FORBIDDEN };
+        assert!(
+            matches!(result, Err(ServerFnError::ServerError {code, ..}) if code == expected),
+            "{result:?}"
+        );
+        assert_eq!(task_count(&pool, ids.org_id).await, 1);
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn linked_task_creation_requires_both_current_grants_and_managed_scope(pool: PgPool) {
     for (project_grant, designated, allowed) in [
         (Permission::ProjectWriteAll, false, true),
@@ -47,10 +251,11 @@ async fn linked_task_creation_requires_both_current_grants_and_managed_scope(poo
             "Scoped task",
             true,
             Some(ids.project_id),
+            &TaskRateEdit::Preserve {},
         )
         .await;
         if allowed {
-            let task = result.unwrap();
+            let (task, _) = result.unwrap();
             let link = sqlx::query!(
                 "SELECT billable,rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2",
                 ids.project_id,
@@ -94,6 +299,7 @@ async fn project_edit_authority_does_not_create_global_tasks(pool: PgPool) {
         "Unauthorized catalog task",
         true,
         Some(ids.project_id),
+        &TaskRateEdit::Preserve {},
     )
     .await;
     assert!(matches!(
@@ -122,13 +328,14 @@ async fn new_task_link_obeys_nonbillable_project_without_changing_catalog_defaul
     .execute(&pool)
     .await
     .unwrap();
-    let task = create_task_for_project(
+    let (task, _) = create_task_for_project(
         &pool,
         ids.org_id,
         ids.user_id,
         "Internal work",
         true,
         Some(ids.project_id),
+        &TaskRateEdit::Preserve {},
     )
     .await
     .unwrap();
@@ -200,6 +407,7 @@ async fn unavailable_project_rolls_back_new_catalog_task(pool: PgPool) {
             "Must roll back",
             true,
             Some(project_id),
+            &TaskRateEdit::Preserve {},
         )
         .await;
         assert!(
@@ -266,6 +474,7 @@ async fn task_creation_fails_closed_for_unavailable_actor_permissions(pool: PgPo
                 "Unavailable actor",
                 true,
                 project_id,
+                &TaskRateEdit::Preserve {},
             )
             .await;
             assert!(
@@ -315,6 +524,7 @@ async fn task_creation_rechecks_revoked_grants_after_organization_wait(pool: PgP
                 "Revoked task",
                 true,
                 linked.then_some(ids.project_id),
+                &TaskRateEdit::Preserve {},
             )
             .await
         });
@@ -386,6 +596,7 @@ async fn task_creation_rechecks_revoked_project_designation_after_wait(pool: PgP
             "Revoked manager task",
             true,
             Some(ids.project_id),
+            &TaskRateEdit::Preserve {},
         )
         .await
     });
@@ -413,13 +624,14 @@ async fn global_task_creation_accepts_current_grant_without_legacy_manager(pool:
         PermissionSelection::new(&[Permission::TaskWriteAll]),
     )
     .await;
-    let task = create_task_for_project(
+    let (task, _) = create_task_for_project(
         &pool,
         ids.org_id,
         ids.user_id,
         "  Canonical task  ",
         true,
         None,
+        &TaskRateEdit::Preserve {},
     )
     .await
     .unwrap();
@@ -432,8 +644,16 @@ async fn global_task_creation_accepts_current_grant_without_legacy_manager(pool:
 #[serial_test::serial]
 async fn global_task_creation_does_not_inherit_legacy_administrator_authority(pool: PgPool) {
     let (ids, _) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
-    let result =
-        create_task_for_project(&pool, ids.org_id, ids.user_id, "Forbidden task", true, None).await;
+    let result = create_task_for_project(
+        &pool,
+        ids.org_id,
+        ids.user_id,
+        "Forbidden task",
+        true,
+        None,
+        &TaskRateEdit::Preserve {},
+    )
+    .await;
     assert!(matches!(
         result,
         Err(ServerFnError::ServerError {
@@ -473,6 +693,7 @@ async fn global_task_creation_rejects_unknown_policy_without_inserting(pool: PgP
         "Unknown-policy task",
         true,
         None,
+        &TaskRateEdit::Preserve {},
     )
     .await;
     assert!(result.is_err());
@@ -501,6 +722,7 @@ async fn task_creation_cannot_link_with_global_task_authority_alone(pool: PgPool
         "Unscoped project task",
         true,
         Some(ids.project_id),
+        &TaskRateEdit::Preserve {},
     )
     .await;
     assert!(matches!(
