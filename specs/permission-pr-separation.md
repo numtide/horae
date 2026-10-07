@@ -5143,3 +5143,7 @@ ARM VM checks, after25m42s. GitHub Flake Check and Format also passed on the
 same head. This supersedes the earlier blocked status: the test-only startup
 correction is now fully verified. The user-authorized normal-queue merge of
 #274 is being requested; confirm its actual merge before rebasing any stack.
+
+#274 merged at11:43:02 UTC as8b3cc2577a3704cad28ee2e02a028fbf52668780.
+Merge-group run37615829882 passed. The authorized branch refresh can now
+proceed; this is not approval to merge any extraction PR.
