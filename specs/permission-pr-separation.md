@@ -3429,3 +3429,26 @@ the old failed queue run remains terminal. #251 still OPEN, mergeCommitnull.
 Next monitor this new group, then confirm actual merge before the no-update-refs
 unsigned Crane rebase/retarget with an exact `587119e` lease. #252's current full
 local/remote evidence does not replace required CI on its eventual master base.
+
+### Read-only preparation while the protected queue runs
+
+Merge-group watcher `90784` remains live for run37559430187 at120s intervals;
+Format passed and Flake Check is pending. No new extraction or application edit
+was started before the two priority build merges. Original #212 remains
+`db3935d` with its same18 unpublished paths; recovery references are preserved.
+
+Dependency inventory of the retained readers: directory `1eb13ec`, project-team
+picker `6b5dbae`, and initial time reader `4ac30fa` all use the storage loader and
+`configure_administration` (already carried by #222/#226) plus
+`PermissionRequester` (already carried by #243 and descendants). The project
+picker additionally imports the directory's `PeopleCursor`; its authorization
+is project-operation scope, not directory access. The directory HTTP test also
+contains legacy identity assertions already owned by #240: preserve those and
+add only the canonical-reader coverage, rather than restoring an older file.
+
+Do not extract final `time_entries.rs` wholesale as the initial reader: its
+later history includes `60f60f9` subject discovery, `5faed76` requester/subject
+binding and `75f13a1` report composition. These are separate dependencies to
+account for. This is source inventory only, not a completed adversarial review
+or newly verified extraction. Continue the protected #251 merge first, then
+rebase/verify/merge #252 before resuming extraction work.
