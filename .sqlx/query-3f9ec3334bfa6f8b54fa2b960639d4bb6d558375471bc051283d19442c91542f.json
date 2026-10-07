@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE project_edit_requests DROP CONSTRAINT reject_form_receipt",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "3f9ec3334bfa6f8b54fa2b960639d4bb6d558375471bc051283d19442c91542f"
+}

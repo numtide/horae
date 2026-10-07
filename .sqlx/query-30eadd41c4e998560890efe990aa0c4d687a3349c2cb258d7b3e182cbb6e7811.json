@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT managed_user_id FROM person_management_assignments\n         WHERE org_id=$1 AND manager_id=$2 AND managed_user_id=ANY($3)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "managed_user_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "30eadd41c4e998560890efe990aa0c4d687a3349c2cb258d7b3e182cbb6e7811"
+}

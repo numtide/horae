@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_task_settings (id,org_id,project_id,task_id,restricted,budget_minutes,budget_cents) VALUES ($1,$2,$3,$4,$5,$6,$7)\n                ON CONFLICT (project_id,task_id) DO UPDATE SET restricted=EXCLUDED.restricted,\n                  budget_minutes=CASE WHEN $8 THEN project_task_settings.budget_minutes ELSE EXCLUDED.budget_minutes END,\n                  budget_cents=CASE WHEN $8 THEN project_task_settings.budget_cents ELSE EXCLUDED.budget_cents END",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Int8",
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0ad8783ae6eff8cc1925ffb22785aedd5095c72f0e3b7a9bad7d482cc5f85dda"
+}

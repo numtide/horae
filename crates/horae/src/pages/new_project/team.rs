@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use crate::models::project_creation::ProtectedProjectField;
 use dioxus::prelude::*;
 use horae_core::money::format_cents_plain;
 use horae_core::project::{BudgetMode, RateMode};
@@ -12,10 +13,10 @@ use crate::components::form::Input;
 use crate::components::icons::NavIcon;
 use crate::components::select_field::SelectField;
 use crate::models::project_creation::{
-    CreationOptions, CreationPerson, CreationSearch, ProjectForm, ProjectFormField,
-    ProjectMemberInput, ReportVisibility, TaskAccess,
+    CreationOptions, CreationPerson, ProjectEditorContext, ProjectFieldAccess, ProjectForm,
+    ProjectFormField, ProjectManagerSelection, ProjectMemberInput, ReportVisibility, TaskAccess,
 };
-use crate::server_fns;
+use crate::models::project_managers::ProjectManager;
 
 use super::FormRow;
 
@@ -42,21 +43,52 @@ pub(super) fn Visibility(mut form: Signal<ProjectForm>, #[props(default)] legacy
 #[component]
 pub(super) fn Team(
     mut form: Signal<ProjectForm>,
+    mut managers: Signal<Option<ProjectManagerSelection>>,
     mut options: Signal<CreationOptions>,
     mut busy: Signal<bool>,
+    #[props(default)] editor_context: Option<ProjectEditorContext>,
+    billable_access: ProjectFieldAccess,
+    cost_access: ProjectFieldAccess,
+    on_edit: EventHandler<ProtectedProjectField>,
+    #[props(default)] retained_managers: Vec<ProjectManager>,
     #[props(default)] inactive_ids: Vec<Uuid>,
     #[props(default)] invalid_field: Option<ProjectFormField>,
     #[props(default)] error_message: Option<String>,
 ) -> Element {
+    // Keep identities after an uncheck or tracking removal so local edits remain reversible.
+    let mut manager_people = use_signal(|| retained_managers);
+    let inactive_for_toggle = inactive_ids.clone();
+    let on_toggle_manager = use_callback(move |id: Uuid| {
+        if busy() {
+            return;
+        }
+        let known = manager_people.peek().iter().any(|person| person.id == id);
+        if inactive_for_toggle.contains(&id) && (!known || managers.peek().is_none()) {
+            return;
+        }
+        if managers.peek().is_some() && !known {
+            let Some(person) = options
+                .peek()
+                .people
+                .iter()
+                .find(|person| person.id == id)
+                .cloned()
+            else {
+                return;
+            };
+            manager_people.write().push(ProjectManager {
+                id,
+                name: person.name,
+                active: true,
+            });
+        }
+        toggle_manager(&mut form.write(), managers.write().as_mut(), id);
+    });
     let query = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
     let mut people = use_resource(move || {
         let query = query();
-        async move {
-            let mut search = CreationSearch::default();
-            search.people.query = query;
-            server_fns::project_creation_options(search).await
-        }
+        async move { super::catalog::people(editor_context, query).await }
     });
     let pending = people.state()() != UseResourceState::Ready;
     let choices = people
@@ -88,7 +120,32 @@ pub(super) fn Team(
                 span { class: "text-xs text-subtle", "{form.read().team.len()} people" }
                 span { class: "text-xs text-label ml-auto", "Check = manages this project" }
             }
-            for member in form.read().team.clone() { MemberRow { key: "{member.user_id}", form, options, id: member.user_id, inactive: inactive_ids.contains(&member.user_id), invalid_field, error_message: error_message.clone() } }
+            for member in form.read().team.clone() {
+                MemberRow {
+                    key: "{member.user_id}", form, options, billable_access, cost_access, on_edit,
+                    id: member.user_id, inactive: inactive_ids.contains(&member.user_id),
+                    manager_editable: !inactive_ids.contains(&member.user_id) || (managers.read().is_some() && manager_people.read().iter().any(|person| person.id == member.user_id)),
+                    on_toggle_manager, invalid_field, error_message: error_message.clone(),
+                }
+            }
+            for person in manager_people.read().iter().filter(|person| !form.read().team.iter().any(|member| member.user_id == person.id)).cloned() {
+                div { key: "{person.id}", class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-b border-light min-w-0",
+                    Checkbox {
+                        id: "np-person-manager-{person.id}",
+                        checked: managers.read().as_ref().is_some_and(|selection| selection.manager_ids.contains(&person.id)),
+                        compact: true, label: "{person.name} manages this project",
+                        onclick: move |_| on_toggle_manager.call(person.id),
+                    }
+                    div { class: "flex items-center gap-4 min-w-0",
+                        Avatar { initials: first_initial(&person.name), size: "project" }
+                        div { class: "min-w-0",
+                            div { class: "text-sm text-strong truncate", title: "{person.name}", "{person.name}" }
+                            div { class: "text-xs text-subtle", "Not on the tracking team" }
+                            if !person.active { div { class: "text-xs text-subtle", "Inactive" } }
+                        }
+                    }
+                }
+            }
             if form.read().team.is_empty() { p { class: "text-sm text-subtle px-5", "No teammates selected yet." } }
             div { class: "px-5 py-3",
                 p { class: "form-hint mt-0",
@@ -109,7 +166,7 @@ pub(super) fn Team(
                                 if let Some(Ok(result)) = &*people.read()
                                     && let Some(person) = result.people.iter().find(|person| person.id == id)
                                 {
-                                    match add_members(&mut form.write(), std::slice::from_ref(person)) {
+                                    match add_members(&mut form.write(), std::slice::from_ref(person), managers.peek().as_ref()) {
                                         Ok(()) => {
                                             if !options.peek().people.iter().any(|existing| existing.id == id) { options.write().people.push(person.clone()); }
                                             error.set(None);
@@ -131,22 +188,14 @@ pub(super) fn Team(
                             }
                         }
                     }
-                    button { r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| {
+                    button { id: "np-add-everyone", r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| {
                         if busy() { return; }
                         busy.set(true);
                         error.set(None);
                         spawn(async move {
                             let result = async {
-                                let mut all = Vec::new();
-                                let mut search = CreationSearch::default();
-                                loop {
-                                    let result = server_fns::project_creation_options(search.clone()).await.map_err(|error| error.to_string())?;
-                                    all.extend(result.people);
-                                    if all.len() > 500 { return Err("A project can have at most 500 people. Select teammates individually.".into()); }
-                                    if !result.more_people { break; }
-                                    search.people.offset += 50;
-                                }
-                                add_members(&mut form.write(), &all).map_err(str::to_string)?;
+                                let all = super::catalog::all_people(editor_context).await.map_err(|error| error.to_string())?;
+                                add_members(&mut form.write(), &all, managers.peek().as_ref()).map_err(str::to_string)?;
                                 let mut catalog = options.write();
                                 for person in all {
                                     if !catalog.people.iter().any(|existing| existing.id == person.id) { catalog.people.push(person); }
@@ -167,8 +216,13 @@ pub(super) fn Team(
 fn MemberRow(
     mut form: Signal<ProjectForm>,
     options: Signal<CreationOptions>,
+    billable_access: ProjectFieldAccess,
+    cost_access: ProjectFieldAccess,
+    on_edit: EventHandler<ProtectedProjectField>,
     id: Uuid,
     #[props(default)] inactive: bool,
+    manager_editable: bool,
+    on_toggle_manager: EventHandler<Uuid>,
     invalid_field: Option<ProjectFormField>,
     error_message: Option<String>,
 ) -> Element {
@@ -206,21 +260,21 @@ fn MemberRow(
         })
         .unwrap_or_else(|| "project currency".into());
     rsx! {
-        fieldset { class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-0 border-b border-light m-0 min-w-0", disabled: inactive,
-            Checkbox { checked: member.manager, compact: true, label: "{name} manages this project", onclick: move |_| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.manager = !member.manager; } } }
+        div { class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-0 border-b border-light m-0 min-w-0",
+            Checkbox { id: "np-person-manager-{id}", checked: member.manager, compact: true, disabled: !manager_editable, label: "{name} manages this project", onclick: move |_| on_toggle_manager.call(id) }
             div { class: "flex items-center gap-4 min-w-0",
                 Avatar { initials: first_initial(&name), size: "project" }
                 div { class: "min-w-0",
                     div { class: "text-sm text-strong truncate", title: "{name}", "{name}" }
-                    if inactive { div { class: "text-xs text-subtle", "Inactive · read only" } }
+                    if inactive { div { class: "text-xs text-subtle", "Inactive · tracking settings read only" } }
                     div { class: "text-xs text-subtle", if member.manager { "Project manager" } else { "Project member" } }
                 }
             }
-            div { class: "np-row-controls flex flex-wrap items-center gap-4 min-w-0",
-                if (form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Person) || form.read().rate_mode == RateMode::Legacy {
-                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-person-rate-{id}",
+            fieldset { class: "np-row-controls flex flex-wrap items-center gap-4 min-w-0 border-0 p-0 m-0", aria_label: "Tracking settings for {name}", disabled: inactive,
+                if billable_access != ProjectFieldAccess::Withheld && ((form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Person) || form.read().rate_mode == RateMode::Legacy) {
+                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-person-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::PersonRate(id)),
                         "bill"
-                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-rate-{id}", label: "Billable rate for {name} ({billing_currency}/h)", value: member.billable_rate,
+                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-rate-{id}", disabled: billable_access != ProjectFieldAccess::Editable, label: "Billable rate for {name} ({billing_currency}/h)", value: member.billable_rate,
                             error_id: (invalid_field == Some(ProjectFormField::PersonRate(id))).then(|| format!("np-person-error-{id}")),
                             placeholder: if org_currency == billing_currency { person.as_ref().and_then(|person| person.billable_rate_cents).map(format_cents_plain).unwrap_or_else(|| "Inherit".into()) } else { "Inherit".into() },
                             oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.billable_rate = event.value(); } }
@@ -228,19 +282,19 @@ fn MemberRow(
                         "{billing_currency}/h"
                     }
                 }
-                if options.read().can_edit_private_settings {
-                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-cost-rate-{id}",
+                if cost_access != ProjectFieldAccess::Withheld {
+                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-cost-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::CostRate(id)),
                         "cost"
-                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-cost-rate-{id}", label: "Cost rate for {name} ({org_currency}/h) · admins only", value: member.cost_rate,
+                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-cost-rate-{id}", disabled: cost_access != ProjectFieldAccess::Editable, label: "Cost rate for {name} ({org_currency}/h)", value: member.cost_rate,
                             error_id: (invalid_field == Some(ProjectFormField::CostRate(id))).then(|| format!("np-person-error-{id}")),
-                            placeholder: person.as_ref().and_then(|person| person.cost_rate_cents).map(format_cents_plain).unwrap_or_else(|| "No rate".into()),
+                            placeholder: person.as_ref().and_then(|person| person.cost_rate_cents).map(format_cents_plain).unwrap_or_else(|| "Inherit".into()),
                             oninput: move |event: FormEvent| { if let Some(member) = form.write().team.iter_mut().find(|member| member.user_id == id) { member.cost_rate = event.value(); } }
                         }
                         "{org_currency}/h"
                     }
                 }
                 if form.read().budget_mode == BudgetMode::HoursPerPerson {
-                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-person-budget-{id}",
+                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-person-budget-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::Budget),
                         "budget"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-budget-{id}", label: "Budget hours for {name}", value: member.budget,
                             error_id: (invalid_field == Some(ProjectFormField::PersonBudget(id))).then(|| format!("np-person-error-{id}")),
@@ -249,7 +303,7 @@ fn MemberRow(
                     }
                 }
             }
-            button { id: "np-person-remove-{id}", r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8 text-label", aria_label: "Remove {name} from project",
+            button { id: "np-person-remove-{id}", r#type: "button", class: "np-row-remove btn btn-ghost p-0 size-8 text-label", disabled: inactive, aria_label: "Remove {name} from project",
                 aria_invalid: (invalid_field == Some(ProjectFormField::Person(id))).then_some("true"),
                 aria_describedby: (invalid_field == Some(ProjectFormField::Person(id))).then(|| format!("np-person-error-{id}")),
                 onclick: move |_| {
@@ -266,7 +320,36 @@ fn MemberRow(
     }
 }
 
-fn add_members(form: &mut ProjectForm, people: &[CreationPerson]) -> Result<(), &'static str> {
+fn toggle_manager(
+    form: &mut ProjectForm,
+    managers: Option<&mut ProjectManagerSelection>,
+    id: Uuid,
+) {
+    let member = form.team.iter_mut().find(|member| member.user_id == id);
+    let selected = if let Some(managers) = managers {
+        let selected = !managers.manager_ids.contains(&id);
+        if selected {
+            managers.manager_ids.push(id);
+            managers.manager_ids.sort_unstable();
+        } else {
+            managers.manager_ids.retain(|manager| *manager != id);
+        }
+        selected
+    } else if let Some(member) = &member {
+        !member.manager
+    } else {
+        return;
+    };
+    if let Some(member) = member {
+        member.manager = selected;
+    }
+}
+
+fn add_members(
+    form: &mut ProjectForm,
+    people: &[CreationPerson],
+    managers: Option<&ProjectManagerSelection>,
+) -> Result<(), &'static str> {
     let mut ids: HashSet<_> = form.team.iter().map(|member| member.user_id).collect();
     let additions: Vec<_> = people
         .iter()
@@ -278,7 +361,7 @@ fn add_members(form: &mut ProjectForm, people: &[CreationPerson]) -> Result<(), 
     form.team
         .extend(additions.into_iter().map(|person| ProjectMemberInput {
             user_id: person.id,
-            manager: false,
+            manager: managers.is_some_and(|selection| selection.manager_ids.contains(&person.id)),
             billable_rate: String::new(),
             cost_rate: String::new(),
             budget: String::new(),
@@ -304,6 +387,81 @@ mod tests {
     use uuid::Uuid;
 
     #[test]
+    fn manager_checkbox_updates_complete_selection_without_dropping_outside_managers() {
+        let person = CreationPerson {
+            id: Uuid::now_v7(),
+            name: "Teammate".into(),
+            billable_rate_cents: None,
+            cost_rate_cents: None,
+        };
+        let outside = Uuid::now_v7();
+        let mut selection = ProjectManagerSelection {
+            expected_access_revision: 12,
+            manager_ids: vec![outside],
+        };
+        let mut form = ProjectForm::default();
+        add_members(&mut form, std::slice::from_ref(&person), Some(&selection)).unwrap();
+        toggle_manager(&mut form, Some(&mut selection), person.id);
+        assert!(form.team[0].manager);
+        assert!(selection.manager_ids.contains(&person.id));
+        assert!(selection.manager_ids.contains(&outside));
+        assert_eq!(selection.manager_ids.len(), 2);
+        toggle_manager(&mut form, Some(&mut selection), person.id);
+        assert!(!form.team[0].manager);
+        assert_eq!(selection.manager_ids, vec![outside]);
+        assert_eq!(selection.expected_access_revision, 12);
+    }
+
+    #[test]
+    fn tracking_removal_and_readdition_keep_independent_manager_intent() {
+        let person = CreationPerson {
+            id: Uuid::now_v7(),
+            name: "Retained manager".into(),
+            billable_rate_cents: None,
+            cost_rate_cents: None,
+        };
+        let mut selection = ProjectManagerSelection {
+            expected_access_revision: 12,
+            manager_ids: vec![person.id],
+        };
+        let mut form = ProjectForm::default();
+        add_members(&mut form, std::slice::from_ref(&person), Some(&selection)).unwrap();
+        assert!(
+            form.team[0].manager,
+            "adding a retained manager must reflect the designation"
+        );
+        remove_member(&mut form, person.id);
+        assert!(form.team.is_empty());
+        assert_eq!(selection.manager_ids, vec![person.id]);
+        add_members(&mut form, std::slice::from_ref(&person), Some(&selection)).unwrap();
+        assert!(form.team[0].manager);
+        toggle_manager(&mut form, Some(&mut selection), person.id);
+        remove_member(&mut form, person.id);
+        add_members(&mut form, &[person], Some(&selection)).unwrap();
+        assert!(
+            !form.team[0].manager,
+            "an explicit uncheck must survive removal and readdition"
+        );
+        assert!(selection.manager_ids.is_empty());
+    }
+
+    #[test]
+    fn legacy_manager_checkbox_needs_no_canonical_selection() {
+        let person = CreationPerson {
+            id: Uuid::now_v7(),
+            name: "Legacy teammate".into(),
+            billable_rate_cents: None,
+            cost_rate_cents: None,
+        };
+        let mut form = ProjectForm::default();
+        add_members(&mut form, std::slice::from_ref(&person), None).unwrap();
+        toggle_manager(&mut form, None, person.id);
+        assert!(form.team[0].manager);
+        toggle_manager(&mut form, None, person.id);
+        assert!(!form.team[0].manager);
+    }
+
+    #[test]
     fn adding_everyone_deduplicates_without_replacing_project_overrides() {
         let person = CreationPerson {
             id: Uuid::now_v7(),
@@ -312,10 +470,10 @@ mod tests {
             cost_rate_cents: None,
         };
         let mut form = ProjectForm::default();
-        add_members(&mut form, &[person.clone(), person.clone()]).unwrap();
+        add_members(&mut form, &[person.clone(), person.clone()], None).unwrap();
         form.team[0].manager = true;
         form.team[0].cost_rate = "0".into();
-        add_members(&mut form, &[person]).unwrap();
+        add_members(&mut form, &[person], None).unwrap();
         assert_eq!(form.team.len(), 1);
         assert!(form.team[0].manager);
         assert_eq!(form.team[0].cost_rate, "0");
@@ -332,7 +490,7 @@ mod tests {
             })
             .collect();
         let mut form = ProjectForm::default();
-        assert!(add_members(&mut form, &people).is_err());
+        assert!(add_members(&mut form, &people, None).is_err());
         assert!(form.team.is_empty());
     }
 
@@ -345,7 +503,7 @@ mod tests {
             cost_rate_cents: None,
         };
         let mut form = ProjectForm::default();
-        add_members(&mut form, std::slice::from_ref(&person)).unwrap();
+        add_members(&mut form, std::slice::from_ref(&person), None).unwrap();
         form.tasks.push(ProjectTaskInput {
             id: Uuid::now_v7(),
             source: TaskSource::New {

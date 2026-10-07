@@ -57,7 +57,13 @@ mod project {
             id: uuid::Uuid::now_v7(),
             project_id: project.id,
             expected_revision: project.revision,
+            expected_requester: project.access.as_ref().map(|access| access.requester),
+            managers: project
+                .access
+                .as_ref()
+                .map(|access| (&access.managers).into()),
             form: project.form,
+            unchanged: Vec::new(),
         }
     }
 

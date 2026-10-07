@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT edit_revision,\n           (SELECT count(*) FROM project_edit_requests WHERE id=$2) as \"receipts!\"\n           FROM projects WHERE id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "edit_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "receipts!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "1a4d37fb2f7715ee75f4b76ee3f8d57ff6abec87618c49861523f75fa0e62cf4"
+}
