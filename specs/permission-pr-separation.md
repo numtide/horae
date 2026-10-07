@@ -111,7 +111,7 @@ implementation remains incomplete. Do not treat
 | Pure rate/management/approval rules, [#221](https://github.com/numtide/horae/pull/221) | `refactor/permission-domain-gates`, `.worktrees/permission-domain-gates` | #219 `ec7ddbd` | Draft at `539316c`; 187 core tests, core Clippy, formatting and full local Flake Check passed; CI required after retargeting |
 | Non-activating permission storage, [#222](https://github.com/numtide/horae/pull/222) | `refactor/permission-storage-foundation`, `.worktrees/permission-storage-foundation` | #219 `ec7ddbd` | Draft at `516b023`; original README ICU/migration note restored; 1,170 source-head tests, SQLx and offline lints passed; final documentation-head format and full local Flake Check `69471` passed; remote checks pending |
 | Legacy import report conversion lock order, [#223](https://github.com/numtide/horae/pull/223) | `fix/import-report-lock-order`, `.worktrees/import-report-lock-order` | `02f7b58` | Draft at `c8f95ac`; 1,125 tests passed, 11 existing ignored; SQLx, offline server/WASM lint format and current-head GitHub Flake Check passed; Nixbot pending |
-| Interrupted import session cleanup, [#224](https://github.com/numtide/horae/pull/224) | `fix/import-session-cleanup`, `.worktrees/import-session-cleanup` | `02f7b58` | Draft at `be57f0e`; 1,123 tests passed, 11 existing ignored; SQLx, offline server/WASM lint format and current-head GitHub Flake Check passed; Nixbot pending |
+| Interrupted import session cleanup, [#224](https://github.com/numtide/horae/pull/224) | `fix/import-session-cleanup`, `.worktrees/import-session-cleanup` | master `8b3cc257` | Draft at `2afe25e3`; original cleanup repair retained, plus bounded synchronization of two aborted-CSV test paths.55 engine tests and format passed on the correction; sole full native71277 running. Earlier checks do not certify this new head |
 | Current authority for organization branding writes, [#225](https://github.com/numtide/horae/pull/225) | `fix/branding-current-authority`, `.worktrees/branding-current-authority` | `02f7b58` | Draft at `f2d6bd4`; full suite, SQLx, offline server/WASM lint format and current-head GitHub Flake Check passed; Nixbot pending |
 | Internal reusable-profile commands, [#226](https://github.com/numtide/horae/pull/226) | `refactor/permission-template-commands`, `.worktrees/permission-template-commands` | #222 `e9695fd` | Draft at `82d15f3`; 1,189 tests, SQLx, offline server/WASM Clippy, format and full local Flake Check passed; CI required after retargeting; no endpoints or activation |
 | Current authority for user creation/role/activity, [#227](https://github.com/numtide/horae/pull/227) | `fix/user-mutation-authority`, `.worktrees/user-mutation-authority` | `02f7b58` | Draft at `142eda1`; 1,127 tests, SQLx, offline server/WASM Clippy, format and current-head GitHub Flake Check passed; Nixbot build pending |
@@ -154,13 +154,13 @@ implementation remains incomplete. Do not treat
 | Grouped CSV/XLSX time exports, [#266](https://github.com/numtide/horae/pull/266) | `feat/grouped-time-exports`, `.worktrees/grouped-time-exports` | Review base `da493f6` combining #265 and #262 | Draft at `0eec1a4`; original grouped handlers/source/16 DB tests, shared CSV group authorization and18 descriptors; original grouped-filter HTTP fixture retained. Source/format/provenance pass; full native gate40587 running; later URL controls and consumer/browser integration remain open |
 | Time download result filters, [#267](https://github.com/numtide/horae/pull/267) | `feat/time-report-download-filters`, `.worktrees/time-report-download-filters` | #2660eec1a4 and inherited detailed/grouped report/export foundations | Draft at `e029a89`; original active-project/billability URL parser, seven DB tests, strict transport and actual-session fixtures;10 original descriptors. Format/provenance/source review passed; full native gate51012 running; UI/browser filter propagation retained separately |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
-| Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267, inherited report access/readers and all four export routes | Draft at `1be11e74`; conservation audit recovered the original disclosure glyphs and added browser path assertions. Format/syntax passed; 31708 failed during disk exhaustion; serial full retry68739 running. No CSS/SQL/schema/activation; full T203 remains open |
+| Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267, inherited report access/readers and all four export routes | Draft at `1be11e74`; original disclosure glyphs and browser path assertions retained. Full native68739 passed at this head, replacing disk-failed31708. ARM Nixbot297 remains red; wider review/full T203 remain open |
 | Cross-PR Reports/Timesheet/People verification only | `integration/reports-permission-check`, `.worktrees/reports-permission-integration` | Combines verified `1a87961` with #268 `810ce57` and its report/export foundations | Local integration merge `b7836d7`, not a delivery PR or GitHub merge. Both HTTP registration sets and all30 unique browser suites retained; dedicated source/test blobs unchanged. Format/syntax/source comparison pass; full native gate25958 running |
-| Scoped project editor, [#269](https://github.com/numtide/horae/pull/269) | `feat/scoped-project-editor`, `.worktrees/scoped-project-editor` | `integration/permission-readers-editor-check` | Draft at `53183702`; restored original obsolete-cache removal; 94084 failed during disk exhaustion; serial retry queued. Five instrumented repetitions passed on the unchanged preceding package, but the earlier lost-acknowledgement failure remains unexplained. No activation |
-| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `0b4fd421`; restored six original cache removals; 25727 failed during disk exhaustion; serial retry queued. Native30162 and Nixbot295, including executed ARM e2e, passed on preceding737aa13a; not acceptance of this new head or a root-cause fix for intermittent266 |
+| Scoped project editor, [#269](https://github.com/numtide/horae/pull/269) | `feat/scoped-project-editor`, `.worktrees/scoped-project-editor` | `integration/permission-readers-editor-check` | Draft at `53183702`; Nixbot301 SQLx/browser/package/lint checks passed on both Linux architectures. Native tests failed on CSV crash-resume Busy; correction in #224 not propagated here. ARM deployment and earlier intermittent lost-acknowledgement diagnosis remain open; no blind native rerun |
+| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `0b4fd421`; Nixbot302 passed all x86 checks and ARM package/browser/lint/tests/SQLx at this head. ARM deployment/OIDC still running when inspected; no duplicate native rerun needed. Earlier295 does not prove a root-cause fix for intermittent266 |
 | Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites` at375e9bd, combining #270 and #267 | Draft at `5beac2e1`; original requester HTTP matrix restored and registered. Nixbot296 passed all listed checks on both Linux architectures at this head; no repeat of disk-failed37940 needed. Wider integration review pending |
-| Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `8b8b0c0b`; restored three original cache removals; 46301 stopped after disk errors; serial retry queued. Older50478/76300 are historical, not new-head acceptance. Latest parent cache removals, ARM and wider integration remain pending |
-| Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `65c4aa23`; restored original count-cache removal; 55108 stopped after disk errors; serial retry queued. Older76300 belongs to4b2c87d. Latest parent cache removals, ARM and wider integration remain pending |
+| Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `8b8b0c0b`; Nixbot303 passed all x86 checks and ARM package/browser/lint/tests/SQLx at this head; no duplicate native rerun needed. Latest parent cache removals, ARM deployment/OIDC and wider integration remain pending |
+| Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `65c4aa23`; Nixbot304 passed all x86 checks and ARM package/browser/lint/tests/SQLx/OIDC at this head; no duplicate native rerun needed. Latest parent cache removals, ARM deployment and wider integration remain pending |
 | Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; tests/live-schema SQLx96425 and full native71588 passed. ARM/wider acceptance pending. No lifecycle, catalog UI, later atomic rate creation or activation |
 | Task archive/restore and import preservation, [#276](https://github.com/numtide/horae/pull/276) | `feat/scoped-task-lifecycle`, `.worktrees/scoped-task-lifecycle` | integration/task-lifecycle-prerequisites1955c38 (#275/#269/#258/#223/#224/#231) | Draft at `7e883eb`; tests/live-schema SQLx60667 and full native95578 passed after restoring original descriptor2889c08. Base full native65768 passed. ARM/wider acceptance pending; catalog/link/UI controls excluded |
 | Existing project-task link authority and currency, [#277](https://github.com/numtide/horae/pull/277) | `feat/scoped-task-links`, `.worktrees/scoped-task-links` | #2767e883eb | Draft at `d1ab522`; original979a594 extracted. Tests/live-schema SQLx23598 and full native62455 passed. ARM/wider acceptance pending; no UI or activation |
@@ -6131,3 +6131,52 @@ Next: collect68739; reuse completed remote gates for the remaining cache heads
 before starting any queued local retry. Resolve the observed failure classes
 without changing product behavior, then propagate verified shared/cache deltas
 and finish registration/composition conservation. PRs remain drafts; no merges.
+
+### CSV cancellation synchronization and recovered native gates — 2026-10-07
+
+Previous iteration made progress: exact-head successes and distinct failure
+logs changed the verification queue; ledgerfc86f304 and #271/#281 descriptions
+were published. Reconfirmed #216 merged before this iteration's change.
+
+68739 finished exit0 on #2681be11e74: complete native flake checks, including
+deployed recovery (98.29s) and OIDC. Nixbot297's ARM failure remains open.
+The #268 description now distinguishes these results instead of claiming a
+running disk-exhausted31708.
+
+Nixbot successful-attribute pages301–304 prove the exact-head results in the
+table above. #270/#272/#273 need no duplicate local native reruns. In301,
+the missing x86 test attribute is a real failure:1044 passed,1 failed when
+`durable_csv_preview_resumes_after_a_crash_without_recounting_rows` retried
+while the cancelled PostgreSQL session still held its import lock. This shares
+the synchronization defect seen in238's non-durable CSV cancellation test.
+
+Published #2242afe25e3 changes only `engine_tests/csv_streaming.rs` (25 added,
+4 removed lines). Both aborted-CSV paths observe the actual import lock before
+one real import retry. The helper waits only on typed Busy and fails on any
+other error. Callers bound the barrier by5s; the existing cancellation test
+keeps barrier plus retry inside its original5s. No checkpoint timeout, original
+assertion, production behavior, SQL macro or migration was changed. Review
+confirmed the probe uses a separate connection and cannot roll back the old
+session or manufacture a successful data import.
+
+Initial narrow98017 and final narrow46685 each exited0:55 engine tests passed,
+4 pre-existing manual scale tests ignored,774 unrelated tests filtered. Final
+run includes both corrected paths and the three original cleanup regressions.
+Cargo formatting86352 and whitespace passed. Full native71277 is now the sole
+local full check, bounded to one job/two cores; this worktree is frozen while
+it runs. These narrow results do not replace its pending full verification or
+claim to fix unrelated checkpoint-timeout/ARM/CLI failures. #224 push57342 and
+updated descriptions for #224/#268/#269/#270/#272/#273 succeeded.
+
+Read-only `merge-tree` preflight for Reports09878591 plus catalog9fcc0a0 found
+four shared-file conflicts: snapshot visibility, HTTP registrations, modal
+resource names and browser suite registrations. Preserve public(crate)
+snapshot access, both registration sets, `get_project_overview` for Projects
+and `load_timesheet_page` for Timesheet. No composition branch was modified.
+Original #212 tracked state still matches its saved snapshot exactly; its18
+dirty paths remain present. No GitHub merges or closures.
+
+Next: collect71277 and ARM302–304 results; propagate the verified #224 barrier
+and cache deletions into the existing dependency/composition chain without
+dropping registrations. Resolve remaining distinct CI failures, then complete
+the cross-stack conservation review and current-head delivery inventory.
