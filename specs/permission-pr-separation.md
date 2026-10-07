@@ -3500,3 +3500,38 @@ updated; automatic protected merge requested with exact final-head matching
 stateOPEN, mergeQueueEntrynull and mergeCommitnull. #252 is not yet merged. Next require current
 remote checks, confirm a genuine queue entry and its result, then actual merge
 before resuming original extraction work. No extraction PR merge authorized.
+
+### Supply the existing signed dependency cache to GitHub CI
+
+Required Crane run37563128636 remained live beyond one hour on `f6f0943`;
+Format44s passed. A normal enqueue attempt (`20445`) was rejected because
+Flake Check was still in progress: no queue entry or bypass. Partial job-log
+download returned BlobNotFound (`68665`), not a terminal build result.
+
+Read-only diagnosis found local Nix already trusts `https://cache.numtide.com`
+and its official public key, while the GitHub workflow did not configure it.
+The key matches [Numtide's published cache](https://cache.numtide.com/index.html).
+Public narinfo confirms both exact dependency outputs (`6264yrq` release,
+`p0fga5r` development) and the previously verified `kqhd2w1` package are present
+with that signing-key identity. This establishes available reusable artifacts,
+not a complete attribution of the old run's duration. No global config changed.
+
+Added eight lines to the two existing install-Nix steps: extra substituter and
+extra trusted public key only. Default caches, signature verification, required
+checks, job permissions and tokens remain unchanged. Formatting (`67880`) and
+pinned-nixpkgs actionlint (`48939`) PASSED. Unsigned/pushed
+`170e52175ad0be9b02159ed16f1ca16273af8b52`; PR now changes seven build/CI files.
+
+Current full local gate `12076` is live; it restores the same release dependency
+artifact and rebuilds the package because the source includes the workflow.
+Current required CI run37568358785 is watched by `90257` at120s; Nixbot138 also
+started. All current-head full-gate results are pending, not inherited passes.
+Cancellation requested for only the verified superseded run37563128636
+(`24771` accepted); watcher `97039` still lives until its terminal result arrives.
+Do not restart or count that old run as passed. Collect its final log when
+available. PR description distinguishes requested cancellation from completion.
+
+Next collect current local/remote gates and old cancellation, inspect actual
+cache reuse in current CI, then use the protected queue after required checks
+pass. Do not retry enqueue while the same check is pending. #251 remains merged;
+#252 and the original split goal remain unfinished.
