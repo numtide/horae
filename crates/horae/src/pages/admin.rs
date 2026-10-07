@@ -7,8 +7,67 @@ use crate::components::table::DataTable;
 use crate::models::{permission_editor::PermissionRequester, task::TaskRateEdit};
 use crate::server_fns;
 
+mod people;
+mod permission_editor;
+
 #[component]
 pub fn AdminUsers() -> Element {
+    let mut own = use_resource(server_fns::get_my_permissions);
+    let mut notice = use_signal(|| None::<String>);
+    let on_saved = use_callback(move |changed: bool| {
+        notice.set(Some(
+            if changed {
+                "Permissions saved."
+            } else {
+                "Permissions are unchanged."
+            }
+            .into(),
+        ));
+        own.restart();
+    });
+    if own.state()() != UseResourceState::Ready {
+        return rsx! { p { role: "status", "Loading people access…" } };
+    }
+    let content = match &*own.read() {
+        Some(Ok(None)) => rsx! {
+            LegacyAdminUsers {}
+            PermissionRecovery { on_saved }
+        },
+        Some(Ok(Some(access)))
+            if access.catalog_version
+                == horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION
+                && (access
+                    .grants
+                    .contains(&horae_core::permissions::catalog::Permission::PeopleReadAll)
+                    || access.grants.contains(
+                        &horae_core::permissions::catalog::Permission::PeopleReadManaged,
+                    )) =>
+        {
+            rsx! {
+                people::CanonicalPeople { can_edit_permissions: access.is_administrator, on_saved }
+            }
+        }
+        _ => rsx! {
+            p { class: "alert alert-danger", role: "alert", "People access is unavailable. Sign in again or retry." }
+            button { r#type: "button", class: "btn btn-secondary", onclick: move |_| own.restart(), "Retry" }
+            PermissionRecovery { on_saved }
+        },
+    };
+    rsx! {
+        if let Some(message) = notice() { p { class: "text-sm text-secondary mb-4", role: "status", "{message}" } }
+        {content}
+    }
+}
+
+/// Retained requests remain recoverable without mounting a directory or selecting a person.
+#[component]
+pub(crate) fn PermissionRecovery(on_saved: EventHandler<bool>) -> Element {
+    let person = use_signal(|| None);
+    rsx! { permission_editor::PermissionEditorDialog { person, on_saved } }
+}
+
+#[component]
+fn LegacyAdminUsers() -> Element {
     let requester = use_resource(server_fns::get_me);
     let mut users = use_resource(|| async move { server_fns::list_users(true).await });
     let tasks = use_resource(|| async move { server_fns::list_tasks().await });

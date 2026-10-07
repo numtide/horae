@@ -14,6 +14,7 @@ use dioxus::prelude::*;
 use dioxus::router::components::HistoryProvider;
 use dioxus_html::SerializedHtmlEventConverter;
 use futures_util::FutureExt;
+use horae_core::permissions::catalog::Permission;
 use horae_core::types::OrgRole;
 use tokio::sync::oneshot;
 
@@ -36,7 +37,11 @@ struct Probe {
     org_requests: Rc<Cell<usize>>,
     panel_mounts: Rc<Cell<usize>>,
     audit: bool,
+    importers: bool,
+    own_error: bool,
+    future_catalog: bool,
     canonical_requests: Rc<Cell<usize>>,
+    canonical: Option<(bool, Vec<Permission>)>,
 }
 
 impl Probe {
@@ -48,7 +53,9 @@ impl Probe {
 }
 
 fn app(probe: Probe) -> Element {
-    let path = if probe.audit {
+    let path = if probe.importers {
+        "/admin/importers"
+    } else if probe.audit {
         "/admin/audit"
     } else {
         "/admin/users"
@@ -127,7 +134,7 @@ async fn failed_user_does_not_mount_admin_content() {
     assert_panel_hidden(&dom, &probe);
     let html = dioxus::ssr::render(&dom);
     assert!(
-        html.contains("Session unavailable"),
+        html.contains("Could not verify workspace access") && !html.contains("Session unavailable"),
         "expected the auth error: {html}"
     );
 }
@@ -145,7 +152,7 @@ async fn members_and_managers_never_mount_admin_content() {
         assert_panel_hidden(&dom, &probe);
         let html = dioxus::ssr::render(&dom);
         assert!(
-            html.contains("Admins only"),
+            html.contains("Access unavailable"),
             "expected access notice: {html}"
         );
         assert!(html.contains("Back to Timesheet"));
@@ -230,6 +237,7 @@ mod server_fns {
     pub struct OwnPermissions {
         pub catalog_version: u32,
         pub is_administrator: bool,
+        pub grants: Vec<Permission>,
     }
 
     pub async fn get_my_permissions() -> Result<Option<OwnPermissions>, ServerFnError> {
@@ -237,6 +245,20 @@ mod server_fns {
         probe
             .canonical_requests
             .set(probe.canonical_requests.get() + 1);
+        if probe.own_error {
+            return Err(ServerFnError::new("private projection error"));
+        }
+        if let Some((is_administrator, grants)) = probe.canonical.clone() {
+            return Ok(Some(OwnPermissions {
+                catalog_version: horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION
+                    + u32::from(probe.future_catalog),
+                is_administrator,
+                grants,
+            }));
+        }
+        if !probe.audit {
+            return Ok(None);
+        }
         let reply = probe
             .responses
             .borrow_mut()
@@ -249,11 +271,15 @@ mod server_fns {
                 Some(OwnPermissions {
                     catalog_version: horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION,
                     is_administrator: user.is_admin(),
+                    grants: vec![],
                 })
             })
     }
 
     pub async fn get_me() -> AuthResponse {
+        if consume_context::<Probe>().audit {
+            return Ok(User(OrgRole::Member));
+        }
         let response = consume_context::<Probe>()
             .responses
             .borrow_mut()
@@ -272,6 +298,13 @@ mod server_fns {
 // Only route argument shapes are needed by the shell; timesheet behavior is
 // outside this access-gate test.
 mod pages {
+    pub mod admin {
+        use dioxus::prelude::*;
+        #[component]
+        pub fn PermissionRecovery(on_saved: EventHandler<bool>) -> Element {
+            rsx! { "Recovery available" }
+        }
+    }
     pub mod timesheet {
         pub type Anchor = String;
         pub type CalSpan = String;
@@ -381,7 +414,7 @@ async fn audit_route_uses_canonical_authority_without_replacing_legacy_page_chec
         .unwrap_or_else(|_| panic!("legacy request dropped"));
     settle(&mut dom);
     assert_panel_hidden(&dom, &probe);
-    assert_eq!(probe.canonical_requests.get(), 0);
+    assert_eq!(probe.canonical_requests.get(), 1);
 }
 
 #[tokio::test]
@@ -399,5 +432,90 @@ async fn audit_gate_hides_internal_authentication_failures() {
     assert_panel_hidden(&dom, &probe);
     let html = dioxus::ssr::render(&dom);
     assert!(!html.contains("private SQL diagnostic"));
-    assert!(html.contains("Could not verify Administrator access"));
+    assert!(html.contains("Could not verify workspace access"));
+}
+
+#[tokio::test]
+async fn canonical_people_does_not_require_a_legacy_admin_role() {
+    for (administrator, grant) in [
+        (true, Permission::PeopleReadAll),
+        (false, Permission::PeopleReadManaged),
+    ] {
+        let probe = Probe {
+            canonical: Some((administrator, vec![grant])),
+            ..Probe::default()
+        };
+        let reply = probe.request();
+        let mut dom = start(&probe);
+        reply
+            .send(Ok(User(OrgRole::Member)))
+            .unwrap_or_else(|_| panic!("identity request dropped"));
+        settle(&mut dom);
+        assert!(dioxus::ssr::render(&dom).contains("Administrative panel"));
+        assert_eq!(probe.panel_mounts.get(), 1);
+    }
+}
+
+#[tokio::test]
+async fn legacy_admin_cannot_bypass_canonical_people_scope() {
+    let probe = Probe {
+        canonical: Some((false, vec![])),
+        ..Probe::default()
+    };
+    let reply = probe.request();
+    let mut dom = start(&probe);
+    reply
+        .send(Ok(User(OrgRole::Admin)))
+        .unwrap_or_else(|_| panic!("identity request dropped"));
+    settle(&mut dom);
+    assert_panel_hidden(&dom, &probe);
+}
+
+#[tokio::test]
+async fn importers_preserves_legacy_authority_when_canonical_projection_fails() {
+    for allowed in [false, true] {
+        let probe = Probe {
+            importers: true,
+            own_error: true,
+            ..Probe::default()
+        };
+        let reply = probe.request();
+        let mut dom = start(&probe);
+        reply
+            .send(Ok(User(if allowed {
+                OrgRole::Admin
+            } else {
+                OrgRole::Member
+            })))
+            .unwrap_or_else(|_| panic!("identity read dropped"));
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert_eq!(html.contains("Importer panel"), allowed);
+        assert!(!html.contains("/admin/users"));
+        assert!(!html.contains("/admin/audit"));
+        assert!(!html.contains("private projection error"));
+    }
+}
+
+#[tokio::test]
+async fn failed_or_future_people_projection_keeps_only_recovery() {
+    for future_catalog in [false, true] {
+        let probe = Probe {
+            own_error: !future_catalog,
+            future_catalog,
+            canonical: Some((true, vec![Permission::PeopleReadAll])),
+            ..Probe::default()
+        };
+        let reply = probe.request();
+        let mut dom = start(&probe);
+        reply
+            .send(Ok(User(OrgRole::Admin)))
+            .unwrap_or_else(|_| panic!("identity read dropped"));
+        settle(&mut dom);
+        assert_panel_hidden(&dom, &probe);
+        let html = dioxus::ssr::render(&dom);
+        assert!(html.contains("Could not verify workspace access"));
+        assert!(html.contains("Recovery available"));
+        assert!(!html.contains("private projection error"));
+    }
 }
