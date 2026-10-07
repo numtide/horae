@@ -3465,3 +3465,13 @@ documented compatibility adaptations. An identical blob is not evidence that
 the combined PRs build or preserve behavior. Keep the final ownership and
 cross-PR integration audit open; do not convert these counts into completion
 percentages. Merge-group watcher `90784` remains live with Flake Check pending.
+
+Queue source identity confirmed: commit `35dc414fa53e43ded274dcb0252c11d44c5d0e74`
+has tree `2546cacc3f025ef82c555b13f86126b459c6c34e`, identical to verified
+`a2b1245`, with parent master `1b8fa4f`. Its Flake Check remains in progress;
+the watcher is live, not a stopped build. Current CI uses pinned Hestia backed
+by GitHub Actions cache; [GitHub's cache isolation rules](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache)
+restrict PR-created caches to their merge ref. This is a possible contributor
+to repeated queue build time, not a measured attribution or reason to weaken
+isolation. No workflow/cache trust changes made. Crane dependency reuse is
+verified locally; its eventual master-base CI timing remains unmeasured.
