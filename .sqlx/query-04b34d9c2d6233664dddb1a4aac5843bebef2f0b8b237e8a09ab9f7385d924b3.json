@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM project_task_settings\n             WHERE org_id=$1 AND project_id=$2 AND budget_cents IS NOT NULL\n               AND (NOT $3 OR NOT(task_id=ANY($4))))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "04b34d9c2d6233664dddb1a4aac5843bebef2f0b8b237e8a09ab9f7385d924b3"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET cost_rate_cents=1750 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ed2e01f8497a88c7ba0fbafd4be2f8ec82fa253869ea716942d365ac01d02bf0"
+}

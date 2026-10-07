@@ -9,7 +9,22 @@ use horae_core::project::{BudgetMode, MonthlyFeeDay, RateMode};
 use uuid::Uuid;
 
 mod associations;
+pub(super) mod catalog;
+mod projection;
+mod protected;
 mod save;
+
+fn apply_manager_flags(
+    form: &mut ProjectForm,
+    managers: &crate::models::project_managers::ProjectManagers,
+) {
+    for member in &mut form.team {
+        member.manager = managers
+            .managers
+            .binary_search_by_key(&member.user_id, |manager| manager.id)
+            .is_ok();
+    }
+}
 
 pub(in crate::server_fns) async fn load_editable_project(
     pool: &sqlx::PgPool,
@@ -24,17 +39,92 @@ pub(in crate::server_fns) async fn load_editable_project(
         .execute(&mut *tx)
         .await
         .map_err(storage_error)?;
-    let role = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
-    let project = load_project_form(&mut tx, org_id, project_id, role).await?;
+    let (role, permissions) = lock_editor_actor(
+        &mut tx,
+        actor_id,
+        org_id,
+        project_id,
+        OrganizationLock::Shared,
+    )
+    .await?;
+    let mut project = load_project_form(
+        &mut tx,
+        org_id,
+        project_id,
+        permissions.is_some() || role == OrgRole::Admin,
+    )
+    .await?;
+    if let Some(permissions) = permissions {
+        projection::redact(&mut tx, org_id, actor_id, &permissions, &mut project).await?;
+    }
     tx.commit().await.map_err(storage_error)?;
     Ok(project)
+}
+
+async fn lock_editor_actor(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    actor_id: Uuid,
+    org_id: Uuid,
+    project_id: Uuid,
+    gate: OrganizationLock,
+) -> Result<
+    (
+        OrgRole,
+        Option<crate::models::permissions::PersonPermissions>,
+    ),
+    ServerFnError,
+> {
+    lock_organization(tx, org_id, gate)
+        .await
+        .map_err(storage_error)?;
+    let role = sqlx::query_scalar!(
+        r#"SELECT org_role as "org_role: OrgRole" FROM users
+           WHERE id = $1 AND org_id = $2 AND active FOR SHARE"#,
+        actor_id,
+        org_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(storage_error)?
+    .ok_or_else(|| forbidden("Current project editing authority is required"))?;
+    let policy = sqlx::query_scalar!(
+        "SELECT permission_policy_version FROM organizations WHERE id=$1",
+        org_id,
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(storage_error)?;
+    let permissions = match policy {
+        0 if role.is_manager_or_above() => None,
+        0 => return Err(forbidden("Manager access required")),
+        1 => {
+            use crate::server_fns::permissions::project_management::{
+                ProjectManagersError, authorize_actor,
+            };
+            Some(
+                authorize_actor(tx, org_id, actor_id, project_id)
+                    .await
+                    .map_err(|error| match error {
+                        ProjectManagersError::Forbidden => {
+                            forbidden("Current project editing authority is required")
+                        }
+                        error => {
+                            tracing::error!(%error, "Unable to authorize project editor");
+                            server_err("Project editor is unavailable")
+                        }
+                    })?,
+            )
+        }
+        _ => return Err(server_err("Project editor is unavailable")),
+    };
+    Ok((role, permissions))
 }
 
 async fn load_project_form(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
     project_id: Uuid,
-    role: OrgRole,
+    include_private_settings: bool,
 ) -> Result<EditableProject, ServerFnError> {
     let project = sqlx::query!(
         r#"SELECT client_id, name, code, currency, active, rate_cents, edit_revision,
@@ -154,7 +244,7 @@ async fn load_project_form(
             discount: format_cents_plain(i64::from(settings.discount_bps)),
         };
     }
-    if role == OrgRole::Admin {
+    if include_private_settings {
         form.admin_notes = sqlx::query_scalar!(
             "SELECT admin_notes FROM project_private_settings WHERE project_id = $1 AND org_id = $2",
             project_id, org_id,
@@ -172,8 +262,8 @@ async fn load_project_form(
     ).fetch_all(&mut **tx).await.map_err(storage_error)?.into_iter().map(|row| MilestoneInput {
         id: row.id, name: row.name, due_on: row.due_on.to_string(), amount: format_cents_plain(row.amount_cents),
     }).collect();
-    form.team = load_members(tx, org_id, project_id, role).await?;
-    form.tasks = load_tasks(tx, org_id, project_id).await?;
+    form.team = load_members(tx, org_id, project_id, include_private_settings).await?;
+    form.tasks = load_tasks(tx, org_id, project_id, budget_mode).await?;
     let client = sqlx::query_as!(CreationClient,
         "SELECT id, name, currency, active, default_rate_cents FROM clients WHERE id = $1 AND org_id = $2",
         project.client_id, org_id,
@@ -209,7 +299,7 @@ async fn load_project_form(
          WHERE a.project_id = $1 AND u.org_id = $2 ORDER BY u.id",
         project_id,
         org_id,
-        role == OrgRole::Admin,
+        include_private_settings,
     )
     .fetch_all(&mut **tx)
     .await
@@ -238,6 +328,7 @@ async fn load_project_form(
         selection: CreationSelection { tasks, people },
         inactive_task_ids,
         inactive_user_ids,
+        access: None,
     })
 }
 
@@ -245,7 +336,7 @@ async fn load_members(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
     project_id: Uuid,
-    role: OrgRole,
+    include_cost_rates: bool,
 ) -> Result<Vec<ProjectMemberInput>, ServerFnError> {
     let rows = sqlx::query!(
         r#"SELECT a.user_id, a.role as "role: ProjectRole", a.rate_cents,
@@ -254,7 +345,7 @@ async fn load_members(
            LEFT JOIN project_member_costs c ON c.project_id = a.project_id AND c.user_id = a.user_id AND c.org_id = $2
            LEFT JOIN project_member_budgets b ON b.project_id = a.project_id AND b.user_id = a.user_id AND b.org_id = $2
            WHERE a.project_id = $1 ORDER BY a.user_id"#,
-        project_id, org_id, role == OrgRole::Admin,
+        project_id, org_id, include_cost_rates,
     ).fetch_all(&mut **tx).await.map_err(storage_error)?;
     Ok(rows
         .into_iter()
@@ -275,6 +366,7 @@ async fn load_tasks(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
     project_id: Uuid,
+    budget_mode: BudgetMode,
 ) -> Result<Vec<ProjectTaskInput>, ServerFnError> {
     let rows = sqlx::query!(
         r#"SELECT pt.task_id, pt.billable, pt.rate_cents, s.restricted as "restricted?", s.budget_minutes, s.budget_cents
@@ -296,11 +388,13 @@ async fn load_tasks(
             },
             billable: row.billable,
             rate: row.rate_cents.map(format_cents_plain).unwrap_or_default(),
-            budget: row
-                .budget_minutes
-                .map(format_hhmm)
-                .or_else(|| row.budget_cents.map(format_cents_plain))
-                .unwrap_or_default(),
+            // A stale monetary setting must not become a visible hours budget.
+            budget: match budget_mode {
+                BudgetMode::HoursPerTask => row.budget_minutes.map(format_hhmm),
+                BudgetMode::FeesPerTask => row.budget_cents.map(format_cents_plain),
+                _ => None,
+            }
+            .unwrap_or_default(),
             access: if row.restricted.unwrap_or(false) {
                 TaskAccess::Restricted {
                     user_ids: access

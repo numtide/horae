@@ -1,3 +1,4 @@
+use crate::models::project_creation::ProtectedProjectField;
 use dioxus::prelude::*;
 use horae_core::money::{format_cents_plain, parse_cents};
 use horae_core::project::{BudgetMode, MonthlyFeeDay, RateMode};
@@ -9,7 +10,7 @@ use crate::components::form::Input;
 use crate::components::icons::NavIcon;
 use crate::components::select_field::SelectField;
 use crate::models::project_creation::{
-    CreationOptions, FeeMode, MilestoneInput, ProjectForm, ProjectFormField,
+    CreationOptions, FeeMode, MilestoneInput, ProjectFieldAccess, ProjectForm, ProjectFormField,
 };
 
 use super::FormRow;
@@ -68,6 +69,8 @@ mod tests {
 pub(super) fn Billing(
     mut form: Signal<ProjectForm>,
     options: Signal<CreationOptions>,
+    billable_access: ProjectFieldAccess,
+    on_edit: EventHandler<ProtectedProjectField>,
     #[props(default)] invalid_field: Option<ProjectFormField>,
     #[props(default)] error_message: Option<String>,
 ) -> Element {
@@ -90,7 +93,7 @@ pub(super) fn Billing(
     let currency_label = currency.unwrap_or_else(|| "Select a currency".into());
     rsx! {
         FormRow { label: "Project type", hint: "How this project bills",
-            fieldset { class: "np-types grid grid-cols-3 gap-3 border-0 p-0 m-0", aria_label: "Project type", disabled: legacy,
+            fieldset { class: "np-types grid grid-cols-3 gap-3 border-0 p-0 m-0", aria_label: "Project type", disabled: legacy || billable_access != ProjectFieldAccess::Editable,
                 for (kind, icon, hint) in [
                     (ProjectType::TimeAndMaterials, "time", "Bill by the hour at your team's billable rates."),
                     (ProjectType::FixedFee, "invoices", "Bill a set fee, in one go or across a schedule."),
@@ -105,7 +108,7 @@ pub(super) fn Billing(
                                 onchange: move |_| {
                                     let mut data = form.write();
                                     data.project_type = kind;
-                                    if data.budget_mode.validate_for(kind).is_err() { data.budget_mode = BudgetMode::None; }
+                                    if data.budget_mode.validate_for(kind).is_err() { on_edit.call(ProtectedProjectField::Budget); data.budget_mode = BudgetMode::None; }
                                 },
                             }
                             span { "data-project-type-icon": icon, aria_hidden: "true",
@@ -123,12 +126,14 @@ pub(super) fn Billing(
             }
             if let Some(message) = error_for(ProjectFormField::ProjectType) { p { id: "np-billing-field-error", class: "text-sm text-danger", "{message}" } }
             div { class: "bg-secondary border rounded-xl p-5 mt-3 flex flex-col gap-5",
+                if billable_access != ProjectFieldAccess::Withheld {
+                fieldset { class: "border-0 p-0 m-0 min-w-0 flex flex-col gap-5", disabled: billable_access != ProjectFieldAccess::Editable,
                 if legacy {
                     div {
                         p { id: "np-rate-mode", class: "text-sm font-semibold m-0", "Existing rate hierarchy" }
                         p { class: "form-hint", "Task override, then person override, then project rate, then profile rate. Empty inherits; zero is an explicit rate." }
                         label { class: "block text-sm mb-2", r#for: "np-project-rate", "Project hourly rate ({currency_label})" }
-                        Input { id: "np-project-rate", error_id: error_id(ProjectFormField::ProjectRate), class: "w-30 max-w-full font-mono text-right", value: form.read().project_rate.clone(), placeholder: "Inherit", oninput: move |event: FormEvent| form.write().project_rate = event.value() }
+                        Input { id: "np-project-rate", error_id: error_id(ProjectFormField::ProjectRate), class: "w-30 max-w-full font-mono text-right", value: form.read().project_rate.clone(), placeholder: "Inherit", oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::ProjectRate); form.write().project_rate = event.value(); } }
                         if let Some(message) = error_for(ProjectFormField::ProjectRate) { p { id: "np-billing-field-error", class: "text-sm text-danger", "{message}" } }
                     }
                 } else if project_type == ProjectType::TimeAndMaterials {
@@ -152,7 +157,7 @@ pub(super) fn Billing(
                                     if mode == RateMode::Project && form.read().rate_mode == mode {
                                         div { class: "flex items-center gap-2 max-w-full",
                                             span { class: "font-mono text-sm text-subtle", "{currency_label}" }
-                                            Input { id: "np-project-rate", error_id: error_id(ProjectFormField::ProjectRate), label: "Hourly rate ({currency_label})", class: "w-30 max-w-full font-mono text-right", value: form.read().project_rate.clone(), oninput: move |event: FormEvent| form.write().project_rate = event.value() }
+                                            Input { id: "np-project-rate", error_id: error_id(ProjectFormField::ProjectRate), label: "Hourly rate ({currency_label})", class: "w-30 max-w-full font-mono text-right", value: form.read().project_rate.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::ProjectRate); form.write().project_rate = event.value(); } }
                                             span { class: "text-xs text-subtle whitespace-nowrap", "/ h" }
                                         }
                                     }
@@ -167,9 +172,13 @@ pub(super) fn Billing(
                     }
                 }
                 if project_type == ProjectType::FixedFee && !legacy {
-                    FeeSchedule { form, currency: currency_label.clone(), invalid_field, error_message: error_message.clone() }
+                    FeeSchedule { form, on_edit, currency: currency_label.clone(), invalid_field, error_message: error_message.clone() }
                 }
-                Budget { form, currency: currency_label, email_available: options.read().email_available, legacy, invalid_field, error_message: error_message.clone() }
+                }
+                } else {
+                    p { class: "form-hint m-0", "Financial settings are restricted. Saving other changes keeps their current values." }
+                }
+                Budget { form, billable_access, on_edit, currency: currency_label, email_available: options.read().email_available, legacy, invalid_field, error_message: error_message.clone() }
                 if project_type == ProjectType::NonBillable {
                     p { class: "text-xs text-subtle m-0", "Internal work, R&D, sales. This project's time is non-billable and cannot be invoiced." }
                 }
@@ -183,12 +192,18 @@ fn Budget(
     mut form: Signal<ProjectForm>,
     currency: String,
     email_available: bool,
+    #[props(default = ProjectFieldAccess::Editable)] billable_access: ProjectFieldAccess,
+    #[props(default)] on_edit: EventHandler<ProtectedProjectField>,
     #[props(default)] legacy: bool,
     invalid_field: Option<ProjectFormField>,
     error_message: Option<String>,
 ) -> Element {
     let error_id = |field| billing_error_id(invalid_field, field);
     let mode = form.read().budget_mode;
+    let monetary = matches!(mode, BudgetMode::TotalFees | BudgetMode::FeesPerTask);
+    if monetary && billable_access == ProjectFieldAccess::Withheld {
+        return rsx! { p { class: "form-hint m-0", "Financial budget settings are restricted and will be kept unchanged." } };
+    }
     let choices: Vec<_> = [
         (BudgetMode::None, "none", "No budget"),
         (BudgetMode::TotalHours, "total_hours", "Total project hours"),
@@ -202,6 +217,11 @@ fn Budget(
         ),
     ]
     .into_iter()
+    .filter(|(candidate, _, _)| {
+        billable_access == ProjectFieldAccess::Editable
+            || *candidate == mode
+            || !matches!(candidate, BudgetMode::TotalFees | BudgetMode::FeesPerTask)
+    })
     .filter(|(mode, _, _)| {
         if legacy {
             matches!(
@@ -228,20 +248,20 @@ fn Budget(
         "Budget hours".into()
     };
     rsx! {
-        div {
+        fieldset { class: "border-0 p-0 m-0 min-w-0", disabled: monetary && billable_access != ProjectFieldAccess::Editable,
             label { class: "block text-xs uppercase tracking-eyebrow text-faint mb-2", r#for: "np-budget-mode", "Budget" }
             div { class: "flex flex-wrap items-center gap-3",
                 div { class: "w-form-select max-w-full",
                     SelectField { id: "np-budget-mode", error_id: error_id(ProjectFormField::BudgetMode), label: "Budget", options: select_options, selected,
                         onselect: move |value: String| {
-                            if let Some((mode, _, _)) = choices.iter().find(|(_, key, _)| *key == value) { form.write().budget_mode = *mode; }
+                            if let Some((mode, _, _)) = choices.iter().find(|(_, key, _)| *key == value) { on_edit.call(ProtectedProjectField::Budget); form.write().budget_mode = *mode; }
                         }
                     }
                 }
                 if matches!(mode, BudgetMode::TotalHours | BudgetMode::TotalFees) {
                     div { class: "flex items-center gap-2 max-w-full",
                         if mode == BudgetMode::TotalFees { span { class: "font-mono text-sm text-subtle", "{currency}" } }
-                        Input { id: "np-budget-value", error_id: error_id(ProjectFormField::BudgetValue), label: amount_label, class: "w-40 max-w-full font-mono text-right", value: form.read().budget_value.clone(), oninput: move |event: FormEvent| form.write().budget_value = event.value() }
+                        Input { id: "np-budget-value", error_id: error_id(ProjectFormField::BudgetValue), label: amount_label, class: "w-40 max-w-full font-mono text-right", value: form.read().budget_value.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::Budget); form.write().budget_value = event.value(); } }
                         span { class: "text-xs text-subtle", if mode == BudgetMode::TotalFees { "total" } else { "hours" } }
                     }
                 }
@@ -258,11 +278,11 @@ fn Budget(
                 div { class: "flex flex-col gap-3 mt-4",
                     div { class: "flex flex-wrap items-center gap-3",
                         Checkbox { id: "np-budget-alert", error_id: error_id(ProjectFormField::BudgetAlert), checked: form.read().budget_alert, label: "Email me and project managers when the budget passes the threshold", disabled: !email_available && !form.read().budget_alert,
-                            onclick: move |_| { let value = !form.read().budget_alert; form.write().budget_alert = value; }
+                            onclick: move |_| { on_edit.call(ProtectedProjectField::Budget); let value = !form.read().budget_alert; form.write().budget_alert = value; }
                         }
                         if form.read().budget_alert {
                             div { class: "flex items-center gap-2",
-                                Input { id: "np-alert-threshold", error_id: error_id(ProjectFormField::BudgetAlertAt), label: "Budget email threshold (%)", class: "w-16 font-mono text-right", disabled: !email_available, value: form.read().budget_alert_at.clone(), oninput: move |event: FormEvent| form.write().budget_alert_at = event.value() }
+                                Input { id: "np-alert-threshold", error_id: error_id(ProjectFormField::BudgetAlertAt), label: "Budget email threshold (%)", class: "w-16 font-mono text-right", disabled: !email_available, value: form.read().budget_alert_at.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::Budget); form.write().budget_alert_at = event.value(); } }
                                 span { class: "text-sm text-subtle", "%" }
                             }
                         }
@@ -271,9 +291,9 @@ fn Budget(
                         if let Some(message) = &error_message { p { id: "np-billing-field-error", class: "text-sm text-danger", "{message}" } }
                     }
                     if !email_available { p { class: "form-hint m-0", "Email delivery is not configured. Ask an administrator to configure it before enabling budget emails." } }
-                    Checkbox { checked: form.read().budget_monthly, label: "Budget resets every month", onclick: move |_| { let value = !form.read().budget_monthly; form.write().budget_monthly = value; } }
+                    Checkbox { checked: form.read().budget_monthly, label: "Budget resets every month", onclick: move |_| { on_edit.call(ProtectedProjectField::Budget); let value = !form.read().budget_monthly; form.write().budget_monthly = value; } }
                     if form.read().project_type != ProjectType::NonBillable {
-                        Checkbox { checked: form.read().budget_nonbillable, label: "Include non-billable time in the budget", onclick: move |_| { let value = !form.read().budget_nonbillable; form.write().budget_nonbillable = value; } }
+                        Checkbox { checked: form.read().budget_nonbillable, label: "Include non-billable time in the budget", onclick: move |_| { on_edit.call(ProtectedProjectField::Budget); let value = !form.read().budget_nonbillable; form.write().budget_nonbillable = value; } }
                     }
                 }
             }
@@ -284,6 +304,7 @@ fn Budget(
 #[component]
 fn FeeSchedule(
     mut form: Signal<ProjectForm>,
+    on_edit: EventHandler<ProtectedProjectField>,
     currency: String,
     invalid_field: Option<ProjectFormField>,
     error_message: Option<String>,
@@ -307,7 +328,7 @@ fn FeeSchedule(
                 div { class: "segmented flex-wrap",
                     for (choice, label) in [(FeeMode::Single, "Single fee"), (FeeMode::Milestones, "Milestones"), (FeeMode::Monthly, "Monthly")] {
                         label { class: if mode == choice { "segmented-item active inline-flex items-center gap-2 cursor-pointer" } else { "segmented-item inline-flex items-center gap-2 cursor-pointer" },
-                            input { r#type: "radio", name: "np-fee-mode", checked: mode == choice, onchange: move |_| form.write().fee_mode = choice }
+                            input { r#type: "radio", name: "np-fee-mode", checked: mode == choice, onchange: move |_| { on_edit.call(ProtectedProjectField::Fees); form.write().fee_mode = choice; } }
                             "{label}"
                         }
                     }
@@ -316,13 +337,13 @@ fn FeeSchedule(
             if mode == FeeMode::Milestones {
                 div { class: "bg-base border border-light rounded-btn mt-4",
                     for milestone in form.read().milestones.clone() {
-                        Milestone { key: "{milestone.id}", form, id: milestone.id, currency: currency.clone(), invalid_field, error_message: error_message.clone() }
+                        Milestone { key: "{milestone.id}", form, on_edit, id: milestone.id, currency: currency.clone(), invalid_field, error_message: error_message.clone() }
                     }
                     div { class: "flex flex-wrap items-center justify-between gap-3 px-3 py-2.5",
                         button { id: "np-add-milestone", class: "btn btn-ghost btn-sm", r#type: "button", disabled: form.read().milestones.len() >= 100,
                             aria_invalid: error_id(ProjectFormField::Milestones).map(|_| "true"),
                             aria_describedby: error_id(ProjectFormField::Milestones),
-                            onclick: move |_| form.write().milestones.push(MilestoneInput { id: Uuid::now_v7(), name: String::new(), due_on: String::new(), amount: String::new() }), "Add milestone"
+                            onclick: move |_| { on_edit.call(ProtectedProjectField::Fees); form.write().milestones.push(MilestoneInput { id: Uuid::now_v7(), name: String::new(), due_on: String::new(), amount: String::new() }); }, "Add milestone"
                         }
                         span { class: "text-xs text-subtle", "Total " span { class: "font-mono text-default", if let Some(total) = total { "{currency} {format_cents_plain(total)}" } else { "Enter valid amounts" } } }
                     }
@@ -331,14 +352,14 @@ fn FeeSchedule(
                 div { class: "flex flex-wrap items-center gap-2 mt-4",
                     div { class: "flex items-center gap-2 max-w-full",
                         span { class: "font-mono text-sm text-subtle", "{currency}" }
-                        Input { id: "np-fee-amount", error_id: error_id(ProjectFormField::FeeAmount), label: "Fee ({currency})", class: "w-50 max-w-full font-mono text-right", value: form.read().fee_amount.clone(), oninput: move |event: FormEvent| form.write().fee_amount = event.value() }
+                        Input { id: "np-fee-amount", error_id: error_id(ProjectFormField::FeeAmount), label: "Fee ({currency})", class: "w-50 max-w-full font-mono text-right", value: form.read().fee_amount.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::Fees); form.write().fee_amount = event.value(); } }
                     }
                     if mode == FeeMode::Monthly {
                         label { class: "text-xs text-subtle", r#for: "np-monthly-day", "per month, available to invoice on" }
                         div { class: "w-50 max-w-full",
                             SelectField { id: "np-monthly-day", label: "Monthly invoice day", options: vec![("first".into(), "1st of the month".into()), ("fifteenth".into(), "15th of the month".into()), ("last".into(), "Last day of the month".into())],
                                 selected: match form.read().monthly_day { MonthlyFeeDay::First => "first", MonthlyFeeDay::Fifteenth => "fifteenth", MonthlyFeeDay::Last => "last" },
-                                onselect: move |value: String| form.write().monthly_day = match value.as_str() { "fifteenth" => MonthlyFeeDay::Fifteenth, "last" => MonthlyFeeDay::Last, _ => MonthlyFeeDay::First }
+                                onselect: move |value: String| { on_edit.call(ProtectedProjectField::Fees); form.write().monthly_day = match value.as_str() { "fifteenth" => MonthlyFeeDay::Fifteenth, "last" => MonthlyFeeDay::Last, _ => MonthlyFeeDay::First }; }
                             }
                         }
                     }
@@ -355,6 +376,7 @@ fn FeeSchedule(
 #[component]
 fn Milestone(
     mut form: Signal<ProjectForm>,
+    on_edit: EventHandler<ProtectedProjectField>,
     id: Uuid,
     currency: String,
     invalid_field: Option<ProjectFormField>,
@@ -374,11 +396,12 @@ fn Milestone(
         return rsx! {};
     };
     rsx! {
-        div { class: "np-milestone-row grid items-center gap-3 px-3 py-2.5 border-b border-light", role: "group", aria_label: if item.name.is_empty() { "New milestone".into() } else { format!("Milestone {}", item.name) },
+        div { class: "np-milestone-row grid items-center gap-3 px-3 py-2.5 border-b border-light", role: "group", aria_label: if item.name.is_empty() { "New milestone".into() } else { format!("Milestone {}", item.name) }, oninput: move |_| on_edit.call(ProtectedProjectField::Fees),
             Input { id: "np-milestone-name-{id}", error_id: error_id(ProjectFormField::MilestoneName(id)), label: "Milestone name", placeholder: "Milestone", class: "min-w-0 px-2.5 py-2", value: item.name.clone(), oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.name = event.value(); } } }
             Input { id: "np-milestone-date-{id}", error_id: error_id(ProjectFormField::MilestoneDate(id)), label: "Due date", class: "min-w-0 px-2.5 py-2 font-mono", kind: "date", value: item.due_on, oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.due_on = event.value(); } } }
             Input { id: "np-milestone-amount-{id}", error_id: error_id(ProjectFormField::MilestoneAmount(id)), label: "Amount ({currency})", placeholder: "0.00", class: "min-w-0 px-2.5 py-2 font-mono text-right", value: item.amount, oninput: move |event: FormEvent| { if let Some(item) = form.write().milestones.iter_mut().find(|item| item.id == id) { item.amount = event.value(); } } }
             button { class: "btn btn-ghost p-0 size-10 text-label", r#type: "button", aria_label: if item.name.is_empty() { "Remove milestone".into() } else { format!("Remove milestone {}", item.name) }, onclick: move |_| {
+                on_edit.call(ProtectedProjectField::Fees);
                 form.write().milestones.retain(|item| item.id != id);
                 document::eval("document.getElementById('np-add-milestone')?.focus()");
             }, "×" }

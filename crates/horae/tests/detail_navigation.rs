@@ -50,6 +50,8 @@ pub mod permission_editor;
 pub mod project;
 #[path = "../src/models/project_creation.rs"]
 pub mod project_creation;
+#[path = "../src/models/project_managers.rs"]
+pub mod project_managers;
 #[path = "../src/pages/projects.rs"]
 mod projects;
 #[path = "../src/models/task.rs"]
@@ -57,7 +59,7 @@ mod task;
 #[path = "../src/models/user.rs"]
 pub mod user;
 mod models {
-    pub use super::{client, invoice, permission_editor, project, project_creation};
+    pub use super::{client, invoice, permission_editor, project, project_creation, project_managers};
     pub use super::{
         client::Client,
         project::{

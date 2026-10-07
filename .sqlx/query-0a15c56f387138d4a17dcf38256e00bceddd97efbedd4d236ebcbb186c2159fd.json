@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_fee_milestones (id,org_id,project_id,position,name,due_on,amount_cents)\n         VALUES ($1,$2,$3,0,'Inactive milestone',DATE '2026-10-05',556677)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a15c56f387138d4a17dcf38256e00bceddd97efbedd4d236ebcbb186c2159fd"
+}

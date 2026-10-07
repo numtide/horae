@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, name, currency, active, NULL::bigint AS default_rate_cents FROM clients\n         WHERE org_id=$1 AND active AND strpos(lower(name), lower($2)) > 0\n         ORDER BY lower(name), id LIMIT 51 OFFSET $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "default_rate_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "aa52a6c69f11ec6b0eb2a905021a7a7adfd8ffd2bc09e069adb6e358b35cf36a"
+}

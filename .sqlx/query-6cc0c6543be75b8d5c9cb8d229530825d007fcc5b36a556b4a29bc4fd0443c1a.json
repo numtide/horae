@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO tasks (id,org_id,name) VALUES ($1,$2,'Équipe %_ 王')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6cc0c6543be75b8d5c9cb8d229530825d007fcc5b36a556b4a29bc4fd0443c1a"
+}

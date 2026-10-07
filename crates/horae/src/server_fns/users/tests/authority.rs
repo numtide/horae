@@ -30,7 +30,13 @@ async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
             id: Uuid::now_v7(),
             project_id: ids.project_id,
             expected_revision: original.revision,
+            expected_requester: original.access.as_ref().map(|access| access.requester),
+            managers: original
+                .access
+                .as_ref()
+                .map(|access| (&access.managers).into()),
             form: original.form,
+            unchanged: Vec::new(),
         };
         request.form.name = "Committed before revocation".into();
         let mut barrier = pool.begin().await.unwrap();

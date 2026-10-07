@@ -30,6 +30,7 @@ mod legacy_readers;
 mod own_permissions;
 mod permission_audit;
 mod permission_editor;
+mod project_editor;
 mod project_managers;
 mod project_people;
 mod project_reads;
@@ -297,6 +298,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     own_permissions::check(&pool, &api).await;
     permission_audit::check(&pool, &api).await;
     project_managers::check(&pool, &api).await;
+    project_editor::check(&pool, &api).await;
     project_people::check(&pool, &api).await;
     project_reads::check(&pool, &api).await;
     task_reads::check(&pool, &api).await;

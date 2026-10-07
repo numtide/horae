@@ -7,6 +7,11 @@ use crate::server_fns::test_seed::seed;
 use horae_core::project::{BudgetMode, RateMode};
 use sqlx::PgPool;
 
+mod canonical_concurrency;
+mod canonical_fields;
+mod canonical_managers;
+mod catalog;
+
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn editor_load_uses_current_role_across_all_billing_configurations(pool: PgPool) {
@@ -107,7 +112,13 @@ fn edit_request(project: EditableProject) -> ProjectEditRequest {
         id: Uuid::now_v7(),
         project_id: project.id,
         expected_revision: project.revision,
+        expected_requester: project.access.as_ref().map(|access| access.requester),
+        managers: project
+            .access
+            .as_ref()
+            .map(|access| (&access.managers).into()),
         form: project.form,
+        unchanged: Vec::new(),
     }
 }
 
@@ -232,6 +243,44 @@ async fn manager_edit_preserves_private_settings_and_cannot_remove_them_indirect
         admin.form.team[0].cost_rate,
         original.form.team[0].cost_rate
     );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn cost_edits_distinguish_zero_override_from_reset_without_changing_person_default(
+    pool: PgPool,
+) {
+    let (owner, original) = configured_fixture(&pool).await;
+    sqlx::query!(
+        "UPDATE users SET cost_rate_cents=1750 WHERE id=$1",
+        owner.user_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (input, expected) in [("0.00", Some(0)), ("", None)] {
+        let project = load_editable_project(&pool, owner.user_id, owner.org_id, original.id)
+            .await
+            .unwrap();
+        let mut request = edit_request(project);
+        request.form.team[0].cost_rate = input.into();
+        save_editable_project(&pool, owner.user_id, owner.org_id, &request, false)
+            .await
+            .unwrap();
+        let stored = sqlx::query_scalar!(
+            "SELECT cost_rate_cents FROM project_member_costs WHERE org_id=$1 AND project_id=$2 AND user_id=$3",
+            owner.org_id, original.id, owner.user_id,
+        ).fetch_optional(&pool).await.unwrap();
+        assert_eq!(stored, expected);
+        let person_default = sqlx::query_scalar!(
+            "SELECT cost_rate_cents FROM users WHERE id=$1",
+            owner.user_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(person_default, Some(1750));
+    }
 }
 
 #[sqlx::test(migrations = "./migrations")]
