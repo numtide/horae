@@ -36,6 +36,7 @@ let
   dummySrc = craneLib.mkDummySrc {
     inherit src;
     extraDummyScript = ''
+      chmod -R u+w "$out/vendor/dioxus-fullstack-0.7.9"
       cp -r ${../vendor/dioxus-fullstack-0.7.9}/. "$out/vendor/dioxus-fullstack-0.7.9/"
       cp ${../crates/horae/Dioxus.toml} "$out/crates/horae/Dioxus.toml"
     '';
