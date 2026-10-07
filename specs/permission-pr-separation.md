@@ -289,7 +289,7 @@ current heads above. Later iteration entries record subsequent verification.
 | Report access and permission-mode-bound downloads, [#265](https://github.com/numtide/horae/pull/265) | `feat/time-report-access`, `.worktrees/time-report-access` | #26455d362b scoped downloads and shared parser | Draft at `f436a29`;7266abb backend preflight/DTOs and mode binding, original parser/HTTP assertions unchanged; format and source review pass; full native gate1825 running; no UI or activation |
 | Grouped CSV/XLSX time exports, [#266](https://github.com/numtide/horae/pull/266) | `feat/grouped-time-exports`, `.worktrees/grouped-time-exports` | Review base `da493f6` combining #265 and #262 | Draft at `0eec1a4`; original grouped handlers/source/16 DB tests, shared CSV group authorization and18 descriptors; original grouped-filter HTTP fixture retained. Source/format/provenance pass; full native gate40587 running; later URL controls and consumer/browser integration remain open |
 | Time download result filters, [#267](https://github.com/numtide/horae/pull/267) | `feat/time-report-download-filters`, `.worktrees/time-report-download-filters` | #2660eec1a4 and inherited detailed/grouped report/export foundations | Draft at `e029a89`; original active-project/billability URL parser, seven DB tests, strict transport and actual-session fixtures;10 original descriptors. Format/provenance/source review passed; full native gate51012 running; UI/browser filter propagation retained separately |
-| Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
+| Retained full-feature follow-up | Original refs and unpublished snapshot; acceptance classification below | Final operation contracts, governance and cutover prerequisites | Not an additional implemented delivery; preserve incomplete work without activating policy or marking broad acceptance tasks complete |
 | Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267, inherited report access/readers and all four export routes | Draft at `1be11e74`; original disclosure glyphs and browser path assertions retained. Full native68739 passed at this head, replacing disk-failed31708. ARM Nixbot297 remains red; wider review/full T203 remain open |
 | Cross-PR Reports/Timesheet/People verification only | `integration/reports-permission-check`, `.worktrees/reports-permission-integration` | Combines verified `1a87961` with #268 `810ce57` and its report/export foundations | Local integration merge `b7836d7`, not a delivery PR or GitHub merge. Both HTTP registration sets and all30 unique browser suites retained; dedicated source/test blobs unchanged. Format/syntax/source comparison pass; full native gate25958 running |
 | Scoped project editor, [#269](https://github.com/numtide/horae/pull/269) | `feat/scoped-project-editor`, `.worktrees/scoped-project-editor` | `integration/permission-readers-editor-check` | Draft at `53183702`; Nixbot301 SQLx/browser/package/lint checks passed on both Linux architectures. Native tests failed on CSV crash-resume Busy; correction in #224 not propagated here. ARM deployment and earlier intermittent lost-acknowledgement diagnosis remain open; no blind native rerun |
@@ -306,11 +306,13 @@ current heads above. Later iteration entries record subsequent verification.
 | Project task archive/restore controls, [#280](https://github.com/numtide/horae/pull/280) | `feat/project-task-activity-ui`, `.worktrees/project-task-activity-ui` | #276 at `7e883eb` | Draft at `24c5d0e`; four original8c1bf9b paths, parent receipt cleanup retained. Full native14092 passed, including browser and deployment/OIDC. ARM/final cross-PR review pending |
 | Harvest-compatible client reads, [#281](https://github.com/numtide/horae/pull/281) | `feat/scoped-harvest-clients`, `.worktrees/scoped-harvest-clients` | #272 at `fd91c3d` | Published draft `cd8d1db7` extracts eleven dirty paths plus shared-test visibility and original fixture descriptor81aefb2e. Initial failures28333/65280/11982 corrected; full native15935 and Nixbot293 on both Linux architectures passed at this head. Latest parent cache changes and wider review remain pending; T238 not implemented |
 
-Candidate groups below are review units, **not a commitment to 31 PRs**.
-Combine or subdivide only after tracing code and test dependencies. Prefer
-independent PRs; stack when required. The final record must identify resulting
-PRs, equivalents already integrated, and expressly retained unfinished work.
-The current candidate classification does not yet satisfy that final mapping.
+The original candidate groups have now produced58 extraction PRs, separate
+from four shared CI corrections (#282–#285) and this ledger (#218). Remote
+inventory aafeac confirms all62 extraction/CI PRs remain open drafts at the
+recorded heads. These are ownership counts, not readiness counts. Integration
+branches are review/verification bases, not additional deliveries or merge
+targets; retarget only after their real prerequisites land. Current-head CI,
+final review and explicit preservation of unfinished acceptance remain required.
 
 ### First extraction: legacy report and invoice reader authority
 
@@ -410,6 +412,32 @@ Evidence reconciliation:
 - Full approval/withdrawal, company locks, migration/cutover, financial report
   and unresolved operation contracts remain unfinished. Do not finish them
   as part of splitting or silently turn their drafts into accepted behavior.
+
+### Retained acceptance versus extracted implementation
+
+This classification covers all30 unchecked source task IDs without changing
+their original checkboxes. It is a separation inventory, not a new feature plan
+or a claim that the remaining work is fully specified. The committed feature
+documents remain in #248; the seven unpublished Clients documents and the
+unadopted constitution proposal retain their separate preservation described
+above. Existing implementation is delivered by its owning PR, not duplicated
+into a new follow-up PR merely because an umbrella task stays unchecked.
+
+| Source task IDs | Extracted or preserved scope | What remains outside completed-extraction claims |
+| --- | --- | --- |
+| T237 | Harvest-compatible client reads in #281 | Source checkbox remains unchecked; extraction checks and current-head readiness are recorded separately. Does not imply ordinary Clients workflow or policy activation |
+| T238 | Approved FR-035/036 retained in #281's contract and original unpublished documents | Ordinary Clients reads/UI/writes, protected default-rate intent, archive/restore races and workflow selector reconciliation remain incomplete |
+| T230, T234 | Task reads, commands, catalog and project controls in #273/#275–#280 | Full task-management acceptance and unresolved scope must be reconciled against those deliveries; do not describe the existing catalog UI as missing or silently close the umbrella tasks |
+| T203 | Report readers, exports and scoped consumer in #261–#268 | Full candidate discovery/pickers, financial report families and broad Reports acceptance remain open; existing grouping and result filters are already extracted |
+| T006, T007, T008, T009, T042 | Existing research, matrix, hierarchy and migration/governance proposals retained in #248/original refs | Final operation contracts, role-check inventory, constitution ratification, full lock hierarchy and executable remaining-work refinement are not supplied by this split |
+| T010, T011, T016, T017, T018, T037, T038, T041 | Domain/storage/profile commands, editor APIs/UI and audit increments in #219/#221/#222/#226/#234/#243–#245/#250/#260 | Broad profile/application/audit/Workspace acceptance remains unchecked despite implemented sub-increments. No policy replacement or broad task closure is inferred from their tests |
+| T012, T013, T043, T044, T045, T046 | Pure coverage rules in #221 and legacy tenant isolation in #239; remaining contracts preserved | Full scoped approvals/withdrawal, combined expense visibility, company-lock calculation/storage/scheduling and UI are not implemented by these narrower deliveries |
+| T014, T015, T019, T020, T039, T040 | Existing per-surface authorization, transaction and regression increments have their own extraction owners | Complete financial payload coverage, every entry point/writer, migration/identity mapping, policy cutover and all nine success criteria remain full-feature work, not prerequisites to invent during separation |
+
+No new product decisions, grants or implementation commitments are introduced
+by this classification. Original task text and its supporting contracts remain
+authoritative; the split can finish with unfinished work explicitly retained,
+but cannot finish with required extraction verification still missing.
 
 ## #208 overlap — read-only
 
@@ -8091,3 +8119,38 @@ the bounded runner against the full permission composition as well as the VM
 store options; no completed result is claimed yet. Next collect this handle
 and remote402/404, then select verified prerequisites for the extraction
 refresh. No merge, closure, policy activation or product change occurred.
+
+### Retained full-feature acceptance classification — 2026-10-08
+
+The preceding iteration made progress through the browser ownership audit,
+published ledgerab2f2750 and isolated CI composition604c0481. Session14504
+remains live, now compiling the full app after191/191 core tests passed with
+the explicit two-thread budget. This is not a complete composition result.
+Remote402/404 remain IN_PROGRESS on unchanged published heads; no retry or
+branch rewrite was requested.
+
+Current remote inventory aafeac confirms58 original-work extraction PRs plus
+four CI prerequisite PRs, all open drafts. Replaced the outdated31-candidate
+description and unassigned-behavior placeholder with actual ownership and
+retained follow-up semantics. Original #212 still has the same18 dirty paths;
+the root's unrelated untracked directory remains untouched.
+
+Read the source's30 unchecked task definitions and their explanatory context.
+Added one classification table in this ledger distinguishing extracted
+sub-increments from unfinished implementation, umbrella acceptance and
+governance/cutover work. In particular, Task catalog and ordinary Reports UI
+are already extracted; their unchecked broad tasks are not evidence those
+screens are absent. Conversely, extracted compatible client reads do not
+deliver T238's ordinary Clients workflow. Profile/audit sub-increments do not
+close all profile, disclosure, design or activation requirements.
+
+Read-only check5c9006 compared every source unchecked ID against the new table:
+30 source IDs,30 classified IDs, no duplicates and exact set equality. This
+checks bookkeeping coverage, not requirements satisfaction. No task checkbox,
+spec contract, original document, source code or acceptance threshold changed.
+This is documentary reconciliation, not a new Spec Kit execution; its skills
+remain unavailable in this session. The goal may finish with explicit retained
+unfinished work, but required extraction CI/review still prevents completion.
+
+Next: collect14504 and402/404; propagate verified CI prerequisites without
+restarting live jobs, then reconcile readiness against the refreshed heads.
