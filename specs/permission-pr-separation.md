@@ -5177,3 +5177,50 @@ otherwise; those PRs remain drafts. Next action: inspect fresh-head results,
 address extraction failures within their own scope, then continue the original
 work-accounting and verification goal without adding features or merging
 extractions.
+
+### Project filter regression diagnosis after the refresh — 2026-10-07
+
+Reconfirmed #216 merged at 02f7b58. The preceding iteration was progress:
+#274 merged after passing both architectures and all extraction branches were
+refreshed with verified tree and dependency preservation. No original branch
+or unpublished Client work was modified.
+
+On #270 at 18a2e4a, the existing native browser log identifies the fourth row
+as the `Team recovery` project intentionally created by `action-errors.cjs`.
+The `new-project.cjs` suite passes alone on the exact package
+`8i4k07nmvmq6lx8xwxq2mp85lrl5zdkj-horae-0.1.0` (session 77388), establishing
+that its fixed three-row assertion depends on suite ordering. This is not a
+duplicate project produced by the lost-response creation retry.
+
+Commit 2dbab02 in #270 changes only that test: capture the unfiltered project
+identities and require both their exact count and identities after Reset
+filters. Existing one-row tag filtering, empty search, disabled bulk actions,
+creation replay, budget, report/export and invoice assertions remain intact.
+The previously failing sequence `action-errors new-project` passes on a fresh
+disposable database (81244). Node syntax and whitespace pass; treefmt does not
+format this JavaScript file. Bounded adversarial review checked missing,
+duplicated and substituted rows: the identity multiset comparison rejects
+all three, unlike a count-only check. No production code, dependency or data
+change was necessary. Full native gate 57812 is running on published 2dbab02;
+neither complete acceptance nor downstream propagation is claimed yet.
+
+The #269 canonical editor fixture passes in isolation on its exact package
+`7r6v6zz9wq53cz7rmn8xmnycjx1fm6j2-horae-0.1.0` (1818), including the two
+identical replay requests and unchanged revision. Its original failing log
+still records one request instead of two. No speculative correction was made;
+the intermittent failure remains unresolved pending stronger evidence.
+
+Fresh remote evidence also prevents declaring ARM fully reliable across these
+extractions. Nixbot build210 on #270's rebased 18a2e4a failed browser checks
+and both ARM VMs. Its OIDC VM reached a listening Horae service around guest
+second635 but never emitted the test-console connection marker within900
+seconds. Its deployment VM did connect and reached the repeated-import
+assertion, then exceeded wait_sql's90-second deadline waiting for `succeeded`.
+These are distinct failures, not proof that PostgreSQL's startup correction
+regressed. #272 build215 also reports failing ARM and browser checks; its
+individual causes are not yet diagnosed. No limits or assertions were weakened.
+
+Next inspect the live 57812 result, propagate the verified test correction
+through its existing dependent stacks, and diagnose the two new ARM failures
+before claiming reliable remote acceptance. Retain #269–#273 as drafts and
+continue the original hunk-accounting goal; no extraction merge is authorized.
