@@ -5113,3 +5113,33 @@ Retain the57-open-PR inventory and dependency
 base mapping when resuming; do not flatten shared integration bases into
 unrelated feature diffs. Next action: validate the rerun of #274 on ARM,
 merge only after complete acceptance, then perform the authorized refresh.
+
+### PostgreSQL startup deadline in emulated VM checks — 2026-10-07
+
+After the user requested another ARM diagnosis, direct Nixbot206 logs showed
+new execution evidence despite GitHub still displaying the earlier failure.
+ARM workers had become available:18 attributes succeeded and both VM checks
+now reached the guest shell. The console device correction worked, but
+PostgreSQL's120-second startup deadline expired during initdb. PostgreSQL
+restarted successfully; Horae remained inactive because its dependency job
+had already been cancelled. The worker-allocation blocker is superseded.
+
+The user authorized fixing this. #2742d1486e sets only PostgreSQL
+TimeoutStartSec=900 in both test nodes; TimeoutSec=120 still supplies the
+unchanged shutdown deadline. Production modules, application assertions and
+the overall VM-test deadline are unchanged. Source and whitespace review
+passed. Full native43688 and current-head remote CI are running; no ARM
+acceptance is claimed yet. PR metadata now describes the current failure,
+not the obsolete allocation error. No merge or rebase has occurred.
+
+Full native43688 passed on2d1486e, including both VM suites; the deployment
+and import-recovery VM finished in129.29 seconds. The generated PostgreSQL
+unit contains TimeoutSec=120 and TimeoutStartSec=900 as intended. Nixbot208
+has completed18 of20 attributes and is executing the two ARM VM checks.
+This is live validation, not the previous infrastructure blocker.
+
+Nixbot208 succeeded on2d1486e for both Linux architectures, including both
+ARM VM checks, after25m42s. GitHub Flake Check and Format also passed on the
+same head. This supersedes the earlier blocked status: the test-only startup
+correction is now fully verified. The user-authorized normal-queue merge of
+#274 is being requested; confirm its actual merge before rebasing any stack.
