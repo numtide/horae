@@ -134,12 +134,13 @@ Clients MVP as canonical-permission acceptance.
 | Timesheet person discovery, [#256](https://github.com/numtide/horae/pull/256) | `feat/timesheet-people-discovery`, `.worktrees/timesheet-people-discovery` | Review base `40102ae`, combining #255 `d93e1af` admission reader and #253 `3a37538` shared `PeopleCursor` | Draft at `1552fdb`; original `60f60f9` DTO/reader/eight DB tests, endpoint/HTTP additions and five SQLx descriptors preserved. Tests/Clippy/live SQLx `61768` PASSED; application992 passed, zero failed,11 inherited ignored. Full native Nix `37414` PASSED; wider integration pending; no UI, context-page contract, commands or activation |
 | Requester-bound Timesheet page context, [#257](https://github.com/numtide/horae/pull/257) | `feat/timesheet-page-context`, `.worktrees/timesheet-page-context` | #256 `1552fdb`, for subject discovery and shared read admission | Draft at `b30e3cd`; DTO/reader original, all six DB tests retained with a four-line cancellation-barrier synchronization correction. Old `8e09e60` full gate passed; dependent `d2b45ca` exposed a test timeout, retained below. Current-head full native Nix `40402` PASSED, including998 application tests, zero failed,11 inherited ignored, browser and NixOS/OIDC; retargeted checks remain |
 | Person-bound Timesheet commands, [#258](https://github.com/numtide/horae/pull/258) | `feat/timesheet-person-commands`, `.worktrees/timesheet-person-commands` | #257 `b30e3cd`, for shared context contracts and foundations | Draft at `b0eacfd`; original commands/tests and39 descriptors unchanged. Old `64524` failure retained; corrected-head tests/Clippy/live SQLx `98625` PASSED (1011 application tests, zero failed,11 inherited ignored). Full native Nix `7633` PASSED; wider integration pending; no UI or activation |
-| Selected-person Timesheet UI, [#259](https://github.com/numtide/horae/pull/259) | `feat/timesheet-selected-person-ui`, `.worktrees/timesheet-selected-person-ui` | #258 `b0eacfd`, for page context, discovery, tracking and commands | Draft at `4ce0919`; original UI/submission contract/tests/cache plus recovered original Nix asset path and two-line calendar pointer-target CSS. Nine whole source/test files byte-identical to final original. Failed gates `48062`/`91457` retained below; fresh full native Nix `75088` running; wider combination pending; no activation or new feature |
-| Scoped People and permission editor UI, [#260](https://github.com/numtide/horae/pull/260) | `feat/people-permission-editor-ui`, `.worktrees/people-permission-editor-ui` | Verified review base `7a2d61c`, combining #240/#250/#253/#254 and foundations; actual consumer dependencies are identity, editor API and directory | Draft at `98857cf`; fifteen complete files original, legacy tasks and current Clients retained. Sixteen JS tests, source review, whitespace/provenance pass; full native Nix `66677` running. Shared navigation composition with #259 remains; no activation |
-| Cross-PR Timesheet/permission verification only | `integration/timesheet-permission-check`, `.worktrees/timesheet-permission-integration` | Combines #240/#241/#250/#253–#258 and inherited foundations | Published at `015dcd1`, no delivery PR; owner cancellation-test correction included. Old `6da9981` targeted checks `25306` PASSED (1037 application tests, zero failed,11 ignored), historical only. Current-head full native Nix `64407` PASSED; UI and report extractions not included |
+| Selected-person Timesheet UI, [#259](https://github.com/numtide/horae/pull/259) | `feat/timesheet-selected-person-ui`, `.worktrees/timesheet-selected-person-ui` | #258 `b0eacfd`, for page context, discovery, tracking and commands | Draft at `4ce0919`; original UI/submission contract/tests/cache plus recovered original Nix asset path and two-line calendar pointer-target CSS. Nine whole source/test files byte-identical to final original. Failed gates `48062`/`91457` retained below; full native Nix `75088` PASSED; published wider combination `1a87961` gate88592 running; no activation or new feature |
+| Scoped People and permission editor UI, [#260](https://github.com/numtide/horae/pull/260) | `feat/people-permission-editor-ui`, `.worktrees/people-permission-editor-ui` | Verified review base `7a2d61c`, combining #240/#250/#253/#254 and foundations; actual consumer dependencies are identity, editor API and directory | Draft at `98857cf`; fifteen complete files original, legacy tasks and current Clients retained. Sixteen JS tests, source review, whitespace/provenance pass; full native Nix `66677` PASSED. Published shared-navigation combination `1a87961` gate88592 running; no activation |
+| Cross-PR Timesheet/permission verification only | `integration/timesheet-permission-check`, `.worktrees/timesheet-permission-integration` | Combines #240/#241/#250/#253–#262 and inherited foundations | Published at `1a87961`, no delivery PR; all five navigation guards,29 browser suites and both HTTP registries retained.19 navigation/storage tests and formatting passed; current full gate88592 running. Earlier015dcd1 full64407 PASSED but excluded UI/report readers |
 | Cross-PR reader/editor verification only | `integration/permission-readers-editor-check`, `.worktrees/permission-readers-editor-check` | Combines #240 `a19ea63`, #250 `c727bc8`, #253 `3a37538` and #254 `f498c3f` | Published at `7a2d61c`, no delivery PR or merge target; registration conflicts resolved preserving both sides, dedicated source/test blobs unchanged, original combined users module restored exactly. Tests/Clippy/SQLx `24884` and full native Nix `16434` PASSED; exact browser/deployment/OIDC outputs and logs verified after original process terminated. Later #255–#257 not included |
-| Scoped detailed time report, [#261](https://github.com/numtide/horae/pull/261) | `feat/scoped-time-report-reader`, `.worktrees/scoped-time-report-reader` | #257 `b30e3cd`, shared time-read admission | Draft at `bf452dd`; final detailed reader,13 original DB tests, reader HTTP/totals assertions and19 original descriptors. Source/provenance/format pass; full native Nix `37229` running; no UI/export/activation |
+| Scoped detailed time report, [#261](https://github.com/numtide/horae/pull/261) | `feat/scoped-time-report-reader`, `.worktrees/scoped-time-report-reader` | #257 `b30e3cd`, shared time-read admission | Draft at `bf452dd`; final detailed reader,13 original DB tests, reader HTTP/totals assertions and19 original descriptors. Source/provenance/format pass; full native Nix `37229` PASSED; no UI/export/activation |
 | Scoped grouped time report, [#262](https://github.com/numtide/horae/pull/262) | `feat/scoped-time-report-groups`, `.worktrees/scoped-time-report-groups` | #261 `bf452dd`, report contracts/totals and fixture | Draft at `66dbf0b`; final reader and13 DB tests exact; original171-line HTTP fixture and10 original descriptors. Source/provenance/format pass; full native Nix `79456` running; no UI/export/activation |
+| Scoped XLSX time exports, [#263](https://github.com/numtide/horae/pull/263) | `feat/scoped-time-xlsx`, `.worktrees/scoped-time-xlsx` | Review base `e8b95cc`, combining #261 and #247 with their existing foundations | Draft at `8cc11c3`; original cbc78a8 materialization/release checks,11 DB tests and HTTP assertions preserved. Final query predicates retained;11 original cache additions/one obsolete descriptor removed. Format/provenance pass; full native gate48482 running with all ten derivations proven identical to the clean head; CSV/shared filters/groups/UI remain separate |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -428,7 +429,7 @@ Clients documents are separate and are not silently included in #248.
 | `ee16165` | Connect scoped People directory and requester-bound editing | people-directory | People consumer, original DTO web-expectation removals/import spelling, historical admin/shell/sidebar and UI fixture preserved in #260. Later task-catalog wiring stays separate; gates pending |
 | `1b41033` | Record People integration verification and remaining report scope | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `75f13a1` | Add scoped detailed time report reads | time-report-readers | Reader/DTO/endpoint and detailed DB/HTTP assertions in #261 bf452dd; final reader includes totals/filter refinements, grouping separate; specification in #248; full gate pending |
-| `cbc78a8` | Apply scoped permissions to time report spreadsheets | time-report-exports | Held in original backup; extraction pending |
+| `cbc78a8` | Apply scoped permissions to time report spreadsheets | time-report-exports | XLSX reader/release scope,11 unchanged DB tests, HTTP assertions and original snapshot-test adaptation in #2638cc11c3; cache reconciled with final query predicates. Specification preserved in #248; full gate pending |
 | `09bd15f` | Apply scoped permissions to streamed time exports | time-report-exports | Native stored-row decoder in #222; streamed exports and remaining hunks retained |
 | `93aaa68` | Support multi-selection filters in time downloads | time-report-exports | Held in original backup; extraction pending |
 | `a23804f` | Include full-period totals in scoped time reports | time-report-readers | One-statement totals, detailed DB/HTTP pagination assertions and exact cache in #261 bf452dd; specification in #248; full gate pending |
@@ -4455,3 +4456,52 @@ terminal results against these exact heads. Continue the original report export/
 access/consumer extraction, then project/task and unpublished Clients ownership,
 and finish hunk reconciliation. The combined branch is only a verification
 artifact, not a proposed broad delivery PR or authorization to activate policy.
+
+### Scoped spreadsheet extraction published
+
+Previous turn was progress: published UI/report integration1a87961 and recorded
+#260's completed gate. This turn #25975088 terminated exit0, all checks passed
+on4ce0919 (1032 application tests, zero failed,11 inherited ignored, remaining
+suites, browser and deployment/OIDC). #26137229 also terminated exit0 with all
+checks passed onbf452dd. No repeated build or extraction merge.
+
+Created prerequisite worktree/branch `integration/scoped-time-export-prerequisites`
+at e8b95cc5365817d4998492b913ec6f5cf322d3e3 by composing #261 with #247.
+One HTTP registration conflict retained every original module and check call.
+This base has no independent acceptance claim; its combination is exercised by
+the dependent full gate. It is not a delivery PR or merge target.
+
+Draft #263 at8cc11c30757e177846530a0544f6808e337d792c owns cbc78a8's bounded
+XLSX materialization and captured-scope release authorization. Original613-line/
+11-test DB fixture is byte-identical. Original72-line HTTP addition coexists with
+#261's totals/pagination assertions. Snapshot test adaptation exactly matches
+cbc78a8: either a coherent earlier snapshot or a later size rejection is valid;
+the size guarantee and subsequent rejection assertion remain enforced.
+
+The231-line export reader differs from historical cbc78a8 only by the final
+original active-project/billability SQL predicates and bindings. Its query DTO
+already contains these fields; the legacy URL adapter initializes their existing
+defaults. Full shared URL/requester/policy parsing remains with CSV/consumer work.
+No UI, dependency, migration, real-data mutation or canonical-policy activation.
+
+Review covered tenant/session binding, fail-closed policy/catalog facts, scope
+before limits, exact minutes, private-field exclusion, source identity capture,
+rendering without authority locks, fresh post-render revocation, empty exports,
+actor commit/rollback races and cancellation. No new high/critical boundary
+finding. SQL inventory:38 macros/26 unique queries;11 absent cache descriptors
+copied byte-for-byte fromdb3935d. One obsolete original size-query descriptor
+removed after checking no remaining Rust source contains its query; recoverable
+from Git. Owned diff20 paths/1269 additions/103 deletions.
+
+Formatter37857 changed only the combined HTTP module ordering. Initial source
+commitcf7c07d omitted that tracked formatting delta; follow-up8cc11c3 includes
+it. Active gate48482 evaluated the formatted worktree before the follow-up commit.
+Clean-head evaluation67972 proved all ten native check derivations identical to
+the active gate, including package, tests, browser, SQLx, Clippy, formatting and
+both deployment checks. This is input-identity evidence, not a completed pass;
+do not restart an identical build. Both branches and draft are published.
+
+Next collect79456,88592 and48482. Continue09bd15f CSV delivery on the proper
+#249 prerequisite, then shared filters, grouped exports and report consumer;
+retain all deferred original assertions. Projects/tasks, unpublished Clients and
+complete hunk accounting remain required. #212/#217/#208 remain untouched.
