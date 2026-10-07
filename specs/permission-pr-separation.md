@@ -4798,3 +4798,52 @@ The wider b7836d7 composition has the projected DTOs and continues under25958;
 its old test fixture is not silently claimed identical to the corrected #268.
 Reconcile this test-only difference in the next wider composition, preserving
 the actual API types and every assertion. No duplicate live check restarted.
+
+### Project editor extraction started; Reports access gate complete
+
+Confirmed #216 remains merged at02f7b58. Created isolated
+feat/scoped-project-editor from the fully verified shared-reader/editor
+composition7a2d61c. Its editor source boundary is2497dbe, not the later final
+tree containing task lifecycle changes. Preserve current client validation and
+reuse the already-extracted rate/delegation implementations.
+
+Full native1825 completed on #265f436a29 with exit0 and all compatible checks
+passed, including deployment/OIDC. Updated its PR verification; no extraction
+merge or closure. Other architectures were not executed. The current265 head
+was reconfirmed before updating its body.
+
+Next finish the Project editor extraction and its original regressions, collect
+40587/51012/25958/64831, and continue the outstanding reader/task and hunk
+accounting work. No check is restarted while its existing handle is live.
+
+Published Project editor extraction #269 atd5dc1da on
+feat/scoped-project-editor, based on7a2d61c. Its82 changed paths comprise
+34 source/test/runner paths and48 original SQLx descriptors. The isolated
+responsibility is bound editing, protected-field intent and atomic manager
+selection; no Task lifecycle or policy activation is included. Original
+2497dbe database/HTTP/component/browser regressions are retained, including
+the4294aa3 single-DEV_LOGIN-administrator fixture correction. The scoped query
+inventory parsed282/282 macros and restored only missing descriptors after
+query/hash equality checks. No descriptor was deleted by a global heuristic.
+
+Two master-preservation adaptations are explicit: retain the shared client
+validation in project_creation.rs and the NewProjectForClient/client_context
+flow (saved drafts retain precedence) in pages/new_project.rs. HTTP module and
+browser registrations retain all existing suites. Detail-navigation fixture
+exports retain the existing client models while adding the editor DTO imports.
+Shared CSS, core rate/delegation code, schema and policy state are unchanged.
+
+Formatter23849 passed with only module-order adjustments; whitespace, shell
+and browser syntax checks passed. Commit/push60912 and draft creation5072
+completed. Full native88044 runs on clean published d5dc1da. Runtime source
+inspection is recorded, but complete adversarial fixture review and wider
+composition are still pending; do not infer executable success from copying
+the original regressions. The draft states these limitations.
+
+Full native40587 also completed successfully on #2660eec1a4 with exit0 and
+all compatible checks passed, including deployment/OIDC. Its PR body now
+records that outcome after reconfirming its live head. Full51012 (#267),
+25958 (b7836d7 composition),64831 (#268aef180f) and88044 (#269d5dc1da) remain
+live; #268 production release and Clippy have passed. No duplicate check,
+extraction merge or closure. Next review the retained editor fixtures, collect
+these checks, then continue Project reads/delivery, tasks and hunk accounting.
