@@ -12,6 +12,12 @@ mod directory_tests;
 #[path = "time_entries.rs"]
 mod time_entries_tests;
 
+#[path = "time_reports.rs"]
+mod time_reports_tests;
+
+#[path = "time_report_groups.rs"]
+mod time_report_groups_tests;
+
 #[path = "timesheet_people.rs"]
 mod timesheet_people_tests;
 

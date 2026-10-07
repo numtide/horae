@@ -28,7 +28,7 @@ pub(crate) enum TimeReadError {
 }
 
 /// Keep policy, actor activity and grants stable until rows are materialized.
-async fn begin_read(
+pub(super) async fn begin_read(
     pool: &PgPool,
     org_id: Uuid,
     actor_id: Uuid,

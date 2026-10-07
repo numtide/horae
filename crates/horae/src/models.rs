@@ -17,6 +17,7 @@ pub mod project_people;
 pub mod scoped_time;
 pub mod task;
 pub mod time_entry;
+pub mod time_report;
 pub mod user;
 
 pub use approval::{Approval, ApprovalSummary};
