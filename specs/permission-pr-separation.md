@@ -3706,3 +3706,42 @@ Runtime, server/WASM and full Nix gates for #254 have not started yet, while
 the two existing verification sessions remain live. Next collect #250/#253,
 then run #254's gates and cross-PR compositions before moving to the retained
 time-reader/editor/UI blocks. No merge or closure was requested or performed.
+
+### Cross-PR composition preserves legacy and canonical read coverage
+
+Previous iteration was progress: draft #254 and its source ownership were
+published. Created isolated `.worktrees/permission-readers-editor-check`, branch
+`integration/permission-readers-editor-check`, from #254 `f498c3f`, then combined
+#250 `c727bc8` and #240 `a19ea63` in unsigned local commits `a9f374e` and
+`7a2d61c1fa6513a4c10056ef94f1f2cc6c2721c9`. This is a published verification
+branch only, not another delivery PR, a GitHub PR merge or a master change.
+
+Conflicts involved module/test registrations and imports, plus adjacent legacy
+directory replacement context. Kept every module and HTTP test call from both
+sides. Kept #240's reviewed `UserListItem` projection and removal of obsolete
+`hide_rates` code/test, plus #253's full canonical endpoint. The resulting entire
+`server_fns/users.rs` is byte-identical to original `1eb13ec`, not an invented
+resolution. Dedicated reader/DTO/DB/HTTP files match #253/#254 unchanged; editor
+files match #250 unchanged; legacy directory/session/approval-label HTTP files
+match #240 unchanged. The three source heads are verified ancestors. Formatting
+`94586` passed with zero changes, clean worktree; push `41158` completed.
+
+#253 exact-head tests/Clippy/SQLx session `18891` is now terminal PASS. All seven
+directory DB tests and the registered-session HTTP suite passed. Application
+unit result: 976 passed, zero failed, 11 inherited ignored; core189 passed,
+zero skipped. Additional test binaries passed (7, 5, 1, 44, 35, 36, 45, 11,
+5, 1 and 8 tests). No tests were waived or modified in this extraction.
+Standalone browser/deployment checks still remain; cross-PR evidence cannot
+silently replace the exact standalone-head gate. PR description/comment updated.
+
+With #253's compilation finished, started full Nix check for #254 `f498c3f`
+as `81722`; it restored the exact package from Numtide cache and is executing
+the remaining checks. After `18891` finished, started combined tests/Clippy/SQLx
+on integration `7a2d61c` as `24884`. Both results remain pending. #250 full gate
+`46207` is still live; its browser now passes the prior New Project per-person
+budget selection and proceeds through the remaining responsive cases. This
+does not yet certify the complete browser or full Nix suite.
+
+Next collect `46207`, `81722` and `24884`, inspect any demonstrated failures,
+then close the standalone #253 browser/deployment gap and continue the remaining
+original time-reader/editor/UI extractions. Keep these PRs draft and no merges.
