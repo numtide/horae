@@ -62,7 +62,7 @@ pub(in crate::server_fns) async fn load_editable_project(
     Ok(project)
 }
 
-async fn lock_editor_actor(
+pub(in crate::server_fns) async fn lock_editor_actor(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     actor_id: Uuid,
     org_id: Uuid,
