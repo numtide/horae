@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO person_management_assignments (id,org_id,manager_id,managed_user_id)\n         VALUES ($1,$2,$3,$4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c018430a8fbfd71503e103aa5dcfb6f56740f9776d6c0933e627b0e1737e3fd0"
+}

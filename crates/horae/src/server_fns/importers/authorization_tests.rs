@@ -40,6 +40,7 @@ mod task_edits;
 mod task_reads;
 mod task_writes;
 mod user_directory;
+mod scoped_time;
 
 #[cfg(target_os = "linux")]
 mod report_stress;
@@ -311,6 +312,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     approval_labels::check(&pool, &api).await;
     legacy_readers::check(&pool, &api).await;
     financial_snapshots::check(&pool, &api).await;
+    scoped_time::check(&pool, &api).await;
     let admin = api.cookie(owner.user_id).await;
     let expired = api.cookie(owner.user_id).await;
     assert_eq!(

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET notes='Visible work notes', rounded_minutes=60, invoice_id=$2,\n        created_at='2026-09-07 12:00:00+00' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "874c2a86558c10404e78b83aff09936c3795c0d47a43df826e5ab083b76c3878"
+}
