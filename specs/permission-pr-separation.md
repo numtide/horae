@@ -3368,3 +3368,23 @@ protected #251 merge after repaired-head verification. Once actually merged,
 rebase/retarget #252 onto master with an exact `587119e` lease (or its current
 verified successor), no-update-refs and unsigned commits, then require its own
 master-base CI. Preserve all timeout evidence and do not weaken browser checks.
+
+### Repaired release head passed full local verification
+
+Full isolated gate `48807` completed successfully on exact
+`a2b12458af4052617bfd5f2110ea27cb8eadf8e3`: tests, Clippy, SQLx, browser,
+deployment VM and OIDC VM. It passed the formerly failing selector scenario
+and all subsequent New Project/draft checks without changing timeouts. The
+separate focused run's pool/readiness timeout remains a recorded failure; it
+did not recur in this complete isolated run. Do not poll `48807` again.
+
+Requested protected automatic merge again for #251 with exact-head matching
+(`83041`), pending required GitHub CI watched by `16075`. The PR body now scopes
+the full local success to the repaired head and retains all earlier caveats.
+This is a merge request, not a confirmed merge. Crane combined-head gate `6287`
+remains active; its native compile was independently observed consuming CPU,
+so a quiet log was not treated as a stopped process or grounds for restart.
+
+Next collect merge-request confirmation, required CI, and `6287`. Keep the same
+ordering: actual protected #251 merge, no-update-refs unsigned rebase/retarget of
+#252, final master-base CI, authorized #252 merge, then original split goal.
