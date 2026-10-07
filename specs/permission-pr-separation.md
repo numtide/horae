@@ -324,8 +324,8 @@ current heads above. Later iteration entries record subsequent verification.
 
 The original candidate groups have now produced58 extraction PRs, separate
 from five shared CI corrections (#282–#286) and this ledger (#218). Remote
-inventory aafeac confirms all62 extraction/CI PRs remain open drafts at the
-recorded heads. These are ownership counts, not readiness counts. Integration
+inventory aafeac confirmed the preceding62 extraction/CI PRs as open drafts;
+new draft #286 brings that count to63. These are ownership counts, not readiness counts. Integration
 branches are review/verification bases, not additional deliveries or merge
 targets; retarget only after their real prerequisites land. Current-head CI,
 final review and explicit preservation of unfinished acceptance remain required.
@@ -8326,3 +8326,14 @@ Next: collect91786 and413, plus402/404's ARM VM results. Once verified, update
 the propagation preview to include #286 and verify its composition with #224;
 the previous75-branch backup remains valid for unchanged extraction heads.
 No original branch, feature branch, PR base or real data changed this iteration.
+
+Prepared the full composition as8fc3a44e in the existing isolated CI worktree,
+preserving604c0481 under backup/permission-delivery-ci-604c0481. The cherry-pick
+had one insertion conflict with the existing imported-task archival test;
+retained that entire test and the shared observer. Comparing every added/deleted
+line against #286's standalone patch passed exactly (28 additions,25 deletions,
+the same three test files). #224's transaction-cleanup code and regressions are
+unchanged. Full composition check85532 is running; log
+.scratch/permission-delivery-ci-8fc3a44e-full-check.log. This source composition
+proof does not replace its pending test results. Collect the same live handles
+instead of restarting either build.
