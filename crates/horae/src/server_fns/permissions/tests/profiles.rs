@@ -6,6 +6,9 @@ use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use std::time::Duration;
 
+#[path = "directory.rs"]
+mod directory_tests;
+
 #[path = "time_entries.rs"]
 mod time_entries_tests;
 
