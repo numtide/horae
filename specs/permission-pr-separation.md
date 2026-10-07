@@ -112,8 +112,8 @@ review delta. The two VM follow-ups remain in #270 pending its dependency refres
 
 This snapshot supersedes the commit/status labels in the historical delivery
 table below. All59 delivery PRs remain drafts; all remote heads match the local
-branches. The refreshed snapshot has15 successful heads,36 failed heads,1 running
-build and7 new heads without a build aggregate yet. A success
+branches. The refreshed snapshot has13 successful heads,32 failed heads,4 running
+builds and10 new heads without a build aggregate yet. A success
 is not completion of the cross-stack review; a failure is not necessarily a new
 functional defect. Failure classes and exact-head local evidence are recorded
 in the iteration sections. No PR is approved for merging by this inventory.
@@ -122,23 +122,23 @@ in the iteration sections. No PR is approved for merging by this inventory.
 | --- | --- | --- |
 | #219 | a936c129 | Awaiting fresh build result |
 | #220 | c2f587d6 | Awaiting fresh build result |
-| #221 | cc474e87 | Awaiting fresh build result |
-| #222 | 1fef1a24 | Awaiting fresh build result |
+| #221 | cc474e87 | Running |
+| #222 | 1fef1a24 | Running |
 | #223 | bc74af8d | Awaiting fresh build result |
 | #224 | c374710a | Awaiting fresh build result |
-| #225 | ac723cb6 | Failed |
-| #226 | 5a617c68 | Passed |
-| #227 | 25d75c4e | Failed |
+| #225 | 34a32928 | Awaiting fresh build result |
+| #226 | 1f9d20e8 | Awaiting fresh build result |
+| #227 | 8f3a7e64 | Awaiting fresh build result |
 | #228 | 6c67247e | Failed |
-| #231 | 2e4bbf9d | Failed |
-| #232 | c90aa898 | Awaiting fresh build result |
+| #231 | 110b365a | Awaiting fresh build result |
+| #232 | c90aa898 | Running |
 | #233 | c30b8c41 | Passed |
 | #234 | 7afbe764 | Failed |
 | #235 | 082fa032 | Failed |
 | #236 | 526a8ba9 | Failed |
 | #237 | 7c7d9d6c | Failed |
-| #238 | fbaf7a43 | Passed |
-| #239 | 3aab2bfa | Failed |
+| #238 | 24aca30d | Awaiting fresh build result |
+| #239 | f4cea603 | Awaiting fresh build result |
 | #240 | 68a0fad8 | Failed |
 | #241 | 5feaa950 | Failed |
 | #242 | 0abace6f | Failed |
@@ -180,9 +180,9 @@ in the iteration sections. No PR is approved for merging by this inventory.
 | #281 | cd8d1db7 | Passed |
 | #282 | e39f033a | Running |
 
-#219/#220/#223/#224 now depend only on shared CI #282. Direct-base ancestry is
-stale for five PRs: #226 needs #222's shared-CI ancestors and six-line README
-database-requirements note; #272 lacks the newer #270 cache/ARM test changes;
+#219/#220/#223/#224/#225/#227/#231/#238/#239 now depend only on shared CI #282.
+Direct-base ancestry is stale for five PRs: #228 needs #227's shared-CI ancestors;
+#272 lacks the newer #270 cache/ARM test changes;
 #273/#281 lack #272's latest cache deletions; #275 lacks #273's latest cache
 deletion. This is not an exhaustive transitive-base audit: named integration
 bases also need their own input-head reconciliation. Do not treat green children
@@ -6664,3 +6664,56 @@ Next: collect that result and then run the sole full gate on complete compositio
 efae7522. Continue the dependency refresh with #226 and the remaining independent
 roots before reconciling their composition bases. Keep original composition audit
 inputs immutable and do not treat earlier green heads as current-head evidence.
+
+### Remaining independent roots and template refresh — 2026-10-07
+
+The preceding iteration made progress by publishing #221/#222/#232 and the
+single ledger. Confirmed #216 is still merged and refreshed six more clean
+worktrees, reusing all original functional commits:
+
+| PR | Previous head | Published head | Current parent |
+| --- | --- | --- | --- |
+| #225 | ac723cb6 | 34a32928b6f6076205aabe68b9fc09924148f895 | #282 e39f033a |
+| #226 | 5a617c68 | 1f9d20e88eb1b4805d49edf03c4c6ec6ff80d596 | #222 1fef1a24 |
+| #227 | 25d75c4e | 8f3a7e640f4d871267104e39e3aebe135992de1e | #282 e39f033a |
+| #231 | 2e4bbf9d | 110b365ae894871fac59e24f6d58a2693e905057 | #282 e39f033a |
+| #238 | fbaf7a43 | 24aca30d9218845181b7c6418a435adb763f8dac | #282 e39f033a |
+| #239 | 3aab2bfa | f4cea603ff8f7c2edc5ab655adfaa937b108a4f8 | #282 e39f033a |
+
+All eight replayed commits have identical range-diff patches; each resulting
+tree equals its precomputed composition with the exact previous parent. No
+conflict resolution, new logic, schema edit or policy activation was needed.
+updateRefs and signing were disabled. All old/new files are byte-identical
+except the inherited CI repairs and #226's six original README lines from #222.
+The README exactly matches #222. Both CI files match #282 except #231's CSV
+test file, which also retains its own original regression tests and barriers.
+An intentionally strict whole-file equality check stopped on that overlap;
+inspection and stable patch comparison prove its old-to-new difference is only
+the shared cleanup patch `9b983651968f82a97483988966201a5beb016a8a`.
+No original test or assertion was replaced to satisfy that check.
+
+Recovery refs are under `backup/shared-ci-roots-second-20261007/`, named after
+the six worktrees. The complete-history bundle
+`.scratch/shared-ci-roots-second-20261007.bundle` verifies, SHA-256
+`67dc8836616bd1e0ec6125a823295c51f2c6cde4b49f6e8d181913deabf5e4f3`.
+Formatting97926/35874/36088/14725/94559/56856 passed without changes, as did
+whitespace checks. Atomic publication84948 used exact previous-head leases;
+GitHub confirms all six heads, bases and draft status. Five independent roots
+now target #282; #226 retains #222 as its base. Descriptions label earlier gates
+historical and explicitly require fresh full checks.
+
+Inventory66860 finds59 drafts, no local/remote mismatch,13 successful heads,
+32 failed heads,4 running aggregates and10 heads without an aggregate yet.
+The changed totals reflect new commits awaiting validation, not newly observed
+test failures. Direct-base stale entries are #228/#272/#273/#275/#281; named
+integration bases still require their own transitive input reconciliation.
+#282 remains active in Nixbot317 and GitHub Flake Check37676457227, with Format
+passed. Do not count those unfinished checks as green.
+
+Local74548 remains live on frozen5c43f24a and is executing server import tests.
+The complete compositionefae7522 is still clean and has not started its full
+gate; run it only after74548 is terminal. Disk has80GB available, and no second
+local full check was started. Next refresh #228 on #2278f3a7e64, then #235 on
+that result. Reconcile the profile, invoice and import prerequisite branches
+from the refreshed inputs before updating their children; do not claim their
+current old ancestry includes these CI repairs. No GitHub merge or closure.
