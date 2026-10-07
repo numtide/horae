@@ -4994,3 +4994,47 @@ API list/count/direct-ID boundary. Created .worktrees/scoped-harvest-projects
 on feat/scoped-harvest-projects from ed964fc for that bounded extraction; no
 changes there yet. Tasks, unpublished Clients and complete hunk ownership remain
 outstanding. No extraction PR was merged or closed, and no policy activated.
+
+### CI repair priority and pending extraction verification
+
+The user prioritized restoring Nixbot before further extraction work. Master
+ed558f6 builds the application and passes its non-VM checks on both Linux
+architectures, but Nixbot build138 fails both ARM VM checks before application
+assertions: QEMU falls back to TCG and the test driver's fixed 300-second shell
+connection timeout expires while the guest is still booting. The farm documents
+TCG as intentional; no infrastructure changes or disabled checks are justified.
+
+Draft #274, fix/nixbot-arm-vm-checks at cd26b56, adds a bounded serial-readiness
+wait to the two existing VM tests. All application assertions remain unchanged.
+Formatting and whitespace checks passed. Full native21618 and Nixbot build202
+are pending; this is not yet a verified repair. No runner configuration, real
+data or production application code was changed.
+
+Before this priority change, draft #272 was published at bfa771d, based on
+#270ed964fc. It extracts the original Harvest-compatible Project readers from
+2631186: 16 paths, including ten original SQLx descriptors. The scoped query
+inventory parsed21/21 macros and checked restored query/hash equality. Formatting
+and whitespace passed. Full native46280 later failed the browser fixture
+project-read-permissions.cjs at131: its errors array was nonempty. Diagnosis is
+pending; compilation and Clippy success do not make this draft ready.
+
+Draft #273 was published at571f3f5, based on #272bfa771d. It extracts original
+task readers and their DB, HTTP and browser tests from f6e8bf1:18 paths, including
+five original SQLx descriptors and the original three-line sidebar interaction
+fix asserted by the browser fixture. Query inventory parsed58/58 macros, with
+query/hash equality checked before restoring descriptors. Formatting, Node/shell
+syntax and whitespace passed. Full native96635 remains pending. Canonical Time
+commands are not in this base; activation still requires the wider composition.
+
+Additional full native results are failures, not acceptance:
+
+- #270ed964fc (56170) and #271b0cd080 (82670): new-project.cjs at1200 expected
+  three options but received four. Fixture isolation needs investigation.
+- #2698da2639 (89598): project-editor-permissions.cjs at145 expected two requests
+  but observed one in the lost-acknowledgement retry scenario. The receipt cleanup
+  has not received full-suite acceptance.
+
+Do not rerun these unchanged heads or weaken their assertions. Next complete
+#274's native and remote ARM validation, record its actual outcome, then return
+to the concrete browser failures before further extraction. Existing original
+branches/worktrees remain preserved; no extraction PR was merged or closed.
