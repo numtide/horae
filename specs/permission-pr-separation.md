@@ -124,8 +124,10 @@ implementation remains incomplete. Do not treat
 - [#285](https://github.com/numtide/horae/pull/285), `test/nix-test-parallelism`,
   at15d9ab5b, makes both Rust runners respect NIX_BUILD_CORES. A sandbox probe
   measured2 allocated cores versus32 default Rust test threads. All121 core
-  tests passed; the full application suite57770 is running. No Rust assertion
-  or timeout changed, and the CSV failure class is not yet considered resolved.
+  tests and application suite57770 passed (821 server tests,11 existing ignored
+  measurements, plus all auxiliary binaries). Full native flake check79988
+  passed on the published head. No Rust assertion or timeout changed, and the CSV failure class is
+  not yet considered resolved.
 - Local complete compositiond5c34851 contains both corrections without diagnostic
   logging. Its full gate50229 failed at Clippy: three unused preflight symbols.
   Local compositionf90f60f7 contains #246's function-local lint expectation for this
@@ -452,9 +454,10 @@ Non-cache overlaps:
 ## Original commit accounting
 
 Every original commit is retained in the verified bundle and refs. Entries
-below assign a candidate responsibility, not yet a final destination PR.
-Mixed commits may supply multiple deliveries; record exact adaptations and
-avoid duplicate shared helpers/queries when finalizing them.
+below identify delivery ownership; ownership does not imply current-head CI
+acceptance. Verification receipts embedded in these rows are historical unless
+explicitly reconciled in the current verification follow-ups. Mixed commits
+may supply multiple deliveries with the documented extraction adaptations.
 
 Documentation ownership now applies across all mixed commits as well as the 50
 documentation-only rows: final committed `specs/015-scoped-permissions/` content
@@ -597,15 +600,15 @@ Clients documents are separate and are not silently included in #248.
 | `7266abb` | Connect scoped time reports with bound downloads | time-report-consumer | Backend preflight/DTOs, CSV/XLSX mode binding and parser/HTTP tests in #265f436a29; UI, browser/component fixtures and consumer lint removals in #268810ce57; specification in #248 |
 | `41ff137` | Add scoped time report grouping with exact totals | time-report-readers | Grouped reader/contracts,13 final DB tests and original171-line HTTP fixture in #26266dbf0b, full gate79456 passed; export_filters helper additions in #2660eec1a4; UI retained separately; specification in #248 |
 | `e2e66fb` | Connect scoped time report groups and detail navigation | time-report-consumer | Grouped consumer and original browser/component assertions in #268810ce57; specification in #248 |
-| `ca170c0` | Export scoped time groups to Excel with release authorization | time-report-exports | Grouped XLSX reader/renderer/route and seven DB tests in #2660eec1a4; UI/browser/component assertions retained for Reports consumer; specification in #248 |
-| `2b59b58` | Stream grouped time reports with scoped authorization | time-report-exports | Grouped CSV cursor/delivery/route, nine DB tests and shared group-lifetime authorization in #2660eec1a4; UI/browser assertions retained for Reports consumer; specification in #248 |
+| `ca170c0` | Export scoped time groups to Excel with release authorization | time-report-exports | Grouped XLSX reader/renderer/route and seven DB tests in #2660eec1a4; UI/browser/component assertions owned by #268; specification in #248 |
+| `2b59b58` | Stream grouped time reports with scoped authorization | time-report-exports | Grouped CSV cursor/delivery/route, nine DB tests and shared group-lifetime authorization in #2660eec1a4; UI/browser assertions owned by #268; specification in #248 |
 | `ecac66b` | Add scoped individual time reports and nested breakdowns | time-report-consumer | Three original scoped modules, individual/nested transitions and original browser/component assertions in #268810ce57; specification in #248 |
-| `de8f9ad` | Filter time reports to active projects | time-report-consumer | DTO/readers and reader tests in #261/#262; export SQL predicates in #263/#264/#266; strict URL transport and original cross-format snapshot/authority fixtures in #267e029a89. UI/browser/component hunks retained for Reports consumer; specification in #248 |
+| `de8f9ad` | Filter time reports to active projects | time-report-consumer | DTO/readers and reader tests in #261/#262; export SQL predicates in #263/#264/#266; strict URL transport and original cross-format snapshot/authority fixtures in #267e029a89. UI/browser/component hunks owned by #268; specification in #248 |
 | `2497dbe` | Enforce scoped permissions in the project editor | project-editor-permissions | Pure RateEdit code/tests in #221; composable delegation and transaction tests in #243; picker reader in #254. Canonical editor DTOs, field/association/save logic, UI, DB/HTTP/browser tests and consumer lint adaptations extracted in #269. Full acceptance remains pending; later task lifecycle changes are not included. Specifications owned by #248 |
 | `2631186` | Enforce scoped project reads across pages and exports | project-read-permissions | Ordinary readers, budgets, minimal labels and bound overview/detail UI in #270; CSV/XLSX release boundaries in #271; Harvest-compatible project list/count/direct-ID readers in #272. Shared export helpers compose over earlier export PRs. Tests and original descriptors retained; fixture adaptations and failing gates recorded below. Final shared-file hunk audit and complete acceptance remain pending; specifications owned by #248 |
 | `1b81680` | Record project permission delivery acceptance | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
-| `f6e8bf1` | Enforce task catalog and tracking read permissions | task-permissions-lifecycle | Task catalog/tracking and Harvest-compatible readers, DB/HTTP/browser fixtures, original descriptors and sidebar interaction correction extracted in #273. Full acceptance remains pending; later task creation, editing, activity and linking commands are still retained separately. Specifications owned by #248 |
-| `8dd61d4` | Enforce current task creation and project scope permissions | task-permissions-lifecycle | Creation commands and original DB/HTTP tests extracted into draft #275f8c1477; full native71588 passed, ARM/wider review pending. Later atomic creation changes remain owned by dcadcee's pending extraction |
+| `f6e8bf1` | Enforce task catalog and tracking read permissions | task-permissions-lifecycle | Task catalog/tracking and Harvest-compatible readers, DB/HTTP/browser fixtures, original descriptors and sidebar interaction correction extracted in #273. Later creation/rate commands belong to #275, lifecycle to #276, linking to #277, atomic creation to #278, catalog UI to #279 and project task activity UI to #280. Current-head acceptance remains separate. Specifications owned by #248 |
+| `8dd61d4` | Enforce current task creation and project scope permissions | task-permissions-lifecycle | Creation commands and original DB/HTTP tests extracted into draft #275f8c1477; full native71588 passed, ARM/wider review pending. Later atomic creation from dcadcee is extracted in #278, with its catalog consumer in #279 |
 | `facfb49` | Protect task rate edits with explicit intent and current permissions | task-permissions-lifecycle | Explicit rate transport, commands, original mutation/DB/HTTP tests and contract extracted into draft #275f8c1477; full native71588 passed, ARM/wider review pending |
 | `ac4c90c` | Authorize task activity changes and guard running timers | task-permissions-lifecycle | Commands, original tests/descriptors and contract extracted with0591407 in draft #276924dcbe. Fresh gates pending |
 | `0591407` | Preserve project task archival across restores and imports | task-permissions-lifecycle | Migration0048, import/checkpoint/lock-order adaptations, editor transport, tracking admission, original tests/descriptors and contract in draft #276924dcbe. Cache correction/fresh gates pending; later UI remains separate |
@@ -613,7 +616,7 @@ Clients documents are separate and are not silently included in #248.
 | `5561f14` | Add permission-aware task catalog management | task-consumers | Catalog reader, DTOs, navigation/UI, tests/cache and contract in #27946d3b36; historical progress/quickstart owned by #248/original refs |
 | `dcadcee` | Add atomic task creation to the task catalog | task-consumers | Backend, legacy caller, DB/HTTP tests and descriptors in #2783d76f99; catalog UI/browser/component tests and contract appendix in #27946d3b36. Historical progress/quickstart owned by #248/original refs |
 | `8c1bf9b` | Add task archive and restore controls to project editing | task-consumers | Two UI files, original Chromium regression increment and contract appendix in draft #28024c5d0e; full native14092 running. Historical progress/quickstart retained with #248/original refs |
-| `db3935d` | Filter time reports and downloads by billability | time-report-consumer | DTO/readers and reader tests in #261/#262; export SQL predicates in #263/#264/#266; grouped HTTP route registrations in #266; strict URL transport and original cross-format DB/HTTP fixtures in #267e029a89. UI/browser/component hunks retained for Reports consumer; specification in #248 |
+| `db3935d` | Filter time reports and downloads by billability | time-report-consumer | DTO/readers and reader tests in #261/#262; export SQL predicates in #263/#264/#266; grouped HTTP route registrations in #266; strict URL transport and original cross-format DB/HTTP fixtures in #267e029a89. UI/browser/component hunks owned by #268; specification in #248 |
 
 Additional original #217 commit `dd141c5`: replaced by #220 for delivery, with
 its original branch left untouched and open. All production/test changes are
@@ -8005,3 +8008,41 @@ Next: collect57770, then reconcile #284/#285 remote CI against exact
 heads. Keep CSV failures open until adequately verified; do not propagate a
 speculative remedy across all extraction heads. Original work and completed
 gate evidence remain preserved; no merge or product change was made.
+
+### Consumer ownership reconciliation and bounded runner result — 2026-10-08
+
+The preceding status turn was a verified wait: session57770 was confirmed live,
+and its log had advanced from compilation into server tests. This iteration
+collected its terminal exit0. The published #285 head15d9ab5b is unchanged and
+its worktree is clean. The log records121 core tests,821 server tests with11
+existing ignored measurements, and all auxiliary binaries passing; four
+isolated child-test results are not counted again as additional server tests.
+Full native flake check79988 passed against that exact published head, logged
+at `.scratch/nix-test-parallelism-15d9ab5b-full-check.log`. It reused unchanged
+derivations and the completed tests output, built the new formatting check,
+and explicitly omitted incompatible ARM/Darwin systems. Remote Nixbot402/404
+remain IN_PROGRESS on exact #284/#285 heads; their evaluations passed. Neither
+ARM readiness nor resolution of the three earlier CSV failures is proven yet.
+
+Corrected stale original-commit rows that still described Reports and Tasks
+consumers as awaiting extraction. Read-only Git blob comparison33b690 confirms
+all six production paths below are byte-identical to originaldb3935db:
+
+| Delivery / current head | Original production paths |
+| --- | --- |
+| #268b7974183 | `pages/reports/scoped.rs`, `pages/reports/scoped/grouped.rs`, `pages/reports/scoped/expanded.rs` |
+| #2791cb4edc5 | `pages/tasks.rs`, `pages/tasks/editor.rs` |
+| #280810449aa | `pages/new_project/tasks.rs` |
+
+Paths are relative to `crates/horae/src/`. Reports browser differences add only
+the two previously documented SVG direction assertions. Its component fixture
+adapts legacy identity/tag stubs to the extraction base, without removing test
+assertions. This reconciles ownership, not new runtime verification. Existing
+backend and contract ownership in #275–#280 is unchanged. No implementation,
+original branch, incomplete feature or acceptance gate was altered.
+
+Spec Kit skills are unavailable in the current session/environment; this narrow
+Git/documentary reconciliation is not reported as a new Spec Kit execution.
+Earlier specification analysis and its limitations remain in this ledger.
+Next: collect the exact-head remote ARM results, then propagate only
+verified CI prerequisites and finish current-head readiness reconciliation.
