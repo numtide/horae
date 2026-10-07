@@ -3475,3 +3475,27 @@ restrict PR-created caches to their merge ref. This is a possible contributor
 to repeated queue build time, not a measured attribution or reason to weaken
 isolation. No workflow/cache trust changes made. Crane dependency reuse is
 verified locally; its eventual master-base CI timing remains unmeasured.
+
+### Release profile merged; Crane verified on its final master base
+
+Protected merge-group run37559430187 PASSED: Flake43m14s, Format53s.
+Watcher `90784` is terminal. GitHub confirms #251 MERGED at2026-10-07T02:38:45Z,
+commit `35dc414fa53e43ded274dcb0252c11d44c5d0e74`; fetched master matches it.
+No rules were bypassed. GitHub automatically retargeted #252 to master.
+
+Preserved current Crane head in `backup/crane-before-release-merge` at
+`587119e5e91d31c615ee63064bced7e43e620112`, in addition to the older `774966e`
+backup. Rebased only its five owned commits unsigned with `--no-update-refs`
+onto actual master; both recovery refs remain unchanged. New head
+`f6f09438be109b5dfc376f381f59892921fed736` has an exactly identical tree to
+`587119e` and still changes only six build files (83 insertions,26 deletions).
+Published successfully with an exact `587119e` lease; worktree clean.
+
+Final-head local full Nix gate `94135` PASSED, reusing the same verified package,
+tests, Clippy, SQLx, browser and VM derivations. This validates the rebased
+source without claiming that cached checks ran again. Required master-base CI
+run37563128636 is now active, watched by `97039` at120s intervals. PR description
+updated; automatic protected merge requested with exact final-head matching
+(`70881`, collect confirmation). #252 is not yet merged. Next require current
+remote checks, confirm a genuine queue entry and its result, then actual merge
+before resuming original extraction work. No extraction PR merge authorized.
