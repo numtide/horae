@@ -38,9 +38,11 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     await expect(page.getByRole('link', { name: 'Edit project', exact: true })).toHaveCount(0);
   };
   try {
-    await page.goto(`${base}/auth/login`);
-    await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
-    await page.waitForURL(`${base}/`);
+    // Authenticate without mounting the legacy Timesheet, whose directory reads
+    // are outside this project-only request audit.
+    const login = await context.request.post(`${base}/auth/dev-login`, { maxRedirects: 0 });
+    assert.equal(login.status(), 303);
+    assert.equal(login.headers().location, '/');
     sql(`BEGIN;
       INSERT INTO clients (id,org_id,name,currency) VALUES ('${client}','${org}','Scoped read client','EUR');
       INSERT INTO users (id,org_id,email,name,active) VALUES ('${teammate}','${org}','private-teammate@example.test','Retained teammate',false);
