@@ -99,12 +99,22 @@ pub(in crate::reports) async fn authorize_projects(
     project_ids: &[Uuid],
 ) -> Result<(), StatusCode> {
     let mut tx = begin_project_read(pool, org_id, actor_id).await?;
+    authorize_project_rows(&mut tx, org_id, actor_id, project_ids).await?;
+    tx.commit().await.map_err(database_error)
+}
+
+pub(in crate::reports) async fn authorize_project_rows(
+    connection: &mut PgConnection,
+    org_id: Uuid,
+    actor_id: Uuid,
+    project_ids: &[Uuid],
+) -> Result<(), StatusCode> {
     let locked = sqlx::query_scalar!(
         "SELECT id FROM projects WHERE org_id=$1 AND id=ANY($2) ORDER BY id FOR SHARE",
         org_id,
         project_ids,
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut *connection)
     .await
     .map_err(database_error)?;
     if locked.len() != project_ids.len() {
@@ -119,11 +129,11 @@ pub(in crate::reports) async fn authorize_projects(
         actor_id,
         project_ids,
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(connection)
     .await
     .map_err(database_error)?;
     if usize::try_from(allowed).ok() != Some(project_ids.len()) {
         return Err(StatusCode::FORBIDDEN);
     }
-    tx.commit().await.map_err(database_error)
+    Ok(())
 }

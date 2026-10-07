@@ -8,7 +8,7 @@ use super::ProjectExportRow;
 
 mod project;
 pub(super) mod time;
-pub(super) use project::{authorize_projects, projects};
+pub(super) use project::{authorize_project_rows, authorize_projects, projects};
 
 const MAX_FIELD_BYTES: i32 = 32_767;
 
@@ -70,6 +70,7 @@ pub(super) async fn begin_manager(
     Ok(tx)
 }
 
+#[cfg(test)]
 pub(super) async fn configure_transaction(connection: &mut PgConnection) -> Result<(), StatusCode> {
     // Size checks and payload reads must see exactly the same rows and text.
     sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
@@ -79,7 +80,7 @@ pub(super) async fn configure_transaction(connection: &mut PgConnection) -> Resu
     configure_deadlines(connection).await
 }
 
-async fn configure_deadlines(connection: &mut PgConnection) -> Result<(), StatusCode> {
+pub(super) async fn configure_deadlines(connection: &mut PgConnection) -> Result<(), StatusCode> {
     sqlx::query!("SET LOCAL statement_timeout = '5s'")
         .execute(&mut *connection)
         .await

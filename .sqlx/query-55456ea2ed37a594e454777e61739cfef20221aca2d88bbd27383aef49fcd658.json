@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT value FROM fetch_csv_export_rows(1) AS source(value bigint,export_bytes bigint)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "value",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "55456ea2ed37a594e454777e61739cfef20221aca2d88bbd27383aef49fcd658"
+}
