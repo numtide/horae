@@ -9,6 +9,9 @@ use crate::models::project_creation::{
     CreationClient, CreationOptions, CreationSearch, CreationSelection, DraftSaved,
     EditableProject, ProjectDraft, ProjectEditRequest, ProjectForm,
 };
+use crate::models::project_people::{
+    ProjectPeopleContext, ProjectPeopleQuery, ProjectPeopleResult,
+};
 
 #[cfg(feature = "server")]
 mod validation;
@@ -33,6 +36,38 @@ mod import_tests;
 
 #[cfg(all(test, feature = "server"))]
 mod locking_tests;
+
+/// Read identity-only teammate choices for the authorized project operation.
+#[server]
+pub async fn project_people(
+    context: ProjectPeopleContext,
+    query: ProjectPeopleQuery,
+) -> Result<ProjectPeopleResult, ServerFnError> {
+    let actor = require_user().await.map_err(|error| match error {
+        error @ ServerFnError::ServerError {
+            code: UNAUTHORIZED, ..
+        } => error,
+        error => {
+            tracing::error!(%error, "Unable to authenticate project people request");
+            server_err("Project people are unavailable")
+        }
+    })?;
+    let state = crate::state::global_state().await;
+    permissions::project_people::read(&state.db, actor.org_id, actor.id, context, &query)
+        .await
+        .map_err(|error| match error {
+            permissions::project_people::ProjectPeopleError::Forbidden => {
+                forbidden("Current project editing authority is required")
+            }
+            permissions::project_people::ProjectPeopleError::InvalidInput => {
+                err(BAD_REQUEST, "Invalid project people query")
+            }
+            error => {
+                tracing::error!(%error, "Project people read failed");
+                server_err("Project people are unavailable")
+            }
+        })
+}
 
 /// Load the existing project into the same form used for creation.
 #[server]
