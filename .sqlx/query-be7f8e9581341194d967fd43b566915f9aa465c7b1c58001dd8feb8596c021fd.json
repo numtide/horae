@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE person_permission_states SET is_administrator=$2 WHERE user_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "be7f8e9581341194d967fd43b566915f9aa465c7b1c58001dd8feb8596c021fd"
+}
