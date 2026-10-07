@@ -105,8 +105,8 @@ implementation remains incomplete. Do not treat
 
 This snapshot supersedes the commit/status labels in the historical delivery
 table below. All58 extraction PRs remain drafts; all remote heads match the local
-branches. After the exact-head #224 completion refresh, Nixbot reports16 successes,
-41 failures and1 running check. Other rows retain the inventory snapshot. A success
+branches. After the exact-head #224/#270 completion refreshes, Nixbot reports17
+successes and41 failures. Other rows retain the inventory snapshot. A success
 is not completion of the cross-stack review; a failure is not necessarily a new
 functional defect. Failure classes and exact-head local evidence are recorded
 in the iteration sections. No PR is approved for merging by this inventory.
@@ -160,7 +160,7 @@ in the iteration sections. No PR is approved for merging by this inventory.
 | #267 | 79798acf | Failed |
 | #268 | 1be11e74 | Failed |
 | #269 | 53183702 | Failed |
-| #270 | b480f9d2 | Running |
+| #270 | b480f9d2 | Passed |
 | #271 | 5beac2e1 | Passed |
 | #272 | 8b8b0c0b | Passed |
 | #273 | 65c4aa23 | Passed |
@@ -6432,3 +6432,69 @@ propagation, then reconcile dependent PR bases and carry the verified shared
 repairs into their delivery chains. Preserve the original backups and the
 explicitly unfinished client work. Do not use standalone passes as proof that
 the combined stack passed.
+
+### Complete delivery composition and ARM acceptance — 2026-10-07
+
+Previous iteration made progress by collecting #224's complete gates and starting
+the next serial run. Local74548 remains live on unchanged5c43f24a: client build
+passed and the server package build is ongoing. Do not edit that worktree or
+start a competing full gate.
+
+Comparison against all58 extraction heads exposed the scope limit of5c43f24a:
+it combines Timesheet/Reports/Projects/Tasks but does not contain12 current heads.
+Those are preserved, not lost. #246 includes the missing #235/#236/#237 chain;
+the nine additional roots are #221/#222/#225/#233/#238/#239/#242/#246/#248.
+#221's original content was already present through other ancestry; #222 adds
+its current database-requirements note. A passing5c43f24a cannot certify these
+remaining boundaries.
+
+Prepared a separate local-only worktree `.worktrees/permission-delivery-complete`,
+branch `integration/permission-delivery-complete-check`, at
+`efae752272402457da6393791048b4e3c0a68d5f`. It contains all58 exact heads from the
+delivery snapshot, without rewriting their branches or creating a combined PR.
+No full build has started there. The two substantive conflict resolutions retain:
+
+- #242's invoice-identity HTTP matrix alongside all24 existing matrices, once
+  each; no replaced or skipped assertion.
+- Every permission module/test, including preflight, and the CSV batch boundary
+  that reads the next batch before opening its organization-locked transaction.
+  Plain `connection.begin()` must not replace `begin_import_transaction` there.
+
+The upload implementation, approval implementation/isolation tests, import
+commands/requester tests, invoice authority tests and preflight implementation/
+tests are byte-identical to the original db3935db. HTTP upload/download revocation,
+requester-spoofing and error-response assertions are present again in the complete
+composition. CSV cancellation synchronization remains exactly #224's recorded
+follow-up over the original fixture. Rustfmt reordered one module declaration;
+that ordering is committed and subsequent formatting70916 passed without changes.
+
+The existing conservation audit was run against all58 inputs, not just the
+subset's leaves. Its first run identified four explicit adaptations. Inspection
+confirmed two intermediate legacy CSV descriptors replaced by the scoped cursor,
+and one intermediate task-link descriptor replaced by lifecycle/rate-currency
+validation. Each accepted deletion requires absence plus the exact corresponding
+source blob from a parent that also lacks the descriptor. The Reports fixture
+requires the exact previously reviewed af7c35dc blob and its ancestry; no arbitrary
+fixture difference is accepted. That fixture differs from the original only by
+the unused parameter spelling `_expected` versus `_`.
+
+Final audit72279 passed:1157 exact paths,108 shared paths (80 equal to an input,
+28 composed), six inspected query replacements, one exact fixture adaptation,
+zero unaccounted single-owner paths,34 unique browser suites and25 unique HTTP
+matrices. Evidence: `.scratch/permission-delivery-complete-audit.json`; the former
+subset report is preserved as `.scratch/permission-split-composition-5c43f24a.json`.
+These checks prove ancestry/preservation constraints, not semantic or runtime
+acceptance of all28 combined paths. No completed-parity claim is made.
+
+[Nixbot311](https://nixbot.numtide.com/repos/github/numtide/horae/builds/311)
+passed on #270b480f9d2. Both Linux e2e/formatting attributes executed successfully
+(ARM e2e19m9s);16 unchanged derivations were already built, including browser,
+Clippy, SQLx, tests, package and OIDC on both Linux architectures. Attribute pages
+are retained in `.scratch/nixbot-311-final-succeeded.html` and
+`.scratch/nixbot-311-final-cached.html`. This is current-head acceptance of the
+bounded ARM repair, not proof that it resolves every historical failure class.
+
+Next: collect74548, then run the full serial gate on complete compositionefae7522
+(or a documented reviewed successor). Finish its changed-boundary review before
+propagating the now-verified #224/#270 repairs and refreshing dependent PR bases.
+No GitHub merges/closures, real-data changes or runtime policy activation.
