@@ -76,7 +76,7 @@ mod components {
 mod reports;
 
 type AccessResponse = Result<TimeReportAccess, ServerFnError>;
-type IdentityResponse = Result<models::user::CurrentUser, ServerFnError>;
+type IdentityResponse = Result<models::user::User, ServerFnError>;
 type ReportResponse = Result<models::time_report::TimeReportPage, ServerFnError>;
 type GroupResponse = Result<models::time_report::TimeReportGroupPage, ServerFnError>;
 
@@ -1239,7 +1239,7 @@ mod server_fns {
     pub async fn list_clients(_: bool) -> Result<Vec<models::Client>, ServerFnError> {
         legacy("clients")
     }
-    pub async fn list_users(_: bool) -> Result<Vec<models::user::UserListItem>, ServerFnError> {
+    pub async fn list_users(_: bool) -> Result<Vec<models::user::User>, ServerFnError> {
         legacy("users")
     }
     pub async fn list_project_tags() -> Result<Vec<models::ProjectTagLink>, ServerFnError> {
