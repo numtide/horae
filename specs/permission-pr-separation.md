@@ -3535,3 +3535,12 @@ Next collect current local/remote gates and old cancellation, inspect actual
 cache reuse in current CI, then use the protected queue after required checks
 pass. Do not retry enqueue while the same check is pending. #251 remains merged;
 #252 and the original split goal remain unfinished.
+
+Superseded watcher `97039` is now terminal (exit1): GitHub API confirms
+run37563128636 completed with conclusion `cancelled`, exact head `f6f0943`.
+Its Flake job duration1h11m23s includes cancellation processing and is not a
+successful cold-build benchmark. The post-termination log request (`61362`)
+still returned BlobNotFound; do not infer a specific compile/test failure or
+claim full timing attribution. No forced cancellation or further restart.
+PR description updated. Current live handles are local full gate `12076` and
+required-CI watcher `90257` (run37568358785, Format50s passed), both on `170e521`.
