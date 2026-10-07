@@ -158,7 +158,7 @@ implementation remains incomplete. Do not treat
 | Cross-PR Reports/Timesheet/People verification only | `integration/reports-permission-check`, `.worktrees/reports-permission-integration` | Combines verified `1a87961` with #268 `810ce57` and its report/export foundations | Local integration merge `b7836d7`, not a delivery PR or GitHub merge. Both HTTP registration sets and all30 unique browser suites retained; dedicated source/test blobs unchanged. Format/syntax/source comparison pass; full native gate25958 running |
 | Scoped project editor, [#269](https://github.com/numtide/horae/pull/269) | `feat/scoped-project-editor`, `.worktrees/scoped-project-editor` | `integration/permission-readers-editor-check` | Draft at `53183702`; restored original obsolete-cache removal; 94084 failed during disk exhaustion; serial retry queued. Five instrumented repetitions passed on the unchanged preceding package, but the earlier lost-acknowledgement failure remains unexplained. No activation |
 | Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `0b4fd421`; restored six original cache removals; 25727 failed during disk exhaustion; serial retry queued. Native30162 and Nixbot295, including executed ARM e2e, passed on preceding737aa13a; not acceptance of this new head or a root-cause fix for intermittent266 |
-| Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites` at375e9bd, combining #270 and #267 | Draft at `5beac2e1`; conservation review restored and registered original requester HTTP matrix. Format/provenance passed; 37940 failed during disk exhaustion; serial retry queued. Earlier native81807 belongs to d61bfd3; ARM/wider review pending |
+| Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites` at375e9bd, combining #270 and #267 | Draft at `5beac2e1`; original requester HTTP matrix restored and registered. Nixbot296 passed all listed checks on both Linux architectures at this head; no repeat of disk-failed37940 needed. Wider integration review pending |
 | Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `8b8b0c0b`; restored three original cache removals; 46301 stopped after disk errors; serial retry queued. Older50478/76300 are historical, not new-head acceptance. Latest parent cache removals, ARM and wider integration remain pending |
 | Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `65c4aa23`; restored original count-cache removal; 55108 stopped after disk errors; serial retry queued. Older76300 belongs to4b2c87d. Latest parent cache removals, ARM and wider integration remain pending |
 | Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; tests/live-schema SQLx96425 and full native71588 passed. ARM/wider acceptance pending. No lifecycle, catalog UI, later atomic rate creation or activation |
@@ -168,7 +168,7 @@ implementation remains incomplete. Do not treat
 | Task catalog and editor, [#279](https://github.com/numtide/horae/pull/279) | `feat/task-catalog`, `.worktrees/task-catalog` | integration/task-catalog-prerequisitese9f793d (#278/#260) | Draft, published `9fcc0a0`; full native66969 passed on this head, using valid cached outputs for identical derivations. ARM/final cross-PR review pending |
 | Task catalog dependency verification only | `integration/task-catalog-prerequisites`, `.worktrees/task-catalog-prerequisites` | #278812a870 and #260f00d8f0 | Published `e9f793d`; original requester,29 browser suites/20 HTTP matrices retained; source audit and full native31756 passed, including deployment/OIDC. Not a delivery PR or wider cross-stack acceptance |
 | Project task archive/restore controls, [#280](https://github.com/numtide/horae/pull/280) | `feat/project-task-activity-ui`, `.worktrees/project-task-activity-ui` | #276 at `7e883eb` | Draft at `24c5d0e`; four original8c1bf9b paths, parent receipt cleanup retained. Full native14092 passed, including browser and deployment/OIDC. ARM/final cross-PR review pending |
-| Harvest-compatible client reads, [#281](https://github.com/numtide/horae/pull/281) | `feat/scoped-harvest-clients`, `.worktrees/scoped-harvest-clients` | #272 at `fd91c3d` | Published draft `cd8d1db7` extracts eleven dirty paths plus shared-test visibility and original fixture descriptor81aefb2e. Initial failures28333/65280/11982 corrected; full native15935 passed, including deployment/OIDC. Latest parent cache changes, ARM and wider review remain pending; T238 not implemented |
+| Harvest-compatible client reads, [#281](https://github.com/numtide/horae/pull/281) | `feat/scoped-harvest-clients`, `.worktrees/scoped-harvest-clients` | #272 at `fd91c3d` | Published draft `cd8d1db7` extracts eleven dirty paths plus shared-test visibility and original fixture descriptor81aefb2e. Initial failures28333/65280/11982 corrected; full native15935 and Nixbot293 on both Linux architectures passed at this head. Latest parent cache changes and wider review remain pending; T238 not implemented |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
 Combine or subdivide only after tracing code and test dependencies. Prefer
@@ -6093,3 +6093,41 @@ compilation batch. New68739 is the sole live local full check, on unchanged
 #2681be11e74. Queue after it: #2715beac2e1, #26953183702, #2700b4fd421,
 #2728b8b0c0b, #27365c4aa23. This queue is not a background scheduler; start each
 only after the preceding handle is authoritatively terminal and space is checked.
+
+### Current-head CI evidence and distinct failure classes — 2026-10-07
+
+The preceding estimate response was status-only, not goal progress. This
+iteration reconfirmed #216 merged and polled68739 directly: still live,189 core
+tests passed, app tests executing. No second local full build was started;
+available space is85GB. No original source, application or assertion changed.
+
+Fresh GitHub snapshot `.scratch/permission-ci-followup.json` ties each check
+to its current head. Nixbot successful-attribute lists confirm browser, Clippy,
+deployment, OIDC, package, SQLx, tests and formatting for both Linux architectures
+on #2715beac2e1 ([296](https://nixbot.numtide.com/repos/github/numtide/horae/builds/296))
+and #281cd8d1db7 ([293](https://nixbot.numtide.com/repos/github/numtide/horae/builds/293)).
+Remove #271 from the local retry queue; those exact-head results need not be
+repeated. They do not certify wider integration or a different future head.
+
+Inspected failure logs rather than treating all red checks as infrastructure:
+
+| Build / PR | Observed failure | Next diagnostic boundary |
+| --- | --- | --- |
+| 297 / #268 | ARM deployment reached SIGKILL setup, then timed out93.94s waiting for the500-row advisory-lock waiter (90s bound) | No job-state diagnostics in that head; cannot distinguish slow processing from failed work from this log alone |
+| 286 / #279 | Build page identifies ARM deployment as its sole failed attribute; timeout94.96s | Not an unexplained aggregate failure; inspect detailed boundary before remediation |
+| 238 / #219 | Native CSV cancellation regression retried while the old import lock was still busy;818 passed,1 failed | CSV test assumes body closure implies PostgreSQL lock release; equivalent API cancellation test already waits for typed Busy within5s |
+| 233 / #236 | Three native CSV recovery tests exceeded the first-checkpoint wait;859 passed,3 failed | Check scheduling/resource contention and checkpoint progress; do not remove assertions or blindly lengthen waits |
+| 234 / #224 | Two native CSV recovery tests exceeded checkpoint/recovery waits;820 passed,2 failed | Distinct from238's cancellation race; no claim that one change fixes both |
+| 260 / #243 | ARM CLI authorization matrix returned indeterminate_submission exit6 instead of expected1;925 passed,1 failed | Inspect transport/server response before classifying as authorization regression or load |
+
+Raw logs and HTML are retained as `.scratch/nixbot-{build}-*.log/html`.
+Source tracing confirms CSV parser cancellation and PostgreSQL connection
+shutdown are separate events. `release_import` awaits unlock on ordinary exits;
+an aborted future instead relies on connection drop. This explains why a
+single immediate retry is not a reliable synchronization barrier, but no
+test/runtime repair is claimed or applied in this iteration.
+
+Next: collect68739; reuse completed remote gates for the remaining cache heads
+before starting any queued local retry. Resolve the observed failure classes
+without changing product behavior, then propagate verified shared/cache deltas
+and finish registration/composition conservation. PRs remain drafts; no merges.
