@@ -6,6 +6,9 @@ pkgs.testers.nixosTest {
     # Under TCG, coldplug can exceed the test harness's five-minute device limit.
     # Keep the console dependency alive until the driver's readiness deadline.
     systemd.settings.Manager.DefaultDeviceTimeoutSec = lib.mkForce 900;
+    # initdb can exceed PostgreSQL's 120-second startup limit under ARM TCG.
+    # Leave the shutdown timeout unchanged.
+    systemd.services.postgresql.serviceConfig.TimeoutStartSec = 900;
     services.horae.enable = true;
     services.horae.database.createLocally = true;
     systemd.services.horae.environment.DEV_LOGIN = "1";
