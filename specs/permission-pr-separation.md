@@ -3280,3 +3280,19 @@ Next collect the merge-group result, confirm actual #251 merge, fetch master,
 rebase the five own Crane commits with unsigned commits/known-head lease, and
 retarget #252. Verify final-head required CI and preserved local derivations
 before requesting its protected merge. Resume the original goal only afterwards.
+
+### Remote Crane platform evidence while protected queue runs
+
+Nixbot build121 on `774966e` completed: native ARM package, tests and browser
+passed, as did x86 package, browser and both VM checks. Only the two ARM VM
+checks failed. Their exact raw logs each show missing KVM, TCG fallback and
+guest-shell startup timeout while waiting for PostgreSQL, before application
+assertions. This improves native ARM evidence but is not an ARM VM pass or a
+cross-build certification. Results and links are recorded on #252.
+
+Created local recovery ref `backup/crane-before-master-rebase` at exact verified
+head `774966e7640bc7338b036b75d6e1f86411faa34b`; the worktree is clean. #251's
+merge-group run and watcher `37872` are still authoritatively live. Its earlier
+successful PR CI uploaded cache paths successfully; no cache-upload failure was
+found. No build was restarted and no merge protection changed. Next action
+remains to collect that queue result, not to start new functional work.
