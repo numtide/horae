@@ -1,9 +1,6 @@
-use std::collections::HashMap;
-
 use dioxus::prelude::*;
 use horae_core::duration::format_hhmm;
 use horae_core::types::EntryState;
-use uuid::Uuid;
 
 use super::{is_manager, loaded};
 use crate::components::avatar::{Avatar, first_initial};
@@ -50,14 +47,6 @@ pub fn Approvals() -> Element {
         let _tick = *refresh.read();
         async move { server_fns::list_approvals(f).await }
     });
-
-    let users = use_resource(|| async move { server_fns::list_users(false).await });
-    let user_names: HashMap<Uuid, String> = users
-        .read()
-        .as_ref()
-        .and_then(|r| r.as_ref().ok())
-        .map(|us| us.iter().map(|u| (u.id, u.name.clone())).collect())
-        .unwrap_or_default();
 
     let is_manager = is_manager(&me);
 
@@ -144,10 +133,7 @@ pub fn Approvals() -> Element {
                                         for s in items.iter() {
                                             {
                                                 let a = s.approval.clone();
-                                                let name = user_names
-                                                    .get(&a.user_id)
-                                                    .cloned()
-                                                    .unwrap_or_else(|| a.user_id.to_string());
+                                                let name = &s.user_name;
                                                 let submitted = a.submitted_at.format("%d %b, %H:%M").to_string();
                                                 let hours = format_hhmm(s.total_minutes);
                                                 let is_pending = a.state == EntryState::Submitted;
@@ -158,7 +144,7 @@ pub fn Approvals() -> Element {
                                                     tr {
                                                         td {
                                                             div { class: "flex items-center gap-3",
-                                                                Avatar { initials: first_initial(&name) }
+                                                                Avatar { initials: first_initial(name) }
                                                                 span { class: "font-medium", "{name}" }
                                                             }
                                                         }

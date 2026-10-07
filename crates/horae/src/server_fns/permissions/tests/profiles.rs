@@ -18,6 +18,15 @@ mod timesheet_people_tests;
 #[path = "timesheet_context.rs"]
 mod timesheet_context_tests;
 
+#[path = "project_people.rs"]
+mod project_people_tests;
+
+#[path = "editor.rs"]
+mod editor_tests;
+
+#[path = "subjects.rs"]
+mod subjects_tests;
+
 async fn save_state(
     pool: &PgPool,
     org: Uuid,
