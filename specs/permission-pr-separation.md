@@ -6914,3 +6914,31 @@ if it proves retained authority, await rollback at the owning transaction bounda
 and verify the regression plus relevant export tests before porting the fix to
 the owning extraction. No complete-composition gate, merge, closure or real-data
 mutation occurred. The full goal remains incomplete.
+
+Regression63981 finished exit1 as expected on diagnosticd112409e: the new test
+reproduced SQLSTATE55P03 on `organizations` while deferred cleanup was paused.
+The exact red derivation is
+`/nix/store/71gq345klrcw3zvras6fw59cn4qdryji-horae-export-denial-repro-0.1.0.drv`.
+This establishes the error-path cleanup race independently of timing under load.
+
+Diagnostic fixefd83523198befcfd32efdc29cd572da2a5c11fd explicitly awaits rollback
+when shared time-export authorization fails, preserving the original error if
+rollback succeeds and the existing database-error mapping otherwise. The change
+is eight lines added/one removed; no changed SQL, cache, migration, grants or
+success-path lifetime. Formatting84897 and whitespace passed. Regression source
+and diagnostic instrumentation remain local-only, not a delivery PR.
+
+Session23364 is the focused green-phase check at that exact head; it runs the
+whole `reports::limits::tests::` group through disposable Nix PostgreSQL, including
+the new deterministic regression and original cancellation/revocation tests.
+Log `.scratch/export-denial-check-green.log`. Do not edit the diagnostic worktree
+until this session is terminal or count this as a full-composition check.
+
+Verified the owning draft #263 and its worktree are unchanged at
+15bda5cccb84aa405270d208dd10c06faab8a0ef. Its authorization is still inline;
+#264 already extracts the identical `authorize_current` helper. Porting the fix
+must retain the cleanup boundary in #263 and preserve #264's helper reuse when
+refreshing descendants. Next: collect23364, review and port a passing fix with
+the regression to #263, then verify that extraction and reconcile descendants.
+The independent CLI broken-pipe failure remains unresolved; no assertion has
+been weakened and no production transport change was made.
