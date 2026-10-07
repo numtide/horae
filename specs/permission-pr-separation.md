@@ -6226,3 +6226,47 @@ recorded successor). Finish the shared-file semantic review and publish necessar
 integration adaptations on the appropriate dependency PRs after verification.
 Collect ARM302's diagnostic result and resolve the distinct remaining CI failures;
 reconcile the final delivery inventory without treating this fixture as shipped.
+
+### ARM recovery evidence and bounded VM budget — 2026-10-07
+
+Previous iteration made progress: composed source af7c35dc and ledger099b43ab
+were committed, with the ledger published. This iteration collected terminal
+results rather than restarting the confirmed-live local71277.
+
+Nixbot302 on #2700b4fd421 failed only ARM e2e. Its raw log is retained at
+`.scratch/nixbot-302-arm-e2e.log`. QEMU reports unavailable KVM. Both interruption
+scenarios succeeded: SIGTERM lock waiter66.67s/recovery73.57s, SIGKILL lock
+waiter84.82s/recovery96.34s elapsed. The final repeated import exceeded the90s
+wait (93.26s elapsed). Diagnostics show503 processed items, one running attempt,
+future lease, no last error, an active backend with no blocking PIDs and only
+the granted import advisory lock. The preceding three jobs succeeded with1003
+processed items. This supports an insufficient TCG workload budget, not a claim
+of a deadlock, cancellation defect or proven completion of the fourth job.
+
+Published #270b480f9d2 changes only `nix/checks/e2e.nix`: the three import
+boundary/completion waits allow300s on ARM and remain90s on x86. Gate acquisition
+stays90s; shutdown and diagnostics stay45s/15s. Input size,500-row interruption,
+exact1000-row results,60000minutes, reports and two-attempt recovery assertions
+are unchanged. No production timeout, lease, retry or skipped test was added.
+The existing blueprint check remains registered on both Linux architectures.
+
+Formatting and whitespace passed. Focused41517 tests the actual evaluated
+scripts for both architectures: six success/failure/diagnostic-error cases,
+90s default and300s explicit bounds, and all three budgeted call sites. An initial
+attribute lookup and dev-shell Python invocation failed before testing; corrected
+commands use `e2e.config.testScript` and Python from the pinned nixpkgs input.
+Current-head full CI is pending, not replaced by these focused tests. PR270's
+description records the evidence and remains draft. The local-only composition
+now includes this commit at5c43f24a; no composition full gate has started.
+
+Nixbot303 (#2728b8b0c0b) and304 (#27365c4aa23) finished successfully. Their
+successful-attribute pages explicitly include both Linux architectures' browser,
+Clippy, e2e, OIDC, package, SQLx, tests and formatting. Reuse these exact-head
+results; do not rerun the old disk-exhausted native checks. Cross-stack semantic
+review remains distinct and unfinished. Local71277 on #224 is still live: both
+package builds and Clippy passed; the browser suite is running.
+
+Next: collect #270's fresh ARM result and #22471277; once the sole local full
+check terminates, run the serial full gate on composition5c43f24a. Continue the
+shared-file semantic review, then propagate verified repairs into dependent PRs
+and finish the current-head inventory. No GitHub merges or closures.
