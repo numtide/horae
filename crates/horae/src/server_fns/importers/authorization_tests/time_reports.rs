@@ -4,6 +4,8 @@ use super::*;
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 
+mod groups;
+
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
     let other = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
@@ -119,4 +121,5 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .status(),
         StatusCode::UNAUTHORIZED
     );
+    groups::check(pool, api).await;
 }
