@@ -2,6 +2,39 @@
 
 use super::*;
 
+/// Resolve a Timesheet subject and its rows without a separate identity bootstrap.
+#[server]
+pub async fn load_timesheet_page(
+    query: crate::models::scoped_time::TimesheetQuery,
+) -> Result<crate::models::scoped_time::TimesheetPage, ServerFnError> {
+    use permissions::time_entries::TimeReadError;
+
+    let user = require_user().await.map_err(|error| match error {
+        error @ ServerFnError::ServerError {
+            code: UNAUTHORIZED, ..
+        } => error,
+        error => {
+            tracing::error!(%error, "Unable to authenticate Timesheet read");
+            server_err("Timesheet is unavailable")
+        }
+    })?;
+    let state = crate::state::global_state().await;
+    permissions::time_entries::sheet(&state.db, user.org_id, user.id, &query)
+        .await
+        .map_err(|error| match error {
+            TimeReadError::Forbidden => {
+                forbidden("Timesheet access or identity has changed; refresh the page")
+            }
+            TimeReadError::InvalidQuery => {
+                err(BAD_REQUEST, "Invalid Timesheet date range or cursor")
+            }
+            error => {
+                tracing::error!(%error, "Timesheet read failed");
+                server_err("Timesheet is unavailable")
+            }
+        })
+}
+
 /// Minimal authorized person labels; selection never grants entry access.
 #[server]
 pub async fn list_timesheet_people(
