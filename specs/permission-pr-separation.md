@@ -7496,3 +7496,166 @@ bases remain #272/#273/#275/#281; transitive review compositions still need the
 remaining refresh. The original #212 worktree remains atdb3935db with the same18
 dirty paths; root still has only the original untracked `.playwright-mcp/`.
 Ledger formatting67244 passed unchanged; no original files were removed.
+
+### Report-export shared-CI refresh
+
+Reconfirmed #216 merged at02f7b58a before changing branches. The preceding
+status-only turn was a verified wait on live gate38699, not implementation
+progress. This iteration advances the remaining report-export dependency chain.
+
+Preserved all nine heads under `backup/shared-ci-report-exports-20261007/*`
+and verified `.scratch/shared-ci-report-exports-20261007.bundle`, SHA-256
+`d35640ad0b2a806513be6ed0edbf4ada8002672579929ff28c0402697b4f61e9`.
+Each clean local head matched its remote before rewriting. Signing and automatic
+rebase reference updates were disabled.
+
+The XLSX review base now replays the existing legacy reader, financial snapshot,
+materialized export and query-cache patches over current #26106810c77. Conflicts
+only affected the combined HTTP test registry; the recovered file matched the
+original blob138255d6 exactly. Its initial treeba516597 matched the explicit
+old-parent composition. Formatting83234 then identified the original unsorted
+module declarations. The existing #263 formatting commit15bda5cc was moved into
+the shared base asd4a0d923, with identical patch and final registry blobd790cf33.
+The duplicate downstream formatting commit was dropped because it is inherited.
+All eight descendant trees remained identical across that move; no new source
+resolution, missing tests or functionality was introduced.
+
+| Branch | Previous head | Refreshed head |
+| --- | --- | --- |
+| integration/scoped-time-export-prerequisites | 83967167 | d4a0d923665fad210e4ac3d329609b015813fb05 |
+| feat/scoped-time-xlsx (#263) | 34341049 | 4b43acf886f3f1bdc2d6ddbe12cdf0f0e8e0053a |
+| integration/scoped-time-csv-prerequisites | e84f1943 | 38c0c28a105b9f42372b1044fa6d919780f57355 |
+| feat/scoped-time-csv (#264) | 2820e56d | 1be265bd89a49aadd2447e28effbee781cac5230 |
+| feat/time-report-access (#265) | 37846239 | fffa7194b702a1b7e7c68197f5a880adc41e466b |
+| integration/grouped-time-export-prerequisites | 29f42408 | 3d7742bbffcc8127317423dae42e55a64aa65846 |
+| feat/grouped-time-exports (#266) | 6293a081 | f6a604b260710a02e398578cc1d948d7c83bdaca |
+| feat/time-report-download-filters (#267) | 6c271f41 | 16b773d53041bac2cd480381e6d5bf8c0f0dcd39 |
+| feat/scoped-time-report-ui (#268) | 95e46821 | b797418348d8e8167a956b8b4d6900ce9d6a758a |
+
+All expected descendant trees matched:df242181,b9329021,cbc25614,f7945c9f,
+0f210d86,05508e7c,7f8313f3 andd968ab95 respectively. The final shared base tree
+is80d2333b after moving only the existing formatting patch. All functional
+delivery patches are identical by range-diff. Every tracked descendant file
+is byte-identical to its preserved head except README and the two #282 recovery
+test files; each exception matches its current owner blob. In particular,
+#263's explicit denial rollback and regression are conserved throughout the
+chain. Formatting63783 passed on all nine final worktrees with zero changes;
+whitespace checks also passed.
+
+The prior #264 reports and HTTP results remain valid evidence for their exact
+older heads, not fresh full-gate evidence for these commits. #283 is still not
+inherited by these branches. Review composition branches are not merge targets;
+the six PRs remain drafts pending current-head CI and final integration.
+
+Publication44560 completed successfully: nine refs updated atomically with
+exact previous-head leases, and all six PR descriptions and exact remote
+heads/draft states verified. No merge or original PR closure occurred.
+
+### Shared editor composition refresh
+
+Preserved the three original heads under
+`backup/shared-ci-editor-composition-20261007/*`; verified bundle
+`.scratch/shared-ci-editor-composition-20261007.bundle`, SHA-256
+`5f8e4e4f1f3b23ad369576cc61e90b89408b78a54ae1675aa9168892f6c074da`.
+Replayed the eight existing editor and identity-projection commits over current
+#254f93019fe, with signing and automatic reference updates disabled.
+
+Recovered editor conflicts matched original combined blobs0fc1f531 (HTTP test
+registry),f40742ce (permission module) andba6d5f90 (profile tests). Identity
+conflicts matched original blobsd9f9efee (HTTP registry) and6b556abb (users).
+A transient MERGE_RR lock interrupted rebase bookkeeping; the lock disappeared
+without deletion. The already-staged original identity change was committed
+with its original message/author, then the remaining replay completed. Final
+composition tree1bf76347 exactly equals the precomputed expected tree.
+
+| Branch | Previous head | Refreshed head |
+| --- | --- | --- |
+| integration/permission-readers-editor-check | 8d57be90 | 794a8e26ee94d727b2fd4a4c96d28fe30eec6fd5 |
+| feat/people-permission-editor-ui (#260) | f00d8f08 | b8bf4662fd2e2eb63ae7315a2e091d6949c21061 |
+| feat/scoped-project-editor (#269) | 53183702 | 1442e01640f27be948cd60223f7055ac9f8b92e7 |
+
+Both delivery trees match their expected compositions4aba6af5 and2bcf27ae;
+all five delivery patches are identical by range-diff. Every tracked file in
+all three branches is byte-identical to its preserved head except the two #282
+test files and #222's README note, each matching the current owner blob. No
+authorization, UI, CSS, test assertion, schema or query-cache change was added.
+
+Formatting52998 passed on all three worktrees with zero changes; whitespace
+checks passed. Publication71990 atomically updated all three refs with exact
+leases, updated both PR descriptions, and verified remote heads/draft states.
+
+### Project reader shared-CI refresh
+
+Preserved the project reader and delivery composition bases and their two PR
+heads under `backup/shared-ci-project-composition-20261008/*`. Verified
+`.scratch/shared-ci-project-composition-20261008.bundle`, SHA-256
+`160d59980d61e6e189562ac365c01b7e9c2f16bc6e01cc0b22dbcc32e76f9f6f`.
+All four clean worktrees matched their remote heads before backup. Only the
+reader base and #270 are updated in this step; #271 and its delivery base
+remain unchanged at5beac2e1 and375e9bdf respectively.
+
+Replayed the two original legacy/financial reader commits over794a8e26, retaining
+the original combined HTTP test registry blob9f937242. New reader-base head
+`c86806a8c3bfea2bce09f227f9af0972b1e4ee3e`, treea68d1306, matches the expected
+explicit-old-parent composition. #270 now has head
+`84b98033b2771a39b6004217d32a5ae98a1f7234`, expected treedf63c7ed.
+All six functional/project-test/query-cache patches are identical by range-diff.
+
+The old CI commits737aa13a andb480f9d2 already exist in the refreshed dependency
+through #282. Before skipping the conflicting diagnostics replay, confirmed
+that the current parent's entire e2e file equals both #282 and old #270. The
+ARM timeout replay then dropped automatically as already upstream. Nothing
+was removed from the final file. All other files are byte-identical to their
+preserved heads except README and the shared CSV recovery fixture; the base
+also gains the shared e2e corrections. Each inherited exception matches its
+owner blob. No production, UI, query, migration or assertion change was added.
+
+Formatting33003 passed on both worktrees with zero changes. Publication44940
+updated both refs atomically with exact leases, updated #270's description and
+verified its exact remote head/draft state.
+
+The complete gate38699 remains live on frozenf90f60f7 and has advanced into the
+server test suite. SQLx preparation is now independently confirmed successful:
+`nix path-info` accepted output
+`/nix/store/hggbpakr3dcwbfd06ab4slgga6s82dkp-horae-sqlx-prepare-0.1.0`
+from derivationsyd8gb6brc2bzv66gfd7aajxrk6s4zfc. This is exact-head SQLx evidence,
+not a claim that the remaining tests/deployment gates passed or that remote
+ARM builds passed.
+
+Next: collect gate38699 without restarting it; refresh the already-backed-up
+project delivery composition375e9bdf and #2715beac2e1, preserving #263's denial
+rollback from current #26716b773d5 and the verified #270 reader changes. Then
+refresh the remaining task/Harvest descendants and reconcile the final
+provenance and current-head verification inventory. #283's transport fix and
+#246's dormant-reader correction remain explicit integration requirements.
+This iteration is PROGRESS: nine PRs and five review bases updated and published;
+the goal remains incomplete. No merge, original closure, real-data operation,
+source-worktree cleanup or new feature was performed.
+
+Post-publication inventory18761 reports60 drafts, no local/remote head mismatch,
+14 successful aggregates,17 failures and29 in progress. These are GitHub check
+summaries, not proof of merge readiness; underlying build commit identity must
+also be checked. Direct stale bases are #272/#273/#275/#281; remaining review
+compositions also require transitive refresh. Original #212 stays atdb3935db
+with the same18 dirty paths, root retains only `.playwright-mcp/`, and the full
+gate worktree is clean atf90f60f7.
+
+Two failure logs were inspected once to refine the remaining CI work:
+
+- Nixbot327 belongs to current #2221fef1a24. Its server suite had829 passes,
+  one failure and11 ignored: the real HTTP test's CSV CLI invocation returned
+  `indeterminate_submission` / exit6 instead of the expected denial / exit1
+  at `authorization_tests/cli.rs`. This matches the previously reproduced
+  transport-framing failure signature; #283 must be composed and checked rather
+  than relaunching the unchanged failing head. Evidence:
+  `.scratch/nixbot-327-current.html` and `.scratch/nixbot-327-tests.log`.
+- The aggregate linked from #223 points to Nixbot323, whose page identifies
+  old head1dc4b6bc, not currentbc74af8d. Its ARM OIDC VM timed out at900 seconds
+  waiting for the test shell, while PostgreSQL was still initializing around
+  guest second885. No OIDC assertion had run. This does not prove a current-head
+  application regression or success; reconcile the build/check attribution and
+  investigate the boot-time limit before proposing another CI change. Evidence:
+  `.scratch/nixbot-323-current.html` and `.scratch/nixbot-323-oidc.log`.
+
+These findings add explicit transport integration and ARM/build-attribution
+follow-ups to the next actions above; no failed test was disabled or retried.
