@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET oidc_subject = id::text, cost_rate_cents = 6000,\n        billable_rate_cents = 10000 WHERE org_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "be7588de4ad0f6339c6f8e987a0d9c33afe0ad6af44cda56f2dc6d2cd95956b2"
+}
