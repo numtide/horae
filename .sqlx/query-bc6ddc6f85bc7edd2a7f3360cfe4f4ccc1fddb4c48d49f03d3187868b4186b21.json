@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable) SELECT id,$2,$3,id,$4,'2026-09-07',1,true FROM unnest($1::uuid[]) id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bc6ddc6f85bc7edd2a7f3360cfe4f4ccc1fddb4c48d49f03d3187868b4186b21"
+}

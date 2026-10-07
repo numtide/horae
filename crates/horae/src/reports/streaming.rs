@@ -27,6 +27,7 @@ use super::{
 
 mod cursor;
 mod delivery;
+pub(super) mod groups;
 use delivery::{Authority, CsvBuffer, Purpose};
 
 const CHUNK_BYTES: usize = 64 * 1024;
