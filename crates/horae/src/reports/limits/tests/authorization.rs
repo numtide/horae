@@ -407,14 +407,16 @@ async fn materialized_exports_preserve_checked_snapshots(pool: PgPool) {
             }
         }
         writer.commit().await.unwrap();
-        assert_eq!(
-            tokio::time::timeout(Duration::from_secs(5), pending)
-                .await
-                .unwrap()
-                .unwrap()
-                .unwrap(),
-            before
-        );
+        let result = tokio::time::timeout(Duration::from_secs(5), pending)
+            .await
+            .unwrap()
+            .unwrap();
+        // Time exports bind size and payload to one statement, not an earlier
+        // transaction snapshot. Either coherent snapshot must enforce the limit.
+        match (reader, result) {
+            (Reader::Entries, Err(StatusCode::PAYLOAD_TOO_LARGE)) => {}
+            (_, result) => assert_eq!(result.unwrap(), before),
+        }
         assert_eq!(
             case.read(&pool, (case.ids.org_id, case.ids.user_id), reader)
                 .await,
