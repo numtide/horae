@@ -14,6 +14,7 @@ pub(crate) mod profiles;
 pub(crate) mod project_management;
 pub(crate) mod templates;
 pub(crate) mod time_entries;
+pub(crate) mod time_reports;
 
 /// Bound authorization transactions independently of pooled connection defaults.
 pub(super) async fn configure_administration(
