@@ -400,3 +400,54 @@ the request/revision/receipt boundary, current project authority, protected-fiel
 preservation and parent-before-task ordering. No additional high/critical finding
 was identified in this increment; this is not independent review, browser
 acceptance or the full Nix gate. T233 and the task-management consumer remain open.
+
+### Existing-task link integration
+
+At `0591407`, the separately registered `link_project_task` still uses legacy
+manager authorization. Reuse the project editor's current all/managed operation
+gate for linking existing identities; global task write is not required and
+does not authorize the destination. Bind the request to the authenticated
+organization/person, including repeats, and acquire the access-changing
+organization gate before actor, project or task locks.
+
+Keep the existing association transport: absent `rate` uses established defaults
+for a new link and never edits an existing link; an explicit `ProjectTaskRate`
+requires current billable-rate write for the destination project. The pure
+project-owned rate evaluator must honor managed designation independently from
+all-project edit scope. Check this authority before existing-link no-op detection,
+including explicit equal/zero amounts. This endpoint is not an update/reset-rate
+API, and must preserve stored overrides, restrictions and archived state.
+
+The shared link helper still validates same-tenant active project/client/task,
+billing mode and currency for creation. Archived retained links require the
+explicit project-editor restoration from the prior increment; a repeated link
+request cannot restore them. Preserve policy-zero behavior and the existing
+create-task-and-link composite authorization.
+
+These are integrations of OP15 and the reviewed project/financial contracts,
+not a claim of observing every custom Harvest combination. Harvest's permissions
+and rate-setting references were rechecked on 2026-10-06; restricted-user browser
+observations remain unavailable for this direct endpoint. Required acceptance
+includes registered sessions, no-op and foreign-target denial, unavailable policy,
+scope/rate revocation across actual waits and retained configuration/history.
+
+The link currency review must also cover canonical-policy projects predating
+`project_settings`. Whenever a new association copies a non-null catalog amount,
+including zero, its known denomination must match the project currency. Missing
+project configuration is not permission to relabel money. An authorized explicit
+project-currency rate may replace that default during initial linking. Retained
+associations remain unchanged, and billing modes that do not copy defaults need
+no catalog-currency recovery. Preserve the separate policy-zero compatibility
+behavior until its reviewed cutover; do not convert historical money in this fix.
+This applies Horae's exact-money invariant and existing form validation, not a
+claim that Harvest documents its internal legacy-data currency behavior.
+
+The production-link currency regression failed before the correction (`10613`)
+and passes with the corrected guard. Expanded verifier `11565` exited 0 with
+154 project, 57 time-entry, 102 editor, 187 import and 29 compatibility tests,
+transport tests and the registered-session matrix, followed by SQLx preparation,
+offline all-target test compilation and strict native/WASM lint. Eight existing
+import scale tests were ignored. Scoped self-review checked every changed helper
+caller, authorization before no-ops, sorted parent/task locks and protected
+configuration/history. This completes T233's backend lifecycle/link boundary,
+not T234's browser consumer, T230, independent full-feature review or activation.
