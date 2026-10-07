@@ -130,9 +130,10 @@ Clients MVP as canonical-permission acceptance.
 | Requester-bound editor API, [#250](https://github.com/numtide/horae/pull/250) | `feat/permission-editor-api`, `.worktrees/permission-editor-api` | Review base `0117991` combining merged master `ed558f6` and #245 `14ad9ca` | Draft at `c727bc8`; four owned commits patch-equivalent to preserved `c82a5b3`; full native Nix `46207` PASSED, including complete browser/deployment/OIDC. Old `90520` selector failure retained; corrected helper inherited from merged master. Combined full native Nix `16434` passed on `7a2d61c`; retargeted gates remain; no UI or activation |
 | Scoped people directory, [#253](https://github.com/numtide/horae/pull/253) | `feat/scoped-people-directory`, `.worktrees/scoped-people-directory` | Review base `0117991`, independent of #250 editor operations and #240 legacy projections | Draft at `3a37538`; original reader/DTO/endpoint and seven DB/HTTP tests preserved; tests/Clippy/live SQLx `18891` and full local Nix `2803` passed. Exact browser/e2e/OIDC outputs explicitly materialized from signed cache; combined full native Nix `16434` passed on `7a2d61c`; later reader composition and retargeted gates remain; no UI or activation |
 | Identity-only project-team choices, [#254](https://github.com/numtide/horae/pull/254) | `feat/project-people-picker`, `.worktrees/project-people-picker` | #253 `3a37538`, for shared `PeopleCursor` and inherited foundations | Draft at `f498c3f`; original reader/DTO/endpoint, nine DB tests and HTTP assertions preserved; full native Nix `81722` PASSED, including complete browser/deployment/OIDC and exact cache reuse where available. Combined full native Nix `16434` passed on `7a2d61c`; retargeted gates remain; no picker UI, assignment writes or activation |
-| Scoped time-entry reader, [#255](https://github.com/numtide/horae/pull/255) | `feat/scoped-time-reader`, `.worktrees/scoped-time-reader` | Review base `0117991`, independent of directory, project-team choices and editor operations | Draft at `d93e1af`; original `4ac30fa` DTO/reader/eight DB tests/HTTP assertions and endpoint preserved; 23 original SQLx descriptors, module registrations adapted only. Formatting/provenance passed; full native Nix `40092` running; no Timesheet UI, subject discovery, commands or activation |
-| Timesheet person discovery, [#256](https://github.com/numtide/horae/pull/256) | `feat/timesheet-people-discovery`, `.worktrees/timesheet-people-discovery` | Review base `40102ae`, combining #255 `d93e1af` admission reader and #253 `3a37538` shared `PeopleCursor` | Draft at `1552fdb`; original `60f60f9` DTO/reader/eight DB tests, endpoint/HTTP additions and five SQLx descriptors preserved. Tests/Clippy/live SQLx `61768` PASSED; application992 passed, zero failed,11 inherited ignored. Full native Nix `37414` running; wider integration pending; no UI, context-page contract, commands or activation |
-| Requester-bound Timesheet page context, [#257](https://github.com/numtide/horae/pull/257) | `feat/timesheet-page-context`, `.worktrees/timesheet-page-context` | #256 `1552fdb`, for subject discovery and shared read admission | Draft at `8e09e60`; original `5faed76` DTO/reader/six DB tests and endpoint/HTTP additions preserved, no new SQL descriptors. Formatting/provenance/static37-query inventory passed; tests/Clippy/live SQLx `63162` running; full native Nix and wider integration pending; no UI, commands or activation |
+| Scoped time-entry reader, [#255](https://github.com/numtide/horae/pull/255) | `feat/scoped-time-reader`, `.worktrees/scoped-time-reader` | Review base `0117991`, independent of directory, project-team choices and editor operations | Draft at `d93e1af`; original `4ac30fa` DTO/reader/eight DB tests/HTTP assertions and endpoint preserved; 23 original SQLx descriptors, module registrations adapted only. Formatting/provenance passed; full native Nix `40092` PASSED; wider composition and retargeted checks pending; no Timesheet UI, subject discovery, commands or activation |
+| Timesheet person discovery, [#256](https://github.com/numtide/horae/pull/256) | `feat/timesheet-people-discovery`, `.worktrees/timesheet-people-discovery` | Review base `40102ae`, combining #255 `d93e1af` admission reader and #253 `3a37538` shared `PeopleCursor` | Draft at `1552fdb`; original `60f60f9` DTO/reader/eight DB tests, endpoint/HTTP additions and five SQLx descriptors preserved. Tests/Clippy/live SQLx `61768` PASSED; application992 passed, zero failed,11 inherited ignored. Full native Nix `37414` PASSED; wider integration pending; no UI, context-page contract, commands or activation |
+| Requester-bound Timesheet page context, [#257](https://github.com/numtide/horae/pull/257) | `feat/timesheet-page-context`, `.worktrees/timesheet-page-context` | #256 `1552fdb`, for subject discovery and shared read admission | Draft at `8e09e60`; original `5faed76` DTO/reader/six DB tests and endpoint/HTTP additions preserved, no new SQL descriptors. Formatting/provenance/static37-query inventory passed; tests/Clippy/live SQLx `63162` and full native Nix `72055` PASSED; application998 passed, zero failed,11 inherited ignored; wider integration pending; no UI, commands or activation |
+| Person-bound Timesheet commands, [#258](https://github.com/numtide/horae/pull/258) | `feat/timesheet-person-commands`, `.worktrees/timesheet-person-commands` | #257 `8e09e60`, for shared context contracts and foundations | Draft at `d2b45ca`; original `48a6533` contracts plus `02c4245` implementation,13 DB tests and HTTP assertions preserved;39 original SQLx descriptors. Formatting/provenance passed; tests/Clippy/SQLx `64524` running. Full and combined gates pending; approval-covered editing remains incomplete, no UI or activation |
 | Cross-PR reader/editor verification only | `integration/permission-readers-editor-check`, `.worktrees/permission-readers-editor-check` | Combines #240 `a19ea63`, #250 `c727bc8`, #253 `3a37538` and #254 `f498c3f` | Published at `7a2d61c`, no delivery PR or merge target; registration conflicts resolved preserving both sides, dedicated source/test blobs unchanged, original combined users module restored exactly. Tests/Clippy/SQLx `24884` and full native Nix `16434` PASSED; exact browser/deployment/OIDC outputs and logs verified after original process terminated. Later #255–#257 not included |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
@@ -392,7 +393,7 @@ Clients documents are separate and are not silently included in #248.
 | `6b5dbae` | Authorize identity-only project team choices | project-team-choices | DTO, reader, endpoint, nine DB tests, HTTP tests and ten SQLx descriptors extracted unchanged in draft #254 on #253; full native Nix `81722` passed on `f498c3f`; combined browser/deployment pending; specification owned by #248 |
 | `4c00660` | Document project form permission integration boundaries | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `3bb62ac` | Limit session identity responses to display fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
-| `4ac30fa` | Add scoped time-entry reads without financial metadata | time-readers | Original DTO, reader, endpoint, eight DB tests and HTTP assertions in draft #255 `d93e1af` on `0117991`; 23 original SQLx descriptors preserved, module registrations adapted only; formatting/provenance passed, full native Nix running; specification owned by #248 |
+| `4ac30fa` | Add scoped time-entry reads without financial metadata | time-readers | Original DTO, reader, endpoint, eight DB tests and HTTP assertions in draft #255 `d93e1af` on `0117991`; 23 original SQLx descriptors preserved, module registrations adapted only; formatting/provenance and full native Nix `40092` passed; wider composition pending; specification owned by #248 |
 | `c80233b` | Keep invoice identities out of time-entry responses | time-entry-payload | Exact final model and independently registered original legacy HTTP assertions in #242 (`43337fc`); 1,122 tests, complete SQLx, format, offline lints and full Nix passed; canonical fixture remainder and specification hunks separately preserved |
 | `5ec183a` | Fence time-entry writes against account deactivation | time-writer-activity | Source/tests and regenerated cache in #241 (`7820f8d`), original configuration SQL inlined without canonical module; 1,142 tests, both offline lints and full Nix passed; specification hunks retained |
 | `228e151` | Clarify timesheet context and locked calendar behavior | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
@@ -400,11 +401,11 @@ Clients documents are separate and are not silently included in #248.
 | `3308926` | Keep permission profile name uniqueness independent of database locale | permission-storage | Migration/storage regressions in #222; command lookup changes remain with template commands |
 | `8af562e` | Record passing permission regression gates | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `9b53182` | Verify profile capacity and confirm timesheet discovery | permission-editor, specification-history, time-readers | Original 50-contender HTTP capacity assertions retained in #250's exact final test file and passed in its workspace suite; specification/Timesheet discovery decision in #248, not a claim to deliver later Timesheet implementation |
-| `60f60f9` | Add scoped Timesheet person discovery | time-readers | DTO, reader, eight DB tests, endpoint and HTTP additions extracted in draft #256 `1552fdb` on combined #255/#253 review base `40102ae`; five original SQLx descriptors; formatting/provenance passed, executable checks running. Legacy HTTP block remains owned by #242; specification owned by #248 |
-| `5faed76` | Bind Timesheet page reads to requester and subject | time-readers | DTO, reader, six DB tests, endpoint and HTTP additions extracted in draft #257 `8e09e60` on #256 `1552fdb`; all queries reuse existing descriptors; formatting/provenance passed, executable checks running; specification owned by #248 |
+| `60f60f9` | Add scoped Timesheet person discovery | time-readers | DTO, reader, eight DB tests, endpoint and HTTP additions extracted in draft #256 `1552fdb` on combined #255/#253 review base `40102ae`; five original SQLx descriptors; formatting/provenance, tests/Clippy/SQLx `61768` and full native Nix `37414` passed; wider composition pending. Legacy HTTP block remains owned by #242; specification owned by #248 |
+| `5faed76` | Bind Timesheet page reads to requester and subject | time-readers | DTO, reader, six DB tests, endpoint and HTTP additions extracted in draft #257 `8e09e60` on #256 `1552fdb`; all queries reuse existing descriptors; formatting/provenance, tests/Clippy/SQLx `63162` and full native Nix `72055` passed; wider composition pending; specification owned by #248 |
 | `e1ddd9a` | Connect Timesheet to complete scoped page reads | timesheet-consumer-commands | Held in original backup; extraction pending |
-| `48a6533` | Define person-bound Timesheet command contracts | timesheet-consumer-commands | Held in original backup; extraction pending |
-| `02c4245` | Authorize person-bound Timesheet commands atomically | timesheet-consumer-commands | Held in original backup; extraction pending |
+| `48a6533` | Define person-bound Timesheet command contracts | timesheet-consumer-commands | 67-line contracts extracted with implemented endpoints in draft #258 `d2b45ca`; no standalone stub delivery. Formatting/provenance passed, executable gates running |
+| `02c4245` | Authorize person-bound Timesheet commands atomically | timesheet-consumer-commands | Whole command module,13 DB tests, HTTP assertions, implemented endpoints and39 original SQLx descriptors in draft #258 `d2b45ca`; source/format passed, `64524` running. Two DTO web-expectation removals stay with connected UI; approval-covered editing remains incomplete |
 | `a0632a8` | Bind Timesheet navigation and actions to the selected person | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `b8b1c60` | Bind weekly submission to the active Timesheet context | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `8722320` | Add browsable permission change history | permission-audit | Own-reader authentication-error sanitization in #244 (`6c4e4d1`); audit reader/UI/navigation, Settings link, profile labels and shell tests extracted in `c96d787`; original editor-dependent browser assertions retained for verification reconciliation; specification hunks retained |
@@ -4047,3 +4048,55 @@ their final UI consumer. This refines the preceding next-action order based on
 actual commit boundaries; it does not reduce scope. Full hunk accounting and
 remaining original editor/report/project/task/UI groups remain open. No merge,
 closure, activation or real-data change occurred.
+
+### Timesheet reader gates closed; person-bound command extraction started
+
+Previous iteration completed combined reader/editor verification and refreshed
+preservation accounting. This iteration closed all three later standalone
+reader gates without changing their heads: #255 `40092` on `d93e1af`, #256
+`37414` on `1552fdb`, and #257 full native Nix `72055` on `8e09e60` each
+terminated with exit0 and all checks passed. #257 tests/Clippy/live SQLx
+`63162` also terminated with exit0:998 application tests passed, zero failed,
+11 inherited ignored; core189 and all additional test binaries passed.
+The full #257 invocation reused available outputs and rebuilt its format check;
+it is not evidence of independently rerunning every cached test. Cross-PR
+composition with the editor, project picker and legacy writers remains pending.
+
+Created isolated `feat/timesheet-person-commands` at #257 `8e09e60`, worktree
+`.worktrees/timesheet-person-commands`. Extracted the original67-line contracts
+from `48a6533` together with the implemented35-line endpoints, complete command
+module and four test files from `02c4245`. Kept existing UI-only lint expectations:
+their original removals depend on the later connected UI, not these endpoints.
+Registered the original real-session HTTP tests with the existing harness.
+No UI consumer, policy activation, migration or new behavior is included.
+
+Static review confirmed existing requester/policy binding, active same-tenant
+subjects, own/person/project/all write scope, both ends of project moves,
+atomic bulk sets, approval/billing conflict boundaries, task eligibility,
+owner-only terminal timer recovery, revocation/cancellation fences and
+post-commit effects. Approval-covered editing remains explicitly incomplete
+in the original implementation and must stay declared, not silently enabled.
+The new path uses the existing organization SHARE and subject write barriers;
+#241's legacy-writer changes are a composition check, not a missing symbol.
+
+Copied38 original command SQLx descriptors. Static inventory of84 macro calls
+found one older reused descriptor absent from the extraction base:
+`d0fb58934201c864ceeb74648fc7516252742592f57cee657d5c81ca56c67621`
+(`SELECT minutes FROM time_entries WHERE id=$1`). Restored it byte-for-byte
+from the same original tree; no query was changed. Whitespace check passed.
+Initial staging orchestration `8929` timed out in automatic approval before
+execution; the permitted retry succeeded. Formatting `62818` passed with zero
+changes. All44 whole command/test/cache files match their original blobs.
+Published unsigned `d2b45cadecae68bbcb28dfd4250462bcbd194e41` as draft #258,
+stacked on #257;47 paths,2844 additions, including39 SQLx descriptor paths.
+Nix tests/Clippy/live SQLx `64524` is running in Clippy. Exact derivations:
+`jdf7ladl6xv4z3dx03rd3qc4gh7n8s5a-horae-clippy-0.1.0`,
+`869wwixbiws3vpq7qisbs4b77iq0lnsx-horae-tests-0.1.0` and
+`4ybli4yj1nq6m0zxb1pwsz268bqxp5zx-horae-sqlx-prepare-0.1.0` (all `.drv`).
+No passing executable result for #258 is claimed yet. #255–#257 descriptions
+now record their completed full gates while retaining draft/retargeting limits.
+
+Next collect `64524` and run #258's full native gate, then verify composition
+with #241 and the other reader/editor deliveries before continuing connected
+UI extraction. Preserve the explicit approval-editing limitation. Original
+hunk accounting remains incomplete. No extraction PR was merged or closed.
