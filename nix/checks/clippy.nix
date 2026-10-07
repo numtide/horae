@@ -1,6 +1,7 @@
 { perSystem, ... }:
-perSystem.self.default.overrideAttrs (_: {
+perSystem.self.default.overrideAttrs (old: {
   pname = "horae-clippy";
+  cargoArtifacts = old.passthru.checkArtifacts;
 
   # Let compile-time sqlx macros (query!, query_as!, …) resolve from the
   # .sqlx/ cache instead of requiring a live database connection.

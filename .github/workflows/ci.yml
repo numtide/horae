@@ -20,6 +20,10 @@ jobs:
 
       - name: Install Nix
         uses: cachix/install-nix-action@a49548c11d9846ad46ecc0115273879b045f001c # v31
+        with:
+          extra_nix_config: |
+            extra-substituters = https://cache.numtide.com
+            extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
 
       - name: Nix binary cache (GitHub Actions cache)
         uses: Mic92/hestia@fb239a2f72d4b6e26eec5425f289dea23b27a527 # v2
@@ -36,6 +40,10 @@ jobs:
 
       - name: Install Nix
         uses: cachix/install-nix-action@a49548c11d9846ad46ecc0115273879b045f001c # v31
+        with:
+          extra_nix_config: |
+            extra-substituters = https://cache.numtide.com
+            extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
 
       - name: Nix binary cache (GitHub Actions cache)
         uses: Mic92/hestia@fb239a2f72d4b6e26eec5425f289dea23b27a527 # v2

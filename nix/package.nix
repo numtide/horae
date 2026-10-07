@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, inputs, ... }:
 let
   inherit (pkgs) lib stdenv;
 
@@ -17,43 +17,79 @@ let
     targets.wasm32-unknown-unknown.stable.rust-std
   ] ++ lib.optional isCross
     targets.${stdenv.hostPlatform.rust.rustcTarget}.stable.rust-std);
-  rustPlatform = buildPkgs.makeRustPlatform {
-    cargo = toolchain;
-    rustc = toolchain;
-  };
-in
-rustPlatform.buildRustPackage (finalAttrs: {
-  pname = "horae";
-  version = "0.1.0";
+  craneLib = (inputs.crane.mkLib pkgs).overrideToolchain (_: toolchain);
   src = lib.cleanSourceWith {
     src = lib.cleanSource ../.;
     filter = path: _type: !(lib.hasSuffix ".nix" path) && !(lib.hasSuffix ".md" path);
   };
-  cargoLock.lockFile = finalAttrs.src + "/Cargo.lock";
-  doCheck = false;
+  cargoVendorDir = craneLib.vendorCargoDeps { inherit src; };
+  common = {
+    pname = "horae";
+    version = "0.1.0";
+    inherit src cargoVendorDir;
+    doCheck = false;
+    SQLX_OFFLINE = "true";
+  };
+
+  # Path patches are dependencies, not dummy workspace code. Dioxus also
+  # needs its configuration to select the same server/web profiles and flags.
+  # Its WASM bundler requires wasm-bindgen intrinsics, absent from an empty main.
+  dummyMain = buildPkgs.writeText "horae-deps-main.rs" ''
+    fn main() {
+        #[cfg(feature = "web")]
+        dioxus::launch(dioxus::prelude::VNode::empty);
+    }
+  '';
+  dummySrc = craneLib.mkDummySrc {
+    inherit src;
+    extraDummyScript = ''
+      chmod -R u+w "$out/vendor/dioxus-fullstack-0.7.9"
+      cp -r ${../vendor/dioxus-fullstack-0.7.9}/. "$out/vendor/dioxus-fullstack-0.7.9/"
+      cp ${../crates/horae/Dioxus.toml} "$out/crates/horae/Dioxus.toml"
+      cp -f ${dummyMain} "$out/crates/horae/src/main.rs"
+    '';
+  };
+  dxInputs = with buildPkgs; [ dioxus-cli wasm-pack binaryen ]
+    ++ lib.optionals stdenv.hostPlatform.isDarwin [ buildPkgs.darwin.sigtool ];
+  dxBuild = ''
+    (cd crates/horae && dx build --release --locked)
+  '';
+  releaseArtifacts = craneLib.buildDepsOnly ((builtins.removeAttrs common [ "src" ]) // {
+    inherit dummySrc;
+    nativeBuildInputs = dxInputs;
+    buildPhaseCargoCommand = dxBuild;
+  });
+  checkArtifacts = craneLib.buildDepsOnly ((builtins.removeAttrs common [ "src" ]) // {
+    inherit dummySrc;
+    pname = "horae-checks";
+    buildPhaseCargoCommand = ''
+      cargo check --locked --workspace --features server --all-targets
+      cargo test --locked --workspace --features server --no-run
+    '';
+  });
+in
+craneLib.mkCargoDerivation (common // {
+  cargoArtifacts = releaseArtifacts;
+  doInstallCargoArtifacts = false;
+  passthru = { inherit checkArtifacts; };
 
   # Compile-time sqlx macros (query!, query_as!, …) resolve from the
   # .sqlx/ cache instead of requiring a live database connection.
   SQLX_OFFLINE = "true";
 
-  nativeBuildInputs = with buildPkgs; [
-    dioxus-cli
-    wasm-pack
-    binaryen
-  ] ++ lib.optionals stdenv.hostPlatform.isDarwin [
-    buildPkgs.darwin.sigtool
+  nativeBuildInputs = dxInputs ++ [
+    craneLib.removeReferencesToRustToolchainHook
+    craneLib.removeReferencesToVendoredSourcesHook
   ];
 
   # Use dx build — the same command as development — to compile both the
-  # server binary and the WASM client bundle in one step.  cargoSetupHook
-  # (from buildRustPackage) runs before this and populates $CARGO_HOME with
-  # the vendored deps, so the cargo invocations inside dx work offline.
+  # server binary and the WASM client bundle in one step. Crane restores
+  # the dependency artifacts and configures vendored sources for offline builds.
   # dx must run from crates/horae/ where Dioxus.toml lives.
-  buildPhase = ''
-    runHook preBuild
-    export HOME=$(mktemp -d)
-    (cd crates/horae && dx build --release)
-    runHook postBuild
+  buildPhaseCargoCommand = ''
+    # Keep Cargo artifacts, but never ship the dependency stub's bundled assets.
+    rm -rf -- target/dx/horae/release/web
+    ${dxBuild}
   '';
 
   installPhase = ''

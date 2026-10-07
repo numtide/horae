@@ -1,6 +1,7 @@
 { perSystem, pkgs, ... }:
 perSystem.self.default.overrideAttrs (old: {
   pname = "horae-tests";
+  cargoArtifacts = old.passthru.checkArtifacts;
   nativeBuildInputs = old.nativeBuildInputs ++ [
     pkgs.cargo-nextest
     pkgs.postgresql
