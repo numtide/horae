@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE OR REPLACE FUNCTION fetch_csv_export_rows(max_rows integer)\n        RETURNS SETOF record LANGUAGE plpgsql SECURITY INVOKER AS $$\n        DECLARE\n            source refcursor := 'horae_csv';\n            item record;\n            payload_bytes bigint := 0;\n            calls integer := COALESCE(NULLIF(current_setting('horae_test.csv_fetches',true),''),'0')::integer;\n        BEGIN\n            PERFORM set_config('horae_test.csv_fetches',(calls+1)::text,true);\n            IF calls=2 THEN PERFORM pg_advisory_xact_lock(733212); END IF;\n            IF max_rows IS NULL OR max_rows < 1 OR max_rows > 128 THEN\n                RAISE EXCEPTION 'Invalid CSV batch size';\n            END IF;\n            FOR position IN 1..max_rows LOOP\n                FETCH NEXT FROM source INTO item;\n                EXIT WHEN NOT FOUND;\n                IF item.export_bytes IS NULL OR item.export_bytes < 0 THEN\n                    RAISE EXCEPTION 'Invalid CSV payload weight';\n                END IF;\n                payload_bytes := payload_bytes + item.export_bytes;\n                RETURN NEXT item;\n                EXIT WHEN payload_bytes >= 65536;\n            END LOOP;\n        END; $$",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "04d07c26fa6315ec4cf03f3bf65cf9cfe5cf16c76e9addf340689654f998fdcd"
+}

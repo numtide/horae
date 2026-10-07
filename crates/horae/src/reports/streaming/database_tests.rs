@@ -4,6 +4,9 @@ use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
 
 use super::*;
 
+mod authorization;
+mod scoped_time;
+
 fn params() -> ExportParams {
     ExportParams {
         from: "2026-09-07".to_owned(),
@@ -12,7 +15,26 @@ fn params() -> ExportParams {
         project_id: None,
         user_id: None,
         tag_id: None,
+        ..ExportParams::default()
     }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn streamed_project_exports_deny_inactive_actors(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let result = projects(
+        pool,
+        ids.org_id,
+        ids.user_id,
+        ProjectsExportParams { scope: None },
+    )
+    .await;
+    assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
 }
 
 async fn body(response: Response) -> Vec<u8> {
@@ -73,6 +95,7 @@ async fn streamed_tag_filter_excludes_other_projects_without_duplicating_rows(po
         entries(
             pool.clone(),
             ids.org_id,
+            ids.user_id,
             ExportParams {
                 tag_id: Some(selected),
                 ..params()
@@ -95,6 +118,7 @@ async fn streamed_tag_filter_excludes_other_projects_without_duplicating_rows(po
         entries(
             pool,
             ids.org_id,
+            ids.user_id,
             ExportParams {
                 tag_id: Some(Uuid::now_v7()),
                 ..params()
@@ -125,7 +149,9 @@ async fn streamed_timesheet_preserves_csv_escaping_frozen_zero_and_all_filters(p
     .execute(&pool)
     .await
     .unwrap();
-    let response = entries(pool.clone(), ids.org_id, params()).await.unwrap();
+    let response = entries(pool.clone(), ids.org_id, ids.user_id, params())
+        .await
+        .unwrap();
     assert_eq!(
         response.headers()[header::CONTENT_DISPOSITION],
         "attachment; filename=\"timesheet.csv\""
@@ -153,7 +179,12 @@ async fn streamed_timesheet_preserves_csv_escaping_frozen_zero_and_all_filters(p
             ..params()
         },
     ] {
-        let csv = body(entries(pool.clone(), ids.org_id, filtered).await.unwrap()).await;
+        let csv = body(
+            entries(pool.clone(), ids.org_id, ids.user_id, filtered)
+                .await
+                .unwrap(),
+        )
+        .await;
         assert_eq!(
             csv::Reader::from_reader(csv.as_slice()).records().count(),
             0
@@ -163,6 +194,7 @@ async fn streamed_timesheet_preserves_csv_escaping_frozen_zero_and_all_filters(p
         entries(
             pool,
             ids.org_id,
+            ids.user_id,
             ExportParams {
                 from: "invalid".to_owned(),
                 ..params()
@@ -179,7 +211,9 @@ async fn streamed_timesheet_preserves_csv_escaping_frozen_zero_and_all_filters(p
 async fn streamed_timesheet_exceeds_xlsx_row_limit_without_one_large_body_chunk(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     add_entries(&pool, &ids, 10_001).await;
-    let response = entries(pool, ids.org_id, params()).await.unwrap();
+    let response = entries(pool, ids.org_id, ids.user_id, params())
+        .await
+        .unwrap();
     let mut chunks = response.into_body().into_data_stream();
     let first = chunks.next().await.unwrap().unwrap();
     assert!(first.len() < 1024);
@@ -283,7 +317,9 @@ async fn streamed_invoice_uses_stored_exact_cents_and_tenant_scoped_metadata(poo
          VALUES ($1, $2, $3, $4, 0, $5, $5)",
         line_id, invoice_id, entry, "Quoted \"界\",\nline", i64::MAX,
     ).execute(&pool).await.unwrap();
-    let result = invoice(pool.clone(), ids.org_id, invoice_id).await.unwrap();
+    let result = invoice(pool.clone(), ids.org_id, ids.user_id, invoice_id)
+        .await
+        .unwrap();
     assert_eq!(
         result.headers()[header::CONTENT_DISPOSITION],
         "attachment; filename=\"invoice-CSV-1.csv\""
@@ -294,13 +330,15 @@ async fn streamed_invoice_uses_stored_exact_cents_and_tenant_scoped_metadata(poo
         "Description,Hours,Rate,Amount,Currency,Issued on,Due on,Payment terms (days),Purchase order\n\"Quoted \"\"界\"\",\nline\",0.00,92233720368547758.07,92233720368547758.07,EUR,2026-09-07,2026-10-07,30,\nSubtotal,,,92233720368547758.07,EUR,2026-09-07,2026-10-07,30,\nTotal,,,92233720368547758.07,EUR,2026-09-07,2026-10-07,30,\n"
     );
     assert_eq!(
-        invoice(pool.clone(), other.org_id, invoice_id)
+        invoice(pool.clone(), other.org_id, other.user_id, invoice_id)
             .await
             .unwrap_err(),
         StatusCode::NOT_FOUND
     );
     assert_eq!(
-        invoice(pool, ids.org_id, Uuid::now_v7()).await.unwrap_err(),
+        invoice(pool, ids.org_id, ids.user_id, Uuid::now_v7())
+            .await
+            .unwrap_err(),
         StatusCode::NOT_FOUND
     );
 }
@@ -327,7 +365,12 @@ async fn streamed_fee_invoice_has_no_fabricated_hours_or_hourly_rate(pool: PgPoo
     sqlx::query!("INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents,po_number,discount_bps,discount_cents,tax1_bps,tax1_cents,tax2_name,tax2_bps,tax2_cents) VALUES ($1,$2,$3,'FEE-1','2026-09-01','2026-09-22','EUR',13782,$4,1000,1250,2100,2363,$5,150,169)", invoice_id, ids.org_id, ids.client_id, "PO \"界\",\n123", "Local \"tax\"").execute(&pool).await.unwrap();
     sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency) VALUES ($1,$2,$3,'single','2026-09-01','Fixed fee',12500,'EUR')", fee_id, ids.org_id, ids.project_id).execute(&pool).await.unwrap();
     sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,fee_occurrence_id,description,amount_cents) VALUES ($1,$2,$3,'Fixed fee',12500)", Uuid::now_v7(), invoice_id, fee_id).execute(&pool).await.unwrap();
-    let bytes = body(invoice(pool, ids.org_id, invoice_id).await.unwrap()).await;
+    let bytes = body(
+        invoice(pool, ids.org_id, ids.user_id, invoice_id)
+            .await
+            .unwrap(),
+    )
+    .await;
     let mut reader = csv::Reader::from_reader(bytes.as_slice());
     assert_eq!(
         reader.headers().unwrap().iter().collect::<Vec<_>>(),
@@ -366,7 +409,7 @@ async fn dropping_streamed_timesheet_closes_its_database_connection(pool: PgPool
     let ids = seed(&pool, OrgRole::Manager).await;
     add_entries(&pool, &ids, 10_001).await;
     let (export_pool, pid) = export_connection(&pool).await;
-    let response = entries(export_pool.clone(), ids.org_id, params())
+    let response = entries(export_pool.clone(), ids.org_id, ids.user_id, params())
         .await
         .unwrap();
     drop(response);
@@ -424,14 +467,48 @@ async fn streamed_invoice_metadata_and_lines_share_one_snapshot(pool: PgPool) {
         "INSERT INTO invoice_line_items (id, invoice_id, time_entry_id, description, minutes, rate_cents, amount_cents)
          VALUES ($1, $2, $1, 'Original', 60, 100, 100)", entry, invoice_id,
     ).execute(&pool).await.unwrap();
-    let (export_pool, pid) = export_connection(&pool).await;
+    sqlx::query!("CREATE SCHEMA invoice_csv_test")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "CREATE FUNCTION invoice_csv_test.pause() RETURNS boolean LANGUAGE plpgsql AS $$
+        BEGIN PERFORM pg_advisory_xact_lock(715046); RETURN true; END $$"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "CREATE VIEW invoice_csv_test.invoice_line_items AS
+        SELECT * FROM public.invoice_line_items WHERE invoice_csv_test.pause()"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let export_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .after_connect(|connection, _| {
+            Box::pin(async move {
+                sqlx::query!("SET search_path=invoice_csv_test,public")
+                    .execute(connection)
+                    .await?;
+                Ok(())
+            })
+        })
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    let pid = sqlx::query_scalar!("SELECT pg_backend_pid() as \"pid!\"")
+        .fetch_one(&export_pool)
+        .await
+        .unwrap();
     let mut edit = pool.begin().await.unwrap();
-    sqlx::query!("LOCK TABLE invoice_line_items IN ACCESS EXCLUSIVE MODE")
+    sqlx::query!("SELECT pg_advisory_xact_lock(715046) AS \"lock!: ()\"")
         .execute(&mut *edit)
         .await
         .unwrap();
     let task_pool = export_pool.clone();
-    let task = tokio::spawn(invoice(task_pool, ids.org_id, invoice_id));
+    let task = tokio::spawn(invoice(task_pool, ids.org_id, ids.user_id, invoice_id));
     let locked = tokio::time::timeout(Duration::from_secs(3), async {
         loop {
             if sqlx::query_scalar!(
@@ -442,19 +519,24 @@ async fn streamed_invoice_metadata_and_lines_share_one_snapshot(pool: PgPool) {
     if locked.is_err() {
         task.abort();
         let _ = task.await;
-        panic!("CSV did not reach its line query");
+        panic!("CSV did not reach its post-capture line fetch");
     }
     sqlx::query!(
-        "UPDATE invoices SET total_cents = 200 WHERE id = $1",
+        "UPDATE public.invoices SET number='CHANGED',currency='USD',total_cents = 200 WHERE id = $1",
         invoice_id
     )
     .execute(&mut *edit)
     .await
     .unwrap();
-    sqlx::query!("UPDATE invoice_line_items SET description = 'Changed', amount_cents = 200 WHERE invoice_id = $1", invoice_id)
+    sqlx::query!("UPDATE public.invoice_line_items SET description = 'Changed', amount_cents = 200 WHERE invoice_id = $1", invoice_id)
         .execute(&mut *edit).await.unwrap();
     edit.commit().await.unwrap();
-    let bytes = body(task.await.unwrap().unwrap()).await;
+    let response = task.await.unwrap().unwrap();
+    assert_eq!(
+        response.headers()[header::CONTENT_DISPOSITION],
+        "attachment; filename=\"invoice-SNAPSHOT.csv\""
+    );
+    let bytes = body(response).await;
     assert_eq!(
         String::from_utf8(bytes).unwrap(),
         "Description,Hours,Rate,Amount,Currency,Issued on,Due on,Payment terms (days),Purchase order\nOriginal,1.00,1.00,1.00,EUR,2026-09-07,2026-10-07,30,\nSubtotal,,,1.00,EUR,2026-09-07,2026-10-07,30,\nTotal,,,1.00,EUR,2026-09-07,2026-10-07,30,\n"
@@ -469,7 +551,9 @@ async fn measure_streaming_csv_export(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     add_entries(&pool, &ids, 100_000).await;
     let started = std::time::Instant::now();
-    let result = entries(pool, ids.org_id, params()).await.unwrap();
+    let result = entries(pool, ids.org_id, ids.user_id, params())
+        .await
+        .unwrap();
     let first_chunk_time = started.elapsed();
     let mut stream = result.into_body().into_data_stream();
     let mut bytes = 0;

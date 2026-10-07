@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE invoice_line_items SET description='Changed',amount_cents=200 WHERE invoice_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ca35852a9f35ba644641ec8581392469e32d7da861c816b94f121fbcea8a6bf6"
+}

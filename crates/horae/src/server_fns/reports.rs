@@ -5,6 +5,36 @@ use super::*;
 #[cfg(all(test, feature = "server"))]
 mod tests;
 
+/// Resolve report mode and identity together before mounting consumer resources.
+#[server]
+pub async fn get_time_report_access(
+    expected_requester: Option<crate::models::permission_editor::PermissionRequester>,
+) -> Result<crate::models::time_report::TimeReportAccess, ServerFnError> {
+    let user = require_user().await.map_err(|error| match error {
+        error @ ServerFnError::ServerError {
+            code: UNAUTHORIZED, ..
+        } => error,
+        error => {
+            tracing::error!(%error, "Unable to authenticate report access");
+            server_err("Report access is unavailable")
+        }
+    })?;
+    let requester = crate::models::permission_editor::PermissionRequester {
+        org_id: user.org_id,
+        user_id: user.id,
+    };
+    if expected_requester.is_some_and(|expected| expected != requester) {
+        return Err(forbidden("Report requester has changed"));
+    }
+    let state = crate::state::global_state().await;
+    crate::reports::read_time_report_access(&state.db, requester)
+        .await
+        .map_err(|status| match status {
+            axum::http::StatusCode::FORBIDDEN => forbidden("Current report access is required"),
+            _ => server_err("Report access is unavailable"),
+        })
+}
+
 /// Nonfinancial detailed time under current scoped authority, in bounded pages.
 #[server]
 pub async fn list_visible_time_report_entries(
@@ -250,9 +280,10 @@ pub async fn report_detailed(
     // The CSV/XLSX exports must return exactly these rows, so the query lives
     // once in `crate::reports` and both surfaces call it.
     let state = crate::state::global_state().await;
-    crate::reports::fetch_entries(
+    fetch_detailed(
         &state.db,
         manager.org_id,
+        manager.id,
         (from_date, to_date),
         crate::reports::ReportFilters {
             client_id: client_filter,
@@ -262,7 +293,22 @@ pub async fn report_detailed(
         },
     )
     .await
-    .map_err(server_err)
+}
+
+#[cfg(feature = "server")]
+pub(super) async fn fetch_detailed(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    period: (chrono::NaiveDate, chrono::NaiveDate),
+    filters: crate::reports::ReportFilters,
+) -> Result<Vec<DetailedReportRow>, ServerFnError> {
+    let mut tx = super::snapshot::manager(pool, org_id, actor_id).await?;
+    let rows = crate::reports::fetch_entries(&mut *tx, org_id, period, filters)
+        .await
+        .map_err(server_err)?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(rows)
 }
 
 // ── Plugins ────────────────────────────────────────────────────────────────

@@ -505,11 +505,17 @@ mod organization;
 mod permission_editor;
 #[cfg(feature = "server")]
 mod permissions;
+#[cfg(feature = "server")]
+pub(crate) use permissions::{
+    PermissionStorageError, StoredPersonPermissions, load_person_permissions,
+};
 mod plugins;
 mod project_creation;
 mod project_managers;
 mod projects;
 mod reports;
+#[cfg(feature = "server")]
+pub(crate) mod snapshot;
 mod time_entries;
 mod users;
 

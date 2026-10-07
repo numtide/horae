@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET search_path=csv_fetch_test,public",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "bb12a9a6a4130cd96a79ed7d7dad8edadb4dc603b4e56d36d816f3cf7317aae9"
+}

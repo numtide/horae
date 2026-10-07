@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET minutes=17,billable=$2,invoice_id=$3,rounded_minutes=$4 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7e2dfc316b9e2c98bcee9afd873622659fc219f3bd9db48fb28ab3211db57a49"
+}

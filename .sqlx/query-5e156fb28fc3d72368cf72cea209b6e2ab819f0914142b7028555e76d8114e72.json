@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE SCHEMA invoice_csv_test",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "5e156fb28fc3d72368cf72cea209b6e2ab819f0914142b7028555e76d8114e72"
+}

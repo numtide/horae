@@ -1,0 +1,163 @@
+//! Snapshot readers derive authority from the actual session, not JSON IDs.
+
+use super::*;
+
+pub(super) async fn check(pool: &PgPool, api: &Api) {
+    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Manager).await;
+    let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    sqlx::query!(
+        "UPDATE projects SET project_type='fixed_fee', starts_on='2026-09-01' WHERE id=$1",
+        ids.project_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode,fee_mode,fee_amount_cents) VALUES ($1,$2,$3,$4,'person','single',12500)",
+        Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id
+    ).execute(pool).await.unwrap();
+    let cookie = api.cookie(ids.user_id).await;
+    let member = api
+        .cookie(user(pool, ids.org_id, OrgRole::Member).await)
+        .await;
+    for name in ["prepare_invoice", "get_project_fee_balances"] {
+        let body = json!({
+            "client_id": ids.client_id, "project_id": ids.project_id,
+            "period_from": "2026-09-01", "period_to": "2026-09-30",
+            "project_ids": null, "overrides": null, "fees": null,
+            "actor_id": foreign.user_id, "org_id": foreign.org_id,
+            "org_role": "admin"
+        });
+        assert_eq!(
+            api.call(name, body.clone(), None, false).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            api.call(name, body.clone(), Some(&member), false)
+                .await
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+        let result = api.json(name, body.clone(), &cookie).await;
+        let amount = if name == "prepare_invoice" {
+            &result["subtotal_cents"]
+        } else {
+            &result[0]["balance"]["remaining_cents"]
+        };
+        assert_eq!(amount, &json!(12500), "{name}: {result}");
+        let mut foreign_target = body.clone();
+        foreign_target["client_id"] = json!(foreign.client_id);
+        foreign_target["project_id"] = json!(foreign.project_id);
+        let response = api.call(name, foreign_target, Some(&cookie), false).await;
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let error = response.text().await.unwrap();
+        for field in ["subtotal_cents", "remaining_cents", "fee_amount_cents"] {
+            assert!(!error.contains(field), "{name}: {error}");
+        }
+        sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            api.call(name, body, Some(&cookie), false).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+    let invoice = crate::server_fns::invoices::generate_invoice_for_period(
+        pool,
+        ids.org_id,
+        ids.client_id,
+        "2026-09-01".parse().unwrap(),
+        "2026-09-30".parse().unwrap(),
+    )
+    .await
+    .unwrap();
+    let invoice_id = invoice.invoice.id;
+    let editor = api
+        .json(
+            "get_invoice_editor",
+            json!({"invoice_id": invoice_id}),
+            &cookie,
+        )
+        .await;
+    let foreign_cookie = api.cookie(foreign.user_id).await;
+    for name in ["get_invoice_editor", "review_invoice_edit"] {
+        let body = json!({
+            "invoice_id": invoice_id, "edit": editor["edit"],
+            "org_id": foreign.org_id, "actor_id": foreign.user_id, "org_role": "admin"
+        });
+        let expected = if name == "get_invoice_editor" {
+            &editor
+        } else {
+            &editor["review"]
+        };
+        assert_eq!(&api.json(name, body.clone(), &cookie).await, expected);
+        assert_eq!(
+            api.call(name, body.clone(), None, false).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            api.call(name, body.clone(), Some(&member), false)
+                .await
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+        for (request, session) in [
+            (body.clone(), &foreign_cookie),
+            (
+                json!({"invoice_id": Uuid::now_v7(), "edit": editor["edit"]}),
+                &cookie,
+            ),
+        ] {
+            let response = api.call(name, request, Some(session), false).await;
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+            let error = response.text().await.unwrap();
+            for field in ["total_cents", "agreed_cents", "amount_cents", "po_number"] {
+                assert!(!error.contains(field), "{name}: {error}");
+            }
+        }
+        sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            api.call(name, body.clone(), Some(&cookie), false)
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        if name == "review_invoice_edit" {
+            let mut stale = body;
+            stale["edit"]["revision"] = json!(editor["edit"]["revision"].as_i64().unwrap() + 1);
+            assert_eq!(
+                api.call(name, stale, Some(&cookie), false).await.status(),
+                StatusCode::CONFLICT
+            );
+        }
+    }
+    sqlx::query!("UPDATE invoices SET status='sent' WHERE id=$1", invoice_id)
+        .execute(pool)
+        .await
+        .unwrap();
+    for name in ["get_invoice_editor", "review_invoice_edit"] {
+        assert_eq!(
+            api.call(
+                name,
+                json!({"invoice_id": invoice_id, "edit": editor["edit"]}),
+                Some(&cookie),
+                false
+            )
+            .await
+            .status(),
+            StatusCode::CONFLICT
+        );
+    }
+}

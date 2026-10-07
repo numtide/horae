@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE SCHEMA project_export_test",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "5044450dc51716a93c4312e6abd7b0419fc4fc0f91322e4ef575258cab6f59ef"
+}

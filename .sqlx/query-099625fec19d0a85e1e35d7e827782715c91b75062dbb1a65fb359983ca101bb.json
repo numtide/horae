@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM assignments WHERE user_id=$1 AND project_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "099625fec19d0a85e1e35d7e827782715c91b75062dbb1a65fb359983ca101bb"
+}

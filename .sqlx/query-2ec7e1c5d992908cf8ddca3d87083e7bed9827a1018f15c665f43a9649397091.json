@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET search_path=invoice_csv_test,public",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "2ec7e1c5d992908cf8ddca3d87083e7bed9827a1018f15c665f43a9649397091"
+}

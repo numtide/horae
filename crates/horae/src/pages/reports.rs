@@ -5,11 +5,14 @@ use dioxus::prelude::*;
 use horae_core::duration::format_hours2 as hours;
 use horae_core::money::format_cents as money;
 
-use super::{is_manager, loaded};
+use super::loaded;
 use crate::components::badge::Badge;
 use crate::components::form::{FormGroup, Input};
 use crate::components::table::DataTable;
 use crate::server_fns;
+
+#[path = "reports/scoped.rs"]
+mod scoped;
 
 /// Do not add monetary values until their currencies have been checked.
 fn money_total(
@@ -68,6 +71,51 @@ fn FilterSelect(
 
 #[component]
 pub fn Reports() -> Element {
+    use crate::models::time_report::{TimeReportAccess, TimeReportPolicy};
+
+    // Retain identity and mode when refreshing access unmounts the result view.
+    let mut binding = use_signal(|| None::<TimeReportAccess>);
+    let mut access = use_resource(move || async move {
+        let expected = *binding.peek();
+        let result = server_fns::get_time_report_access(expected.map(|value| value.requester))
+            .await
+            .map_err(|_| "Report access is unavailable. Sign in again or retry.")?;
+        if expected.is_some_and(|expected| expected != result) {
+            return Err("Your session or report policy changed. Reload this page to continue.");
+        }
+        binding.set(Some(result));
+        Ok(result)
+    });
+    if access.state()() != UseResourceState::Ready {
+        return rsx! { p { role: "status", "Loading report access…" } };
+    }
+    match &*access.read() {
+        Some(Ok(access)) if access.policy == TimeReportPolicy::Legacy => rsx! { LegacyReports {} },
+        Some(Ok(allowed)) => rsx! {
+            scoped::ScopedReports {
+                requester: allowed.requester,
+                on_check_access: move |_| access.restart(),
+            }
+        },
+        response => {
+            let message = response
+                .as_ref()
+                .and_then(|result| result.as_ref().err())
+                .copied()
+                .unwrap_or("Report access is unavailable. Sign in again or retry.");
+            rsx! {
+                div { class: "page-header", h1 { class: "page-title", "Reports" } }
+                p { class: "alert alert-danger", role: "alert", "{message}" }
+                button { id: "reports-retry-access", r#type: "button", class: "btn btn-secondary",
+                    onclick: move |_| access.restart(), "Retry access"
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn LegacyReports() -> Element {
     let today = chrono::Utc::now().date_naive();
     let month_start = today.with_day(1).unwrap_or(today);
 
@@ -79,8 +127,6 @@ pub fn Reports() -> Element {
     let mut user_filter = use_signal(String::new);
     let mut tag_filter = use_signal(String::new);
     let mut active_tab = use_signal(|| "time".to_string());
-
-    let me = use_resource(|| async move { server_fns::get_me().await });
 
     // Dropdown sources. Projects narrow to the chosen client.
     let clients = use_resource(|| async move { server_fns::list_clients(false).await });
@@ -116,23 +162,6 @@ pub fn Reports() -> Element {
         let tag = opt(tag_filter());
         async move { server_fns::report_detailed(f, t, cl, pr, us, tag).await }
     });
-
-    // Reports cover every user's time and money, so the endpoints are
-    // manager-only (SPEC §6). Mirror the Approvals page: keep the rail link for
-    // everyone and show a notice here instead of a wall of errors.
-    let is_manager = is_manager(&me);
-    if !is_manager {
-        return rsx! {
-            div {
-                div { class: "page-header",
-                    h1 { class: "page-title", "Reports" }
-                }
-                div { class: "card p-8 text-center",
-                    p { class: "text-muted", "Manager or admin access is required to view reports." }
-                }
-            }
-        };
-    }
 
     // The export must match what the tables show, so the active filters ride
     // along in the query string; unset ones are left out and mean "all".

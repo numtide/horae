@@ -13,11 +13,18 @@ use serde::Deserialize;
 use tower_sessions::Session;
 
 mod bounded;
+mod groups;
+pub use groups::export_csv as export_time_groups_csv;
+pub use groups::export_xlsx as export_time_groups_xlsx;
 mod limits;
+pub(crate) use limits::time::read_access as read_time_report_access;
 mod streaming;
 
 #[cfg(test)]
 mod privacy_tests;
+
+#[cfg(test)]
+mod export_params_tests;
 
 /// `login_redirect_guard` lets `/api/` through, because everything else there is
 /// a server function that checks its own session. These handlers must too. The
@@ -41,9 +48,8 @@ async fn require_session(session: &Session) -> Result<(uuid::Uuid, uuid::Uuid), 
 }
 
 /// Every invoice server function gates on `require_manager`, so exporting one
-/// has to as well. Returns the manager's org id so the invoice fetches below
-/// can be org-scoped exactly like their server-fn counterparts.
-async fn require_manager(session: &Session) -> Result<uuid::Uuid, StatusCode> {
+/// has to as well. Retain both actor and tenant for transaction reauthorization.
+async fn require_manager(session: &Session) -> Result<(uuid::Uuid, uuid::Uuid), StatusCode> {
     let (user_id, _) = require_session(session).await?;
     let state = crate::state::global_state().await;
     let row = sqlx::query!(
@@ -58,20 +64,56 @@ async fn require_manager(session: &Session) -> Result<uuid::Uuid, StatusCode> {
 
     row.org_role
         .is_manager_or_above()
-        .then_some(row.org_id)
+        .then_some((user_id, row.org_id))
         .ok_or(StatusCode::FORBIDDEN)
 }
 
-/// Mirrors the Reports page filters, so a download matches what is on screen.
-/// Absent client/project/user/tag means "all", as on the page.
-#[derive(Deserialize)]
+async fn render_manager_export(
+    permit: bounded::ExportPermit,
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    render: impl FnOnce() -> Result<Vec<u8>, StatusCode> + Send + 'static,
+) -> Result<axum::body::Body, StatusCode> {
+    let body = permit.render(render).await?;
+    // Rendering holds no authority locks. Recheck before releasing its result.
+    limits::begin_manager(pool, org_id, actor_id)
+        .await?
+        .commit()
+        .await
+        .map_err(limits::database_error)?;
+    Ok(body)
+}
+
+/// Download filters support both legacy scalar links and complete ID selections.
+#[derive(Default, Deserialize)]
 pub struct ExportParams {
     pub from: String,
     pub to: String,
+    #[serde(default, deserialize_with = "query_bool")]
+    pub active_projects_only: bool,
+    #[serde(default)]
+    pub billability: crate::models::time_report::TimeReportBillability,
     pub client_id: Option<uuid::Uuid>,
     pub project_id: Option<uuid::Uuid>,
     pub user_id: Option<uuid::Uuid>,
     pub tag_id: Option<uuid::Uuid>,
+    pub client_ids: Option<String>,
+    pub project_ids: Option<String>,
+    pub user_ids: Option<String>,
+    pub task_ids: Option<String>,
+    pub tag_ids: Option<String>,
+    pub expected_org_id: Option<uuid::Uuid>,
+    pub expected_user_id: Option<uuid::Uuid>,
+    pub expected_policy: Option<crate::models::time_report::TimeReportPolicy>,
+    pub after: Option<String>,
+}
+
+fn query_bool<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    // Flattened URL parameters retain strings instead of Serde's bool coercion.
+    String::deserialize(deserializer)?
+        .parse()
+        .map_err(serde::de::Error::custom)
 }
 
 /// Entity filters shared by grouped reports, detailed rows and downloads.
@@ -84,19 +126,58 @@ pub(crate) struct ReportFilters {
 }
 
 impl ExportParams {
-    fn filters(&self) -> ReportFilters {
-        ReportFilters {
-            client_id: self.client_id,
-            project_id: self.project_id,
-            user_id: self.user_id,
-            tag_id: self.tag_id,
+    fn time_query(&self) -> Result<crate::models::time_report::TimeReportQuery, StatusCode> {
+        let date_from = self.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+        let date_to = self.to.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+        if date_from > date_to || self.after.is_some() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        let expected_requester = match (self.expected_org_id, self.expected_user_id) {
+            (None, None) => None,
+            (Some(org_id), Some(user_id)) => {
+                Some(crate::models::permission_editor::PermissionRequester { org_id, user_id })
+            }
+            _ => return Err(StatusCode::BAD_REQUEST),
+        };
+        Ok(crate::models::time_report::TimeReportQuery {
+            date_from,
+            date_to,
+            active_projects_only: self.active_projects_only,
+            billability: self.billability,
+            client_ids: Self::ids(self.client_id, self.client_ids.as_deref())?,
+            project_ids: Self::ids(self.project_id, self.project_ids.as_deref())?,
+            user_ids: Self::ids(self.user_id, self.user_ids.as_deref())?,
+            task_ids: Self::ids(None, self.task_ids.as_deref())?,
+            tag_ids: Self::ids(self.tag_id, self.tag_ids.as_deref())?,
+            after: None,
+            expected_requester,
+        })
+    }
+
+    fn ids(
+        single: Option<uuid::Uuid>,
+        multiple: Option<&str>,
+    ) -> Result<Vec<uuid::Uuid>, StatusCode> {
+        match (single, multiple) {
+            (Some(_), Some(_)) => Err(StatusCode::BAD_REQUEST),
+            (_, None) => Ok(single.into_iter().collect()),
+            (None, Some("")) => Ok(Vec::new()),
+            (None, Some(values)) => {
+                // Dropping an invalid element could turn a selected filter into "all".
+                let mut ids = values
+                    .split(',')
+                    .map(|value| value.parse().map_err(|_| StatusCode::BAD_REQUEST))
+                    .collect::<Result<Vec<_>, _>>()?;
+                ids.sort_unstable();
+                ids.dedup();
+                Ok(ids)
+            }
         }
     }
 }
 
-/// The rows behind both the CSV/XLSX exports and the manager-only
-/// `report_detailed` server fn — one query, so a download always matches what
-/// the Reports page shows.
+/// Shared rows for materialized exports and the manager-only detailed report.
+/// The streaming cursor preserves this projection, filtering and ordering.
 pub(crate) async fn fetch_entries<'e>(
     executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
@@ -152,12 +233,10 @@ pub async fn export_csv(
     session: Session,
     Query(params): Query<ExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    // Same rows as the manager-only `report_detailed` server fn (every user's
-    // hours and notes), so the same gate applies.
-    let org_id = require_manager(&session).await?;
+    let (actor_id, org_id) = require_session(&session).await?;
 
     let state = crate::state::global_state().await;
-    streaming::entries(state.db.clone(), org_id, params).await
+    streaming::entries(state.db.clone(), org_id, actor_id, params).await
 }
 
 const ENTRY_EXPORT_HEADERS: [&str; 8] = [
@@ -207,15 +286,22 @@ pub async fn export_xlsx(
     session: Session,
     Query(params): Query<ExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    // Same rows as the manager-only `report_detailed` server fn (every user's
-    // hours and notes), so the same gate applies.
-    let org_id = require_manager(&session).await?;
+    let (actor_id, org_id) = require_session(&session).await?;
     let permit = bounded::ExportPermit::acquire()?;
 
     let state = crate::state::global_state().await;
-    let entries = limits::entries(&state.db, org_id, &params).await?;
-
-    let data = permit.render(move || entries_xlsx(&entries)).await?;
+    let export = limits::time::entries(
+        &state.db,
+        org_id,
+        actor_id,
+        &params.time_query()?,
+        params.expected_policy,
+    )
+    .await?;
+    let data = export
+        .scope
+        .render(permit, &state.db, move || entries_xlsx(&export.rows))
+        .await?;
 
     Ok((
         [
@@ -292,6 +378,7 @@ pub struct ProjectsExportParams {
 }
 
 struct ProjectExportRow {
+    id: uuid::Uuid,
     client_name: String,
     code: Option<String>,
     name: String,
@@ -312,6 +399,7 @@ fn budget_cell(r: &ProjectExportRow) -> String {
     )
 }
 
+#[cfg(test)]
 async fn fetch_projects_export<'e>(
     executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
@@ -323,6 +411,7 @@ async fn fetch_projects_export<'e>(
         .await
 }
 
+#[cfg(test)]
 fn stream_projects_export<'e>(
     executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
@@ -331,7 +420,7 @@ fn stream_projects_export<'e>(
 ) -> impl Stream<Item = Result<ProjectExportRow, sqlx::Error>> + 'e {
     sqlx::query_as!(
         ProjectExportRow,
-        r#"SELECT c.name as client_name, p.code, p.name,
+        r#"SELECT p.id, c.name as client_name, p.code, p.name,
                   p.project_type as "project_type: horae_core::types::ProjectType",
                   p.currency,
                   p.budget_kind as "budget_kind: horae_core::types::BudgetKind",
@@ -375,7 +464,16 @@ pub async fn export_projects_xlsx(
     let state = crate::state::global_state().await;
     let rows = limits::projects(&state.db, org_id, viewer_id, scope).await?;
 
-    let data = permit.render(move || projects_xlsx(&rows)).await?;
+    let project_ids = rows.iter().map(|row| row.id).collect();
+    let data = render_project_export(
+        permit,
+        &state.db,
+        org_id,
+        viewer_id,
+        project_ids,
+        move || projects_xlsx(&rows),
+    )
+    .await?;
 
     Ok((
         [
@@ -390,6 +488,21 @@ pub async fn export_projects_xlsx(
         ],
         data,
     ))
+}
+
+async fn render_project_export(
+    permit: bounded::ExportPermit,
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    mut project_ids: Vec<uuid::Uuid>,
+    render: impl FnOnce() -> Result<Vec<u8>, StatusCode> + Send + 'static,
+) -> Result<axum::body::Body, StatusCode> {
+    project_ids.sort_unstable();
+    project_ids.dedup();
+    let body = permit.render(render).await?;
+    limits::authorize_projects(pool, org_id, actor_id, &project_ids).await?;
+    Ok(body)
 }
 
 fn projects_xlsx(rows: &[ProjectExportRow]) -> Result<Vec<u8>, StatusCode> {
@@ -421,18 +534,8 @@ fn projects_xlsx(rows: &[ProjectExportRow]) -> Result<Vec<u8>, StatusCode> {
 
 // ── Invoice export ────────────────────────────────────────────────────────────
 
-/// An invoice and its line items, org-scoped — shared with the `get_invoice`
-/// server fn so exports render exactly what the app serves. `None` when the
-/// org has no such invoice; each caller maps that to its own not-found error.
-pub(crate) async fn fetch_invoice_with_lines(
-    invoice_id: uuid::Uuid,
-    org_id: uuid::Uuid,
-) -> Result<Option<(crate::models::Invoice, Vec<crate::models::InvoiceLine>)>, sqlx::Error> {
-    let state = crate::state::global_state().await;
-    let mut connection = state.db.acquire().await?;
-    fetch_invoice_from(&mut connection, invoice_id, org_id).await
-}
-
+/// Shared org-scoped invoice projection. Callers authorize the actor and choose
+/// the transaction so metadata and lines belong to the same snapshot.
 pub(crate) async fn fetch_invoice_from(
     connection: &mut sqlx::PgConnection,
     invoice_id: uuid::Uuid,
@@ -518,26 +621,27 @@ pub async fn export_invoice_csv(
     session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let org_id = require_manager(&session).await?;
+    let (actor_id, org_id) = require_manager(&session).await?;
 
     let state = crate::state::global_state().await;
-    streaming::invoice(state.db.clone(), org_id, invoice_id).await
+    streaming::invoice(state.db.clone(), org_id, actor_id, invoice_id).await
 }
 
 pub async fn export_invoice_xlsx(
     session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let org_id = require_manager(&session).await?;
+    let (actor_id, org_id) = require_manager(&session).await?;
     let permit = bounded::ExportPermit::acquire()?;
 
     let state = crate::state::global_state().await;
-    let (invoice, lines) = limits::invoice(&state.db, org_id, invoice_id).await?;
+    let (invoice, lines) = limits::invoice(&state.db, org_id, actor_id, invoice_id).await?;
 
     let filename = format!("invoice-{}.xlsx", invoice.number);
-    let data = permit
-        .render(move || invoice_xlsx(&invoice, &lines))
-        .await?;
+    let data = render_manager_export(permit, &state.db, org_id, actor_id, move || {
+        invoice_xlsx(&invoice, &lines)
+    })
+    .await?;
 
     Ok((
         [
@@ -567,12 +671,28 @@ const INVOICE_HEADERS: [&str; 9] = [
 ];
 
 fn invoice_export_metadata(invoice: &crate::models::Invoice) -> [String; 5] {
+    invoice_metadata(
+        &invoice.currency,
+        invoice.issued_on,
+        invoice.due_on,
+        invoice.terms_days,
+        &invoice.po_number,
+    )
+}
+
+fn invoice_metadata(
+    currency: &str,
+    issued_on: chrono::NaiveDate,
+    due_on: chrono::NaiveDate,
+    terms_days: i32,
+    po_number: &str,
+) -> [String; 5] {
     [
-        invoice.currency.trim().into(),
-        invoice.issued_on.to_string(),
-        invoice.due_on.to_string(),
-        invoice.terms_days.to_string(),
-        invoice.po_number.clone(),
+        currency.trim().into(),
+        issued_on.to_string(),
+        due_on.to_string(),
+        terms_days.to_string(),
+        po_number.into(),
     ]
 }
 
@@ -646,29 +766,28 @@ pub async fn export_invoice_pdf(
     session: Session,
     Path(invoice_id): Path<uuid::Uuid>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let org_id = require_manager(&session).await?;
+    let (actor_id, org_id) = require_manager(&session).await?;
     let permit = bounded::ExportPermit::acquire()?;
 
     let state = crate::state::global_state().await;
-    let document = limits::pdf(&state.db, org_id, invoice_id).await?;
+    let document = limits::pdf(&state.db, org_id, actor_id, invoice_id).await?;
 
     let filename = format!("invoice-{}.pdf", document.invoice.number);
-    let pdf_bytes = permit
-        .render(move || {
-            crate::render::render_invoice_pdf(
-                &document.invoice,
-                &document.lines,
-                &document.client_name,
-                document.client_address.as_deref(),
-                document.client_tax_id.as_deref(),
-                &document.branding,
-            )
-            .map_err(|e| {
-                tracing::error!("PDF rendering failed: {e}");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })
+    let pdf_bytes = render_manager_export(permit, &state.db, org_id, actor_id, move || {
+        crate::render::render_invoice_pdf(
+            &document.invoice,
+            &document.lines,
+            &document.client_name,
+            document.client_address.as_deref(),
+            document.client_tax_id.as_deref(),
+            &document.branding,
+        )
+        .map_err(|e| {
+            tracing::error!("PDF rendering failed: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
         })
-        .await?;
+    })
+    .await?;
     Ok((
         [
             (

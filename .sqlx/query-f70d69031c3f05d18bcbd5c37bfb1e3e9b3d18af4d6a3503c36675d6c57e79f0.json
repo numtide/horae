@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_management_assignments SET project_id=$2 WHERE manager_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f70d69031c3f05d18bcbd5c37bfb1e3e9b3d18af4d6a3503c36675d6c57e79f0"
+}

@@ -3,8 +3,30 @@
 use super::*;
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
+use std::io::{Cursor, Read};
 
+mod export_filters;
 mod groups;
+
+async fn xlsx(api: &Api, cookie: Option<&str>, filter: &str) -> reqwest::Response {
+    download(api, cookie, "xlsx", filter).await
+}
+
+async fn download(
+    api: &Api,
+    cookie: Option<&str>,
+    format: &str,
+    filter: &str,
+) -> reqwest::Response {
+    let mut request = api.client.get(format!(
+        "{}/api/reports/export/{format}?from=2026-09-01&to=2026-09-30{filter}",
+        api.base,
+    ));
+    if let Some(cookie) = cookie {
+        request = request.header("cookie", cookie);
+    }
+    request.send().await.unwrap()
+}
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
@@ -12,6 +34,48 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let entry = crate::server_fns::test_seed::time_entry(pool, &ids, EntryState::Open).await;
     sqlx::query!("UPDATE users SET oidc_subject=id::text,billable_rate_cents=123456,cost_rate_cents=987654 WHERE id=$1", ids.user_id).execute(pool).await.unwrap();
     let cookie = api.cookie(ids.user_id).await;
+    const ACCESS: &str = "get_time_report_access";
+    let access_request = json!({"expected_requester":null});
+    assert_eq!(
+        api.call(ACCESS, access_request.clone(), None, false)
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        api.call(ACCESS, access_request.clone(), Some(&cookie), false)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    let other_cookie = api.cookie(other.user_id).await;
+    assert_eq!(
+        api.json(ACCESS, access_request.clone(), &other_cookie)
+            .await,
+        json!({
+            "requester":{"org_id":other.org_id,"user_id":other.user_id}, "policy":"legacy"
+        })
+    );
+    let binding = json!({"expected_requester":{"org_id":ids.org_id,"user_id":ids.user_id}});
+    assert_eq!(
+        api.call(ACCESS, binding.clone(), Some(&other_cookie), false)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(xlsx(api, None, "").await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        download(api, None, "csv", "").await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        download(api, Some(&cookie), "csv", "").await.status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        xlsx(api, Some(&cookie), "").await.status(),
+        StatusCode::FORBIDDEN
+    );
     let request = json!({"query": {
         "date_from":"2026-09-01", "date_to":"2026-09-30",
         "client_ids":[], "project_ids":[], "user_ids":[], "task_ids":[], "tag_ids":[],
@@ -38,6 +102,20 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .await
     .unwrap();
     assert_eq!(
+        api.call(ACCESS, access_request.clone(), Some(&cookie), false)
+            .await
+            .status(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(
+        xlsx(api, Some(&cookie), "").await.status(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(
+        download(api, Some(&cookie), "csv", "").await.status(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(
         api.call(ENDPOINT, request.clone(), Some(&cookie), false)
             .await
             .status(),
@@ -54,7 +132,111 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         "next_after":null,
         "totals":{"entry_count":1,"total_minutes":60,"rounded_minutes":60,"billable_minutes":60}
     });
+    let expected_access =
+        json!({"requester":{"org_id":ids.org_id,"user_id":ids.user_id},"policy":"scoped"});
+    assert_eq!(
+        api.json(ACCESS, access_request.clone(), &cookie).await,
+        expected_access
+    );
+    assert_eq!(api.json(ACCESS, binding, &cookie).await, expected_access);
+    let forged_access =
+        json!({"expected_requester":null,"org_id":other.org_id,"actor_id":other.user_id});
+    assert_eq!(
+        api.json(ACCESS, forged_access, &cookie).await,
+        expected_access
+    );
     assert_eq!(api.json(ENDPOINT, request.clone(), &cookie).await, expected);
+    let response = download(
+        api,
+        Some(&cookie),
+        "csv",
+        &format!("&org_id={}&actor_id={}", other.org_id, other.user_id),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers()["content-disposition"],
+        "attachment; filename=\"timesheet.csv\""
+    );
+    let data = response.text().await.unwrap();
+    let mut csv = csv::Reader::from_reader(data.as_bytes());
+    assert_eq!(csv.headers().unwrap().len(), 8);
+    let records = csv.records().collect::<Result<Vec<_>, _>>().unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(&records[0][1], "Widget");
+    assert_eq!(&records[0][3], "Test User");
+    for private in [
+        "123456",
+        "987654",
+        "billable_rate",
+        "cost_rate",
+        "EUR",
+        "time_read_own",
+        "catalog_version",
+    ] {
+        assert!(!data.contains(private), "{private}");
+    }
+    let response = download(
+        api,
+        Some(&cookie),
+        "csv",
+        &format!("&project_id={}", other.project_id),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        csv::Reader::from_reader(response.bytes().await.unwrap().as_ref())
+            .records()
+            .count(),
+        0
+    );
+    let response = xlsx(
+        api,
+        Some(&cookie),
+        &format!("&org_id={}&actor_id={}", other.org_id, other.user_id),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers()["content-disposition"],
+        "attachment; filename=\"timesheet.xlsx\""
+    );
+    let mut archive = zip::ZipArchive::new(Cursor::new(response.bytes().await.unwrap())).unwrap();
+    let mut sheet = String::new();
+    archive
+        .by_name("xl/worksheets/sheet1.xml")
+        .unwrap()
+        .read_to_string(&mut sheet)
+        .unwrap();
+    assert_eq!(sheet.matches("<row ").count(), 2);
+    let mut strings = String::new();
+    archive
+        .by_name("xl/sharedStrings.xml")
+        .unwrap()
+        .read_to_string(&mut strings)
+        .unwrap();
+    assert!(strings.contains("Widget") && strings.contains("Test User"));
+    for private in ["123456", "987654", "billable_rate", "cost_rate", "EUR"] {
+        assert!(
+            !strings.contains(private) && !sheet.contains(private),
+            "{private}"
+        );
+    }
+    let response = xlsx(
+        api,
+        Some(&cookie),
+        &format!("&project_id={}", other.project_id),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let mut archive = zip::ZipArchive::new(Cursor::new(response.bytes().await.unwrap())).unwrap();
+    let mut sheet = String::new();
+    archive
+        .by_name("xl/worksheets/sheet1.xml")
+        .unwrap()
+        .read_to_string(&mut sheet)
+        .unwrap();
+    assert_eq!(sheet.matches("<row ").count(), 1);
     let mut forged = request.clone();
     forged["org_id"] = json!(other.org_id);
     forged["user_id"] = json!(other.user_id);
@@ -106,6 +288,12 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .await
     .unwrap();
     assert_eq!(
+        api.call(ACCESS, access_request.clone(), Some(&cookie), false)
+            .await
+            .status(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(
         api.call(ENDPOINT, request.clone(), Some(&cookie), false)
             .await
             .status(),
@@ -116,10 +304,93 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .await
         .unwrap();
     assert_eq!(
+        api.call(ACCESS, access_request, Some(&cookie), false)
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        xlsx(api, Some(&cookie), "").await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        download(api, Some(&cookie), "csv", "").await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
         api.call(ENDPOINT, request, Some(&cookie), false)
             .await
             .status(),
         StatusCode::UNAUTHORIZED
     );
+    // A previously accepted scoped screen must not become an unrestricted
+    // legacy download after a mode change, even with the same Admin session.
+    sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
+        VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), other.org_id, other.user_id, &grants).execute(pool).await.unwrap();
+    let scoped_link = format!(
+        "&expected_org_id={}&expected_user_id={}&expected_policy=scoped",
+        other.org_id, other.user_id
+    );
+    let legacy_link = scoped_link.replace("expected_policy=scoped", "expected_policy=legacy");
+    for mode in [1, 0] {
+        sqlx::query!(
+            "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
+            other.org_id,
+            mode
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        let snapshot = api
+            .json(ACCESS, json!({"expected_requester":null}), &other_cookie)
+            .await;
+        assert_eq!(
+            snapshot["policy"],
+            if mode == 1 { "scoped" } else { "legacy" }
+        );
+        for format in ["csv", "xlsx"] {
+            let matching = if mode == 1 {
+                &scoped_link
+            } else {
+                &legacy_link
+            };
+            let stale = if mode == 1 {
+                &legacy_link
+            } else {
+                &scoped_link
+            };
+            assert_eq!(
+                download(api, Some(&other_cookie), format, matching)
+                    .await
+                    .status(),
+                StatusCode::OK
+            );
+            assert_eq!(
+                download(api, Some(&other_cookie), format, stale)
+                    .await
+                    .status(),
+                StatusCode::FORBIDDEN
+            );
+            assert_eq!(
+                download(api, Some(&other_cookie), format, "")
+                    .await
+                    .status(),
+                StatusCode::OK
+            );
+            for invalid in [
+                "&expected_policy=",
+                "&expected_policy=future",
+                "&expected_policy=scoped&expected_policy=legacy",
+            ] {
+                assert_eq!(
+                    download(api, Some(&other_cookie), format, invalid)
+                        .await
+                        .status(),
+                    StatusCode::BAD_REQUEST
+                );
+            }
+        }
+    }
+    export_filters::check(pool, api).await;
     groups::check(pool, api).await;
 }
