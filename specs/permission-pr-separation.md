@@ -133,7 +133,7 @@ Clients MVP as canonical-permission acceptance.
 | Scoped time-entry reader, [#255](https://github.com/numtide/horae/pull/255) | `feat/scoped-time-reader`, `.worktrees/scoped-time-reader` | Review base `0117991`, independent of directory, project-team choices and editor operations | Draft at `d93e1af`; original `4ac30fa` DTO/reader/eight DB tests/HTTP assertions and endpoint preserved; 23 original SQLx descriptors, module registrations adapted only. Formatting/provenance passed; full native Nix `40092` PASSED; wider composition and retargeted checks pending; no Timesheet UI, subject discovery, commands or activation |
 | Timesheet person discovery, [#256](https://github.com/numtide/horae/pull/256) | `feat/timesheet-people-discovery`, `.worktrees/timesheet-people-discovery` | Review base `40102ae`, combining #255 `d93e1af` admission reader and #253 `3a37538` shared `PeopleCursor` | Draft at `1552fdb`; original `60f60f9` DTO/reader/eight DB tests, endpoint/HTTP additions and five SQLx descriptors preserved. Tests/Clippy/live SQLx `61768` PASSED; application992 passed, zero failed,11 inherited ignored. Full native Nix `37414` PASSED; wider integration pending; no UI, context-page contract, commands or activation |
 | Requester-bound Timesheet page context, [#257](https://github.com/numtide/horae/pull/257) | `feat/timesheet-page-context`, `.worktrees/timesheet-page-context` | #256 `1552fdb`, for subject discovery and shared read admission | Draft at `b30e3cd`; DTO/reader original, all six DB tests retained with a four-line cancellation-barrier synchronization correction. Old `8e09e60` full gate passed; dependent `d2b45ca` exposed a test timeout, retained below. New-head full native Nix `40402` running; no current-head pass claimed |
-| Person-bound Timesheet commands, [#258](https://github.com/numtide/horae/pull/258) | `feat/timesheet-person-commands`, `.worktrees/timesheet-person-commands` | #257 `b30e3cd`, for shared context contracts and foundations | Draft at `b0eacfd`; original commands/tests and39 descriptors unchanged. Old `64524` failure retained; corrected-head tests/Clippy/live SQLx `98625` PASSED (1011 application tests, zero failed,11 inherited ignored). Full native Nix `7633` running; no UI or activation |
+| Person-bound Timesheet commands, [#258](https://github.com/numtide/horae/pull/258) | `feat/timesheet-person-commands`, `.worktrees/timesheet-person-commands` | #257 `b30e3cd`, for shared context contracts and foundations | Draft at `b0eacfd`; original commands/tests and39 descriptors unchanged. Old `64524` failure retained; corrected-head tests/Clippy/live SQLx `98625` PASSED (1011 application tests, zero failed,11 inherited ignored). Full native Nix `7633` PASSED; wider integration pending; no UI or activation |
 | Selected-person Timesheet UI, [#259](https://github.com/numtide/horae/pull/259) | `feat/timesheet-selected-person-ui`, `.worktrees/timesheet-selected-person-ui` | #258 `b0eacfd`, for page context, discovery, tracking and commands | Draft at `0dfea8b`; complete original UI plus weekly-submission contract/tests/cache. Nine whole source/test files byte-identical to final original. Shared current navigation/browser behavior retained. Ten navigation tests and format/provenance pass; full native Nix `48062` running; wider combination pending; no activation or new feature |
 | Cross-PR Timesheet/permission verification only | `integration/timesheet-permission-check`, `.worktrees/timesheet-permission-integration` | Combines #240/#241/#250/#253–#258 and inherited foundations | Published at `015dcd1`, no delivery PR; owner cancellation-test correction included. Old `6da9981` targeted checks `25306` PASSED (1037 application tests, zero failed,11 ignored), historical only. Current-head full native Nix `64407` running; #259 not yet included |
 | Cross-PR reader/editor verification only | `integration/permission-readers-editor-check`, `.worktrees/permission-readers-editor-check` | Combines #240 `a19ea63`, #250 `c727bc8`, #253 `3a37538` and #254 `f498c3f` | Published at `7a2d61c`, no delivery PR or merge target; registration conflicts resolved preserving both sides, dedicated source/test blobs unchanged, original combined users module restored exactly. Tests/Clippy/SQLx `24884` and full native Nix `16434` PASSED; exact browser/deployment/OIDC outputs and logs verified after original process terminated. Later #255–#257 not included |
@@ -4266,3 +4266,21 @@ the other extracted permission work and verify that new head. Continue
 remaining permission-editor/People UI, reports, project/task lifecycle/UI,
 unpublished Clients and original-hunk accounting. No extraction PR was merged
 or closed, and the goal is not complete.
+
+#258 full native Nix `7633` subsequently terminated exit0 with all checks
+passed on exact `b0eacfd`. It reused available derivations and rebuilt the
+format check; do not report a fresh execution of every cached test. The
+targeted executable pass `98625` above remains its new-head test evidence.
+PR258's description now records both. #257 `40402`, combined `64407`
+and UI #259 `48062` remain live; #259's WASM client build has passed,
+which is not its complete release/server/browser gate.
+
+Read-only preparation for the next independent UI group found that final
+`admin.rs` also contains later task-catalog mutations (`TaskRateEdit` and
+the requester-bound `create_task` signature). Those belong to the unfinished
+task owner, not a blind People/editor copy. `ee16165` ties CanonicalPeople,
+requester-bound dialog selection and shell/sidebar access together; the
+existing reader/editor combination `7a2d61c` already contains #250/#253.
+Review the editor/recovery/template files fully before extracting that
+consumer, preserve legacy task behavior, and reconcile its shared navigation
+guard with #259 in a later integration check. No editor UI edits made yet.
