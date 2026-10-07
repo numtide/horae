@@ -112,8 +112,8 @@ review delta. The two VM follow-ups remain in #270 pending its dependency refres
 
 This snapshot supersedes the commit/status labels in the historical delivery
 table below. All59 delivery PRs remain drafts; all remote heads match the local
-branches. The refreshed snapshot has13 successful heads,32 failed heads,4 running
-builds and10 new heads without a build aggregate yet. A success
+branches. The refreshed snapshot has12 successful heads,28 failed heads,10 running
+builds and9 new heads without a build aggregate yet. A success
 is not completion of the cross-stack review; a failure is not necessarily a new
 functional defect. Failure classes and exact-head local evidence are recorded
 in the iteration sections. No PR is approved for merging by this inventory.
@@ -126,19 +126,19 @@ in the iteration sections. No PR is approved for merging by this inventory.
 | #222 | 1fef1a24 | Running |
 | #223 | bc74af8d | Awaiting fresh build result |
 | #224 | c374710a | Awaiting fresh build result |
-| #225 | 34a32928 | Awaiting fresh build result |
-| #226 | 1f9d20e8 | Awaiting fresh build result |
-| #227 | 8f3a7e64 | Awaiting fresh build result |
-| #228 | 6c67247e | Failed |
-| #231 | 110b365a | Awaiting fresh build result |
+| #225 | 34a32928 | Running |
+| #226 | 1f9d20e8 | Running |
+| #227 | 8f3a7e64 | Running |
+| #228 | 951baf9d | Awaiting fresh build result |
+| #231 | 110b365a | Running |
 | #232 | c90aa898 | Running |
-| #233 | c30b8c41 | Passed |
-| #234 | 7afbe764 | Failed |
-| #235 | 082fa032 | Failed |
-| #236 | 526a8ba9 | Failed |
+| #233 | 26bbda2f | Awaiting fresh build result |
+| #234 | 6b524f70 | Awaiting fresh build result |
+| #235 | 7331d30b | Awaiting fresh build result |
+| #236 | 5f0c619c | Awaiting fresh build result |
 | #237 | 7c7d9d6c | Failed |
-| #238 | 24aca30d | Awaiting fresh build result |
-| #239 | f4cea603 | Awaiting fresh build result |
+| #238 | 24aca30d | Running |
+| #239 | f4cea603 | Running |
 | #240 | 68a0fad8 | Failed |
 | #241 | 5feaa950 | Failed |
 | #242 | 0abace6f | Failed |
@@ -181,7 +181,8 @@ in the iteration sections. No PR is approved for merging by this inventory.
 | #282 | e39f033a | Running |
 
 #219/#220/#223/#224/#225/#227/#231/#238/#239 now depend only on shared CI #282.
-Direct-base ancestry is stale for five PRs: #228 needs #227's shared-CI ancestors;
+Direct-base ancestry is stale for six PRs: #241 needs the updated #228 and
+#244 needs the updated #234;
 #272 lacks the newer #270 cache/ARM test changes;
 #273/#281 lack #272's latest cache deletions; #275 lacks #273's latest cache
 deletion. This is not an exhaustive transitive-base audit: named integration
@@ -6717,3 +6718,88 @@ local full check was started. Next refresh #228 on #2278f3a7e64, then #235 on
 that result. Reconcile the profile, invoice and import prerequisite branches
 from the refreshed inputs before updating their children; do not claim their
 current old ancestry includes these CI repairs. No GitHub merge or closure.
+
+### Shared prerequisite compositions and child refresh — 2026-10-07
+
+Previous iteration made progress by publishing six roots/children with recoverable
+backups. Confirmed #216 remains merged. Refreshed five delivery branches and three
+existing review/test compositions; no new delivery PR or behavior was added:
+
+| Branch / PR | Previous head | Published head |
+| --- | --- | --- |
+| #228 project-access-lock-order | 6c67247e | 951baf9d31de0b936477b54a884f3b0a9b04cbfd |
+| #235 harvest-connection-authority | 082fa032 | 7331d30b7fe0f9c9c06ded3f8a5f7852df5bae4e |
+| integration/profile-command-prerequisites | a108c514 | b929b0d868931f5fc68725c4c50043a1c47804ee |
+| integration/invoice-authority-prerequisites | 99eab225 | 99adead5b51d7194589e12fdbbf0fe1e69090356 |
+| integration/import-job-authority-prerequisites | 9f4d52e4 | d8fa7945418510a4532398403f6cafdef8d11b23 |
+| #233 invoice-write-authority | c30b8c41 | 26bbda2f9320e885b93eff6532abf8914715158c |
+| #234 person-profile-commands | 7afbe764 | 6b524f701a91123082e7cc8ad9191cc63017b160 |
+| #236 import-job-authority | 526a8ba9 | 5f0c619c09b8da32a0d1ac5c4c617f1f081a715e |
+
+Each rebase preserves every replayed patch by range-diff and exactly matches the
+precomputed tree using its old parent. Signing/updateRefs were disabled; no
+manual conflict resolution was required. The only inherited changes are the
+two shared CI repairs and, for the profile composition/child, #222's original
+README note. The CSV cleanup difference has the exact shared stable patch ID,
+including the import composition that also retains #231's own CSV tests.
+
+The profile composition contains the patch-equivalent current #221. The invoice
+composition contains the unchanged #220 source patch plus exact #232 patch;
+four #220 SQLx descriptors are already supplied by #228, not deleted or missing.
+Their blobs match #220 both before and after the composition commit. The import
+composition retains current #235 ancestry and exact #231 patch. These are review
+compositions, not separate deliverables or merge targets; do not claim ancestry
+of cherry-picked delivery heads merely because their patches are equivalent.
+
+Verified complete-history recovery bundles and refs:
+
+| Bundle / ref prefix | SHA-256 |
+| --- | --- |
+| `.scratch/shared-ci-prerequisites-20261007.bundle` / `backup/shared-ci-prerequisites-20261007/` | ddda18c040d66d1df1d00f629bc896a3740937b3de970c09c47fd4347580e8d6 |
+| `.scratch/shared-ci-prerequisite-children-20261007.bundle` / `backup/shared-ci-prerequisite-children-20261007/` | 1bb2a5b90f2b2510da00d0df232ad2993cc21632ddc0ad37171693ef7914b6d0 |
+
+Ref suffixes are worktree basenames. Formatting97470/74784/12673/10286/18274
+and40002/71405/98563 passed without changes; whitespace checks passed. Atomic
+publication52486 used exact old-head leases for all eight branches. GitHub
+confirms the five PR heads/bases/draft states, with fresh CI explicitly pending.
+Inventory94966 finds59 drafts, no remote/local mismatch,12 successful heads,
+28 failed heads,10 running aggregates and9 awaiting aggregates. The six directly
+stale bases are #241/#244/#272/#273/#275/#281; transitive compositions still need
+input reconciliation. Remaining master-based code roots #240/#242 also need the
+shared CI base, while #248 is the separate documentation delivery.
+
+### Subset full-gate result and changed next action — 2026-10-07
+
+Session74548 is terminal, exit1, at exact subset head5c43f24a. It is no longer a
+live wait and must not be repolled or called a pass. Both release builds, Clippy,
+browser checks and live-schema SQLx preparation completed before the server suite
+failed: **1,409 passed,2 failed,11 existing ignored**,377.86 seconds of test time.
+Log: `.scratch/permission-split-full-5c43f24a.log`.
+
+1. `reports::limits::tests::authorization::materialized_exports_retain_authority_and_release_cancelled_reads`
+   failed at the final organization `FOR UPDATE NOWAIT` assertion with PostgreSQL
+   55P03. The test had already observed revocation and a forbidden subsequent read.
+   Inspection finds the scoped Entries path uses `reports/limits/time.rs::begin`,
+   whose denied `authorize_current(...).await?` drops its transaction; the legacy
+   snapshot helper explicitly awaits rollback on denial. This identifies a
+   candidate error-path cleanup race, not yet a reproduced or verified root cause.
+   Preserve the original NOWAIT and row-preservation assertions. Trace and reproduce
+   the shared scoped-export transaction paths before choosing a production or
+   fixture change; the scoped XLSX extraction begins in #263.
+1. `server_fns::importers::authorization_tests::job_endpoints_enforce_session_role_and_organization`
+   again failed in the rejected CSV CLI case: expected exit1/401-or-403, received
+   exit6/`indeterminate_submission`. This matches the earlier ARM260 failure class
+   but now occurs on native x86. `Transport::csv` streams the file and maps send
+   errors to that category; the current log does not expose the underlying error.
+   Do not infer timeout, HTTP status, early-body rejection or a safe retry without
+   a focused reproduction. Preserve the authorization assertions and secret-free
+   public error handling. No CLI production change has been made.
+
+Used the Rust best-practices/testing/async skills for this bounded diagnosis;
+no source file was edited. Complete compositionefae7522 remains clean, untested
+by a full gate, and contains these same paths. The previous instruction to launch
+it immediately after74548 is superseded: first reproduce and resolve the two
+failures, then propagate reviewed fixes and run the complete gate. No local full
+gate is currently running. Continue independent dependency refresh while focused
+diagnostics run; do not restart the failed whole subset merely hoping for green.
+No original-source edit, policy activation, real-data mutation, merge or closure.
