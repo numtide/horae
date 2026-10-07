@@ -511,6 +511,8 @@ mod organization;
     )
 )]
 mod permissions;
+#[cfg(feature = "server")]
+pub(crate) use permissions::{PermissionStorageError, load_person_permissions};
 mod plugins;
 mod project_creation;
 mod project_managers;

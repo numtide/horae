@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT NOT EXISTS (\n                 SELECT 1 FROM unnest($3::uuid[],$4::uuid[]) AS captured(owner_id,project_id)\n                 WHERE NOT ($7::bool OR ($5::bool AND captured.owner_id=$2) OR ($6::bool AND (\n                   EXISTS (SELECT 1 FROM person_management_assignments m\n                     WHERE m.org_id=$1 AND m.manager_id=$2 AND m.managed_user_id=captured.owner_id)\n                   OR EXISTS (SELECT 1 FROM project_management_assignments m\n                     WHERE m.org_id=$1 AND m.manager_id=$2 AND m.project_id=captured.project_id))))\n               ) AS \"allowed!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "allowed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray",
+        "UuidArray",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2c1bfb27aa4e498b81e3afbe8f3c44117dcaed4286b338a45a5b6a39720ef29b"
+}
