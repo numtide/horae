@@ -154,13 +154,13 @@ implementation remains incomplete. Do not treat
 | Grouped CSV/XLSX time exports, [#266](https://github.com/numtide/horae/pull/266) | `feat/grouped-time-exports`, `.worktrees/grouped-time-exports` | Review base `da493f6` combining #265 and #262 | Draft at `0eec1a4`; original grouped handlers/source/16 DB tests, shared CSV group authorization and18 descriptors; original grouped-filter HTTP fixture retained. Source/format/provenance pass; full native gate40587 running; later URL controls and consumer/browser integration remain open |
 | Time download result filters, [#267](https://github.com/numtide/horae/pull/267) | `feat/time-report-download-filters`, `.worktrees/time-report-download-filters` | #2660eec1a4 and inherited detailed/grouped report/export foundations | Draft at `e029a89`; original active-project/billability URL parser, seven DB tests, strict transport and actual-session fixtures;10 original descriptors. Format/provenance/source review passed; full native gate51012 running; UI/browser filter propagation retained separately |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
-| Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267, inherited report access/readers and all four export routes | Draft at `1be11e74`; conservation audit recovered the original disclosure glyphs and added browser path assertions. Format/syntax passed; fresh full native31708 running. No CSS/SQL/schema/activation; full T203 remains open |
+| Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267, inherited report access/readers and all four export routes | Draft at `1be11e74`; conservation audit recovered the original disclosure glyphs and added browser path assertions. Format/syntax passed; 31708 failed during disk exhaustion; serial full retry68739 running. No CSS/SQL/schema/activation; full T203 remains open |
 | Cross-PR Reports/Timesheet/People verification only | `integration/reports-permission-check`, `.worktrees/reports-permission-integration` | Combines verified `1a87961` with #268 `810ce57` and its report/export foundations | Local integration merge `b7836d7`, not a delivery PR or GitHub merge. Both HTTP registration sets and all30 unique browser suites retained; dedicated source/test blobs unchanged. Format/syntax/source comparison pass; full native gate25958 running |
-| Scoped project editor, [#269](https://github.com/numtide/horae/pull/269) | `feat/scoped-project-editor`, `.worktrees/scoped-project-editor` | `integration/permission-readers-editor-check` | Draft at `53183702`; restored original obsolete-cache removal; fresh full native94084 running. Five instrumented repetitions passed on the unchanged preceding package, but the earlier lost-acknowledgement failure remains unexplained. No activation |
-| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `0b4fd421`; restored six original cache removals; fresh full native25727 running. Native30162 and Nixbot295, including executed ARM e2e, passed on preceding737aa13a; not acceptance of this new head or a root-cause fix for intermittent266 |
-| Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites` at375e9bd, combining #270 and #267 | Draft at `5beac2e1`; conservation review restored and registered original requester HTTP matrix. Format/provenance passed; fresh full native37940 running. Earlier native81807 belongs to d61bfd3; ARM/wider review pending |
-| Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `8b8b0c0b`; restored three original cache removals; fresh full native46301 running. Older50478/76300 are historical, not new-head acceptance. Latest parent cache removals, ARM and wider integration remain pending |
-| Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `65c4aa23`; restored original count-cache removal; fresh full native55108 running. Older76300 belongs to4b2c87d. Latest parent cache removals, ARM and wider integration remain pending |
+| Scoped project editor, [#269](https://github.com/numtide/horae/pull/269) | `feat/scoped-project-editor`, `.worktrees/scoped-project-editor` | `integration/permission-readers-editor-check` | Draft at `53183702`; restored original obsolete-cache removal; 94084 failed during disk exhaustion; serial retry queued. Five instrumented repetitions passed on the unchanged preceding package, but the earlier lost-acknowledgement failure remains unexplained. No activation |
+| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `0b4fd421`; restored six original cache removals; 25727 failed during disk exhaustion; serial retry queued. Native30162 and Nixbot295, including executed ARM e2e, passed on preceding737aa13a; not acceptance of this new head or a root-cause fix for intermittent266 |
+| Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites` at375e9bd, combining #270 and #267 | Draft at `5beac2e1`; conservation review restored and registered original requester HTTP matrix. Format/provenance passed; 37940 failed during disk exhaustion; serial retry queued. Earlier native81807 belongs to d61bfd3; ARM/wider review pending |
+| Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `8b8b0c0b`; restored three original cache removals; 46301 stopped after disk errors; serial retry queued. Older50478/76300 are historical, not new-head acceptance. Latest parent cache removals, ARM and wider integration remain pending |
+| Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `65c4aa23`; restored original count-cache removal; 55108 stopped after disk errors; serial retry queued. Older76300 belongs to4b2c87d. Latest parent cache removals, ARM and wider integration remain pending |
 | Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; tests/live-schema SQLx96425 and full native71588 passed. ARM/wider acceptance pending. No lifecycle, catalog UI, later atomic rate creation or activation |
 | Task archive/restore and import preservation, [#276](https://github.com/numtide/horae/pull/276) | `feat/scoped-task-lifecycle`, `.worktrees/scoped-task-lifecycle` | integration/task-lifecycle-prerequisites1955c38 (#275/#269/#258/#223/#224/#231) | Draft at `7e883eb`; tests/live-schema SQLx60667 and full native95578 passed after restoring original descriptor2889c08. Base full native65768 passed. ARM/wider acceptance pending; catalog/link/UI controls excluded |
 | Existing project-task link authority and currency, [#277](https://github.com/numtide/horae/pull/277) | `feat/scoped-task-links`, `.worktrees/scoped-task-links` | #2767e883eb | Draft at `d1ab522`; original979a594 extracted. Tests/live-schema SQLx23598 and full native62455 passed. ARM/wider acceptance pending; no UI or activation |
@@ -6065,3 +6065,31 @@ the verified shared/cache deltas into the existing verification compositions,
 finish shared-registration ownership and update the final delivery table from
 current heads. Do not rerun completed15935/31756/295 or equate repeated isolated
 replay success with diagnosis of the old #269 failure. No merges or closures.
+
+### Disk-exhaustion recovery — 2026-10-07
+
+The concurrent build batch exhausted filesystem space. Sandbox startup failed
+with ENOSPC; #26831708 and #27137940 are terminal exit1, not live or green.
+#268 explicitly failed creating a compiler temporary file; #271's linker failed
+with SIGBUS during the same exhaustion. Their browser and live SQLx stages
+had completed, but neither whole gate passed.
+
+#27025727 and #26994084 also ended exit1 with disk-exhaustion/dependency errors.
+#27246301 and #27355108 reported ENOSPC/compiler-link errors but kept building
+independent derivations. Read-only PID/cwd checks identified exactly3126834 and
+3126904 in those two worktrees; sent SIGINT only to those task-owned Nix clients.
+Both handles are now terminal exit1. No worktree, database, backup or cache was
+manually deleted. Nix released temporary build state and available space rose
+to38GB. None of these failures establishes a missing SQLx descriptor or a
+functional regression, and none is counted as verification.
+
+Ledger fe0b2a1d reached GitHub, confirmed by ls-remote, despite a local tracking-ref
+write warning during exhaustion. The worktree remains clean before this receipt.
+All six old handles above are closed: do not poll or restart them concurrently.
+Retry unchanged #268 first with `nix flake check -L --max-jobs 1 --cores 2`;
+then process the remaining exact heads one at a time, reusing completed outputs.
+Future whole gates must use this bounded queue rather than another parallel
+compilation batch. New68739 is the sole live local full check, on unchanged
+#2681be11e74. Queue after it: #2715beac2e1, #26953183702, #2700b4fd421,
+#2728b8b0c0b, #27365c4aa23. This queue is not a background scheduler; start each
+only after the preceding handle is authoritatively terminal and space is checked.
