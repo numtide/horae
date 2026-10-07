@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organizations SET permission_policy_version=1,default_currency='EUR' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8604814a8df61da83ffc3a6e2f8d198578d346e3710e1ac16d8c9f3ed06cda0f"
+}
