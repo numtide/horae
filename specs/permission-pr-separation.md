@@ -5453,3 +5453,21 @@ and20 original deletions still require ownership reconciliation. These are
 conservation clues, not feature completion percentages or a final hunk audit.
 Next collect96425/50478 without restarting live work, finish #275's full gates,
 then continue the retained task boundaries and shared-file ownership audit.
+
+The corrected #275 cache provenance check now covers all25 added descriptors:
+every file matches originalfacfb49 and its query SHA-256. The remaining lifecycle
+boundary was traced before choosing another extraction: ac4c90c changes global
+activity, while0591407 adds migration0048, independent project-link activity,
+editor intent/receipts, tracking admission and import/checkpoint preservation.
+Taking only the first commit would omit the original restore guarantees.
+Its composition must include #275, the #269 editor and the #258 time-command
+boundary; import integration must also preserve #223/#224/#231. None of these
+five sibling branches is an ancestor of #275, confirmed by Git ancestry checks.
+
+A non-mutating worktree preflight of #275f8c1477 plus #269a9ba27b produced two
+conflicts: the browser-suite registration list and detail-navigation tests.
+HTTP registrations, task mutation tests and the new-project permission fixture
+merged textually, but still require semantic review; an automatic merge is not
+evidence of compatible contracts. No branch/worktree was merged or changed by
+this preflight. Resolve those test unions explicitly when composing the next
+boundary, retain all suites, and keep #269's unresolved lost-ack fixture visible.
