@@ -5486,3 +5486,28 @@ ARM/Darwin were explicitly omitted. Updated PR272 accordingly. Ledger04048fb
 was published successfully; only full #275 gate71588 remains live from this
 iteration, currently running Chromium. Next collect that handle, then continue
 the lifecycle composition and unresolved cross-PR/ARM verification.
+
+### Lifecycle prerequisite integration — 2026-10-07
+
+The estimate-only response was no progress. Revalidated #216 as merged at
+02f7b58 and the original worktree's 18 preserved dirty paths. Full native gate
+71588 passed on #275 f8c1477; its PR description now records the result.
+ARM acceptance and the wider separation review remain pending.
+
+Published integration/task-lifecycle-prerequisites at 1955c38. It combines
+#275 f8c1477, #269 a9ba27b, #258 e1525af, #223 1dc4b6b, #224 8ffac9d and
+#231 2e4bbf9 without merging any GitHub PR. Resolved test-registration and
+model-export conflicts as unions; retained all 26 browser suites and 18 HTTP
+matrices. The private composition audit verifies all six ancestors and 705
+unchanged single-owner blobs, and inventories 25 shared paths. Descriptor
+c5179dc remains absent because #275 replaced its query; the composed projects
+module matches #275 exactly. These checks are conservation evidence, not final
+semantic acceptance.
+
+Full native gate65768 is confirmed live on unchanged1955c38, currently executing
+browser tests. Do not modify or restart that worktree while it runs. The clean
+child feat/scoped-task-lifecycle is based on1955c38. Next extract original
+ac4c90c and0591407 together (global/project activity, migration0048, editor
+intent, tracking admission and import/checkpoint preservation), retaining
+later catalog/link/editor-control work separately. Collect65768 and verify the
+new extraction on its own head before claiming acceptance.
