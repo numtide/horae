@@ -3397,3 +3397,35 @@ observation is included in the PR body alongside the earlier3m19s observation:
 do not present the fastest sample as a guaranteed speedup. Concurrency/load were
 not controlled; artifact reuse, not a fixed timing ratio, is the proven benefit.
 Remaining Crane checks continue. Live handles are `6287` and `16075` only.
+
+### Both repaired heads verified; explicit protected queue entry
+
+Previous iteration was PROGRESS: repaired release full local gate passed,
+Crane inherited the test synchronization and its real package was built.
+At continuation, exact-head remote Nixbot builds125 (`a2b1245`) and128 (`587119e`)
+both passed package, tests, Clippy, SQLx, formatting and browser checks on x86 and
+ARM Linux, plus both x86 VM checks. Only ARM VMs failed; each of the four exact
+raw logs again proves missing KVM, TCG fallback and guest-shell startup timeout
+while waiting for PostgreSQL, before application assertions. Both PRs have
+current-head evidence comments; no check was disabled or ARM deployment claimed.
+
+Crane full local gate `6287` completed successfully on exact `587119e`, including
+all browser and VM checks. Final package `kqhd2w13ls03fp972728ldc36vvr7qsm` was
+inspected: no stub JS/WASM, one real pair, server present, runtime store references
+only glibc. Required #251 CI `37556278237` passed (Flake34m17s, Format45s); watcher
+`16075` is complete. These two handles must not be polled/restarted.
+
+Despite successful normal merge requests, GraphQL showed no queue entry for
+#251. Re-read actual branch rules: required Flake Check/Format, squash-only,
+ALLGREEN protected queue; no rules changed. An explicit normal CLI request
+`89212` still returned no entry. Used the documented GitHub `enqueuePullRequest`
+API with exact expected head and `jump:false`, not an administrator merge.
+GitHub confirmed position1, stateQUEUED at2026-10-07T01:54:36Z, entry
+`MQE_lQDOTRPZ888AAAABHBMpBs4AA_LZzgMiH-I`. This does not establish the CLI's
+underlying cause and is not a bypass or an actual merge.
+
+New merge-group run `37559430187` is confirmed active (created01:54:54Z), while
+the old failed queue run remains terminal. #251 still OPEN, mergeCommitnull.
+Next monitor this new group, then confirm actual merge before the no-update-refs
+unsigned Crane rebase/retarget with an exact `587119e` lease. #252's current full
+local/remote evidence does not replace required CI on its eventual master base.
