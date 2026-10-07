@@ -117,9 +117,11 @@ implementation remains incomplete. Do not treat
   logging. Its full gate50229 failed at Clippy: three unused preflight symbols.
   Local compositionf90f60f7 contains #246's function-local lint expectation for this
   deliberately unexposed reader; full gate38699 is running. #2469cc4330e passed
-  exact-head native all-target Clippy. #264–#268 now inherit the denied-export
-  cleanup. #264's111 focused report tests passed; HTTP verification remains
-  pending. Remaining shared-CI rebases and
+  exact-head native all-target Clippy. The complete composition's Clippy and
+  browser derivations have also passed; SQLx and the global result remain pending.
+  #264–#268 now inherit the denied-export
+  cleanup. #264's111 focused report tests and its actual HTTP session/organization
+  matrix passed. Remaining shared-CI rebases and
   final prerequisite integration are still required.
 
 ## Remote heads snapshot — 2026-10-07, before the follow-ups above
@@ -7360,3 +7362,137 @@ base is `integration/materialized-export-prerequisites` at8c990cd6 (parents
 99eab225 andc2d8de05), feeding #2474c6d0110 and #249c808b46c. It has only been
 inspected: no rebase started there. Refresh it against its existing owners'
 current heads before propagating CI changes through the exported report chain.
+
+### Shared-CI export and reader prerequisites refreshed — 2026-10-07
+
+The previous iteration was PROGRESS: export cleanup propagated and published
+through #264–#268 with111 passing focused report tests. Re-read the saved goal,
+AGENTS, constitution and ponytail; #216 reconfirmed merged at02f7b58. The complete
+composition f90f60f7 remains frozen under live gate38699. Its native all-target
+Clippy completed successfully and its browser checks are running; no full pass
+is claimed. No extra full local gate was started.
+
+HTTP-only91192 exited0 on #2642820e56d: the exact
+`job_endpoints_enforce_session_role_and_organization` test passed, with1106
+other tests filtered out. Its code calls the time-report and CSV/XLSX filter
+matrices using real loopback HTTP and disposable PostgreSQL. Log
+`.scratch/scoped-time-csv-http-check.log`, derivation
+`/nix/store/3iyfv5c9c9syslna8clg7jxr593kzq4c-horae-scoped-time-csv-http-check-0.1.0.drv`.
+The prior empty selector remains explicitly uncounted. PR updates28784 recorded
+the actual pass;76682 clarifies focused success versus the still-pending full
+gate. This does not prove #283 is unnecessary or certify any other head.
+
+Preserved the materialized/CSV authority base and deliveries under
+`backup/shared-ci-exports-20261007/*` and the verified
+`.scratch/shared-ci-exports-20261007.bundle`, SHA-256
+`c8406a383b83491da6b9d98a7b1e343a1c9c065ba737e10271666043a424c8d7`.
+Read-only comparison ruled out replacing the existing composition by a single
+unrelated independent PR. Reused `integration/invoice-authority-prerequisites`
+99adead5: it matches old parent99eab225 except the two established CI files.
+Replayed the original pure-domain/storage patches and #222's existing README
+commit1fef1a24; no new implementation or requirement text was written.
+
+| Branch | Previous head | Published head |
+| --- | --- | --- |
+| integration/materialized-export-prerequisites | 8c990cd6 | 267b0f0083dd9e7117ef4527c156dc7191af102f |
+| fix/materialized-export-authority (#247) | 4c6d0110 | 9274066db2e1d182ac73f4078412b919726ae222 |
+| fix/csv-export-authority (#249) | c808b46c | 5be60396c9c758346afb81bd05c9871d8e3fa950 |
+
+The pre-README base tree16c8b64b matched the explicit-old-parent expectation;
+final base tree40ecd449 matched the composition of current99adead5 and current
+storage1fef1a24. Child trees648070b0 and28487084 matched their expected trees.
+All four delivery commits are identical by range-diff. Every old/new tracked
+path except README and the two CI files is byte-identical; those three match
+their current owner blobs exactly. Formatting96476,99158 and23017 passed
+unchanged. Publication97647 succeeded atomically with exact old-head leases;
+descriptions92929 preserve historical checks and label fresh CI pending.
+
+Preserved the editor base and four reader/editor deliveries under
+`backup/shared-ci-readers-20261007/*` and verified
+`.scratch/shared-ci-readers-20261007.bundle`, SHA-256
+`0cd8b0a4ff9bf7adccf61b8049e0f575ab9a4144cdc14b14e5eba4b6d9d000cf`.
+The old editor-base treea2b429f6 exactly equaled old #2457dc76ed3: its historical
+merge added no unique content. Rebased that ref to current #245322f62b0 directly,
+preserving the old merge in the backup rather than creating another composition.
+
+| Branch | Previous head | Published head |
+| --- | --- | --- |
+| integration/permission-editor-build-prerequisites | a2b429f6 | 322f62b0b05af8b62209a86f6b02ab3201a3eaed |
+| feat/permission-editor-api (#250) | 202532b8 | 39b3b1c3b4b7be5297c8de3cb6fb643763d20b25 |
+| feat/scoped-people-directory (#253) | 80058039 | 1f6999549cd0f4b5238cf01a40223a1f9788a4cf |
+| feat/project-people-picker (#254) | b9b47c09 | f93019fe972807ae91e44dcd0cec666e0c4d933d |
+| feat/scoped-time-reader (#255) | e16978a9 | 40780585f4b9bf4a559e47a8a01fb3a23a2911ed |
+
+All four delivery trees matched precomputed expectations (acf1654a,85332176,
+b8e94925,de2001f1 respectively). All eight delivery patches are identical by
+range-diff. Only README and the two shared CI files differ from preserved heads,
+again matching their owner blobs; no production, query/cache, test or schema
+change was introduced. Formatting71926,34304,62869 and7462 passed unchanged.
+Publication44661 atomically updated all five refs with exact leases; each PR's
+updated description and exact remote head/draft state were verified. #283 is
+not yet inherited; current-head CI and final integration remain separate gates.
+No merge, original PR closure, source-worktree mutation or real-data operation.
+
+### Timesheet and report-reader shared-CI refresh
+
+Preserved seven original heads under `backup/shared-ci-timesheets-20261007/*`
+and verified `.scratch/shared-ci-timesheets-20261007.bundle`, SHA-256
+`206d2397ad42db948a256b3403a009bcd41cf7fd609f58db42bb75634b2fcf0a`.
+Local clean status and exact remote heads were checked before rebasing, with
+updateRefs and signing disabled throughout.
+
+The shared people prerequisite replays #253's unchanged directory/cache patches
+over current #25540780585. Recovered conflicts in the HTTP registration and
+profile-test files exactly matched original combined blobs9a2794dd anda1e156e1
+before staging. Its final tree911c33fe equals the precomputed explicit-old-parent
+composition; no novel source resolution was introduced.
+
+| Branch | Previous head | Refreshed head |
+| --- | --- | --- |
+| integration/scoped-time-people-prerequisites | 2437326e | 91d21fc8391e431143f766e3bf1b2f61bf0335d6 |
+| feat/timesheet-people-discovery (#256) | 5a95766b | f739f6d542425e97838c4f4f4d1b5f5493f1f2e0 |
+| feat/timesheet-page-context (#257) | 657bf8ed | 50303263c884fa84eedb4abe698abb1ddda0e80a |
+| feat/timesheet-person-commands (#258) | e1525af4 | 4d1fdb0a947b6c661a70d886caec62ecbe9627d7 |
+| feat/timesheet-selected-person-ui (#259) | b94f2fb5 | 5469226f45a3ddbd24893566218b29ac4a3bd1cc |
+| feat/scoped-time-report-reader (#261) | 46c0b1c9 | 06810c77d71d8ab851169f381a486b7787572555 |
+| feat/scoped-time-report-groups (#262) | 91832917 | fb6e7b2d7e1abc1de9fd59686ece349447699f8d |
+
+All six delivery trees matched their expected compositions:ff7dfdfd,1d42a6fe,
+3a3ca73b,b6f69667,4547da44 ande19212a8. All nine non-merge delivery patches are
+identical by range-diff. #258's old merge carried only #257's four-line query
+barrier-release correction; that correction remains inherited from #25750303263
+and is not duplicated or dropped by the flattened replay.
+
+Every tracked file in all seven branches is byte-identical to its old head
+except the two #282 recovery-test files and #222's README note; those match the
+current owner blobs exactly. No UI, CSS, authorization, query/cache, schema or
+assertion changed. Formatting17519/base,28642/#256,16334/#257,56806/#258,
+66265/#259,27366/#261 and35635/#262 passed with zero changes. Publication46407
+completed successfully, updating all seven refs atomically with exact leases.
+All six PR descriptions were updated and their exact remote heads and draft
+states were confirmed. Their current-head CI remains pending.
+
+Complete gate38699 advanced beyond browser into SQLx preparation. Both exact
+derivation outputs were independently confirmed valid via `nix path-info`:
+
+- Clippy `/nix/store/ifqd0qb8fzm25x1bxdv7w8pkd839a711-horae-clippy-0.1.0`,
+  from derivationnr7a2clln7q9rygp17x9hkp6lpiq148f.
+- Browser `/nix/store/79f3zhvq2d4xg5rd2k3fnigbzna5fz66-horae-browser-checks`,
+  from derivationgmlbhh5g7c5p07gd8yan9qpivyvnylr8.
+
+These prove native lint and the checked-in browser suite on f90f60f7, not the
+whole `nix flake check`, current remote heads, or an ARM gate. Keep the complete
+worktree frozen while38699 remains live. Next collect the full gate,
+reconcile a single current-head inventory, then refresh the remaining
+report-export/editor/project composition bases in dependency order. Preserve
+#263's explicit rollback and #246's dormant-reader annotation when carrying
+existing fixes. This iteration is PROGRESS; the goal remains incomplete.
+
+Post-publication inventory48370 confirms60 drafts with no local/remote mismatch:
+14 successful aggregates,17 failures,25 builds in progress and four fresh heads
+without a build aggregate yet. The lower success count reflects rewritten heads
+awaiting new evidence; old green checks are not carried forward. Direct stale
+bases remain #272/#273/#275/#281; transitive review compositions still need the
+remaining refresh. The original #212 worktree remains atdb3935db with the same18
+dirty paths; root still has only the original untracked `.playwright-mcp/`.
+Ledger formatting67244 passed unchanged; no original files were removed.
