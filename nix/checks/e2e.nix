@@ -3,6 +3,9 @@ pkgs.testers.nixosTest {
   name = "horae-e2e";
   nodes.server = { config, lib, ... }: {
     imports = [ flake.nixosModules.horae ];
+    # Under TCG, coldplug can exceed the test harness's five-minute device limit.
+    # Keep the console dependency alive until the driver's readiness deadline.
+    systemd.settings.Manager.DefaultDeviceTimeoutSec = lib.mkForce 900;
     services.horae.enable = true;
     services.horae.database.createLocally = true;
     systemd.services.horae.environment.DEV_LOGIN = "1";
