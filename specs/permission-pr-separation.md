@@ -153,11 +153,11 @@ T237 verification and T238 implementation remain incomplete. Do not treat
 | Grouped CSV/XLSX time exports, [#266](https://github.com/numtide/horae/pull/266) | `feat/grouped-time-exports`, `.worktrees/grouped-time-exports` | Review base `da493f6` combining #265 and #262 | Draft at `0eec1a4`; original grouped handlers/source/16 DB tests, shared CSV group authorization and18 descriptors; original grouped-filter HTTP fixture retained. Source/format/provenance pass; full native gate40587 running; later URL controls and consumer/browser integration remain open |
 | Time download result filters, [#267](https://github.com/numtide/horae/pull/267) | `feat/time-report-download-filters`, `.worktrees/time-report-download-filters` | #2660eec1a4 and inherited detailed/grouped report/export foundations | Draft at `e029a89`; original active-project/billability URL parser, seven DB tests, strict transport and actual-session fixtures;10 original descriptors. Format/provenance/source review passed; full native gate51012 running; UI/browser filter propagation retained separately |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
-| Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267 `e029a89`, inherited report access/readers and all four export routes | Draft at `aef180f`; original components,15 component tests and538-line isolated Chromium fixture. Format/source/provenance/syntax pass; gate50800 failed on two test-only user DTO references; minimal API-matching fix published and new full gate64831 running. No CSS/SQL/schema/activation; full T203 remains open |
+| Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267, inherited report access/readers and all four export routes | Draft at `1be11e74`; conservation audit recovered the original disclosure glyphs and added browser path assertions. Format/syntax passed; fresh full native31708 running. No CSS/SQL/schema/activation; full T203 remains open |
 | Cross-PR Reports/Timesheet/People verification only | `integration/reports-permission-check`, `.worktrees/reports-permission-integration` | Combines verified `1a87961` with #268 `810ce57` and its report/export foundations | Local integration merge `b7836d7`, not a delivery PR or GitHub merge. Both HTTP registration sets and all30 unique browser suites retained; dedicated source/test blobs unchanged. Format/syntax/source comparison pass; full native gate25958 running |
 | Scoped project editor, [#269](https://github.com/numtide/horae/pull/269) | `feat/scoped-project-editor`, `.worktrees/scoped-project-editor` | `integration/permission-readers-editor-check` | Draft at `a9ba27b`; canonical fields, preserved hidden values and manager edits extracted. Lost-acknowledgement fixture failed in the full gate but passes isolated; failure remains unresolved. No activation |
-| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `4a5c7d9`; full browser10797 and complete native51216 pass. Nixbot266 failed ARM deployment waiting for the restart-import advisory-lock waiter; ARM acceptance remains open |
-| Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites` at375e9bd, combining #270 and #267 | Draft at `d61bfd3`; parent browser corrections propagated with exact expected tree. Full native81807 passed on this head; ARM and wider delivery review remain pending |
+| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `737aa13a`; complete native30162 passed. Diagnostic-only VM change preserves deadlines/assertions. Nixbot295 running; earlier266 failed ARM before SIGKILL checkpoint, so ARM remains open |
+| Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites` at375e9bd, combining #270 and #267 | Draft at `5beac2e1`; conservation review restored and registered original requester HTTP matrix. Format/provenance passed; fresh full native37940 running. Earlier native81807 belongs to d61bfd3; ARM/wider review pending |
 | Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `fd91c3d`; parent browser corrections propagated with exact expected tree. Full native76300 passed in child #273; own exact-head gate50478 also passed. ARM and wider review remain pending |
 | Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `4b2c87d`; parent browser corrections propagated with exact expected tree. Full native76300 passed on this head. ARM, wider review, task lifecycle and catalog-management UI remain separate pending work |
 | Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; tests/live-schema SQLx96425 and full native71588 passed. ARM/wider acceptance pending. No lifecycle, catalog UI, later atomic rate creation or activation |
@@ -5825,3 +5825,70 @@ Unsignedcd8d1db7 restores descriptor81aefb2e byte-identically from original
 not a runtime Timesheet dependency. Fresh full native15935 runs on cd8d1db7.
 Next collect15935/31756 and complete the remaining source/shared-hunk and
 specification reconciliation, ARM checkpoint and #269 fixture diagnosis.
+
+### Shared-source conservation findings and ARM diagnostics — 2026-10-07
+
+The previous iteration made progress: #279 final-head native acceptance and
+#281 publication/corrected test dependencies. Reconfirmed #216 merged before
+editing; original #212 tracked work still exactly matches its saved snapshot.
+No original, #208, production data or policy state was changed.
+
+Fetched the authoritative Nixbot266 ARM VM log to
+`.scratch/nixbot-266-arm-e2e.log`. It proves the SIGTERM checkpoint, recovery,
+totals/attempts/report and repeated import completed (the latter in84.72s).
+The later SIGKILL setup timed out before observing its second-batch lock waiter
+(93.77s for a90s bound). It does not expose that job's progress/error/lease or
+blocking state. This does not prove an application deadlock or a sufficient
+deadline. No timeout was relaxed.
+
+#270737aa13a adds only bounded, best-effort failure diagnostics to wait_sql:
+synthetic job status/progress/lease/errors, PostgreSQL waits/blockers/advisory
+locks and an80-line service journal excerpt. It rethrows the original failure
+even when diagnostics fail. A focused check of the evaluated Python helper
+passes success, failure and unavailable-diagnostics cases, retaining90s wait
+and15s diagnostic command bounds. Formatting passed; full native30162 then
+passed exit0. Nixbot295 is confirmed running on that exact head. This is not an
+ARM repair or acceptance claim, and the diagnostic has not been propagated to
+dependent extractions. PR body76913 updated successfully.
+
+Added a local triage script and artifact, `permission-shared-line-audit.mjs/json`,
+which compare original additions with PR review deltas and current master.
+It explicitly is not semantic, ordering, deletion or unique-ownership proof.
+The first run exposed a missing-master-file handling bug in the audit script;
+the corrected run handles original added files and uses origin/master for
+independent PR bases. No extraction was changed by the inventory itself.
+
+Manual review of its results found two real omissions, now corrected:
+
+- #2715beac2e1 restores original2631186's complete project_requester HTTP matrix
+  byte-for-byte and registers it in exports::check. Both CSV/XLSX requesters,
+  anonymous/changed/foreign sessions, partial identities, headers and payloads
+  are tested. No production query or assertion changed. Formatting and byte
+  comparison pass; fresh full native37940 is running.
+- #2681be11e74 restores ecac66b's exact six-line chevron-right/down match arms,
+  used by grouped report expansion. Unknown icons previously rendered nothing.
+  Two existing Chromium scenario assertions now require the actual collapsed
+  and expanded SVG paths; accessible expanded state and all prior checks remain.
+  Formatting/JavaScript syntax pass; fresh full native31708 is running.
+
+Both corrections and their draft descriptions are published (29478/33527).
+Their prior-head green checks are not final-head evidence. The refreshed blob
+inventory contains1136 identical extraction blobs,58 adaptation/retained paths
+and20 original cache deletions; these are not completion percentages.
+
+Some apparent missing lines are already explained by checked extraction
+boundaries: the original scoped_time legacy invoice-identity matrix is separately
+registered as time_entry_payload::check in #242; the original user_directory
+canonical matrix is registered as scoped_directory::check in #253. The original
+configure_administration call in legacy time writers is inlined, with identical
+SQL, in #241 to avoid an unrelated canonical-module dependency. These are
+relocations/adaptations, not reasons to copy duplicate tests or broaden APIs.
+The sole core/lib addition belongs to #219; original CSS additions split into
+the rail-popover pointer guard in #273 and event-child drag targeting in #259.
+The feature selector and unadopted constitution proposal remain intentionally
+preserved as recorded under Original commit accounting.
+
+Next collect15935 (#281),31756 (catalog prerequisites),37940 (#271),31708 (#268)
+and current-head Nixbot295 without restarting live checks. Finish remaining
+shared-hunk/cache-deletion/specification reconciliation and #269's intermittent
+fixture diagnosis; do not mark complete or propagate unverified corrections.
