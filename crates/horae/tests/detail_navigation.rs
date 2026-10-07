@@ -59,7 +59,9 @@ mod task;
 #[path = "../src/models/user.rs"]
 pub mod user;
 mod models {
-    pub use super::{client, invoice, permission_editor, project, project_creation, project_managers};
+    pub use super::{
+        client, invoice, permission_editor, project, project_creation, project_managers,
+    };
     pub use super::{
         client::Client,
         project::{
