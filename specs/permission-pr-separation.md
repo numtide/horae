@@ -3329,3 +3329,14 @@ inherit this test repair after #251 actually merges. Next collect repaired-head
 gates, then re-enable protected auto-merge with exact-head matching. No merges
 have occurred, and the original extraction goal remains deferred until priority
 build PRs are integrated.
+
+Focused run `37073` subsequently FAILED at a different readiness assertion:
+`Draft saved at` remained `Saving draft…` for5s near New Project1052. Its failure
+snapshot already showed the saved status and no pending requests; disposable
+server log `/tmp/horae-browser.zCVW0N/server.log` recorded a PostgreSQL pool
+acquisition timeout during concurrent compilation. This is not a full-suite
+pass and is not yet classified as a product defect or purely load-related.
+Do not weaken its timeout. Formerly failing selector scenarios did pass.
+Wait for isolated Nix gate `48807`; repaired-head required CI run37556278237 is
+watched by live session `16075` at120s intervals (Format45s passed). These two
+handles, not the failed old queue or focused suite, are the active verification.
