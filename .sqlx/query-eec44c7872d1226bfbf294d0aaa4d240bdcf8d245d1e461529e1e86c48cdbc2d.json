@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET task_id=$2, org_id=$3 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eec44c7872d1226bfbf294d0aaa4d240bdcf8d245d1e461529e1e86c48cdbc2d"
+}
