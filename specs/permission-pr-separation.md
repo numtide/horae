@@ -5560,3 +5560,43 @@ original paths with an exact extraction blob;91 require adaptation/retained-work
 review and20 are original deletions requiring separate ownership review. The
 two #276 deletion owners are now documented above. These counts are not a
 completion percentage and do not replace the shared-hunk or dirty-work audit.
+
+### Existing-task link extraction — 2026-10-07
+
+The previous goal iteration made progress: published #276 and its original
+cache correction, verified the six-parent native composition, and published
+ledger282813e. Reconfirmed #216 merged and the original18 dirty paths before
+continuing. Original backup refs remain db3935d and d364270.
+
+Created feat/scoped-task-links in .worktrees/scoped-task-links directly on
+#2767e883eb. Unsigned commitd1ab522 extracts original979a594 without new
+functionality. All14 changed-path added/deleted line sets match the original;
+all nine added files are byte-identical, including seven query descriptors with
+verified hashes. The HTTP registry preserves19 parent matrices and adds
+task_links as the20th. Descriptorfa78a5ad is superseded only in this extraction
+by the currency-aware query and remains recoverable in its parent/source.
+Historical progress/quickstart/task-status changes stay with #248/original refs.
+
+Bounded source review followed both enable_project_task callers, requester
+binding, current all/managed project authority, independent explicit-rate
+authorization before existing-link no-ops, organization/actor/project/task
+ordering, tenant joins, integer parsing, canonical default currency even without
+project_settings, and archived/history preservation. Retained all five original
+database regressions and the nine-case HTTP matrix, including actual lock-wait
+revocation and stable-denial/no-op storage checks. No new critical/high finding
+identified in this boundary; full and cross-PR acceptance remain pending.
+
+Formatting and whitespace pass. Fresh tests/live-schema SQLx gate23598 is live
+on unchangedd1ab522. Publication attempt74103 has reported SSH-agent signing
+refusal and has not completed; do not claim a published branch/PR yet. The
+prepared draft body is retained in the repository scratch directory. #276's
+body-update handle62777 is also still live; readback confirms its head7e883eb
+but not the revised body. Do not repeat a pending write solely for lack of output.
+
+#276 gate60667 has completed live-schema SQLx validation and is running tests,
+including successful import activity/checkpoint lock-order regressions. Its
+full native95578 remains live. Next collect these exact handles, resolve any
+terminal publication failure using existing authorized credentials, and publish
+the link PR with accurate evidence. Keep original catalog5561f14, atomic
+creationdcadcee, editor controls8c1bf9b and unpublished Clients as remaining
+work. ARM and the earlier intermittent editor fixture remain unclosed.
