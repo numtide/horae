@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET active=(id=$1) WHERE org_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2a44aa1e62ae37490bc2e52aca97f4cb8048c973a4034296809ca6279555562b"
+}
