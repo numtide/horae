@@ -5147,3 +5147,33 @@ correction is now fully verified. The user-authorized normal-queue merge of
 #274 merged at11:43:02 UTC as8b3cc2577a3704cad28ee2e02a028fbf52668780.
 Merge-group run37615829882 passed. The authorized branch refresh can now
 proceed; this is not approval to merge any extraction PR.
+
+### Post-repair stack refresh — 2026-10-07
+
+Rebased all 52 extraction and ledger PRs in #218–#273 and their 18 shared
+integration branches onto 8b3cc2577a3704cad28ee2e02a028fbf52668780. All 70
+branches were published together with an atomic push and exact old-head
+force-with-lease checks. No extraction PR was merged.
+
+For every branch, the resulting tree exactly matches the original tree
+combined with the repaired master. All 51 non-ledger PR diffs are byte-for-byte
+unchanged at their respective merge bases, and every existing ancestor
+relationship with a PR base is preserved. Historical integration conflicts
+were resolved only after confirming equality with the original merge's
+resolution. No application behavior was changed by this refresh.
+
+Recovery refs remain under `backup/ci-refresh-20261007/`, with a verified
+bundle in `.scratch/ci-refresh-before.bundle`. The local manifests
+`.scratch/ci-refresh-plan.json`, `.scratch/ci-refresh-completed.log` and
+`.scratch/ci-refresh-published.json` record original and published heads.
+The original #208, #212 and #217 branches remain unchanged; #212 retains its 18
+uncommitted paths. They are preservation sources, not refreshed extraction
+branches. Root master and unrelated worktrees were not reset.
+
+CI must validate the newly published heads. The successful #274 checks prove
+the CI repair, not the correctness of every extraction. Existing browser
+failures in #269–#273 remain unresolved until fresh evidence demonstrates
+otherwise; those PRs remain drafts. Next action: inspect fresh-head results,
+address extraction failures within their own scope, then continue the original
+work-accounting and verification goal without adding features or merging
+extractions.
