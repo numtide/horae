@@ -3,6 +3,12 @@ pkgs.testers.nixosTest {
   name = "horae-e2e";
   nodes.server = { config, lib, ... }: {
     imports = [ flake.nixosModules.horae ];
+    # Under TCG, coldplug can exceed the test harness's five-minute device limit.
+    # Keep the console dependency alive until the driver's readiness deadline.
+    systemd.settings.Manager.DefaultDeviceTimeoutSec = lib.mkForce 900;
+    # initdb can exceed PostgreSQL's 120-second startup limit under ARM TCG.
+    # Leave the shutdown timeout unchanged.
+    systemd.services.postgresql.serviceConfig.TimeoutStartSec = 900;
     services.horae.enable = true;
     services.horae.database.createLocally = true;
     systemd.services.horae.environment.DEV_LOGIN = "1";
@@ -16,6 +22,10 @@ pkgs.testers.nixosTest {
     import shlex
 
     server.start()
+    # TCG boots on ARM can exceed the driver's fixed five-minute shell timeout.
+    # Wait for the guest's serial readiness signal before connecting to its shell.
+    # Read the complete log: wait_for_console_text drains only one line per second.
+    retry(lambda _: "connecting to host..." in server.get_console_log(), timeout_seconds=900)
     server.wait_for_unit("postgresql.service")
     server.wait_for_unit("horae.service")
     server.wait_for_open_port(3000)
