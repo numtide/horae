@@ -1,7 +1,11 @@
 // Canonical editor acceptance uses only run-design-checks.sh's disposable database.
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const { execFileSync } = require('node:child_process');
+const { mkdirSync } = require('node:fs');
+const { join } = require('node:path');
 const assert = require('node:assert/strict');
+const evidence = process.env.HORAE_PROJECT_TASK_EVIDENCE;
+if (evidence) mkdirSync(evidence, { recursive: true });
 const base = process.env.HORAE_TEST_URL;
 const target = new URL(base), database = new URL(process.env.DATABASE_URL);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
@@ -12,6 +16,10 @@ const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id FROM 
 const org = actor.org_id;
 const id = n => `019f4000-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const project = id(1), client = id(2), archived = id(3), outside = id(4), active = id(12);
+const task = id(20), archivedTask = id(21), globalArchivedTask = id(22);
+const taskState = () => sql(`SELECT jsonb_agg(jsonb_build_array(pt.task_id,pt.billable,pt.rate_cents,s.budget_minutes,s.budget_cents,s.restricted) ORDER BY pt.task_id)
+  FROM project_tasks pt JOIN project_task_settings s USING(project_id,task_id) WHERE pt.project_id='${project}'`);
+const taskActivity = taskId => sql(`SELECT active FROM project_tasks WHERE project_id='${project}' AND task_id='${taskId}'`);
 const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
 const edit = [...floor, 'project_read_managed', 'project_read_all', 'project_write_managed', 'project_write_all'];
 const readMoney = ['billable_rate_read_managed', 'billable_rate_read_all', 'cost_rate_read_all'];
@@ -67,6 +75,20 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
         VALUES ('${id(6)}','${org}','${project}','Private project note');
       INSERT INTO assignments (id,project_id,user_id) VALUES
         ('${id(7)}','${project}','${archived}'), ('${id(13)}','${project}','${active}');
+      INSERT INTO tasks (id,org_id,name,active) VALUES
+        ('${task}','${org}','Retained project task',true),
+        ('${archivedTask}','${org}','Archived project task',true),
+        ('${globalArchivedTask}','${org}','Globally archived task',false);
+      INSERT INTO project_tasks (project_id,task_id,active,billable,rate_cents) VALUES
+        ('${project}','${task}',true,true,23456),
+        ('${project}','${archivedTask}',false,true,34567),
+        ('${project}','${globalArchivedTask}',false,true,45678);
+      INSERT INTO project_task_settings (id,org_id,project_id,task_id,restricted,budget_minutes) VALUES
+        ('${id(26)}','${org}','${project}','${task}',true,120),
+        ('${id(27)}','${org}','${project}','${archivedTask}',false,240),
+        ('${id(28)}','${org}','${project}','${globalArchivedTask}',false,360);
+      INSERT INTO project_task_members (id,org_id,project_id,task_id,user_id)
+        VALUES ('${id(29)}','${org}','${project}','${task}','${active}');
       INSERT INTO project_member_costs (id,org_id,project_id,user_id,cost_rate_cents)
         VALUES ('${id(8)}','${org}','${project}','${archived}',56789),
           ('${id(14)}','${org}','${project}','${active}',67890);
@@ -104,6 +126,57 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     assert.equal(protectedState(), protectedBefore);
     console.log('PASS: keyboard manager removal preserves archived membership and withheld money/notes at desktop and narrow widths');
 
+    const tasksBefore = taskState();
+    assert.equal(taskActivity(archivedTask), 'f', 'unrelated save must not restore a project task');
+    await open();
+    const taskSection = page.getByRole('region', { name: 'Tasks', exact: true });
+    await expect(taskSection.getByRole('button', { name: 'Restore task Archived project task', exact: true })).toBeEnabled();
+    await expect(taskSection.getByRole('button', { name: 'Restore task Globally archived task', exact: true })).toBeDisabled();
+    await expect(taskSection.getByText('Restore in the task catalog first.', { exact: true })).toBeVisible();
+    const archiveTask = () => taskSection.getByRole('button', { name: 'Archive task Retained project task', exact: true });
+    await archiveTask().focus();
+    await page.keyboard.press('Enter');
+    await expect(taskSection.getByRole('button', { name: 'Restore task Retained project task', exact: true })).toBeFocused();
+    await expect(page.locator('[data-project-edit-state]')).toHaveAttribute('data-project-edit-state', 'dirty');
+    await expect(taskSection.getByRole('button', { name: 'Access for Retained project task: Restricted (1)', exact: true })).toBeDisabled();
+    assert.equal(taskActivity(task), 't', 'staging must not write before Save');
+    await taskSection.getByRole('button', { name: 'Restore task Retained project task', exact: true }).click();
+    await expect(page.locator('[data-project-edit-state]')).toHaveAttribute('data-project-edit-state', 'clean');
+    await taskSection.getByRole('button', { name: 'Development', exact: true }).click();
+    await taskSection.getByRole('button', { name: 'Remove task Development', exact: true }).click();
+    await expect(page.locator('[data-project-edit-state]')).toHaveAttribute('data-project-edit-state', 'clean');
+    await archiveTask().click();
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.evaluate(theme => document.documentElement.setAttribute('data-theme', theme), width === 1440 ? 'dark' : 'light');
+      await taskSection.scrollIntoViewIfNeeded();
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      if (evidence) await taskSection.screenshot({ path: join(evidence, `project-task-lifecycle-${width}.png`) });
+    }
+    await page.locator('#np-cancel').click();
+    await expect(page.getByRole('heading', { name: 'Discard changes?', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    sql(`INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable,state,is_running,started_at)
+      VALUES ('${id(30)}','${org}','${active}','${project}','${task}',CURRENT_DATE,0,true,'open',true,now())`);
+    await page.locator('#np-save').click();
+    await expect(page.locator('#np-form-error-message')).toHaveText('A running timer prevents archiving this project task');
+    await expect(taskSection.getByRole('button', { name: 'Restore task Retained project task', exact: true })).toBeEnabled();
+    await expect(page.locator('#np-save')).toBeEnabled();
+    assert.equal(taskActivity(task), 't');
+    assert.equal(taskState(), tasksBefore);
+    sql(`DELETE FROM time_entries WHERE id='${id(30)}'`);
+    await save();
+    assert.equal(taskActivity(task), 'f');
+    assert.equal(taskState(), tasksBefore);
+    assert.equal(sql(`SELECT user_id FROM project_task_members WHERE project_id='${project}' AND task_id='${task}'`), active);
+    await open();
+    await taskSection.getByRole('button', { name: 'Restore task Archived project task', exact: true }).click();
+    await save();
+    assert.equal(taskActivity(archivedTask), 't');
+    assert.equal(taskActivity(task), 'f');
+    assert.equal(taskState(), tasksBefore);
+    console.log('PASS: staged project task archive/restore, undo, cancellation and running-timer rejection preserve hidden configuration and restrictions');
+
     setGrants([...edit, ...readMoney]);
     await open();
     await expect(page.locator('#np-project-rate')).toHaveValue('123.45');
@@ -121,10 +194,15 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
 
     setGrants([...edit, ...writeMoney]);
     await open();
+    await taskSection.getByRole('button', { name: 'None', exact: true }).click();
+    await expect(taskSection.getByRole('checkbox', { name: 'Retained project task is billable', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(taskSection.getByRole('checkbox', { name: 'Archived project task is billable', exact: true })).toHaveAttribute('aria-checked', 'false');
+    await taskSection.getByRole('button', { name: 'All', exact: true }).click();
     await expect(page.locator('#np-project-rate')).toBeEnabled();
     await page.locator('#np-project-rate').fill('0');
     await expect(page.locator(`#np-cost-rate-${active}`)).toBeEnabled();
     await page.locator(`#np-cost-rate-${active}`).fill('');
+    await taskSection.getByRole('button', { name: 'Restore task Retained project task', exact: true }).click();
     const requests = [];
     await page.route('**/api/save_project_editor*', async route => {
       requests.push(route.request().postData());
@@ -144,6 +222,7 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     await expect(page).toHaveURL(`${base}/projects/${project}`);
     assert.equal(requests.length, 2);
     assert.equal(requests[0], requests[1]);
+    assert.equal(taskActivity(task), 't');
     assert.equal(sql(`SELECT edit_revision FROM projects WHERE id='${project}'`), committedRevision);
     const zeroExpected = JSON.parse(protectedBefore);
     zeroExpected[0][0] = 0;
@@ -153,6 +232,7 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
 
     await open();
     await page.locator('#np-name').fill('Discard on access loss');
+    await archiveTask().click();
     setGrants(floor);
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(page.locator('#np-editor-reload')).toBeVisible();
@@ -162,6 +242,7 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     await page.locator('#np-editor-reload').click();
     await expect(page.locator('#np-name')).toHaveValue('Read-only financial edit');
     await expect(page.locator('#np-project-rate')).toHaveCount(0);
+    assert.equal(taskActivity(task), 't', 'revoked save must not archive the task');
     console.log('PASS: current-authority revocation discards old editor state; explicit reload restores a fresh authorized form');
 
     await page.locator('#np-budget-value').fill('11');
@@ -178,13 +259,16 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       UPDATE organizations SET permission_policy_version=0 WHERE id='${org}';
       UPDATE users SET org_role='admin' WHERE id='${actor.id}';
       DELETE FROM person_permission_states WHERE id='${id(11)}';
+      DELETE FROM time_entries WHERE id='${id(30)}';
       DELETE FROM project_management_assignments WHERE project_id='${project}';
       DELETE FROM permission_change_receipts r USING project_edit_requests e
         WHERE r.org_id='${org}' AND r.actor_user_id='${actor.id}'
           AND e.org_id=r.org_id AND e.actor_id=r.actor_user_id AND e.id=r.request_id
           AND e.project_id='${project}';
       DELETE FROM assignments WHERE project_id='${project}';
+      DELETE FROM project_tasks WHERE project_id='${project}';
       DELETE FROM projects WHERE id='${project}';
+      DELETE FROM tasks WHERE id IN ('${task}','${archivedTask}','${globalArchivedTask}');
       DELETE FROM clients WHERE id='${client}';
       DELETE FROM users WHERE id IN ('${archived}','${outside}','${active}'); COMMIT;`);
     assert.equal(receipts(), initialReceipts, 'Editor fixture must remove only its own receipts');
