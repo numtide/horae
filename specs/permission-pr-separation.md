@@ -164,10 +164,10 @@ T237 verification and T238 implementation remain incomplete. Do not treat
 | Task archive/restore and import preservation, [#276](https://github.com/numtide/horae/pull/276) | `feat/scoped-task-lifecycle`, `.worktrees/scoped-task-lifecycle` | integration/task-lifecycle-prerequisites1955c38 (#275/#269/#258/#223/#224/#231) | Draft at `7e883eb`; tests/live-schema SQLx60667 and full native95578 passed after restoring original descriptor2889c08. Base full native65768 passed. ARM/wider acceptance pending; catalog/link/UI controls excluded |
 | Existing project-task link authority and currency, [#277](https://github.com/numtide/horae/pull/277) | `feat/scoped-task-links`, `.worktrees/scoped-task-links` | #2767e883eb | Draft at `d1ab522`; original979a594 extracted. Tests/live-schema SQLx23598 and full native62455 passed. ARM/wider acceptance pending; no UI or activation |
 | Atomic task creation with an initial rate, [#278](https://github.com/numtide/horae/pull/278) | `feat/atomic-task-creation`, `.worktrees/atomic-task-creation` | #277d1ab522 | Draft at `812a870`; full native63014 passed, including browser and deployment/OIDC. ARM/final cross-PR review pending. Catalog UI separate |
-| Task catalog and editor, [#279](https://github.com/numtide/horae/pull/279) | `feat/task-catalog`, `.worktrees/task-catalog` | integration/task-catalog-prerequisitese9f793d (#278/#260) | Draft; local `9fcc0a0` incorporates the verified #278 cleanup, tree identical to `46d3b36`. Earlier tests/live-schema SQLx56599 passed on46d3b36; fresh full native66969 running on9fcc0a0. ARM/final cross-PR review pending |
+| Task catalog and editor, [#279](https://github.com/numtide/horae/pull/279) | `feat/task-catalog`, `.worktrees/task-catalog` | integration/task-catalog-prerequisitese9f793d (#278/#260) | Draft, published `9fcc0a0`; full native66969 passed on this head, using valid cached outputs for identical derivations. ARM/final cross-PR review pending |
 | Task catalog dependency verification only | `integration/task-catalog-prerequisites`, `.worktrees/task-catalog-prerequisites` | #278812a870 and #260f00d8f0 | Local `e9f793d`; original requester,29 browser suites/20 HTTP matrices retained; source audit passed. Full native4427 passed on earlier0b781f9, not claimed for the changed head; not a delivery PR |
 | Project task archive/restore controls, [#280](https://github.com/numtide/horae/pull/280) | `feat/project-task-activity-ui`, `.worktrees/project-task-activity-ui` | #276 at `7e883eb` | Draft at `24c5d0e`; four original8c1bf9b paths, parent receipt cleanup retained. Full native14092 passed, including browser and deployment/OIDC. ARM/final cross-PR review pending |
-| Harvest-compatible client reads, [#281](https://github.com/numtide/horae/pull/281) | `feat/scoped-harvest-clients`, `.worktrees/scoped-harvest-clients` | #272 at `fd91c3d` | Published `1c254582` extracts eleven dirty paths plus the original shared-test visibility hunk. Initial gate28333 failed compilation, corrected; live-schema SQLx65280 then found a missing cache entry. Offline diagnostic/tests11982 running. Draft, not accepted |
+| Harvest-compatible client reads, [#281](https://github.com/numtide/horae/pull/281) | `feat/scoped-harvest-clients`, `.worktrees/scoped-harvest-clients` | #272 at `fd91c3d` | Local `cd8d1db7` extracts eleven dirty paths plus shared-test visibility and original fixture descriptor81aefb2e. Initial failures28333/65280/11982 diagnosed and corrected; fresh full native15935 running. Draft, not accepted |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
 Combine or subdivide only after tracing code and test dependencies. Prefer
@@ -5814,3 +5814,14 @@ Client65280 then failed live-schema SQLx validation for a missing descriptor,
 after compiling successfully with the fixture correction. Offline tests11982
 are diagnosing the exact consuming query; no cache is removed or assertion
 weakened. #281 remains draft until both SQLx and the full gates pass.
+
+Full native66969 subsequently finished exit0 on #2799fcc0a0, using cached Nix
+outputs for identical derivations and checking the final source. This is native
+acceptance only; ARM/Darwin were omitted. #279 body update67803 records it.
+Client diagnostic11982 finished exit101 with exactly the missing metadata for
+`UPDATE clients SET active=false WHERE id=$1` in the original client test.
+Unsignedcd8d1db7 restores descriptor81aefb2e byte-identically from original
+02c4245/db3935d; no new query or assertion. This is shared test-cache ownership,
+not a runtime Timesheet dependency. Fresh full native15935 runs on cd8d1db7.
+Next collect15935/31756 and complete the remaining source/shared-hunk and
+specification reconciliation, ARM checkpoint and #269 fixture diagnosis.
