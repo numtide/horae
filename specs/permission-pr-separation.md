@@ -112,8 +112,8 @@ review delta. The two VM follow-ups remain in #270 pending its dependency refres
 
 This snapshot supersedes the commit/status labels in the historical delivery
 table below. All59 delivery PRs remain drafts; all remote heads match the local
-branches. The refreshed snapshot has15 successful heads,39 failed heads,1 running
-build and4 new heads without a build aggregate yet. A success
+branches. The refreshed snapshot has15 successful heads,36 failed heads,1 running
+build and7 new heads without a build aggregate yet. A success
 is not completion of the cross-stack review; a failure is not necessarily a new
 functional defect. Failure classes and exact-head local evidence are recorded
 in the iteration sections. No PR is approved for merging by this inventory.
@@ -122,8 +122,8 @@ in the iteration sections. No PR is approved for merging by this inventory.
 | --- | --- | --- |
 | #219 | a936c129 | Awaiting fresh build result |
 | #220 | c2f587d6 | Awaiting fresh build result |
-| #221 | 7866b97f | Failed |
-| #222 | 23f258b7 | Failed |
+| #221 | cc474e87 | Awaiting fresh build result |
+| #222 | 1fef1a24 | Awaiting fresh build result |
 | #223 | bc74af8d | Awaiting fresh build result |
 | #224 | c374710a | Awaiting fresh build result |
 | #225 | ac723cb6 | Failed |
@@ -131,7 +131,7 @@ in the iteration sections. No PR is approved for merging by this inventory.
 | #227 | 25d75c4e | Failed |
 | #228 | 6c67247e | Failed |
 | #231 | 2e4bbf9d | Failed |
-| #232 | 6bf2fbcf | Failed |
+| #232 | c90aa898 | Awaiting fresh build result |
 | #233 | c30b8c41 | Passed |
 | #234 | 7afbe764 | Failed |
 | #235 | 082fa032 | Failed |
@@ -181,8 +181,7 @@ in the iteration sections. No PR is approved for merging by this inventory.
 | #282 | e39f033a | Running |
 
 #219/#220/#223/#224 now depend only on shared CI #282. Direct-base ancestry is
-stale for eight PRs: #221/#222/#232 need the updated shared-CI ancestors;
-#226 lacks #222's six-line README
+stale for five PRs: #226 needs #222's shared-CI ancestors and six-line README
 database-requirements note; #272 lacks the newer #270 cache/ARM test changes;
 #273/#281 lack #272's latest cache deletions; #275 lacks #273's latest cache
 deletion. This is not an exhaustive transitive-base audit: named integration
@@ -6621,3 +6620,47 @@ completed; live-schema SQLx preparation is running. #282 CI remains pending.
 Next: collect74548, then verify complete compositionefae7522; continue the
 dependency-ordered refresh through #221/#222/#232 with the same preservation
 checks. No additional local full gate, GitHub merge or original-source edit.
+
+### Shared-child refresh — 2026-10-07
+
+The preceding user-facing estimate was status-only, not goal progress. Revalidated
+the live local check via session74548 and confirmed #216 remains merged before
+continuing. This iteration updates three clean children without changing their
+functional patches:
+
+| PR | Previous head | Published head | Current parent |
+| --- | --- | --- | --- |
+| #221 | 7866b97f | cc474e87befc9a8769268c0358db7f9b2773620b | #219 a936c129 |
+| #222 | 23f258b7 | 1fef1a2461052a6fd43087c50812bafaabffd6a0 | #219 a936c129 |
+| #232 | 6bf2fbcf | c90aa898a40175661a3493c429be0ca06bf64d51 | #220 c2f587d6 |
+
+All four replayed commits have identical range-diff patches. Each resulting tree
+equals its precomputed composition with the exact previous parent as merge base.
+Automatic merge-base selection initially reported an add/add conflict because
+the parent itself had been rewritten; that was a read-only preflight, not a
+worktree conflict or code change. Explicit old-parent selection and all rebases
+then succeeded without manual resolution. Every old/new file is byte-identical
+except the two inherited CI files, which exactly match #282. updateRefs and
+commit signing were disabled for each rebase.
+
+Recovery refs are under `backup/shared-ci-children-20261007/`, named after the
+three worktrees. The complete-history bundle
+`.scratch/shared-ci-children-20261007.bundle` verifies, SHA-256
+`0841df8573ae42722c615b737b8aef42776df68e96013ccfd6e7fa404da7e118`.
+Formatting21009/14903/86144 passed without changes; whitespace checks passed.
+Atomic publication90927 used exact previous-head leases. GitHub confirms all
+three heads, unchanged parent branch names and draft status. PR descriptions
+explicitly distinguish historical full gates from pending fresh-head checks.
+
+Inventory94258 finds59 drafts, no remote/local mismatches,15 successful heads,
+36 failed heads,1 running aggregate and7 new heads awaiting an aggregate.
+Only five direct bases are stale; named integration bases still require input
+reconciliation, so this does not certify transitive freshness. No original-source
+edit, real-data change, policy activation, GitHub merge or closure occurred.
+
+Local74548 remains live on frozen5c43f24a, now compiling the server test suite
+after SQLx preparation. Its eventual result covers the recorded subset only.
+Next: collect that result and then run the sole full gate on complete composition
+efae7522. Continue the dependency refresh with #226 and the remaining independent
+roots before reconciling their composition bases. Keep original composition audit
+inputs immutable and do not treat earlier green heads as current-head evidence.
