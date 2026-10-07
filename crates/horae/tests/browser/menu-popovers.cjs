@@ -255,7 +255,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
       await expect(page.getByRole('menuitem', { name: /^Archived projects/ })).toHaveAttribute('aria-current', 'true');
       await page.getByRole('menuitem', { name: /^Active projects/ }).click();
       await expect(filter).toBeVisible();
-      await visit('/timesheet/calendar/2027-10-04', 'list_time_entries');
+      await visit('/timesheet/calendar/2027-10-04', 'load_timesheet_page');
       for (const name of ['Day view', '5-day view', 'Week view']) {
         await page.locator('button[aria-controls="calendar-span-menu"]').click();
         geometry = await visibleItems(page.getByRole('menu'));
@@ -277,7 +277,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     });
     await check('Timesheet keeps the shared calendar and week selection behavior', async () => {
       await page.setViewportSize({ width: 1440, height: 900 });
-      await visit('/timesheet/week/2027-10-04', 'list_time_entries');
+      await visit('/timesheet/week/2027-10-04', 'load_timesheet_page');
       await page.locator('.ts-pager-label').click();
       const calendar = page.locator('.dp-pop .dp');
       await expect(calendar).toBeVisible();

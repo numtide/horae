@@ -4,6 +4,130 @@ use sqlx::PgPool;
 use std::time::Duration;
 
 #[sqlx::test(migrations = "./migrations")]
+async fn submission_rechecks_policy_and_activity_after_access_change(pool: PgPool) {
+    for policy_change in [true, false] {
+        for commit in [true, false] {
+            let ids = seed(&pool, OrgRole::Member).await;
+            let entry = time_entry(&pool, &ids, EntryState::Open).await;
+            let mut change = pool.begin().await.unwrap();
+            crate::db::lock_organization(
+                &mut change,
+                ids.org_id,
+                crate::db::OrganizationLock::AccessChange,
+            )
+            .await
+            .unwrap();
+            if policy_change {
+                sqlx::query!(
+                    "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
+                    ids.org_id
+                )
+                .execute(&mut *change)
+                .await
+                .unwrap();
+            } else {
+                sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+                    .execute(&mut *change)
+                    .await
+                    .unwrap();
+            }
+            let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+                .fetch_one(&mut *change)
+                .await
+                .unwrap();
+            let db = pool.clone();
+            let mut run = tokio::task::JoinSet::new();
+            run.spawn(async move {
+                submit_user_week(&db, ids.user_id, ids.org_id, "2026-09-07".parse().unwrap()).await
+            });
+            wait_for_blocked(&pool, blocker).await;
+            if commit {
+                change.commit().await.unwrap();
+            } else {
+                change.rollback().await.unwrap();
+            }
+            let result = run.join_next().await.unwrap().unwrap();
+            if commit {
+                assert!(
+                    matches!(
+                        result,
+                        Err(ServerFnError::ServerError {
+                            code: FORBIDDEN,
+                            ..
+                        })
+                    ),
+                    "{result:?}"
+                );
+            } else {
+                assert!(result.is_ok(), "{result:?}");
+            }
+            let stored = sqlx::query!(
+                "SELECT state::text,rounded_minutes FROM time_entries WHERE id=$1",
+                entry
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            assert_eq!(
+                stored.state.as_deref(),
+                Some(if commit { "open" } else { "submitted" })
+            );
+            assert_eq!(stored.rounded_minutes.is_none(), commit);
+        }
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn admitted_submission_finishes_before_access_change(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Member).await;
+    let entry = time_entry(&pool, &ids, EntryState::Open).await;
+    let mut held = pool.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM time_entries WHERE id=$1 FOR UPDATE", entry)
+        .fetch_one(&mut *held)
+        .await
+        .unwrap();
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+        .fetch_one(&mut *held)
+        .await
+        .unwrap();
+    let db = pool.clone();
+    let mut submissions = tokio::task::JoinSet::new();
+    submissions.spawn(async move {
+        submit_user_week(&db, ids.user_id, ids.org_id, "2026-09-07".parse().unwrap()).await
+    });
+    wait_for_blocked(&pool, blocker).await;
+    let submission_pid = sqlx::query_scalar!(
+        "SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid))", blocker
+    ).fetch_one(&pool).await.unwrap();
+    let db = pool.clone();
+    let mut changes = tokio::task::JoinSet::new();
+    changes.spawn(async move {
+        let mut tx = db.begin().await.unwrap();
+        crate::db::lock_organization(
+            &mut tx,
+            ids.org_id,
+            crate::db::OrganizationLock::AccessChange,
+        )
+        .await
+        .unwrap();
+        sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+    });
+    wait_for_blocked(&pool, submission_pid.unwrap()).await;
+    held.commit().await.unwrap();
+    assert!(submissions.join_next().await.unwrap().unwrap().is_ok());
+    changes.join_next().await.unwrap().unwrap();
+    let state = sqlx::query_scalar!("SELECT state::text FROM time_entries WHERE id=$1", entry)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(state.as_deref(), Some("submitted"));
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn submission_freezes_the_minutes_after_a_competing_edit(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;

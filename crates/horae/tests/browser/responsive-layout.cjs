@@ -69,9 +69,9 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
       ['/invoices', 'list_invoices'], ['/reports', 'report_time'],
       ['/admin/users', 'list_users'], ['/approvals', 'list_approvals'],
       ['/settings', 'get_me'], ['/admin/importers', 'get_me'],
-      [`/timesheet/week/${week}`, 'list_time_entries'],
-      [`/timesheet/day/${week}`, 'list_time_entries'],
-      [`/timesheet/calendar/${week}`, 'list_time_entries'],
+      [`/timesheet/week/${week}`, 'load_timesheet_page'],
+      [`/timesheet/day/${week}`, 'load_timesheet_page'],
+      [`/timesheet/calendar/${week}`, 'load_timesheet_page'],
     ]) {
       await visit(path, resource);
       if (path === '/reports') await expect(page.getByRole('link', { name: 'Export XLSX', exact: true })).toBeVisible();
@@ -126,7 +126,7 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
     });
     await check('small-screen timesheet pager, date picker and view controls remain usable', async () => {
       await page.setViewportSize({ width: 320, height: 1000 });
-      await visit(`/timesheet/week/${week}`, 'list_time_entries');
+      await visit(`/timesheet/week/${week}`, 'load_timesheet_page');
       await page.getByRole('button', { name: 'Next week', exact: true }).click();
       await expect(page).toHaveURL(url => url.pathname === `/timesheet/week/${nextWeek}`);
       await page.getByRole('button', { name: 'Previous week', exact: true }).click();
@@ -156,7 +156,7 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
     });
     await check('day strip scrolls to Sunday and long entry labels do not cover actions', async () => {
       await page.setViewportSize({ width: 320, height: 1000 });
-      await visit(`/timesheet/day/${week}`, 'list_time_entries');
+      await visit(`/timesheet/day/${week}`, 'load_timesheet_page');
       const first = page.locator('.ts-day-entry').first();
       await expect(first).toBeVisible();
       await first.locator('.ts-day-entry-project').evaluate(el => { el.textContent = 'unbroken_project_reference_'.repeat(10); });

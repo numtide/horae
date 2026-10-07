@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
 use dioxus::html::geometry::PixelsVector2D;
@@ -13,11 +13,20 @@ use crate::components::controls::Segmented;
 use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::modal::Modal;
-use crate::components::project_task_picker::ProjectTaskPicker;
 use crate::components::timer_widget::use_running_timer;
-use crate::models::time_entry::TimeEntry;
+use crate::models::permission_editor::PermissionRequester;
+use crate::models::scoped_time::{
+    TimesheetCommand, TimesheetEntryInput, TimesheetPolicy, TimesheetWriteContext, VisibleTimeEntry,
+};
 use crate::route::Route;
 use crate::server_fns;
+
+mod data;
+mod people;
+mod tracking;
+
+#[cfg(test)]
+mod refresh_tests;
 
 /// Offset (0..=6) of `today` within the week starting `week_start`,
 /// or `None` when today falls outside that week.
@@ -49,20 +58,6 @@ fn value_cell_class(base: &str, minutes: i32, today_off: Option<usize>, i: usize
     }
 }
 
-/// Map a list-returning resource's loaded value, or yield `R::default()` while it
-/// is still loading or errored — collapses the repeated
-/// `read().as_ref().and_then(...).map(...).unwrap_or_default()` boilerplate.
-fn from_list<T: 'static, E: 'static, R: Default>(
-    res: &Resource<Result<Vec<T>, E>>,
-    f: impl FnOnce(&[T]) -> R,
-) -> R {
-    res.read()
-        .as_ref()
-        .and_then(|r| r.as_ref().ok())
-        .map(|v| f(v))
-        .unwrap_or_default()
-}
-
 /// Empty is an intentional clear/start action, not a failed parse.
 fn entry_minutes(input: &str) -> Result<Option<i32>, &'static str> {
     if input.trim().is_empty() {
@@ -92,7 +87,10 @@ struct CellFields {
     start_minute: Option<i32>,
 }
 
-fn cell_fields(input: &str, existing: Option<&TimeEntry>) -> Result<CellFields, &'static str> {
+fn cell_fields(
+    input: &str,
+    existing: Option<&VisibleTimeEntry>,
+) -> Result<CellFields, &'static str> {
     Ok(CellFields {
         minutes: entry_minutes(input)?.unwrap_or(0),
         notes: existing.and_then(|e| e.notes.clone()),
@@ -104,42 +102,20 @@ fn cell_fields(input: &str, existing: Option<&TimeEntry>) -> Result<CellFields, 
 /// Create, update, or (when `minutes` is 0) delete a time entry — `existing` is
 /// the entry to change, or `None` to create one. Shared by the week grid cells
 /// and the entry dialog so both save the same way.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "one shared create/update/delete dispatch mirroring the entry's fields"
-)]
 async fn persist_entry(
+    context: TimesheetWriteContext,
     existing: Option<Uuid>,
-    project_id: String,
-    task_id: String,
-    day: NaiveDate,
-    minutes: i32,
-    notes: Option<String>,
-    billable: bool,
-    start_minute: Option<i32>,
+    entry: TimesheetEntryInput,
 ) -> Result<(), ServerFnError> {
-    match (existing, minutes) {
-        (Some(id), 0) => server_fns::delete_time_entry(id.to_string())
-            .await
-            .map(|_| ()),
-        (Some(id), m) => {
-            server_fns::update_time_entry(id.to_string(), m, notes, billable, start_minute)
-                .await
-                .map(|_| ())
-        }
-        (None, m) if m > 0 => server_fns::create_time_entry(
-            project_id,
-            task_id,
-            day.to_string(),
-            m,
-            notes,
-            billable,
-            start_minute,
-        )
-        .await
-        .map(|_| ()),
-        _ => Ok(()),
-    }
+    let command = match (existing, entry.minutes) {
+        (Some(entry_id), 0) => TimesheetCommand::Delete {
+            entry_ids: vec![entry_id],
+        },
+        (Some(entry_id), _) => TimesheetCommand::Update { entry_id, entry },
+        (None, m) if m > 0 => TimesheetCommand::Create { entry },
+        _ => return Ok(()),
+    };
+    server_fns::apply_timesheet_command(context, command).await
 }
 
 #[derive(Clone, Copy, PartialEq, Default)]
@@ -258,20 +234,42 @@ impl CalSpan {
 }
 
 #[component]
-pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan) -> Element {
+pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> Element {
     let config = use_resource(server_fns::get_week_start);
+    // Keep the requester pinned across selected-person/date/view remounts.
+    let requester = use_signal(|| None::<PermissionRequester>);
+    let subject = if user.is_empty() {
+        None
+    } else if let Ok(id) = user.parse::<Uuid>() {
+        Some(id)
+    } else {
+        return rsx! { div { class: "alert alert-danger", role: "alert", "Invalid timesheet person. Choose Timesheet from the navigation to return to your own time." } };
+    };
     loaded(&config.read(), |first_day| {
         let Some(start) = start_of_week(date.0, *first_day)
             .filter(|start| start.checked_add_days(chrono::Days::new(6)).is_some())
         else {
             return rsx! { div { class: "alert alert-danger", "This week is outside the supported date range." } };
         };
-        rsx! { TimesheetContent { view, date, span, start } }
+        // Keys reset component state only inside a dynamic fragment. A route
+        // change must discard the previous person's resources and drafts.
+        rsx! {
+            for key in [format!("{view}:{date}:{span}:{user}")] {
+                TimesheetContent { key: "{key}", view, date, span, start, subject, requester }
+            }
+        }
     })
 }
 
 #[component]
-fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDate) -> Element {
+fn TimesheetContent(
+    view: ViewMode,
+    date: Anchor,
+    span: CalSpan,
+    start: NaiveDate,
+    subject: Option<Uuid>,
+    mut requester: Signal<Option<PermissionRequester>>,
+) -> Element {
     let today = chrono::Utc::now().date_naive();
     // View, week, selected day and calendar span all derive from the URL
     // (/timesheet/<view>/<date>?span=<span>), so switching views, changing the
@@ -288,6 +286,7 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
             view: v,
             date: Anchor(anchor),
             span,
+            user: subject.map(|id| id.to_string()).unwrap_or_default(),
         });
     });
     // Selecting a day in the Day-view strip navigates to that day (span carried
@@ -301,76 +300,145 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
     // entries below.
     let running_timer = use_running_timer();
 
-    let entries = use_resource(move || {
+    let mut sheet = use_resource(move || {
         let ws = *week_start.read();
         // Starting or stopping a timer adds or closes an entry in this week, so
         // subscribe to the shared timer: the rail can start one without knowing
         // this page exists.
         let _changes = running_timer.changes();
+        let expected = *requester.peek();
         async move {
             let we = ws + chrono::Duration::days(6);
-            server_fns::list_time_entries(
-                None,
-                None,
-                Some(ws.to_string()),
-                Some(we.to_string()),
-                // The whole window: every view here sums these rows, so a
-                // truncated fetch would quietly under-report the week's hours.
-                None,
+            (
+                ws,
+                data::load(subject, ws, we, expected, server_fns::load_timesheet_page).await,
             )
-            .await
         }
     });
-    let projects = use_resource(|| async move { server_fns::list_tracking_projects().await });
-    let tasks = use_resource(|| async move { server_fns::list_tracking_tasks().await });
-    let clients = use_resource(|| async move { server_fns::list_clients(true).await });
+    let current_sheet = use_memo(move || {
+        data::current(
+            sheet.state() == UseResourceState::Ready,
+            week_start(),
+            &sheet.read(),
+        )
+        .cloned()
+    });
+    use_effect(move || {
+        if let Some(Ok(page)) = current_sheet.read().as_ref()
+            && requester.peek().is_none()
+        {
+            requester.set(Some(page.requester));
+        }
+    });
+    // Resources retain their previous value during a refresh. Do not render
+    // those rows or derive totals until the complete new window is admitted.
+    let entries = use_memo(move || {
+        current_sheet
+            .read()
+            .as_ref()
+            .and_then(|result| result.as_ref().ok())
+            .map(|page| page.entries.clone())
+            .unwrap_or_default()
+    });
+    let context = use_memo(move || {
+        current_sheet
+            .read()
+            .as_ref()
+            .and_then(|result| result.as_ref().ok())
+            .map(|page| TimesheetWriteContext {
+                expected_requester: page.requester,
+                subject_id: page.subject.id,
+                expected_policy: page.policy,
+            })
+    });
+    let policy = use_memo(move || context().map(|context| context.expected_policy));
+    let mut tracking_page = use_resource(move || {
+        let expected = context();
+        async move {
+            let result = match expected {
+                Some(context) => server_fns::load_timesheet_tracking(context).await,
+                None => Ok(Vec::new()),
+            };
+            (expected, result)
+        }
+    });
+    let current_tracking = use_memo(move || {
+        if tracking_page.state() != UseResourceState::Ready || context().is_none() {
+            return None;
+        }
+        tracking_page
+            .read()
+            .as_ref()
+            .filter(|(expected, _)| expected == &context())
+            .map(|(_, result)| result.clone())
+    });
+    let tracking = use_memo(move || {
+        current_tracking
+            .read()
+            .as_ref()
+            .and_then(|result| result.as_ref().ok())
+            .cloned()
+            .unwrap_or_default()
+    });
+    let mut pending_action = use_signal(|| false);
 
     // Lookups and grid data are memoized so they rebuild only when their
     // resources (or the selected week) change — not on every render, e.g. each
     // keystroke in the add-entry modal.
     let project_names = use_memo(move || -> HashMap<Uuid, String> {
-        from_list(&projects, |ps| {
-            ps.iter().map(|p| (p.id, p.name.clone())).collect()
-        })
+        let mut names: HashMap<_, _> = tracking
+            .read()
+            .iter()
+            .map(|p| (p.project_id, p.project_name.clone()))
+            .collect();
+        names.extend(
+            entries
+                .read()
+                .iter()
+                .map(|e| (e.project_id, e.project_name.clone())),
+        );
+        names
     });
     let task_names = use_memo(move || -> HashMap<Uuid, String> {
-        from_list(&tasks, |ts| {
-            ts.iter().map(|t| (t.id, t.name.clone())).collect()
-        })
+        let mut names: HashMap<_, _> = tracking
+            .read()
+            .iter()
+            .map(|t| (t.task_id, t.task_name.clone()))
+            .collect();
+        names.extend(
+            entries
+                .read()
+                .iter()
+                .map(|e| (e.task_id, e.task_name.clone())),
+        );
+        names
     });
-    // project_id -> (client name, project currency), for the calendar event's
-    // "Client · CUR" line.
-    let project_client = use_memo(move || -> HashMap<Uuid, (String, String)> {
-        let client_names: HashMap<Uuid, String> = from_list(&clients, |cs| {
-            cs.iter().map(|c| (c.id, c.name.clone())).collect()
-        });
-        from_list(&projects, |ps| {
-            ps.iter()
-                .map(|p| {
-                    let name = client_names.get(&p.client_id).cloned().unwrap_or_default();
-                    (p.id, (name, p.currency.clone()))
-                })
-                .collect()
-        })
+    // Time visibility supplies historical labels, not financial authority.
+    let project_client = use_memo(move || -> HashMap<Uuid, String> {
+        entries
+            .read()
+            .iter()
+            .map(|e| (e.project_id, e.client_name.clone()))
+            .collect()
     });
 
     let ws = *week_start.read();
     let week_end = ws + Duration::days(6);
 
     // Entries for the visible week, grouped by weekday, with per-day totals.
-    let week_entries = use_memo(move || -> Vec<TimeEntry> {
+    let week_entries = use_memo(move || -> Vec<VisibleTimeEntry> {
         let ws = week_start();
         let we = ws + Duration::days(6);
-        from_list(&entries, |es| {
-            es.iter()
-                .filter(|e| e.spent_date >= ws && e.spent_date <= we)
-                .cloned()
-                .collect()
-        })
+        entries
+            .read()
+            .iter()
+            .filter(|e| e.spent_date >= ws && e.spent_date <= we)
+            .cloned()
+            .collect()
     });
-    let by_day = use_memo(move || -> [Vec<TimeEntry>; 7] {
+    let by_day = use_memo(move || -> [Vec<VisibleTimeEntry>; 7] {
         let ws = week_start();
-        let mut by_day: [Vec<TimeEntry>; 7] = Default::default();
+        let mut by_day: [Vec<VisibleTimeEntry>; 7] = Default::default();
         for entry in week_entries.read().iter() {
             let offset = (entry.spent_date - ws).num_days();
             if (0..7).contains(&offset) {
@@ -412,6 +480,25 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
     // billable flag is carried through (the modal doesn't expose it).
     let mut editing = use_signal(|| None::<Uuid>);
     let mut edit_billable = use_signal(|| true);
+    // Legacy own edits may retain their historical source without making that
+    // pair eligible for a new entry, timer, or another person's sheet.
+    let modal_tracking = use_memo(move || {
+        let mut options = tracking();
+        if policy() == Some(TimesheetPolicy::LegacyOwn)
+            && let Some(id) = editing()
+            && let Some(entry) = entries.read().iter().find(|entry| entry.id == id)
+            && !tracking::eligible(&options, entry.project_id, entry.task_id)
+        {
+            options.push(crate::models::scoped_time::TimesheetTrackingOption {
+                project_id: entry.project_id,
+                project_name: entry.project_name.clone(),
+                task_id: entry.task_id,
+                task_name: entry.task_name.clone(),
+                billable: entry.billable,
+            });
+        }
+        options
+    });
     // The entry's optional start time (minutes since midnight); None = untimed.
     // Set by a calendar drag or when editing a timed entry; carried into save.
     let mut add_start = use_signal(|| None::<i32>);
@@ -436,15 +523,15 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
     // Open the modal to create a new entry for `date`, defaulting the selects to
     // the first project/task.
     let open_add = use_callback(move |date: NaiveDate| {
-        let first_project = from_list(&projects, |ps| {
-            ps.first().map(|p| p.id.to_string()).unwrap_or_default()
-        });
-        let first_task = from_list(&tasks, |ts| {
-            ts.first().map(|t| t.id.to_string()).unwrap_or_default()
-        });
+        if pending_action() {
+            return;
+        }
+        let Some(first) = tracking.read().first().cloned() else {
+            return;
+        };
         editing.set(None);
-        add_project.set(first_project);
-        add_task.set(first_task);
+        add_project.set(first.project_id.to_string());
+        add_task.set(first.task_id.to_string());
         add_notes.set(String::new());
         add_duration.set(String::new());
         add_start.set(None);
@@ -452,9 +539,11 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
         add_open.set(Some(date));
     });
 
-    // Open the modal to edit an existing entry, pre-filled from it. Project and
-    // task are read-only in edit mode (the update only changes duration/notes).
-    let open_edit = use_callback(move |e: TimeEntry| {
+    // Opening the modal does not grant write access to its source or destination.
+    let open_edit = use_callback(move |e: VisibleTimeEntry| {
+        if pending_action() || !tracking::editable(policy(), &tracking.read(), &e) {
+            return;
+        }
         editing.set(Some(e.id));
         add_project.set(e.project_id.to_string());
         add_task.set(e.task_id.to_string());
@@ -480,22 +569,27 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
         };
         // Refresh after refusals too: another session may have changed the entry,
         // or a response may have been lost after the server committed the move.
-        let commit = move |fut: std::pin::Pin<
-            Box<dyn std::future::Future<Output = Result<(), ServerFnError>>>,
-        >| {
+        let Some(context) = context() else {
+            return;
+        };
+        if pending_action() {
+            return;
+        }
+        let mut commit = move |command: TimesheetCommand| {
+            pending_action.set(true);
             let mut timer = running_timer;
             spawn(async move {
-                match fut.await {
+                match server_fns::apply_timesheet_command(context, command).await {
                     Ok(()) => grid_error.set(None),
                     Err(e) => grid_error.set(Some(format!("Could not change entry: {e}"))),
                 }
                 timer.refresh();
+                pending_action.set(false);
             });
         };
-        // A locked (submitted/approved/invoiced) entry can't be moved, resized, or
-        // reordered — open it for viewing instead of silently snapping back.
+        // Submitted edits still need the approval-coverage integration.
         if let Some(entry) = d.entry.clone()
-            && entry.state != horae_core::types::EntryState::Open
+            && !tracking::editable(policy(), &tracking.read(), &entry)
         {
             open_edit.call(entry);
             return;
@@ -529,13 +623,12 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                     return;
                 }
                 let dur = clamp(new_start, d.orig_dur);
-                let date = (ws + Duration::days(d.day as i64)).to_string();
-                let id = entry.id.to_string();
-                commit(Box::pin(async move {
-                    server_fns::reschedule_time_entry(id, date, new_start, dur)
-                        .await
-                        .map(|_| ())
-                }));
+                commit(TimesheetCommand::Reschedule {
+                    entry_id: entry.id,
+                    spent_date: ws + Duration::days(d.day as i64),
+                    start_minute: new_start,
+                    minutes: dur,
+                });
             }
             // Resize an entry → new duration from its start to the pointer.
             DragKind::Resize => {
@@ -543,14 +636,12 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                     return;
                 };
                 let dur = clamp(d.start_min, d.resize_end() - d.start_min);
-                let date = (ws + Duration::days(d.orig_day as i64)).to_string();
-                let id = entry.id.to_string();
-                let start = d.start_min;
-                commit(Box::pin(async move {
-                    server_fns::reschedule_time_entry(id, date, start, dur)
-                        .await
-                        .map(|_| ())
-                }));
+                commit(TimesheetCommand::Reschedule {
+                    entry_id: entry.id,
+                    spent_date: ws + Duration::days(d.orig_day as i64),
+                    start_minute: d.start_min,
+                    minutes: dur,
+                });
             }
             // Reorder an untimed entry within its day's stack. No move (or a drop
             // on another day) → treat as a click and open it for editing.
@@ -561,19 +652,13 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                 // Drop column = target day; the same call reorders within a day and
                 // moves the entry to another day (its spent_date follows).
                 let target_date = ws + Duration::days(d.day as i64);
-                let mut ordered = entries
+                let day: Vec<VisibleTimeEntry> = entries
                     .read()
-                    .as_ref()
-                    .and_then(|r| r.as_ref().ok())
-                    .map(|all| {
-                        let day: Vec<TimeEntry> = all
-                            .iter()
-                            .filter(|e| e.spent_date == target_date)
-                            .cloned()
-                            .collect();
-                        untimed_ordered(&day)
-                    })
-                    .unwrap_or_default();
+                    .iter()
+                    .filter(|e| e.spent_date == target_date)
+                    .cloned()
+                    .collect();
+                let mut ordered = untimed_ordered(&day);
                 let before: Vec<Uuid> = ordered.iter().map(|e| e.id).collect();
                 // Drop the moved entry from the target list (present only on a
                 // same-day reorder) and re-insert it at the drop position.
@@ -594,24 +679,33 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                     open_edit.call(entry);
                     return;
                 }
-                let ids: Vec<String> = after.iter().map(|id| id.to_string()).collect();
-                let date = target_date.to_string();
-                commit(Box::pin(async move {
-                    server_fns::reorder_untimed_entries(date, ids).await
-                }));
+                commit(TimesheetCommand::Reorder {
+                    spent_date: target_date,
+                    entry_ids: after,
+                });
             }
         }
     });
 
     // Start a timer for an existing entry's project/task (the Day-view "Start"
     // action, Harvest-style resume).
-    let start_entry = use_callback(move |e: TimeEntry| {
+    let start_entry = use_callback(move |e: VisibleTimeEntry| {
+        let Some(context) = context() else {
+            return;
+        };
+        if pending_action() || !tracking::eligible(&tracking.read(), e.project_id, e.task_id) {
+            return;
+        }
+        pending_action.set(true);
         let mut timer = running_timer;
         spawn(async move {
-            match server_fns::start_timer(
-                e.project_id.to_string(),
-                e.task_id.to_string(),
-                e.notes.clone(),
+            match server_fns::apply_timesheet_command(
+                context,
+                TimesheetCommand::StartTimer {
+                    project_id: e.project_id,
+                    task_id: e.task_id,
+                    notes: e.notes,
+                },
             )
             .await
             {
@@ -619,6 +713,36 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                 Err(e) => grid_error.set(Some(format!("Could not start timer: {e}"))),
             }
             timer.refresh();
+            pending_action.set(false);
+        });
+    });
+    let stop_entry = use_callback(move |entry: VisibleTimeEntry| {
+        let Some(context) = context() else {
+            return;
+        };
+        if pending_action()
+            || !tracking::stoppable(
+                &tracking.read(),
+                &entry,
+                Some(context.expected_requester.user_id),
+            )
+        {
+            return;
+        }
+        pending_action.set(true);
+        let mut timer = running_timer;
+        spawn(async move {
+            match server_fns::apply_timesheet_command(
+                context,
+                TimesheetCommand::StopTimer { entry_id: entry.id },
+            )
+            .await
+            {
+                Ok(()) => grid_error.set(None),
+                Err(error) => grid_error.set(Some(format!("Could not stop timer: {error}"))),
+            }
+            timer.refresh();
+            pending_action.set(false);
         });
     });
 
@@ -629,11 +753,31 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
     let mut addrow_open = use_signal(|| false);
     let mut addrow_project = use_signal(String::new);
     let mut addrow_task = use_signal(String::new);
+    // Keep keystrokes outside the refreshable grid: another cell's save may
+    // unmount it before this cell has emitted blur/change.
+    let mut cell_drafts = use_signal(HashMap::<CellKey, String>::new);
+    let mut saving_cells = use_signal(HashSet::<CellKey>::new);
 
     // Commit a grid cell: create, update, or clear the entry behind it, then
     // reload. Notes, billability, and the start time of an update are preserved.
     let commit_cell = use_callback(move |edit: CellEdit| {
-        let fields = {
+        let Some(context) = context() else {
+            grid_error.set(Some(
+                "Wait for the timesheet to finish loading before saving.".into(),
+            ));
+            return;
+        };
+        let key = (edit.project_id, edit.task_id, edit.day);
+        if pending_action()
+            || removing_row()
+            || (edit.existing.is_none()
+                && !tracking::eligible(&tracking.read(), edit.project_id, edit.task_id))
+            || saving_cells.read().contains(&key)
+            || cell_drafts.read().get(&key) != Some(&edit.input)
+        {
+            return;
+        }
+        let mut fields = {
             let entries = week_entries.read();
             let existing = edit
                 .existing
@@ -644,6 +788,10 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                 ));
                 return;
             }
+            if existing.is_some_and(|entry| !tracking::editable(policy(), &tracking.read(), entry))
+            {
+                return;
+            }
             match cell_fields(&edit.input, existing) {
                 Ok(fields) => fields,
                 Err(message) => {
@@ -652,101 +800,158 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                 }
             }
         };
+        if edit.existing.is_none() {
+            fields.billable = tracking
+                .read()
+                .iter()
+                .find(|option| {
+                    option.project_id == edit.project_id && option.task_id == edit.task_id
+                })
+                .is_some_and(|option| option.billable);
+        }
+        saving_cells.write().insert(key);
         let mut timer = running_timer;
         spawn(async move {
             let res = persist_entry(
+                context,
                 edit.existing,
-                edit.project_id.to_string(),
-                edit.task_id.to_string(),
-                edit.day,
-                fields.minutes,
-                fields.notes,
-                fields.billable,
-                fields.start_minute,
+                TimesheetEntryInput {
+                    project_id: edit.project_id,
+                    task_id: edit.task_id,
+                    spent_date: edit.day,
+                    minutes: fields.minutes,
+                    notes: fields.notes,
+                    billable: fields.billable,
+                    start_minute: fields.start_minute,
+                },
             )
             .await;
             match res {
                 Ok(()) => {
+                    let mut drafts = cell_drafts.write();
+                    if drafts.get(&key) == Some(&edit.input) {
+                        drafts.remove(&key);
+                    }
+                    if fields.minutes > 0 {
+                        pending_rows
+                            .write()
+                            .retain(|row| *row != (edit.project_id, edit.task_id));
+                    }
                     grid_error.set(None);
                     timer.refresh();
                 }
-                // Refresh on failure too: the cell still shows what was typed,
-                // and only a re-read puts the saved value back on screen.
+                // Re-read saved facts on failure, but retain the user's input
+                // separately so it can be corrected and retried.
                 Err(e) => {
                     grid_error.set(Some(format!("Could not save: {e}")));
                     timer.refresh();
                 }
             }
+            saving_cells.write().remove(&key);
         });
     });
 
     // Remove a row: drop a pending one, or delete every entry it holds this week.
     let remove_row = use_callback(move |key: (Uuid, Uuid)| {
-        if removing_row() {
+        let start = week_start();
+        let Some(context) = context() else {
+            return;
+        };
+        if pending_action() || removing_row() {
+            return;
+        }
+        if saving_cells.read().iter().any(|&(project, task, day)| {
+            (project, task) == key && (0..7).contains(&(day - start).num_days())
+        }) {
+            grid_error.set(Some(
+                "Wait for this row's changes to finish saving before removing it.".into(),
+            ));
             return;
         }
         pending_rows.write().retain(|k| *k != key);
-        let entries: Vec<(Uuid, NaiveDate)> = week_entries
+        let entries: Vec<VisibleTimeEntry> = week_entries
             .read()
             .iter()
             .filter(|e| e.project_id == key.0 && e.task_id == key.1)
-            .map(|e| (e.id, e.spent_date))
+            .cloned()
             .collect();
         if entries.is_empty() {
+            discard_row_drafts(&mut cell_drafts.write(), key, start);
+            return;
+        }
+        if entries
+            .iter()
+            .any(|entry| !tracking::editable(policy(), &tracking.read(), entry))
+        {
+            grid_error.set(Some(
+                "This row contains entries that cannot currently be removed.".into(),
+            ));
             return;
         }
         removing_row.set(true);
         let mut timer = running_timer;
         spawn(async move {
-            let total = entries.len();
-            let mut deleted = 0;
-            let mut first_error = None;
-            for (id, day) in entries {
-                match server_fns::delete_time_entry(id.to_string()).await {
-                    Ok(()) => deleted += 1,
-                    Err(e) => {
-                        if first_error.is_none() {
-                            first_error = Some(format!("{day}: {e}"));
-                        }
-                    }
+            let command = TimesheetCommand::Delete {
+                entry_ids: entries.iter().map(|entry| entry.id).collect(),
+            };
+            match server_fns::apply_timesheet_command(context, command).await {
+                Ok(()) => {
+                    discard_row_drafts(&mut cell_drafts.write(), key, start);
+                    grid_error.set(None);
                 }
+                Err(error) => grid_error.set(Some(format!("Could not remove row: {error}"))),
             }
-            grid_error.set(first_error.map(|error| {
-                format!(
-                    "Deleted {deleted} of {total} entries. {} deletions were not confirmed. First error: {error}",
-                    total - deleted
-                )
-            }));
             timer.refresh();
             removing_row.set(false);
         });
     });
 
     let open_add_row = use_callback(move |()| {
-        addrow_project.set(from_list(&projects, |ps| {
-            ps.first().map(|p| p.id.to_string()).unwrap_or_default()
-        }));
-        addrow_task.set(from_list(&tasks, |ts| {
-            ts.first().map(|t| t.id.to_string()).unwrap_or_default()
-        }));
+        if pending_action() {
+            return;
+        }
+        let Some(first) = tracking.read().first().cloned() else {
+            return;
+        };
+        addrow_project.set(first.project_id.to_string());
+        addrow_task.set(first.task_id.to_string());
         addrow_open.set(true);
     });
 
+    let busy = use_memo(move || {
+        pending_action() || add_saving() || removing_row() || !saving_cells.read().is_empty()
+    });
+    let dirty = !cell_drafts.read().is_empty()
+        || add_open().is_some()
+        || addrow_open()
+        || !pending_rows.read().is_empty()
+        || cal_drag.read().is_some();
     let week_actions = WeekActions {
         commit: commit_cell,
         remove_row,
         removing_row: removing_row.into(),
         add_row: open_add_row,
+        drafts: cell_drafts,
+        saving: saving_cells.into(),
+        tracking,
+        busy,
+        policy,
     };
 
     // Shared validation for the entry dialog's Start-timer / Save actions: a
     // project and task must be picked. Returns the values (notes trimmed) or sets
     // the modal error and yields None.
-    let read_pt_notes = use_callback(move |()| -> Option<(String, String, Option<String>)> {
-        let project_id = add_project.read().clone();
-        let task_id = add_task.read().clone();
-        if project_id.is_empty() || task_id.is_empty() {
+    let read_pt_notes = use_callback(move |()| -> Option<(Uuid, Uuid, Option<String>)> {
+        let (Ok(project_id), Ok(task_id)) =
+            (add_project().parse::<Uuid>(), add_task().parse::<Uuid>())
+        else {
             add_error.set(Some("Select a project and task.".to_string()));
+            return None;
+        };
+        if !tracking::eligible(&modal_tracking.read(), project_id, task_id) {
+            add_error.set(Some(
+                "This project and task are not currently available for this person.".into(),
+            ));
             return None;
         }
         let notes = {
@@ -756,19 +961,20 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
         Some((project_id, task_id, notes))
     });
 
-    // The "+" button adds for today when it's in the viewed week, else its first day.
-    let add_default_date = if (0..7).contains(&(today - ws).num_days()) {
-        today
-    } else {
-        ws
-    };
-
     let current_mode = *view_mode.read();
     let sel_offset = *selected_day_offset.read();
     // The pager moves a single day in Day view and in the Calendar's single-day
     // span; otherwise it moves a whole week (like Harvest).
     let day_paged = current_mode == ViewMode::Day
         || (current_mode == ViewMode::Calendar && span == CalSpan::Day);
+    // A single-day view must add to its displayed day, not the week's default.
+    let add_default_date = if day_paged {
+        date.0
+    } else if (0..7).contains(&(today - ws).num_days()) {
+        today
+    } else {
+        ws
+    };
 
     let mut picker_open = use_signal(|| false);
     // Pager stepping. Moving the anchor date across the week edge rolls the week
@@ -783,10 +989,14 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
 
     rsx! {
         div {
+            "data-editor-kind": "timesheet",
+            "data-editor-state": if busy() { "pending" } else if dirty { "dirty" } else { "clean" },
             // Header: title + last-saved + view toggle
             div { class: "ts-header",
                 h1 { class: "page-title", "Timesheet" }
-                span { class: "ts-saved", "{format_hhmm(week_total.into())} this week" }
+                if matches!(&*current_sheet.read(), Some(Ok(_))) {
+                    span { class: "ts-saved", "{format_hhmm(week_total.into())} this week" }
+                }
                 Segmented {
                     items: vec!["Day".to_string(), "Week".to_string(), "Calendar".to_string()],
                     active: match current_mode {
@@ -811,6 +1021,7 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                 button {
                     class: "ts-add",
                     "aria-label": "Add entry",
+                    disabled: busy() || tracking.read().is_empty(),
                     onclick: move |_| open_add.call(add_default_date),
                     "+"
                 }
@@ -900,6 +1111,26 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                 }
             }
 
+            if let Some(Ok(page)) = current_sheet.read().as_ref() {
+                if page.policy == TimesheetPolicy::Scoped {
+                    people::PersonPicker {
+                        requester: page.requester, selected: page.subject.clone(), disabled: busy(),
+                        on_selected: move |id: Uuid| {
+                            navigator().push(Route::Timesheet { view, date, span, user: id.to_string() });
+                        },
+                    }
+                }
+            }
+            if subject.is_some() {
+                Link { to: Route::Timesheet { view, date, span, user: String::new() }, class: "btn btn-ghost btn-sm", "My timesheet" }
+            }
+            if let Some(Err(error)) = current_tracking.read().as_ref() {
+                div { class: "alert alert-danger", role: "alert",
+                    p { "Could not load available projects and tasks: {error}" }
+                    button { class: "btn btn-secondary btn-sm", onclick: move |_| tracking_page.restart(), "Retry choices" }
+                }
+            }
+
             // Keep mutation failures visible across the week, day and calendar
             // views, including partial row deletion results.
             if let Some(msg) = grid_error() {
@@ -907,28 +1138,42 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
             }
 
             // Content
-            {loaded(&*entries.read(), |_| match current_mode {
+            if current_sheet.read().is_none() {
+                div { class: "text-muted text-sm", role: "status", "Loading timesheet…" }
+            } else if let Some(Err(error)) = current_sheet.read().as_ref() {
+                div { class: "alert alert-danger", role: "alert",
+                    p { "Could not load the complete timesheet: {error}" }
+                    button { class: "btn btn-secondary btn-sm", onclick: move |_| sheet.restart(), "Retry" }
+                }
+            } else {
+            {loaded(&*current_sheet.read(), |_| match current_mode {
                     ViewMode::Week => rsx! {
                         {render_week_view(&week_entries.read(), &daily_totals.read(), ws, today, &project_names.read(), &task_names.read(), &pending_rows.read(), week_actions)}
                         div { class: "ts-submit-bar",
                             if all_submitted_or_approved {
                                 span { class: "badge badge-success", "Submitted" }
-                            } else if !week_entries.is_empty() && has_open {
+                            } else if !week_entries.is_empty() && has_open && context().is_some_and(|context| context.subject_id == context.expected_requester.user_id && context.expected_policy == TimesheetPolicy::LegacyOwn) {
                                 div { class: "ts-submit",
                                     button {
                                         class: "ts-submit-main",
+                                        disabled: busy(),
                                         onclick: move |_| {
+                                            if busy() { return; }
+                                            let Some(command_context) = context() else { return; };
+                                            pending_action.set(true);
                                             let ws_str = ws.to_string();
                                             let mut timer = running_timer;
                                             let mut submit_status = submit_status;
                                             spawn(async move {
-                                                match server_fns::submit_week(ws_str).await {
+                                                match server_fns::submit_week(ws_str, command_context).await {
                                                     Ok(_) => {
                                                         submit_status.set(None);
-                                                        timer.refresh();
                                                     }
                                                     Err(e) => submit_status.set(Some(format!("{e}"))),
                                                 }
+                                                sheet.restart();
+                                                timer.refresh();
+                                                pending_action.set(false);
                                             });
                                         },
                                         "Submit week for approval"
@@ -944,15 +1189,16 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                         }
                     },
                     ViewMode::Day => rsx! {
-                        {render_day_view(&by_day.read(), &daily_totals.read(), ws, sel_offset, select_day, &project_names.read(), &task_names.read(), open_edit, start_entry)}
+                        {render_day_view(&by_day.read(), &daily_totals.read(), ws, sel_offset, select_day, &project_names.read(), &task_names.read(), open_edit, start_entry, stop_entry, &tracking.read(), busy(), context())}
                     },
                     ViewMode::Calendar => rsx! {
                         {
                             let visible = span.visible_days(*selected_day_offset.read() as usize, ws.weekday());
-                            render_calendar_view(&by_day.read(), &daily_totals.read(), &visible, ws, today, &CalLabels { projects: &project_names.read(), tasks: &task_names.read(), clients: &project_client.read() }, cal_drag, add_hint, drag_commit)
+                            render_calendar_view(&by_day.read(), &daily_totals.read(), &visible, ws, today, &CalLabels { projects: &project_names.read(), tasks: &task_names.read(), clients: &project_client.read() }, cal_drag, add_hint, drag_commit, &tracking.read(), busy(), policy())
                         }
                     },
                 })}
+            }
 
             // Add–entry modal (opened by "+" or by clicking a calendar day).
             Modal {
@@ -961,6 +1207,7 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                 open: add_open.read().is_some(),
                 busy: add_saving(),
                 large: true,
+                focus_fallback: "app-main",
                 on_dismiss: move |_| add_open.set(None),
                 if let Some(date) = *add_open.read() {
                     div { id: "time-entry-title", class: "ts-modal-title",
@@ -968,16 +1215,16 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                         " for {date.format(\"%A, %d %b\")}"
                     }
                     div { class: "ts-modal-body",
-                        label { class: "form-label", "Project / Task" }
-                        ProjectTaskPicker {
-                            project: add_project, task: add_task, projects, tasks,
-                            disabled: editing.read().is_some(),
+                        tracking::TrackingPicker {
+                            project: add_project, task: add_task, options: modal_tracking(),
+                            disabled: add_saving(),
                         }
                         div { class: "ts-modal-row",
                             input {
                                 class: "form-input ts-modal-notes",
                                 placeholder: "Notes (optional)",
                                 value: "{add_notes}",
+                                disabled: add_saving(),
                                 oninput: move |e| add_notes.set(e.value()),
                             }
                             input {
@@ -985,6 +1232,7 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                                 "aria-label": "Duration",
                                 placeholder: "0:00",
                                 value: "{add_duration}",
+                                disabled: add_saving(),
                                 oninput: move |e| add_duration.set(e.value()),
                             }
                         }
@@ -992,6 +1240,7 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                             class: "form-input",
                             "aria-label": "Start time",
                             placeholder: "Start time, e.g. 9:00 (optional)",
+                            disabled: add_saving(),
                             value: add_start().map(|m| horae_core::time_of_day::format(m as u16)).unwrap_or_default(),
                             oninput: move |e| {
                                 let v = e.value();
@@ -1013,8 +1262,10 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                             // it saves a fixed entry.
                             button {
                                 class: "btn btn-primary",
-                                disabled: add_saving(),
+                                disabled: busy() || context().is_none() || modal_tracking.read().is_empty(),
                                 onclick: move |_| {
+                                    if busy() { return; }
+                                    let Some(context) = context() else { return; };
                                     let Some((project_id, task_id, notes)) = read_pt_notes.call(()) else {
                                         return;
                                     };
@@ -1030,14 +1281,14 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                                         add_saving.set(true);
                                         add_error.set(None);
                                         spawn(async move {
-                                            match server_fns::start_timer(project_id, task_id, notes).await {
+                                            match server_fns::apply_timesheet_command(context, TimesheetCommand::StartTimer { project_id, task_id, notes }).await {
                                                 Ok(_) => {
                                                     add_open.set(None);
-                                                    running_timer.refresh();
                                                 }
                                                 Err(e) => add_error
                                                     .set(Some(format!("Could not start timer: {e}"))),
                                             }
+                                            running_timer.refresh();
                                             add_saving.set(false);
                                         });
                                         return;
@@ -1047,24 +1298,24 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                                     let billable = if editing_id.is_some() {
                                         edit_billable()
                                     } else {
-                                        true
+                                        tracking.read().iter().find(|option| option.project_id == project_id && option.task_id == task_id).is_some_and(|option| option.billable)
                                     };
                                     let mut modal_timer = running_timer;
                                     add_saving.set(true);
                                     add_error.set(None);
                                     spawn(async move {
                                         let result = persist_entry(
-                                            editing_id, project_id, task_id, date, minutes,
-                                            notes, billable, start_minute,
+                                            context, editing_id,
+                                            TimesheetEntryInput { project_id, task_id, spent_date: date, minutes, notes, billable, start_minute },
                                         )
                                         .await;
                                         match result {
                                             Ok(()) => {
                                                 add_open.set(None);
-                                                modal_timer.refresh();
                                             }
                                             Err(e) => add_error.set(Some(format!("Could not save: {e}"))),
                                         }
+                                        modal_timer.refresh();
                                         add_saving.set(false);
                                     });
                                 },
@@ -1079,8 +1330,10 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                             if editing.read().is_some() {
                                 button {
                                     class: "btn btn-danger",
-                                    disabled: add_saving(),
+                                    disabled: busy() || context().is_none(),
                                     onclick: move |_| {
+                                        if busy() { return; }
+                                        let Some(context) = context() else { return; };
                                         let Some(id) = *editing.read() else {
                                             return;
                                         };
@@ -1088,15 +1341,15 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                                         add_saving.set(true);
                                         add_error.set(None);
                                         spawn(async move {
-                                            match server_fns::delete_time_entry(id.to_string()).await {
+                                            match server_fns::apply_timesheet_command(context, TimesheetCommand::Delete { entry_ids: vec![id] }).await {
                                                 Ok(()) => {
                                                     add_open.set(None);
-                                                    modal_timer.refresh();
                                                 }
                                                 Err(e) => {
                                                     add_error.set(Some(format!("Could not delete: {e}")))
                                                 }
                                             }
+                                            modal_timer.refresh();
                                             add_saving.set(false);
                                         });
                                     },
@@ -1123,20 +1376,21 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
                 if addrow_open() {
                     div { id: "add-row-title", class: "ts-modal-title", "Add a row" }
                     div { class: "ts-modal-body",
-                        label { class: "form-label", "Project / Task" }
-                        ProjectTaskPicker {
-                            project: addrow_project, task: addrow_task, projects, tasks,
-
+                        tracking::TrackingPicker {
+                            project: addrow_project, task: addrow_task, options: tracking(), disabled: busy(),
                         }
                         div { class: "ts-modal-actions",
                             button {
                                 class: "btn btn-primary",
+                                disabled: busy() || tracking.read().is_empty(),
                                 onclick: move |_| {
+                                    if busy() { return; }
                                     let p = addrow_project.read().parse::<Uuid>();
                                     let t = addrow_task.read().parse::<Uuid>();
                                     if let (Ok(pid), Ok(tid)) = (p, t) {
+                                        if !tracking::eligible(&tracking.read(), pid, tid) { return; }
                                         let key = (pid, tid);
-                                        if !pending_rows.read().contains(&key) {
+                                        if !pending_rows.read().contains(&key) && !week_entries.read().iter().any(|entry| (entry.project_id, entry.task_id) == key) {
                                             pending_rows.write().push(key);
                                         }
                                     }
@@ -1161,8 +1415,8 @@ fn TimesheetContent(view: ViewMode, date: Anchor, span: CalSpan, start: NaiveDat
 struct CalLabels<'a> {
     projects: &'a HashMap<Uuid, String>,
     tasks: &'a HashMap<Uuid, String>,
-    /// project_id -> (client name, currency).
-    clients: &'a HashMap<Uuid, (String, String)>,
+    /// project_id -> authorized client name.
+    clients: &'a HashMap<Uuid, String>,
 }
 
 /// A calendar event's pre-computed placement and labels, plus the entry it came
@@ -1183,7 +1437,7 @@ struct CalEvent {
     /// untimed.
     time_label: String,
     client: String,
-    entry: TimeEntry,
+    entry: VisibleTimeEntry,
 }
 
 /// Calendar grid pixels per hour.
@@ -1200,7 +1454,7 @@ fn cal_y_to_min(y: f64) -> i32 {
 /// Assign overlapping timed entries to side-by-side lanes. Returns, per index of
 /// `day` (parallel to the slice), the entry's lane and the number of lanes in its
 /// overlap cluster; untimed entries get `(0, 1)`.
-fn timed_lanes(day: &[TimeEntry]) -> (Vec<i32>, Vec<i32>) {
+fn timed_lanes(day: &[VisibleTimeEntry]) -> (Vec<i32>, Vec<i32>) {
     let n = day.len();
     let mut lane_of = vec![0i32; n];
     let mut lanes_of = vec![1i32; n];
@@ -1278,7 +1532,7 @@ struct CalDrag {
     /// Move: the pointer minute where the block was grabbed.
     grab_min: i32,
     /// Move/Resize target (None for Create).
-    entry: Option<TimeEntry>,
+    entry: Option<VisibleTimeEntry>,
     orig_dur: i32,
     orig_day: usize,
 }
@@ -1312,8 +1566,8 @@ fn cal_time_label(start: i32, end: i32) -> String {
 /// A day's untimed (duration-only) entries in stacking order: by explicit
 /// `sort_order`, then newest-first (the pre-reorder default). Shared by the
 /// calendar placement and the reorder commit so both agree on the order.
-fn untimed_ordered(day: &[TimeEntry]) -> Vec<TimeEntry> {
-    let mut u: Vec<TimeEntry> = day
+fn untimed_ordered(day: &[VisibleTimeEntry]) -> Vec<VisibleTimeEntry> {
+    let mut u: Vec<VisibleTimeEntry> = day
         .iter()
         .filter(|e| e.start_minute.is_none())
         .cloned()
@@ -1331,7 +1585,7 @@ fn untimed_ordered(day: &[TimeEntry]) -> Vec<TimeEntry> {
     reason = "view renderer takes the week's data, display maps, and the add/edit/drag actions"
 )]
 fn render_calendar_view(
-    by_day: &[Vec<TimeEntry>; 7],
+    by_day: &[Vec<VisibleTimeEntry>; 7],
     daily_totals: &[i32],
     visible_days: &[usize],
     week_start: NaiveDate,
@@ -1340,7 +1594,11 @@ fn render_calendar_view(
     mut cal_drag: Signal<Option<CalDrag>>,
     mut add_hint: Signal<Option<(usize, i32)>>,
     drag_commit: Callback<CalDrag>,
+    tracking: &[crate::models::scoped_time::TimesheetTrackingOption],
+    busy: bool,
+    policy: Option<TimesheetPolicy>,
 ) -> Element {
+    let can_create = !busy && !tracking.is_empty();
     let today_off = today_offset(today, week_start);
     let col_class = |i: usize| {
         day_col_class(
@@ -1392,7 +1650,7 @@ fn render_calendar_view(
             let client = labels
                 .clients
                 .get(&e.project_id)
-                .map(|(name, currency)| format!("{name} · {currency}"))
+                .cloned()
                 .unwrap_or_default();
             let time_label = match e.start_minute {
                 Some(sm) => cal_time_label(sm, sm + e.minutes),
@@ -1500,6 +1758,7 @@ fn render_calendar_view(
                             // Press-drag on an empty column draws a slot; release
                             // opens the entry form (a plain click has no start).
                             onmousedown: move |e: MouseEvent| {
+                                if !can_create { return; }
                                 let m = cal_y_to_min(e.element_coordinates().y);
                                 cal_drag.set(Some(CalDrag {
                                     kind: DragKind::Create,
@@ -1515,6 +1774,7 @@ fn render_calendar_view(
                             onmousemove: {
                                 let occ = occupied[i].clone();
                                 move |e: MouseEvent| {
+                                    if !can_create { return; }
                                     let m = cal_y_to_min(e.element_coordinates().y);
                                     if cal_drag.read().is_some() {
                                         cal_drag.with_mut(|d| {
@@ -1634,7 +1894,7 @@ fn render_calendar_view(
                                 };
                                 // Locked entries (submitted/approved/invoiced) can't be
                                 // dragged; mark them and explain why on hover.
-                                let locked = ev.entry.state != horae_core::types::EntryState::Open;
+                                let locked = busy || !tracking::editable(policy, tracking, &ev.entry);
                                 let ev_class = if locked {
                                     format!("{base} locked")
                                 } else {
@@ -1650,6 +1910,7 @@ fn render_calendar_view(
                                     horae_core::types::EntryState::Invoiced => {
                                         "Invoiced — can't be moved"
                                     }
+                                    horae_core::types::EntryState::Open if locked => "Not currently editable",
                                     horae_core::types::EntryState::Open => "",
                                 };
                                 rsx! {
@@ -1675,6 +1936,7 @@ fn render_calendar_view(
                                         let dur = ev.entry.minutes;
                                         move |e: MouseEvent| {
                                             e.stop_propagation();
+                                            if locked { return; }
                                             if timed {
                                                 let off =
                                                     (e.element_coordinates().y * 60.0 / CAL_HOUR as f64) as i32;
@@ -1760,15 +2022,19 @@ fn render_calendar_view(
     reason = "view renderer takes the week's data, display maps, and the row actions"
 )]
 fn render_day_view(
-    by_day: &[Vec<TimeEntry>; 7],
+    by_day: &[Vec<VisibleTimeEntry>; 7],
     daily_totals: &[i32],
     week_start: NaiveDate,
     selected_offset: i64,
     select_day: Callback<i64>,
     project_names: &HashMap<Uuid, String>,
     task_names: &HashMap<Uuid, String>,
-    open_edit: Callback<TimeEntry>,
-    start_entry: Callback<TimeEntry>,
+    open_edit: Callback<VisibleTimeEntry>,
+    start_entry: Callback<VisibleTimeEntry>,
+    stop_entry: Callback<VisibleTimeEntry>,
+    tracking: &[crate::models::scoped_time::TimesheetTrackingOption],
+    busy: bool,
+    context: Option<TimesheetWriteContext>,
 ) -> Element {
     let offset = selected_offset.clamp(0, 6) as usize;
     let day_entries = &by_day[offset];
@@ -1811,6 +2077,10 @@ fn render_day_view(
                             let dur = format_hhmm(entry.minutes.into());
                             let e_start = entry.clone();
                             let e_edit = entry.clone();
+                            let e_stop = entry.clone();
+                            let can_edit = !busy && tracking::editable(context.map(|context| context.expected_policy), tracking, entry);
+                            let can_start = !busy && tracking::eligible(tracking, entry.project_id, entry.task_id);
+                            let can_stop = !busy && tracking::stoppable(tracking, entry, context.map(|context| context.expected_requester.user_id));
                             rsx! {
                                 div { class: "ts-day-entry",
                                     div { class: "ts-day-entry-main",
@@ -1823,16 +2093,19 @@ fn render_day_view(
                                     div { class: "ts-day-entry-side",
                                         if running {
                                             span { class: "badge badge-success", "Running" }
+                                            button { class: "ts-day-action primary", disabled: !can_stop, onclick: move |_| stop_entry.call(e_stop.clone()), "Stop" }
                                         } else {
                                             span { class: "ts-day-entry-dur text-mono", "{dur}" }
                                             button {
                                                 class: "ts-day-action primary",
+                                                disabled: !can_start,
                                                 onclick: move |_| start_entry.call(e_start.clone()),
                                                 "Start"
                                             }
                                         }
                                         button {
                                             class: "ts-day-action",
+                                            disabled: !can_edit,
                                             onclick: move |_| open_edit.call(e_edit.clone()),
                                             "Edit"
                                         }
@@ -1865,6 +2138,14 @@ struct CellEdit {
     input: String,
 }
 
+type CellKey = (Uuid, Uuid, NaiveDate);
+
+fn discard_row_drafts(drafts: &mut HashMap<CellKey, String>, row: (Uuid, Uuid), start: NaiveDate) {
+    drafts.retain(|&(project, task, day), _| {
+        (project, task) != row || !(0..7).contains(&(day - start).num_days())
+    });
+}
+
 /// The actions the editable week grid dispatches back to the page.
 #[derive(Clone, Copy)]
 struct WeekActions {
@@ -1872,6 +2153,11 @@ struct WeekActions {
     remove_row: Callback<(Uuid, Uuid)>,
     removing_row: ReadSignal<bool>,
     add_row: Callback<()>,
+    drafts: Signal<HashMap<CellKey, String>>,
+    saving: ReadSignal<HashSet<CellKey>>,
+    tracking: Memo<Vec<crate::models::scoped_time::TimesheetTrackingOption>>,
+    busy: Memo<bool>,
+    policy: Memo<Option<TimesheetPolicy>>,
 }
 
 /// A week grid row's per-day minutes and the entry ids behind each day, so a cell
@@ -1888,14 +2174,14 @@ struct RowAgg {
     reason = "view renderer takes the week's data, display maps, pending rows, and grid actions"
 )]
 fn render_week_view(
-    entries: &[TimeEntry],
+    entries: &[VisibleTimeEntry],
     daily_totals: &[i32],
     week_start: NaiveDate,
     today: NaiveDate,
     project_names: &HashMap<Uuid, String>,
     task_names: &HashMap<Uuid, String>,
     pending: &[(Uuid, Uuid)],
-    actions: WeekActions,
+    mut actions: WeekActions,
 ) -> Element {
     // Group by (project_id, task_id), tracking per-day minutes and entry ids,
     // preserving first-seen order. Rows added via "Add row" (no entries yet)
@@ -1920,6 +2206,13 @@ fn render_week_view(
         if !row_map.contains_key(key) {
             row_keys.push(*key);
             row_map.insert(*key, RowAgg::default());
+        }
+    }
+    for &(project, task, day) in actions.drafts.read().keys() {
+        let key = (project, task);
+        if (0..7).contains(&(day - week_start).num_days()) && !row_map.contains_key(&key) {
+            row_keys.push(key);
+            row_map.insert(key, RowAgg::default());
         }
     }
 
@@ -1970,6 +2263,8 @@ fn render_week_view(
                         let task = task_names.get(&tid).cloned().unwrap_or_else(|| "\u{2014}".into());
                         let agg = &row_map[key];
                         let row_total: i32 = agg.mins.iter().sum();
+                        let eligible = tracking::eligible(&actions.tracking.read(), pid, tid);
+                        let row_editable = entries.iter().filter(|entry| entry.project_id == pid && entry.task_id == tid).all(|entry| tracking::editable((actions.policy)(), &actions.tracking.read(), entry));
                         rsx! {
                             div { class: "ts-row ts-body",
                                 div { class: "ts-project",
@@ -1988,7 +2283,13 @@ fn render_week_view(
                                         if agg.ids[i].len() <= 1 {
                                             let day = week_start + Duration::days(i as i64);
                                             let existing = agg.ids[i].first().copied();
-                                            let val = if mins > 0 { format_hhmm(mins.into()) } else { String::new() };
+                                            let editable = match existing {
+                                                None => eligible,
+                                                Some(id) => entries.iter().find(|entry| entry.id == id).is_some_and(|entry| tracking::editable((actions.policy)(), &actions.tracking.read(), entry)),
+                                            };
+                                            let saved = if mins > 0 { format_hhmm(mins.into()) } else { String::new() };
+                                            let cell_key = (pid, tid, day);
+                                            let val = actions.drafts.read().get(&cell_key).cloned().unwrap_or_else(|| saved.clone());
                                             let icls = value_cell_class("ts-cell-input", mins, today_off, i);
                                             rsx! {
                                                 div { class: "ts-cell",
@@ -1996,11 +2297,22 @@ fn render_week_view(
                                                         class: "{icls}",
                                                         r#type: "text",
                                                         value: "{val}",
+                                                        disabled: !editable || (actions.removing_row)() || actions.saving.read().contains(&cell_key),
+                                                        aria_label: "Hours for {proj}, {task}, {day}",
                                                         placeholder: "\u{2013}",
-                                                        onchange: move |e| {
-                                                            actions
-                                                                .commit
-                                                                .call(CellEdit { project_id: pid, task_id: tid, day, existing, input: e.value() });
+                                                        oninput: move |event| {
+                                                            let input = event.value();
+                                                            if input == saved {
+                                                                actions.drafts.write().remove(&cell_key);
+                                                            } else {
+                                                                actions.drafts.write().insert(cell_key, input);
+                                                            }
+                                                        },
+                                                        onblur: move |_| {
+                                                            let input = actions.drafts.read().get(&cell_key).cloned();
+                                                            if let Some(input) = input {
+                                                                actions.commit.call(CellEdit { project_id: pid, task_id: tid, day, existing, input });
+                                                            }
                                                         },
                                                     }
                                                 }
@@ -2019,7 +2331,7 @@ fn render_week_view(
                                 div { class: "text-center",
                                     button {
                                         class: "ts-del",
-                                        disabled: (actions.removing_row)(),
+                                        disabled: (actions.busy)() || !row_editable,
                                         "aria-label": "Remove row",
                                         onclick: move |_| actions.remove_row.call((pid, tid)),
                                         "\u{00d7}"
@@ -2035,6 +2347,7 @@ fn render_week_view(
                     button {
                         r#type: "button",
                         class: "ts-addrow",
+                        disabled: (actions.busy)() || actions.tracking.read().is_empty(),
                         onclick: move |_| actions.add_row.call(()),
                         span { class: "plus", "\u{ff0b}" }
                         "Add row"
@@ -2189,13 +2502,17 @@ mod tests {
         assert_eq!(day_col_class("c", None, 5, Weekday::Fri), "c");
     }
 
-    fn timed_entry(start_minute: i32, minutes: i32) -> TimeEntry {
-        TimeEntry {
+    fn timed_entry(start_minute: i32, minutes: i32) -> VisibleTimeEntry {
+        VisibleTimeEntry {
             id: Uuid::nil(),
-            org_id: Uuid::nil(),
             user_id: Uuid::nil(),
+            user_name: "Person".into(),
             project_id: Uuid::nil(),
+            project_name: "Project".into(),
             task_id: Uuid::nil(),
+            task_name: "Task".into(),
+            client_id: Uuid::nil(),
+            client_name: "Client".into(),
             spent_date: ymd(2026, 9, 3),
             minutes,
             rounded_minutes: None,
@@ -2206,9 +2523,129 @@ mod tests {
             start_minute: Some(start_minute),
             sort_order: 0,
             state: horae_core::types::EntryState::Open,
-            invoice_id: None,
             created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
+        }
+    }
+
+    #[test]
+    fn terminal_stop_recovery_is_owner_only_when_tracking_is_lost() {
+        let mut entry = timed_entry(540, 60);
+        entry.is_running = true;
+        assert!(tracking::stoppable(&[], &entry, Some(entry.user_id)));
+        assert!(!tracking::stoppable(&[], &entry, Some(Uuid::now_v7())));
+        assert!(!tracking::editable(
+            Some(TimesheetPolicy::Scoped),
+            &[],
+            &entry
+        ));
+    }
+
+    #[test]
+    fn delegated_stop_requires_the_exact_eligible_pair_and_keeps_state_locks() {
+        let mut entry = timed_entry(540, 60);
+        entry.is_running = true;
+        let actor = Some(Uuid::now_v7());
+        let mut options = vec![crate::models::scoped_time::TimesheetTrackingOption {
+            project_id: entry.project_id,
+            project_name: entry.project_name.clone(),
+            task_id: Uuid::now_v7(),
+            task_name: "Other task".into(),
+            billable: true,
+        }];
+        assert!(!tracking::stoppable(&options, &entry, actor));
+        options[0].task_id = entry.task_id;
+        assert!(tracking::stoppable(&options, &entry, actor));
+        assert!(!tracking::stoppable(&options, &entry, None));
+        for state in [
+            horae_core::types::EntryState::Submitted,
+            horae_core::types::EntryState::Approved,
+            horae_core::types::EntryState::Invoiced,
+        ] {
+            entry.state = state;
+            assert!(!tracking::stoppable(&options, &entry, actor));
+            assert!(!tracking::stoppable(&options, &entry, Some(entry.user_id)));
+        }
+    }
+
+    #[test]
+    fn visible_time_without_writable_tracking_does_not_enable_edit_controls() {
+        let entry = timed_entry(540, 60);
+        assert!(!tracking::editable(
+            Some(TimesheetPolicy::Scoped),
+            &[],
+            &entry
+        ));
+        let options = vec![crate::models::scoped_time::TimesheetTrackingOption {
+            project_id: entry.project_id,
+            project_name: entry.project_name.clone(),
+            task_id: entry.task_id,
+            task_name: entry.task_name.clone(),
+            billable: false,
+        }];
+        assert!(tracking::editable(
+            Some(TimesheetPolicy::Scoped),
+            &options,
+            &entry
+        ));
+        assert!(!tracking::editable(None, &options, &entry));
+    }
+
+    #[test]
+    fn legacy_historical_edits_do_not_create_new_tracking_eligibility() {
+        let entry = timed_entry(540, 60);
+        assert!(tracking::editable(
+            Some(TimesheetPolicy::LegacyOwn),
+            &[],
+            &entry
+        ));
+        assert!(!tracking::eligible(&[], entry.project_id, entry.task_id));
+        assert!(!tracking::editable(
+            Some(TimesheetPolicy::Scoped),
+            &[],
+            &entry
+        ));
+    }
+
+    #[test]
+    fn read_only_day_keeps_facts_but_disables_edit_and_start_buttons() {
+        let mut dom = VirtualDom::new(|| {
+            let mut by_day: [Vec<VisibleTimeEntry>; 7] = Default::default();
+            by_day[0].push(timed_entry(540, 60));
+            render_day_view(
+                &by_day,
+                &[60, 0, 0, 0, 0, 0, 0],
+                ymd(2026, 9, 3),
+                0,
+                use_callback(|_| {}),
+                &HashMap::new(),
+                &HashMap::new(),
+                use_callback(|_| {}),
+                use_callback(|_| {}),
+                use_callback(|_| {}),
+                &[],
+                false,
+                Some(TimesheetWriteContext {
+                    expected_requester: PermissionRequester {
+                        org_id: Uuid::nil(),
+                        user_id: Uuid::now_v7(),
+                    },
+                    subject_id: Uuid::nil(),
+                    expected_policy: TimesheetPolicy::Scoped,
+                }),
+            )
+        });
+        dom.rebuild_in_place();
+        let html = dioxus::ssr::render(&dom);
+        assert!(html.contains("1:00"));
+        for label in ["Start", "Edit"] {
+            let button = html
+                .split("<button")
+                .find(|part| part.contains(&format!(">{label}</button>")))
+                .unwrap();
+            assert!(
+                button.split('>').next().unwrap().contains("disabled"),
+                "{label} must be disabled: {button}"
+            );
         }
     }
 
