@@ -149,7 +149,7 @@ Clients MVP as canonical-permission acceptance.
 | Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267 `e029a89`, inherited report access/readers and all four export routes | Draft at `aef180f`; original components,15 component tests and538-line isolated Chromium fixture. Format/source/provenance/syntax pass; gate50800 failed on two test-only user DTO references; minimal API-matching fix published and new full gate64831 running. No CSS/SQL/schema/activation; full T203 remains open |
 | Cross-PR Reports/Timesheet/People verification only | `integration/reports-permission-check`, `.worktrees/reports-permission-integration` | Combines verified `1a87961` with #268 `810ce57` and its report/export foundations | Local integration merge `b7836d7`, not a delivery PR or GitHub merge. Both HTTP registration sets and all30 unique browser suites retained; dedicated source/test blobs unchanged. Format/syntax/source comparison pass; full native gate25958 running |
 | Scoped project editor, [#269](https://github.com/numtide/horae/pull/269) | `feat/scoped-project-editor`, `.worktrees/scoped-project-editor` | `integration/permission-readers-editor-check` | Draft at `a9ba27b`; canonical fields, preserved hidden values and manager edits extracted. Lost-acknowledgement fixture failed in the full gate but passes isolated; failure remains unresolved. No activation |
-| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `387f80f`; current reader, budgets and bound UI extracted. Two fixture corrections pass focused Chromium; full native36963 running. ARM readiness and repeated-import failures remain open |
+| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `4a5c7d9`; current reader, budgets and bound UI extracted. Three fixture corrections and full browser10797 pass; full native51216 running. ARM readiness and repeated-import failures remain open |
 | Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites`, combining #270 and #267 | Draft at `255aa94`; requester and financial release guards plus original DB/HTTP tests extracted. Full browser gate failed the inherited fixed project-count assertion; #270 corrections not yet propagated |
 | Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `abe5aa0`; original list/count/direct-ID boundary and race tests extracted. Full acceptance pending; fresh Nixbot215 reports ARM and browser failures. Parent fixture corrections not yet propagated |
 | Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `5a04f89`; original readers, DB/HTTP/browser tests and sidebar interaction correction extracted. Inherited filter-count failure remains until parent correction propagates. Task lifecycle and catalog-management UI are still separate retained work |
@@ -5321,3 +5321,26 @@ Fresh-head native gate51216 is running on #2704a5c7d9. GitHub initially
 rejected the ledger push and PR-body update with internal server errors; the
 remote branch and body were checked before retrying. This transient publication
 failure did not stop local verification or modify the original branches.
+
+The second ledger push and GraphQL update also failed; the subsequent REST
+body update returned an empty/invalid response and must be read back before any
+retry. Ledger commits e510957 and866ce28 remain local until publication is
+confirmed; #270's code commit4a5c7d9 was published successfully beforehand.
+
+Verification boundary: #269 and #270 are sibling extractions on the common
+reader/editor foundation, not parent/child. The #270 default browser runner
+does not include #269's `project-editor-permissions` fixture, which is absent
+from its source tree. Its passing legacy `project-edit` checks cannot close
+#269's canonical editor failure. Their later integration must combine both
+fixture registrations and verify both contracts; no suite was removed in this
+iteration.
+
+Browser sequence10797 completed successfully with all default suites, including
+the corrected creation-permission matrix, editor/navigation checks, Clients and
+own-permission/history suites. It used the production binary from387f80f with
+4a5c7d9's test-only changes; native51216 verifies the actual new source head and
+remains live. REST readback confirms the PR body was not updated, and the ledger
+remote is still f6e29c8. Do not claim these local ledger commits are published.
+Next collect51216 without restarting it, then propagate the verified fixture
+commits to dependent stacks and publish the retained ledger updates once GitHub
+accepts writes. The unresolved ARM and sibling-editor gates remain separate.
