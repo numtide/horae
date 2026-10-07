@@ -1,0 +1,45 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.id, u.name, u.email, u.active FROM users u\n         WHERE u.org_id=$1\n           AND ($3::bool OR EXISTS (\n             SELECT 1 FROM person_management_assignments m\n             WHERE m.org_id=u.org_id AND m.manager_id=$2 AND m.managed_user_id=u.id))\n           AND ($4::bool IS NULL OR u.active=$4)\n           AND ($5::text IS NULL OR (u.name,u.id)>($5::text,$6::uuid))\n         ORDER BY u.name,u.id LIMIT 51",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "active",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "41d9b15fc14ad336f9dad06a38e307b9864b20832c6394b1356fc952947648ed"
+}
