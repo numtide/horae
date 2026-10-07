@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE person_permission_states SET grants=array_append(grants,'unknown.grant') WHERE user_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "91c9d651cd4eb8b5d8e0bd7435b9e07a8f3e8dbfa922a08b9feca7b46520ebd9"
+}
