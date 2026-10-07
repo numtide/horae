@@ -1,0 +1,570 @@
+// Real canonical commands and browser storage, only in the runner's disposable DB.
+const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
+const { execFileSync } = require('node:child_process');
+const { mkdirSync } = require('node:fs');
+const { join } = require('node:path');
+const assert = require('node:assert/strict');
+const base = process.env.HORAE_TEST_URL;
+const target = new URL(base);
+const database = new URL(process.env.DATABASE_URL);
+assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
+assert.equal(database.pathname, '/horae');
+assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
+const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
+const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id, org_id, name FROM users WHERE email='admin@example.com' AND active AND org_role='admin') u"));
+assert.match(actor.id, /^[0-9a-f-]{36}$/);
+assert.match(actor.org_id, /^[0-9a-f-]{36}$/);
+assert.equal(sql("SELECT count(*) FROM users WHERE active AND org_role='admin'"), '1', 'The development login must have exactly one candidate before testing canonical permissions');
+assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
+assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
+assert.equal(sql(`SELECT count(*) FROM permission_change_receipts WHERE org_id='${actor.org_id}'`), '0');
+const originalRevision = sql(`SELECT access_revision FROM organizations WHERE id='${actor.org_id}'`);
+assert.match(originalRevision, /^\d+$/);
+const person = '01960000-0000-7000-8000-000000000701';
+const actorState = '01960000-0000-7000-8000-000000000702';
+const personState = '01960000-0000-7000-8000-000000000703';
+const otherActor = '01960000-0000-7000-8000-000000000704';
+const otherState = '01960000-0000-7000-8000-000000000705';
+const personName = 'Permission browser fixture';
+const templateName = 'Browser recovery profile';
+const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
+const administrator = [...floor,
+  'time_read_managed', 'time_write_managed', 'time_approve_managed', 'time_read_all', 'time_write_all', 'time_approve_all',
+  'expense_read_managed', 'expense_write_managed', 'expense_read_all', 'expense_write_all',
+  'project_read_managed', 'project_write_managed', 'project_create_all', 'project_read_all', 'project_write_all',
+  'client_read_all', 'client_write_all', 'task_read_all', 'task_write_all',
+  'people_read_managed', 'people_write_managed', 'people_read_all', 'people_write_all',
+  'billable_rate_read_managed', 'billable_rate_write_managed', 'billable_rate_read_all', 'billable_rate_write_all',
+  'cost_rate_read_all', 'cost_rate_write_all', 'invoice_read_managed', 'invoice_draft_write_managed', 'invoice_write_managed',
+  'invoice_read_all', 'invoice_write_all', 'estimate_read_all', 'estimate_write_all',
+  'report_profitability_read', 'report_contractor_read', 'report_invoicing_read',
+  'saved_report_read_inactive', 'saved_report_write_inactive', 'approval_withdraw_managed',
+  'company_read', 'company_write', 'billing_read', 'billing_write'];
+const key = `horae-permission-request:v1:${actor.org_id}:${actor.id}`;
+const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
+
+(async () => {
+  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+  console.log(`Permission recovery browser: Chromium ${browser.version()}`);
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  const errors = [], saves = [], requests = [], pending = new Set();
+  let loseResponse = false, committedLostResponse = false, discard = false;
+  let delayedEditorLoad;
+  page.on('pageerror', error => errors.push(error.stack || error.message));
+  page.on('dialog', dialog => dialog.type() === 'beforeunload' || discard ? dialog.accept() : dialog.dismiss());
+  page.on('request', request => { const path = new URL(request.url()).pathname; if (path.startsWith('/api/')) { pending.add(request); requests.push(path); } });
+  page.on('requestfinished', request => pending.delete(request));
+  page.on('requestfailed', request => pending.delete(request));
+  const readsFinished = () => expect.poll(() => pending.size).toBe(0);
+  const record = () => page.evaluate(key => sessionStorage.getItem(key), key);
+  const receipts = () => Number(sql(`SELECT count(*) FROM permission_change_receipts WHERE org_id='${actor.org_id}' AND actor_user_id='${actor.id}'`));
+  const editor = page.getByRole('dialog', { name: 'Edit permissions', exact: true });
+  const recovery = page.getByRole('dialog', { name: 'Recover permission request', exact: true });
+  const openEditor = async (name = personName) => {
+    await page.getByRole('button', { name: `Edit permissions for ${name}`, exact: true }).click();
+    await expect(editor.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
+    await readsFinished();
+  };
+  const review = async () => {
+    await editor.getByRole('button', { name: 'Review changes', exact: true }).click();
+    await expect(editor.getByRole('button', { name: 'Confirm permissions', exact: true })).toBeEnabled();
+  };
+  const resizeViewport = async (width, height) => {
+    await page.setViewportSize({ width, height });
+    // Deliver resize before opening a menu: the shared menu deliberately closes
+    // on resize, including when screenshots are disabled in the headless gate.
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+  };
+  const capture = async (label, showSubjects = false) => {
+    for (const [width, height, theme] of [[1440, 900, 'dark'], [390, 844, 'light']]) {
+      await resizeViewport(width, height);
+      await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+      const dialog = page.locator('dialog[open]');
+      await expect(dialog).toBeVisible();
+      if (showSubjects && !await editor.locator('#permission-subjects').evaluate(el => el.matches(':popover-open'))) {
+        await editor.getByRole('button', { name: 'Change person', exact: false }).click();
+      }
+      assert.equal(await dialog.evaluate(el => el.scrollWidth > el.clientWidth + 1), false, 'dialog must not overflow horizontally');
+      const panel = await dialog.locator('.modal').boundingBox();
+      assert.ok(panel && panel.x >= 0 && panel.x + panel.width <= width + 1);
+      if (process.env.HORAE_BROWSER_ARTIFACTS) {
+        mkdirSync(process.env.HORAE_BROWSER_ARTIFACTS, { recursive: true });
+        await page.screenshot({ path: join(process.env.HORAE_BROWSER_ARTIFACTS, `${label}-${width}-${theme}.png`), animations: 'disabled' });
+      }
+    }
+    await resizeViewport(1440, 900);
+    await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+  };
+  await page.route('**/api/**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.startsWith('/api/load_permission_editor') && delayedEditorLoad) await delayedEditorLoad;
+    if (/^\/api\/save_(person_permissions|permission_template)/.test(path)) {
+      const body = route.request().postDataJSON();
+      const stored = JSON.parse(await record());
+      assert.deepEqual(body.expected_requester, { org_id: actor.org_id, user_id: actor.id });
+      assert.deepEqual(stored.requester, body.expected_requester);
+      assert.deepEqual(stored.command.value, body.command, 'storage acknowledgement must precede the real mutation');
+      saves.push(body);
+      if (loseResponse) {
+        loseResponse = false;
+        const response = await route.fetch();
+        assert.equal(response.status(), 200, await response.text());
+        committedLostResponse = true;
+        return route.abort('failed');
+      }
+    }
+    return route.continue();
+  });
+  try {
+    sql(`BEGIN;
+      INSERT INTO users (id, org_id, email, name) VALUES
+        ('${person}', '${actor.org_id}', 'permission-browser@example.test', '${personName}'),
+        ('${otherActor}', '${actor.org_id}', 'permission-other-browser@example.test', 'Other permission administrator');
+      INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source, built_in_profile) VALUES
+        ('${actorState}', '${actor.org_id}', '${actor.id}', 1, ${array(administrator)}, true, 'built_in', 'administrator'),
+        ('${personState}', '${actor.org_id}', '${person}', 1, ${array(floor)}, false, 'built_in', 'member'),
+        ('${otherState}', '${actor.org_id}', '${otherActor}', 1, ${array(administrator)}, true, 'built_in', 'administrator');
+      UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'; COMMIT;`);
+    await page.goto(`${base}/auth/login`);
+    await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
+    await page.waitForURL(`${base}/`);
+    await readsFinished();
+    await page.goto(`${base}/admin/audit`);
+    await expect(page.getByText('No permission events recorded yet.', { exact: false })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => ({
+      hasTheme: getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim() !== '',
+      utility: getComputedStyle(document.querySelector('[aria-labelledby="audit-title"] .flex')).display,
+    }))).toEqual({ hasTheme: true, utility: 'flex' });
+    await expect(page.locator('#audit-older')).toBeDisabled();
+    await expect(page.locator('#audit-newest')).toBeDisabled();
+    // Directory reads are independent from legacy roles and explicit Administrator identity.
+    sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`);
+    let readStart = requests.length;
+    await page.goto(`${base}/admin/users`);
+    await expect(page.getByRole('button', { name: `Edit permissions for ${personName}`, exact: true })).toBeVisible();
+    await readsFinished();
+    assert.ok(!requests.slice(readStart).some(path => /^\/api\/(list_users|list_tasks)/.test(path)));
+    await page.locator('.sidebar-footer').click();
+    await expect(page.locator('.sidebar-menu').getByRole('link', { name: 'People', exact: true })).toBeVisible();
+    await expect(page.locator('.sidebar-menu').getByRole('link', { name: 'Importers', exact: true })).toHaveCount(0);
+    await page.locator('.sidebar-footer').click();
+    sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
+    await page.reload();
+    await expect(page.getByRole('cell', { name: personName, exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Edit permissions for/ })).toHaveCount(0);
+    sql(`INSERT INTO person_management_assignments(id, org_id, manager_id, managed_user_id)
+      VALUES ('01960000-0000-7000-8000-000000000708', '${actor.org_id}', '${actor.id}', '${person}');
+      UPDATE person_permission_states SET grants=${array([...floor, 'people_read_managed'])} WHERE id='${actorState}'`);
+    await page.reload();
+    await expect(page.getByRole('cell', { name: personName, exact: true })).toBeVisible();
+    await expect(page.locator('tbody tr')).toHaveCount(1);
+    await page.locator('#people-activity').selectOption('archived');
+    await expect(page.getByText('No people match this filter', { exact: false })).toBeVisible();
+    await page.locator('#people-activity').selectOption('all');
+    await expect(page.locator('tbody tr')).toHaveCount(1);
+    sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}';
+      UPDATE person_permission_states SET grants=${array(floor)} WHERE id='${actorState}'`);
+    readStart = requests.length;
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toBeVisible();
+    await readsFinished();
+    assert.ok(!requests.slice(readStart).some(path => /^\/api\/(list_people|list_users|list_tasks|load_permission_editor|list_permission_subjects)/.test(path)));
+    sql(`UPDATE organizations SET permission_policy_version=0 WHERE id='${actor.org_id}'`);
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Invite User', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Edit permissions for/ })).toHaveCount(0);
+    sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}';
+      UPDATE person_permission_states SET grants=${array(administrator)}, is_administrator=true WHERE id='${actorState}';
+      DELETE FROM person_management_assignments WHERE id='01960000-0000-7000-8000-000000000708'`);
+    console.log('PASS: canonical People separates read scope, Administrator editing and legacy roles without legacy reads');
+    sql(`INSERT INTO users(id, org_id, email, name)
+      SELECT ('01960000-0000-7000-8001-' || lpad(i::text,12,'0'))::uuid, '${actor.org_id}',
+      'directory-' || i || '@example.test', 'Z Directory ' || lpad(i::text,3,'0') FROM generate_series(1,51) i`);
+    await page.goto(`${base}/admin/users`);
+    await expect(page.locator('tbody tr')).toHaveCount(50);
+    await expect(page.locator('#people-previous')).toBeDisabled();
+    await page.locator('#people-next').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('cell', { name: 'Z Directory 051', exact: true })).toBeVisible();
+    await expect(page.locator('#people-next')).toBeDisabled();
+    await page.locator('#people-previous').click();
+    await expect(page.locator('tbody tr')).toHaveCount(50);
+    for (const [width, height, theme] of [[1440,900,'dark'],[390,844,'light']]) {
+      await resizeViewport(width, height);
+      await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+      if (process.env.HORAE_BROWSER_ARTIFACTS) {
+        mkdirSync(process.env.HORAE_BROWSER_ARTIFACTS, { recursive: true });
+        await page.screenshot({ path: join(process.env.HORAE_BROWSER_ARTIFACTS, `people-${width}-${theme}.png`), animations: 'disabled' });
+      }
+    }
+    await resizeViewport(1440,900);
+    await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+    sql(`DELETE FROM users WHERE org_id='${actor.org_id}' AND id IN
+      (SELECT ('01960000-0000-7000-8001-' || lpad(i::text,12,'0'))::uuid FROM generate_series(1,51) i)`);
+    await page.locator('#people-refresh').click();
+    await openEditor();
+    await capture('permission-editor');
+
+    // A second tab changes the real session cookie after the directory loaded.
+    // Neither the first target read nor its retry may adopt the new Administrator.
+    await editor.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(editor).not.toBeVisible();
+    const loginTab = await context.newPage();
+    const login = async () => {
+      await loginTab.goto(`${base}/auth/login`);
+      await loginTab.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
+      await loginTab.waitForURL(`${base}/`);
+    };
+    try {
+      sql(`UPDATE users SET org_role='manager' WHERE id='${actor.id}'; UPDATE users SET org_role='admin' WHERE id='${otherActor}'`);
+      await login();
+      for (const action of [
+        () => page.getByRole('button', { name: 'Edit permissions for Other permission administrator', exact: true }).click(),
+        () => editor.getByRole('button', { name: 'Reload permissions', exact: true }).click(),
+      ]) {
+        let release;
+        delayedEditorLoad = new Promise(resolve => { release = resolve; });
+        const response = page.waitForResponse(reply => new URL(reply.url()).pathname.startsWith('/api/load_permission_editor'));
+        try {
+          await action();
+          await expect(editor.locator('[data-editor-state="pending"]')).toBeVisible();
+          await expect(editor.getByText('Permission editing is unavailable for this account or workspace.', { exact: true })).toHaveCount(0);
+        } finally {
+          release();
+          delayedEditorLoad = undefined;
+        }
+        const loaded = await response;
+        assert.equal(loaded.status(), 200);
+        assert.deepEqual((await loaded.json()).requester, { org_id: actor.org_id, user_id: otherActor });
+        await expect(editor.getByText('Permission editing is unavailable for this account or workspace.', { exact: true })).toBeVisible();
+        await expect(editor.locator('#permission-review')).toHaveCount(0);
+      }
+      assert.equal(saves.length, 0);
+      assert.equal(receipts(), 0);
+      assert.equal(await record(), null);
+    } finally {
+      sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'; UPDATE users SET org_role='member' WHERE id='${otherActor}'`);
+      await login();
+      await loginTab.close();
+    }
+    await editor.getByRole('button', { name: 'Reload permissions', exact: true }).click();
+    await expect(editor.getByRole('heading', { name: 'Other permission administrator', exact: true })).toBeVisible();
+    await readsFinished();
+    await editor.getByRole('button', { name: 'Change person', exact: false }).click();
+    await editor.getByRole('menuitem', { name: personName, exact: true }).click();
+    await expect(editor.getByRole('heading', { name: personName, exact: true })).toBeVisible();
+    await readsFinished();
+    console.log('PASS: editor reload rejects a changed session and recovers only for the original requester');
+
+    // The shared menu keeps keyboard focus inside the dialog. A refused dirty
+    // switch cannot discard the draft or submit it; a confirmed switch reloads.
+    const picker = editor.getByRole('button', { name: 'Change person', exact: false });
+    await picker.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(editor.getByRole('menu', { name: 'Change person', exact: false })).toBeVisible();
+    await expect(editor.locator('#permission-subjects [role="menuitem"]').first()).toBeFocused();
+    await capture('permission-subjects', true);
+    if (!await editor.locator('#permission-subjects').evaluate(el => el.matches(':popover-open'))) await picker.click();
+    await page.keyboard.press('Escape');
+    await expect(editor).toBeVisible();
+    await expect(picker).toBeFocused();
+    await editor.locator('#permission-ClientReadAll').click();
+    await picker.click();
+    await editor.getByRole('menuitem', { name: 'Other permission administrator', exact: true }).click();
+    await expect(editor.locator('#permission-ClientReadAll')).toBeChecked();
+    assert.equal(saves.length, 0);
+    discard = true;
+    await picker.click();
+    await editor.getByRole('menuitem', { name: 'Other permission administrator', exact: true }).click();
+    await expect(editor.getByRole('heading', { name: 'Other permission administrator', exact: true })).toBeVisible();
+    await readsFinished();
+    discard = false;
+    await picker.click();
+    await editor.getByRole('menuitem', { name: personName, exact: true }).click();
+    await expect(editor.getByRole('heading', { name: personName, exact: true })).toBeVisible();
+    await expect(editor.locator('#permission-ClientReadAll')).not.toBeChecked();
+    await readsFinished();
+    assert.equal(saves.length, 0, 'person selection must not save either person');
+
+    await editor.locator('#person-permissions-profile').focus();
+    await page.keyboard.press('Tab');
+    await expect(editor.locator('#permission-TimeReadManaged')).toBeFocused();
+    await page.getByRole('button', { name: `Edit permissions for ${personName}`, exact: true, includeHidden: true }).evaluate(el => el.focus());
+    await expect(editor.locator('#permission-TimeReadManaged')).toBeFocused();
+
+    // A dirty keyboard dismissal must preserve the draft unless confirmed.
+    await editor.locator('#permission-ClientReadAll').click();
+    await page.keyboard.press('Escape');
+    await expect(editor).toBeVisible();
+    await expect(editor.locator('#permission-ClientReadAll')).toBeChecked();
+    discard = true;
+    await page.keyboard.press('Escape');
+    await expect(editor).not.toBeVisible();
+    discard = false;
+    await expect(page.getByRole('button', { name: 'Edit permissions for Other permission administrator', exact: true })).toBeFocused();
+    await openEditor();
+    await expect(editor.locator('#permission-ClientReadAll')).not.toBeChecked();
+    await editor.locator('#permission-ClientReadAll').click();
+    await review();
+    const count = receipts();
+    loseResponse = true;
+    await editor.getByRole('button', { name: 'Confirm permissions', exact: true }).click();
+    await expect(editor.getByRole('button', { name: 'Retry same save', exact: true })).toBeEnabled();
+    assert.equal(committedLostResponse, true);
+    assert.equal(receipts(), count + 1);
+    const firstRecord = await record();
+    const original = structuredClone(saves.at(-1));
+    await page.reload();
+    await expect(recovery.getByRole('button', { name: 'Retry original request', exact: true })).toBeEnabled();
+    await readsFinished();
+    assert.equal(await record(), firstRecord);
+    assert.equal(saves.length, 1, 'reload must not automatically replay a command');
+    await capture('permission-recovery');
+    await recovery.getByRole('button', { name: 'Retry original request', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(recovery).not.toBeVisible();
+    assert.deepEqual(saves.at(-1), original);
+    assert.equal(receipts(), count + 1);
+    assert.equal(await record(), null);
+    assert.equal(sql(`SELECT 'client_read_all'=ANY(grants) FROM person_permission_states WHERE user_id='${person}'`), 't');
+    console.log('PASS: real person save survives lost response/reload and replays exactly one receipt');
+
+    // A later loss of authority cannot erase a successfully committed request.
+    await openEditor();
+    await editor.locator('summary').filter({ hasText: 'Reusable custom profiles' }).click();
+    await editor.locator('#permission-template-create').click();
+    await editor.getByLabel('Profile name', { exact: true }).fill(templateName);
+    loseResponse = true;
+    await editor.locator('#permission-template-save').click();
+    await expect(editor.getByRole('button', { name: 'Retry same save', exact: true })).toBeEnabled();
+    const templateRecord = await record();
+    const templateCommand = structuredClone(saves.at(-1));
+    const templateCount = receipts();
+    const callsBeforeSwitch = saves.length;
+    await readsFinished();
+    // Change only disposable login candidates; never offer another user's retained request.
+    sql(`UPDATE users SET org_role='manager' WHERE id='${actor.id}'; UPDATE users SET org_role='admin' WHERE id='${otherActor}'`);
+    await page.goto(`${base}/auth/login`);
+    await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
+    await page.waitForURL(`${base}/`);
+    await readsFinished();
+    await page.goto(`${base}/admin/users`);
+    await expect(page.getByRole('button', { name: `Edit permissions for ${personName}`, exact: true })).toBeVisible();
+    await readsFinished();
+    await expect(recovery).not.toBeVisible();
+    assert.equal(await record(), templateRecord);
+    assert.equal(saves.length, callsBeforeSwitch);
+    sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'; UPDATE users SET org_role='member' WHERE id='${otherActor}'`);
+    await page.goto(`${base}/auth/login`);
+    await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
+    await page.waitForURL(`${base}/`);
+    await readsFinished();
+    await page.goto(`${base}/admin/users`);
+    await expect(recovery.getByRole('button', { name: 'Retry original request', exact: true })).toBeEnabled();
+    assert.equal(await record(), templateRecord);
+    sql(`UPDATE person_permission_states SET is_administrator=false, grants=${array(floor)} WHERE id='${actorState}'`);
+    readStart = requests.length;
+    await page.reload();
+    await expect(recovery).toBeVisible();
+    await readsFinished();
+    assert.ok(!requests.slice(readStart).some(path => /^\/api\/(list_people|list_users|list_tasks|load_permission_editor|list_permission_subjects)/.test(path)));
+    await recovery.locator('#permission-recovery-retry').click();
+    await expect(recovery.getByText(/An earlier attempt may still have saved/)).toBeVisible();
+    assert.equal(await record(), templateRecord);
+    assert.equal(receipts(), templateCount);
+    await expect(recovery.locator('#permission-recovery-discard')).toBeDisabled();
+    sql(`UPDATE organizations SET permission_policy_version=0 WHERE id='${actor.org_id}'`);
+    await page.reload();
+    await expect(recovery).toBeVisible();
+    assert.equal(await record(), templateRecord);
+    assert.equal(saves.length, callsBeforeSwitch + 1);
+    sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}';
+      UPDATE person_permission_states SET is_administrator=true, grants=${array(administrator)} WHERE id='${actorState}'`);
+    await recovery.locator('#permission-recovery-retry').click();
+    await expect(recovery.getByText(/Custom profile request completed/)).toBeVisible();
+    assert.deepEqual(saves.at(-1), templateCommand);
+    assert.equal(receipts(), templateCount);
+    assert.equal(await record(), null);
+    await recovery.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(recovery).not.toBeVisible();
+    await readsFinished();
+    // The own-access resource was loaded while revoked; a fresh visit restores its entry action.
+    await page.goto(`${base}/admin/users`);
+    console.log('PASS: account changes isolate tab recovery; same-user reauthentication and restored authority recover the template');
+
+    // The deleted template must not be needed to recover its historical receipt.
+    const templateId = sql(`SELECT id FROM permission_templates WHERE org_id='${actor.org_id}' AND name='${templateName}'`);
+    assert.match(templateId, /^[0-9a-f-]{36}$/);
+    await openEditor();
+    await editor.locator('summary').filter({ hasText: 'Reusable custom profiles' }).click();
+    await editor.locator(`#permission-template-delete-${templateId}`).click();
+    await expect(editor.getByText('No people currently use this profile.', { exact: true })).toBeVisible();
+    await editor.locator('#permission-template-confirm').click();
+    loseResponse = true;
+    await editor.locator('#permission-template-save').click();
+    await expect(editor.getByRole('button', { name: 'Retry same save', exact: true })).toBeEnabled();
+    const deletion = structuredClone(saves.at(-1));
+    const deletionCount = receipts();
+    assert.equal(sql(`SELECT count(*) FROM permission_templates WHERE id='${templateId}'`), '0');
+    await page.reload();
+    await recovery.getByRole('button', { name: 'Retry original request', exact: true }).click();
+    await expect(recovery.getByText(/Custom profile request completed/)).toBeVisible();
+    assert.deepEqual(saves.at(-1), deletion);
+    assert.equal(receipts(), deletionCount);
+    assert.equal(sql(`SELECT count(*) FROM permission_templates WHERE org_id='${actor.org_id}' AND name='${templateName}'`), '0');
+    assert.equal(await record(), null);
+    await recovery.getByRole('button', { name: 'Done', exact: true }).click();
+    await expect(recovery).not.toBeVisible();
+    console.log('PASS: a deleted template is recovered from its exact receipt without recreating it');
+
+    // Produce enough real, reviewed commands to cross a history page boundary.
+    // Never manufacture receipt JSON: the browser must read the writers' output.
+    for (let index = 0; index < 26; index++) {
+      await openEditor();
+      await editor.locator('#permission-ClientReadAll').click();
+      await review();
+      await editor.locator('#permission-save').click();
+      await expect(editor).not.toBeVisible();
+    }
+    const historyIds = sql(`SELECT id FROM permission_change_receipts WHERE org_id='${actor.org_id}' ORDER BY created_at DESC, id DESC`).split('\n');
+    assert.equal(historyIds.length, 29);
+    await page.getByRole('link', { name: 'Audit log', exact: true }).click();
+    await page.waitForURL(`${base}/admin/audit`);
+    const history = page.getByRole('table', { name: 'Permission change history', exact: true });
+    const receiptIds = () => history.locator('details p').filter({ hasText: /^Receipt: / }).allTextContents();
+    await expect(history.locator('tbody tr')).toHaveCount(25);
+    assert.deepEqual(await receiptIds(), historyIds.slice(0, 25).map(id => `Receipt: ${id}`));
+    const summary = history.locator('summary').first();
+    await summary.focus();
+    await page.keyboard.press('Enter');
+    await expect(history.locator('details').first()).toHaveAttribute('open', '');
+    await expect(history.getByText(`Person: ${person}`, { exact: true }).first()).toBeVisible();
+    for (const [width, height, theme] of [[1440, 900, 'dark'], [390, 844, 'light']]) {
+      await resizeViewport(width, height);
+      await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'history must not widen the viewport');
+      for (const id of ['audit-refresh', 'audit-newest', 'audit-older']) {
+        const box = await page.locator(`#${id}`).boundingBox();
+        assert.ok(box && box.x >= 0 && box.x + box.width <= width + 1, `${id} must remain within the viewport`);
+      }
+      if (process.env.HORAE_BROWSER_ARTIFACTS) {
+        await page.screenshot({ path: join(process.env.HORAE_BROWSER_ARTIFACTS, `permission-history-${width}-${theme}.png`), animations: 'disabled' });
+      }
+    }
+    await resizeViewport(1440, 900);
+    await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+    await page.locator('#audit-older').focus();
+    await page.keyboard.press('Enter');
+    await expect(history.locator('tbody tr')).toHaveCount(4);
+    assert.deepEqual(await receiptIds(), historyIds.slice(25).map(id => `Receipt: ${id}`));
+    await expect(page.locator('#audit-older')).toBeDisabled();
+    await expect(page.getByText('No more permission events.', { exact: true })).toBeVisible();
+    await history.locator('summary').filter({ hasText: 'Custom profile deleted' }).click();
+    await expect(history.getByText(`Before: ${templateName}`, { exact: true })).toBeVisible();
+    assert.equal(sql(`SELECT count(*) FROM permission_templates WHERE id='${templateId}'`), '0');
+    await page.locator('#audit-newest').click();
+    await expect(history.locator('tbody tr')).toHaveCount(25);
+
+    let releaseHistory;
+    let historyIntercepted = false;
+    const heldHistory = new Promise(resolve => { releaseHistory = resolve; });
+    const holdHistory = async route => {
+      historyIntercepted = true;
+      await heldHistory;
+      await route.continue();
+    };
+    await page.route('**/api/list_permission_audit*', holdHistory);
+    try {
+      await page.locator('#audit-refresh').click();
+      await expect.poll(() => historyIntercepted).toBe(true);
+      await expect(page.getByText('Loading permission history…', { exact: true })).toBeVisible();
+      await expect(history).not.toBeVisible();
+      await expect(page.locator('#audit-refresh')).toBeDisabled();
+      await expect(page.locator('#audit-older')).toBeDisabled();
+    } finally {
+      releaseHistory();
+      await page.unroute('**/api/list_permission_audit*', holdHistory);
+    }
+    await expect(history.locator('tbody tr')).toHaveCount(25);
+    sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
+    await page.locator('#audit-refresh').click();
+    await expect(page.getByRole('alert')).toContainText('Administrator access is required');
+    await expect(history).not.toBeVisible();
+    sql(`UPDATE person_permission_states SET is_administrator=true WHERE id='${actorState}'`);
+    await page.locator('#audit-refresh').click();
+    await expect(history.locator('tbody tr')).toHaveCount(25);
+    assert.deepEqual(await receiptIds(), historyIds.slice(0, 25).map(id => `Receipt: ${id}`));
+
+    // Canonical Administrator access must not depend on the retained legacy role.
+    sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`);
+    await page.goto(`${base}/settings`);
+    await page.getByRole('link', { name: 'View permission audit log', exact: true }).click();
+    await page.waitForURL(`${base}/admin/audit`);
+    await expect(history.locator('tbody tr')).toHaveCount(25);
+    sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'`);
+    await page.goto(`${base}/admin/users`);
+    console.log('PASS: real permission history supports empty state, keyboard details, stable paging, deleted profiles, refresh/revocation and canonical access');
+
+    // Self-demotion makes any second server send forbidden; cleanup must stay local.
+    await openEditor(actor.name);
+    await editor.locator('#person-permissions-profile').selectOption('Member');
+    await review();
+    await page.evaluate(() => {
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = function(key, value) { if (key.startsWith('horae-permission-request:')) throw new DOMException('Test quota', 'QuotaExceededError'); return original.call(this, key, value); };
+      window.restorePermissionStorage = () => { Storage.prototype.setItem = original; };
+    });
+    const callsBeforeFailure = saves.length;
+    await editor.locator('#permission-save').click();
+    await expect(editor.getByRole('alert')).toContainText('Browser session storage is unavailable');
+    assert.equal(saves.length, callsBeforeFailure);
+    await page.evaluate(() => {
+      window.restorePermissionStorage();
+      const original = Storage.prototype.removeItem;
+      Storage.prototype.removeItem = function(key) { if (key.startsWith('horae-permission-request:')) throw new DOMException('Test storage failure'); return original.call(this, key); };
+      window.restorePermissionStorage = () => { Storage.prototype.removeItem = original; };
+    });
+    await editor.locator('#permission-save').click();
+    await expect(editor.getByRole('button', { name: 'Finish recovery cleanup', exact: true })).toBeEnabled();
+    assert.equal(saves.length, callsBeforeFailure + 1);
+    assert.equal(sql(`SELECT is_administrator FROM person_permission_states WHERE id='${actorState}'`), 'f');
+    assert.notEqual(await record(), null);
+    await page.evaluate(() => window.restorePermissionStorage());
+    await editor.locator('#permission-save').click();
+    await expect(editor).not.toBeVisible();
+    assert.equal(saves.length, callsBeforeFailure + 1);
+    assert.equal(await record(), null);
+    await readsFinished();
+    assert.deepEqual(errors, []);
+    console.log('PASS: storage refusal prevents sends; acknowledged self-demotion cleanup issues no second mutation');
+  } catch (error) {
+    console.error('Browser failure state:', await page.evaluate(() => ({
+      url: location.href,
+      dialogs: [...document.querySelectorAll('dialog')].map(el => ({ id: el.id, open: el.open, busy: el.getAttribute('aria-busy'), text: el.innerText.slice(0, 1000) })),
+      recovery: Object.keys(sessionStorage).filter(key => key.startsWith('horae-permission-request:')),
+      focus: document.activeElement?.outerHTML.slice(0, 300),
+    })));
+    console.error('Browser errors:', errors);
+    if (process.env.HORAE_BROWSER_ARTIFACTS) {
+      await page.screenshot({ path: join(process.env.HORAE_BROWSER_ARTIFACTS, 'permission-failure.png') });
+    }
+    throw error;
+  } finally {
+    await context.close();
+    await browser.close();
+    sql(`BEGIN;
+      SELECT id FROM organizations WHERE id='${actor.org_id}' FOR UPDATE;
+      DELETE FROM permission_change_receipts WHERE org_id='${actor.org_id}' AND actor_user_id='${actor.id}';
+      DELETE FROM person_permission_states WHERE id IN ('${actorState}', '${personState}', '${otherState}');
+      DELETE FROM permission_templates WHERE org_id='${actor.org_id}' AND name='${templateName}';
+      DELETE FROM users WHERE id='${person}' AND email='permission-browser@example.test';
+      DELETE FROM users WHERE id='${otherActor}' AND email='permission-other-browser@example.test';
+      UPDATE users SET org_role='admin' WHERE id='${actor.id}';
+      UPDATE organizations SET permission_policy_version=0, access_revision=${originalRevision} WHERE id='${actor.org_id}'; COMMIT;`);
+    assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
+    assert.equal(sql(`SELECT count(*) FROM permission_change_receipts WHERE org_id='${actor.org_id}'`), '0');
+    assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
+  }
+})().catch(error => { console.error(error); process.exitCode = 1; });
