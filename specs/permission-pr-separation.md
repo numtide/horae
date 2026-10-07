@@ -548,7 +548,7 @@ Clients documents are separate and are not silently included in #248.
 | `9e6d8bd` | Record person editor delivery and template follow-up | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `0f97cb2` | Add custom permission profile controls | permission-editor | Template DTO runtime in #250 using #226 commands; template controls and web-expectation removal now preserved in #260 `98857cf`, executable gates pending; specification in #248 |
 | `8db19ba` | Show affected names in permission reviews | permission-editor | Profile command's relationship-type reuse in #234; final loss-label DTO/reader/DB/HTTP portions in #250; final page/draft/rendering tests now byte-preserved in #260; specification in #248 |
-| `e7d8a36` | Protect permission drafts during navigation and dismissal | permission-editor | Final editor/recovery files in #260; navigation guard preserves current Clients. Cross-#259 union still pending; specification in #248 |
+| `e7d8a36` | Protect permission drafts during navigation and dismissal | permission-editor | Final editor/recovery files in #260; navigation guard preserves current Clients. Cross-#259 union retained and verified in native composition f90f60f7, including all13 navigation assertions; this does not replace current-head remote checks. Specification in #248 |
 | `6bba224` | Bind permission saves to the original requester | permission-editor | Shared requester DTO already in prerequisites; final session-save binding and HTTP assertions in #250; final editor/recovery UI portions now byte-preserved in #260; specification in #248 |
 | `1ecfa21` | Recover interrupted permission saves across reloads | permission-editor | Final recovery/storage/template/UI fixtures byte-preserved in #260; runner retains current suites; specification in #248; full gate pending |
 | `c88ca6d` | Exercise permission recovery in a real browser | permission-editor | Final real-browser recovery fixture and runner wiring in #260; specification in #248; full gate pending |
@@ -567,7 +567,7 @@ Clients documents are separate and are not silently included in #248.
 | `c80233b` | Keep invoice identities out of time-entry responses | time-entry-payload | Exact final model and independently registered original legacy HTTP assertions in #242 (`43337fc`); 1,122 tests, complete SQLx, format, offline lints and full Nix passed; canonical fixture remainder and specification hunks separately preserved |
 | `5ec183a` | Fence time-entry writes against account deactivation | time-writer-activity | Source/tests and regenerated cache in #241 (`7820f8d`), original configuration SQL inlined without canonical module; 1,142 tests, both offline lints and full Nix passed; specification hunks retained |
 | `228e151` | Clarify timesheet context and locked calendar behavior | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
-| `4294aa3` | Isolate permission browser fixtures and retain test assets | browser-fixture-tooling | Original browser.nix asset-path hunk in #259 `455c155` and equivalent independent #260; original permission recovery fixture in #260. Other shared tooling hunks still require final accounting |
+| `4294aa3` | Isolate permission browser fixtures and retain test assets | browser-fixture-tooling | Original browser.nix asset-path hunk in #259 `455c155` and equivalent independent #260; single-admin DEV_LOGIN and viewport synchronization in #260's byte-identical permission recovery fixture; New Project manager fixture and single-admin assertion in #269's byte-identical browser fixture. All three original paths accounted for |
 | `3308926` | Keep permission profile name uniqueness independent of database locale | permission-storage | Migration/storage regressions in #222; command lookup changes remain with template commands |
 | `8af562e` | Record passing permission regression gates | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `9b53182` | Verify profile capacity and confirm timesheet discovery | permission-editor, specification-history, time-readers | Original 50-contender HTTP capacity assertions retained in #250's exact final test file and passed in its workspace suite; specification/Timesheet discovery decision in #248, not a claim to deliver later Timesheet implementation |
@@ -578,9 +578,9 @@ Clients documents are separate and are not silently included in #248.
 | `02c4245` | Authorize person-bound Timesheet commands atomically | timesheet-consumer-commands | Whole command module,13 DB tests, HTTP assertions, implemented endpoints and39 original SQLx descriptors in draft #258 `d2b45ca`; source/format passed, `64524` running. Two DTO web-expectation removals stay with connected UI; approval-covered editing remains incomplete |
 | `a0632a8` | Bind Timesheet navigation and actions to the selected person | timesheet-consumer-commands | Original navigation/person/tracking/command UI in #259 `0dfea8b`; final helpers/page exact, route and shared guards adapted to preserve current Clients/audit work. Navigation harness retains every assertion with client coverage substituted for the still-pending permission-editor branch |
 | `b8b1c60` | Bind weekly submission to the active Timesheet context | timesheet-consumer-commands | Original weekly-submission context contract, page caller,124-line DB race tests,97-line HTTP fixture and five cache descriptors in #259 `0dfea8b`; obsolete descriptor replaced recoverably. Legacy-own submission boundary unchanged; specification owned by #248 |
-| `8722320` | Add browsable permission change history | permission-audit | Own-reader authentication-error sanitization in #244 (`6c4e4d1`); audit reader/UI/navigation, Settings link, profile labels and shell tests extracted in `c96d787`; original editor-dependent browser assertions retained for verification reconciliation; specification hunks retained |
+| `8722320` | Add browsable permission change history | permission-audit | Own-reader authentication-error sanitization in #244 (`6c4e4d1`); audit reader/UI/navigation, Settings link, profile labels and shell tests in #245 (original extraction `c96d787`); editor consumer and the later real-writer/history browser assertions belong to #260. Specification owned by #248 |
 | `2078a13` | Format permission history verification notes | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
-| `2f5357f` | Verify permission history and scoped Timesheet browser flows | browser-fixture-tooling, permission-audit, timesheet-consumer-commands, permission-editor | Timesheet readiness and New Project Timesheet-picker browser hunks in #259 `0dfea8b`, retaining current master Clients/project assertions. Permission-editor/history fixture remainder stays preserved for its owner; specification owned by #248 |
+| `2f5357f` | Verify permission history and scoped Timesheet browser flows | browser-fixture-tooling, permission-audit, timesheet-consumer-commands, permission-editor | Timesheet readiness and New Project Timesheet-picker browser hunks in #259 `0dfea8b`, retaining current master Clients/project assertions. Complete permission-editor/history fixture owned by #260 and byte-identical to original final fixture, including all96 lines added here; specification owned by #248 |
 | `68bbaae` | Fix Timesheet modal focus and long-label layout | timesheet-consumer-commands | Original modal focus and long-label picker fixes plus modal/error browser suites in #259 `0dfea8b`. Runner preserves current suites and adds only applicable Timesheet/navigation suites; specification owned by #248 |
 | `e29f4d8` | Reload Timesheet state when switching people | timesheet-consumer-commands | Final original keyed person-switch remount and browser-history assertions in #259 `0dfea8b`; full browser gate pending; specification owned by #248 |
 | `5f7895c` | Preserve selected dates and drag offsets in Timesheet | timesheet-consumer-commands | Final selected-date/calendar code and assertions in #259; initially omitted original two-line pointer-target CSS restored in `4ce0919` after unchanged test exposed the dependency. Full gate `75088` pending; specification in #248 |
@@ -8046,3 +8046,48 @@ Git/documentary reconciliation is not reported as a new Spec Kit execution.
 Earlier specification analysis and its limitations remain in this ledger.
 Next: collect the exact-head remote ARM results, then propagate only
 verified CI prerequisites and finish current-head readiness reconciliation.
+
+### Shared browser ownership and complete CI composition — 2026-10-08
+
+The preceding iteration made progress: full native #285 verification completed
+and ownership corrections were published in #218 at26859d4a. Current Nixbot
+402/404 remain live on the same exact heads. Their pending VM jobs are not
+treated as failed or restarted.
+
+Read-only comparison closes three remaining ambiguous browser ownership rows:
+
+- Original4294aa3 has exactly three paths. The browser.nix asset-root change
+  belongs to #259/#260; permission-editor-recovery.cjs belongs to #260; the
+  manager fixture and single-admin assertion in new-project-permissions.cjs
+  belong to #269. The latter two whole files have zero diff against db3935db
+  on current heads b8bf4662 and1442e016 respectively.
+- Original2f5357f's96 added recovery/history-browser lines remain inside the
+  exact #260 fixture (blob b84c961b9c0d756d8d983cecb82a6b6d667c4443), also exact
+  in compositionf90f60f7. The other four browser paths' Timesheet readiness and
+  picker changes belong to #259. Their differences from the original are the
+  already-recorded master Clients integration and separate Project overview
+  endpoint, not deletion of the Timesheet assertions. Its four spec paths are
+  owned by #248.
+- Compositionf90f60f7 retains the complete original navigation dispatcher plus
+  master's Client guard. Its13 navigation tests cover pending and dirty states
+  for Permissions, Clients, Invoices, Projects and Timesheet, both permission
+  and Timesheet scroll-only replacements, and legacy explicit release. The
+  unchanged full-gate log records13/13 passing and successful real browser
+  history/recovery checks. This closes the local union check, not remote
+  acceptance of later rebased heads. No repeat browser run was necessary.
+
+After reconfirming #216 merged, created isolated
+`.worktrees/permission-delivery-ci-check` on branch
+`integration/permission-delivery-ci-check` from preservedf90f60f7. Cherry-picked
+only #284/#285 as unsigned2474cb45 and604c0481: three Nix files,13 additions and
+two replaced lines. All application code, assertions, database schema and
+original worktrees are unchanged. The previous verified composition remains
+clean and intact. This branch is a local verification artifact, not another
+delivery PR or a replacement for the independent extraction branches.
+
+Full native `nix flake check -L --max-jobs 1 --cores 2` runs as14504 on604c0481;
+log `.scratch/permission-delivery-ci-604c0481-full-check.log`. This exercises
+the bounded runner against the full permission composition as well as the VM
+store options; no completed result is claimed yet. Next collect this handle
+and remote402/404, then select verified prerequisites for the extraction
+refresh. No merge, closure, policy activation or product change occurred.
