@@ -68,9 +68,10 @@ original worktree.
 ### Original unpublished work: extraction and retained follow-up
 
 All 18 original paths below remain preserved and unchanged. Eleven are now
-extracted locally in `feat/scoped-harvest-clients` at `1a1de4a`: the six cache
-paths, four Rust paths and `contracts/client-permissions.md`. Publication failed
-with a GitHub internal error; remote reconciliation is pending. The other seven
+extracted in draft [#281](https://github.com/numtide/horae/pull/281),
+`feat/scoped-harvest-clients` at `1c254582`: the six cache paths, four Rust paths
+and `contracts/client-permissions.md`, plus the original shared-test visibility
+hunk. Publication91690 succeeded after the transient GitHub errors. The other seven
 specification paths remain retained with unfinished client-workflow follow-up:
 dependent reconciliation, operation matrix, plan, spec, tasks, progress and
 quickstart. Their approved FR-035/036 decisions are also preserved in the
@@ -162,11 +163,11 @@ T237 verification and T238 implementation remain incomplete. Do not treat
 | Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; tests/live-schema SQLx96425 and full native71588 passed. ARM/wider acceptance pending. No lifecycle, catalog UI, later atomic rate creation or activation |
 | Task archive/restore and import preservation, [#276](https://github.com/numtide/horae/pull/276) | `feat/scoped-task-lifecycle`, `.worktrees/scoped-task-lifecycle` | integration/task-lifecycle-prerequisites1955c38 (#275/#269/#258/#223/#224/#231) | Draft at `7e883eb`; tests/live-schema SQLx60667 and full native95578 passed after restoring original descriptor2889c08. Base full native65768 passed. ARM/wider acceptance pending; catalog/link/UI controls excluded |
 | Existing project-task link authority and currency, [#277](https://github.com/numtide/horae/pull/277) | `feat/scoped-task-links`, `.worktrees/scoped-task-links` | #2767e883eb | Draft at `d1ab522`; original979a594 extracted. Tests/live-schema SQLx23598 and full native62455 passed. ARM/wider acceptance pending; no UI or activation |
-| Atomic task creation with an initial rate, [#278](https://github.com/numtide/horae/pull/278) | `feat/atomic-task-creation`, `.worktrees/atomic-task-creation` | #277d1ab522 | Draft; original dcadcee backend, tests/cache and legacy caller. Tests/live-schema SQLx63668 passed on3d76f99. Cleanup812a870 removes the obsolete browser lint expectation; fresh full native63014 running. Catalog UI separate |
-| Task catalog and editor, [#279](https://github.com/numtide/horae/pull/279) | `feat/task-catalog`, `.worktrees/task-catalog` | integration/task-catalog-prerequisites0b781f9 (#278/#260) | Draft at `46d3b36`; original5561f14 and dcadcee UI/contract. Provenance/format/syntax and tests/live-schema SQLx56599 passed. Full/browser/ARM acceptance pending; no activation |
-| Task catalog dependency verification only | `integration/task-catalog-prerequisites`, `.worktrees/task-catalog-prerequisites` | #2783d76f99 and #260f00d8f0 | Published at `0b781f9`; original legacy requester preserved,29 browser suites/20 HTTP matrices retained; source audit passed. Full native4427 running; not a delivery PR |
-| Project task archive/restore controls, [#280](https://github.com/numtide/horae/pull/280) | `feat/project-task-activity-ui`, `.worktrees/project-task-activity-ui` | #276 at `7e883eb` | Draft at `24c5d0e`; four original8c1bf9b paths, parent receipt cleanup retained. Provenance/format/syntax passed; full native14092 running. No new backend or activation |
-| Harvest-compatible client reads, publication pending | `feat/scoped-harvest-clients`, `.worktrees/scoped-harvest-clients` | #272 at `fd91c3d` | Local `1a1de4a` extracts eleven original dirty paths. Provenance/format passed; tests/live-schema SQLx28333 running. Publication2339 failed with GitHub internal errors; no PR number confirmed |
+| Atomic task creation with an initial rate, [#278](https://github.com/numtide/horae/pull/278) | `feat/atomic-task-creation`, `.worktrees/atomic-task-creation` | #277d1ab522 | Draft at `812a870`; full native63014 passed, including browser and deployment/OIDC. ARM/final cross-PR review pending. Catalog UI separate |
+| Task catalog and editor, [#279](https://github.com/numtide/horae/pull/279) | `feat/task-catalog`, `.worktrees/task-catalog` | integration/task-catalog-prerequisitese9f793d (#278/#260) | Draft; local `9fcc0a0` incorporates the verified #278 cleanup, tree identical to `46d3b36`. Earlier tests/live-schema SQLx56599 passed on46d3b36; fresh full native66969 running on9fcc0a0. ARM/final cross-PR review pending |
+| Task catalog dependency verification only | `integration/task-catalog-prerequisites`, `.worktrees/task-catalog-prerequisites` | #278812a870 and #260f00d8f0 | Local `e9f793d`; original requester,29 browser suites/20 HTTP matrices retained; source audit passed. Full native4427 passed on earlier0b781f9, not claimed for the changed head; not a delivery PR |
+| Project task archive/restore controls, [#280](https://github.com/numtide/horae/pull/280) | `feat/project-task-activity-ui`, `.worktrees/project-task-activity-ui` | #276 at `7e883eb` | Draft at `24c5d0e`; four original8c1bf9b paths, parent receipt cleanup retained. Full native14092 passed, including browser and deployment/OIDC. ARM/final cross-PR review pending |
+| Harvest-compatible client reads, [#281](https://github.com/numtide/horae/pull/281) | `feat/scoped-harvest-clients`, `.worktrees/scoped-harvest-clients` | #272 at `fd91c3d` | Published `1c254582` extracts eleven dirty paths plus the original shared-test visibility hunk. Initial gate28333 failed compilation, corrected; live-schema SQLx65280 then found a missing cache entry. Offline diagnostic/tests11982 running. Draft, not accepted |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
 Combine or subdivide only after tracing code and test dependencies. Prefer
@@ -5768,3 +5769,48 @@ requiring adaptation/retained-work review, and 20 separately tracked deletions.
 This is not a completion percentage. Next collect these handles, reconcile
 client publication, finish shared-hunk/specification ownership and diagnose ARM
 and #269's intermittent fixture. T238 remains explicitly unfinished.
+
+### Final task heads and client test-fixture dependency — 2026-10-07
+
+The preceding estimate-only response made no implementation progress. This
+iteration revalidated the state and resumed safe work. #216 remains merged at
+02f7b58; the original18 dirty paths still match their preserved snapshot.
+
+Full native63014 (#278812a870),4427 (composition0b781f9) and14092 (#28024c5d0e)
+all finished exit0, including browser and deployment/OIDC. ARM/Darwin were
+omitted. Only after these handles became terminal, the composition incorporated
+#278812a870 as e9f793d. Its audit again retains780 single-owner paths,29 browser
+suites and20 HTTP matrices, with no missing paths. The26 shared paths still
+require final cross-PR accounting. The catalog incorporates that composition
+as9fcc0a0, with tree fa15e37c3562215faf2e0373a2c85edfc0bb3ae2 identical to its
+previous46d3b36. Fresh full native66969 runs on the new head; no historical
+pass is substituted for final-head verification.
+
+Client gate28333 failed compilation: sibling tests could not access the
+canonical/selection fixtures. Unsigned1c254582 reuses exactly the original
+f6e8bf1 pub(super) increment, already present in #273, without pulling unrelated
+task runtime into the client reader. Production code and assertions are
+unchanged. Formatting passed; fresh tests/live-schema SQLx65280 is running.
+This shared test-only ownership must be retained when composing #273 and the
+client extraction. Seven incomplete dirty client specification files remain
+preserved and T238 is not claimed complete.
+
+Prior publication retries2021/45046 failed with GitHub internal server errors.
+#279 body writes63600 and92419 also failed; a fresh remote read85051 confirms
+the old body remains and there is still no client PR. Publication91690 now
+attempts the corrected client head and catalog/base updates; reconcile its
+terminal result before repeating writes. Next collect65280/66969, publish
+accurate descriptions and this ledger, verify the updated composition, and
+finish shared-hunk/specification ownership plus ARM/#269 diagnosis. No GitHub
+merges, closures, policy activation or real-data changes occurred.
+
+Publication91690 finished successfully: catalog9fcc0a0 and compositione9f793d
+are remote, and Clients is confirmed draft #281 at1c254582. PR descriptions for
+#278/#279/#280 updated successfully in42193. Fresh composition full31756 is
+running on e9f793d. Refreshed inventory includes #281 and still reports1135
+exact blobs,59 adaptation/retained paths and20 original cache deletions.
+
+Client65280 then failed live-schema SQLx validation for a missing descriptor,
+after compiling successfully with the fixture correction. Offline tests11982
+are diagnosing the exact consuming query; no cache is removed or assertion
+weakened. #281 remains draft until both SQLx and the full gates pass.
