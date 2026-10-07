@@ -27,6 +27,7 @@ mod cli;
 #[path = "../time_entries/commands/tests/http.rs"]
 mod delegated_time;
 mod own_permissions;
+mod own_submission;
 mod permission_audit;
 mod project_managers;
 mod scoped_directory;
@@ -283,6 +284,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     let mut server = tokio::task::JoinSet::new();
     server.spawn(async move { axum::serve(listener, router).await.unwrap() });
     own_permissions::check(&pool, &api).await;
+    own_submission::check(&pool, &api).await;
     permission_audit::check(&pool, &api).await;
     project_managers::check(&pool, &api).await;
     scoped_directory::check(&pool, &api).await;

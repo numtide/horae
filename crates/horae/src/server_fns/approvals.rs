@@ -1,6 +1,7 @@
 //! Approval server functions.
 
 use super::*;
+use crate::models::scoped_time::TimesheetWriteContext;
 
 // ── Approvals (M7) ──────────────────────────────────────────────────────────
 
@@ -34,14 +35,35 @@ async fn week_has_running_timer(
 /// Transitions all 'open' entries in [week_start, week_start+6] to 'submitted'
 /// and creates an approval row.
 #[server]
-pub async fn submit_week(week_start: String) -> Result<Approval, ServerFnError> {
+pub async fn submit_week(
+    week_start: String,
+    context: TimesheetWriteContext,
+) -> Result<Approval, ServerFnError> {
     let user = require_user().await?;
     let user_id = user.id;
     let org_id = user.org_id;
+    if context.expected_requester.user_id != user_id
+        || context.expected_requester.org_id != org_id
+        || context.subject_id != user_id
+        || context.expected_policy != crate::models::scoped_time::TimesheetPolicy::LegacyOwn
+    {
+        return Err(forbidden("Timesheet context changed; refresh the page"));
+    }
     let state = crate::state::global_state().await;
 
     let ws = parse_date(&week_start, "week_start")?;
-    let (approval, total_minutes) = submit_user_week(&state.db, user_id, org_id, ws).await?;
+    let (approval, total_minutes) = submit_user_week(&state.db, user_id, org_id, ws)
+        .await
+        .map_err(|error| match error {
+            error @ ServerFnError::ServerError {
+                code: BAD_REQUEST | FORBIDDEN | CONFLICT | NOT_FOUND,
+                ..
+            } => error,
+            error => {
+                tracing::error!(%error, "Timesheet submission failed");
+                server_err("Timesheet submission is unavailable")
+            }
+        })?;
     state
         .plugins
         .dispatch(crate::plugin::AppEvent::TimesheetSubmitted {
@@ -65,6 +87,33 @@ async fn submit_user_week(
         .ok_or_else(|| err(BAD_REQUEST, "week_start is out of range"))?;
 
     let mut tx = pool.begin().await.map_err(server_err)?;
+    permissions::configure_administration(&mut tx)
+        .await
+        .map_err(server_err)?;
+    let config = sqlx::query!(
+        r#"SELECT permission_policy_version, week_start, round_minutes,
+                  round_dir as "round_dir: horae_core::types::RoundDir"
+           FROM organizations WHERE id = $1 FOR SHARE"#,
+        org_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| forbidden("Timesheet context changed; refresh the page"))?;
+    if config.permission_policy_version != 0 {
+        return Err(forbidden("Timesheet policy changed; refresh the page"));
+    }
+    let active_owner = sqlx::query_scalar!(
+        "SELECT id FROM users WHERE org_id=$1 AND id=$2 AND active FOR SHARE",
+        org_id,
+        user_id
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?;
+    if active_owner.is_none() {
+        return Err(forbidden("Active same-organization account required"));
+    }
     // Writers acquire the shared form before changing any entries. Taking the
     // user-wide lock first covers inserts and cross-week moves, not just rows
     // that happened to exist when submission started.
@@ -72,14 +121,6 @@ async fn submit_user_week(
         r#"SELECT pg_advisory_xact_lock(hashtextextended('horae.timesheet:' || $1::uuid::text, 0)) as "lock!: ()""#,
         user_id,
     ).execute(&mut *tx).await.map_err(server_err)?;
-    let config = sqlx::query!(
-        r#"SELECT week_start, round_minutes, round_dir as "round_dir: horae_core::types::RoundDir"
-           FROM organizations WHERE id = $1"#,
-        org_id,
-    )
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(server_err)?;
     if ws.weekday().number_from_monday() as i16 != config.week_start {
         return Err(err(
             BAD_REQUEST,
