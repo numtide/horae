@@ -6942,3 +6942,40 @@ refreshing descendants. Next: collect23364, review and port a passing fix with
 the regression to #263, then verify that extraction and reconcile descendants.
 The independent CLI broken-pipe failure remains unresolved; no assertion has
 been weakened and no production transport change was made.
+
+Focused check23364 completed exit0 at diagnostic efd83523:54 passed,0 failed,
+1 existing ignored manual export measurement,1368 filtered out. Both the original
+`materialized_exports_retain_authority_and_release_cancelled_reads` and the new
+deterministic denial regression passed. Exact derivation:
+`/nix/store/58hcnhs8fnk7m9vxjrv0y9i9d9hglrjl-horae-export-denial-check-0.1.0.drv`.
+This covers bounded export tests, not the whole application or combined gate.
+
+Ported the fix and byte-identical regression to #263 locally, commit
+34341049883d8d5752272e963445dc39f3f478d4. The extracted authorization helper is
+byte-identical to the one already owned by #264 and tested in the composition;
+moving it earlier lets the transaction owner await rollback without duplicating
+cleanup across denial branches. Verified helper, `begin`, and regression bodies
+against the passing diagnostic source. Queries are unchanged. Formatting4470
+and whitespace passed. Reviewed success-path lock lifetime, error propagation,
+tenant/actor checks and rollback cancellation; no grant or policy change.
+
+Recovery ref `backup/export-denial-fix-20261007/scoped-time-xlsx` and complete
+verified bundle `.scratch/scoped-time-xlsx-before-denial-fix-20261007.bundle`
+preserve15bda5cc; SHA-256
+`40c98d79d9190dc20c2b88c65652040eb54ece6bc11f887bd5db14304b5624d0`.
+Session70597 completed exit0 on #263's own dependency context:43 passed,0 failed,
+1 existing ignored manual measurement,1032 filtered out. Both the deterministic
+regression and the original cancellation/authority test passed. Log:
+`.scratch/scoped-time-xlsx-denial-check.log`; exact derivation:
+`/nix/store/04sikfszyngycbjlsrkh7vpkx22w7gp3-horae-scoped-time-xlsx-denial-check-0.1.0.drv`.
+Publication49141 completed: GitHub263 confirms34341049, still draft, on review
+base83967167. Its description distinguishes current focused checks from older
+full gates, documents the cleanup fix and preserves original provenance.
+
+Next: reconcile this cleanup into dependent extractions and the complete
+composition, retain it while refreshing #264's previously extracted helper,
+and resolve the outstanding CSV CLI transport failure before the complete gate.
+No local diagnostic/full gate is running. The diagnostic branch remains local
+and retains only its instrumentation plus this fix/regression; do not deliver
+the instrumentation. Originals #212/#217/#208 remain untouched. No merge,
+closure, policy activation or real-data mutation occurred. Goal incomplete.
