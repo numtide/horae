@@ -120,9 +120,9 @@ implementation remains incomplete. Do not treat
 - [#284](https://github.com/numtide/horae/pull/284), `test/vm-store-image`,
   at93b3fbaa, is a ten-line draft over #283. Both complete native VM checks and
   full local flake check passed, including explicit Nix store registration.
-  Nixbot402 now confirms exact-head ARM OIDC success (444.68s test script).
-  ARM deployment/recovery has passed boot and is exercising import restart
-  checks; its final result and full-build acceptance remain pending.
+  Nixbot402 completed successfully at2026-10-07 23:53:50 UTC on this exact head.
+  Both ARM VMs passed: OIDC444.68s and deployment/recovery993.95s test runtime.
+  Remote x86 VM checks also passed; this does not verify downstream heads.
 - [#285](https://github.com/numtide/horae/pull/285), `test/nix-test-parallelism`,
   at15d9ab5b, makes both Rust runners respect NIX_BUILD_CORES. A sandbox probe
   measured2 allocated cores versus32 default Rust test threads. All121 core
@@ -8416,3 +8416,31 @@ Next: collect those existing handles. After the prerequisite base and compositio
 are verified, use the prepared one-branch-at-a-time procedure, verify each exact
 tree and preserve review-base bindings before publication. Do not restart builds
 or rewrite the extraction branches while their shared candidate remains pending.
+
+### Complete remote ARM VM correction accepted — 2026-10-08
+
+The preceding iteration made progress by preparing the guarded propagation
+procedure and recording ARM OIDC acceptance in published ledgerbbff47ce.
+Continued verified waits on the same91786/85532 and402/413 handles; did not
+restart builds or publish rewritten extraction heads.
+
+Nixbot402's ARM deployment/recovery test completed successfully in993.95s,
+including graceful termination, forced termination, checkpoint recovery and
+repeated-import assertions. Its total runtime exceeding900s is not a guest
+readiness timeout: guest startup had already passed and the functional scenarios
+ran afterward. The succeeded attribute endpoint confirms both ARM VM checks,
+both x86 VM checks and formatting. GitHub reports the complete402 nix-build
+SUCCESS at2026-10-07 23:53:50 UTC for #28493b3fbaa; nix-eval also passed.
+Evidence: .scratch/nixbot-402-complete-summary.json and its source URLs. Updated
+#284's description with exact-head acceptance, without claiming a benchmark,
+downstream CI success or permission to merge.
+
+Locally, #286's full browser check and SQLx cache verification passed; its core
+tests finished and the server test binary is compiling. The full composition
+passed Clippy and continues its browser matrix. Both full gates remain live.
+Nixbot404 and413 are not yet accepted as complete. The propagation preflight,
+backups and original source branches remain unchanged.
+
+Next: collect the remaining exact-head checks and complete-composition result,
+then begin guarded propagation only when the shared base is verified. No merge
+or original-branch modification occurred.
