@@ -13,6 +13,33 @@ fn parse(filters: &str) -> Result<TimeReportQuery, StatusCode> {
 }
 
 #[test]
+fn download_policy_binding_rejects_unknown_and_repeated_modes() {
+    for value in ["scoped", "legacy"] {
+        let uri = format!(
+            "/api/reports/export/csv?from=2026-09-01&to=2026-09-30&expected_policy={value}"
+        )
+        .parse()
+        .unwrap();
+        let params = Query::<ExportParams>::try_from_uri(&uri).unwrap().0;
+        assert_eq!(serde_json::to_value(params.expected_policy).unwrap(), value);
+    }
+    for query in [
+        "expected_policy=",
+        "expected_policy=1",
+        "expected_policy=future",
+        "expected_policy=scoped&expected_policy=legacy",
+    ] {
+        let uri = format!("/api/reports/export/csv?from=2026-09-01&to=2026-09-30&{query}")
+            .parse()
+            .unwrap();
+        assert!(
+            Query::<ExportParams>::try_from_uri(&uri).is_err(),
+            "{query}"
+        );
+    }
+}
+
+#[test]
 fn plural_filters_preserve_every_dimension_and_deduplicate_ids() {
     let a = Uuid::from_u128(1);
     let b = Uuid::from_u128(2);

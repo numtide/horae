@@ -10,6 +10,7 @@ async fn capture(pool: &PgPool, ids: &SeedIds) -> Result<time::TimeExport, Statu
         ids.org_id,
         ids.user_id,
         &params().time_query().unwrap(),
+        None,
     )
     .await
 }
@@ -152,7 +153,7 @@ async fn scoped_xlsx_scope_union_and_multi_filters_precede_size_checks(pool: PgP
     query.user_ids = vec![target, outsider];
     query.task_ids = vec![ids.task_id];
     query.client_ids = vec![ids.client_id];
-    let selected = time::entries(&pool, ids.org_id, ids.user_id, &query)
+    let selected = time::entries(&pool, ids.org_id, ids.user_id, &query, None)
         .await
         .unwrap();
     assert_eq!(selected.rows.len(), 1);
@@ -433,7 +434,7 @@ async fn scoped_xlsx_rejects_paged_reversed_or_wrong_requester_queries(pool: PgP
     let mut query = params().time_query().unwrap();
     query.date_to = "2026-09-06".parse().unwrap();
     assert!(matches!(
-        time::entries(&pool, ids.org_id, ids.user_id, &query).await,
+        time::entries(&pool, ids.org_id, ids.user_id, &query, None).await,
         Err(StatusCode::BAD_REQUEST)
     ));
     let mut query = params().time_query().unwrap();
@@ -444,7 +445,7 @@ async fn scoped_xlsx_rejects_paged_reversed_or_wrong_requester_queries(pool: PgP
         id: Uuid::now_v7(),
     });
     assert!(matches!(
-        time::entries(&pool, ids.org_id, ids.user_id, &query).await,
+        time::entries(&pool, ids.org_id, ids.user_id, &query, None).await,
         Err(StatusCode::BAD_REQUEST)
     ));
     let mut query = params().time_query().unwrap();
@@ -453,7 +454,7 @@ async fn scoped_xlsx_rejects_paged_reversed_or_wrong_requester_queries(pool: PgP
         user_id: Uuid::now_v7(),
     });
     assert!(matches!(
-        time::entries(&pool, ids.org_id, ids.user_id, &query).await,
+        time::entries(&pool, ids.org_id, ids.user_id, &query, None).await,
         Err(StatusCode::FORBIDDEN)
     ));
 }
