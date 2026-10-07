@@ -5055,3 +5055,61 @@ is still pending and remains the required ARM evidence. Full native96635 on
 #273571f3f5 failed in the existing new-project browser suite (expected three
 project rows, received four); retain the draft and investigate isolation after
 the priority repair. No unchanged extraction check is being restarted.
+
+### CI repair follow-up and authorized branch refresh — 2026-10-07
+
+Nixbot204 failed both ARM VM checks on f869353. The serial device dependency
+timed out inside systemd after300 seconds, cancelling backdoor.service before
+the driver's longer900-second readiness wait could help. Native checks passed;
+this was not an accepted ARM fix.
+
+A disposable local ARM VM using the exact cached guest kernel, initrd and
+system closure reproduced the failure under TCG. /dev/hvc0 existed before
+udev finished coldplug; systemd eventually marked it plugged after its job
+had expired. Starting backdoor.service after coldplug immediately produced
+the readiness marker. No real application database was accessed. The debug
+VM was terminated after recording this evidence.
+
+#274ccc2961 also sets DefaultDeviceTimeoutSec=900 inside the two test nodes.
+Production service settings, assertions, supported systems and the overall
+test deadline are unchanged. Full native97178 and Nixbot206 are running on
+this correction; neither is yet reported as passed.
+
+The user explicitly authorized merging #274 once the complete repair passes,
+then rebasing the worked-on open PRs so their checks include the repaired CI.
+No merge or rebase has occurred yet. Refresh stacks in dependency order,
+preserve recovery refs and local edits, and use exact-head CI evidence after
+each refresh. In particular #212 still has its18 original dirty paths; do
+not overwrite them. This does not authorize merging extraction PRs or
+continuing feature implementation ahead of the repair.
+
+Full native97178 passed on ccc2961, including both VMs; deployment/recovery
+finished in103.66 seconds. GitHub run37599025624 passed Flake Check and Format.
+Nixbot206 failed before executing ARM checks: its scheduler reported no
+connected, non-draining aarch64-linux worker after120 seconds. Both ARM VMs
+and ARM formatting share this allocation failure; it is not evidence of a
+test regression or a successful ARM correction. A single same-head Nixbot
+rerun request through GitHub's documented check-run rerequest endpoint was
+rejected with HTTP404 even though the same check is readable. It did not
+schedule a new run.
+
+One empty commit, #274a757709, triggers a fresh run without changing the
+verified ccc2961 tree. Do not repeat empty commits if worker allocation fails
+again; report the infrastructure blocker instead of bypassing ARM checks.
+
+Nixbot reused failed build206 for the unchanged a757709 tree, so the empty
+commit did not execute a new ARM run. The alternative check-suite rerequest
+endpoint also returned HTTP404. GitHub Flake Check and Format passed on
+a757709. A user-triggered Re-run on the
+nixbot/nix-build check is now required to get fresh ARM evidence with the
+available access. No CI result was overridden, no infrastructure configuration
+was modified, and no PR was merged or rebased.
+
+Read-only refresh audit: the52 extraction/ledger PRs #218–#273 all match their
+published heads; only this ledger has current local edits. All other audited
+extraction worktrees are clean. The read-only snapshot is saved locally in
+`.scratch/pr-refresh-inventory-20261007.json`; re-fetch before any mutation.
+Retain the57-open-PR inventory and dependency
+base mapping when resuming; do not flatten shared integration bases into
+unrelated feature diffs. Next action: validate the rerun of #274 on ARM,
+merge only after complete acceptance, then perform the authorized refresh.
