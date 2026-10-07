@@ -5,6 +5,13 @@ use uuid::Uuid;
 
 /// Independent counts may overlap; zero findings do not establish readiness.
 #[derive(Debug, Default, PartialEq, Eq)]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Legacy diagnostics have no public entry point yet"
+    )
+)]
 pub(crate) struct PreflightCounts {
     pub cross_org_memberships: i64,
     pub cross_org_approvals: i64,
@@ -16,6 +23,13 @@ pub(crate) struct PreflightCounts {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Legacy diagnostics have no public entry point yet"
+    )
+)]
 pub(crate) enum PreflightError {
     #[error("Permission preflight unavailable")]
     Forbidden,
@@ -24,6 +38,13 @@ pub(crate) enum PreflightError {
 }
 
 /// Inspects legacy source data using authenticated tenant/requester IDs.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Legacy diagnostics have no public entry point yet"
+    )
+)]
 pub(crate) async fn read(
     pool: &PgPool,
     org_id: Uuid,
