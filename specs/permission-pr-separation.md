@@ -156,7 +156,7 @@ Clients MVP as canonical-permission acceptance.
 | Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; tests/live-schema SQLx96425 and full native71588 passed. ARM/wider acceptance pending. No lifecycle, catalog UI, later atomic rate creation or activation |
 | Task archive/restore and import preservation, [#276](https://github.com/numtide/horae/pull/276) | `feat/scoped-task-lifecycle`, `.worktrees/scoped-task-lifecycle` | integration/task-lifecycle-prerequisites1955c38 (#275/#269/#258/#223/#224/#231) | Draft at `7e883eb`; tests/live-schema SQLx60667 and full native95578 passed after restoring original descriptor2889c08. Base full native65768 passed. ARM/wider acceptance pending; catalog/link/UI controls excluded |
 | Existing project-task link authority and currency, [#277](https://github.com/numtide/horae/pull/277) | `feat/scoped-task-links`, `.worktrees/scoped-task-links` | #2767e883eb | Draft at `d1ab522`; original979a594 extracted. Tests/live-schema SQLx23598 and full native62455 passed. ARM/wider acceptance pending; no UI or activation |
-| Atomic task creation with an initial rate, [#278](https://github.com/numtide/horae/pull/278) | `feat/atomic-task-creation`, `.worktrees/atomic-task-creation` | #277d1ab522 | Draft at `3d76f99`; original dcadcee backend, tests/cache and legacy caller. Tests/live-schema SQLx63668 running. Catalog UI remains separate |
+| Atomic task creation with an initial rate, [#278](https://github.com/numtide/horae/pull/278) | `feat/atomic-task-creation`, `.worktrees/atomic-task-creation` | #277d1ab522 | Draft; original dcadcee backend, tests/cache and legacy caller. Tests/live-schema SQLx63668 passed on3d76f99. Cleanup812a870 removes the obsolete browser lint expectation; fresh full native63014 running. Catalog UI separate |
 | Task catalog and editor, [#279](https://github.com/numtide/horae/pull/279) | `feat/task-catalog`, `.worktrees/task-catalog` | integration/task-catalog-prerequisites0b781f9 (#278/#260) | Draft at `46d3b36`; original5561f14 and dcadcee UI/contract. Provenance/format/syntax passed; tests/live-schema SQLx56599 running. Full/browser/ARM acceptance pending; no activation |
 | Task catalog dependency verification only | `integration/task-catalog-prerequisites`, `.worktrees/task-catalog-prerequisites` | #2783d76f99 and #260f00d8f0 | Published at `0b781f9`; original legacy requester preserved,29 browser suites/20 HTTP matrices retained; source audit passed. Full native4427 running; not a delivery PR |
 
@@ -5704,3 +5704,12 @@ not completion percentages. Original dirty Clients work remains preserved.
 Next collect63668/4427/56599, resolve the parent lint annotation, then extract
 8c1bf9b's project task-activity controls and finish Clients/shared-hunk accounting.
 ARM and the #269 intermittent fixture still need their own diagnosis.
+
+Gate63668 subsequently finished exit0: tests and live-schema SQLx passed on
+#2783d76f99. With no check left running in that worktree, unsigned812a870
+removes only the seven-line TaskRateEdit lint expectation, moving the original
+5561f14 cleanup to its first browser consumer. Fresh full native63014 is live
+on that new head. Do not transplant it into the running composition4427 or
+catalog56599 yet; propagate after those handles finish and verify the resulting
+heads. No runtime/query/test assertion changed, and old results are not claimed
+for the new commit.
