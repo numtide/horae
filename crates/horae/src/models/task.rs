@@ -2,13 +2,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Explicit intent for a task's global default, independent of project overrides.
-#[cfg_attr(
-    all(not(feature = "server"), not(test)),
-    expect(
-        dead_code,
-        reason = "Transport for a registered endpoint without a browser caller."
-    )
-)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub enum TaskRateEdit {
