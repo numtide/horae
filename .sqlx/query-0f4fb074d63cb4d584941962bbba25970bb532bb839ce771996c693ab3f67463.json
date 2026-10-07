@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET created_at='2026-09-07 12:00:00+00' WHERE org_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0f4fb074d63cb4d584941962bbba25970bb532bb839ce771996c693ab3f67463"
+}

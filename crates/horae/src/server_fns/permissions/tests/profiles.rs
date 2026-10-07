@@ -6,6 +6,9 @@ use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use std::time::Duration;
 
+#[path = "time_entries.rs"]
+mod time_entries_tests;
+
 async fn save_state(
     pool: &PgPool,
     org: Uuid,
