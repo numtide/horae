@@ -154,9 +154,11 @@ Clients MVP as canonical-permission acceptance.
 | Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `fd91c3d`; parent browser corrections propagated with exact expected tree. Full native76300 passed in child #273; own exact-head gate50478 also passed. ARM and wider review remain pending |
 | Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `4b2c87d`; parent browser corrections propagated with exact expected tree. Full native76300 passed on this head. ARM, wider review, task lifecycle and catalog-management UI remain separate pending work |
 | Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; tests/live-schema SQLx96425 and full native71588 passed. ARM/wider acceptance pending. No lifecycle, catalog UI, later atomic rate creation or activation |
-| Task archive/restore and import preservation, [#276](https://github.com/numtide/horae/pull/276) | `feat/scoped-task-lifecycle`, `.worktrees/scoped-task-lifecycle` | integration/task-lifecycle-prerequisites1955c38 (#275/#269/#258/#223/#224/#231) | Draft at `7e883eb`; tests/live-schema SQLx60667 passed after restoring original descriptor2889c08. Full native95578 running; base full native65768 passed. Catalog/link/UI controls excluded |
-| Existing project-task link authority and currency, [#277](https://github.com/numtide/horae/pull/277) | `feat/scoped-task-links`, `.worktrees/scoped-task-links` | #2767e883eb | Draft at `d1ab522`; original979a594 extracted. Tests/live-schema SQLx23598 passed. Full native62455 running; ARM pending; no UI or activation |
+| Task archive/restore and import preservation, [#276](https://github.com/numtide/horae/pull/276) | `feat/scoped-task-lifecycle`, `.worktrees/scoped-task-lifecycle` | integration/task-lifecycle-prerequisites1955c38 (#275/#269/#258/#223/#224/#231) | Draft at `7e883eb`; tests/live-schema SQLx60667 and full native95578 passed after restoring original descriptor2889c08. Base full native65768 passed. ARM/wider acceptance pending; catalog/link/UI controls excluded |
+| Existing project-task link authority and currency, [#277](https://github.com/numtide/horae/pull/277) | `feat/scoped-task-links`, `.worktrees/scoped-task-links` | #2767e883eb | Draft at `d1ab522`; original979a594 extracted. Tests/live-schema SQLx23598 and full native62455 passed. ARM/wider acceptance pending; no UI or activation |
 | Atomic task creation with an initial rate, [#278](https://github.com/numtide/horae/pull/278) | `feat/atomic-task-creation`, `.worktrees/atomic-task-creation` | #277d1ab522 | Draft at `3d76f99`; original dcadcee backend, tests/cache and legacy caller. Tests/live-schema SQLx63668 running. Catalog UI remains separate |
+| Task catalog and editor, [#279](https://github.com/numtide/horae/pull/279) | `feat/task-catalog`, `.worktrees/task-catalog` | integration/task-catalog-prerequisites0b781f9 (#278/#260) | Draft at `46d3b36`; original5561f14 and dcadcee UI/contract. Provenance/format/syntax passed; tests/live-schema SQLx56599 running. Full/browser/ARM acceptance pending; no activation |
+| Task catalog dependency verification only | `integration/task-catalog-prerequisites`, `.worktrees/task-catalog-prerequisites` | #2783d76f99 and #260f00d8f0 | Published at `0b781f9`; original legacy requester preserved,29 browser suites/20 HTTP matrices retained; source audit passed. Full native4427 running; not a delivery PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
 Combine or subdivide only after tracing code and test dependencies. Prefer
@@ -464,8 +466,8 @@ Clients documents are separate and are not silently included in #248.
 | `ac4c90c` | Authorize task activity changes and guard running timers | task-permissions-lifecycle | Commands, original tests/descriptors and contract extracted with0591407 in draft #276924dcbe. Fresh gates pending |
 | `0591407` | Preserve project task archival across restores and imports | task-permissions-lifecycle | Migration0048, import/checkpoint/lock-order adaptations, editor transport, tracking admission, original tests/descriptors and contract in draft #276924dcbe. Cache correction/fresh gates pending; later UI remains separate |
 | `979a594` | Enforce scoped project task linking and rate currency | task-permissions-lifecycle | Commands, five DB regressions, HTTP matrix, original descriptors and contract extracted in draft #277d1ab522. Live-schema SQLx passed; tests/full gates pending |
-| `5561f14` | Add permission-aware task catalog management | task-consumers | Held in original backup; extraction pending |
-| `dcadcee` | Add atomic task creation to the task catalog | task-consumers | Backend, legacy caller, DB/HTTP tests and descriptors in #2783d76f99; catalog UI/browser/component tests and contract appendix retained for the catalog extraction. Historical progress/quickstart owned by #248/original refs |
+| `5561f14` | Add permission-aware task catalog management | task-consumers | Catalog reader, DTOs, navigation/UI, tests/cache and contract in #27946d3b36; historical progress/quickstart owned by #248/original refs |
+| `dcadcee` | Add atomic task creation to the task catalog | task-consumers | Backend, legacy caller, DB/HTTP tests and descriptors in #2783d76f99; catalog UI/browser/component tests and contract appendix in #27946d3b36. Historical progress/quickstart owned by #248/original refs |
 | `8c1bf9b` | Add task archive and restore controls to project editing | task-consumers | Held in original backup; extraction pending |
 | `db3935d` | Filter time reports and downloads by billability | time-report-consumer | DTO/readers and reader tests in #261/#262; export SQL predicates in #263/#264/#266; grouped HTTP route registrations in #266; strict URL transport and original cross-format DB/HTTP fixtures in #267e029a89. UI/browser/component hunks retained for Reports consumer; specification in #248 |
 
@@ -5661,3 +5663,44 @@ were updated successfully in36369 with those exact-head results. Native
 browser progress does not close the ARM import-checkpoint failure or diagnose
 #269's intermittent fixture. Next finish the composition audit, extract the
 catalog, collect existing live gates and continue Clients/shared-hunk accounting.
+
+### Catalog extraction and completed native gates — 2026-10-07
+
+Published #279 at46d3b363e8e46a5619e9746a719ab03886b08d0f on the published
+0b781f94238f6228e24fd57eac252219279972e6 composition. Source audit retained
+780 single-owner blobs, inventoried26 shared paths and found no missing blobs;
+the previously superseded c5179dc descriptor remains accounted for. The two
+merge resolutions preserve #278's requester inside #260's LegacyAdminUsers and
+the union of29 browser suites. All20 parent HTTP matrices remain registered.
+
+#279 contains21 changed paths:5561f14 plus dcadcee's UI and original contract
+appendices. All20 non-registry added/deleted line sets match their selected
+source increments, all nine added files are byte-identical, and all three SQLx
+query hashes match. The adapted registry preserves all29 parent suites and adds
+task-catalog; the HTTP catalog matrix is the21st. Formatting/whitespace and
+JavaScript/shell syntax pass. Tests/live-schema SQLx56599 is running; no own
+full/browser or ARM acceptance is claimed. The contract's old verification
+references remain historical, explicitly distinguished in the draft PR body.
+
+Bounded review covered the current requester and grants under ReadAccess,
+tenant filtering before pagination, separate rate projection and affordances,
+non-authoritative cursors, stale UI suppression, modal/busy/validation handling,
+and exact zero/blank/clear intents. Retained two DB regressions, six HTTP grant
+cases, eight actual-component tests, independent shell authorization and the
+original real-session desktop/mobile Chromium fixture. No new critical/high
+source finding within this boundary. No CSS framework or product redesign.
+
+Full native95578 on #2767e883eb and62455 on #277d1ab522 both finished exit0,
+including browser and deployment/OIDC. ARM and Darwin were explicitly omitted.
+Descriptions updated successfully in49930. Dependency full4427 remains live;
+it reported an unfulfilled TaskRateEdit dead-code expectation because #278 now
+has a browser caller. #279 already includes the original annotation removal;
+the parent needs a small earlier cleanup after its live test63668 finishes.
+Do not modify checked worktrees or treat native success as ARM acceptance.
+
+The refreshed conservation inventory has1,134 of1,214 exact extraction blobs,
+60 adaptation/retained-work paths and20 separately tracked deletions. These are
+not completion percentages. Original dirty Clients work remains preserved.
+Next collect63668/4427/56599, resolve the parent lint annotation, then extract
+8c1bf9b's project task-activity controls and finish Clients/shared-hunk accounting.
+ARM and the #269 intermittent fixture still need their own diagnosis.
