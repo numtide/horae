@@ -4847,3 +4847,46 @@ records that outcome after reconfirming its live head. Full51012 (#267),
 live; #268 production release and Clippy have passed. No duplicate check,
 extraction merge or closure. Next review the retained editor fixtures, collect
 these checks, then continue Project reads/delivery, tasks and hunk accounting.
+
+### Project reader extraction and Reports composition verification
+
+Full native51012 passed on #267e029a89; its PR body was updated after
+reconfirming the live head. Full native25958 completed with exit0 and all
+compatible checks passed on the wider Reports composition b7836d7. This
+composition still uses the original #268 fixture types appropriate to its
+identity foundation; reconcile the later standalone aef180f test-only
+adaptation when composing again. Other architectures were not executed.
+The #26864831 and #26988044 gates remain live; neither was restarted.
+
+Completed scoped source review of #269's original canonical-field, manager,
+catalog, concurrency, HTTP, component and browser fixture changes and runtime
+boundary. No new critical or high finding was identified. Updated the draft
+description, without claiming an independent review or full executable pass.
+Its release and Clippy stages have passed; remaining checks are pending.
+
+Created feat/scoped-project-reads in .worktrees/scoped-project-reads from the
+shared reader/editor foundation7a2d61c. The original reader requires the
+existing financial snapshot boundary #2320bb5721 for legacy fee reads.
+Composed that prerequisite locally as c6e96f4 on
+integration/project-read-prerequisites. The only manual merge resolution
+united HTTP fixture registrations and calls, retaining both parents' suites.
+No GitHub merge occurred; this new composition is not yet verified.
+
+Extracted the2631186 ordinary reader, budget summaries, row projections,
+requester-bound overview/detail UI and original database/component fixtures.
+Preserved master's client-linked project route and passed initial_client into
+the keyed overview child. Retained the shared is_admin helper because Clients
+still consumes it. Adapted Client detail's existing spend caller and optional
+amount display: withheld money remains unavailable, never fabricated zero.
+Preserved all Client navigation fixtures and their deferred responses while
+adapting the shared Project fixture; did not replace it with the older file.
+The original new reader database fixtures and two component submodules were
+read and retained without adding the later Task lifecycle fixture.
+
+These reader changes are still local and uncommitted, not build-ready or
+published. Whitespace checks pass, but HTTP/browser fixtures, SQLx inventory,
+formatting, full native verification and remaining review are outstanding.
+Project CSV/XLSX and Harvest-compatible list/count/direct-ID release boundaries
+remain separate extractions. Next finish these reader regressions and caller
+checks, publish the bounded draft, collect the two live gates, then continue
+delivery, Tasks, unpublished Clients classification and full hunk accounting.
