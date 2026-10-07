@@ -3452,3 +3452,16 @@ binding and `75f13a1` report composition. These are separate dependencies to
 account for. This is source inventory only, not a completed adversarial review
 or newly verified extraction. Continue the protected #251 merge first, then
 rebase/verify/merge #252 before resuming extraction work.
+
+Read-only blob comparison against all30 extraction heads (#219–#250, excluding
+#229/#230) and master `1b8fa4f` provides a lower-bound conservation check for
+the1,214 original changed paths:98 non-SQLx/non-spec files,480 SQLx descriptors
+and48 spec files have an identical final blob in at least one extraction.
+The other220 ordinary files,341 descriptors and7 spec files require hunk-level
+accounting or still-pending extraction;20 original SQLx deletions require
+query/cache reconciliation. A differing blob is not evidence of lost work:
+several files intentionally contain only one extracted responsibility or have
+documented compatibility adaptations. An identical blob is not evidence that
+the combined PRs build or preserve behavior. Keep the final ownership and
+cross-PR integration audit open; do not convert these counts into completion
+percentages. Merge-group watcher `90784` remains live with Flake Check pending.
