@@ -74,6 +74,9 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     assert.equal(await trigger.evaluate(node => node.tagName), 'BUTTON', `${label} uses the shared selector`);
     await trigger.click();
     const picker = page.getByRole('dialog', { name: `Choose ${label}`, exact: true });
+    // Native toggle initializes focus asynchronously; let it finish before
+    // moving to another option, or its initial focus can replace our choice.
+    await expect(picker.getByRole('option', { selected: true })).toBeFocused();
     await picker.getByRole('option', { name: option, exact: true }).focus();
     await page.keyboard.press('Enter');
     await expect(picker).not.toBeVisible();

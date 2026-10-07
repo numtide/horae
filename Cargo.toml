@@ -13,7 +13,7 @@ dioxus-fullstack = { path = "vendor/dioxus-fullstack-0.7.9" }
 
 [profile.release]
 opt-level = 3
-lto = true
-codegen-units = 1
+lto = "thin"
+codegen-units = 16
 debug = 0
 strip = "debuginfo" # strip residual DWARF — prevents binaryen/wasm-opt crash
