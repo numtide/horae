@@ -136,8 +136,9 @@ implementation remains incomplete. Do not treat
   and page-consumer tests. No production code, SQL, timeout or assertion changes.
   Native full check91786 and remote Nixbot413 are running; formatting passed.
   It is a draft over #285. The shared prerequisite order is now
-  #282→#283→#284→#285→#286; the existing75-branch propagation preview targets
-  #285 only and must be refreshed before including this additional correction.
+  #282→#283→#284→#285→#286. The refreshed75-branch tree-only preview includes
+  #286 and preserves all57 code-PR review patches; actual propagation remains
+  pending verification of the shared base.
 - Local complete compositiond5c34851 contains both corrections without diagnostic
   logging. Its full gate50229 failed at Clippy: three unused preflight symbols.
   Local compositionf90f60f7 contains #246's function-local lint expectation for this
@@ -8337,3 +8338,37 @@ unchanged. Full composition check85532 is running; log
 .scratch/permission-delivery-ci-8fc3a44e-full-check.log. This source composition
 proof does not replace its pending test results. Collect the same live handles
 instead of restarting either build.
+
+### Complete CI propagation preview including cancellation synchronization — 2026-10-08
+
+The preceding iteration made progress by publishing #286 and preparing its full
+composition; ledgercef63082 is published. Revalidated both live local handles
+91786/85532 and remote402/404/413. Native formatting passed in both worktrees;
+both app builds have completed their web bundles and continue running. Remote
+checks are still pending, not successful or stopped. No build was restarted.
+
+Updated the tree-only propagation proof for targeted286e6b. Revalidated all75
+local/remote heads, clean worktrees and saved recovery references. All75 trees
+contain exactly the shared correction's edits in eight files, with no feature,
+SQLx or migration edits. All57 code-PR review patches retain identical added
+and removed lines and paths; unlike the prior #285 preview, this comparison
+ignores hunk offsets and blob IDs because #286 also touches test files extended
+by the task-feature PRs.
+
+There are six insertion conflicts: #276–#280 and their existing
+integration/task-catalog-prerequisites review base. Each inserts the archived
+project-task regression at the same former gap as #286's helper. Preserved the
+entire existing regression followed by the unchanged helper, matching the
+already-reviewed full composition. The verifier accepts only this exact
+empty-ancestor insertion conflict and fails on other conflicts or altered edits.
+No branch, PR base, source worktree or remote ref was rewritten by this preview.
+
+Evidence: .scratch/permission-ci-cancellation-preview-20261008.json and
+.scratch/preview-ci-cancellation-propagation.mjs. The existing75-head recovery
+bundle still matches every extraction head. #218/#248 are documentation-only
+and remain outside code propagation; originals #212/#217/#208 remain excluded.
+
+Next: collect91786/85532 and the exact-head ARM VM/test results. If the shared
+base passes, revalidate leases and apply the refreshed preview in dependency
+order, preserving the six explicitly reviewed insertion resolutions. Do not
+treat the simulation as executed rebases or fresh-head CI acceptance.
