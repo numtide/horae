@@ -3340,3 +3340,31 @@ Do not weaken its timeout. Formerly failing selector scenarios did pass.
 Wait for isolated Nix gate `48807`; repaired-head required CI run37556278237 is
 watched by live session `16075` at120s intervals (Format45s passed). These two
 handles, not the failed old queue or focused suite, are the active verification.
+
+### Verify repaired Crane base in parallel with release CI
+
+The last iteration was PROGRESS: selector readiness correction published with
+deterministic focus-order evidence, and the separate draft timeout preserved.
+At continuation both `48807` and `16075` are confirmed live. Release application
+build and Clippy have now passed within `48807`; remaining gates are pending.
+
+To avoid deferring independent priority verification until #251 merges, rebased
+the five owned Crane commits onto repaired `perf/release-thin-lto` now. Published
+with exact old-head lease: `587119e5e91d31c615ee63064bced7e43e620112`. Compared
+directly with original `774966e`, its tree differs only by the three test lines;
+its PR diff relative to #251 remains the same six build files. No goal extraction
+or application feature work resumed. Full combined-head gate `6287` is live
+with cores2/max-jobs1; previous Crane head results are not claimed for it.
+
+Git's existing `rebase.updateRefs=true` also moved the owned recovery branch.
+Immediately restored `backup/crane-before-master-rebase` to exact original
+`774966e7640bc7338b036b75d6e1f86411faa34b` using a compare-and-swap update and
+verified it. Use `--no-update-refs` on subsequent rebases; do not alter global
+configuration. Direct original-SHA comparison, not the temporarily moved ref,
+proved the inherited diff. Worktree is clean and PR description updated.
+
+Next collect `48807`, `6287` and required-check watcher `16075`; only request
+protected #251 merge after repaired-head verification. Once actually merged,
+rebase/retarget #252 onto master with an exact `587119e` lease (or its current
+verified successor), no-update-refs and unsigned commits, then require its own
+master-base CI. Preserve all timeout evidence and do not weaken browser checks.
