@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (id,org_id,email,name,active) VALUES ($1,$2,$3,'Project teammate',false)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2e011f5677394645e4213ba6b7d93c6dcd839a6c4389f0cf26c2d1203abfd39e"
+}

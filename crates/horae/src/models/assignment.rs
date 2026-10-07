@@ -5,6 +5,13 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(sqlx::FromRow))]
+#[cfg_attr(
+    not(feature = "server"),
+    expect(
+        dead_code,
+        reason = "Assignment endpoints retain this wire DTO; the project editor uses ProjectForm."
+    )
+)]
 pub struct Assignment {
     pub id: Uuid,
     pub project_id: Uuid,

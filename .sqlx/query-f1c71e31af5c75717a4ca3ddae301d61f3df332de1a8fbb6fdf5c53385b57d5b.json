@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id,t.name FROM project_tasks pt\n         JOIN tasks t ON t.id=pt.task_id AND t.org_id=$1\n         JOIN projects p ON p.id=pt.project_id AND p.org_id=$1\n         WHERE pt.project_id=$2 AND t.active ORDER BY lower(t.name),t.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "f1c71e31af5c75717a4ca3ddae301d61f3df332de1a8fbb6fdf5c53385b57d5b"
+}
