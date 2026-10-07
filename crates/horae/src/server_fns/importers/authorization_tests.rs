@@ -35,7 +35,9 @@ mod project_people;
 mod project_reads;
 mod scoped_directory;
 mod session_identity;
+mod task_edits;
 mod task_reads;
+mod task_writes;
 mod user_directory;
 
 #[cfg(target_os = "linux")]
@@ -298,6 +300,8 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     project_people::check(&pool, &api).await;
     project_reads::check(&pool, &api).await;
     task_reads::check(&pool, &api).await;
+    task_writes::check(&pool, &api).await;
+    task_edits::check(&pool, &api).await;
     scoped_directory::check(&pool, &api).await;
     permission_editor::check(&pool, &api).await;
     session_identity::check(&pool, &api).await;
