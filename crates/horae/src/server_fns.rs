@@ -502,7 +502,7 @@ mod clients;
 mod importers;
 mod invoices;
 mod organization;
-pub(crate) mod permission_editor;
+mod permission_editor;
 #[cfg(feature = "server")]
 mod permissions;
 mod plugins;
@@ -525,6 +525,7 @@ pub use invoices::*;
 // Org-branding endpoints exist but no page consumes them yet.
 #[allow(unused_imports)]
 pub use organization::*;
+pub use permission_editor::*;
 pub use plugins::*;
 pub use project_creation::*;
 pub use projects::*;
