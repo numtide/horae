@@ -156,19 +156,19 @@ implementation remains incomplete. Do not treat
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 | Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267, inherited report access/readers and all four export routes | Draft at `1be11e74`; conservation audit recovered the original disclosure glyphs and added browser path assertions. Format/syntax passed; fresh full native31708 running. No CSS/SQL/schema/activation; full T203 remains open |
 | Cross-PR Reports/Timesheet/People verification only | `integration/reports-permission-check`, `.worktrees/reports-permission-integration` | Combines verified `1a87961` with #268 `810ce57` and its report/export foundations | Local integration merge `b7836d7`, not a delivery PR or GitHub merge. Both HTTP registration sets and all30 unique browser suites retained; dedicated source/test blobs unchanged. Format/syntax/source comparison pass; full native gate25958 running |
-| Scoped project editor, [#269](https://github.com/numtide/horae/pull/269) | `feat/scoped-project-editor`, `.worktrees/scoped-project-editor` | `integration/permission-readers-editor-check` | Draft at `a9ba27b`; canonical fields, preserved hidden values and manager edits extracted. Lost-acknowledgement fixture failed in the full gate but passes isolated; failure remains unresolved. No activation |
-| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `737aa13a`; complete native30162 passed. Diagnostic-only VM change preserves deadlines/assertions. Nixbot295 running; earlier266 failed ARM before SIGKILL checkpoint, so ARM remains open |
+| Scoped project editor, [#269](https://github.com/numtide/horae/pull/269) | `feat/scoped-project-editor`, `.worktrees/scoped-project-editor` | `integration/permission-readers-editor-check` | Draft at `53183702`; restored original obsolete-cache removal; fresh full native94084 running. Five instrumented repetitions passed on the unchanged preceding package, but the earlier lost-acknowledgement failure remains unexplained. No activation |
+| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `0b4fd421`; restored six original cache removals; fresh full native25727 running. Native30162 and Nixbot295, including executed ARM e2e, passed on preceding737aa13a; not acceptance of this new head or a root-cause fix for intermittent266 |
 | Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites` at375e9bd, combining #270 and #267 | Draft at `5beac2e1`; conservation review restored and registered original requester HTTP matrix. Format/provenance passed; fresh full native37940 running. Earlier native81807 belongs to d61bfd3; ARM/wider review pending |
-| Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `fd91c3d`; parent browser corrections propagated with exact expected tree. Full native76300 passed in child #273; own exact-head gate50478 also passed. ARM and wider review remain pending |
-| Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `4b2c87d`; parent browser corrections propagated with exact expected tree. Full native76300 passed on this head. ARM, wider review, task lifecycle and catalog-management UI remain separate pending work |
+| Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `8b8b0c0b`; restored three original cache removals; fresh full native46301 running. Older50478/76300 are historical, not new-head acceptance. Latest parent cache removals, ARM and wider integration remain pending |
+| Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `65c4aa23`; restored original count-cache removal; fresh full native55108 running. Older76300 belongs to4b2c87d. Latest parent cache removals, ARM and wider integration remain pending |
 | Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; tests/live-schema SQLx96425 and full native71588 passed. ARM/wider acceptance pending. No lifecycle, catalog UI, later atomic rate creation or activation |
 | Task archive/restore and import preservation, [#276](https://github.com/numtide/horae/pull/276) | `feat/scoped-task-lifecycle`, `.worktrees/scoped-task-lifecycle` | integration/task-lifecycle-prerequisites1955c38 (#275/#269/#258/#223/#224/#231) | Draft at `7e883eb`; tests/live-schema SQLx60667 and full native95578 passed after restoring original descriptor2889c08. Base full native65768 passed. ARM/wider acceptance pending; catalog/link/UI controls excluded |
 | Existing project-task link authority and currency, [#277](https://github.com/numtide/horae/pull/277) | `feat/scoped-task-links`, `.worktrees/scoped-task-links` | #2767e883eb | Draft at `d1ab522`; original979a594 extracted. Tests/live-schema SQLx23598 and full native62455 passed. ARM/wider acceptance pending; no UI or activation |
 | Atomic task creation with an initial rate, [#278](https://github.com/numtide/horae/pull/278) | `feat/atomic-task-creation`, `.worktrees/atomic-task-creation` | #277d1ab522 | Draft at `812a870`; full native63014 passed, including browser and deployment/OIDC. ARM/final cross-PR review pending. Catalog UI separate |
 | Task catalog and editor, [#279](https://github.com/numtide/horae/pull/279) | `feat/task-catalog`, `.worktrees/task-catalog` | integration/task-catalog-prerequisitese9f793d (#278/#260) | Draft, published `9fcc0a0`; full native66969 passed on this head, using valid cached outputs for identical derivations. ARM/final cross-PR review pending |
-| Task catalog dependency verification only | `integration/task-catalog-prerequisites`, `.worktrees/task-catalog-prerequisites` | #278812a870 and #260f00d8f0 | Local `e9f793d`; original requester,29 browser suites/20 HTTP matrices retained; source audit passed. Full native4427 passed on earlier0b781f9, not claimed for the changed head; not a delivery PR |
+| Task catalog dependency verification only | `integration/task-catalog-prerequisites`, `.worktrees/task-catalog-prerequisites` | #278812a870 and #260f00d8f0 | Published `e9f793d`; original requester,29 browser suites/20 HTTP matrices retained; source audit and full native31756 passed, including deployment/OIDC. Not a delivery PR or wider cross-stack acceptance |
 | Project task archive/restore controls, [#280](https://github.com/numtide/horae/pull/280) | `feat/project-task-activity-ui`, `.worktrees/project-task-activity-ui` | #276 at `7e883eb` | Draft at `24c5d0e`; four original8c1bf9b paths, parent receipt cleanup retained. Full native14092 passed, including browser and deployment/OIDC. ARM/final cross-PR review pending |
-| Harvest-compatible client reads, [#281](https://github.com/numtide/horae/pull/281) | `feat/scoped-harvest-clients`, `.worktrees/scoped-harvest-clients` | #272 at `fd91c3d` | Local `cd8d1db7` extracts eleven dirty paths plus shared-test visibility and original fixture descriptor81aefb2e. Initial failures28333/65280/11982 diagnosed and corrected; fresh full native15935 running. Draft, not accepted |
+| Harvest-compatible client reads, [#281](https://github.com/numtide/horae/pull/281) | `feat/scoped-harvest-clients`, `.worktrees/scoped-harvest-clients` | #272 at `fd91c3d` | Published draft `cd8d1db7` extracts eleven dirty paths plus shared-test visibility and original fixture descriptor81aefb2e. Initial failures28333/65280/11982 corrected; full native15935 passed, including deployment/OIDC. Latest parent cache changes, ARM and wider review remain pending; T238 not implemented |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
 Combine or subdivide only after tracing code and test dependencies. Prefer
@@ -6013,3 +6013,55 @@ Ledger deb861d1 and #279's updated composition result were published successfull
 (61706 and5920 exit0). Updating #270/#281 descriptions and this result receipt
 is the next publication action. Only37940 (#271) and31708 (#268) remain live
 from this batch; cache cleanup, cross-stack unions and #269 diagnosis remain.
+
+### Original cache-deletion ownership and replay diagnostics — 2026-10-07
+
+Previous iteration made progress: exact-head client/catalog checks passed and
+ARM295 was inspected, not merely polled. #270/#281 descriptions and ledger
+8eb51864 were published (53747/84196 exit0). Reconfirmed #216 merged before
+this iteration's edits; original branches, dirty source and real data untouched.
+
+Read the existing #269 browser fixture and pinned derivation environment.
+Scratch-only instrumentation observes request/response/failure events and route
+interception without changing any assertion, input, production source or binary.
+85251 ran five repetitions on the exact 7r6v6zz package with a disposable runner
+database and exited0. Each retains the two-identical-requests check, unchanged
+committed revision, protected-state/history assertions and fixture cleanup.
+This fails to reproduce89598, not proof its cause is fixed; no speculative
+runtime or assertion change was made. Scratch runner/wrapper are preserved under
+`.scratch/editor-replay-diagnostic/`.
+
+The existing combined Reports branch09878591 already contains all five editor
+navigation guards (permission, client, invoice, project, Timesheet). Fresh pinned
+Node check34646 passed all19 navigation/storage tests. This closes the specific
+shared-dispatcher uncertainty noted above, not the full updated cross-stack gate.
+
+Recovered the remaining11 original SQLx descriptor deletions after checking
+original deletion commits, replaced queries and current readers. All changes
+are cache-only, reversible through Git; no query, assertion or schema changed.
+
+| Owner/head | Original deleted query prefixes | Fresh full native handle |
+| --- | --- | --- |
+| #26953183702 | a1ea432d7440 | 94084 |
+| #2700b4fd421 | 22bd5f392be7,6bd34bcfb204,baf75ef8ba55,bc3f9ea5c9aa,c1f2843a6aaf,e25b27423bd4 | 25727 |
+| #2728b8b0c0b | 1f0c682793eb,40899460e93f,4c92eb5086da | 46301 |
+| #27365c4aa23 | 3036fe659e73 | 55108 |
+
+All four commits/descriptions are published (39379/19144/3709/18786 exit0);
+checks are running and worktrees are frozen. Parent removals have not yet been
+propagated into dependent heads. Earlier green evidence remains tied to its
+older commits, including Nixbot295 on737aa13a.
+
+Refreshed blob inventory8095 passed. Every one of the20 original deleted cache
+paths now has an owner where it is absent: the11 above, #237 (074eb86a0a23 and
+4fa0a9d60b98), #228 (9ff1b7d9e9c8 and ed1c72f60026), #249 (548235be5387),
+#247 (717614d03bf8), #263 (bcde45c163fc), and #276 (2a22de0eb8e0 and
+8aae7affad63). Successful new-head compilation/cache checks are still required;
+absence alone is not verification. The1136 exact blobs and58 shared/adapted
+paths remain triage classifications, not a completion percentage.
+
+Next collect37940/31708 and the four fresh cache-head gates above. Then integrate
+the verified shared/cache deltas into the existing verification compositions,
+finish shared-registration ownership and update the final delivery table from
+current heads. Do not rerun completed15935/31756/295 or equate repeated isolated
+replay success with diagnosis of the old #269 failure. No merges or closures.
