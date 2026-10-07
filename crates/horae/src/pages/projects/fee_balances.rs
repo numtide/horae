@@ -4,10 +4,15 @@ use horae_core::money::format_cents_plain;
 use uuid::Uuid;
 
 use crate::components::form::{FormGroup, Input};
+use crate::models::permission_editor::PermissionRequester;
 use crate::server_fns;
 
 #[component]
-pub(super) fn ProjectFeeBalances(project_id: Uuid) -> Element {
+pub(super) fn ProjectFeeBalances(
+    project_id: Uuid,
+    requester: PermissionRequester,
+    on_access_change: EventHandler<()>,
+) -> Element {
     let mut from = use_signal(|| {
         let today = Utc::now().date_naive();
         today.with_day(1).unwrap_or(today).to_string()
@@ -22,7 +27,23 @@ pub(super) fn ProjectFeeBalances(project_id: Uuid) -> Element {
             .to_string()
     });
     let mut balances = use_resource(move || async move {
-        server_fns::get_project_fee_balances(project_id.to_string(), from(), to()).await
+        let result = server_fns::get_project_fee_balances(
+            project_id.to_string(),
+            from(),
+            to(),
+            Some(requester),
+        )
+        .await;
+        if matches!(
+            &result,
+            Err(ServerFnError::ServerError {
+                code: 401 | 403,
+                ..
+            })
+        ) {
+            on_access_change.call(());
+        }
+        result
     });
     let loading = balances.state()() != UseResourceState::Ready;
     rsx! {

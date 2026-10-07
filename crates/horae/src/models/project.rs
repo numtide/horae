@@ -5,6 +5,13 @@ use uuid::Uuid;
 
 /// An explicit task rate in the currency shown to the project manager.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(
+    not(feature = "server"),
+    expect(
+        dead_code,
+        reason = "The task-link endpoint retains this wire DTO; the project editor uses ProjectForm."
+    )
+)]
 pub struct ProjectTaskRate {
     pub amount: String,
     pub currency: String,
@@ -42,6 +49,33 @@ pub struct Project {
     pub created_at: DateTime<Utc>,
 }
 
+/// Minimal client context for a visible project, not access to its directory record.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectOverviewClient {
+    pub id: Uuid,
+    pub name: String,
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectOverviewRow {
+    pub project: Project,
+    pub client: Option<ProjectOverviewClient>,
+    /// Display affordance only; every edit reloads current server authority.
+    pub can_edit: bool,
+}
+
+/// Rows and workflow labels bound to one authenticated requester and policy mode.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectOverview {
+    pub requester: super::permission_editor::PermissionRequester,
+    pub canonical_permissions: bool,
+    pub can_create: bool,
+    pub can_import: bool,
+    pub can_change_legacy_status: bool,
+    pub projects: Vec<ProjectOverviewRow>,
+}
+
 /// Authorized budget consumption, without entry details or billing/cost rates.
 /// A missing budget is unallocated, not a zero allowance. Legacy projects have
 /// no configured progress rows and retain their lifetime overview totals.
@@ -57,6 +91,22 @@ pub struct ProjectBudgetProgress {
     pub period_key: String,
     pub budget: Option<i64>,
     pub consumed: i64,
+}
+
+/// Whole-project summary computed before filtering private task/person scopes.
+/// Withheld money is absent, not zero; breakdown contains only allowed scopes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectBudgetOverview {
+    pub project_id: Uuid,
+    pub scope: String,
+    pub kind: BudgetKind,
+    pub currency: String,
+    pub period_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub budget: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consumed: Option<i64>,
+    pub breakdown: Vec<ProjectBudgetProgress>,
 }
 
 /// Saved basic project details; private notes are absent for non-administrators.
@@ -75,6 +125,24 @@ pub struct ProjectDetails {
     pub tags: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub admin_notes: Option<String>,
+}
+
+/// A label within a readable project, not a directory record or financial value.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectDetailIdentity {
+    pub id: Uuid,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectDetailView {
+    pub requester: super::permission_editor::PermissionRequester,
+    pub canonical_permissions: bool,
+    pub project: ProjectDetails,
+    /// Display affordance; the editor independently reloads its current authority.
+    pub can_edit: bool,
+    pub team: Vec<ProjectDetailIdentity>,
+    pub tasks: Vec<ProjectDetailIdentity>,
 }
 
 /// A tag associated with a project whose progress the caller may read.

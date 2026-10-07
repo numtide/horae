@@ -83,7 +83,7 @@ async fn bulk_preserves_invoiced_history_assignments_and_spend(pool: PgPool) {
                 .await
                 .unwrap()[0]
                 .spent_cents,
-            6000
+            Some(6000)
         );
     }
 }

@@ -75,7 +75,10 @@ async fn imported_legacy_project_keeps_exact_rates_and_totals_on_retry(pool: PgP
         .iter()
         .find(|row| row.project_id == project_id)
         .unwrap();
-    assert_eq!((imported.spent_minutes, imported.spent_cents), (165, 13000));
+    assert_eq!(
+        (imported.spent_minutes, imported.spent_cents),
+        (165, Some(13000))
+    );
     let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
         .await
         .unwrap();

@@ -44,10 +44,14 @@ mod clients;
 pub mod invoice;
 #[path = "../src/pages/invoices.rs"]
 mod invoices;
+#[path = "../src/models/permission_editor.rs"]
+pub mod permission_editor;
 #[path = "../src/models/project.rs"]
-mod project;
+pub mod project;
 #[path = "../src/models/project_creation.rs"]
 pub mod project_creation;
+#[path = "../src/models/project_managers.rs"]
+pub mod project_managers;
 #[path = "../src/pages/projects.rs"]
 mod projects;
 #[path = "../src/models/task.rs"]
@@ -55,11 +59,13 @@ mod task;
 #[path = "../src/models/user.rs"]
 pub mod user;
 mod models {
-    pub use super::{client, invoice, project_creation};
+    pub use super::{
+        client, invoice, permission_editor, project, project_creation, project_managers,
+    };
     pub use super::{
         client::Client,
         project::{
-            Project, ProjectBudgetProgress, ProjectDetails, ProjectTagLink, ProjectTaskRate,
+            Project, ProjectBudgetOverview, ProjectBudgetProgress, ProjectDetails, ProjectTagLink,
         },
     };
 }
@@ -67,6 +73,12 @@ mod models {
 type InvoiceResponse = Result<invoice::InvoiceWithLines, ServerFnError>;
 type AssignmentResponse = Result<Vec<assignment::Assignment>, ServerFnError>;
 type ProjectDetailsResponse = Result<project::ProjectDetails, ServerFnError>;
+type DeferredResponse<T> = Rc<RefCell<Option<oneshot::Receiver<Result<T, ServerFnError>>>>>;
+
+#[path = "detail_navigation/detail.rs"]
+mod detail_tests;
+#[path = "detail_navigation/overview.rs"]
+mod overview_tests;
 type ClientDetailsResponse = Result<client::ClientDetails, ServerFnError>;
 type ClientInvoicesResponse = Result<Vec<invoice::Invoice>, ServerFnError>;
 type ClientProjectsResponse = Result<Vec<project::Project>, ServerFnError>;
@@ -91,6 +103,16 @@ struct Probe {
     response: Rc<RefCell<Option<oneshot::Receiver<InvoiceResponse>>>>,
     assignment_response: Rc<RefCell<Option<oneshot::Receiver<AssignmentResponse>>>>,
     detail_response: Rc<RefCell<Option<oneshot::Receiver<ProjectDetailsResponse>>>>,
+    overview: Rc<RefCell<Option<project::ProjectOverview>>>,
+    overview_requests: Rc<RefCell<Vec<Option<permission_editor::PermissionRequester>>>>,
+    overview_response: DeferredResponse<project::ProjectOverview>,
+    auxiliary_requesters: Rc<RefCell<Vec<Option<permission_editor::PermissionRequester>>>>,
+    client_catalog_reads: Rc<RefCell<usize>>,
+    fee_response: DeferredResponse<Vec<project::ProjectFeeBalance>>,
+    detail_view: Rc<RefCell<Option<project::ProjectDetailView>>>,
+    detail_view_requests: Rc<RefCell<Vec<Option<permission_editor::PermissionRequester>>>>,
+    detail_view_response: DeferredResponse<project::ProjectDetailView>,
+    tag_response: DeferredResponse<Vec<project::ProjectTagLink>>,
 }
 
 fn app(probe: Probe) -> Element {
@@ -382,7 +404,7 @@ async fn client_detail_distinguishes_unset_rate_from_known_zero_project_totals()
         .send(Ok(vec![server_fns::ProjectSpend {
             project_id: id,
             spent_minutes: 0,
-            spent_cents: 0,
+            spent_cents: Some(0),
         }]))
         .unwrap();
     settle(&mut dom);
@@ -699,7 +721,7 @@ async fn pending_or_failed_project_details_never_show_previous_metadata() {
     dom.rebuild_in_place();
     settle(&mut dom);
     assert!(dioxus::ssr::render(&dom).contains("CODE-1"));
-    assert!(dioxus::ssr::render(&dom).contains("Task hourly rate (EUR)"));
+    assert!(dioxus::ssr::render(&dom).contains("Edit project"));
     let (send, receive) = oneshot::channel();
     *probe.detail_response.borrow_mut() = Some(receive);
     let navigator = probe.navigator.borrow().unwrap();
@@ -720,9 +742,10 @@ async fn pending_or_failed_project_details_never_show_previous_metadata() {
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
     assert!(
-        html.contains("Metadata unavailable") && html.contains("Retry details"),
+        html.contains("Project details are unavailable") && html.contains("Retry details"),
         "{html}"
     );
+    assert!(!html.contains("Metadata unavailable"), "{html}");
     assert!(!html.contains("project-task-rate"), "{html}");
     assert!(!html.contains("Enable task"), "{html}");
     assert!(
@@ -759,7 +782,14 @@ async fn pending_or_failed_project_assignments_never_show_previous_assignments()
         .unwrap();
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
-    assert!(html.contains("Assignments unavailable"), "rendered: {html}");
+    assert!(
+        html.contains("Project details are unavailable"),
+        "rendered: {html}"
+    );
+    assert!(
+        !html.contains("Assignments unavailable"),
+        "rendered: {html}"
+    );
     assert!(!html.contains("User-101"), "rendered: {html}");
 
     dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
@@ -815,7 +845,7 @@ mod server_fns {
     pub struct ProjectSpend {
         pub project_id: Uuid,
         pub spent_minutes: i64,
-        pub spent_cents: i64,
+        pub spent_cents: Option<i64>,
     }
 
     fn user(id: u128, role: OrgRole) -> CurrentUser {
@@ -897,23 +927,10 @@ mod server_fns {
         panic!("navigation must not change client status");
     }
 
-    pub async fn list_users(_archived: bool) -> Result<Vec<user::UserListItem>, ServerFnError> {
-        Ok([101, 102]
-            .into_iter()
-            .map(|id| {
-                let user = user(id, OrgRole::Member);
-                user::UserListItem {
-                    id: user.id,
-                    name: user.name,
-                    email: user.email,
-                    org_role: user.org_role,
-                    active: true,
-                }
-            })
-            .collect())
-    }
-
-    pub async fn list_assignments(id: String) -> AssignmentResponse {
+    pub async fn list_assignments(
+        id: String,
+        _expected_requester: Option<permission_editor::PermissionRequester>,
+    ) -> AssignmentResponse {
         let id = Uuid::parse_str(&id).unwrap();
         let probe = consume_context::<Probe>();
         probe.assignment_requests.borrow_mut().push(id);
@@ -947,9 +964,6 @@ mod server_fns {
         }])
     }
 
-    pub async fn list_tasks() -> Result<Vec<Task>, ServerFnError> {
-        Ok(Vec::new())
-    }
     pub async fn list_projects(
         client: Option<String>,
         _archived: bool,
@@ -983,14 +997,54 @@ mod server_fns {
             created_at: chrono::DateTime::UNIX_EPOCH,
         }])
     }
-    pub async fn list_project_tags() -> Result<Vec<project::ProjectTagLink>, ServerFnError> {
+    pub async fn get_project_overview(
+        expected: Option<permission_editor::PermissionRequester>,
+    ) -> Result<project::ProjectOverview, ServerFnError> {
+        let probe = consume_context::<Probe>();
+        probe.overview_requests.borrow_mut().push(expected);
+        let response = probe.overview_response.borrow_mut().take();
+        if let Some(response) = response {
+            return response.await.unwrap();
+        }
+        Ok(probe
+            .overview
+            .borrow()
+            .clone()
+            .unwrap_or(project::ProjectOverview {
+                requester: permission_editor::PermissionRequester {
+                    org_id: Uuid::nil(),
+                    user_id: Uuid::from_u128(300),
+                },
+                canonical_permissions: false,
+                can_create: true,
+                can_import: true,
+                can_change_legacy_status: true,
+                projects: Vec::new(),
+            }))
+    }
+    pub async fn list_project_tags(
+        _expected: Option<permission_editor::PermissionRequester>,
+    ) -> Result<Vec<project::ProjectTagLink>, ServerFnError> {
+        let probe = consume_context::<Probe>();
+        probe.auxiliary_requesters.borrow_mut().push(_expected);
+        let response = probe.tag_response.borrow_mut().take();
+        if let Some(response) = response {
+            return response.await.unwrap();
+        }
         Ok(Vec::new())
     }
     pub async fn get_project_fee_balances(
         id: String,
         _from: String,
         _to: String,
+        _expected: Option<permission_editor::PermissionRequester>,
     ) -> Result<Vec<project::ProjectFeeBalance>, ServerFnError> {
+        let probe = consume_context::<Probe>();
+        probe.auxiliary_requesters.borrow_mut().push(_expected);
+        let response = probe.fee_response.borrow_mut().take();
+        if let Some(response) = response {
+            return response.await.expect("controlled fee response was dropped");
+        }
         let id = Uuid::parse_str(&id).unwrap();
         Ok(vec![project::ProjectFeeBalance {
             period_key: "single".into(),
@@ -1003,7 +1057,10 @@ mod server_fns {
             },
         }])
     }
-    pub async fn get_project_details(id: String) -> ProjectDetailsResponse {
+    pub async fn get_project_details(
+        id: String,
+        _expected: Option<permission_editor::PermissionRequester>,
+    ) -> ProjectDetailsResponse {
         let id = Uuid::parse_str(&id).unwrap();
         let probe = consume_context::<Probe>();
         probe.detail_requests.borrow_mut().push(id);
@@ -1024,7 +1081,55 @@ mod server_fns {
             admin_notes: None,
         })
     }
-    pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
+    pub async fn get_project_detail_view(
+        id: String,
+        expected: Option<permission_editor::PermissionRequester>,
+    ) -> Result<project::ProjectDetailView, ServerFnError> {
+        let probe = consume_context::<Probe>();
+        probe.detail_view_requests.borrow_mut().push(expected);
+        let response = probe.detail_view_response.borrow_mut().take();
+        if let Some(response) = response {
+            return response.await.unwrap();
+        }
+        if let Some(view) = probe.detail_view.borrow().clone() {
+            return Ok(view);
+        }
+        let project = get_project_details(id.clone(), expected).await?;
+        let team = list_assignments(id.clone(), expected)
+            .await?
+            .into_iter()
+            .map(|row| project::ProjectDetailIdentity {
+                id: row.user_id,
+                name: format!("User-{}", row.user_id.as_u128()),
+            })
+            .collect();
+        let tasks = list_project_tasks(id)
+            .await?
+            .into_iter()
+            .map(|row| project::ProjectDetailIdentity {
+                id: row.id,
+                name: row.name,
+            })
+            .collect();
+        Ok(project::ProjectDetailView {
+            requester: permission_editor::PermissionRequester {
+                org_id: Uuid::nil(),
+                user_id: Uuid::from_u128(300),
+            },
+            canonical_permissions: false,
+            project,
+            can_edit: true,
+            team,
+            tasks,
+        })
+    }
+    pub async fn list_project_spend(
+        _expected: Option<permission_editor::PermissionRequester>,
+    ) -> Result<Vec<ProjectSpend>, ServerFnError> {
+        consume_context::<Probe>()
+            .auxiliary_requesters
+            .borrow_mut()
+            .push(_expected);
         let response = consume_context::<Probe>()
             .project_spend_response
             .borrow_mut()
@@ -1034,44 +1139,29 @@ mod server_fns {
         }
         Ok(Vec::new())
     }
-    pub async fn list_project_budget_progress()
-    -> Result<Vec<crate::models::ProjectBudgetProgress>, ServerFnError> {
+    pub async fn list_project_budget_progress(
+        _expected: Option<permission_editor::PermissionRequester>,
+    ) -> Result<Vec<crate::models::ProjectBudgetOverview>, ServerFnError> {
+        consume_context::<Probe>()
+            .auxiliary_requesters
+            .borrow_mut()
+            .push(_expected);
         Ok(Vec::new())
     }
-    pub async fn set_project_active(_id: String, _active: bool) -> Result<(), ServerFnError> {
+    pub async fn set_project_active(
+        _id: String,
+        _active: bool,
+        _expected: Option<permission_editor::PermissionRequester>,
+    ) -> Result<(), ServerFnError> {
         panic!("unexpected mutation");
     }
     pub async fn set_projects_active(
         _ids: Vec<String>,
         _active: bool,
+        _expected: Option<permission_editor::PermissionRequester>,
     ) -> Result<Vec<Project>, ServerFnError> {
         panic!("unexpected mutation");
     }
-    pub async fn create_assignment(
-        _project: String,
-        _user: String,
-        _role: String,
-    ) -> Result<Assignment, ServerFnError> {
-        panic!("unexpected mutation");
-    }
-    pub async fn delete_assignment(_id: String) -> Result<(), ServerFnError> {
-        panic!("unexpected mutation");
-    }
-    pub async fn link_project_task(
-        _project: String,
-        _task: String,
-        _rate: Option<crate::project::ProjectTaskRate>,
-    ) -> Result<(), ServerFnError> {
-        panic!("unexpected mutation");
-    }
-    pub async fn create_task(
-        _name: String,
-        _billable: bool,
-        _project: Option<String>,
-    ) -> Result<Task, ServerFnError> {
-        panic!("unexpected mutation");
-    }
-
     pub async fn get_invoice(id: String) -> Result<InvoiceWithLines, ServerFnError> {
         let id = Uuid::parse_str(&id).unwrap();
         let probe = consume_context::<Probe>();
@@ -1109,6 +1199,7 @@ mod server_fns {
     }
 
     pub async fn list_clients(_archived: bool) -> Result<Vec<Client>, ServerFnError> {
+        *consume_context::<Probe>().client_catalog_reads.borrow_mut() += 1;
         Ok(Vec::new())
     }
 

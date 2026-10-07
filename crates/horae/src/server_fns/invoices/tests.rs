@@ -931,7 +931,10 @@ async fn configured_fixed_fee_hours_are_not_invoiced_but_legacy_fees_are_unchang
         .unwrap();
         if configured {
             assert!(invoice.unwrap_err().to_string().contains("No billable"));
-            assert_eq!((spend[0].spent_cents, report[0].billable_cents), (0, 0));
+            assert_eq!(
+                (spend[0].spent_cents, report[0].billable_cents),
+                (Some(0), 0)
+            );
             assert!(
                 sqlx::query_scalar!("SELECT invoice_id FROM time_entries WHERE id = $1", entry)
                     .fetch_one(&pool)
@@ -943,7 +946,7 @@ async fn configured_fixed_fee_hours_are_not_invoiced_but_legacy_fees_are_unchang
             assert_eq!(invoice.unwrap().invoice.total_cents, 6000);
             assert_eq!(
                 (spend[0].spent_cents, report[0].billable_cents),
-                (6000, 6000)
+                (Some(6000), 6000)
             );
         }
     }
@@ -1119,7 +1122,7 @@ async fn selected_project_rate_modes_agree_across_billing_consumers(pool: PgPool
                 invoice.invoice.total_cents,
                 invoice.lines[0].rate_cents
             ),
-            (expected, expected, expected, Some(expected)),
+            (expected, Some(expected), expected, Some(expected)),
             "selected mode: {mode}; task={task:?}, assignment={assignment:?}, project={project:?}",
         );
     }
@@ -1183,7 +1186,7 @@ async fn billing_cascade_agrees_across_all_four_levels_including_zero(pool: PgPo
                 invoice.invoice.total_cents,
                 invoice.lines[0].rate_cents
             ),
-            (expected, expected, expected, Some(expected)),
+            (expected, Some(expected), expected, Some(expected)),
             "rates: {task:?}, {assignment:?}, {project:?}, {user:?}",
         );
     }
@@ -1226,7 +1229,7 @@ async fn project_rate_is_used_by_invoices_reports_and_spend(pool: PgPool) {
     let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
         .await
         .unwrap();
-    assert_eq!(spend[0].spent_cents, 6000);
+    assert_eq!(spend[0].spent_cents, Some(6000));
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -1264,7 +1267,7 @@ async fn invoiced_amounts_survive_rate_changes_and_void_uses_current_rates(pool:
     let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
         .await
         .unwrap();
-    assert_eq!(spend[0].spent_cents, invoice.invoice.total_cents);
+    assert_eq!(spend[0].spent_cents, Some(invoice.invoice.total_cents));
     transition_invoice(
         &pool,
         ids.org_id,
@@ -1282,7 +1285,8 @@ async fn invoiced_amounts_survive_rate_changes_and_void_uses_current_rates(pool:
         .await
         .unwrap();
     assert_eq!(
-        spend[0].spent_cents, 6000,
+        spend[0].spent_cents,
+        Some(6000),
         "the old void invoice must not duplicate spend"
     );
 }
@@ -1331,7 +1335,10 @@ async fn non_billable_context_produces_no_unbilled_amount_on_any_report(pool: Pg
             crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
                 .await
                 .unwrap();
-        assert_eq!((spend[0].spent_minutes, spend[0].spent_cents), (60, 0));
+        assert_eq!(
+            (spend[0].spent_minutes, spend[0].spent_cents),
+            (60, Some(0))
+        );
         let detail = crate::reports::fetch_entries(
             &pool,
             ids.org_id,
@@ -1485,7 +1492,7 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
             report[0].billable_cents,
             spend[0].spent_cents
         ),
-        (i64::MAX, i64::MAX, i64::MAX, i64::MAX)
+        (i64::MAX, i64::MAX, i64::MAX, Some(i64::MAX))
     );
 
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -1502,12 +1509,15 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
         crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
             .await
             .unwrap_err();
-    for error in [report_error, spend_error] {
-        assert_eq!(
-            error.as_database_error().unwrap().code().as_deref(),
-            Some("22003")
-        );
-    }
+    assert_eq!(
+        report_error.as_database_error().unwrap().code().as_deref(),
+        Some("22003")
+    );
+    assert!(
+        matches!(spend_error, ServerFnError::ServerError { code: INTERNAL_ERROR, ref message, .. }
+        if message.contains("bigint out of range")),
+        "{spend_error:?}"
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -1651,7 +1661,10 @@ async fn assert_reporting_minutes(
         .await
         .unwrap();
     assert_eq!(spend.len(), 1);
-    assert_eq!((spend[0].spent_minutes, spend[0].spent_cents), (16, cents));
+    assert_eq!(
+        (spend[0].spent_minutes, spend[0].spent_cents),
+        (16, Some(cents))
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]

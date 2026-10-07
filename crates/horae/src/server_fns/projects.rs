@@ -3,14 +3,28 @@
 use super::*;
 #[cfg(feature = "server")]
 use crate::db::{OrganizationLock, lock_organization};
-use crate::models::project::ProjectFeeBalance;
+use crate::models::permission_editor::PermissionRequester;
+use crate::models::project::{ProjectFeeBalance, ProjectOverview};
+#[cfg(feature = "server")]
+use crate::models::project::{ProjectOverviewClient, ProjectOverviewRow};
 use crate::models::{ProjectDetails, ProjectTagLink, ProjectTaskRate};
+
+mod detail_view;
+pub use detail_view::get_project_detail_view;
+
+#[cfg(feature = "server")]
+pub(super) mod read_access;
+#[cfg(feature = "server")]
+use horae_core::permissions::catalog::Permission;
 
 #[cfg(all(test, feature = "server"))]
 mod tests;
 
 #[cfg(all(test, feature = "server"))]
 mod privacy_tests;
+
+#[cfg(all(test, feature = "server"))]
+mod canonical_read_tests;
 
 #[cfg(all(test, feature = "server"))]
 mod details_tests;
@@ -31,8 +45,10 @@ pub async fn get_project_fee_balances(
     project_id: String,
     period_from: String,
     period_to: String,
+    expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectFeeBalance>, ServerFnError> {
     let viewer = require_manager().await?;
+    project_requester(&viewer, expected_requester)?;
     let state = crate::state::global_state().await;
     fetch_project_fee_balances(
         &state.db,
@@ -102,13 +118,16 @@ pub(super) async fn fetch_project_fee_balances(
 }
 
 #[server]
-pub async fn get_project_details(project_id: String) -> Result<ProjectDetails, ServerFnError> {
+pub async fn get_project_details(
+    project_id: String,
+    expected_requester: Option<PermissionRequester>,
+) -> Result<ProjectDetails, ServerFnError> {
     let viewer = require_user().await?;
+    project_requester(&viewer, expected_requester)?;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let state = crate::state::global_state().await;
     fetch_project_details(&state.db, viewer.org_id, viewer.id, project_id)
-        .await
-        .map_err(server_err)?
+        .await?
         .ok_or_else(|| not_found("Project not found"))
 }
 
@@ -118,11 +137,29 @@ async fn fetch_project_details(
     org_id: uuid::Uuid,
     viewer_id: uuid::Uuid,
     project_id: uuid::Uuid,
-) -> Result<Option<ProjectDetails>, sqlx::Error> {
+) -> Result<Option<ProjectDetails>, ServerFnError> {
+    let Some(mut access) = read_access::ReadAccess::begin(pool, org_id, viewer_id).await? else {
+        return Ok(None);
+    };
+    let details =
+        project_details_in_transaction(&mut access, org_id, viewer_id, project_id).await?;
+    access.tx.commit().await.map_err(server_err)?;
+    Ok(details)
+}
+
+#[cfg(feature = "server")]
+async fn project_details_in_transaction(
+    access: &mut read_access::ReadAccess<'_>,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+) -> Result<Option<ProjectDetails>, ServerFnError> {
     sqlx::query_as!(
         ProjectDetails,
         r#"SELECT p.id, p.name, p.code, c.name AS client_name, p.currency,
-            CASE WHEN u.org_role IN ('admin', 'manager')
+            CASE WHEN (CASE WHEN $4 THEN u.org_role IN ('admin', 'manager')
+              ELSE ($8 OR ($9 AND management.id IS NOT NULL))
+                AND ($10 OR ($11 AND management.id IS NOT NULL)) END)
               AND p.project_type <> 'non_billable'
               AND (settings.project_id IS NULL
                 OR (p.project_type = 'time_and_materials' AND settings.rate_mode = 'task'))
@@ -133,29 +170,46 @@ async fn fetch_project_details(
                 JOIN project_tags t ON t.id = l.tag_id AND t.org_id = l.org_id
                 WHERE l.project_id = p.id AND l.org_id = p.org_id
                 ORDER BY lower(t.name), t.id) as "tags!",
-            CASE WHEN u.org_role = 'admin' THEN private.admin_notes END AS admin_notes
+            CASE WHEN (CASE WHEN $4 THEN u.org_role = 'admin' ELSE $7 END)
+              THEN private.admin_notes END AS admin_notes
         FROM projects p
         JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
-        JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id
-        JOIN users u ON u.id = a.user_id AND u.org_id = a.org_id
+        JOIN users u ON u.id = $2 AND u.org_id = p.org_id AND u.active
+        LEFT JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id AND a.user_id = u.id
+        LEFT JOIN project_management_assignments management ON management.org_id = p.org_id
+          AND management.project_id = p.id AND management.manager_id = u.id
+        LEFT JOIN assignments member ON member.project_id = p.id AND member.user_id = u.id
         LEFT JOIN project_private_settings private ON private.project_id = p.id AND private.org_id = p.org_id
         LEFT JOIN project_settings settings ON settings.project_id = p.id AND settings.org_id = p.org_id
-        WHERE p.org_id = $1 AND a.user_id = $2 AND p.id = $3 AND a.can_view_progress"#,
+        WHERE p.org_id = $1 AND p.id = $3
+          AND CASE WHEN $4 THEN COALESCE(a.can_view_progress, false)
+            ELSE $5 OR ($6 AND management.id IS NOT NULL)
+              OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members') = 'project_members') END"#,
         org_id,
         viewer_id,
         project_id,
+        access.legacy(),
+        access.has(Permission::ProjectReadAll),
+        access.has(Permission::ProjectReadManaged),
+        access.administrator(),
+        access.has(Permission::ProjectWriteAll),
+        access.has(Permission::ProjectWriteManaged),
+        access.has(Permission::BillableRateWriteAll),
+        access.has(Permission::BillableRateWriteManaged),
     )
-    .fetch_optional(pool)
+    .fetch_optional(&mut *access.tx)
     .await
+    .map_err(server_err)
 }
 
 #[server]
-pub async fn list_project_tags() -> Result<Vec<ProjectTagLink>, ServerFnError> {
+pub async fn list_project_tags(
+    expected_requester: Option<PermissionRequester>,
+) -> Result<Vec<ProjectTagLink>, ServerFnError> {
     let viewer = require_user().await?;
+    project_requester(&viewer, expected_requester)?;
     let state = crate::state::global_state().await;
-    fetch_project_tags(&state.db, viewer.org_id, viewer.id)
-        .await
-        .map_err(server_err)
+    fetch_project_tags(&state.db, viewer.org_id, viewer.id).await
 }
 
 #[cfg(feature = "server")]
@@ -163,20 +217,38 @@ async fn fetch_project_tags(
     pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
     viewer_id: uuid::Uuid,
-) -> Result<Vec<ProjectTagLink>, sqlx::Error> {
-    sqlx::query_as!(
+) -> Result<Vec<ProjectTagLink>, ServerFnError> {
+    let Some(mut access) = read_access::ReadAccess::begin(pool, org_id, viewer_id).await? else {
+        return Ok(Vec::new());
+    };
+    let tags = sqlx::query_as!(
         ProjectTagLink,
         r#"SELECT l.project_id, l.tag_id, t.name
         FROM project_tag_links l
         JOIN project_tags t ON t.id = l.tag_id AND t.org_id = l.org_id
-        JOIN project_read_access a ON a.project_id = l.project_id AND a.org_id = l.org_id
-        WHERE l.org_id = $1 AND a.user_id = $2 AND a.can_view_progress
+        JOIN projects p ON p.id = l.project_id AND p.org_id = l.org_id
+        LEFT JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
+        LEFT JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id AND a.user_id = $2
+        LEFT JOIN project_management_assignments management ON management.org_id = p.org_id
+          AND management.project_id = p.id AND management.manager_id = $2
+        LEFT JOIN assignments member ON member.project_id = p.id AND member.user_id = $2
+        LEFT JOIN project_settings settings ON settings.project_id = p.id AND settings.org_id = p.org_id
+        WHERE l.org_id = $1 AND ($3 OR c.id IS NOT NULL)
+          AND CASE WHEN $3 THEN COALESCE(a.can_view_progress, false)
+          ELSE $4 OR ($5 AND management.id IS NOT NULL)
+            OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members') = 'project_members') END
         ORDER BY lower(t.name), t.id, l.project_id"#,
         org_id,
         viewer_id,
+        access.legacy(),
+        access.has(Permission::ProjectReadAll),
+        access.has(Permission::ProjectReadManaged),
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *access.tx)
     .await
+    .map_err(server_err)?;
+    access.tx.commit().await.map_err(server_err)?;
+    Ok(tags)
 }
 
 #[cfg(feature = "server")]
@@ -191,6 +263,73 @@ fn parse_project_rate(value: &str) -> Result<Option<i64>, ServerFnError> {
         return Err(conflict("Rate cannot be negative"));
     }
     Ok(Some(cents))
+}
+
+/// Load overview rows and labels without requiring an unrelated client directory grant.
+#[server]
+pub async fn get_project_overview(
+    expected_requester: Option<PermissionRequester>,
+) -> Result<ProjectOverview, ServerFnError> {
+    let user = require_user().await?;
+    let state = crate::state::global_state().await;
+    fetch_project_overview(&state.db, &user, expected_requester).await
+}
+
+#[cfg(feature = "server")]
+async fn fetch_project_overview(
+    pool: &sqlx::PgPool,
+    viewer: &User,
+    expected_requester: Option<PermissionRequester>,
+) -> Result<ProjectOverview, ServerFnError> {
+    let requester = project_requester(viewer, expected_requester)?;
+    let mut access = read_access::ReadAccess::begin(pool, viewer.org_id, viewer.id)
+        .await?
+        .ok_or_else(|| forbidden("Current project access is required"))?;
+    let canonical_permissions = !access.legacy();
+    let role = sqlx::query_scalar!(
+        r#"SELECT org_role as "org_role: OrgRole" FROM users WHERE org_id=$1 AND id=$2"#,
+        viewer.org_id,
+        viewer.id,
+    )
+    .fetch_one(&mut *access.tx)
+    .await
+    .map_err(server_err)?;
+    let can_create = if canonical_permissions {
+        access.has(Permission::ProjectCreateAll)
+    } else {
+        role.is_manager_or_above()
+    };
+    let can_import = if canonical_permissions {
+        access.administrator()
+    } else {
+        role == OrgRole::Admin
+    };
+    let can_change_legacy_status = !canonical_permissions && role.is_manager_or_above();
+    let projects = project_rows(&mut access, viewer, None, true, ProjectRead::Overview).await?;
+    access.tx.commit().await.map_err(server_err)?;
+    Ok(ProjectOverview {
+        requester,
+        canonical_permissions,
+        can_create,
+        can_import,
+        can_change_legacy_status,
+        projects,
+    })
+}
+
+#[cfg(feature = "server")]
+fn project_requester(
+    viewer: &User,
+    expected_requester: Option<PermissionRequester>,
+) -> Result<PermissionRequester, ServerFnError> {
+    let requester = PermissionRequester {
+        org_id: viewer.org_id,
+        user_id: viewer.id,
+    };
+    if expected_requester.is_some_and(|expected| expected != requester) {
+        return Err(forbidden("Project requester has changed"));
+    }
+    Ok(requester)
 }
 
 #[server]
@@ -234,34 +373,108 @@ async fn projects_for_viewer(
     include_inactive: bool,
     purpose: ProjectRead,
 ) -> Result<Vec<Project>, ServerFnError> {
-    let overview = matches!(purpose, ProjectRead::Overview);
+    let Some(mut access) = read_access::ReadAccess::begin(pool, viewer.org_id, viewer.id).await?
+    else {
+        return Ok(Vec::new());
+    };
+    let rows = project_rows(&mut access, viewer, client_id, include_inactive, purpose).await?;
+    access.tx.commit().await.map_err(server_err)?;
+    Ok(rows.into_iter().map(|row| row.project).collect())
+}
 
-    let projects = sqlx::query_as!(
-        Project,
+#[cfg(feature = "server")]
+async fn project_rows(
+    access: &mut read_access::ReadAccess<'_>,
+    viewer: &User,
+    client_id: Option<uuid::Uuid>,
+    include_inactive: bool,
+    purpose: ProjectRead,
+) -> Result<Vec<ProjectOverviewRow>, ServerFnError> {
+    let overview = matches!(purpose, ProjectRead::Overview);
+    let projects = sqlx::query!(
         r#"SELECT p.id, p.org_id, p.client_id, p.code, p.name,
                 p.project_type as "project_type: ProjectType", p.currency,
-                CASE WHEN $4 AND a.can_view_rates THEN p.rate_cents END AS rate_cents,
+                CASE WHEN $4 AND (CASE WHEN $6 THEN a.can_view_rates
+                    ELSE $9 OR ($10 AND management.id IS NOT NULL) END)
+                  THEN p.rate_cents END AS rate_cents,
                 p.starts_on as "starts_on: chrono::NaiveDate",
                 p.ends_on as "ends_on: chrono::NaiveDate",
-                CASE WHEN $4 AND a.can_view_progress THEN p.budget_kind ELSE 'none'::budget_kind END as "budget_kind!: BudgetKind",
-                CASE WHEN $4 AND a.can_view_progress THEN p.budget_amount_cents END AS budget_amount_cents,
-                CASE WHEN $4 AND a.can_view_progress THEN p.budget_minutes END AS budget_minutes,
-                p.active, p.created_at as "created_at: chrono::DateTime<chrono::Utc>"
-         FROM projects p JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id
-         WHERE p.org_id = $2 AND ($1::bool OR p.active) AND a.user_id = $3
-           AND (NOT $4 OR a.can_view_progress) AND ($5::uuid IS NULL OR p.client_id = $5)
+                CASE WHEN $4 THEN p.budget_kind ELSE 'none'::budget_kind END as "budget_kind!: BudgetKind",
+                CASE WHEN $4 AND (CASE WHEN $6 THEN a.can_view_progress
+                    ELSE $9 OR ($10 AND management.id IS NOT NULL) END)
+                  THEN p.budget_amount_cents END AS budget_amount_cents,
+                CASE WHEN $4 AND ($6 OR p.budget_kind = 'hours') THEN p.budget_minutes END AS budget_minutes,
+                p.active, p.created_at as "created_at: chrono::DateTime<chrono::Utc>",
+                CASE WHEN $4 THEN c.name END AS client_name,
+                CASE WHEN $4 THEN c.active END AS client_active,
+                ($4 AND CASE WHEN $6 THEN u.org_role IN ('admin', 'manager')
+                  ELSE $12 OR ($13 AND management.id IS NOT NULL) END) AS "can_edit!"
+         FROM projects p
+         JOIN users u ON u.org_id = p.org_id AND u.id = $3 AND u.active
+         LEFT JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
+         LEFT JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id AND a.user_id = $3
+         LEFT JOIN project_management_assignments management ON management.org_id = p.org_id
+           AND management.project_id = p.id AND management.manager_id = $3
+         LEFT JOIN assignments member ON member.project_id = p.id AND member.user_id = $3
+         LEFT JOIN project_settings settings ON settings.project_id = p.id AND settings.org_id = p.org_id
+         WHERE p.org_id = $2 AND ($6 OR c.id IS NOT NULL)
+           AND ($1::bool OR p.active) AND ($5::uuid IS NULL OR p.client_id = $5)
+           AND CASE WHEN $6 THEN a.user_id IS NOT NULL AND (NOT $4 OR a.can_view_progress)
+             WHEN $4 THEN $7 OR ($8 AND management.id IS NOT NULL)
+               OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members') = 'project_members')
+             ELSE member.id IS NOT NULL OR $11 OR EXISTS (
+               SELECT 1 FROM time_entries te WHERE te.org_id = p.org_id
+                 AND te.project_id = p.id AND te.user_id = $3) END
          ORDER BY p.name, p.id"#,
         include_inactive,
         viewer.org_id,
         viewer.id,
         overview,
         client_id,
+        access.legacy(),
+        access.has(Permission::ProjectReadAll),
+        access.has(Permission::ProjectReadManaged),
+        access.has(Permission::BillableRateReadAll),
+        access.has(Permission::BillableRateReadManaged),
+        access.administrator(),
+        access.has(Permission::ProjectWriteAll),
+        access.has(Permission::ProjectWriteManaged),
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *access.tx)
     .await
     .map_err(server_err)?;
 
-    Ok(projects)
+    Ok(projects
+        .into_iter()
+        .map(|row| ProjectOverviewRow {
+            client: match (row.client_name, row.client_active) {
+                (Some(name), Some(active)) => Some(ProjectOverviewClient {
+                    id: row.client_id,
+                    name,
+                    active,
+                }),
+                _ => None,
+            },
+            can_edit: row.can_edit,
+            project: Project {
+                id: row.id,
+                org_id: row.org_id,
+                client_id: row.client_id,
+                code: row.code,
+                name: row.name,
+                project_type: row.project_type,
+                currency: row.currency,
+                rate_cents: row.rate_cents,
+                starts_on: row.starts_on,
+                ends_on: row.ends_on,
+                budget_kind: row.budget_kind,
+                budget_amount_cents: row.budget_amount_cents,
+                budget_minutes: row.budget_minutes,
+                active: row.active,
+                created_at: row.created_at,
+            },
+        })
+        .collect())
 }
 
 /// Per-project tracked totals for the overview's Spent column: every project's
@@ -269,31 +482,32 @@ async fn projects_for_viewer(
 /// through the FR-024 cascade (task → assignment → project → user default) and summed.
 /// Only projects whose progress the viewer may read; never per-user time or rates.
 #[server]
-pub async fn list_project_spend() -> Result<Vec<ProjectSpend>, ServerFnError> {
+pub async fn list_project_spend(
+    expected_requester: Option<PermissionRequester>,
+) -> Result<Vec<ProjectSpend>, ServerFnError> {
     let user = require_user().await?;
+    project_requester(&user, expected_requester)?;
     let state = crate::state::global_state().await;
 
-    fetch_project_spend(&state.db, user.org_id, user.id)
-        .await
-        .map_err(server_err)
+    fetch_project_spend(&state.db, user.org_id, user.id).await
 }
 
 /// Configured budgets use their own period and scope; tracked totals remain
 /// available separately through `list_project_spend`.
 #[server]
-pub async fn list_project_budget_progress()
--> Result<Vec<crate::models::ProjectBudgetProgress>, ServerFnError> {
+pub async fn list_project_budget_progress(
+    expected_requester: Option<PermissionRequester>,
+) -> Result<Vec<crate::models::ProjectBudgetOverview>, ServerFnError> {
     let user = require_user().await?;
+    project_requester(&user, expected_requester)?;
     let state = crate::state::global_state().await;
-    let mut connection = state.db.acquire().await.map_err(server_err)?;
     super::budgets::progress_for_viewer(
-        &mut connection,
+        &state.db,
         user.org_id,
         user.id,
         chrono::Utc::now().date_naive(),
     )
     .await
-    .map_err(server_err)
 }
 
 #[cfg(feature = "server")]
@@ -301,7 +515,10 @@ pub(super) async fn fetch_project_spend(
     pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
     viewer_id: uuid::Uuid,
-) -> Result<Vec<ProjectSpend>, sqlx::Error> {
+) -> Result<Vec<ProjectSpend>, ServerFnError> {
+    let Some(mut access) = read_access::ReadAccess::begin(pool, org_id, viewer_id).await? else {
+        return Ok(Vec::new());
+    };
     // Grouped in Postgres, not folded here: the overview needs one number per
     // project, and folding in Rust meant fetching one row per time entry to get
     // there. SQL rate resolution preserves legacy precedence for projects
@@ -310,38 +527,66 @@ pub(super) async fn fetch_project_spend(
     // tasks, assignments, and invoice lines each have a unique pair key.
     let spend = sqlx::query_as!(
         ProjectSpend,
-        r#"SELECT
-             te.project_id as "project_id!",
-             SUM(te.minutes)::bigint as "spent_minutes!",
-             COALESCE(SUM(COALESCE(line.amount_cents, line_amount_cents(
+        r#"WITH visible AS (
+             SELECT p.*,
+               CASE WHEN $3 THEN COALESCE(legacy.can_view_progress, false)
+                 ELSE $6 OR ($7 AND management.id IS NOT NULL) END AS can_view_money
+             FROM projects p
+             JOIN clients parent ON parent.id=p.client_id AND parent.org_id=p.org_id
+             LEFT JOIN project_read_access legacy ON legacy.org_id=p.org_id
+               AND legacy.project_id=p.id AND legacy.user_id=$2
+             LEFT JOIN project_management_assignments management ON management.org_id=p.org_id
+               AND management.project_id=p.id AND management.manager_id=$2
+             LEFT JOIN assignments member ON member.project_id=p.id AND member.user_id=$2
+             LEFT JOIN project_settings settings ON settings.org_id=p.org_id AND settings.project_id=p.id
+             WHERE p.org_id=$1 AND CASE WHEN $3 THEN COALESCE(legacy.can_view_progress, false)
+               ELSE $4 OR ($5 AND management.id IS NOT NULL)
+                 OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members')='project_members') END
+           ), entries AS (
+             SELECT p.id AS project_id, te.minutes,
+               CASE WHEN p.can_view_money AND te.billable
+                 AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable'
+                   AND COALESCE(pt.billable, t.billable_default)))
+               THEN COALESCE(line.amount_cents, line_amount_cents(
                  COALESCE(CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
                    THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
                    CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
                    CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
                  ) END, 0),
                  effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)
-               ))) FILTER (WHERE (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default))))), 0)::bigint as "spent_cents!"
-           FROM time_entries te
-           JOIN projects p ON p.id = te.project_id
-           JOIN clients c ON c.id = p.client_id
-           LEFT JOIN project_settings ps ON ps.project_id = p.id
-           JOIN tasks t ON t.id = te.task_id
+               )) END AS amount_cents
+           FROM visible p
+           JOIN time_entries te ON te.project_id=p.id AND te.org_id=p.org_id
+           JOIN clients c ON c.id = p.client_id AND c.org_id=te.org_id
+           LEFT JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id=te.org_id
+           JOIN tasks t ON t.id = te.task_id AND t.org_id=te.org_id
            LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
            LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
-           LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
-           JOIN users u ON u.id = te.user_id
+           LEFT JOIN invoices invoice ON invoice.id=te.invoice_id AND invoice.org_id=te.org_id
+           LEFT JOIN invoice_line_items line ON line.invoice_id = invoice.id AND line.time_entry_id = te.id
+           JOIN users u ON u.id = te.user_id AND u.org_id=te.org_id
            JOIN organizations o ON o.id = te.org_id
-           WHERE te.org_id = $1 AND EXISTS (
-             SELECT 1 FROM project_read_access access
-             WHERE access.org_id = $1 AND access.project_id = te.project_id
-               AND access.user_id = $2 AND access.can_view_progress)
-           GROUP BY te.project_id"#,
+           WHERE te.invoice_id IS NULL OR invoice.id IS NOT NULL
+           )
+           SELECT p.id AS "project_id!",
+             COALESCE(SUM(e.minutes),0)::bigint AS "spent_minutes!",
+             CASE WHEN p.can_view_money THEN COALESCE(SUM(e.amount_cents),0)::bigint END AS "spent_cents?"
+           FROM visible p LEFT JOIN entries e ON e.project_id=p.id
+           GROUP BY p.id,p.can_view_money
+           ORDER BY p.id"#,
         org_id,
         viewer_id,
+        access.legacy(),
+        access.has(Permission::ProjectReadAll),
+        access.has(Permission::ProjectReadManaged),
+        access.has(Permission::BillableRateReadAll),
+        access.has(Permission::BillableRateReadManaged),
     )
-    .fetch_all(pool)
-    .await?;
+    .fetch_all(&mut *access.tx)
+    .await
+    .map_err(server_err)?;
 
+    access.tx.commit().await.map_err(server_err)?;
     Ok(spend)
 }
 
@@ -351,8 +596,10 @@ pub(super) async fn fetch_project_spend(
 pub async fn set_project_active(
     project_id: String,
     active: bool,
+    expected_requester: Option<PermissionRequester>,
 ) -> Result<Project, ServerFnError> {
     let manager = require_manager().await?;
+    project_requester(&manager, expected_requester)?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let (project, transition) =
@@ -366,8 +613,10 @@ pub async fn set_project_active(
 pub async fn set_projects_active(
     project_ids: Vec<String>,
     active: bool,
+    expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<Project>, ServerFnError> {
     let manager = require_manager().await?;
+    project_requester(&manager, expected_requester)?;
     let ids = parse_bulk_project_ids(&project_ids)?;
     let state = crate::state::global_state().await;
     let results = set_projects_active_records(&state.db, manager.org_id, &ids, active).await?;
@@ -944,8 +1193,12 @@ async fn enable_project_task(
 // ── Assignments ─────────────────────────────────────────────────────────────
 
 #[server]
-pub async fn list_assignments(project_id: String) -> Result<Vec<Assignment>, ServerFnError> {
+pub async fn list_assignments(
+    project_id: String,
+    expected_requester: Option<PermissionRequester>,
+) -> Result<Vec<Assignment>, ServerFnError> {
     let viewer = require_user().await?;
+    project_requester(&viewer, expected_requester)?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     assignments_for_viewer(&state.db, &viewer, project_id).await
@@ -957,20 +1210,49 @@ async fn assignments_for_viewer(
     viewer: &User,
     project_id: uuid::Uuid,
 ) -> Result<Vec<Assignment>, ServerFnError> {
+    let Some(mut access) = read_access::ReadAccess::begin(db, viewer.org_id, viewer.id).await?
+    else {
+        return Ok(Vec::new());
+    };
+    let team = assignment_rows(&mut access, viewer, project_id).await?;
+    access.tx.commit().await.map_err(server_err)?;
+    Ok(team)
+}
+
+#[cfg(feature = "server")]
+async fn assignment_rows(
+    access: &mut read_access::ReadAccess<'_>,
+    viewer: &User,
+    project_id: uuid::Uuid,
+) -> Result<Vec<Assignment>, ServerFnError> {
     sqlx::query_as!(
         Assignment,
         r#"SELECT a.id, a.project_id, a.user_id, a.role as "role: ProjectRole",
-                CASE WHEN access.can_view_rates THEN a.rate_cents ELSE NULL END AS rate_cents,
+                CASE WHEN (CASE WHEN $4 THEN legacy.can_view_rates
+                    ELSE $7 OR ($8 AND management.id IS NOT NULL) END)
+                  THEN a.rate_cents END AS rate_cents,
                 a.created_at as "created_at: chrono::DateTime<chrono::Utc>"
          FROM assignments a JOIN projects p ON p.id = a.project_id
-         JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id
-         WHERE a.project_id = $1 AND p.org_id = $2 AND access.user_id = $3 AND access.can_view_team
+         JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
+         JOIN users member ON member.id = a.user_id AND member.org_id = p.org_id
+         LEFT JOIN project_read_access legacy ON legacy.project_id = p.id
+           AND legacy.org_id = p.org_id AND legacy.user_id = $3
+         LEFT JOIN project_management_assignments management ON management.org_id = p.org_id
+           AND management.project_id = p.id AND management.manager_id = $3
+         WHERE a.project_id = $1 AND p.org_id = $2
+           AND CASE WHEN $4 THEN COALESCE(legacy.can_view_team, false)
+             ELSE $5 OR ($6 AND management.id IS NOT NULL) OR a.user_id = $3 END
          ORDER BY a.created_at, a.id"#,
         project_id,
         viewer.org_id,
         viewer.id,
+        access.legacy(),
+        access.has(Permission::ProjectReadAll),
+        access.has(Permission::ProjectReadManaged),
+        access.has(Permission::BillableRateReadAll),
+        access.has(Permission::BillableRateReadManaged),
     )
-    .fetch_all(db)
+    .fetch_all(&mut *access.tx)
     .await
     .map_err(server_err)
 }

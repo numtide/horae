@@ -1,0 +1,159 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, p.org_id, p.client_id, p.code, p.name,\n                p.project_type as \"project_type: ProjectType\", p.currency,\n                CASE WHEN $4 AND (CASE WHEN $6 THEN a.can_view_rates\n                    ELSE $9 OR ($10 AND management.id IS NOT NULL) END)\n                  THEN p.rate_cents END AS rate_cents,\n                p.starts_on as \"starts_on: chrono::NaiveDate\",\n                p.ends_on as \"ends_on: chrono::NaiveDate\",\n                CASE WHEN $4 THEN p.budget_kind ELSE 'none'::budget_kind END as \"budget_kind!: BudgetKind\",\n                CASE WHEN $4 AND (CASE WHEN $6 THEN a.can_view_progress\n                    ELSE $9 OR ($10 AND management.id IS NOT NULL) END)\n                  THEN p.budget_amount_cents END AS budget_amount_cents,\n                CASE WHEN $4 AND ($6 OR p.budget_kind = 'hours') THEN p.budget_minutes END AS budget_minutes,\n                p.active, p.created_at as \"created_at: chrono::DateTime<chrono::Utc>\",\n                CASE WHEN $4 THEN c.name END AS client_name,\n                CASE WHEN $4 THEN c.active END AS client_active,\n                ($4 AND CASE WHEN $6 THEN u.org_role IN ('admin', 'manager')\n                  ELSE $12 OR ($13 AND management.id IS NOT NULL) END) AS \"can_edit!\"\n         FROM projects p\n         JOIN users u ON u.org_id = p.org_id AND u.id = $3 AND u.active\n         LEFT JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id\n         LEFT JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id AND a.user_id = $3\n         LEFT JOIN project_management_assignments management ON management.org_id = p.org_id\n           AND management.project_id = p.id AND management.manager_id = $3\n         LEFT JOIN assignments member ON member.project_id = p.id AND member.user_id = $3\n         LEFT JOIN project_settings settings ON settings.project_id = p.id AND settings.org_id = p.org_id\n         WHERE p.org_id = $2 AND ($6 OR c.id IS NOT NULL)\n           AND ($1::bool OR p.active) AND ($5::uuid IS NULL OR p.client_id = $5)\n           AND CASE WHEN $6 THEN a.user_id IS NOT NULL AND (NOT $4 OR a.can_view_progress)\n             WHEN $4 THEN $7 OR ($8 AND management.id IS NOT NULL)\n               OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members') = 'project_members')\n             ELSE member.id IS NOT NULL OR $11 OR EXISTS (\n               SELECT 1 FROM time_entries te WHERE te.org_id = p.org_id\n                 AND te.project_id = p.id AND te.user_id = $3) END\n         ORDER BY p.name, p.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "client_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "project_type: ProjectType",
+        "type_info": {
+          "Custom": {
+            "name": "project_type",
+            "kind": {
+              "Enum": [
+                "time_and_materials",
+                "fixed_fee",
+                "non_billable",
+                "retainer"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "starts_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 9,
+        "name": "ends_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 10,
+        "name": "budget_kind!: BudgetKind",
+        "type_info": {
+          "Custom": {
+            "name": "budget_kind",
+            "kind": {
+              "Enum": [
+                "none",
+                "amount",
+                "hours"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "budget_amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 12,
+        "name": "budget_minutes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "client_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "client_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 17,
+        "name": "can_edit!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null,
+      true,
+      true,
+      null,
+      null,
+      null,
+      false,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "0b721cbeefa39470f7ed30f718b92315e3186302413fc9e5a8c07a96a1c9f5dd"
+}
