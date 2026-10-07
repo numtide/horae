@@ -37,7 +37,7 @@ let
   dummyMain = buildPkgs.writeText "horae-deps-main.rs" ''
     fn main() {
         #[cfg(feature = "web")]
-        dioxus::launch(|| dioxus::prelude::rsx! {});
+        dioxus::launch(dioxus::prelude::VNode::empty);
     }
   '';
   dummySrc = craneLib.mkDummySrc {
