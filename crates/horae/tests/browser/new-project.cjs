@@ -1188,6 +1188,11 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(createdRow.getByRole('progressbar')).toHaveAttribute('value', '0');
     await expect(createdRow).toContainText('120h');
     await expect(createdRow).toContainText('Total tracked: 0h');
+    // Earlier suites may create projects; resetting filters must restore this
+    // exact list, not assume that only the two seed projects precede this one.
+    const visibleProjects = () => page.locator('.proj-row .proj-namelink')
+      .evaluateAll(links => links.map(link => link.getAttribute('href')).sort());
+    const unfilteredProjects = await visibleProjects();
     await page.getByRole('checkbox', { name: 'Select all visible projects', exact: true }).click();
     await page.getByRole('button', { name: /^All tags/ }).click();
     await page.getByRole('menuitem', { name: 'browser', exact: true }).click();
@@ -1197,7 +1202,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await page.getByRole('textbox', { name: 'Search by project or client' }).fill('no matching project');
     await expect(page.getByRole('heading', { name: 'No projects match your filters', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Reset filters', exact: true }).click();
-    await expect(page.locator('.proj-row')).toHaveCount(3);
+    await expect(page.locator('.proj-row')).toHaveCount(unfilteredProjects.length);
+    await expect.poll(visibleProjects).toEqual(unfilteredProjects);
     await expect(page.getByRole('button', { name: /^All tags/ })).toBeVisible();
     await readsFinished(page);
     console.log('PASS: real finalized budget reaches the authorized Projects endpoint and display');
