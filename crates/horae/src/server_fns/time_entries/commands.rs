@@ -119,6 +119,7 @@ async fn choices(
            JOIN project_tasks pt ON pt.project_id=p.id
            JOIN tasks t ON t.id=pt.task_id AND t.org_id=u.org_id
            WHERE u.org_id=$1 AND u.id=$2 AND u.active AND p.active AND c.active AND t.active
+             AND ($5 OR pt.active)
              AND ($3 OR p.id=ANY($4))
              AND (($5 AND u.org_role='admin') OR EXISTS (
                  SELECT 1 FROM assignments a WHERE a.user_id=u.id AND a.project_id=p.id))

@@ -113,9 +113,16 @@ impl ParentSnapshot {
         )
         .execute(&mut *conn)
         .await?;
+        // Checkpoints predating link activity use the same policy-dependent
+        // initialization as a new imported link; explicit archived state survives.
         sqlx::query!(
-            "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
-             SELECT r.project_id, r.task_id, r.billable, r.rate_cents
+            "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents, active)
+             SELECT r.project_id, r.task_id, r.billable, r.rate_cents,
+               COALESCE(r.active, (
+                 SELECT o.permission_policy_version=0 OR (o.permission_policy_version=1 AND t.active)
+                 FROM tasks t JOIN organizations o ON o.id=t.org_id
+                 WHERE t.id=r.task_id AND o.id=$2
+               ))
              FROM jsonb_populate_recordset(NULL::project_tasks, $1) r
              WHERE (SELECT org_id FROM projects WHERE id = r.project_id) = $2
                AND (SELECT org_id FROM tasks WHERE id = r.task_id) = $2
@@ -132,6 +139,57 @@ impl ParentSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[sqlx::test]
+    async fn checkpoint_retains_link_activity_and_derives_missing_legacy_field(pool: sqlx::PgPool) {
+        let ids =
+            crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
+        for policy in [0, 1] {
+            sqlx::query!(
+                "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
+                ids.org_id,
+                policy
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            for global_active in [false, true] {
+                sqlx::query!(
+                    "UPDATE tasks SET active=$2 WHERE id=$1",
+                    ids.task_id,
+                    global_active
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+                let mut tx = pool.begin().await.unwrap();
+                sqlx::query!("INSERT INTO project_tasks (project_id,task_id,billable,rate_cents,active) VALUES ($1,$2,true,2500,false)", ids.project_id, ids.task_id)
+                    .execute(&mut *tx).await.unwrap();
+                let mut cache = RunCache::default();
+                cache.project_tasks.insert((ids.project_id, ids.task_id));
+                let mut snapshot = ParentSnapshot::capture(&mut tx, ids.org_id, &cache)
+                    .await
+                    .unwrap();
+                tx.rollback().await.unwrap();
+                for has_activity in [true, false] {
+                    if !has_activity {
+                        snapshot.project_tasks[0]
+                            .as_object_mut()
+                            .unwrap()
+                            .remove("active");
+                    }
+                    let mut tx = pool.begin().await.unwrap();
+                    snapshot.restore(&mut tx, ids.org_id).await.unwrap();
+                    let link = sqlx::query!("SELECT active, billable, rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2", ids.project_id, ids.task_id)
+                        .fetch_one(&mut *tx).await.unwrap();
+                    assert_eq!(link.active, !has_activity && (policy == 0 || global_active));
+                    assert!(link.billable);
+                    assert_eq!(link.rate_cents, Some(2500));
+                    tx.rollback().await.unwrap();
+                }
+            }
+        }
+    }
 
     #[sqlx::test]
     async fn checkpoint_restores_known_task_currency_and_keeps_old_currency_unknown(

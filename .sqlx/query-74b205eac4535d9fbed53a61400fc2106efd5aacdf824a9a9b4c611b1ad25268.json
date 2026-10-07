@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT t.id, t.name, t.active, t.billable_default, t.default_rate_cents, t.default_rate_currency\n         FROM tasks t JOIN project_tasks pt ON pt.task_id = t.id\n         WHERE pt.project_id = $1 AND t.org_id = $2 ORDER BY t.id",
+  "query": "SELECT t.id, t.name, t.active, pt.active AS link_active, t.billable_default, t.default_rate_cents, t.default_rate_currency\n         FROM tasks t JOIN project_tasks pt ON pt.task_id = t.id\n         WHERE pt.project_id = $1 AND t.org_id = $2 ORDER BY t.id",
   "describe": {
     "columns": [
       {
@@ -20,16 +20,21 @@
       },
       {
         "ordinal": 3,
-        "name": "billable_default",
+        "name": "link_active",
         "type_info": "Bool"
       },
       {
         "ordinal": 4,
+        "name": "billable_default",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
         "name": "default_rate_cents",
         "type_info": "Int8"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "default_rate_currency",
         "type_info": "Text"
       }
@@ -45,9 +50,10 @@
       false,
       false,
       false,
+      false,
       true,
       true
     ]
   },
-  "hash": "842375a58bc219385591fd6d2ab7d069c5ed902e4147b1495e9a56b92107a244"
+  "hash": "74b205eac4535d9fbed53a61400fc2106efd5aacdf824a9a9b4c611b1ad25268"
 }

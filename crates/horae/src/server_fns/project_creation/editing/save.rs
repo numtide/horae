@@ -61,7 +61,11 @@ pub(super) async fn save(
         });
     }
     super::protected::validate_intent(request)?;
-    if permissions.is_none() && (!request.unchanged.is_empty() || request.managers.is_some()) {
+    if permissions.is_none()
+        && (!request.unchanged.is_empty()
+            || request.managers.is_some()
+            || !request.task_activity.is_empty())
+    {
         return Err(err(
             BAD_REQUEST,
             "Protected-field intent requires the current permission policy",
@@ -95,7 +99,7 @@ pub(super) async fn save(
     } else {
         None
     };
-    let intent = if permissions.is_some() {
+    let mut intent = if permissions.is_some() {
         let mut unchanged = request.unchanged.clone();
         unchanged.sort_unstable();
         serde_json::json!({
@@ -107,6 +111,20 @@ pub(super) async fn save(
     } else {
         raw_payload
     };
+    if !request.task_activity.is_empty() {
+        let mut activity = request.task_activity.clone();
+        activity.sort_by_key(|edit| edit.task_id);
+        if activity
+            .windows(2)
+            .any(|pair| pair[0].task_id == pair[1].task_id)
+        {
+            return Err(err(
+                BAD_REQUEST,
+                "A task activity change may only be selected once",
+            ));
+        }
+        intent["task_activity"] = serde_json::to_value(activity).map_err(server_err)?;
+    }
     let revision = sqlx::query_scalar!(
         "SELECT edit_revision FROM projects WHERE id = $1 AND org_id = $2 FOR UPDATE",
         request.project_id,
@@ -323,6 +341,7 @@ pub(super) async fn save(
         ));
     }
     let parsed = validate_edit(&before, form, email_available)?;
+    super::task_activity::apply(&mut tx, org_id, &before, form, &request.task_activity).await?;
     let reset_task_default = before.configured
         && access.is_some()
         && (form.rate_mode == RateMode::Legacy

@@ -332,7 +332,7 @@ pub(super) async fn apply(
                     Rows::Entries(_) => bail!("API entries preceded catalog completion"),
                 }
                 checkpoint.download = batch.next;
-                let mut tx = begin_transaction(connection).await?;
+                let mut tx = begin_transaction(connection, org_id).await?;
                 checkpoint
                     .save(
                         &mut tx,
@@ -351,7 +351,7 @@ pub(super) async fn apply(
             .parent_offset
             .saturating_add(PARENT_BATCH)
             .min(checkpoint.parent_count());
-        let mut tx = begin_transaction(connection).await?;
+        let mut tx = begin_transaction(connection, org_id).await?;
         let mut batch = tx.begin().await?;
         if let Some(preview) = &checkpoint.preview {
             preview.restore(&mut batch, org_id, &[]).await?;
@@ -405,7 +405,7 @@ pub(super) async fn apply(
                         checkpoint.missing_timestamp = true;
                     }
                 }
-                let mut tx = begin_transaction(connection).await?;
+                let mut tx = begin_transaction(connection, org_id).await?;
                 let mut simulation = tx.begin().await?;
                 if let Some(preview) = &checkpoint.preview {
                     preview.restore(&mut simulation, org_id, &page_ids).await?;
@@ -443,7 +443,7 @@ pub(super) async fn apply(
             _ => bail!("unexpected API checkpoint message"),
         }
     }
-    let mut tx = begin_transaction(connection).await?;
+    let mut tx = begin_transaction(connection, org_id).await?;
     if checkpoint.report.mode == ImportMode::Commit
         && checkpoint.report.error_count() == 0
         && !checkpoint.missing_timestamp

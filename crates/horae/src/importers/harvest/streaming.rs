@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::{Context, bail};
 use chrono::{DateTime, Utc};
 use horae_core::importers::harvest::types::{EntityType, ImportMode, SourceKind};
-use sqlx::{Acquire, PgConnection, Postgres, Transaction, pool::PoolConnection};
+use sqlx::{PgConnection, Postgres, Transaction, pool::PoolConnection};
 use tokio::sync::{Mutex, mpsc};
 use uuid::Uuid;
 
@@ -221,7 +221,7 @@ async fn apply(
     let Some(Page::Catalog(catalog)) = pages.recv().await else {
         return Err(IncompleteDownload.into());
     };
-    let mut tx = begin_transaction(connection).await?;
+    let mut tx = begin_transaction(connection, org_id).await?;
     let org = OrgDefaults {
         org_id,
         default_currency: currency,
@@ -275,8 +275,9 @@ async fn apply(
 
 async fn begin_transaction(
     connection: &mut PgConnection,
+    org_id: Uuid,
 ) -> anyhow::Result<Transaction<'_, Postgres>> {
-    let mut tx = connection.begin().await?;
+    let mut tx = super::begin_import_transaction(connection, org_id).await?;
     // Fresh imports grow tables inside one transaction, before autovacuum can
     // analyze those rows. A plan cached against the initial tiny table can scan every
     // provenance row for each lookup. Re-plan only inside this import transaction.
@@ -291,7 +292,58 @@ mod tests {
     use super::*;
 
     #[sqlx::test(migrations = "./migrations")]
+    async fn import_batches_join_the_access_gate_before_resource_locks(pool: sqlx::PgPool) {
+        let ids =
+            crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
+        let mut connection = pool.acquire().await.unwrap();
+        let tx = begin_transaction(&mut connection, ids.org_id)
+            .await
+            .unwrap();
+        let mut access = pool.begin().await.unwrap();
+        let error = sqlx::query!(
+            "SELECT id FROM organizations WHERE id=$1 FOR NO KEY UPDATE NOWAIT",
+            ids.org_id
+        )
+        .fetch_one(&mut *access)
+        .await
+        .unwrap_err();
+        assert_eq!(
+            error.as_database_error().unwrap().code().as_deref(),
+            Some("55P03")
+        );
+        access.rollback().await.unwrap();
+        tx.commit().await.unwrap();
+
+        let mut access = pool.begin().await.unwrap();
+        crate::db::lock_organization(
+            &mut access,
+            ids.org_id,
+            crate::db::OrganizationLock::AccessChange,
+        )
+        .await
+        .unwrap();
+        let holder = sqlx::query_scalar!("SELECT pg_backend_pid()")
+            .fetch_one(&mut *access)
+            .await
+            .unwrap()
+            .unwrap();
+        let pending_pool = pool.clone();
+        let pending = tokio::spawn(async move {
+            let mut connection = pending_pool.acquire().await.unwrap();
+            let tx = begin_transaction(&mut connection, ids.org_id)
+                .await
+                .unwrap();
+            tx.commit().await.unwrap();
+        });
+        crate::server_fns::test_seed::wait_for_blocked(&pool, holder).await;
+        access.commit().await.unwrap();
+        pending.await.unwrap();
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
     async fn api_planning_policy_ends_with_the_transaction(pool: sqlx::PgPool) {
+        let ids =
+            crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
         let mut connection = pool.acquire().await.unwrap();
         connection.close_on_drop();
         sqlx::query!("SET plan_cache_mode = force_generic_plan")
@@ -299,7 +351,9 @@ mod tests {
             .await
             .unwrap();
         for mode in [ImportMode::Commit, ImportMode::DryRun] {
-            let mut tx = begin_transaction(&mut connection).await.unwrap();
+            let mut tx = begin_transaction(&mut connection, ids.org_id)
+                .await
+                .unwrap();
             let during =
                 sqlx::query_scalar!(r#"SELECT current_setting('plan_cache_mode') AS "mode!""#)
                     .fetch_one(&mut *tx)

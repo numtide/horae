@@ -221,6 +221,8 @@ pub struct EditableProject {
     pub client: CreationClient,
     pub selection: CreationSelection,
     pub inactive_task_ids: Vec<Uuid>,
+    #[serde(default)]
+    pub archived_task_ids: Vec<Uuid>,
     pub inactive_user_ids: Vec<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub access: Option<ProjectEditorAccess>,
@@ -261,6 +263,16 @@ pub struct ProjectEditRequest {
     /// Every other protected field is an explicit edit, including empty or zero.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unchanged: Vec<ProtectedProjectField>,
+    /// Only explicitly named links change activity; omission preserves it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub task_activity: Vec<ProjectTaskActivity>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectTaskActivity {
+    pub task_id: Uuid,
+    pub active: bool,
 }
 
 /// Complete delegation intent, independent of tracking membership.
