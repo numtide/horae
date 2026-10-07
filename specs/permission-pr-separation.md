@@ -103,7 +103,7 @@ implementation remains incomplete. Do not treat
 
 ## Current remote heads — 2026-10-07, inventory refresh
 
-Shared CI prerequisite, added after this58-extraction snapshot:
+Shared CI prerequisite, distinct from the58 original-work extractions:
 [#282](https://github.com/numtide/horae/pull/282), `test/import-recovery-checks`
 at `e39f033a`, is a draft over master containing only the two existing recovery
 test files. Fresh CI is pending. It is not another feature extraction. The
@@ -111,21 +111,21 @@ CSV fixture patch is now inherited by #224 from this base, not duplicated in its
 review delta. The two VM follow-ups remain in #270 pending its dependency refresh.
 
 This snapshot supersedes the commit/status labels in the historical delivery
-table below. All58 extraction PRs remain drafts; all remote heads match the local
-branches. After the #224 rebase, this table has16 successful heads,41 failed heads
-and1 new head in evaluation. Other rows retain the inventory snapshot. A success
+table below. All59 delivery PRs remain drafts; all remote heads match the local
+branches. The refreshed snapshot has15 successful heads,39 failed heads,1 running
+build and4 new heads without a build aggregate yet. A success
 is not completion of the cross-stack review; a failure is not necessarily a new
 functional defect. Failure classes and exact-head local evidence are recorded
 in the iteration sections. No PR is approved for merging by this inventory.
 
 | PR | Current head | Nixbot aggregate |
 | --- | --- | --- |
-| #219 | 94a5d606 | Failed |
-| #220 | ae152748 | Passed |
+| #219 | a936c129 | Awaiting fresh build result |
+| #220 | c2f587d6 | Awaiting fresh build result |
 | #221 | 7866b97f | Failed |
 | #222 | 23f258b7 | Failed |
-| #223 | 1dc4b6bc | Failed |
-| #224 | c374710a | Evaluating; previous head passed |
+| #223 | bc74af8d | Awaiting fresh build result |
+| #224 | c374710a | Awaiting fresh build result |
 | #225 | ac723cb6 | Failed |
 | #226 | 5a617c68 | Passed |
 | #227 | 25d75c4e | Failed |
@@ -178,8 +178,11 @@ in the iteration sections. No PR is approved for merging by this inventory.
 | #279 | 9fcc0a09 | Failed |
 | #280 | 24c5d0e1 | Failed |
 | #281 | cd8d1db7 | Passed |
+| #282 | e39f033a | Running |
 
-Direct-base ancestry is stale for five PRs: #226 lacks #222's six-line README
+#219/#220/#223/#224 now depend only on shared CI #282. Direct-base ancestry is
+stale for eight PRs: #221/#222/#232 need the updated shared-CI ancestors;
+#226 lacks #222's six-line README
 database-requirements note; #272 lacks the newer #270 cache/ARM test changes;
 #273/#281 lack #272's latest cache deletions; #275 lacks #273's latest cache
 deletion. This is not an exhaustive transitive-base audit: named integration
@@ -6581,3 +6584,40 @@ Next: collect the sole local gate and #282/#224 CI, then verify complete
 compositionefae7522. Continue the dependency refresh from its shared roots,
 retaining backups and proving expected trees before publishing. Do not modify
 the active-check worktree, start competing full builds or merge GitHub PRs.
+
+### Shared-root refresh — 2026-10-07
+
+Previous iteration made progress with #224's verified rebase. Updated the next
+three clean, single-commit roots onto #282e39f033a, with updateRefs disabled:
+
+| PR | Previous head | Published head | Functional patch |
+| --- | --- | --- | --- |
+| #219 | 94a5d606 | a936c129019bd7b90b7adb2b90ab34288f36a5c3 | Unchanged |
+| #220 | ae152748 | c2f587d6d3cf2bf52ccc37ef139dd1863fe0406e | Unchanged |
+| #223 | 1dc4b6bc | bc74af8d198704fe033f50353b08b2d0dec0dc29 | Unchanged |
+
+For each, range-diff reports an identical patch, its resulting tree equals the
+precomputed composition of old head and #282, all other files are byte-identical
+and the two CI files exactly equal #282. No manual conflict resolution or code
+rewrite was needed. Formatting21531/73103/50969 passed without changes.
+
+Recovery refs are under `backup/shared-ci-roots-20261007/`, using the three
+worktree basenames. Their complete-history bundle
+`.scratch/shared-ci-roots-20261007.bundle` verifies, SHA-256
+`2aea5850cefd26c7e98f19aa77498314e9d212dcdc00cd40dc03b8cbb0f17238`.
+Publication43969 used one atomic push with explicit old-SHA leases. All three
+PRs now target `test/import-recovery-checks`, remain draft, and describe earlier
+test results as historical. GitHub confirms each published head/base.
+
+Refreshed inventory62744 includes all59 deliveries and finds no local/remote
+head mismatch. It also explicitly identifies the newly stale direct children
+#221/#222/#232; their transitive composition bases are not yet reconciled.
+Do not treat those children as containing the shared repairs. Original-work
+conservation reports retain their recorded old input SHAs; the new snapshot is
+not an input-ancestry proof for the earlier local compositions.
+
+Local74548 remains live on frozen5c43f24a. Both builds, Clippy and browser checks
+completed; live-schema SQLx preparation is running. #282 CI remains pending.
+Next: collect74548, then verify complete compositionefae7522; continue the
+dependency-ordered refresh through #221/#222/#232 with the same preservation
+checks. No additional local full gate, GitHub merge or original-source edit.
