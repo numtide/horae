@@ -107,13 +107,13 @@ Shared CI prerequisite, added after this58-extraction snapshot:
 [#282](https://github.com/numtide/horae/pull/282), `test/import-recovery-checks`
 at `e39f033a`, is a draft over master containing only the two existing recovery
 test files. Fresh CI is pending. It is not another feature extraction. The
-three source patches remain in #224/#270 until the verified dependency refresh
-removes duplicate review deltas; no source branch has been rewritten yet.
+CSV fixture patch is now inherited by #224 from this base, not duplicated in its
+review delta. The two VM follow-ups remain in #270 pending its dependency refresh.
 
 This snapshot supersedes the commit/status labels in the historical delivery
 table below. All58 extraction PRs remain drafts; all remote heads match the local
-branches. After the exact-head #224/#270 completion refreshes, Nixbot reports17
-successes and41 failures. Other rows retain the inventory snapshot. A success
+branches. After the #224 rebase, this table has16 successful heads,41 failed heads
+and1 new head in evaluation. Other rows retain the inventory snapshot. A success
 is not completion of the cross-stack review; a failure is not necessarily a new
 functional defect. Failure classes and exact-head local evidence are recorded
 in the iteration sections. No PR is approved for merging by this inventory.
@@ -125,7 +125,7 @@ in the iteration sections. No PR is approved for merging by this inventory.
 | #221 | 7866b97f | Failed |
 | #222 | 23f258b7 | Failed |
 | #223 | 1dc4b6bc | Failed |
-| #224 | 2afe25e3 | Passed |
+| #224 | c374710a | Evaluating; previous head passed |
 | #225 | ac723cb6 | Failed |
 | #226 | 5a617c68 | Passed |
 | #227 | 25d75c4e | Failed |
@@ -6550,3 +6550,34 @@ Next: collect74548 and fresh #282 CI. After the sole local full gate ends, verif
 complete compositionefae7522. Use #282 as the bounded shared prerequisite when
 refreshing dependent branches, preserving explicit backups and avoiding blind
 reruns or counting old heads as new-head verification. No GitHub merges.
+
+### First delivery rebased onto shared CI — 2026-10-07
+
+Previous iteration made progress by publishing #282 and its preservation proof.
+Reconfirmed #216 merged and #224's clean worktree/remote2afe25e3 before rewriting
+the extraction branch. Saved `backup/import-session-before-shared-ci-20261007`
+and verified complete-history bundle `.scratch/pr224-before-shared-ci-20261007.bundle`
+(SHA-256 `cc723189e3d45770a385df47728c3c9e0e729c1bb11e1ec41124d63ca6484885`).
+Rebase explicitly disabled updateRefs and signing; original #212/#217 and all
+integration worktrees remain unchanged.
+
+#224 is now `c374710a19968afd711113a726faec0a2f150ddb`, based on #282e39f033a.
+Only the duplicate2afe25e3 patch was dropped as already present upstream. Its
+review delta contains one production/cleanup-test commit: the exact8ffac9de patch
+with stable ID `633e655c8c4207c69e84cb13e34c2c9a27d69f99`. All files match the
+previous2afe25e3 tree except `nix/checks/e2e.nix`, which matches #282 exactly.
+Formatting36405 and whitespace checks passed. Retarget/publication57738 succeeded
+using an explicit lease for the old remote SHA; GitHub confirms the new base,
+head and draft state. Nixbot319 has begun evaluating this head. Previous308/71277
+passes remain labeled historical, not counted as c374710a verification.
+
+Current #282 Nixbot317 remains live. Local74548 remains live on frozen5c43f24a;
+Clippy completed and the browser suites are running. The complete local
+compositionefae7522 still contains the old #224 ancestry but identical Rust/
+test content and the same final Nix script; record tree/patch equivalence when
+reconciling its inputs, rather than claiming new-head ancestry.
+
+Next: collect the sole local gate and #282/#224 CI, then verify complete
+compositionefae7522. Continue the dependency refresh from its shared roots,
+retaining backups and proving expected trees before publishing. Do not modify
+the active-check worktree, start competing full builds or merge GitHub PRs.
