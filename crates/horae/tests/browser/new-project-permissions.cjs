@@ -140,22 +140,23 @@ const name = 'Permission fixture project';
       const tracking = (await json('list_tracking_projects')).find(item => item.id === projectId);
       assert.ok(tracking, 'Own tracking remains available regardless of report visibility');
       for (const field of ['rate_cents', 'budget_minutes', 'budget_amount_cents']) absent(tracking, field);
-      const details = await post('get_project_details', { project_id: projectId });
+      const details = await post('get_project_detail_view', { project_id: projectId });
       assert.equal(details.status(), scenario.progress ? 200 : 404);
       if (scenario.progress) {
         const body = await details.json();
-        if (scenario.private) assert.equal(body.admin_notes, privateNote);
-        else absent(body, 'admin_notes');
+        assert.deepEqual(body.requester, { org_id: actor.org_id, user_id: actor.id });
+        assert.equal(body.canonical_permissions, false);
+        assert.equal(body.can_edit, scenario.rates);
+        assert.equal(body.project.id, projectId);
+        if (scenario.private) assert.equal(body.project.admin_notes, privateNote);
+        else absent(body.project, 'admin_notes');
+        assert.deepEqual(body.team, [{ id: actor.id, name: 'Admin User' }]);
+        assert.deepEqual(body.tasks, [{ id: taskId, name: 'Development' }]);
+        // Detail labels never carry rates, even for an administrator.
+        for (const person of body.team) absent(person, 'rate_cents');
+        for (const task of body.tasks) absent(task, 'default_rate_cents');
       }
-      assert.equal((await post('get_project_details', { project_id: foreignProject })).status(), 404);
-      const team = await json('list_assignments', { project_id: projectId });
-      const tasks = await json('list_project_tasks', { project_id: projectId });
-      assert.equal(team.some(person => person.user_id === actor.id), true);
-      assert.equal(tasks.some(task => task.id === taskId), true);
-      if (!scenario.rates) {
-        for (const person of team) absent(person, 'rate_cents');
-        for (const task of tasks) absent(task, 'default_rate_cents');
-      }
+      assert.equal((await post('get_project_detail_view', { project_id: foreignProject })).status(), 404);
       const exported = await context.request.get(`${base}/api/projects/export/csv?scope=active`);
       assert.equal(exported.status(), 200);
       assert.equal((await exported.text()).includes(name), scenario.progress);
@@ -170,8 +171,13 @@ const name = 'Permission fixture project';
       await visit(`/projects/${projectId}`);
       const detailRegion = page.getByRole('region', { name: 'Project details', exact: true });
       if (scenario.progress) await expect(detailRegion).toContainText(name);
-      else await expect(detailRegion.getByRole('alert')).toContainText('Could not load project details');
-      if (!scenario.private) await expect(detailRegion).not.toContainText(privateNote);
+      else {
+        await expect(page.getByRole('alert')).toContainText('Project details are unavailable');
+        for (const label of ['Project details', 'Project team', 'Project tasks']) {
+          await expect(page.getByRole('region', { name: label, exact: true })).toHaveCount(0);
+        }
+      }
+      if (!scenario.private) await expect(page.locator('body')).not.toContainText(privateNote);
       // Navigation may finish before hydration issues the permission request.
       const [optionsResponse] = await Promise.all([
         page.waitForResponse(response => /^\/api\/project_creation_options\d+$/.test(new URL(response.url()).pathname)),
@@ -211,8 +217,10 @@ const name = 'Permission fixture project';
     const cost = sql(`SELECT row_to_json(c)::text FROM project_member_costs c WHERE project_id = '${projectId}' AND user_id = '${actor.id}'`);
     sql(`DELETE FROM assignments WHERE project_id = '${projectId}' AND user_id = '${actor.id}'`);
     assert.equal((await json('list_projects', { client_id: null, include_inactive: true })).some(item => item.id === projectId), false);
-    assert.equal((await post('get_project_details', { project_id: projectId })).status(), 404);
-    assert.deepEqual(await json('list_assignments', { project_id: projectId }), []);
+    assert.equal((await post('get_project_detail_view', { project_id: projectId })).status(), 404);
+    await visit(`/projects/${projectId}`);
+    await expect(page.getByRole('alert')).toContainText('Project details are unavailable');
+    await expect(page.getByRole('region', { name: 'Project team', exact: true })).toHaveCount(0);
     assert.ok((await json('list_tracking_projects')).some(item => item.id === projectId), 'Own history preserves identity, not project-wide access');
     sql(`UPDATE time_entries SET user_id = '${other}' WHERE id = '${entry}'`);
     assert.equal((await json('list_tracking_projects')).some(item => item.id === projectId), false);
@@ -222,8 +230,8 @@ const name = 'Permission fixture project';
     console.log('PASS: revoked assignment and outsider identities cannot grant project-wide access');
 
     sql(`UPDATE users SET org_role = 'admin', active = false WHERE id = '${actor.id}'`);
-    for (const method of ['list_projects', 'get_project_details', 'project_creation_options', 'load_project_draft', 'save_project_draft', 'finalize_project_draft']) {
-      const response = await post(method, method === 'get_project_details' ? { project_id: projectId } : method.includes('draft') && !method.startsWith('load') ? ownPayload : undefined);
+    for (const method of ['list_projects', 'get_project_detail_view', 'project_creation_options', 'load_project_draft', 'save_project_draft', 'finalize_project_draft']) {
+      const response = await post(method, method === 'get_project_detail_view' ? { project_id: projectId } : method.includes('draft') && !method.startsWith('load') ? ownPayload : undefined);
       assert.ok([401, 403].includes(response.status()), `Inactive user: ${method} returned ${response.status()}`);
     }
     sql(`UPDATE users SET org_role = 'manager', active = true WHERE id = '${actor.id}'`);
