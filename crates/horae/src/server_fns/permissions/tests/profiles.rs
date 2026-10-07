@@ -9,15 +9,6 @@ use std::time::Duration;
 #[path = "directory.rs"]
 mod directory_tests;
 
-#[path = "project_people.rs"]
-mod project_people_tests;
-
-#[path = "editor.rs"]
-mod editor_tests;
-
-#[path = "subjects.rs"]
-mod subjects_tests;
-
 #[path = "time_entries.rs"]
 mod time_entries_tests;
 
@@ -26,6 +17,15 @@ mod timesheet_people_tests;
 
 #[path = "timesheet_context.rs"]
 mod timesheet_context_tests;
+
+#[path = "project_people.rs"]
+mod project_people_tests;
+
+#[path = "editor.rs"]
+mod editor_tests;
+
+#[path = "subjects.rs"]
+mod subjects_tests;
 
 async fn save_state(
     pool: &PgPool,

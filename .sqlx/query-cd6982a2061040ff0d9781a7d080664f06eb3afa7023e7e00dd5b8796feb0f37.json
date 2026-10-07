@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT managed_user_id FROM person_management_assignments WHERE org_id=$1 AND manager_id=$2 AND managed_user_id=$3 FOR SHARE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "managed_user_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cd6982a2061040ff0d9781a7d080664f06eb3afa7023e7e00dd5b8796feb0f37"
+}

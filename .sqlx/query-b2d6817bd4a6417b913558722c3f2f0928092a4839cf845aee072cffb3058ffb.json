@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (p.project_type <> 'non_billable' AND COALESCE(pt.billable,t.billable_default)) AS \"billable!\"\n           FROM projects p JOIN tasks t ON t.id=$3 AND t.org_id=p.org_id\n           LEFT JOIN project_tasks pt ON pt.project_id=p.id AND pt.task_id=t.id\n           WHERE p.org_id=$1 AND p.id=$2 FOR SHARE OF p,t",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "billable!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b2d6817bd4a6417b913558722c3f2f0928092a4839cf845aee072cffb3058ffb"
+}

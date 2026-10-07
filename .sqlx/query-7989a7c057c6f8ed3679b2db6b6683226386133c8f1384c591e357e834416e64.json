@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT minutes,start_minute,billable FROM time_entries WHERE id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "start_minute",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "billable",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "7989a7c057c6f8ed3679b2db6b6683226386133c8f1384c591e357e834416e64"
+}

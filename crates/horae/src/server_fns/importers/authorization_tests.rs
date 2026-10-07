@@ -25,6 +25,8 @@ use super::*;
 
 mod approval_labels;
 mod cli;
+#[path = "../time_entries/commands/tests/http.rs"]
+mod delegated_time;
 mod financial_snapshots;
 mod legacy_readers;
 mod own_permissions;
@@ -35,12 +37,12 @@ mod project_managers;
 mod project_people;
 mod project_reads;
 mod scoped_directory;
+mod scoped_time;
 mod session_identity;
 mod task_edits;
 mod task_reads;
 mod task_writes;
 mod user_directory;
-mod scoped_time;
 
 #[cfg(target_os = "linux")]
 mod report_stress;
@@ -313,6 +315,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     legacy_readers::check(&pool, &api).await;
     financial_snapshots::check(&pool, &api).await;
     scoped_time::check(&pool, &api).await;
+    delegated_time::check(&pool, &api).await;
     let admin = api.cookie(owner.user_id).await;
     let expired = api.cookie(owner.user_id).await;
     assert_eq!(

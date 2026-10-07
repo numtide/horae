@@ -53,6 +53,73 @@ pub struct TimesheetPage {
     pub next_after: Option<TimeEntryCursor>,
 }
 
+/// Expected identities bind a command to its original UI context, not authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimesheetWriteContext {
+    pub expected_requester: PermissionRequester,
+    pub subject_id: Uuid,
+    pub expected_policy: TimesheetPolicy,
+}
+
+/// Editable entry facts; the context owns the immutable person identity.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimesheetEntryInput {
+    pub project_id: Uuid,
+    pub task_id: Uuid,
+    pub spent_date: NaiveDate,
+    pub minutes: i32,
+    pub notes: Option<String>,
+    pub billable: bool,
+    pub start_minute: Option<i32>,
+}
+
+/// One operation, authorized atomically over every affected entry and context.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
+pub enum TimesheetCommand {
+    Create {
+        entry: TimesheetEntryInput,
+    },
+    Update {
+        entry_id: Uuid,
+        entry: TimesheetEntryInput,
+    },
+    Delete {
+        entry_ids: Vec<Uuid>,
+    },
+    StartTimer {
+        project_id: Uuid,
+        task_id: Uuid,
+        notes: Option<String>,
+    },
+    StopTimer {
+        entry_id: Uuid,
+    },
+    Reschedule {
+        entry_id: Uuid,
+        spent_date: NaiveDate,
+        start_minute: i32,
+        minutes: i32,
+    },
+    Reorder {
+        spent_date: NaiveDate,
+        entry_ids: Vec<Uuid>,
+    },
+}
+
+/// A currently eligible pair for the selected person within requester write scope.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimesheetTrackingOption {
+    pub project_id: Uuid,
+    pub project_name: String,
+    pub task_id: Uuid,
+    pub task_name: String,
+    pub billable: bool,
+}
+
 /// Narrow authorized Timesheet identities, independently of the displayed dates.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
