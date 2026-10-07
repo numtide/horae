@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DECLARE horae_csv NO SCROLL CURSOR FOR\n           WITH authority AS MATERIALIZED (\n             SELECT o.permission_policy_version policy,u.org_role role,u.active,\n                    s.catalog_version,s.grants,s.is_administrator,s.source permission_source,\n                    s.built_in_profile,s.template_id,s.applied_template_revision,s.revision,\n                    COALESCE(octet_length(s.source),0)::bigint + COALESCE(octet_length(s.built_in_profile),0)::bigint\n                      + COALESCE((SELECT SUM(octet_length(g)::bigint) FROM unnest(s.grants) g),0)::bigint authority_bytes\n             FROM (VALUES ($1::uuid,$2::uuid)) identity(org_id,user_id)\n             LEFT JOIN organizations o ON o.id=identity.org_id\n             LEFT JOIN users u ON u.id=identity.user_id AND u.org_id=identity.org_id\n             LEFT JOIN person_permission_states s ON s.org_id=o.id AND s.user_id=u.id\n           )\n           SELECT a.policy,a.role,a.active,a.catalog_version,a.grants,a.is_administrator,\n                  a.permission_source,a.built_in_profile,a.template_id,a.applied_template_revision,a.revision,\n                  e.id,e.user_id,e.project_id,e.spent_date,e.project_name,e.task_name,e.user_name,\n                  e.minutes,e.rounded_minutes,e.billable,e.notes,\n                  256::bigint + a.authority_bytes + COALESCE(octet_length(e.project_name),0)::bigint\n                    + COALESCE(octet_length(e.task_name),0)::bigint + COALESCE(octet_length(e.user_name),0)::bigint\n                    + COALESCE(octet_length(e.notes),0)::bigint AS export_bytes\n           FROM authority a LEFT JOIN LATERAL (\n             SELECT te.id,te.user_id,te.project_id,te.spent_date,p.name project_name,t.name task_name,\n                    u.name user_name,te.minutes,\n                    effective_minutes(te.minutes,te.rounded_minutes,o.round_minutes,o.round_dir) rounded_minutes,\n                    (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable'\n                      AND COALESCE(pt.billable,t.billable_default)))) billable,te.notes\n             FROM time_entries te JOIN organizations o ON o.id=te.org_id\n             JOIN projects p ON p.id=te.project_id AND p.org_id=te.org_id\n             JOIN tasks t ON t.id=te.task_id AND t.org_id=te.org_id\n             JOIN users u ON u.id=te.user_id AND u.org_id=te.org_id\n             JOIN clients c ON c.id=p.client_id AND c.org_id=te.org_id\n             LEFT JOIN project_tasks pt ON pt.project_id=p.id AND pt.task_id=t.id\n             WHERE te.org_id=$1 AND a.active AND (\n               (a.policy=0 AND a.role IN ('admin','manager')) OR (a.policy=1 AND (\n                 'time_read_all'=ANY(a.grants) OR ('time_read_own'=ANY(a.grants) AND te.user_id=$2)\n                 OR ('time_read_managed'=ANY(a.grants) AND (\n                   EXISTS (SELECT 1 FROM person_management_assignments m\n                     WHERE m.org_id=te.org_id AND m.manager_id=$2 AND m.managed_user_id=te.user_id)\n                   OR EXISTS (SELECT 1 FROM project_management_assignments m\n                     WHERE m.org_id=te.org_id AND m.manager_id=$2 AND m.project_id=te.project_id))))))\n               AND te.spent_date BETWEEN $3 AND $4\n               AND (NOT $10::bool OR p.active)\n               AND ($11::bool IS NULL OR $11 = (te.billable AND (te.invoice_id IS NOT NULL\n                 OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable,t.billable_default)))))\n               AND (cardinality($5::uuid[])=0 OR p.client_id=ANY($5))\n               AND (cardinality($6::uuid[])=0 OR te.project_id=ANY($6))\n               AND (cardinality($7::uuid[])=0 OR te.user_id=ANY($7))\n               AND (cardinality($8::uuid[])=0 OR te.task_id=ANY($8))\n               AND (cardinality($9::uuid[])=0 OR EXISTS (\n                 SELECT 1 FROM project_tag_links l JOIN project_tags tag ON tag.id=l.tag_id AND tag.org_id=l.org_id\n                 WHERE l.org_id=te.org_id AND l.project_id=te.project_id AND tag.id=ANY($9)))\n           ) e ON true\n           ORDER BY e.spent_date,e.project_name COLLATE \"C\",e.task_name COLLATE \"C\",e.id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Date",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e9b56291cc9cd9e2c8b9f6fa8a1804d6ba45cf6f8a4441fe2994ae060b438523"
+}
