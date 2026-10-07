@@ -6270,3 +6270,45 @@ Next: collect #270's fresh ARM result and #22471277; once the sole local full
 check terminates, run the serial full gate on composition5c43f24a. Continue the
 shared-file semantic review, then propagate verified repairs into dependent PRs
 and finish the current-head inventory. No GitHub merges or closures.
+
+### Focused composition review — 2026-10-07
+
+Previous iteration made progress through the published ARM repair and terminal
+CI evidence. Composition5c43f24a is clean; its crate sources are byte-identical
+to af7c35dc (only the recorded ARM test repair followed). The current-head
+composition audit passes with988 exact paths,66 shared paths equal to an input,
+19 genuinely combined paths and the three inspected obsolete-query replacements.
+All34 browser suite names and24 HTTP matrices remain registered once.
+
+Focused self-review of those19 combined paths checked both parent diffs, not
+just the auto-merge result:
+
+| Boundary | Preserved behavior / review result |
+| --- | --- |
+| Route, Admin shell, sidebar and shell fixture | Tasks/People destinations coexist with Timesheet's selected-person parameter; return links select own time; old person-less route tests and malformed-person rejection remain |
+| Reports route and isolated fixture | Access gate/requester binding remains from Reports; legacy tags use the Project reader's optional requester signature; af7c35dc is the previously recorded test-double-only adaptation |
+| Harvest router and pagination registration | Client list/count/direct-ID delegate to #281's same-transaction reader, alongside the unchanged Project/Task readers; all three regression modules remain registered |
+| Server module exports and HTTP registration | ProjectReadAccess, report permission-state exports and crate-visible snapshot coexist; all delegated-time, export and task matrices retained |
+| Browser waits, suite runner and New Project | Projects wait for overview, Timesheet for page loading; reset checks exact pre-filter project identities rather than assuming seed-only rows; all existing assertions retained |
+| CSS and icons | Only the two existing narrow pointer-event fixes are combined; Tasks glyph and both Reports chevrons coexist; no token or global selector rewrite |
+| CSV cancellation fixture | Exactly #224's bounded session-release synchronization over the task-lifecycle fixture; checkpoint, rollback, count and retry assertions unchanged |
+| Task contract | Existing link/catalog/atomic-rate sections and project-editor lifecycle section retained; no new requirement or completed-parity claim |
+
+Additionally, invoice cross-consumer fixtures preserve exact amounts (now
+Some(amount), not a zero fallback), maximum-integer overflow and void behavior.
+Project exports/delivery remain byte-identical to #271; task editor controls
+remain byte-identical to #280. The additive permission migration still defaults
+policy to0. Observed policy-setting statements are test fixtures, including the
+preview file's cfg(test) module; no activation command was added by composition.
+
+No additional high/critical integration finding was identified in this bounded
+review. This is not an independent review of all inherited implementation, nor
+proof of compiled/runtime compatibility. Browser-script syntax plus shell
+syntax91401 passed. Full composition compilation, SQLx, tests, actual browser
+and deployment gates remain required. Local71277 is still live in the existing
+browser suite; its worktree remains frozen and no second full build was started.
+
+Next: collect71277 and start the serial full composition gate when it terminates;
+collect ARM311 on #270b480f9d2. Reconcile the remaining inherited-file/original
+change inventory and dependency delivery after those results, retaining explicit
+unfinished client work and without merging any GitHub PR.
