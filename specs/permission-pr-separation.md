@@ -381,7 +381,7 @@ Clients documents are separate and are not silently included in #248.
 | `8d49421` | Add authorized permission editor subject discovery | permission-editor | Complete final subject DTO/API/reader, 305-line DB tests and HTTP assertions in #250; exact source/cache provenance and workspace suite passed; final gates pending; specification in #248 |
 | `b735b3a` | Add safe person switching to permission editor | permission-editor | Final subject DTO runtime content in #250; person-switching page/state consumer and removal of its historical web expectation remain preserved separately; specification in #248 |
 | `7f14e4b` | Limit user directory responses to consumed fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
-| `1eb13ec` | Add scoped people directory reads | people-directory | Reader, DTO, session endpoint, seven DB tests and canonical HTTP assertions extracted in draft #253; original cache descriptors preserved, verification pending. Specification owned by #248; legacy HTTP assertions remain with #240 |
+| `1eb13ec` | Add scoped people directory reads | people-directory | Reader, DTO, session endpoint, seven DB tests and canonical HTTP assertions extracted in draft #253; exact-head tests/Clippy/SQLx and full local Nix gate passed on 3a37538; combined integration remains pending. Specification owned by #248; legacy HTTP assertions remain with #240 |
 | `981d0e3` | Resolve approval names without directory access | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `6b5dbae` | Authorize identity-only project team choices | project-team-choices | DTO, reader, endpoint, nine DB tests, HTTP tests and ten SQLx descriptors extracted unchanged in draft #254 on #253; formatting/static cache inventory passed, execution pending; specification owned by #248 |
 | `4c00660` | Document project form permission integration boundaries | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
@@ -3745,3 +3745,32 @@ does not yet certify the complete browser or full Nix suite.
 Next collect `46207`, `81722` and `24884`, inspect any demonstrated failures,
 then close the standalone #253 browser/deployment gap and continue the remaining
 original time-reader/editor/UI extractions. Keep these PRs draft and no merges.
+
+### Standalone directory full gate completed
+
+Previous iteration was progress: published the isolated cross-PR composition and
+completed the directory tests/cache/lints. Re-polled the same live handles this
+iteration rather than restarting any build. #250 `46207` completed its full
+browser derivation successfully, including the previously failing New Project
+selection; SQLx passed and its test derivation is now running. Combined `24884`
+passed Clippy and continues live SQLx checking. Picker full gate `81722` is still
+live. These are partial results, not full-gate passes.
+
+Started `nix flake check -L --cores 1 --max-jobs 1` on unchanged #253 `3a37538`
+as `2803`; it completed with exit0, rebuilding only current formatting while
+recognizing available cached check outputs. The subsequent read-only local
+`nix path-info` request `66589` exited1 because three cached outputs were not
+yet present locally; this was not a failing browser or deployment test.
+Explicit `nix build` of browser/e2e/e2e-oidc then PASSED, materializing all three
+exact outputs from the signed Numtide cache:
+
+- `/nix/store/gayvrydx0rbm7pgq9b50fyhiggbj2w61-horae-browser-checks`
+- `/nix/store/l4vka8grd4j3m54xr921q95v8vkfbivl-vm-test-run-horae-e2e`
+- `/nix/store/asch5fnxcb7hr3k644akjnal97cd642m-vm-test-run-horae-e2e-oidc`
+
+This closes the exact standalone-head browser/deployment gap by verified cache
+reuse, not a claim of fresh local execution. Working tree is clean at the same
+head. PR #253 description/comment and source ownership row updated. Cross-PR
+integration remains pending, so draft status and prerequisite/retarget conditions
+remain unchanged. Next collect `46207`, `81722`, `24884`, then complete combined
+browser/deployment verification and continue the unextracted original groups.
