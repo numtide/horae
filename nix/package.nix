@@ -86,7 +86,11 @@ craneLib.mkCargoDerivation (common // {
   # server binary and the WASM client bundle in one step. Crane restores
   # the dependency artifacts and configures vendored sources for offline builds.
   # dx must run from crates/horae/ where Dioxus.toml lives.
-  buildPhaseCargoCommand = dxBuild;
+  buildPhaseCargoCommand = ''
+    # Keep Cargo artifacts, but never ship the dependency stub's bundled assets.
+    rm -rf -- target/dx/horae/release/web
+    ${dxBuild}
+  '';
 
   installPhase = ''
     runHook preInstall
