@@ -28,6 +28,8 @@ const protectedState = () => sql(`SELECT json_build_array(
   (SELECT admin_notes FROM project_private_settings WHERE project_id='${project}'),
   (SELECT jsonb_agg(to_jsonb(c) ORDER BY id) FROM project_member_costs c WHERE project_id='${project}'))`);
 const leaves = value => value && typeof value === 'object' ? Object.values(value).flatMap(leaves) : [value];
+const receipts = () => sql(`SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY id), '[]'::jsonb) FROM permission_change_receipts r WHERE org_id='${org}'`);
+const initialReceipts = receipts();
 assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
 assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
 
@@ -177,9 +179,14 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       UPDATE users SET org_role='admin' WHERE id='${actor.id}';
       DELETE FROM person_permission_states WHERE id='${id(11)}';
       DELETE FROM project_management_assignments WHERE project_id='${project}';
+      DELETE FROM permission_change_receipts r USING project_edit_requests e
+        WHERE r.org_id='${org}' AND r.actor_user_id='${actor.id}'
+          AND e.org_id=r.org_id AND e.actor_id=r.actor_user_id AND e.id=r.request_id
+          AND e.project_id='${project}';
       DELETE FROM assignments WHERE project_id='${project}';
       DELETE FROM projects WHERE id='${project}';
       DELETE FROM clients WHERE id='${client}';
       DELETE FROM users WHERE id IN ('${archived}','${outside}','${active}'); COMMIT;`);
+    assert.equal(receipts(), initialReceipts, 'Editor fixture must remove only its own receipts');
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });
