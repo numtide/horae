@@ -3189,3 +3189,38 @@ gate pass. The browser test and Projects/select paths have no diff against the
 exact #245 base. Cause remains unproven; do not label the failure fixed or exempt
 the test. Keep #250 draft and revisit the browser evidence after the build
 priority. Exact-master Fat LTO control `91392` is still live.
+
+### Baseline completed and final dependency stub verified for WASM
+
+Exact-master control rebuild `91392` completed successfully, including Nix's
+output comparison: native/WASM build phase 18m42s, versus 8m56s for #251. These
+are indicative local observations under concurrent load, not a controlled
+benchmark or a runtime-performance claim. #251 body now includes both times and
+the previously measured size increase. Remote required CI is still pending;
+automatic merge remains enabled, not completed. Current branch rules were read:
+required Flake Check and Format, squash-only PR merges and protected merge queue.
+
+The intermediate #252 stub `6a05046` failed Rust compilation: its qualified RSX
+macro expands to an unimported `dioxus_core` name (`E0433`). No dependency was
+added to accommodate a temporary stub. Published unsigned
+`6ef7bec7fe8fe6dfbb78a223098de6c51b9d4a1d` uses the existing
+`dioxus::prelude::VNode::empty` function directly; the pinned library declares
+the exact `fn() -> Element` signature required by `launch`. Superseded run
+`45037` was deliberately interrupted after identifying its own PID/worktree,
+not reported as a passing gate. Corrected full run `2967` is live; its generated
+WASM client compiled and bundled successfully at 37.40s. Server dependency
+compilation and subsequent real application/check gates are not yet complete.
+
+The source-only key test was repeated on `6ef7bec` using the same Git-source
+flake entry point as CI (not an impure path-flake source). A temporary comment
+in `crates/core/src/lib.rs` changed the package derivation from
+`v2kkhxzdf7kr837376k8za1y89n7296p` to `gyr6zvcpnvwqhf283r8afb04vfnk8qin`.
+Release dependency key `41y1cd29z5bzp58s0anfijd1kvlr0gbx` and development dependency
+key `2h9fc5lh0vsbff5yfy09ad77gsr3ngm9` stayed identical. The comment was removed
+with a patch; `git diff --exit-code` passed. This still does not claim actual
+Cargo artifact reuse until the final package is observed rebuilding from them.
+
+Next collect `2967` and #251 required CI/merge state. After confirmed #251 merge,
+rebase all four own Crane commits onto current master and retarget #252, preserving
+the published head with a lease. No extraction work resumes before build priority
+completion. #250's unresolved browser failure is also recorded publicly in its PR.
