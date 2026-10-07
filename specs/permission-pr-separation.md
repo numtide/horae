@@ -4941,3 +4941,56 @@ Next finish the scoped reader adversarial review, collect87701/23221, correct
 any concrete failures, then extract project delivery/compatibility readers,
 Task lifecycle/readers/UI, classify unpublished Clients and complete hunk-level
 ownership and wider composition. No extraction PR was merged or closed.
+
+### Project delivery extraction and concrete verification corrections
+
+Full native23221 on #2700723bb3 failed Clippy after successful server/WASM
+builds: the detail-navigation fixture re-exported an unused project_managers
+module. Commit ed964fc removes only that unused module/import. Formatting88589
+and whitespace passed; commit/push22660 completed. Full native56170 runs on the
+published corrected head, and the draft now records both the failure and rerun.
+Scoped reader review found no new critical/high issue in the extracted ordinary
+read boundary: current organization/actor locks, strict stored policy/grants,
+tenant joins, minimal labels, optional money, budget totals and original race
+fixtures were inspected. This is not independent sign-off. Existing lifecycle
+and fee operations still use their legacy role/snapshot gates; their canonical
+authorization is explicitly outside this reader extraction and policy must
+remain inactive. Wider UI/composition review and full acceptance remain pending.
+
+Full native87701 on #269fdae71d passed the formerly failing client-context suite
+and reached the history fixture. Its zero-receipt precondition failed because
+the canonical editor fixture left four of its own receipts after deleting its
+project. Commit8da2639 cleans only receipts joined by organization, actor and
+request ID to that fixture project's edit requests, before cascade deletion.
+It additionally checks that the original receipt snapshot is unchanged. The
+history fixture and all prior assertions are retained. This cleanup runs only
+inside the guarded disposable browser database, never a real database. Node
+syntax93514 and whitespace passed; commit/push1458 completed. Full native89598
+runs on the corrected head. The draft records this actual failure, not a pass.
+
+Published draft #271b0cd080 on feat/scoped-project-exports, based on
+integration/project-delivery-prerequisites abc7642. This base locally combines
+#267e029a89 and #270ed964fc. Initial composition5f2eca0 resolved models, server
+exports and two fixture registries by retaining both parents' registrations;
+abc7642 then incorporates the reader test-import correction. No GitHub merge.
+The base is an integration artifact, not an independent delivery PR.
+
+The export extraction owns21 paths:16 Rust source/test paths and five original
+SQLx descriptors. Source2631186 runtime and three new fixture modules are
+preserved, with shared call sites receiving the monetary-context argument.
+Requester binding rejects malformed/partial/mismatched identity without
+selecting another actor. Canonical scope and money visibility are independent;
+CSV source-state restoration applies to empty exports too. Workbook release
+and CSV delivery after capacity waits recheck captured project/monetary access.
+Retained nine canonical DB regressions, three parameter tests and legacy suites.
+Scoped inventory parsed28/28 query macros and restored exact original cache
+entries after query/hash equality; no heuristic cache deletion. Formatting26118
+and whitespace passed; commit/push51395 and draft11523 completed. Full native82670
+runs on the clean published head; live-schema acceptance remains pending.
+
+Next collect56170/89598/82670 without duplicate runs, address concrete failures,
+finish Project reader/delivery review, then extract the existing Harvest project
+API list/count/direct-ID boundary. Created .worktrees/scoped-harvest-projects
+on feat/scoped-harvest-projects from ed964fc for that bounded extraction; no
+changes there yet. Tasks, unpublished Clients and complete hunk ownership remain
+outstanding. No extraction PR was merged or closed, and no policy activated.
