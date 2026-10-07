@@ -134,6 +134,7 @@ Clients MVP as canonical-permission acceptance.
 | Timesheet person discovery, [#256](https://github.com/numtide/horae/pull/256) | `feat/timesheet-people-discovery`, `.worktrees/timesheet-people-discovery` | Review base `40102ae`, combining #255 `d93e1af` admission reader and #253 `3a37538` shared `PeopleCursor` | Draft at `1552fdb`; original `60f60f9` DTO/reader/eight DB tests, endpoint/HTTP additions and five SQLx descriptors preserved. Tests/Clippy/live SQLx `61768` PASSED; application992 passed, zero failed,11 inherited ignored. Full native Nix `37414` PASSED; wider integration pending; no UI, context-page contract, commands or activation |
 | Requester-bound Timesheet page context, [#257](https://github.com/numtide/horae/pull/257) | `feat/timesheet-page-context`, `.worktrees/timesheet-page-context` | #256 `1552fdb`, for subject discovery and shared read admission | Draft at `8e09e60`; original `5faed76` DTO/reader/six DB tests and endpoint/HTTP additions preserved, no new SQL descriptors. Formatting/provenance/static37-query inventory passed; tests/Clippy/live SQLx `63162` and full native Nix `72055` PASSED; application998 passed, zero failed,11 inherited ignored; wider integration pending; no UI, commands or activation |
 | Person-bound Timesheet commands, [#258](https://github.com/numtide/horae/pull/258) | `feat/timesheet-person-commands`, `.worktrees/timesheet-person-commands` | #257 `8e09e60`, for shared context contracts and foundations | Draft at `d2b45ca`; original `48a6533` contracts plus `02c4245` implementation,13 DB tests and HTTP assertions preserved;39 original SQLx descriptors. Formatting/provenance passed; tests/Clippy/SQLx `64524` running. Full and combined gates pending; approval-covered editing remains incomplete, no UI or activation |
+| Cross-PR Timesheet/permission verification only | `integration/timesheet-permission-check`, `.worktrees/timesheet-permission-integration` | Combines #240/#241/#250/#253–#258 and inherited foundations | Published at `6da9981`, no delivery PR; three registration conflicts retain both sides,21 selected whole source/test files unchanged. Formatting passed; tests/Clippy/SQLx `25306` running, full native gate pending |
 | Cross-PR reader/editor verification only | `integration/permission-readers-editor-check`, `.worktrees/permission-readers-editor-check` | Combines #240 `a19ea63`, #250 `c727bc8`, #253 `3a37538` and #254 `f498c3f` | Published at `7a2d61c`, no delivery PR or merge target; registration conflicts resolved preserving both sides, dedicated source/test blobs unchanged, original combined users module restored exactly. Tests/Clippy/SQLx `24884` and full native Nix `16434` PASSED; exact browser/deployment/OIDC outputs and logs verified after original process terminated. Later #255–#257 not included |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
@@ -4150,3 +4151,12 @@ Timesheet UI/weekly-submission group from `e1ddd9a`, `a0632a8`, `b8b1c60` and
 later focus/person-switch/date-offset fixes, preserving browser coverage and
 keeping task lifecycle changes separate. Original hunk accounting, editor,
 report, project/task UI and unpublished client groups remain unfinished.
+
+The connected UI extraction must also preserve current master navigation work:
+its shared navigation script already handles client drafts, while original
+`a0632a8` adds Timesheet on top of permission-editor guards not yet extracted.
+Apply the owned Timesheet condition without overwriting client behavior; preserve
+the permission-editor additions for their owner. The original editor-navigation
+test file is absent from #258's base and needs explicit test ownership/wiring,
+not a blind whole-file replacement. Timesheet page and sidebar themselves match
+the pre-consumer source base; route/admin-shell files have other changes to keep.
