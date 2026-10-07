@@ -1,6 +1,51 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::permission_editor::PermissionRequester;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskActivity {
+    Active,
+    Archived,
+    All,
+}
+
+/// Exclusive ordering bound, not a saved authorization decision.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TaskCursor {
+    pub name: String,
+    pub id: Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TaskCatalogEntry {
+    pub id: Uuid,
+    pub name: String,
+    pub billable_default: bool,
+    pub active: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_rate_cents: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_rate_currency: Option<String>,
+}
+
+/// Rows and affordances share the same current authorization transaction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TaskCatalogPage {
+    pub requester: PermissionRequester,
+    pub can_edit: bool,
+    pub can_read_rates: bool,
+    pub can_edit_rates: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rate_currency: Option<String>,
+    pub tasks: Vec<TaskCatalogEntry>,
+    pub next_after: Option<TaskCursor>,
+}
+
 /// Explicit intent for a task's global default, independent of project overrides.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tasks SET active=false,default_rate_cents=8000,default_rate_currency='USD' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c591f2590348edfd92dea4649a8bf1620e25b6d4778a41e2048c5d80ffc7e3c9"
+}
