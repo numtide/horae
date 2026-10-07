@@ -7659,3 +7659,175 @@ Two failure logs were inspected once to refine the remaining CI work:
 
 These findings add explicit transport integration and ARM/build-attribution
 follow-ups to the next actions above; no failed test was disabled or retried.
+
+### Project export composition refresh
+
+The previous goal iteration was PROGRESS. Reconfirmed #216 merged before
+rewriting code and reused the verified project-composition backup recorded
+above; both old heads still matched their remote refs and clean worktrees.
+
+Rebased the existing project-delivery composition over current #26716b773d5.
+Duplicate legacy readerae152748 and financial reader6bf2fbcf were omitted only
+after verifying the former differs from inheritedb761912a solely by four SQLx
+descriptors already present byte-for-byte, and the latter has the identical
+patch as inherited99eab225. The final existing test registration order was
+restored explicitly. Resulting tree7f94aa22 exactly matches the precomputed
+explicit-old-parent composition, including the existing #263 denial rollback.
+Then replayed #270's existing cache cleanup0b4fd421 as71a84073; range-diff is
+identical, removing the same six obsolete generated descriptors. They remain
+recoverable in the original commits and verified bundle.
+
+The refreshed review base is
+`71a840734ffc5a3e223c52ad54cb22215cacb6df`, expected tree9ec0559f. #271 is
+`d4a4af79e3347bbb859baae2263d4294419382ca`, expected treed0ef3839. Its two
+original delivery patches are identical by range-diff. Every other tracked
+path matches the preserved head except the two known rollback files, the six
+known SQLx deletions, the two #282 recovery-test files and #222's README note.
+The rollback files exactly match current #267; CI/README exceptions exactly
+match their owners. No new authorization or product behavior was introduced.
+Formatting62147 passed on both branches unchanged. Publication65883 atomically
+updated both refs with exact leases and verified #271's new head/draft state.
+
+### Complete x86_64 Linux gate passed
+
+Session38699 exited0 on the unchanged, clean complete composition
+`f90f60f754f359528c1ae08577d895f92bc5702b`. Its command was
+`nix flake check -L --max-jobs 1 --cores 2`; the retained log
+`.scratch/permission-delivery-complete-f90f60f7.log` ends `all checks passed!`.
+This covers the composed build, checked-in browser suite, Clippy, SQLx cache,
+server/integration tests and NixOS deployment/OIDC checks on x86_64 Linux.
+
+The main server suite reports1478 passed,0 failed,11 ignored, followed by all
+15 integration/UI test binaries passing. The11 ignored tests are the existing
+manual scale/memory/export measurements, not newly disabled failures. Four
+focused one-test runs also passed. The tests derivation output was independently
+confirmed valid by `nix path-info`:
+`/nix/store/h7jfb54lcgdq84dbc047j9928sp1y1n1-horae-tests-0.1.0`, from
+derivationp2jaidgz0npdlq2dcadnjjcjf8qpfjj7. Earlier exact-head Clippy/browser/SQLx
+evidence remains valid. The process is terminal; do not poll or restart it.
+
+The flake explicitly omitted incompatibleaarch64-darwin andaarch64-linux.
+This does not prove ARM CI, current individual PR heads, or final provenance
+reconciliation. The passed composition contains #283 and #246's corrections;
+those must remain accounted for when reconciling refreshed extraction heads.
+The goal remains incomplete despite this full local pass.
+
+### Harvest and task reader prerequisite refresh
+
+Preserved four clean, remote-matched heads under
+`backup/shared-ci-harvest-task-readers-20261008/*`; verified bundle
+`.scratch/shared-ci-harvest-task-readers-20261008.bundle`, SHA-256
+`6b56071a2ea4ccf1eed10f7353bcdb2f850acd322b9c2eabbc01dd5e0c721e3f`.
+Rebased each PR onto its actual current parent, incorporating the previously
+separate SQLx cleanups rather than continuing to use the pre-cleanup parent.
+
+| PR | Previous head | Refreshed head | Expected tree |
+| --- | --- | --- | --- |
+| #272 | 8b8b0c0b | f10a735bb81fac091f982dce2ef11a18b44176fb | 1d7e8df3 |
+| #273 | 65c4aa23 | d2c0507fd5c3e2b379d94cbedb8c46f6ee4f77ce | 4c1344d7 |
+| #275 | f8c1477b | 431417c0f35a197cee1db0a7a36c42d926e8ee9f | 5882d0f4 |
+| #281 | cd8d1db7 | 31cd51af84696d7647bcdaee9a622aff3f02fc9f | c79eed1e |
+
+All nine delivery patches are identical by range-diff, and every tree equals
+its precomputed explicit-old-parent composition. Every tracked source, test
+and UI file is byte-identical to the old head except the two #282 recovery
+fixtures and #222's README note, which match their owner blobs. The SQLx
+differences are exactly6/9/10/9 descriptor removals respectively, independently
+compared against the union of existing owner commits0b4fd421,8b8b0c0b and
+65c4aa23 as applicable. No unrelated descriptor was removed and no SQL changed.
+Formatting11791 passed on all four final worktrees with zero changes.
+
+Publication22902 atomically updated all four refs with exact leases; every PR
+description and exact remote head/draft state were verified. These remain drafts
+pending fresh current-head CI; #283 is not inherited by them yet.
+
+### Task delivery dependency refresh
+
+Preserved seven clean, remote-matched heads under
+`backup/shared-ci-task-delivery-20261008/*`; verified bundle
+`.scratch/shared-ci-task-delivery-20261008.bundle`, SHA-256
+`6027eecb64036fa8b4b1f3babba8fc7eb6d04343c5c825fdedaee7e0ee12bb5a`.
+The lifecycle base replays its12 original editor, Timesheet and import commits
+over current #275431417c0. Recovered browser-runner/navigation blobs match the
+originalc1d60a8d/e7c1ad04, and final HTTP/profile registries match original
+463e7c04/6845a836. Initial treea2792596 equals the precomputed composition.
+Then inherited #269's existing one-descriptor cleanup53183702 asce06d51c,
+yielding expected tree66635fd6. No new semantic resolution was introduced.
+
+| Branch | Previous head | Refreshed head | Expected tree |
+| --- | --- | --- | --- |
+| integration/task-lifecycle-prerequisites | 1955c38f | ce06d51c1f0ec81d7904c9f6c81184671ea719cf | 66635fd6 |
+| feat/scoped-task-lifecycle (#276) | 7e883eb5 | 14e2c72862a2e1079d8a4b64a0cb1b7f0921b7a6 | 3b82c512 |
+| feat/scoped-task-links (#277) | d1ab5224 | 598b2dd9724dae3991d96f5a3da7ea20b53d8cb6 | cbf95029 |
+| feat/atomic-task-creation (#278) | 812a870f | 11c87a95b56bc78ddd7c08fe5cc89116d2ba05de | d9db2431 |
+| integration/task-catalog-prerequisites | e9f793df | b6fbf9e7541c0708e4079a0c01a410c073261320 | 0c5e207c |
+| feat/task-catalog (#279) | 9fcc0a09 | 1cb4edc56baea2da9b7231797c544ef38f8ec0f1 | 96832117 |
+| feat/project-task-activity-ui (#280) | 24c5d0e1 | 810449aaa74f440743bd55e75eb50b443ddbeb4b | 7c22636b |
+
+The catalog base replays the existing People editor UI over the current atomic
+creation branch. Its two recovered files exactly match original blobs2c554ac9
+(admin page) andf10c5a0a (browser runner). Every final tree matches its expected
+composition. All six delivery patches across #276/#277/#278/#280 are identical
+by range-diff. #279's sole delivery patch differs only because its removal of
+the obsolete TaskRateEdit lint annotation is already inherited from #278; the
+final file is byte-identical to old #279. The older review merge is preserved
+in the bundle, not retained as a redundant merge in the refreshed branch.
+
+Every tracked file across all seven branches matches its preserved head except
+README, the two shared recovery-test files and11 known SQLx removals. The SQLx
+sets exactly equal the existing cleanups0b4fd421/8b8b0c0b/65c4aa23/53183702.
+README/e2e match their current owners; the CSV fixture matches current #231,
+which includes its original transaction-boundary tests as well as the #282
+cleanup correction. Comparing that whole file to #282 alone would wrongly omit
+the already-existing #231 tests; the earlier owner-comparison failure made no
+source change. No test, assertion or feature was removed.
+
+Formatting1192 passed on all seven final worktrees with zero changes; whitespace
+checks also passed. #283 was checked once after the complete local gate ended:
+GitHub still reports Nixbot352 IN_PROGRESS on exact head8d83b853, with no failed
+check in its current rollup. No retry was requested; this is not a completed
+remote gate or ARM evidence.
+
+Publication46213 completed successfully: seven refs updated atomically with
+exact leases, all five PR descriptions updated, and remote heads/draft states
+verified. This iteration published10 PRs and three review bases without merging.
+
+Post-publication inventory77241 reports60 drafts, no local/remote head mismatch
+and no stale direct bases. Aggregates are9 successful,15 failed,32 in progress
+and4 missing after recent rewrites. These are status summaries, not proof that
+the underlying Nixbot link belongs to the current head; the attribution caveat
+recorded for #223 remains. Remote master is still8b3cc257. Original #212 remains
+atdb3935db with the same18 dirty paths; root retains only `.playwright-mcp/`.
+
+### Refreshed-head content reconciliation
+
+Generated `.scratch/permission-delivery-refreshed-coverage.json` against the
+exact passed compositionf90f60f7 and all60 current extraction/correction heads.
+This is a content-coverage audit, not an ancestry claim: flattened/rebased
+review histories do not make the refreshed commits literal ancestors of the
+already-tested composition.
+
+The audit finds1159 exact single-variant paths and108 shared paths. Of the
+shared paths,81 match a current input blob; the27 composed blobs exactly match
+the earlier audited compositionefae7522, so no fresh source resolution was
+introduced. The seven non-exact single-variant paths are precisely the six
+previously audited query replacements and the existing scoped-report fixture
+adaptationaf7c35dc. Each superseding source blob is unchanged from the earlier
+audit, and the adapted fixture matches its recorded blob91f508aa. There are
+zero unaccounted paths in this comparison. The original audit artifact was
+retained rather than overwritten.
+
+An explicit registration-union check over all60 heads also confirms the passed
+composition retains all34 browser suites and25 HTTP matrices, without missing
+or duplicate registrations. This supplements the blob comparison; it does not
+turn unexecuted manual measurements or remote ARM checks into passed gates.
+The reverse path check also found zero target-only files: no composition file
+falls outside the baseline and all current input trees.
+
+Next: finish current-head CI/build attribution and ARM boot analysis, integrate
+#283's transport correction into the necessary prerequisite roots without
+changing features, and recheck exact affected heads. Reuse the successful
+f90f60f7 integration evidence where its exact tree still applies; do not restart
+its completed process. Reconcile final PR readiness and the incomplete-work
+inventory before claiming completion. The goal remains active/incomplete;
+this iteration is PROGRESS, not a wait or a completed delivery claim.
