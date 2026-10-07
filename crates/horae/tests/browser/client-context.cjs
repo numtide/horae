@@ -26,7 +26,8 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     SELECT '${techProject}', org_id, id, 'Context TechStart project', currency FROM clients WHERE id = '${tech}'`);
   const projects = sql("SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY id), '[]') FROM projects p");
   const invoices = sql("SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY id), '[]') FROM invoices i");
-  const draft = () => sql('SELECT row_to_json(d) FROM project_drafts d WHERE discarded_at IS NULL AND completed_project_id IS NULL');
+  const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id, org_id FROM users WHERE active AND org_role = 'admin') u"));
+  const draft = () => sql(`SELECT row_to_json(d) FROM project_drafts d WHERE org_id = '${actor.org_id}' AND creator_id = '${actor.id}' AND discarded_at IS NULL AND completed_project_id IS NULL`);
   const editor = page.locator('.np-page');
   const saved = () => expect(editor.locator('header').getByRole('status')).toContainText('Draft saved at');
   const discard = async () => {
