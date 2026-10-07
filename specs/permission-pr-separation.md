@@ -3544,3 +3544,39 @@ still returned BlobNotFound; do not infer a specific compile/test failure or
 claim full timing attribution. No forced cancellation or further restart.
 PR description updated. Current live handles are local full gate `12076` and
 required-CI watcher `90257` (run37568358785, Format50s passed), both on `170e521`.
+
+### Priority build PRs merged; resume the original separation goal
+
+Current-head local full Nix gate `12076` PASSED, including tests, SQLx, Clippy,
+browser and both x86 VM checks. Required run37568358785 PASSED on `170e521`
+(Flake19m59s, Format50s); watcher `90257` is terminal. Its complete log explicitly
+copies both `6264yrq` release and `p0fga5r` development artifacts from
+`https://cache.numtide.com` and restores them for the package/test/Clippy/SQLx
+builds. Cache reuse in GitHub CI is now observed, not inferred from local runs.
+Do not compare this successful duration with the canceled old run as a benchmark.
+
+Final installed package `xm11dbjilz94xnfgpgivxni0vb17daq5` was compared with
+previous verified `kqhd2w13ls03fp972728ldc36vvr7qsm`: server bytes and entire
+public tree are identical; runtime store references contain only glibc.
+Nixbot138 passed native package/tests/Clippy/SQLx/browser/format on both Linux
+architectures and both x86 VMs. Both exact ARM VM raw logs (`drv/17/raw`) prove
+missing KVM, TCG fallback and guest-shell startup timeout before application
+assertions. No ARM VM deployment claim or disabled checks.
+
+Automatic merge entered the normal protected queue without another mutation:
+run37569967612 PASSED (Flake44s, Format43s). GitHub confirms #252 MERGED at
+2026-10-07T04:09:07Z as `ed558f62ef03401864b0e0228b681cdb352edb62`.
+Fetched master equals that commit; its tree exactly matches `170e521`.
+PR description and final verification comment updated. #251 and #252 are both
+integrated; their branches, worktrees and recovery refs remain preserved.
+No live build/check handles remain from this priority work.
+
+Original-goal prerequisite #216 revalidated MERGED at `02f7b58`. Original #212
+is still `db3935d` with the same18 unpublished paths; #250 remains clean at
+`c82a5b3`. No extraction PR was merged or closed. The original goal is active
+and incomplete. Next resume #250's inherited browser-gate reconciliation against
+the now-merged selector repair/build configuration, using a preserved isolated
+prerequisite composition so its review diff stays scoped. Then continue the
+inventoried reader/editor/consumer groups and final hunk-level ownership plus
+cross-PR integration audit. Do not treat build optimization as completion of
+permission separation, activation or Harvest parity.
