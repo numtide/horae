@@ -132,9 +132,9 @@ Clients MVP as canonical-permission acceptance.
 | Identity-only project-team choices, [#254](https://github.com/numtide/horae/pull/254) | `feat/project-people-picker`, `.worktrees/project-people-picker` | #253 `3a37538`, for shared `PeopleCursor` and inherited foundations | Draft at `f498c3f`; original reader/DTO/endpoint, nine DB tests and HTTP assertions preserved; full native Nix `81722` PASSED, including complete browser/deployment/OIDC and exact cache reuse where available. Combined full native Nix `16434` passed on `7a2d61c`; retargeted gates remain; no picker UI, assignment writes or activation |
 | Scoped time-entry reader, [#255](https://github.com/numtide/horae/pull/255) | `feat/scoped-time-reader`, `.worktrees/scoped-time-reader` | Review base `0117991`, independent of directory, project-team choices and editor operations | Draft at `d93e1af`; original `4ac30fa` DTO/reader/eight DB tests/HTTP assertions and endpoint preserved; 23 original SQLx descriptors, module registrations adapted only. Formatting/provenance passed; full native Nix `40092` PASSED; wider composition and retargeted checks pending; no Timesheet UI, subject discovery, commands or activation |
 | Timesheet person discovery, [#256](https://github.com/numtide/horae/pull/256) | `feat/timesheet-people-discovery`, `.worktrees/timesheet-people-discovery` | Review base `40102ae`, combining #255 `d93e1af` admission reader and #253 `3a37538` shared `PeopleCursor` | Draft at `1552fdb`; original `60f60f9` DTO/reader/eight DB tests, endpoint/HTTP additions and five SQLx descriptors preserved. Tests/Clippy/live SQLx `61768` PASSED; application992 passed, zero failed,11 inherited ignored. Full native Nix `37414` PASSED; wider integration pending; no UI, context-page contract, commands or activation |
-| Requester-bound Timesheet page context, [#257](https://github.com/numtide/horae/pull/257) | `feat/timesheet-page-context`, `.worktrees/timesheet-page-context` | #256 `1552fdb`, for subject discovery and shared read admission | Draft at `8e09e60`; original `5faed76` DTO/reader/six DB tests and endpoint/HTTP additions preserved, no new SQL descriptors. Formatting/provenance/static37-query inventory passed; tests/Clippy/live SQLx `63162` and full native Nix `72055` PASSED; application998 passed, zero failed,11 inherited ignored; wider integration pending; no UI, commands or activation |
-| Person-bound Timesheet commands, [#258](https://github.com/numtide/horae/pull/258) | `feat/timesheet-person-commands`, `.worktrees/timesheet-person-commands` | #257 `8e09e60`, for shared context contracts and foundations | Draft at `d2b45ca`; original `48a6533` contracts plus `02c4245` implementation,13 DB tests and HTTP assertions preserved;39 original SQLx descriptors. Formatting/provenance passed; tests/Clippy/SQLx `64524` running. Full and combined gates pending; approval-covered editing remains incomplete, no UI or activation |
-| Cross-PR Timesheet/permission verification only | `integration/timesheet-permission-check`, `.worktrees/timesheet-permission-integration` | Combines #240/#241/#250/#253–#258 and inherited foundations | Published at `6da9981`, no delivery PR; three registration conflicts retain both sides,21 selected whole source/test files unchanged. Formatting passed; tests/Clippy/SQLx `25306` running, full native gate pending |
+| Requester-bound Timesheet page context, [#257](https://github.com/numtide/horae/pull/257) | `feat/timesheet-page-context`, `.worktrees/timesheet-page-context` | #256 `1552fdb`, for subject discovery and shared read admission | Draft at `b30e3cd`; DTO/reader original, all six DB tests retained with a four-line cancellation-barrier synchronization correction. Old `8e09e60` full gate passed; dependent `d2b45ca` exposed a test timeout, retained below. New-head full native Nix `40402` running; no current-head pass claimed |
+| Person-bound Timesheet commands, [#258](https://github.com/numtide/horae/pull/258) | `feat/timesheet-person-commands`, `.worktrees/timesheet-person-commands` | #257 `b30e3cd`, for shared context contracts and foundations | Draft at `b0eacfd`; original command contracts/implementation/13 DB tests/HTTP assertions and39 descriptors unchanged. Old `64524` failed one inherited context test (1010 passed,11 ignored); owner fix merged locally. Fresh tests/Clippy/SQLx `98625` running; full/combined gates pending; no UI or activation |
+| Cross-PR Timesheet/permission verification only | `integration/timesheet-permission-check`, `.worktrees/timesheet-permission-integration` | Combines #240/#241/#250/#253–#258 and inherited foundations | Published at `015dcd1`, no delivery PR; includes owner cancellation-test correction. Original `6da9981` checks `25306` still running, not evidence for new head. Current-head targeted/full gates pending; all registration suites preserved |
 | Cross-PR reader/editor verification only | `integration/permission-readers-editor-check`, `.worktrees/permission-readers-editor-check` | Combines #240 `a19ea63`, #250 `c727bc8`, #253 `3a37538` and #254 `f498c3f` | Published at `7a2d61c`, no delivery PR or merge target; registration conflicts resolved preserving both sides, dedicated source/test blobs unchanged, original combined users module restored exactly. Tests/Clippy/SQLx `24884` and full native Nix `16434` PASSED; exact browser/deployment/OIDC outputs and logs verified after original process terminated. Later #255–#257 not included |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
@@ -4160,3 +4160,45 @@ the permission-editor additions for their owner. The original editor-navigation
 test file is absent from #258's base and needs explicit test ownership/wiring,
 not a blind whole-file replacement. Timesheet page and sidebar themselves match
 the pre-consumer source base; route/admin-shell files have other changes to keep.
+
+### Cancellation-test failure preserved and synchronization corrected
+
+#258 old-head `64524` terminated exit1 on `d2b45ca`:1010 application tests
+passed, one failed,11 ignored. All13 new command tests passed. The failure was
+`sheet_holds_selected_activity_through_entry_delivery_and_releases_on_cancel`,
+at the five-second archive completion timeout (`timesheet_context.rs:343`),
+not an authorization assertion. Strict Clippy and live SQLx passed; the overall
+gate failed. No unchanged rerun was used to discard this failure.
+
+Inspected the pinned SQLx0.8.6 source in the actual Nix vendor tree:
+`sqlx-core/src/transaction.rs` Drop calls `start_rollback`;
+`sqlx-postgres/src/transaction.rs` queues that rollback behind the current query;
+pool return pings/flushes it asynchronously. Aborting the Rust task does not
+immediately cancel the blocked PostgreSQL statement. The test retained its
+artificial ACCESS EXCLUSIVE table barrier after confirmed task cancellation,
+making queued cleanup compete with both the5000ms statement limit and the
+five-second archive deadline. No production-code change was needed.
+
+Owner #257 commit `b30e3cda8ca6f076294735eb9c8e9c03b17bd56e` adds four lines:
+after confirmed cancellation, release that artificial barrier so SQLx rollback
+can complete. Every original assertion remains, including the observed lock
+dependency before cancellation, cancelled-task result, bounded archive
+completion and subsequent access denial. No timeout was increased, test
+removed/ignored or grant/runtime behavior changed. Formatting `7799` passed
+with zero changes. This is an explicit test-harness adaptation, not a claim
+that the database query itself now cancels immediately.
+
+Propagated the owner fix without rewriting history: #258 is now
+`b0eacfdcc08f2d3e226cf3a3e16a9fb25913cef8`; verification-only combination is
+`015dcd15f97c299fef0799041849f9ffbf8696c0`. All three heads are published.
+The old #257 passes at `8e09e60` remain historical, not current-head evidence.
+Descriptions for #257/#258 now expose the failure, correction and pending gates.
+Old combined `25306` remains live on `6da9981` in application tests; do not
+mistake its result for verification of `015dcd1` or restart it while live.
+
+Fresh #258 tests/Clippy/live SQLx `98625` runs on `b0eacfd`. Full native Nix
+#257 `40402` runs on `b30e3cd`. After collecting old combined `25306`, start
+fresh combined checks on `015dcd1`; #258 still also needs its full native gate.
+No corrected-head passing executable result is claimed yet. Continue the
+coherent UI extraction only with these failures/limits preserved in the ledger;
+the goal is still incomplete and no PR was merged or closed.
