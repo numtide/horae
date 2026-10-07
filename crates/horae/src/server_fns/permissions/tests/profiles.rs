@@ -12,6 +12,9 @@ mod directory_tests;
 #[path = "time_entries.rs"]
 mod time_entries_tests;
 
+#[path = "timesheet_people.rs"]
+mod timesheet_people_tests;
+
 async fn save_state(
     pool: &PgPool,
     org: Uuid,
