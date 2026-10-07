@@ -149,11 +149,11 @@ Clients MVP as canonical-permission acceptance.
 | Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267 `e029a89`, inherited report access/readers and all four export routes | Draft at `aef180f`; original components,15 component tests and538-line isolated Chromium fixture. Format/source/provenance/syntax pass; gate50800 failed on two test-only user DTO references; minimal API-matching fix published and new full gate64831 running. No CSS/SQL/schema/activation; full T203 remains open |
 | Cross-PR Reports/Timesheet/People verification only | `integration/reports-permission-check`, `.worktrees/reports-permission-integration` | Combines verified `1a87961` with #268 `810ce57` and its report/export foundations | Local integration merge `b7836d7`, not a delivery PR or GitHub merge. Both HTTP registration sets and all30 unique browser suites retained; dedicated source/test blobs unchanged. Format/syntax/source comparison pass; full native gate25958 running |
 | Scoped project editor, [#269](https://github.com/numtide/horae/pull/269) | `feat/scoped-project-editor`, `.worktrees/scoped-project-editor` | `integration/permission-readers-editor-check` | Draft at `a9ba27b`; canonical fields, preserved hidden values and manager edits extracted. Lost-acknowledgement fixture failed in the full gate but passes isolated; failure remains unresolved. No activation |
-| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `4a5c7d9`; full browser10797 and complete native51216 pass. Fresh Nixbot266 remains running; ARM readiness and repeated-import failures are not yet closed |
-| Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites` at375e9bd, combining #270 and #267 | Draft at `d61bfd3`; parent browser corrections propagated with exact expected tree. Full native81807 running; no fresh-head acceptance yet |
-| Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `fd91c3d`; parent browser corrections propagated with exact expected tree. Its integration in #273 is being checked by76300; own fresh-head acceptance remains pending |
-| Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `4b2c87d`; parent browser corrections propagated with exact expected tree. Full native76300 running. Task lifecycle and catalog-management UI remain separate retained work |
-| Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `9548cdd`; original8dd61d4/facfb49 commands, tests and contract extracted. Source provenance, formatting and whitespace pass; Nix tests/SQLx53475 running. No lifecycle, catalog UI, later atomic rate creation or activation |
+| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `4a5c7d9`; full browser10797 and complete native51216 pass. Nixbot266 failed ARM deployment waiting for the restart-import advisory-lock waiter; ARM acceptance remains open |
+| Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites` at375e9bd, combining #270 and #267 | Draft at `d61bfd3`; parent browser corrections propagated with exact expected tree. Full native81807 passed on this head; ARM and wider delivery review remain pending |
+| Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `fd91c3d`; parent browser corrections propagated with exact expected tree. Full native76300 passed in child #273; own exact-head gate50478 is running |
+| Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `4b2c87d`; parent browser corrections propagated with exact expected tree. Full native76300 passed on this head. ARM, wider review, task lifecycle and catalog-management UI remain separate pending work |
+| Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; missing original test-query descriptors restored after gate53475 failed. Corrected live-schema SQLx passes; tests96425 running. No lifecycle, catalog UI, later atomic rate creation or activation |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
 Combine or subdivide only after tracing code and test dependencies. Prefer
@@ -5407,3 +5407,49 @@ separate pending extractions; #275 does not claim to deliver them. Next collect
 review, reconcile the remote descriptions/ledger after the publication errors,
 then continue those remaining task boundaries and full hunk accounting. No
 extraction merge, #212/#217 closure or policy activation is authorized.
+
+### Task cache correction and verified project dependants — 2026-10-07
+
+The preceding estimate-only response was no progress. Reconfirmed #216 merged,
+checked the original worktree still has its 18 preserved dirty paths, and polled
+the existing process handles before taking action. No original files changed.
+
+Gate53475 terminated with three missing SQLx descriptors in task creation tests;
+the live-schema prepare check independently reported the incomplete cache.
+Published unsigned commit f8c1477 in #275 restores descriptors6b3f433,81aefb2
+andbe0c828 verbatim from originalfacfb49. No Rust or assertion changed. Fresh
+gate96425 has passed live-schema SQLx (with the inherited unused-query warning)
+and is executing tests; full native and final cross-PR gates remain pending.
+
+Source review of #275 traced session identity through organization/actor locks,
+current strict grants, project designation, atomic linked creation and task-row
+serialization. Inspected all 11 creation and eight edit regressions plus both
+registered-session matrices. Explicit rate intent authorizes even financial
+no-ops, validates current currency under the organization lock, preserves
+overrides/history and separates committed event payloads from redacted replies.
+No new critical/high issue identified in this bounded source review. This is
+not independent signoff or acceptance of later lifecycle/link/catalog commands:
+those retain legacy behavior here and policy activation remains forbidden.
+Creation requester/rate transport from laterdcadcee is still separate work.
+
+Full native gates76300 (#2734b2c87d) and81807 (#271d61bfd3) terminated with
+exit0 and all checks passed, including browser and deployment/OIDC. Both
+explicitly omitted ARM/Darwin. #272fd91c3d now has its own exact-head full
+native gate50478 running; the passing child composition is not substituted
+for it. Successfully updated PR descriptions270–273 and275 with current
+evidence; the previous GitHub publication failures no longer block these edits.
+Ledger28f61fe was also successfully published before this iteration.
+
+Nixbot266 on #2704a5c7d9 has now terminated with ARM deployment failure:
+the restart-import scenario waited93.77seconds for an advisory-lock waiter at
+scriptline154 (90-second bound). The existing log does not expose the job's
+status or database wait reason at failure; it cannot distinguish slow progress
+from a failed/stuck job. This differs from the earlier repeated-import wait.
+No timeout or assertion was relaxed, and ARM acceptance is still unproven.
+
+Regenerated the private original-blob inventory including #275: 1,049 of1,214
+paths match an extraction exactly,145 need adaptation/retained-work review,
+and20 original deletions still require ownership reconciliation. These are
+conservation clues, not feature completion percentages or a final hunk audit.
+Next collect96425/50478 without restarting live work, finish #275's full gates,
+then continue the retained task boundaries and shared-file ownership audit.
