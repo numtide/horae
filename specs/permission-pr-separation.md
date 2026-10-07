@@ -103,6 +103,13 @@ implementation remains incomplete. Do not treat
 
 ## Current remote heads — 2026-10-07, inventory refresh
 
+Shared CI prerequisite, added after this58-extraction snapshot:
+[#282](https://github.com/numtide/horae/pull/282), `test/import-recovery-checks`
+at `e39f033a`, is a draft over master containing only the two existing recovery
+test files. Fresh CI is pending. It is not another feature extraction. The
+three source patches remain in #224/#270 until the verified dependency refresh
+removes duplicate review deltas; no source branch has been rewritten yet.
+
 This snapshot supersedes the commit/status labels in the historical delivery
 table below. All58 extraction PRs remain drafts; all remote heads match the local
 branches. After the exact-head #224/#270 completion refreshes, Nixbot reports17
@@ -6498,3 +6505,48 @@ Next: collect74548, then run the full serial gate on complete compositionefae752
 (or a documented reviewed successor). Finish its changed-boundary review before
 propagating the now-verified #224/#270 repairs and refreshing dependent PR bases.
 No GitHub merges/closures, real-data changes or runtime policy activation.
+
+### Shared CI prerequisite extracted — 2026-10-07
+
+Previous iteration made progress through the complete local composition and ARM
+acceptance. Local74548 is confirmed live on frozen5c43f24a; both release package
+targets completed and the server all-target Clippy check is running. No second
+full local gate was launched.
+
+Opened draft [#282](https://github.com/numtide/horae/pull/282) over unchanged
+origin/master8b3cc257: branch `test/import-recovery-checks`, worktree
+`.worktrees/import-recovery-checks`, head `e39f033a12bf3a708b54472fd7a80fb8672bb5df`.
+It isolates the test repairs needed by the extraction stack, rather than making
+CI depend on Project readers or production session cleanup. Two files change:
+CSV engine fixture and NixOS recovery script;58 additions/11 removals. No runtime
+code, schema, new dependency or product behavior is included.
+
+| Source patch | Independent commit | Stable patch ID |
+| --- | --- | --- |
+| 737aa13a VM failure diagnostics | c5ea7b0a | 29757062ad506e3fc0c6976e198220c13b751b40 |
+| b480f9d2 ARM workload bound | 00b0742d | f18c2f514cd5a25c589604b81bf54e56d8380f91 |
+| 2afe25e3 cancellation fixture barrier | e39f033a | 9b983651968f82a97483988966201a5beb016a8a |
+
+All patch IDs match their source. The entire changed CSV file is byte-identical
+to #224's current version; the entire Nix file equals #270's current version.
+Focused14969 passes formatting, both architecture evaluations and the existing
+six deadline/diagnostic cases for each script. Fresh standalone CI remains
+required: source-head Nixbot308/311 are supporting evidence, not this PR's gates.
+Publication16559 succeeded. #224/#270 remain preserved at their prior heads;
+the eventual dependency refresh must remove these duplicate review deltas.
+
+Additional bounded review of compositionefae7522 confirms its Harvest callback,
+credential authorization, account switching, import commands, engine fixture
+setup, report-migration fixture and user-role helper match the original source.
+The callback authority check now resides inside the reserved transaction, as in
+the original #235 extraction; no pre-exchange-only guard was substituted.
+All `week_total_minutes` callers supply the organization identity required by
+#239. Invoice authority tests remain registered alongside the existing suites;
+the read-side additions are the separately retained #220/master snapshot work.
+No new high/critical finding in these reviewed boundaries; this is not a claim
+that all pending CI failure classes or the full semantic audit are resolved.
+
+Next: collect74548 and fresh #282 CI. After the sole local full gate ends, verify
+complete compositionefae7522. Use #282 as the bounded shared prerequisite when
+refreshing dependent branches, preserving explicit backups and avoiding blind
+reruns or counting old heads as new-head verification. No GitHub merges.
