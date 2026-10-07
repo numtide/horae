@@ -2,6 +2,37 @@
 
 use super::*;
 
+/// Read a bounded page of time entries under current canonical permissions.
+#[server]
+pub async fn list_visible_time_entries(
+    query: crate::models::scoped_time::TimeEntryQuery,
+) -> Result<crate::models::scoped_time::TimeEntryPage, ServerFnError> {
+    use permissions::time_entries::TimeReadError;
+
+    let user = require_user().await.map_err(|error| match error {
+        error @ ServerFnError::ServerError {
+            code: UNAUTHORIZED, ..
+        } => error,
+        error => {
+            tracing::error!(%error, "Unable to authenticate time-entry read");
+            server_err("Time entries are unavailable")
+        }
+    })?;
+    let state = crate::state::global_state().await;
+    permissions::time_entries::read(&state.db, user.org_id, user.id, &query)
+        .await
+        .map_err(|error| match error {
+            TimeReadError::Forbidden => forbidden("Current time-read authority is required"),
+            TimeReadError::InvalidQuery => {
+                err(BAD_REQUEST, "Invalid time-entry date range or cursor")
+            }
+            error => {
+                tracing::error!(%error, "Scoped time-entry read failed");
+                server_err("Time entries are unavailable")
+            }
+        })
+}
+
 /// Validate an optional start time (minutes since midnight, 0..=1439) and clamp
 /// the duration so the entry never crosses midnight (Constitution: exactness).
 /// Returns the possibly-clamped minutes and the validated start.
