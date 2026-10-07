@@ -3496,6 +3496,7 @@ tests, Clippy, SQLx, browser and VM derivations. This validates the rebased
 source without claiming that cached checks ran again. Required master-base CI
 run37563128636 is now active, watched by `97039` at120s intervals. PR description
 updated; automatic protected merge requested with exact final-head matching
-(`70881`, collect confirmation). #252 is not yet merged. Next require current
+(`70881` succeeded). GraphQL confirms it enabled at2026-10-07T02:41:49Z,
+stateOPEN, mergeQueueEntrynull and mergeCommitnull. #252 is not yet merged. Next require current
 remote checks, confirm a genuine queue entry and its result, then actual merge
 before resuming original extraction work. No extraction PR merge authorized.
