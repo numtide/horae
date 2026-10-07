@@ -31,25 +31,41 @@ async fn begin(
         .await
         .map_err(database_error)?;
     configure_deadlines(&mut tx).await?;
+    let (policy, grants) = match authorize_current(&mut tx, requester).await {
+        Ok(authority) => authority,
+        Err(error) => {
+            // Release authority before returning, not during deferred pool cleanup.
+            tx.rollback().await.map_err(database_error)?;
+            return Err(error);
+        }
+    };
+    Ok((tx, policy, grants))
+}
+
+/// The caller configures the transaction and owns the lifetime of these gates.
+pub(in crate::reports) async fn authorize_current(
+    connection: &mut PgConnection,
+    requester: PermissionRequester,
+) -> Result<(i32, PermissionSelection), StatusCode> {
     let policy = sqlx::query_scalar!(
         "SELECT permission_policy_version FROM organizations WHERE id=$1 FOR SHARE",
         requester.org_id,
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut *connection)
     .await
     .map_err(database_error)?
     .ok_or(StatusCode::FORBIDDEN)?;
     let role = sqlx::query_scalar!(
         r#"SELECT org_role AS "role: OrgRole" FROM users WHERE org_id=$1 AND id=$2 AND active FOR SHARE"#,
         requester.org_id, requester.user_id,
-    ).fetch_optional(&mut *tx).await.map_err(database_error)?.ok_or(StatusCode::FORBIDDEN)?;
+    ).fetch_optional(&mut *connection).await.map_err(database_error)?.ok_or(StatusCode::FORBIDDEN)?;
     let grants = match policy {
         0 if matches!(role, OrgRole::Manager | OrgRole::Admin) => {
             PermissionSelection::new(&[Permission::TimeReadAll])
         }
         0 => return Err(StatusCode::FORBIDDEN),
         1 => {
-            load_person_permissions(&mut tx, requester.org_id, requester.user_id)
+            load_person_permissions(connection, requester.org_id, requester.user_id)
                 .await
                 .map_err(|error| match error {
                     PermissionStorageError::Database(error) => database_error(error),
@@ -70,7 +86,7 @@ async fn begin(
     {
         return Err(StatusCode::FORBIDDEN);
     }
-    Ok((tx, policy, grants))
+    Ok((policy, grants))
 }
 
 pub(in crate::reports) async fn entries(

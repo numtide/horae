@@ -4,6 +4,55 @@ use crate::server_fns::test_seed::wait_for_blocked;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use std::time::Duration;
 
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn denied_time_export_releases_authority_before_pool_cleanup(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let returning = std::sync::Arc::new(tokio::sync::Notify::new());
+    let cleanup = std::sync::Arc::new(tokio::sync::Notify::new());
+    let reader_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .after_release({
+            let returning = std::sync::Arc::clone(&returning);
+            let cleanup = std::sync::Arc::clone(&cleanup);
+            move |_, _| {
+                let returning = std::sync::Arc::clone(&returning);
+                let cleanup = std::sync::Arc::clone(&cleanup);
+                Box::pin(async move {
+                    // Hold deferred rollback flushing until the writer has checked its lock.
+                    returning.notify_one();
+                    cleanup.notified().await;
+                    Ok(true)
+                })
+            }
+        })
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    assert!(matches!(
+        capture(&reader_pool, &ids).await,
+        Err(StatusCode::FORBIDDEN)
+    ));
+    tokio::time::timeout(Duration::from_secs(5), returning.notified())
+        .await
+        .unwrap();
+    let mut writer = pool.begin().await.unwrap();
+    let lock = sqlx::query!(
+        "SELECT id FROM organizations WHERE id=$1 FOR UPDATE NOWAIT",
+        ids.org_id
+    )
+    .fetch_one(&mut *writer)
+    .await;
+    cleanup.notify_one();
+    writer.rollback().await.unwrap();
+    reader_pool.close().await;
+    assert!(lock.is_ok(), "denied export retained authority: {lock:?}");
+}
+
 async fn capture(pool: &PgPool, ids: &SeedIds) -> Result<time::TimeExport, StatusCode> {
     time::entries(
         pool,
