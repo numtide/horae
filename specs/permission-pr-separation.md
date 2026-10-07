@@ -140,10 +140,11 @@ Clients MVP as canonical-permission acceptance.
 | Cross-PR reader/editor verification only | `integration/permission-readers-editor-check`, `.worktrees/permission-readers-editor-check` | Combines #240 `a19ea63`, #250 `c727bc8`, #253 `3a37538` and #254 `f498c3f` | Published at `7a2d61c`, no delivery PR or merge target; registration conflicts resolved preserving both sides, dedicated source/test blobs unchanged, original combined users module restored exactly. Tests/Clippy/SQLx `24884` and full native Nix `16434` PASSED; exact browser/deployment/OIDC outputs and logs verified after original process terminated. Later #255–#257 not included |
 | Scoped detailed time report, [#261](https://github.com/numtide/horae/pull/261) | `feat/scoped-time-report-reader`, `.worktrees/scoped-time-report-reader` | #257 `b30e3cd`, shared time-read admission | Draft at `bf452dd`; final detailed reader,13 original DB tests, reader HTTP/totals assertions and19 original descriptors. Source/provenance/format pass; full native Nix `37229` PASSED; no UI/export/activation |
 | Scoped grouped time report, [#262](https://github.com/numtide/horae/pull/262) | `feat/scoped-time-report-groups`, `.worktrees/scoped-time-report-groups` | #261 `bf452dd`, report contracts/totals and fixture | Draft at `66dbf0b`; final reader and13 DB tests exact; original171-line HTTP fixture and10 original descriptors. Source/provenance/format pass; full native Nix `79456` PASSED,1024 application tests/zero failed/11 inherited ignored plus all remaining gates; no UI/export/activation |
-| Scoped XLSX time exports, [#263](https://github.com/numtide/horae/pull/263) | `feat/scoped-time-xlsx`, `.worktrees/scoped-time-xlsx` | Review base `e8b95cc`, combining #261 and #247 with their existing foundations | Draft at `8cc11c3`; original cbc78a8 materialization/release checks,11 DB tests and HTTP assertions preserved. Final query predicates retained;11 original cache additions/one obsolete descriptor removed. Format/provenance pass; full native gate48482 running with all ten derivations proven identical to the clean head; CSV/shared filters/groups/UI remain separate |
+| Scoped XLSX time exports, [#263](https://github.com/numtide/horae/pull/263) | `feat/scoped-time-xlsx`, `.worktrees/scoped-time-xlsx` | Review base `e8b95cc`, combining #261 and #247 with their existing foundations | Draft at `8cc11c3`; original cbc78a8 materialization/release checks,11 DB tests and HTTP assertions preserved. Final query predicates retained;11 original cache additions/one obsolete descriptor removed. Full native gate48482 PASSED,1064 application tests/zero failed/11 inherited ignored and remaining checks; all ten derivations previously matched clean head. Wider exports/UI composition remains open |
 | Scoped CSV time exports and shared filters, [#264](https://github.com/numtide/horae/pull/264) | `feat/scoped-time-csv`, `.worktrees/scoped-time-csv` | Review base `4e0ed43`, combining #263 and #249 | Draft at `55d362b`; original10 DB tests/five parser tests/two-format HTTP fixture retained; native cursor final predicates, shared XLSX release helpers and17 original descriptors. Source/provenance/format pass; full native gate40286 running; grouped exports/UI/policy binding remain separate |
 | Report access and permission-mode-bound downloads, [#265](https://github.com/numtide/horae/pull/265) | `feat/time-report-access`, `.worktrees/time-report-access` | #26455d362b scoped downloads and shared parser | Draft at `f436a29`;7266abb backend preflight/DTOs and mode binding, original parser/HTTP assertions unchanged; format and source review pass; full native gate1825 running; no UI or activation |
 | Grouped CSV/XLSX time exports, [#266](https://github.com/numtide/horae/pull/266) | `feat/grouped-time-exports`, `.worktrees/grouped-time-exports` | Review base `da493f6` combining #265 and #262 | Draft at `0eec1a4`; original grouped handlers/source/16 DB tests, shared CSV group authorization and18 descriptors; original grouped-filter HTTP fixture retained. Source/format/provenance pass; full native gate40587 running; later URL controls and consumer/browser integration remain open |
+| Time download result filters, [#267](https://github.com/numtide/horae/pull/267) | `feat/time-report-download-filters`, `.worktrees/time-report-download-filters` | #2660eec1a4 and inherited detailed/grouped report/export foundations | Draft at `e029a89`; original active-project/billability URL parser, seven DB tests, strict transport and actual-session fixtures;10 original descriptors. Format/provenance/source review passed; full native gate51012 running; UI/browser filter propagation retained separately |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -442,7 +443,7 @@ Clients documents are separate and are not silently included in #248.
 | `ca170c0` | Export scoped time groups to Excel with release authorization | time-report-exports | Grouped XLSX reader/renderer/route and seven DB tests in #2660eec1a4; UI/browser/component assertions retained for Reports consumer; specification in #248 |
 | `2b59b58` | Stream grouped time reports with scoped authorization | time-report-exports | Grouped CSV cursor/delivery/route, nine DB tests and shared group-lifetime authorization in #2660eec1a4; UI/browser assertions retained for Reports consumer; specification in #248 |
 | `ecac66b` | Add scoped individual time reports and nested breakdowns | time-report-consumer | Held in original backup; extraction pending |
-| `de8f9ad` | Filter time reports to active projects | time-report-consumer | Held in original backup; extraction pending |
+| `de8f9ad` | Filter time reports to active projects | time-report-consumer | DTO/readers and reader tests in #261/#262; export SQL predicates in #263/#264/#266; strict URL transport and original cross-format snapshot/authority fixtures in #267e029a89. UI/browser/component hunks retained for Reports consumer; specification in #248 |
 | `2497dbe` | Enforce scoped permissions in the project editor | project-editor-permissions | Pure RateEdit code/tests in #221; composable delegation and its transaction tests in `be787ca`; picker reader now #254 retains its historical web lint expectations, whose removal stays with this pending project editor/UI consumer; remaining hunks retained |
 | `2631186` | Enforce scoped project reads across pages and exports | project-read-permissions | Held in original backup; extraction pending |
 | `1b81680` | Record project permission delivery acceptance | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
@@ -455,7 +456,7 @@ Clients documents are separate and are not silently included in #248.
 | `5561f14` | Add permission-aware task catalog management | task-consumers | Held in original backup; extraction pending |
 | `dcadcee` | Add atomic task creation to the task catalog | task-consumers | Held in original backup; extraction pending |
 | `8c1bf9b` | Add task archive and restore controls to project editing | task-consumers | Held in original backup; extraction pending |
-| `db3935d` | Filter time reports and downloads by billability | time-report-consumer | Held in original backup; extraction pending |
+| `db3935d` | Filter time reports and downloads by billability | time-report-consumer | DTO/readers and reader tests in #261/#262; export SQL predicates in #263/#264/#266; grouped HTTP route registrations in #266; strict URL transport and original cross-format DB/HTTP fixtures in #267e029a89. UI/browser/component hunks retained for Reports consumer; specification in #248 |
 
 Additional original #217 commit `dd141c5`: replaced by #220 for delivery, with
 its original branch left untouched and open. All production/test changes are
@@ -4635,3 +4636,49 @@ active-project/billability URL controls and their original tests, then the Repor
 consumer on the reader/export/access foundations. Fold these into the wider
 composition only after preserving its existing fixtures. Continue project/task
 and unpublished Clients boundaries and complete original-hunk accounting.
+
+### Shared result-filter transport and fixtures published
+
+Previous turn progressed by publishing #265/#266 and recording the successful
+Timesheet/People/reader composition. This turn reconfirmed #216 merged and the
+four pending gates live. #26348482 subsequently exited0 with all compatible native
+checks passed on8cc11c3:1064 application tests, zero failed,11 inherited ignored,
+remaining suites, browser, SQLx, Clippy, formatting and deployment/OIDC.
+The previously recorded ten-derivation identity proof binds this run to that
+clean published head; no identical build was restarted.
+
+Created isolated worktree/branch feat/time-report-download-filters on #266.
+Draft #267 at e029a892e228a076887d594750d48fff2fa60b9d owns the remaining
+de8f9ad/db3935d URL-filter transport: optional strict active_projects_only and
+the closed all/billable/non_billable selection, forwarded into already extracted
+query fields and SQL. No production SQL, UI, CSS, schema or dependency change.
+No activation or real-data mutation.
+
+Preserved the original347-line/four-test active-project fixture and378-line/
+three-test billability fixture byte-for-byte. They exercise detailed and grouped
+CSV/XLSX, all four dimensions, empty-result authorization, archived client/task
+independence, effective project/task billability, invoice-linked frozen zero
+rounding, private-field exclusion and source snapshots after edits/archiving.
+The final full HTTP filter fixture and grouped handler/parser file are exact;
+the detailed parser fixture differs only by the two-line Project-export test
+registration retained for that separate owner. No existing test weakened.
+
+Source review checked strict default/duplicate/invalid query decoding, including
+flattened grouped URLs, and traced the forwarded fields through each export's
+existing predicates before aggregation and size limits. T222/T235 contracts
+apply to this transport boundary; T236/UI resource keys and browser interactions
+remain with the Reports consumer. No new high/critical source finding; executable
+evidence for this head remains pending.
+
+SQL inventory29 macros/26 unique queries;10 absent test descriptors restored
+exactly fromdb3935d. Formatter23013 and whitespace checks passed with no edits.
+Owned diff18 paths/1121 additions/two deletions, predominantly original fixtures.
+Branch and draft are published; clean-head full native Nix51012 is running.
+
+#26440286 has passed release/Clippy and is exercising browser checks;
+#2651825 passed release and is running Clippy; #26640587 is building release.
+Next collect these handles and51012 without duplicates. Extract the full
+original Reports consumer, including its component/browser fixtures and filter/
+group/expanded request keys, on the now available reader/export/access/filter
+foundations. Then verify wider composition and continue project/task/Clients
+ownership and the complete original-hunk audit. No extraction merge or closure.
