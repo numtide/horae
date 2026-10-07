@@ -127,10 +127,11 @@ Clients MVP as canonical-permission acceptance.
 | Materialized XLSX/PDF authorization, [#247](https://github.com/numtide/horae/pull/247) | `fix/materialized-export-authority`, `.worktrees/materialized-export-authority` | Review base `3edc0b8` combining existing `0046dad` (#227/#228 + #220/#232) and #222 `e9695fd` | Draft at `d9717e7`; 1,229 tests, full SQLx/provenance (1,135 descriptors), source review/Spec Kit/format, offline native/WASM lint and complete local Nix `32625` passed; remote Nixbot failures, prerequisite integration and retargeted gates remain open; no policy activation |
 | CSV delivery authorization, [#249](https://github.com/numtide/horae/pull/249) | `fix/csv-export-authority`, `.worktrees/csv-export-authority` | Exact #247 head `d9717e7` | Draft at `71232dc`; 1,245 source-head tests, full SQLx/provenance (1,174 descriptors), format/source review/scoped analysis and final-head offline native/WASM lint passed; complete local Nix `72947` passed; retargeted required checks remain; no canonical activation |
 | Existing permission specification and history, [#248](https://github.com/numtide/horae/pull/248) | `docs/permission-specification`, `.worktrees/permission-specification` | Master `1b8fa4f` | Draft at `49843b2`; all 54 original feature documents preserved, six contextualized; all 43 requirements/criteria and 236 task lines unchanged; original New Project transition and AGENTS cache guidance preserved; provenance/format passed, full local Nix `51945` and required GitHub checks passed; final reconciliation pending; no code or constitution adoption |
-| Requester-bound editor API, [#250](https://github.com/numtide/horae/pull/250) | `feat/permission-editor-api`, `.worktrees/permission-editor-api` | Review base `0117991` combining merged master `ed558f6` and #245 `14ad9ca` | Draft at `c727bc8`; four owned commits patch-equivalent to preserved `c82a5b3`; current package, formatting, Clippy, SQLx and complete browser checks passed, full Nix `46207` still running. Old `90520` selector failure retained; corrected helper inherited from merged master. Cross-PR gate remains pending; no UI or activation |
+| Requester-bound editor API, [#250](https://github.com/numtide/horae/pull/250) | `feat/permission-editor-api`, `.worktrees/permission-editor-api` | Review base `0117991` combining merged master `ed558f6` and #245 `14ad9ca` | Draft at `c727bc8`; four owned commits patch-equivalent to preserved `c82a5b3`; full native Nix `46207` PASSED, including complete browser/deployment/OIDC. Old `90520` selector failure retained; corrected helper inherited from merged master. Combined tests/Clippy/SQLx passed; combined browser/deployment remains pending; no UI or activation |
 | Scoped people directory, [#253](https://github.com/numtide/horae/pull/253) | `feat/scoped-people-directory`, `.worktrees/scoped-people-directory` | Review base `0117991`, independent of #250 editor operations and #240 legacy projections | Draft at `3a37538`; original reader/DTO/endpoint and seven DB/HTTP tests preserved; tests/Clippy/live SQLx `18891` and full local Nix `2803` passed. Exact browser/e2e/OIDC outputs explicitly materialized from signed cache; cross-PR integration and retargeted gates remain pending; no UI or activation |
-| Identity-only project-team choices, [#254](https://github.com/numtide/horae/pull/254) | `feat/project-people-picker`, `.worktrees/project-people-picker` | #253 `3a37538`, for shared `PeopleCursor` and inherited foundations | Draft at `f498c3f`; original reader/DTO/endpoint, nine DB tests and HTTP assertions preserved; formatting and 47-query static descriptor inventory passed; full local Nix `81722` running, preserved reader tests passed so far; no picker UI, assignment writes or activation |
-| Cross-PR reader/editor verification only | `integration/permission-readers-editor-check`, `.worktrees/permission-readers-editor-check` | Combines #240 `a19ea63`, #250 `c727bc8`, #253 `3a37538` and #254 `f498c3f` | Published at `7a2d61c`, no delivery PR or merge target; registration conflicts resolved preserving both sides, dedicated source/test blobs unchanged, original combined users module restored exactly. Format, Clippy and SQLx passed; combined tests `24884` running, combined browser/deployment pending |
+| Identity-only project-team choices, [#254](https://github.com/numtide/horae/pull/254) | `feat/project-people-picker`, `.worktrees/project-people-picker` | #253 `3a37538`, for shared `PeopleCursor` and inherited foundations | Draft at `f498c3f`; original reader/DTO/endpoint, nine DB tests and HTTP assertions preserved; full native Nix `81722` PASSED, including complete browser/deployment/OIDC and exact cache reuse where available. Combined browser/deployment remains pending; no picker UI, assignment writes or activation |
+| Scoped time-entry reader, [#255](https://github.com/numtide/horae/pull/255) | `feat/scoped-time-reader`, `.worktrees/scoped-time-reader` | Review base `0117991`, independent of directory, project-team choices and editor operations | Draft at `d93e1af`; original `4ac30fa` DTO/reader/eight DB tests/HTTP assertions and endpoint preserved; 23 original SQLx descriptors, module registrations adapted only. Formatting/provenance passed; full native Nix `40092` running; no Timesheet UI, subject discovery, commands or activation |
+| Cross-PR reader/editor verification only | `integration/permission-readers-editor-check`, `.worktrees/permission-readers-editor-check` | Combines #240 `a19ea63`, #250 `c727bc8`, #253 `3a37538` and #254 `f498c3f` | Published at `7a2d61c`, no delivery PR or merge target; registration conflicts resolved preserving both sides, dedicated source/test blobs unchanged, original combined users module restored exactly. Format, tests, Clippy and SQLx `24884` PASSED; combined full native Nix running; #255 not yet composed |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -386,10 +387,10 @@ Clients documents are separate and are not silently included in #248.
 | `7f14e4b` | Limit user directory responses to consumed fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `1eb13ec` | Add scoped people directory reads | people-directory | Reader, DTO, session endpoint, seven DB tests and canonical HTTP assertions extracted in draft #253; exact-head tests/Clippy/SQLx and full local Nix gate passed on 3a37538; combined integration remains pending. Specification owned by #248; legacy HTTP assertions remain with #240 |
 | `981d0e3` | Resolve approval names without directory access | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
-| `6b5dbae` | Authorize identity-only project team choices | project-team-choices | DTO, reader, endpoint, nine DB tests, HTTP tests and ten SQLx descriptors extracted unchanged in draft #254 on #253; formatting/static cache inventory passed, execution pending; specification owned by #248 |
+| `6b5dbae` | Authorize identity-only project team choices | project-team-choices | DTO, reader, endpoint, nine DB tests, HTTP tests and ten SQLx descriptors extracted unchanged in draft #254 on #253; full native Nix `81722` passed on `f498c3f`; combined browser/deployment pending; specification owned by #248 |
 | `4c00660` | Document project form permission integration boundaries | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `3bb62ac` | Limit session identity responses to display fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
-| `4ac30fa` | Add scoped time-entry reads without financial metadata | time-readers | Held in original backup; extraction pending |
+| `4ac30fa` | Add scoped time-entry reads without financial metadata | time-readers | Original DTO, reader, endpoint, eight DB tests and HTTP assertions in draft #255 `d93e1af` on `0117991`; 23 original SQLx descriptors preserved, module registrations adapted only; formatting/provenance passed, full native Nix running; specification owned by #248 |
 | `c80233b` | Keep invoice identities out of time-entry responses | time-entry-payload | Exact final model and independently registered original legacy HTTP assertions in #242 (`43337fc`); 1,122 tests, complete SQLx, format, offline lints and full Nix passed; canonical fixture remainder and specification hunks separately preserved |
 | `5ec183a` | Fence time-entry writes against account deactivation | time-writer-activity | Source/tests and regenerated cache in #241 (`7820f8d`), original configuration SQL inlined without canonical module; 1,142 tests, both offline lints and full Nix passed; specification hunks retained |
 | `228e151` | Clarify timesheet context and locked calendar behavior | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
@@ -3811,3 +3812,62 @@ Next collect the same three live handles, finish combined browser/deployment
 verification after its tests, then extract the remaining original reader/editor
 and consumer groups with this ownership boundary. Full original hunk accounting
 and final cross-PR acceptance remain open; no original PR or extraction is merged.
+
+### Initial scoped time reader extracted; two full gates completed
+
+Previous iteration was progress: the delivery index was reconciled and the
+time-reader lineage isolated without importing later consumer changes. Confirmed
+#216 remains merged at `02f7b58` before editing. Read the goal, constitution and
+Rust/async/testing/Ponytail guidance; no new product decision or abstraction.
+
+#250 `46207` completed with exit0 on exact `c727bc8`: full native Nix, including
+browser, deployment and OIDC, passed. Application unit result: 982 passed,
+zero failed, 11 inherited ignored; core189 and additional binaries passed.
+#254 `81722` also completed with exit0 on exact `f498c3f`: full native Nix passed,
+including its complete browser run and exact cached outputs where available.
+Application unit result: 985 passed, zero failed, 11 inherited ignored; all nine
+picker DB tests, seven inherited directory DB tests and real-session HTTP
+assertions passed. Updated both PR descriptions, preserving old failure history.
+
+Combined tests/Clippy/SQLx `24884` completed with exit0 on unchanged `7a2d61c`.
+Started its full `nix flake check -L --cores 2 --max-jobs 1`; process1004924 was
+confirmed live in `.worktrees/permission-readers-editor-check`. The launch
+response was truncated before retaining its session handle; do not restart or
+interrupt it. Collect exact derivation/log evidence after that process ends.
+This combination does not yet include #255.
+
+Created `.worktrees/scoped-time-reader`, branch `feat/scoped-time-reader`, from
+review base `0117991`, and published draft
+[#255](https://github.com/numtide/horae/pull/255) at unsigned commit
+`d93e1af639db34b3d709f7b6917d459f31dfb885`. Scope is the initial `4ac30fa` reader,
+not the final mixed Timesheet/report file. Four whole files (DTO, transaction
+reader, 576-line/eight-test DB suite and 155-line session HTTP suite) are
+byte-identical to `4ac30fa`; the 31-line endpoint is copied unchanged. Only five
+module/fixture composition points are adapted. No directory/editor/picker
+dependency is needed. No migration, UI, command or activation is included.
+
+Restored the original16 SQLx additions. A static48-macro inventory identified
+seven older descriptors reused by these source files but absent from this base;
+all seven were copied unchanged from the `4ac30fa` tree before compilation.
+An initial scanner misparsed the quoted raw SQL literal; corrected the scanner
+and discarded that false positive, with no source query edit. Final extraction
+is32 files/1473 insertions, including23 SQLx descriptors and the nine Rust paths.
+No original source or local unpublished work was removed.
+
+Bounded adversarial review checked session-derived authority, tenant joins,
+own/managed/all scope before filters/limits, explicit non-financial projection,
+descending exclusive pagination, actor/policy gates, revoke/cancel transaction
+tests and sanitized errors. No critical/high finding in this boundary. Preserve
+the query/page web-only lint expectations until the real UI consumer arrives.
+Later discovery `60f60f9`, context `5faed76`, consumer/command/report changes remain
+unextracted; legacy invoice payload cleanup belongs to #242, not #255.
+
+Formatting `53706` passed with zero changes, and committed-tree formatting passed
+again in full native Nix `40092`, which remains live on exact `d93e1af`; it has
+restored the merged Crane release dependency artifact and started app builds.
+Compilation/test/browser/deployment success is not yet claimed for #255.
+
+Next collect #255 `40092` and combined full-gate evidence, correct any demonstrated
+failures, then compose #255 and continue original subject-discovery/context and
+editor/UI extractions. Retargeted gates and final original-hunk accounting remain
+open. No extraction PR or original PR was merged or closed.
