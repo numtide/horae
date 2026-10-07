@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO projects (id,org_id,client_id,name,currency) SELECT id,$2,$3,'Same name','EUR' FROM unnest($1::uuid[]) id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aa8f4a6bd670ccc24c2f68333d581906dd6f1be8150386568983d0988dbf4b48"
+}

@@ -138,6 +138,51 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source) VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants).execute(pool).await.unwrap();
     sqlx::query!("INSERT INTO person_management_assignments (id,org_id,manager_id,managed_user_id) VALUES ($1,$2,$3,$4)", Uuid::now_v7(), ids.org_id, ids.user_id, managed).execute(pool).await.unwrap();
     let cookie = api.cookie(ids.user_id).await;
+    let grouped = json!({"query": {
+        "date_from":"2026-09-01", "date_to":"2026-09-30",
+        "client_ids":[ids.client_id,client,foreign.client_id],
+        "project_ids":[ids.project_id,second,foreign.project_id],
+        "user_ids":[ids.user_id,managed,hidden,foreign.user_id],
+        "task_ids":[ids.task_id,task], "tag_ids":[tags[0],tags[1],tags[0]],
+        "group_by":"client", "after":null,
+        "expected_requester":{"org_id":ids.org_id,"user_id":ids.user_id}
+    }});
+    // Exercise the same populated filter fixture through all four groupings.
+    // Repeated tags/IDs must not multiply entries, and each dimension narrows
+    // the authorized row set before aggregation.
+    for dimension in ["client", "project", "task", "person"] {
+        for (key, value, count) in [
+            ("tag_ids", json!([tags[0], tags[1], tags[0]]), 3),
+            ("task_ids", json!([task]), 1),
+            ("user_ids", json!([managed, hidden]), 1),
+            ("client_ids", json!([ids.client_id]), 1),
+            ("tag_ids", json!([tags[0]]), 1),
+            ("project_ids", json!([second, second]), 2),
+            ("project_ids", json!([foreign.project_id]), 0),
+        ] {
+            let mut body = grouped.clone();
+            body["query"]["group_by"] = json!(dimension);
+            body["query"][key] = value;
+            let response = api
+                .json("list_visible_time_report_groups", body, &cookie)
+                .await;
+            assert_eq!(
+                response["totals"],
+                json!({
+                    "entry_count":count,"total_minutes":count*60,
+                    "rounded_minutes":count*60,"billable_minutes":count*60
+                }),
+                "{dimension}: {key}"
+            );
+            let entries: i64 = response["groups"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|group| group["totals"]["entry_count"].as_i64().unwrap())
+                .sum();
+            assert_eq!(entries, count);
+        }
+    }
     let binding = format!(
         "&expected_org_id={}&expected_user_id={}",
         ids.org_id, ids.user_id

@@ -4,6 +4,7 @@ use sqlx::PgConnection;
 use super::*;
 use crate::reports::ProjectExportRow;
 
+pub(super) mod groups;
 mod time;
 pub(super) use time::{declare_entries, entries};
 

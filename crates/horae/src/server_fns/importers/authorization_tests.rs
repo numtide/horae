@@ -228,6 +228,14 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         .register_server_functions()
         .route("/api/reports/export/csv", get(crate::reports::export_csv))
         .route(
+            "/api/reports/time/grouped/csv",
+            get(crate::reports::export_time_groups_csv),
+        )
+        .route(
+            "/api/reports/time/grouped/xlsx",
+            get(crate::reports::export_time_groups_xlsx),
+        )
+        .route(
             "/api/projects/export/csv",
             get(crate::reports::export_projects_csv),
         )
