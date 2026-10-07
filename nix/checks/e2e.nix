@@ -119,10 +119,31 @@ pkgs.testers.nixosTest {
             "sudo -u postgres psql -d horae -At -v ON_ERROR_STOP=1 -c "
             + shlex.quote(statement)
         )
-        server.wait_until_succeeds(
-            "test \"$(" + command + ")\" = " + shlex.quote(expected),
-            timeout=90,
-        )
+        try:
+            server.wait_until_succeeds(
+                "test \"$(" + command + ")\" = " + shlex.quote(expected),
+                timeout=90,
+            )
+        except Exception:
+            # Preserve the failed assertion while exposing slow work vs lost leases
+            # or blocked transactions in the disposable recovery-test database.
+            diagnostics = (
+                "sudo -u postgres psql -d horae -x -c " + shlex.quote(
+                    "SELECT id,status,attempts,phase,processed_count,total_count,"
+                    "lease_until,available_at,last_error FROM horae_jobs; "
+                    "SELECT pid,state,wait_event_type,wait_event,pg_blocking_pids(pid) "
+                    "FROM pg_stat_activity WHERE datname='horae'; "
+                    "SELECT pid,classid,objid,granted FROM pg_locks "
+                    "WHERE locktype='advisory'"
+                ),
+                "journalctl -u horae.service --no-pager -n 80",
+            )
+            for diagnostic in diagnostics:
+                try:
+                    print(server.execute(diagnostic, timeout=15))
+                except Exception as diagnostic_error:
+                    print(f"Recovery diagnostics unavailable: {diagnostic_error}")
+            raise
 
     # The next batch blocks on an advisory lock held by a separate connection.
     # Waiting for the actual lock waiter proves the first batch has committed;
