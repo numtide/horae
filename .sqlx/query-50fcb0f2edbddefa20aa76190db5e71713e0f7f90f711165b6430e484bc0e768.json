@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET project_id=$2,task_id=$3,spent_date=$4,minutes=$5,\n            notes=$6,billable=$7,start_minute=$8,sort_order=$9,is_running=$10,started_at=$11,\n            notified_long_running_at=CASE WHEN $10 THEN notified_long_running_at ELSE NULL END\n           WHERE id=$1 RETURNING updated_at AS \"updated_at: chrono::DateTime<chrono::Utc>\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "updated_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Int4",
+        "Text",
+        "Bool",
+        "Int4",
+        "Int4",
+        "Bool",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "50fcb0f2edbddefa20aa76190db5e71713e0f7f90f711165b6430e484bc0e768"
+}
