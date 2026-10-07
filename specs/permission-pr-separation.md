@@ -3388,3 +3388,12 @@ so a quiet log was not treated as a stopped process or grounds for restart.
 Next collect merge-request confirmation, required CI, and `6287`. Keep the same
 ordering: actual protected #251 merge, no-update-refs unsigned rebase/retarget of
 #252, final master-base CI, authorized #252 merge, then original split goal.
+
+Merge request `83041` completed successfully: exact repaired #251 head verified,
+auto-merge enabled at2026-10-07T01:37:13Z, stateOPEN, mergeCommitnull. No merge yet.
+Crane run `6287` has now built the real package on `587119e`:8m53s, WASM76.88s,
+with cores2/max-jobs1 and unchanged restored dependency artifacts. This slower
+observation is included in the PR body alongside the earlier3m19s observation:
+do not present the fastest sample as a guaranteed speedup. Concurrency/load were
+not controlled; artifact reuse, not a fixed timing ratio, is the proven benefit.
+Remaining Crane checks continue. Live handles are `6287` and `16075` only.
