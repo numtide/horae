@@ -5,6 +5,36 @@ use super::*;
 #[cfg(all(test, feature = "server"))]
 mod tests;
 
+/// Resolve report mode and identity together before mounting consumer resources.
+#[server]
+pub async fn get_time_report_access(
+    expected_requester: Option<crate::models::permission_editor::PermissionRequester>,
+) -> Result<crate::models::time_report::TimeReportAccess, ServerFnError> {
+    let user = require_user().await.map_err(|error| match error {
+        error @ ServerFnError::ServerError {
+            code: UNAUTHORIZED, ..
+        } => error,
+        error => {
+            tracing::error!(%error, "Unable to authenticate report access");
+            server_err("Report access is unavailable")
+        }
+    })?;
+    let requester = crate::models::permission_editor::PermissionRequester {
+        org_id: user.org_id,
+        user_id: user.id,
+    };
+    if expected_requester.is_some_and(|expected| expected != requester) {
+        return Err(forbidden("Report requester has changed"));
+    }
+    let state = crate::state::global_state().await;
+    crate::reports::read_time_report_access(&state.db, requester)
+        .await
+        .map_err(|status| match status {
+            axum::http::StatusCode::FORBIDDEN => forbidden("Current report access is required"),
+            _ => server_err("Report access is unavailable"),
+        })
+}
+
 /// Nonfinancial detailed time under current scoped authority, in bounded pages.
 #[server]
 pub async fn list_visible_time_report_entries(
