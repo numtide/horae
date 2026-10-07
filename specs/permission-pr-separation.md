@@ -5294,3 +5294,30 @@ adaptations through #272/#273 and #271's shared base, continue diagnosing the
 distinct ARM failures, and resolve the remaining hunk ownership. Task lifecycle
 and catalogue UI work remains preserved in #212; it is not silently discarded
 or counted as an accepted extraction. No merge or policy activation performed.
+
+The scratch comparison now records the original deleting commit and every
+extraction where each deleted descriptor is absent. Seven of the20 deletions
+are reproduced by an owning extraction (and sometimes inherited downstream):
+`074eb86a0a23` and `4fa0a9d60b98` belong to #237's requester retention;
+`9ff1b7d9e9c8` and `ed1c72f60026` to #228's lock ordering;
+`548235be5387` to #249's download release checks;
+`717614d03bf8` to #247's project export sizing;
+`bcde45c163fc` to #263's spreadsheet sizing. Prefixes identify the original
+`.sqlx/query-<hash>.json` paths in the full scratch manifest.
+
+The remaining13 descriptors still exist in the extraction trees. Their deletion
+responsibilities are now explicit; this is not approval to remove them without
+checking each owner's current SQLx inventory and any composed consumers:
+
+| Owner | Original descriptor hash prefixes | Responsibility |
+| --- | --- | --- |
+| #270 | `22bd5f392be7`, `6bd34bcfb204`, `baf75ef8ba55`, `bc3f9ea5c9aa`, `c1f2843a6aaf`, `e25b27423bd4` | Project details, budget, spend, list, assignments and tags replaced by scoped queries |
+| #272 | `1f0c682793eb`, `40899460e93f`, `4c92eb5086da` | Harvest project count, direct lookup and list |
+| #273 | `3036fe659e73` | Harvest task count |
+| #269 | `a1ea432d7440` | Project editor settings update |
+| Retained original0591407 | `2a22de0eb8e0`, `8aae7affad63` | Task activity-aware restore/import inserts; lifecycle extraction still pending |
+
+Fresh-head native gate51216 is running on #2704a5c7d9. GitHub initially
+rejected the ledger push and PR-body update with internal server errors; the
+remote branch and body were checked before retrying. This transient publication
+failure did not stop local verification or modify the original branches.
