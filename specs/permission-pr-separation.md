@@ -381,7 +381,7 @@ Clients documents are separate and are not silently included in #248.
 | `8d49421` | Add authorized permission editor subject discovery | permission-editor | Complete final subject DTO/API/reader, 305-line DB tests and HTTP assertions in #250; exact source/cache provenance and workspace suite passed; final gates pending; specification in #248 |
 | `b735b3a` | Add safe person switching to permission editor | permission-editor | Final subject DTO runtime content in #250; person-switching page/state consumer and removal of its historical web expectation remain preserved separately; specification in #248 |
 | `7f14e4b` | Limit user directory responses to consumed fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
-| `1eb13ec` | Add scoped people directory reads | people-directory | Held in original backup; extraction pending |
+| `1eb13ec` | Add scoped people directory reads | people-directory | Reader, DTO, session endpoint, seven DB tests and canonical HTTP assertions extracted in draft #253; original cache descriptors preserved, verification pending. Specification owned by #248; legacy HTTP assertions remain with #240 |
 | `981d0e3` | Resolve approval names without directory access | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `6b5dbae` | Authorize identity-only project team choices | project-team-choices | Held in original backup; extraction pending |
 | `4c00660` | Document project form permission integration boundaries | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
@@ -413,7 +413,7 @@ Clients documents are separate and are not silently included in #248.
 | `774f60a` | Record invoice revocation verification and next integration gates | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `1879b8a` | Preserve requester identity when reloading permission editors | permission-editor | Held in original backup; extraction pending |
 | `dab6885` | Record editor reload verification and remaining directory integration | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
-| `ee16165` | Connect scoped People directory and requester-bound editing | people-directory | Held in original backup; extraction pending |
+| `ee16165` | Connect scoped People directory and requester-bound editing | people-directory | UI consumer remains preserved and pending. Its two DTO web-expectation removals and import spelling change belong with that consumer; #253 retains the historical pre-consumer DTO, with unchanged runtime content |
 | `1b41033` | Record People integration verification and remaining report scope | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `75f13a1` | Add scoped detailed time report reads | time-report-readers | Held in original backup; extraction pending |
 | `cbc78a8` | Apply scoped permissions to time report spreadsheets | time-report-exports | Held in original backup; extraction pending |
@@ -3606,3 +3606,56 @@ do not certify this composition, and the merged select-helper repair has not
 yet been proven to close #250's browser failure. Next collect this gate and
 reconcile the result, retaining the draft until verified; continue the existing
 reader/editor/consumer inventory without expanding product scope.
+
+### Scoped people-directory reader extracted independently of editor operations
+
+Previous iteration was progress: #250's owned commits were preserved, rebased
+without patch changes, published and submitted to a new exact-head gate. Its
+session `46207` remains live; formatting and WASM package compilation passed,
+but the full gate is still pending. No restart or inferred terminal state.
+
+Created `feat/scoped-people-directory` in `.worktrees/scoped-people-directory`
+from the existing review-only base `0117991`. Draft PR #253 contains original
+reader commit `1eb13ec`'s production endpoint, DTO, storage reader, seven DB
+tests and registered-session assertions. It does not require #250 editor
+operations or #240 legacy projections. Shared dependencies are permission
+storage/grants, `configure_administration`, person-management relationships,
+profile test fixtures and the existing `PermissionRequester` value in the base.
+No migrations, UI consumers, legacy `list_users` changes or activation are added.
+
+Production reader/DTO and DB test files are byte-identical to `1eb13ec`.
+Exact string comparison also passed for the complete session endpoint and HTTP
+test body. Only the HTTP module/entry name changes: canonical `check_scoped`
+becomes `scoped_directory::check`, registered in the existing HTTP suite. This
+avoids copying the legacy assertions already owned by #240. The later
+`ee16165` DTO changes are only an import spelling and removal of two web-only
+lint expectations; those stay with its unextracted UI consumer. Specification
+history/contracts remain owned by #248, not duplicated into this code PR.
+
+Adversarial source review checked session-only actor/tenant derivation, explicit
+policy-1 admission, active actor SHARE locking, fail-closed corrupt/missing
+permission state, managed-person rather than project-manager scope, scope before
+activity/cursor/limit, fixed identity-only projection, safe error translation,
+bounded transaction settings and cancellation. The existing seven tests cover
+revocation waits, relationship removal, direct deactivation, pool reuse, deleted
+cursors, page boundaries and foreign/empty scopes; HTTP assertions cover forged
+authority, unauthenticated/revoked callers and non-disclosing errors. These are
+source-review observations, not yet a passing execution or cross-PR integration
+claim. No new product semantics or relaxed assertions.
+
+Initial unsigned head `269e58a` passed formatting (`68456`, zero changes).
+Verification `14669` then FAILED offline compilation for two original test
+queries whose descriptors came from earlier commits `03e90b1`/`8d49421`, not
+the directory commit itself. Preserved and copied those exact source descriptors
+(`0c02f33`, `f68ed67`) in unsigned/pushed `3a3753826a17923ecb1464aa9d911876e5a9ef86`.
+The PR now adds 23 files/1177 lines, including 14 original SQLx descriptors;
+two other descriptors added by `1eb13ec` already exist in the base. No base
+descriptor was removed or modified.
+
+After `14669` terminated, restarted tests/Clippy/SQLx verification on the changed
+head as session `18891`, using isolated disposable PostgreSQL in Nix. Results
+remain pending. Full browser/deployment gates and composition with #240/#250
+remain required. Next collect both live gates, resolve only demonstrated
+extraction failures, then continue the project-team reader/editor UI groups.
+Original #212 still has its same 18 unpublished paths untouched; #208/#217 and
+all original backups remain preserved. No extraction PR merge or closure.
