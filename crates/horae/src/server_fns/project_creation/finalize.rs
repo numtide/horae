@@ -15,7 +15,8 @@ pub(super) async fn finalize_draft_record(
     email_available: bool,
 ) -> Result<Uuid, ServerFnError> {
     let mut tx = pool.begin().await.map_err(storage_error)?;
-    let role = lock_creation_actor(&mut tx, actor_id, org_id).await?;
+    let role =
+        lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::AccessChange).await?;
     let draft = sqlx::query!(
         "SELECT revision, completed_project_id, discarded_at FROM project_drafts
          WHERE id = $1 AND org_id = $2 AND creator_id = $3 FOR UPDATE",
@@ -48,7 +49,7 @@ pub(super) async fn finalize_draft_record(
         .map_err(|error| with_field(error, ProjectFormField::Client))?;
     let currency = form.currency.as_deref().unwrap_or(&client.currency);
     let org_currency = sqlx::query_scalar!(
-        "SELECT default_currency FROM organizations WHERE id = $1 FOR SHARE",
+        "SELECT default_currency FROM organizations WHERE id = $1",
         org_id,
     )
     .fetch_one(&mut *tx)

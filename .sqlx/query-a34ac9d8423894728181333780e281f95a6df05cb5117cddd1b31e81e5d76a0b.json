@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM assignments a USING projects p, users u\n         WHERE a.id = $1 AND a.project_id = p.id AND a.user_id = u.id\n           AND p.org_id = $2 AND u.org_id = $2 AND a.project_id = $3\n         RETURNING a.id, a.project_id, a.user_id, a.role as \"role: ProjectRole\", a.rate_cents,\n                   a.created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "role: ProjectRole",
+        "type_info": {
+          "Custom": {
+            "name": "project_role",
+            "kind": {
+              "Enum": [
+                "lead",
+                "freelancer",
+                "admin"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "a34ac9d8423894728181333780e281f95a6df05cb5117cddd1b31e81e5d76a0b"
+}

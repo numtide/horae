@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "LOCK TABLE users IN ACCESS EXCLUSIVE MODE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "2962a43fd17841a5eb5403846dfdbdbd3ca7f84f519369213da50c61017cbdc4"
+}

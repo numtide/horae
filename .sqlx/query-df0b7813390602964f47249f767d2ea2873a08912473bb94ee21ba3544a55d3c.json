@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT name, catalog_version, grants, revision FROM permission_templates WHERE org_id = $1 AND id = $2 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "catalog_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "grants",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 3,
+        "name": "revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "df0b7813390602964f47249f767d2ea2873a08912473bb94ee21ba3544a55d3c"
+}

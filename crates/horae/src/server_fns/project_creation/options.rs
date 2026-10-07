@@ -14,7 +14,7 @@ pub(super) async fn load_selected_catalog(
         return Err(err(BAD_REQUEST, "Select at most 500 tasks and 500 people"));
     }
     let mut tx = pool.begin().await.map_err(storage_error)?;
-    let role = lock_creation_actor(&mut tx, actor_id, org_id).await?;
+    let role = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
     let tasks = sqlx::query_as!(
         CreationTask,
         "SELECT id, name, billable_default as billable, default_rate_cents, default_rate_currency FROM tasks
@@ -41,7 +41,7 @@ pub(super) async fn load_selected_client(
     client_id: uuid::Uuid,
 ) -> Result<Option<CreationClient>, ServerFnError> {
     let mut tx = pool.begin().await.map_err(storage_error)?;
-    lock_creation_actor(&mut tx, actor_id, org_id).await?;
+    lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
     let client = sqlx::query_as!(CreationClient,
         "SELECT id, name, currency, active, default_rate_cents FROM clients WHERE org_id = $1 AND id = $2",
         org_id, client_id,
@@ -69,7 +69,7 @@ pub(super) async fn load_creation_options(
         }
     }
     let mut tx = pool.begin().await.map_err(storage_error)?;
-    let role = lock_creation_actor(&mut tx, actor_id, org_id).await?;
+    let role = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
     let organization_currency = sqlx::query_scalar!(
         "SELECT default_currency FROM organizations WHERE id = $1",
         org_id,

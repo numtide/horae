@@ -78,6 +78,7 @@ async fn creating_a_project_task_enables_it_with_its_defaults(pool: PgPool) {
     let task = create_task_for_project(
         &pool,
         ids.org_id,
+        ids.user_id,
         "  Support  ",
         false,
         Some(ids.project_id),
@@ -102,9 +103,16 @@ async fn failed_project_task_creation_leaves_no_orphan_task(pool: PgPool) {
     .unwrap();
     for project in [ids.project_id, other.project_id, uuid::Uuid::now_v7()] {
         assert!(
-            create_task_for_project(&pool, ids.org_id, "Orphan", true, Some(project))
-                .await
-                .is_err()
+            create_task_for_project(
+                &pool,
+                ids.org_id,
+                ids.user_id,
+                "Orphan",
+                true,
+                Some(project)
+            )
+            .await
+            .is_err()
         );
     }
     assert_eq!(

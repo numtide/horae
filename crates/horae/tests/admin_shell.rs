@@ -35,6 +35,8 @@ struct Probe {
     responses: Rc<RefCell<VecDeque<oneshot::Receiver<AuthResponse>>>>,
     org_requests: Rc<Cell<usize>>,
     panel_mounts: Rc<Cell<usize>>,
+    audit: bool,
+    canonical_requests: Rc<Cell<usize>>,
 }
 
 impl Probe {
@@ -46,10 +48,15 @@ impl Probe {
 }
 
 fn app(probe: Probe) -> Element {
+    let path = if probe.audit {
+        "/admin/audit"
+    } else {
+        "/admin/users"
+    };
     use_context_provider(|| probe);
     rsx! {
         HistoryProvider {
-            history: |_| Rc::new(MemoryHistory::with_initial_path("/admin/users")) as Rc<dyn History>,
+            history: move |_| Rc::new(MemoryHistory::with_initial_path(path)) as Rc<dyn History>,
             Router::<route::Route> {}
         }
     }
@@ -220,6 +227,32 @@ async fn retry_waits_for_fresh_authorization_then_recovers() {
 mod server_fns {
     use super::*;
 
+    pub struct OwnPermissions {
+        pub catalog_version: u32,
+        pub is_administrator: bool,
+    }
+
+    pub async fn get_my_permissions() -> Result<Option<OwnPermissions>, ServerFnError> {
+        let probe = consume_context::<Probe>();
+        probe
+            .canonical_requests
+            .set(probe.canonical_requests.get() + 1);
+        let reply = probe
+            .responses
+            .borrow_mut()
+            .pop_front()
+            .expect("unexpected canonical read");
+        reply
+            .await
+            .expect("resolve canonical authorization")
+            .map(|user| {
+                Some(OwnPermissions {
+                    catalog_version: horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION,
+                    is_administrator: user.is_admin(),
+                })
+            })
+    }
+
     pub async fn get_me() -> AuthResponse {
         let response = consume_context::<Probe>()
             .responses
@@ -282,6 +315,8 @@ mod route {
         AdminUsers {},
         #[route("/admin/importers")]
         HarvestImport {},
+        #[route("/admin/audit")]
+        PermissionAudit {},
     }
 
     pub fn route_is_active(to: &Route) -> bool {
@@ -306,4 +341,62 @@ mod route {
     fn HarvestImport() -> Element {
         rsx! { "Importer panel" }
     }
+
+    #[component]
+    fn PermissionAudit() -> Element {
+        rsx! { "Permission audit panel" }
+    }
+}
+
+#[tokio::test]
+async fn audit_route_uses_canonical_authority_without_replacing_legacy_page_checks() {
+    for allowed in [true, false] {
+        let probe = Probe {
+            audit: true,
+            ..Probe::default()
+        };
+        let response = probe.request();
+        let mut dom = start(&probe);
+        assert_panel_hidden(&dom, &probe);
+        response
+            .send(Ok(User(if allowed {
+                OrgRole::Admin
+            } else {
+                OrgRole::Member
+            })))
+            .unwrap_or_else(|_| panic!("audit request dropped"));
+        settle(&mut dom);
+        assert_eq!(probe.canonical_requests.get(), 1);
+        assert_eq!(
+            dioxus::ssr::render(&dom).contains("Permission audit panel"),
+            allowed
+        );
+    }
+    let probe = Probe::default();
+    let response = probe.request();
+    let mut dom = start(&probe);
+    response
+        .send(Ok(User(OrgRole::Member)))
+        .unwrap_or_else(|_| panic!("legacy request dropped"));
+    settle(&mut dom);
+    assert_panel_hidden(&dom, &probe);
+    assert_eq!(probe.canonical_requests.get(), 0);
+}
+
+#[tokio::test]
+async fn audit_gate_hides_internal_authentication_failures() {
+    let probe = Probe {
+        audit: true,
+        ..Probe::default()
+    };
+    let response = probe.request();
+    let mut dom = start(&probe);
+    response
+        .send(Err(ServerFnError::new("private SQL diagnostic")))
+        .unwrap_or_else(|_| panic!("audit request dropped"));
+    settle(&mut dom);
+    assert_panel_hidden(&dom, &probe);
+    let html = dioxus::ssr::render(&dom);
+    assert!(!html.contains("private SQL diagnostic"));
+    assert!(html.contains("Could not verify Administrator access"));
 }

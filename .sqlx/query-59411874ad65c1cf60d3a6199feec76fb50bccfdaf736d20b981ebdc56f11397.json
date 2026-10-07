@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO permission_change_receipts\n        (id, org_id, operator_id, operator_command, request_id, format_version, intent, result, audit)\n        SELECT $1, org_id, 'operator-invocation', 'permission.change', $2, format_version,\n        '{\"private_input\":\"sentinel\"}'::jsonb, '{\"private_result\":\"sentinel\"}'::jsonb, audit\n        FROM permission_change_receipts WHERE id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "59411874ad65c1cf60d3a6199feec76fb50bccfdaf736d20b981ebdc56f11397"
+}

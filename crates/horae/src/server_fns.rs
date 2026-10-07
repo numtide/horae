@@ -502,8 +502,18 @@ mod clients;
 mod importers;
 mod invoices;
 mod organization;
+#[cfg(feature = "server")]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Stored permission state is not activated until the cutover gates pass"
+    )
+)]
+mod permissions;
 mod plugins;
 mod project_creation;
+mod project_managers;
 mod projects;
 mod reports;
 mod time_entries;
