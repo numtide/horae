@@ -76,7 +76,8 @@ specification paths remain retained with unfinished client-workflow follow-up:
 dependent reconciliation, operation matrix, plan, spec, tasks, progress and
 quickstart. Their approved FR-035/036 decisions are also preserved in the
 extracted contract; their historical checks are not fresh extraction evidence.
-T237 verification and T238 implementation remain incomplete. Do not treat
+T237 has current-head native extraction verification recorded below; T238
+implementation remains incomplete. Do not treat
 #216's legacy Clients MVP as canonical-permission acceptance.
 
 | Original status | Path |
@@ -5980,3 +5981,35 @@ now uses protected-field CASE assignments in place of its obsolete settings
 update. This narrows the next cache-reconciliation action but does not substitute
 for offline compilation/cache validation after removing descriptors. No cache
 file was deleted during this iteration or while its owner's gate was live.
+
+### Final-head client and ARM results — 2026-10-07
+
+Client15935 finished exit0 on unchanged cd8d1db7bcc9f5de1d60feaaff4c337c5ad51fa4:
+all native checks passed, including live SQLx, application/component tests,
+browser and deployed recovery/OIDC. The deployment script took97.91s.
+ARM/Darwin were omitted locally. This replaces the earlier failed compilation
+and missing-cache attempts as #281's exact-head native evidence. T238 and the
+original broad feature acceptance remain incomplete; source task markers were
+not rewritten. Do not restart15935.
+
+Nixbot295 completed SUCCESS at2026-10-07T18:13:09Z on #270737aa13a. Fetched its
+successful-attribute page and actual ARM e2e derivation log, retained under
+`.scratch/nixbot-295-*`. `checks.aarch64-linux.e2e` executed successfully in21m,
+not merely reused a skipped result; its script finished in1226.11s. SIGTERM and
+SIGKILL checkpoint/recovery and repeat-import assertions all completed. The
+previously failing SIGKILL waiter appeared in71.82s; recovery took80.68s and the
+last reimport91.14s elapsed under the existing wait helper. No failure diagnostic
+ran. Both architecture formatting and x86 e2e attributes also succeeded;16 other
+attributes were already built.
+
+This is current-head ARM green evidence, not a root-cause fix for build266's
+intermittent timeout. The diagnostic-only change leaves successful execution
+unchanged, and timings remain close to the existing wait threshold. Preserve the
+previous failure and do not infer stable timing, widen deadlines or claim that
+the added diagnostics repaired runtime behavior. Further runs are warranted by
+actual source changes, not repeated polling of completed295.
+
+Ledger deb861d1 and #279's updated composition result were published successfully
+(61706 and5920 exit0). Updating #270/#281 descriptions and this result receipt
+is the next publication action. Only37940 (#271) and31708 (#268) remain live
+from this batch; cache cleanup, cross-stack unions and #269 diagnosis remain.
