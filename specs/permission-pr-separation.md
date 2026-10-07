@@ -141,6 +141,12 @@ implementation remains incomplete. Do not treat
   cleanup. #264's111 focused report tests and its actual HTTP session/organization
   matrix passed. Remaining shared-CI rebases and
   final prerequisite integration are still required.
+- Updated full composition604c0481 includes #283 framing, the #263 denied-export
+  rollback and #246 lint correction, plus #284 VM stores and #285 runner limits.
+  Complete native gate14504 passed:191 core tests,1478 server tests,15 auxiliary
+  binaries and all other compatible checks, including deployment/recovery91.22s
+  and OIDC29.07s. This preserves f90f60f7 as earlier evidence; neither result is
+  an ARM VM pass or verification of yet-unpublished extraction heads.
 
 ## Remote heads snapshot — 2026-10-07, before the follow-ups above
 
@@ -8245,3 +8251,33 @@ is verified, use the saved expected trees and recovery refs for the bounded
 refresh, with rebase.updateRefs disabled and explicit remote leases. Revalidate
 all heads before writing; a recovery checkpoint is not permission to overwrite
 subsequent user changes or a substitute for final-head tests.
+
+### Complete composition with CI corrections passed — 2026-10-08
+
+The preceding iteration made progress by creating and independently restoring
+the75-branch recovery checkpoint, published in ledgerccc827cb. Reconfirmed
+local14504 and remote402/404 live, then waited without restarting any check.
+Collected14504's terminal exit0 on clean604c0481770f1264eb07638518635e62dc991dd8:
+the log ends in all checks passed and explicitly omits ARM/Darwin.
+
+The complete composition passed191 core tests,1478 server tests with11 existing
+manual measurements ignored, and all15 auxiliary binaries. The server suite
+took356.90s with the two-thread budget. CLI framing, denied-export rollback and
+the previously failing CSV interruption cases are included. Browser, Clippy,
+SQLx and unchanged build outputs were reused where their derivations matched;
+the changed tests and VM checks executed. Deployment/recovery finished91.22s
+and OIDC29.07s, both with the explicit store-registration guard. Expected
+database-creation denials are assertions within the successful VM script, not
+failed build results.
+
+Evidence remains `.scratch/permission-delivery-ci-604c0481-full-check.log` and
+the isolated clean worktree. Its source difference from already-verified
+f90f60f7 is exactly the three Nix files previously recorded; no Rust, SQLx,
+browser assertions or migration changes were required. This closes the local
+cross-extraction CI-configuration check, not new-head individual remote CI or
+the remaining ARM VM gates. Original code and prior verification remain intact.
+
+Next: collect402/404 ARM VM results before propagating the base. If those fail,
+inspect their actual terminal logs rather than attributing every failure to
+the previous TCG timeout. The75-branch preview/recovery checkpoint is ready;
+heads and leases must still be revalidated before any rewrite or publication.
