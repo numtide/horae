@@ -5038,3 +5038,20 @@ Do not rerun these unchanged heads or weaken their assertions. Next complete
 #274's native and remote ARM validation, record its actual outcome, then return
 to the concrete browser failures before further extraction. Existing original
 branches/worktrees remain preserved; no extraction PR was merged or closed.
+
+The initial #274 run exposed a second, test-driver-specific delay:
+wait_for_console_text consumes one queued console line per one-second retry.
+The guest had emitted readiness but the reader was still draining old boot
+lines. Follow-up f869353 uses the existing bounded retry helper with
+get_console_log instead; the readiness marker and900-second bound are unchanged.
+Formatting and whitespace passed. Superseded native21618 was explicitly stopped,
+not reported as success. Full native56305 and Nixbot build204 validate the new
+head. The native OIDC VM completed its full assertions in21.47 seconds; the
+remaining gates are pending. No application assertion or test was removed.
+
+Full native56305 completed successfully on #274f869353: all native flake checks
+passed, with the deployment/recovery VM completing in70.03 seconds. Nixbot204
+is still pending and remains the required ARM evidence. Full native96635 on
+#273571f3f5 failed in the existing new-project browser suite (expected three
+project rows, received four); retain the draft and investigate isolation after
+the priority repair. No unchanged extraction check is being restarted.
