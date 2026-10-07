@@ -3100,3 +3100,45 @@ merging the extraction PRs or closing the preserved originals. Start from
 current `origin/master` (`1b8fa4f`) and retain all existing test gates. Measure
 build behavior and dependency reuse rather than claiming an unmeasured speedup.
 Resume the remaining ownership mapping above after the build PRs are merged.
+
+### Build PRs published; verification in progress
+
+Both priority branches start from exact master `1b8fa4f`; no extraction branch
+was merged or rewritten.
+
+- [#251](https://github.com/numtide/horae/pull/251), `perf/release-thin-lto`,
+  worktree `.worktrees/release-thin-lto`, unsigned `0004659`: only two release
+  values change (`lto = "thin"`, `codegen-units = 16`). Formatting passed;
+  complete native/WASM package `42999` passed (build phase 8m56s). Binary size
+  increases from 90,176,360 to 119,730,568 bytes; public bundle allocation from
+  3,728 to 3,916 KiB. Exact-master control rebuild `91392` remains running;
+  concurrent workloads preclude claiming a controlled speedup. Full local gate
+  `57447` and remote Flake Check run `37549267934` remain pending. Format passed.
+- [#252](https://github.com/numtide/horae/pull/252),
+  `build/crane-dependency-cache`, worktree `.worktrees/crane-dependency-cache`,
+  stacks on #251. Pins Crane `47b6b27` without changing Rust/Dioxus/nixpkgs or
+  Cargo.lock; separates Dioxus release dependencies from shared development
+  dependencies for tests/Clippy/SQLx. No assertions or test execution removed.
+  Initial `8be49dc` failed minimal-source construction because generated stubs
+  were read-only. Unsigned/pushed `8b4c69d` fixes only that generated directory;
+  minimal-source build `59698` passed. Superseded full runs `22361`/`22680` were
+  deliberately interrupted, not passed; corrected full gate `10968` is running.
+  The first dependency preparation requires fetching/unpacking Crane's vendor
+  layout. It is not a warm-cache benchmark.
+
+The initial source-only probe changes an actual Rust file temporarily: application
+derivation changes, both dependency derivations remain identical. The probe was
+removed with a patch and clean diff verified. Initial tests/Clippy/SQLx also
+evaluate to the same development dependency derivation. This demonstrates key
+stability, not yet successful Cargo artifact reuse. Final Git-source derivations
+on `8b4c69d`: package `qck7vabd696gkqh2898j5qz42c32k3nz`, release dependencies
+`1250yiw3cd1ba0yafilansgwfll69x1a`, check dependencies
+`45fhbl1nxfzlfayfa2g79rgz64a8gc6i`. Dev shell probe `48847` passed (Cargo1.96.1,
+Dioxus0.7.9, database environment present). ARM and cross-overlay evaluation
+passed, but cross builds are not certified by evaluation.
+
+Next collect priority gates and baseline, inspect actual dependency reuse and
+package/browser/VM behavior, correct findings, then merge #251 only when ready.
+Retarget #252 to master afterwards and require its own final checks before merge.
+Both remain draft. Original editor gate `90520` also remains running; preserve
+its result. Resume extraction ownership work only after the build priority.
