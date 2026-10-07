@@ -148,6 +148,11 @@ Clients MVP as canonical-permission acceptance.
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 | Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267 `e029a89`, inherited report access/readers and all four export routes | Draft at `aef180f`; original components,15 component tests and538-line isolated Chromium fixture. Format/source/provenance/syntax pass; gate50800 failed on two test-only user DTO references; minimal API-matching fix published and new full gate64831 running. No CSS/SQL/schema/activation; full T203 remains open |
 | Cross-PR Reports/Timesheet/People verification only | `integration/reports-permission-check`, `.worktrees/reports-permission-integration` | Combines verified `1a87961` with #268 `810ce57` and its report/export foundations | Local integration merge `b7836d7`, not a delivery PR or GitHub merge. Both HTTP registration sets and all30 unique browser suites retained; dedicated source/test blobs unchanged. Format/syntax/source comparison pass; full native gate25958 running |
+| Scoped project editor, [#269](https://github.com/numtide/horae/pull/269) | `feat/scoped-project-editor`, `.worktrees/scoped-project-editor` | `integration/permission-readers-editor-check` | Draft at `a9ba27b`; canonical fields, preserved hidden values and manager edits extracted. Lost-acknowledgement fixture failed in the full gate but passes isolated; failure remains unresolved. No activation |
+| Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `387f80f`; current reader, budgets and bound UI extracted. Two fixture corrections pass focused Chromium; full native36963 running. ARM readiness and repeated-import failures remain open |
+| Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites`, combining #270 and #267 | Draft at `255aa94`; requester and financial release guards plus original DB/HTTP tests extracted. Full browser gate failed the inherited fixed project-count assertion; #270 corrections not yet propagated |
+| Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `abe5aa0`; original list/count/direct-ID boundary and race tests extracted. Full acceptance pending; fresh Nixbot215 reports ARM and browser failures. Parent fixture corrections not yet propagated |
+| Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `5a04f89`; original readers, DB/HTTP/browser tests and sidebar interaction correction extracted. Inherited filter-count failure remains until parent correction propagates. Task lifecycle and catalog-management UI are still separate retained work |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
 Combine or subdivide only after tracing code and test dependencies. Prefer
@@ -446,10 +451,10 @@ Clients documents are separate and are not silently included in #248.
 | `2b59b58` | Stream grouped time reports with scoped authorization | time-report-exports | Grouped CSV cursor/delivery/route, nine DB tests and shared group-lifetime authorization in #2660eec1a4; UI/browser assertions retained for Reports consumer; specification in #248 |
 | `ecac66b` | Add scoped individual time reports and nested breakdowns | time-report-consumer | Three original scoped modules, individual/nested transitions and original browser/component assertions in #268810ce57; specification in #248 |
 | `de8f9ad` | Filter time reports to active projects | time-report-consumer | DTO/readers and reader tests in #261/#262; export SQL predicates in #263/#264/#266; strict URL transport and original cross-format snapshot/authority fixtures in #267e029a89. UI/browser/component hunks retained for Reports consumer; specification in #248 |
-| `2497dbe` | Enforce scoped permissions in the project editor | project-editor-permissions | Pure RateEdit code/tests in #221; composable delegation and its transaction tests in `be787ca`; picker reader now #254 retains its historical web lint expectations, whose removal stays with this pending project editor/UI consumer; remaining hunks retained |
-| `2631186` | Enforce scoped project reads across pages and exports | project-read-permissions | Held in original backup; extraction pending |
+| `2497dbe` | Enforce scoped permissions in the project editor | project-editor-permissions | Pure RateEdit code/tests in #221; composable delegation and transaction tests in #243; picker reader in #254. Canonical editor DTOs, field/association/save logic, UI, DB/HTTP/browser tests and consumer lint adaptations extracted in #269. Full acceptance remains pending; later task lifecycle changes are not included. Specifications owned by #248 |
+| `2631186` | Enforce scoped project reads across pages and exports | project-read-permissions | Ordinary readers, budgets, minimal labels and bound overview/detail UI in #270; CSV/XLSX release boundaries in #271; Harvest-compatible project list/count/direct-ID readers in #272. Shared export helpers compose over earlier export PRs. Tests and original descriptors retained; fixture adaptations and failing gates recorded below. Final shared-file hunk audit and complete acceptance remain pending; specifications owned by #248 |
 | `1b81680` | Record project permission delivery acceptance | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
-| `f6e8bf1` | Enforce task catalog and tracking read permissions | task-permissions-lifecycle | Held in original backup; extraction pending |
+| `f6e8bf1` | Enforce task catalog and tracking read permissions | task-permissions-lifecycle | Task catalog/tracking and Harvest-compatible readers, DB/HTTP/browser fixtures, original descriptors and sidebar interaction correction extracted in #273. Full acceptance remains pending; later task creation, editing, activity and linking commands are still retained separately. Specifications owned by #248 |
 | `8dd61d4` | Enforce current task creation and project scope permissions | task-permissions-lifecycle | Held in original backup; extraction pending |
 | `facfb49` | Protect task rate edits with explicit intent and current permissions | task-permissions-lifecycle | Held in original backup; extraction pending |
 | `ac4c90c` | Authorize task activity changes and guard running timers | task-permissions-lifecycle | Held in original backup; extraction pending |
@@ -5224,3 +5229,21 @@ Next inspect the live 57812 result, propagate the verified test correction
 through its existing dependent stacks, and diagnose the two new ARM failures
 before claiming reliable remote acceptance. Retain #269–#273 as drafts and
 continue the original hunk-accounting goal; no extraction merge is authorized.
+
+Full native 57812 failed in the project-only request audit, before the filter
+suite: `directories` contained the legacy Timesheet's `list_clients` call from
+the login landing page; `errors` was empty. The listener was installed before
+login, and the old Timesheet explicitly mounts that directory resource. The
+failure therefore depends on whether landing-page hydration starts before
+the fixture navigates to Projects.
+
+Commit 387f80f in #270 authenticates through the same dev-login endpoint using
+the browser context's shared cookie store, with redirects disabled and the303
+response and `/` destination asserted. No Timesheet is mounted; the directory
+listener remains active before the first Projects navigation and none of its
+assertions are removed or filtered. All project browser interactions, grant
+revocations, inactive-account checks and requester-binding checks remain real.
+Focused Chromium 8195 passes all three scenario groups; Node syntax and
+whitespace pass. Full native 36963 is running on published 387f80f. Do not
+restart the completed failing 57812 or count the focused pass as full acceptance.
+Downstream propagation waits for this corrected head's full result.
