@@ -8347,7 +8347,7 @@ composition; ledgercef63082 is published. Revalidated both live local handles
 both app builds have completed their web bundles and continue running. Remote
 checks are still pending, not successful or stopped. No build was restarted.
 
-Updated the tree-only propagation proof for targeted286e6b. Revalidated all75
+Updated the tree-only propagation proof for target `ed286e6b`. Revalidated all75
 local/remote heads, clean worktrees and saved recovery references. All75 trees
 contain exactly the shared correction's edits in eight files, with no feature,
 SQLx or migration edits. All57 code-PR review patches retain identical added
@@ -8372,3 +8372,12 @@ Next: collect91786/85532 and the exact-head ARM VM/test results. If the shared
 base passes, revalidate leases and apply the refreshed preview in dependency
 order, preserving the six explicitly reviewed insertion resolutions. Do not
 treat the simulation as executed rebases or fresh-head CI acceptance.
+
+The current GitHub base query also confirms11 extraction roots still review
+against #282: #219, #220, #223, #224, #225, #227, #231, #238, #239, #240 and
+#242. When publishing verified refreshed heads, retarget these11 to
+test/import-cancellation-release (#286), otherwise their visible review diffs
+would include shared CI corrections. All other extraction review-base names
+remain unchanged. Do not retarget #283, whose real prerequisite remains #282,
+or change the shared-fix chain. This is a pending publication step, not an
+already-applied base change.
