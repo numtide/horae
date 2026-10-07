@@ -5,7 +5,48 @@ use horae_core::types::EntryState;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::people::PeopleCursor;
 use super::permission_editor::PermissionRequester;
+
+/// Narrow authorized Timesheet identities, independently of the displayed dates.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    not(feature = "server"),
+    expect(
+        dead_code,
+        reason = "Timesheet selected-person integration is pending."
+    )
+)]
+pub struct TimesheetPeopleQuery {
+    pub search: String,
+    pub user_id: Option<Uuid>,
+    pub after: Option<PeopleCursor>,
+}
+
+/// A navigation label does not grant access to this person's other records.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimesheetPerson {
+    pub id: Uuid,
+    pub name: String,
+}
+
+/// Each page is reauthorized; these identities are not write capabilities.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    not(feature = "server"),
+    expect(
+        dead_code,
+        reason = "Timesheet selected-person integration is pending."
+    )
+)]
+pub struct TimesheetPeoplePage {
+    pub requester: PermissionRequester,
+    pub people: Vec<TimesheetPerson>,
+    pub next_after: Option<PeopleCursor>,
+}
 
 /// An exclusive descending ordering bound, not a permission snapshot.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

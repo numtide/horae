@@ -1,14 +1,16 @@
 //! Scoped time reads; neither contextual labels nor running timers grant writes.
 
-use horae_core::permissions::catalog::Permission;
+use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use horae_core::types::EntryState;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::{PermissionStorageError, configure_administration, load_person_permissions};
+use crate::models::people::PeopleCursor;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::scoped_time::{
-    TimeEntryCursor, TimeEntryPage, TimeEntryQuery, VisibleTimeEntry,
+    TimeEntryCursor, TimeEntryPage, TimeEntryQuery, TimesheetPeoplePage, TimesheetPeopleQuery,
+    TimesheetPerson, VisibleTimeEntry,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -17,7 +19,7 @@ pub(crate) enum TimeReadError {
     Forbidden,
     #[error("Permission state is unavailable")]
     Unavailable,
-    #[error("Invalid time-entry date range or cursor")]
+    #[error("Invalid time-read query")]
     InvalidQuery,
     #[error(transparent)]
     Storage(#[from] PermissionStorageError),
@@ -25,13 +27,12 @@ pub(crate) enum TimeReadError {
     Database(#[from] sqlx::Error),
 }
 
-/// Session-derived identity only; materialize rows while authority is stable.
-pub(crate) async fn read(
+/// Keep policy, actor activity and grants stable until rows are materialized.
+async fn begin_read(
     pool: &PgPool,
     org_id: Uuid,
     actor_id: Uuid,
-    query: &TimeEntryQuery,
-) -> Result<TimeEntryPage, TimeReadError> {
+) -> Result<(Transaction<'_, Postgres>, PermissionSelection), TimeReadError> {
     let mut tx = pool.begin().await?;
     configure_administration(&mut tx).await?;
     let policy = sqlx::query_scalar!(
@@ -64,6 +65,90 @@ pub(crate) async fn read(
     if !own && !managed && !all {
         return Err(TimeReadError::Forbidden);
     }
+    Ok((tx, state.grants))
+}
+
+/// Discover identities without requiring time in the displayed date range.
+pub(crate) async fn people(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+    query: &TimesheetPeopleQuery,
+) -> Result<TimesheetPeoplePage, TimeReadError> {
+    let (mut tx, grants) = begin_read(pool, org_id, actor_id).await?;
+    let search = query.search.trim();
+    if search.contains('\0')
+        || search.chars().count() > 100
+        || query
+            .after
+            .as_ref()
+            .is_some_and(|cursor| cursor.name.contains('\0'))
+    {
+        return Err(TimeReadError::InvalidQuery);
+    }
+    let mut people = sqlx::query_as!(
+        TimesheetPerson,
+        "SELECT u.id,u.name FROM users u
+         WHERE u.org_id=$1 AND u.active AND (
+           $5::bool OR ($3::bool AND u.id=$2) OR ($4::bool AND (
+             EXISTS (SELECT 1 FROM person_management_assignments m
+               WHERE m.org_id=u.org_id AND m.manager_id=$2 AND m.managed_user_id=u.id)
+             OR EXISTS (SELECT 1 FROM project_management_assignments m
+               JOIN projects p ON p.id=m.project_id AND p.org_id=m.org_id
+               JOIN clients c ON c.id=p.client_id AND c.org_id=p.org_id
+               WHERE m.org_id=u.org_id AND m.manager_id=$2 AND (
+                 EXISTS (SELECT 1 FROM assignments a
+                   WHERE a.project_id=p.id AND a.user_id=u.id)
+                 OR EXISTS (SELECT 1 FROM time_entries e
+                   JOIN tasks t ON t.id=e.task_id AND t.org_id=e.org_id
+                   WHERE e.org_id=u.org_id AND e.project_id=p.id AND e.user_id=u.id))))))
+           AND strpos(lower(u.name),lower($6)) > 0
+           AND ($7::uuid IS NULL OR u.id=$7)
+           AND ($8::text IS NULL OR (u.name,u.id)>($8::text,$9::uuid))
+         ORDER BY u.name,u.id LIMIT 51",
+        org_id,
+        actor_id,
+        grants.contains(Permission::TimeReadOwn),
+        grants.contains(Permission::TimeReadManaged),
+        grants.contains(Permission::TimeReadAll),
+        search,
+        query.user_id,
+        query.after.as_ref().map(|cursor| cursor.name.as_str()),
+        query.after.as_ref().map(|cursor| cursor.id),
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    let next_after = if people.len() > 50 {
+        people.truncate(50);
+        people.last().map(|person| PeopleCursor {
+            name: person.name.clone(),
+            id: person.id,
+        })
+    } else {
+        None
+    };
+    tx.commit().await?;
+    Ok(TimesheetPeoplePage {
+        requester: PermissionRequester {
+            org_id,
+            user_id: actor_id,
+        },
+        people,
+        next_after,
+    })
+}
+
+/// Session-derived identity only; materialize rows while authority is stable.
+pub(crate) async fn read(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+    query: &TimeEntryQuery,
+) -> Result<TimeEntryPage, TimeReadError> {
+    let (mut tx, grants) = begin_read(pool, org_id, actor_id).await?;
+    let own = grants.contains(Permission::TimeReadOwn);
+    let managed = grants.contains(Permission::TimeReadManaged);
+    let all = grants.contains(Permission::TimeReadAll);
     if query.date_from > query.date_to
         || query.after.as_ref().is_some_and(|cursor| {
             cursor.spent_date < query.date_from || cursor.spent_date > query.date_to

@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.id,u.name FROM users u\n         WHERE u.org_id=$1 AND u.active AND (\n           $5::bool OR ($3::bool AND u.id=$2) OR ($4::bool AND (\n             EXISTS (SELECT 1 FROM person_management_assignments m\n               WHERE m.org_id=u.org_id AND m.manager_id=$2 AND m.managed_user_id=u.id)\n             OR EXISTS (SELECT 1 FROM project_management_assignments m\n               JOIN projects p ON p.id=m.project_id AND p.org_id=m.org_id\n               JOIN clients c ON c.id=p.client_id AND c.org_id=p.org_id\n               WHERE m.org_id=u.org_id AND m.manager_id=$2 AND (\n                 EXISTS (SELECT 1 FROM assignments a\n                   WHERE a.project_id=p.id AND a.user_id=u.id)\n                 OR EXISTS (SELECT 1 FROM time_entries e\n                   JOIN tasks t ON t.id=e.task_id AND t.org_id=e.org_id\n                   WHERE e.org_id=u.org_id AND e.project_id=p.id AND e.user_id=u.id))))))\n           AND strpos(lower(u.name),lower($6)) > 0\n           AND ($7::uuid IS NULL OR u.id=$7)\n           AND ($8::text IS NULL OR (u.name,u.id)>($8::text,$9::uuid))\n         ORDER BY u.name,u.id LIMIT 51",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Text",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "acb0a93db7c31e910c0bbb859824d3ac1d98b85a8d231d120656eb807f17b037"
+}
