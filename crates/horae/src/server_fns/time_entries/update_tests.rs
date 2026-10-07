@@ -3,7 +3,7 @@ use crate::server_fns::test_seed::{seed, wait_for_blocked};
 use sqlx::PgPool;
 use std::time::Duration;
 
-async fn editable_entry(pool: &PgPool, billable: bool) -> TimeEntry {
+pub(super) async fn editable_entry(pool: &PgPool, billable: bool) -> TimeEntry {
     let ids = seed(pool, OrgRole::Admin).await;
     sqlx::query!(
         "INSERT INTO project_tasks (project_id, task_id, billable) VALUES ($1, $2, $3)",
@@ -30,6 +30,44 @@ async fn editable_entry(pool: &PgPool, billable: bool) -> TimeEntry {
     )
     .await
     .unwrap()
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn inactive_owner_cannot_edit_time_after_session_lookup(pool: PgPool) {
+    let entry = editable_entry(&pool, true).await;
+    sqlx::query!("UPDATE users SET active=false WHERE id=$1", entry.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    for minutes in [60, 90] {
+        let result = update_entry(
+            &pool,
+            entry.user_id,
+            entry.id,
+            minutes,
+            Some("Kept"),
+            true,
+            Some(540),
+        )
+        .await;
+        assert!(
+            matches!(
+                result,
+                Err(ServerFnError::ServerError {
+                    code: FORBIDDEN,
+                    ..
+                })
+            ),
+            "{result:?}"
+        );
+    }
+    assert_eq!(
+        sqlx::query_scalar!("SELECT minutes FROM time_entries WHERE id=$1", entry.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        60
+    );
 }
 
 async fn restrict_task(pool: &PgPool, entry: &TimeEntry) {
@@ -518,7 +556,8 @@ async fn revoked_grant_does_not_trap_an_own_running_timer(pool: PgPool) {
     .await
     .unwrap();
     restrict_task(&pool, &entry).await;
-    let foreign = stop_entry_timer(&pool, uuid::Uuid::now_v7(), running.id).await;
+    let foreign_user = seed(&pool, OrgRole::Member).await;
+    let foreign = stop_entry_timer(&pool, foreign_user.user_id, running.id).await;
     assert!(matches!(
         foreign,
         Err(ServerFnError::ServerError {
@@ -774,9 +813,10 @@ async fn each_editable_field_changes_once_including_nulls(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn missing_foreign_and_locked_entries_are_not_noops(pool: PgPool) {
     let entry = editable_entry(&pool, true).await;
+    let foreign = seed(&pool, OrgRole::Member).await;
     for (user, id) in [
         (entry.user_id, uuid::Uuid::now_v7()),
-        (uuid::Uuid::now_v7(), entry.id),
+        (foreign.user_id, entry.id),
     ] {
         let error = update_entry(&pool, user, id, 60, Some("Kept"), true, Some(540))
             .await
