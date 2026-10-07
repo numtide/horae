@@ -9,6 +9,7 @@ pkgs.runCommand "horae-browser-checks"
   meta.platforms = pkgs.lib.platforms.linux;
 }
   ''
-    bash ${../../crates/horae/tests/browser}/run-design-checks.sh
+    # Script-level checks load application JS relative to tests/browser.
+    bash ${../../crates/horae}/tests/browser/run-design-checks.sh
     touch "$out"
   ''
