@@ -151,7 +151,7 @@ Clients MVP as canonical-permission acceptance.
 | Scoped project editor, [#269](https://github.com/numtide/horae/pull/269) | `feat/scoped-project-editor`, `.worktrees/scoped-project-editor` | `integration/permission-readers-editor-check` | Draft at `a9ba27b`; canonical fields, preserved hidden values and manager edits extracted. Lost-acknowledgement fixture failed in the full gate but passes isolated; failure remains unresolved. No activation |
 | Scoped project overview/detail, [#270](https://github.com/numtide/horae/pull/270) | `feat/scoped-project-reads`, `.worktrees/scoped-project-reads` | `integration/project-read-prerequisites` | Draft at `4a5c7d9`; full browser10797 and complete native51216 pass. Nixbot266 failed ARM deployment waiting for the restart-import advisory-lock waiter; ARM acceptance remains open |
 | Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites` at375e9bd, combining #270 and #267 | Draft at `d61bfd3`; parent browser corrections propagated with exact expected tree. Full native81807 passed on this head; ARM and wider delivery review remain pending |
-| Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `fd91c3d`; parent browser corrections propagated with exact expected tree. Full native76300 passed in child #273; own exact-head gate50478 is running |
+| Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `fd91c3d`; parent browser corrections propagated with exact expected tree. Full native76300 passed in child #273; own exact-head gate50478 also passed. ARM and wider review remain pending |
 | Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `4b2c87d`; parent browser corrections propagated with exact expected tree. Full native76300 passed on this head. ARM, wider review, task lifecycle and catalog-management UI remain separate pending work |
 | Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; missing original test-query descriptors restored after gate53475 failed. Tests/live-schema SQLx96425 passed; full native71588 running. No lifecycle, catalog UI, later atomic rate creation or activation |
 
@@ -5480,3 +5480,9 @@ same unchanged head; gate50478 for #272 also remains live. PR275 now records
 the completed narrow gates and pending full acceptance. The latest ledger
 publication before this update wasb4e7346. Next collect71588/50478 and retain
 the separate ARM and editor-fixture blockers; do not restart live checks.
+
+Gate50478 then completed with exit0 and all x86_64 checks passed on #272fd91c3d.
+ARM/Darwin were explicitly omitted. Updated PR272 accordingly. Ledger04048fb
+was published successfully; only full #275 gate71588 remains live from this
+iteration, currently running Chromium. Next collect that handle, then continue
+the lifecycle composition and unresolved cross-PR/ARM verification.
