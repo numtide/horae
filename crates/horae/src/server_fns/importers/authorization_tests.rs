@@ -24,15 +24,15 @@ use uuid::Uuid;
 use super::*;
 
 mod cli;
+mod exports;
+mod financial_snapshots;
+mod legacy_readers;
 mod own_permissions;
 mod permission_audit;
 mod project_managers;
 mod scoped_directory;
 mod scoped_time;
 mod time_reports;
-mod exports;
-mod financial_snapshots;
-mod legacy_readers;
 
 #[cfg(target_os = "linux")]
 mod report_stress;
