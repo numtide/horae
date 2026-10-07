@@ -132,6 +132,7 @@ Clients MVP as canonical-permission acceptance.
 | Identity-only project-team choices, [#254](https://github.com/numtide/horae/pull/254) | `feat/project-people-picker`, `.worktrees/project-people-picker` | #253 `3a37538`, for shared `PeopleCursor` and inherited foundations | Draft at `f498c3f`; original reader/DTO/endpoint, nine DB tests and HTTP assertions preserved; full native Nix `81722` PASSED, including complete browser/deployment/OIDC and exact cache reuse where available. Combined browser/deployment remains pending; no picker UI, assignment writes or activation |
 | Scoped time-entry reader, [#255](https://github.com/numtide/horae/pull/255) | `feat/scoped-time-reader`, `.worktrees/scoped-time-reader` | Review base `0117991`, independent of directory, project-team choices and editor operations | Draft at `d93e1af`; original `4ac30fa` DTO/reader/eight DB tests/HTTP assertions and endpoint preserved; 23 original SQLx descriptors, module registrations adapted only. Formatting/provenance passed; full native Nix `40092` running; no Timesheet UI, subject discovery, commands or activation |
 | Timesheet person discovery, [#256](https://github.com/numtide/horae/pull/256) | `feat/timesheet-people-discovery`, `.worktrees/timesheet-people-discovery` | Review base `40102ae`, combining #255 `d93e1af` admission reader and #253 `3a37538` shared `PeopleCursor` | Draft at `1552fdb`; original `60f60f9` DTO/reader/eight DB tests, endpoint/HTTP additions and five SQLx descriptors preserved. Formatting/provenance/static61-query inventory passed; tests/Clippy/live SQLx `61768` running; full native Nix and wider integration pending; no UI, context-page contract, commands or activation |
+| Requester-bound Timesheet page context, [#257](https://github.com/numtide/horae/pull/257) | `feat/timesheet-page-context`, `.worktrees/timesheet-page-context` | #256 `1552fdb`, for subject discovery and shared read admission | Draft at `8e09e60`; original `5faed76` DTO/reader/six DB tests and endpoint/HTTP additions preserved, no new SQL descriptors. Formatting/provenance/static37-query inventory passed; tests/Clippy/live SQLx `63162` running; full native Nix and wider integration pending; no UI, commands or activation |
 | Cross-PR reader/editor verification only | `integration/permission-readers-editor-check`, `.worktrees/permission-readers-editor-check` | Combines #240 `a19ea63`, #250 `c727bc8`, #253 `3a37538` and #254 `f498c3f` | Published at `7a2d61c`, no delivery PR or merge target; registration conflicts resolved preserving both sides, dedicated source/test blobs unchanged, original combined users module restored exactly. Format, tests, Clippy and SQLx `24884` PASSED; combined full native Nix running; #255 not yet composed |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
@@ -400,7 +401,7 @@ Clients documents are separate and are not silently included in #248.
 | `8af562e` | Record passing permission regression gates | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `9b53182` | Verify profile capacity and confirm timesheet discovery | permission-editor, specification-history, time-readers | Original 50-contender HTTP capacity assertions retained in #250's exact final test file and passed in its workspace suite; specification/Timesheet discovery decision in #248, not a claim to deliver later Timesheet implementation |
 | `60f60f9` | Add scoped Timesheet person discovery | time-readers | DTO, reader, eight DB tests, endpoint and HTTP additions extracted in draft #256 `1552fdb` on combined #255/#253 review base `40102ae`; five original SQLx descriptors; formatting/provenance passed, executable checks running. Legacy HTTP block remains owned by #242; specification owned by #248 |
-| `5faed76` | Bind Timesheet page reads to requester and subject | time-readers | Held in original backup; extraction pending |
+| `5faed76` | Bind Timesheet page reads to requester and subject | time-readers | DTO, reader, six DB tests, endpoint and HTTP additions extracted in draft #257 `8e09e60` on #256 `1552fdb`; all queries reuse existing descriptors; formatting/provenance passed, executable checks running; specification owned by #248 |
 | `e1ddd9a` | Connect Timesheet to complete scoped page reads | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `48a6533` | Define person-bound Timesheet command contracts | timesheet-consumer-commands | Held in original backup; extraction pending |
 | `02c4245` | Authorize person-bound Timesheet commands atomically | timesheet-consumer-commands | Held in original backup; extraction pending |
@@ -3935,3 +3936,55 @@ Next collect `40092` and `61768`, recover combined full-gate completion, run the
 remaining standalone/full integration gates, then extract original `5faed76`
 requester/subject context and the pending consumer/editor/UI groups. Continue
 original-hunk accounting; no original PR or extraction was merged or closed.
+
+### Requester-bound Timesheet context extracted
+
+Previous iteration was progress: published #256, its explicit combined base and
+source ownership. Re-read the objective and applicable skills, confirmed #216
+remains merged at `02f7b58`, and checked the clean published source base before
+creating the next worktree. Original source worktrees remain untouched.
+
+Published draft [#257](https://github.com/numtide/horae/pull/257), branch
+`feat/timesheet-page-context`, worktree `.worktrees/timesheet-page-context`, at
+unsigned commit `8e09e6088eb68d253ec9bbe7cfe033b38e5e019c` on #256 `1552fdb`.
+This extracts original `5faed76`: requester/policy-bound page loads resolve an
+active selected person and their scoped rows under one transaction. Explicit
+legacy-own policy is preserved; canonical denial never selects legacy mode.
+There is no connected UI, write command, policy activation or data migration.
+
+Three whole DTO/reader/354-line DB-test files match `5faed76` byte for byte.
+All six DB tests and the33-line endpoint/109-line HTTP additions are unchanged;
+only the new test-module registration is adapted. The HTTP suite still excludes
+exactly the36-line legacy invoice-identity block independently owned by #242.
+Total owned diff is six Rust paths,713 additions and33 deletions; deletions are
+original helper extraction and transaction ownership changes, not removed tests.
+No new SQL descriptor is needed: static inventory matched all37 macro query
+strings in the reader, context DB tests and HTTP suite to existing descriptors.
+
+Bounded adversarial review checked session-derived identity, expected requester
+and policy mismatch, active-subject lock lifetime, per-page reauthorization,
+scope narrowing, legacy-own restriction without canonical fallback, foreign and
+inactive subjects, date/cursor validation, archive races, cancellation and error
+sanitization. No critical/high finding in this boundary. Historical DTO web-only
+lint expectations remain until the actual Timesheet UI consumer is extracted.
+Formatting `17124` passed with zero changes and source/whitespace checks passed.
+
+Started Nix tests/Clippy/live SQLx on exact `8e09e60` as `63162`, currently in
+Clippy after restoring Crane check dependencies. Derivations are
+`v02bmlf0gh6plfblz53vv1ca9m1h0z15-horae-clippy-0.1.0`,
+`w2k6hrywi6rf5pfpi4kajgns6wy3mpxi-horae-tests-0.1.0` and
+`xi4ji136irf6wp9rcfc1pcb35barknp9-horae-sqlx-prepare-0.1.0` (all `.drv`). No
+runtime/full-gate pass is claimed for this new head.
+
+Existing verification progressed without restart: #255 `40092` passed release
+server/WASM and Clippy and is now running browser checks. #256 `61768` passed
+Clippy and live SQLx and is compiling the application test suite. The earlier
+combined `7a2d61c` full-check process1004924 remains live; its package build log
+reached fixup and the exact browser log had no result yet. None of these live
+full gates is counted as complete.
+
+Next collect `40092`, `61768`, `63162` and combined exact-output evidence; finish
+standalone and cross-PR full gates, then extract the original connected Timesheet
+consumer (`e1ddd9a` plus its relevant later fixes) and editor/UI groups. Retain
+the original14-line removal of two DTO lint expectations with their real consumer. Original-hunk
+accounting remains incomplete; no extraction/original PR was merged or closed.
