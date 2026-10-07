@@ -103,9 +103,9 @@ implementation remains incomplete. Do not treat
 
 ## Current verification follow-ups — 2026-10-08
 
-- #263 at34341049 releases denied export authority before pool cleanup. The
+- #263 at4b43acf8 releases denied export authority before pool cleanup. The
   deterministic regression failed before the fix;43 bounded-export tests passed
-  on its own branch and54 on the diagnostic composition. Nixbot350 was running
+  on its own branch and54 on the diagnostic composition. Nixbot382 was running
   at the last check. The PR remains draft.
 - [#283](https://github.com/numtide/horae/pull/283), `fix/csv-upload-framing`,
   at8d83b853, is a separate draft over #282. One Content-Length header preserves
@@ -131,6 +131,13 @@ implementation remains incomplete. Do not treat
   Nixbot404 subsequently passed ARM tests and formatting on this exact head:
   121 core tests,821 server tests and all nine auxiliary binaries passed with
   an8-thread allocation. Remote VM/full-build acceptance remains pending.
+- [#286](https://github.com/numtide/horae/pull/286), `test/import-cancellation-release`,
+  ated286e6b, reuses the CSV session-release observer for the cancelled HTTP-worker
+  and page-consumer tests. No production code, SQL, timeout or assertion changes.
+  Native full check91786 and remote Nixbot413 are running; formatting passed.
+  It is a draft over #285. The shared prerequisite order is now
+  #282→#283→#284→#285→#286; the existing75-branch propagation preview targets
+  #285 only and must be refreshed before including this additional correction.
 - Local complete compositiond5c34851 contains both corrections without diagnostic
   logging. Its full gate50229 failed at Clippy: three unused preflight symbols.
   Local compositionf90f60f7 contains #246's function-local lint expectation for this
@@ -316,7 +323,7 @@ current heads above. Later iteration entries record subsequent verification.
 | Harvest-compatible client reads, [#281](https://github.com/numtide/horae/pull/281) | `feat/scoped-harvest-clients`, `.worktrees/scoped-harvest-clients` | #272 at `fd91c3d` | Published draft `cd8d1db7` extracts eleven dirty paths plus shared-test visibility and original fixture descriptor81aefb2e. Initial failures28333/65280/11982 corrected; full native15935 and Nixbot293 on both Linux architectures passed at this head. Latest parent cache changes and wider review remain pending; T238 not implemented |
 
 The original candidate groups have now produced58 extraction PRs, separate
-from four shared CI corrections (#282–#285) and this ledger (#218). Remote
+from five shared CI corrections (#282–#286) and this ledger (#218). Remote
 inventory aafeac confirms all62 extraction/CI PRs remain open drafts at the
 recorded heads. These are ownership counts, not readiness counts. Integration
 branches are review/verification bases, not additional deliveries or merge
@@ -8281,3 +8288,41 @@ Next: collect402/404 ARM VM results before propagating the base. If those fail,
 inspect their actual terminal logs rather than attributing every failure to
 the previous TCG timeout. The75-branch preview/recovery checkpoint is ready;
 heads and leases must still be revalidated before any rewrite or publication.
+
+### Cancelled-worker session-release race — 2026-10-08
+
+The preceding user-facing estimate was a status-only turn, not additional
+verification progress. Revalidated the goal, #216's merged state, clean candidate
+worktrees and live remote402/404 before continuing. ARM402 is still building the
+VM image, not reporting a completed guest boot result.
+
+The current-head CI inventory exposed another failure on #228951baf9d:
+[ARM build338](https://nixbot.numtide.com/repos/github/numtide/horae/builds/338/logs/raw/checks.aarch64-linux.tests)
+finished835 passed,1 failed,11 ignored. The page-consumer cancellation test's
+single retry returned Busy. Traced the externally aborted future through
+streaming::run_inner, the worker's shared session ownership and SQLx's
+close-on-drop task. Pool capacity becoming available does not acknowledge
+PostgreSQL's release of the old session lock. #224's explicit release_import
+cleanup is not called on this externally aborted path; adding that dependency
+would not fix the test's synchronization assumption.
+
+Published draft #286, headed286e6b4d72687963290dda7b51242313886cd2, over #285
+in isolated .worktrees/import-cancellation-release. Moved the existing CSV
+wait_for_session_release helper to its parent test module and reused it in both
+cancelled-worker tests. Reviewed that all four observer callers remain bounded
+by existing five-second deadlines; Busy is retried only while observing cleanup,
+other errors fail immediately. Busy-while-worker-active, actual single import
+retry, empty clients/time entries, unchanged watermark and one-connection pool
+assertions remain intact. No production retry, SQL change, migration, sleep,
+timeout increase or new dependency was introduced.
+
+Formatting and diff checks passed. Full native flake check91786 is running on
+the published head; log .scratch/import-cancellation-release-ed286e6b-full-check.log.
+Nixbot413 evaluation passed and its build is live. These are pending checks,
+not a native/ARM pass claim. The failure above is the original CI regression
+evidence, not a claimed deterministic local reproduction.
+
+Next: collect91786 and413, plus402/404's ARM VM results. Once verified, update
+the propagation preview to include #286 and verify its composition with #224;
+the previous75-branch backup remains valid for unchanged extraction heads.
+No original branch, feature branch, PR base or real data changed this iteration.
