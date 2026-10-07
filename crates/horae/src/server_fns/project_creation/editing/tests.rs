@@ -11,6 +11,7 @@ mod canonical_concurrency;
 mod canonical_fields;
 mod canonical_managers;
 mod catalog;
+mod task_activity;
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
@@ -109,6 +110,7 @@ async fn editor_load_uses_current_role_across_all_billing_configurations(pool: P
 
 fn edit_request(project: EditableProject) -> ProjectEditRequest {
     ProjectEditRequest {
+        task_activity: Vec::new(),
         id: Uuid::now_v7(),
         project_id: project.id,
         expected_revision: project.revision,

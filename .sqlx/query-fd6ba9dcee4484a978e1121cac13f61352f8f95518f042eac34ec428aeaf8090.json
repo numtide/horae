@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM time_entries\n                WHERE org_id=$1 AND task_id=$2 AND is_running) AS \"running!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "running!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "fd6ba9dcee4484a978e1121cac13f61352f8f95518f042eac34ec428aeaf8090"
+}

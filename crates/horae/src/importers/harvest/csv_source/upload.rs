@@ -8,12 +8,11 @@ use std::sync::Arc;
 use anyhow::Context;
 use axum::body::{Body, Bytes, HttpBody};
 use horae_core::importers::harvest::types::{EntityType, ImportMode, RowOutcome, SourceKind};
-use sqlx::Acquire;
 use tokio::sync::{Mutex, mpsc};
 use uuid::Uuid;
 
 use super::super::{
-    apply, finish_import, lock_import, release_import,
+    apply, begin_import_transaction, finish_import, lock_import, release_import,
     report::ImportReport,
     resolve::{OrgDefaults, RunCache, preview::ParentSnapshot},
 };
@@ -178,7 +177,7 @@ pub(crate) async fn import_body_with_lease(
         let mut batch = read_batch(&mut receive, lease.is_some()).await?;
         let first = batch.pop_front().ok_or(IncompleteUpload)?;
         let mut connection = session.lock().await;
-        let mut tx = connection.begin().await?;
+        let mut tx = begin_import_transaction(&mut connection, org_id).await?;
         if let Some(preview) = &checkpoint.preview {
             preview.restore(&mut tx, org_id).await?;
         }
@@ -218,7 +217,7 @@ pub(crate) async fn import_body_with_lease(
                     checkpoint.preview =
                         Some(ParentSnapshot::capture(&mut tx, org_id, &checkpoint.cache).await?);
                     tx.rollback().await?;
-                    tx = connection.begin().await?;
+                    tx = begin_import_transaction(&mut connection, org_id).await?;
                 }
                 lease
                     .archive_report(&mut tx, &mut checkpoint.report)
@@ -238,7 +237,7 @@ pub(crate) async fn import_body_with_lease(
                     .await?;
                 tx.commit().await?;
                 batch = read_batch(&mut receive, true).await?;
-                tx = connection.begin().await?;
+                tx = begin_import_transaction(&mut connection, org_id).await?;
                 if let Some(preview) = &checkpoint.preview {
                     preview.restore(&mut tx, org_id).await?;
                 }
@@ -255,7 +254,7 @@ pub(crate) async fn import_body_with_lease(
         if mode == ImportMode::DryRun
             && let Some(lease) = lease
         {
-            let mut tx = connection.begin().await?;
+            let mut tx = begin_import_transaction(&mut connection, org_id).await?;
             lease
                 .archive_report(&mut tx, &mut checkpoint.report)
                 .await?;

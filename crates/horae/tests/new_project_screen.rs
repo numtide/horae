@@ -332,6 +332,7 @@ fn canonical_editor() -> Probe {
             people: vec![],
         },
         inactive_task_ids: vec![],
+        archived_task_ids: vec![],
         inactive_user_ids: vec![],
         access: Some(ProjectEditorAccess {
             requester,
@@ -1125,6 +1126,7 @@ async fn edit_prefills_legacy_currency_and_type_without_reading_or_saving_a_draf
             people: vec![],
         },
         inactive_task_ids: vec![],
+        archived_task_ids: vec![],
         inactive_user_ids: vec![],
     });
     let writes = probe.writes.clone();

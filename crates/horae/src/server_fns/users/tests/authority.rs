@@ -27,6 +27,7 @@ async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
             .await
             .unwrap();
         let mut request = ProjectEditRequest {
+            task_activity: Vec::new(),
             id: Uuid::now_v7(),
             project_id: ids.project_id,
             expected_revision: original.revision,

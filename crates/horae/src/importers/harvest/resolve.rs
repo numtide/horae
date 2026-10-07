@@ -513,8 +513,8 @@ pub async fn resolve_task(
     Ok(Resolved::created(ParentKind::Task, ck, id))
 }
 
-/// Ensure the task is enabled on the project (FR-009). Not counted in the summary
-/// — it is a link, not one of the four entity levels.
+/// Ensure a retained project link exists (FR-009), without restoring archived
+/// links. Not counted in the summary — it is not one of the four entity levels.
 pub async fn ensure_project_task(
     conn: &mut sqlx::PgConnection,
     cache: &RunCache,
@@ -555,8 +555,12 @@ pub async fn ensure_project_task(
         ));
     }
     sqlx::query!(
-        "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
-         VALUES ($1, $2, $3, $4)
+        "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents, active)
+         VALUES ($1, $2, $3, $4, (
+           SELECT o.permission_policy_version=0 OR (o.permission_policy_version=1 AND t.active)
+           FROM tasks t JOIN projects p ON p.org_id=t.org_id
+           JOIN organizations o ON o.id=p.org_id WHERE p.id=$1 AND t.id=$2
+         ))
          ON CONFLICT (project_id, task_id) DO NOTHING",
         project_id,
         task_id,
