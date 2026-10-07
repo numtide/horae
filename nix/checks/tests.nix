@@ -18,7 +18,7 @@ perSystem.self.default.overrideAttrs (old: {
     export HOME=$(mktemp -d)
 
     # horae-core: pure domain tests — no database required.
-    cargo nextest run -p horae-core
+    cargo nextest run -p horae-core --test-threads "$NIX_BUILD_CORES"
 
     # The rest of the suite is #[sqlx::test]: every test creates a throwaway
     # database — so the role needs CREATEDB, which `postgres` has as a
@@ -36,7 +36,8 @@ perSystem.self.default.overrideAttrs (old: {
     # cargo test rather than nextest: the integration tests are #[serial], and
     # serial_test's lock is in-process. nextest runs each test in its own
     # process, which would leave them running concurrently regardless.
-    cargo test -p horae --features server
+    # libtest otherwise uses all host CPUs, independently of Nix's job budget.
+    cargo test -p horae --features server -- --test-threads "$NIX_BUILD_CORES"
 
     pg_ctl -D "$PGDATA" stop
     runHook postBuild
