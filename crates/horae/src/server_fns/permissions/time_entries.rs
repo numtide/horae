@@ -9,8 +9,8 @@ use super::{PermissionStorageError, configure_administration, load_person_permis
 use crate::models::people::PeopleCursor;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::scoped_time::{
-    TimeEntryCursor, TimeEntryPage, TimeEntryQuery, TimesheetPeoplePage, TimesheetPeopleQuery,
-    TimesheetPerson, VisibleTimeEntry,
+    TimeEntryCursor, TimeEntryPage, TimeEntryQuery, TimesheetPage, TimesheetPeoplePage,
+    TimesheetPeopleQuery, TimesheetPerson, TimesheetPolicy, TimesheetQuery, VisibleTimeEntry,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -33,6 +33,25 @@ async fn begin_read(
     org_id: Uuid,
     actor_id: Uuid,
 ) -> Result<(Transaction<'_, Postgres>, PermissionSelection), TimeReadError> {
+    let (tx, grants, policy) = begin_sheet_read(pool, org_id, actor_id).await?;
+    if policy != TimesheetPolicy::Scoped {
+        return Err(TimeReadError::Forbidden);
+    }
+    Ok((tx, grants))
+}
+
+async fn begin_sheet_read(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+) -> Result<
+    (
+        Transaction<'_, Postgres>,
+        PermissionSelection,
+        TimesheetPolicy,
+    ),
+    TimeReadError,
+> {
     let mut tx = pool.begin().await?;
     configure_administration(&mut tx).await?;
     let policy = sqlx::query_scalar!(
@@ -41,11 +60,12 @@ async fn begin_read(
     )
     .fetch_optional(&mut *tx)
     .await?;
-    match policy {
-        Some(1) => {}
-        Some(0) | None => return Err(TimeReadError::Forbidden),
+    let policy = match policy {
+        Some(1) => TimesheetPolicy::Scoped,
+        Some(0) => TimesheetPolicy::LegacyOwn,
+        None => return Err(TimeReadError::Forbidden),
         Some(_) => return Err(TimeReadError::Unavailable),
-    }
+    };
     let actor = sqlx::query_scalar!(
         "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
         org_id,
@@ -56,6 +76,13 @@ async fn begin_read(
     if actor.is_none() {
         return Err(TimeReadError::Forbidden);
     }
+    if policy == TimesheetPolicy::LegacyOwn {
+        return Ok((
+            tx,
+            PermissionSelection::new(&[Permission::TimeReadOwn]),
+            policy,
+        ));
+    }
     let state = load_person_permissions(&mut tx, org_id, actor_id)
         .await?
         .ok_or(TimeReadError::Unavailable)?;
@@ -65,7 +92,81 @@ async fn begin_read(
     if !own && !managed && !all {
         return Err(TimeReadError::Forbidden);
     }
-    Ok((tx, state.grants))
+    Ok((tx, state.grants, policy))
+}
+
+/// Resolve selection and entries together; selecting a person never widens row scope.
+pub(crate) async fn sheet(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+    query: &TimesheetQuery,
+) -> Result<TimesheetPage, TimeReadError> {
+    let requester = PermissionRequester {
+        org_id,
+        user_id: actor_id,
+    };
+    if query
+        .expected_requester
+        .is_some_and(|expected| expected != requester)
+    {
+        return Err(TimeReadError::Forbidden);
+    }
+    let (mut tx, grants, policy) = begin_sheet_read(pool, org_id, actor_id).await?;
+    if query
+        .expected_policy
+        .is_some_and(|expected| expected != policy)
+    {
+        return Err(TimeReadError::Forbidden);
+    }
+    let subject_id = query.subject_id.unwrap_or(actor_id);
+    if policy == TimesheetPolicy::LegacyOwn && subject_id != actor_id {
+        return Err(TimeReadError::Forbidden);
+    }
+    // A teammate can be archived independently of the requester. Hold its
+    // activity stable across discovery and the subsequent entry query too.
+    sqlx::query_scalar!(
+        "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
+        org_id,
+        subject_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(TimeReadError::Forbidden)?;
+    let subject = fetch_people(
+        &mut tx,
+        requester,
+        &grants,
+        &TimesheetPeopleQuery {
+            user_id: Some(subject_id),
+            ..TimesheetPeopleQuery::default()
+        },
+    )
+    .await?
+    .into_iter()
+    .next()
+    .ok_or(TimeReadError::Forbidden)?;
+    let page = fetch_entries(
+        &mut tx,
+        requester,
+        &grants,
+        &TimeEntryQuery {
+            date_from: query.date_from,
+            date_to: query.date_to,
+            user_id: Some(subject_id),
+            project_id: None,
+            after: query.after.clone(),
+        },
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(TimesheetPage {
+        requester,
+        subject,
+        policy,
+        entries: page.entries,
+        next_after: page.next_after,
+    })
 }
 
 /// Discover identities without requiring time in the displayed date range.
@@ -76,6 +177,38 @@ pub(crate) async fn people(
     query: &TimesheetPeopleQuery,
 ) -> Result<TimesheetPeoplePage, TimeReadError> {
     let (mut tx, grants) = begin_read(pool, org_id, actor_id).await?;
+    let requester = PermissionRequester {
+        org_id,
+        user_id: actor_id,
+    };
+    let mut people = fetch_people(&mut tx, requester, &grants, query).await?;
+    let next_after = if people.len() > 50 {
+        people.truncate(50);
+        people.last().map(|person| PeopleCursor {
+            name: person.name.clone(),
+            id: person.id,
+        })
+    } else {
+        None
+    };
+    tx.commit().await?;
+    Ok(TimesheetPeoplePage {
+        requester,
+        people,
+        next_after,
+    })
+}
+
+async fn fetch_people(
+    tx: &mut Transaction<'_, Postgres>,
+    requester: PermissionRequester,
+    grants: &PermissionSelection,
+    query: &TimesheetPeopleQuery,
+) -> Result<Vec<TimesheetPerson>, TimeReadError> {
+    let PermissionRequester {
+        org_id,
+        user_id: actor_id,
+    } = requester;
     let search = query.search.trim();
     if search.contains('\0')
         || search.chars().count() > 100
@@ -86,7 +219,7 @@ pub(crate) async fn people(
     {
         return Err(TimeReadError::InvalidQuery);
     }
-    let mut people = sqlx::query_as!(
+    let people = sqlx::query_as!(
         TimesheetPerson,
         "SELECT u.id,u.name FROM users u
          WHERE u.org_id=$1 AND u.active AND (
@@ -116,26 +249,9 @@ pub(crate) async fn people(
         query.after.as_ref().map(|cursor| cursor.name.as_str()),
         query.after.as_ref().map(|cursor| cursor.id),
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut **tx)
     .await?;
-    let next_after = if people.len() > 50 {
-        people.truncate(50);
-        people.last().map(|person| PeopleCursor {
-            name: person.name.clone(),
-            id: person.id,
-        })
-    } else {
-        None
-    };
-    tx.commit().await?;
-    Ok(TimesheetPeoplePage {
-        requester: PermissionRequester {
-            org_id,
-            user_id: actor_id,
-        },
-        people,
-        next_after,
-    })
+    Ok(people)
 }
 
 /// Session-derived identity only; materialize rows while authority is stable.
@@ -146,6 +262,30 @@ pub(crate) async fn read(
     query: &TimeEntryQuery,
 ) -> Result<TimeEntryPage, TimeReadError> {
     let (mut tx, grants) = begin_read(pool, org_id, actor_id).await?;
+    let result = fetch_entries(
+        &mut tx,
+        PermissionRequester {
+            org_id,
+            user_id: actor_id,
+        },
+        &grants,
+        query,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(result)
+}
+
+async fn fetch_entries(
+    tx: &mut Transaction<'_, Postgres>,
+    requester: PermissionRequester,
+    grants: &PermissionSelection,
+    query: &TimeEntryQuery,
+) -> Result<TimeEntryPage, TimeReadError> {
+    let PermissionRequester {
+        org_id,
+        user_id: actor_id,
+    } = requester;
     let own = grants.contains(Permission::TimeReadOwn);
     let managed = grants.contains(Permission::TimeReadManaged);
     let all = grants.contains(Permission::TimeReadAll);
@@ -184,7 +324,7 @@ pub(crate) async fn read(
         query.after.as_ref().map(|cursor| cursor.spent_date) as _,
         query.after.as_ref().map(|cursor| cursor.created_at) as _,
         query.after.as_ref().map(|cursor| cursor.id),
-    ).fetch_all(&mut *tx).await?;
+    ).fetch_all(&mut **tx).await?;
     let next_after = if entries.len() > 500 {
         entries.truncate(500);
         entries.last().map(|entry| TimeEntryCursor {
@@ -195,12 +335,8 @@ pub(crate) async fn read(
     } else {
         None
     };
-    tx.commit().await?;
     Ok(TimeEntryPage {
-        requester: PermissionRequester {
-            org_id,
-            user_id: actor_id,
-        },
+        requester,
         entries,
         next_after,
     })
