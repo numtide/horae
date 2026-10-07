@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "LOCK TABLE assignments IN ACCESS EXCLUSIVE MODE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "0312d8174adf5b79bafb61bba423962d42f49f437a5230959e070834f172088b"
+}
