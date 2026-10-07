@@ -155,6 +155,7 @@ Clients MVP as canonical-permission acceptance.
 | Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `4b2c87d`; parent browser corrections propagated with exact expected tree. Full native76300 passed on this head. ARM, wider review, task lifecycle and catalog-management UI remain separate pending work |
 | Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; tests/live-schema SQLx96425 and full native71588 passed. ARM/wider acceptance pending. No lifecycle, catalog UI, later atomic rate creation or activation |
 | Task archive/restore and import preservation, [#276](https://github.com/numtide/horae/pull/276) | `feat/scoped-task-lifecycle`, `.worktrees/scoped-task-lifecycle` | integration/task-lifecycle-prerequisites1955c38 (#275/#269/#258/#223/#224/#231) | Draft at `7e883eb`; original ac4c90c+0591407 extracted. Missing original test descriptor2889c08 restored after gate72726 failed. Fresh tests/SQLx60667 and full native95578 running. Base full native65768 passed. Catalog/link/UI controls excluded |
+| Existing project-task link authority and currency, [#277](https://github.com/numtide/horae/pull/277) | `feat/scoped-task-links`, `.worktrees/scoped-task-links` | #2767e883eb | Draft at `d1ab522`; original979a594 extracted. Gate23598 passed live-schema SQLx and is executing tests. Full native/ARM gates pending; no UI or activation |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
 Combine or subdivide only after tracing code and test dependencies. Prefer
@@ -461,7 +462,7 @@ Clients documents are separate and are not silently included in #248.
 | `facfb49` | Protect task rate edits with explicit intent and current permissions | task-permissions-lifecycle | Explicit rate transport, commands, original mutation/DB/HTTP tests and contract extracted into draft #275f8c1477; full native71588 passed, ARM/wider review pending |
 | `ac4c90c` | Authorize task activity changes and guard running timers | task-permissions-lifecycle | Commands, original tests/descriptors and contract extracted with0591407 in draft #276924dcbe. Fresh gates pending |
 | `0591407` | Preserve project task archival across restores and imports | task-permissions-lifecycle | Migration0048, import/checkpoint/lock-order adaptations, editor transport, tracking admission, original tests/descriptors and contract in draft #276924dcbe. Cache correction/fresh gates pending; later UI remains separate |
-| `979a594` | Enforce scoped project task linking and rate currency | task-permissions-lifecycle | Held in original backup; extraction pending |
+| `979a594` | Enforce scoped project task linking and rate currency | task-permissions-lifecycle | Commands, five DB regressions, HTTP matrix, original descriptors and contract extracted in draft #277d1ab522. Live-schema SQLx passed; tests/full gates pending |
 | `5561f14` | Add permission-aware task catalog management | task-consumers | Held in original backup; extraction pending |
 | `dcadcee` | Add atomic task creation to the task catalog | task-consumers | Held in original backup; extraction pending |
 | `8c1bf9b` | Add task archive and restore controls to project editing | task-consumers | Held in original backup; extraction pending |
@@ -5600,3 +5601,12 @@ terminal publication failure using existing authorized credentials, and publish
 the link PR with accurate evidence. Keep original catalog5561f14, atomic
 creationdcadcee, editor controls8c1bf9b and unpublished Clients as remaining
 work. ARM and the earlier intermittent editor fixture remain unclosed.
+
+Publication74103 subsequently completed successfully: branchd1ab522 and draft
+#277 are published after SSH tried another configured identity. No credential
+change or duplicate push was needed. Gate23598 passed live-schema SQLx (with
+the inherited unused-query warning) and has started the test derivation. #276's
+tests60667 and full native95578 remain live. Ledger82d512f was committed locally
+before this publication result; publish it together with this update. The
+separate #276 body update62777 is still unconfirmed and must not be repeated
+while its handle remains live.
