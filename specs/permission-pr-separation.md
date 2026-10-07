@@ -6875,3 +6875,42 @@ reviewed fixes into the complete composition and run its full gate. Independent
 refresh can continue through import requester and audit/delegation prerequisite
 compositions, retaining exact backups and patch accounting. No full local gate,
 policy activation, real-data change, merge or original PR closure occurred.
+
+### Import requester publication and deterministic export diagnosis — 2026-10-07
+
+The intervening user estimate response was status only, not goal progress.
+Reconfirmed #216 merged before resuming source changes. Collected publication3368:
+#237 is still draft, with head491891603f76cae23c8b78eac4a95282e53c2251 and
+base `integration/import-requester-prerequisites` at
+970f0c6bb9ee1b6013ed9dc6080aa343460f91e6. Both exact-lease pushes succeeded.
+The base replays the same two foundation/storage patches onto current #236 and
+restores the six-line database README note from #222; #237's two patches are
+unchanged by range-diff. Formatting65372/99499 and whitespace passed. Recovery
+refs use `backup/shared-ci-import-requester-20261007/`; verified bundle
+`.scratch/shared-ci-import-requester-20261007.bundle` has SHA-256
+`f216f9cc3fa29d35e86c5158a0d4f218d8473abc5ccc6f9f9228fe030b18ca02`.
+
+Focused diagnostic10979 finished with exit1. Reports passed20 isolated invocations;
+this does not clear the original full-suite failure. CLI failed on invocation14:
+the CSV request send reports Hyper `BodyWrite` / OS32 `Broken pipe`, not an
+observed HTTP denial or a timeout. The public indeterminate-submission result is
+therefore not evidence of an authorization bypass. Keep the original CLI status
+assertions and investigate delivery of the early HTTP rejection separately; no
+transport fix, automatic retry or dependency update has been made.
+
+Pinned SQLx0.8.6 source confirms that transaction drop queues rollback and pool
+cleanup flushes it asynchronously, after the `after_release` callback. The scoped
+time export `begin` propagates authorization failure by dropping its transaction,
+unlike the legacy snapshot reader's explicit awaited rollback. Added regression
+`denied_time_export_releases_authority_before_pool_cleanup` on the isolated
+diagnostic branch, commitd112409e. It pauses only deferred pool cleanup, expects
+FORBIDDEN for an inactive actor, and checks the organization with the original
+NOWAIT query before releasing cleanup. No production path or SQL query changed.
+
+Session63981 runs the regression's red phase through the existing Nix test
+derivation and disposable PostgreSQL; log `.scratch/export-denial-repro-red.log`.
+The diagnostic worktree is frozen while it runs. Next: collect that exact run;
+if it proves retained authority, await rollback at the owning transaction boundary
+and verify the regression plus relevant export tests before porting the fix to
+the owning extraction. No complete-composition gate, merge, closure or real-data
+mutation occurred. The full goal remains incomplete.
