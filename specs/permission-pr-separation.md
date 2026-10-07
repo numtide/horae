@@ -136,8 +136,10 @@ Clients MVP as canonical-permission acceptance.
 | Person-bound Timesheet commands, [#258](https://github.com/numtide/horae/pull/258) | `feat/timesheet-person-commands`, `.worktrees/timesheet-person-commands` | #257 `b30e3cd`, for shared context contracts and foundations | Draft at `b0eacfd`; original commands/tests and39 descriptors unchanged. Old `64524` failure retained; corrected-head tests/Clippy/live SQLx `98625` PASSED (1011 application tests, zero failed,11 inherited ignored). Full native Nix `7633` PASSED; wider integration pending; no UI or activation |
 | Selected-person Timesheet UI, [#259](https://github.com/numtide/horae/pull/259) | `feat/timesheet-selected-person-ui`, `.worktrees/timesheet-selected-person-ui` | #258 `b0eacfd`, for page context, discovery, tracking and commands | Draft at `4ce0919`; original UI/submission contract/tests/cache plus recovered original Nix asset path and two-line calendar pointer-target CSS. Nine whole source/test files byte-identical to final original. Failed gates `48062`/`91457` retained below; fresh full native Nix `75088` running; wider combination pending; no activation or new feature |
 | Scoped People and permission editor UI, [#260](https://github.com/numtide/horae/pull/260) | `feat/people-permission-editor-ui`, `.worktrees/people-permission-editor-ui` | Verified review base `7a2d61c`, combining #240/#250/#253/#254 and foundations; actual consumer dependencies are identity, editor API and directory | Draft at `98857cf`; fifteen complete files original, legacy tasks and current Clients retained. Sixteen JS tests, source review, whitespace/provenance pass; full native Nix `66677` running. Shared navigation composition with #259 remains; no activation |
-| Cross-PR Timesheet/permission verification only | `integration/timesheet-permission-check`, `.worktrees/timesheet-permission-integration` | Combines #240/#241/#250/#253–#258 and inherited foundations | Published at `015dcd1`, no delivery PR; owner cancellation-test correction included. Old `6da9981` targeted checks `25306` PASSED (1037 application tests, zero failed,11 ignored), historical only. Current-head full native Nix `64407` running; #259 not yet included |
+| Cross-PR Timesheet/permission verification only | `integration/timesheet-permission-check`, `.worktrees/timesheet-permission-integration` | Combines #240/#241/#250/#253–#258 and inherited foundations | Published at `015dcd1`, no delivery PR; owner cancellation-test correction included. Old `6da9981` targeted checks `25306` PASSED (1037 application tests, zero failed,11 ignored), historical only. Current-head full native Nix `64407` PASSED; UI and report extractions not included |
 | Cross-PR reader/editor verification only | `integration/permission-readers-editor-check`, `.worktrees/permission-readers-editor-check` | Combines #240 `a19ea63`, #250 `c727bc8`, #253 `3a37538` and #254 `f498c3f` | Published at `7a2d61c`, no delivery PR or merge target; registration conflicts resolved preserving both sides, dedicated source/test blobs unchanged, original combined users module restored exactly. Tests/Clippy/SQLx `24884` and full native Nix `16434` PASSED; exact browser/deployment/OIDC outputs and logs verified after original process terminated. Later #255–#257 not included |
+| Scoped detailed time report, [#261](https://github.com/numtide/horae/pull/261) | `feat/scoped-time-report-reader`, `.worktrees/scoped-time-report-reader` | #257 `b30e3cd`, shared time-read admission | Draft at `bf452dd`; final detailed reader,13 original DB tests, reader HTTP/totals assertions and19 original descriptors. Source/provenance/format pass; full native Nix `37229` running; no UI/export/activation |
+| Scoped grouped time report, [#262](https://github.com/numtide/horae/pull/262) | `feat/scoped-time-report-groups`, `.worktrees/scoped-time-report-groups` | #261 `bf452dd`, report contracts/totals and fixture | Draft at `66dbf0b`; final reader and13 DB tests exact; original171-line HTTP fixture and10 original descriptors. Source/provenance/format pass; full native Nix `79456` running; no UI/export/activation |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -380,16 +382,16 @@ Clients documents are separate and are not silently included in #248.
 | `98b1692` | Add reviewed person permission editing | permission-editor | DTO runtime in #250; web-expectation removal, final editor state/export wiring and complete UI tests now preserved in #260 `98857cf`, executable gates pending; specification in #248 |
 | `9e6d8bd` | Record person editor delivery and template follow-up | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `0f97cb2` | Add custom permission profile controls | permission-editor | Template DTO runtime in #250 using #226 commands; template controls and web-expectation removal now preserved in #260 `98857cf`, executable gates pending; specification in #248 |
-| `8db19ba` | Show affected names in permission reviews | permission-editor | Profile command's relationship-type reuse in #234; final loss-label DTO/reader/DB/HTTP portions in #250; page/draft/rendering tests remain preserved for UI extraction; specification in #248 |
+| `8db19ba` | Show affected names in permission reviews | permission-editor | Profile command's relationship-type reuse in #234; final loss-label DTO/reader/DB/HTTP portions in #250; final page/draft/rendering tests now byte-preserved in #260; specification in #248 |
 | `e7d8a36` | Protect permission drafts during navigation and dismissal | permission-editor | Final editor/recovery files in #260; navigation guard preserves current Clients. Cross-#259 union still pending; specification in #248 |
-| `6bba224` | Bind permission saves to the original requester | permission-editor | Shared requester DTO already in prerequisites; final session-save binding and HTTP assertions in #250; editor/recovery UI portions remain preserved separately; specification in #248 |
-| `1ecfa21` | Recover interrupted permission saves across reloads | permission-editor | Held in original backup; extraction pending |
-| `c88ca6d` | Exercise permission recovery in a real browser | permission-editor | Held in original backup; extraction pending |
+| `6bba224` | Bind permission saves to the original requester | permission-editor | Shared requester DTO already in prerequisites; final session-save binding and HTTP assertions in #250; final editor/recovery UI portions now byte-preserved in #260; specification in #248 |
+| `1ecfa21` | Recover interrupted permission saves across reloads | permission-editor | Final recovery/storage/template/UI fixtures byte-preserved in #260; runner retains current suites; specification in #248; full gate pending |
+| `c88ca6d` | Exercise permission recovery in a real browser | permission-editor | Final real-browser recovery fixture and runner wiring in #260; specification in #248; full gate pending |
 | `202ee96` | Protect project delegation against concurrent deactivation | project-manager-delegation | Complete final command/activity tests in #243 (`3404c85`); suite/cache/format, final WASM lint and full local Nix passed; specification hunks preserved separately |
 | `3f45b7c` | Validate combined approval record coverage | scope-domain | Code/tests in #221; specification hunks retained for reconciliation |
 | `eb56af3` | Define scoped approval transaction and coverage gates | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `8d49421` | Add authorized permission editor subject discovery | permission-editor | Complete final subject DTO/API/reader, 305-line DB tests and HTTP assertions in #250; exact source/cache provenance and workspace suite passed; final gates pending; specification in #248 |
-| `b735b3a` | Add safe person switching to permission editor | permission-editor | Final subject DTO runtime content in #250; person-switching page/state consumer and removal of its historical web expectation remain preserved separately; specification in #248 |
+| `b735b3a` | Add safe person switching to permission editor | permission-editor | Final subject DTO runtime content in #250; person-switching consumer and historical web-expectation removal now byte-preserved in #260; specification in #248 |
 | `7f14e4b` | Limit user directory responses to consumed fields | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
 | `1eb13ec` | Add scoped people directory reads | people-directory | Reader, DTO, session endpoint, seven DB tests and canonical HTTP assertions extracted in draft #253; exact-head tests/Clippy/SQLx and full local Nix gate passed on 3a37538; combined integration remains pending. Specification owned by #248; legacy HTTP assertions remain with #240 |
 | `981d0e3` | Resolve approval names without directory access | identity-projections | Source/tests together in #240 at `1ce993f`; 1,122 tests, regenerated cache, format and offline lints passed; full Nix running; canonical tests and mixed specification hunks separately preserved |
@@ -421,17 +423,17 @@ Clients documents are separate and are not silently included in #248.
 | `c4e83c8` | Record project delegation verification and next integration gate | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `a25e544` | Serialize invoice writes before user revocation | legacy-access-writers | Five Rust/test changes and eight SQLx additions in #233 on integrated #220/#227/#228/#232 prerequisites; suite/cache/offline lints/full Nix passed; specification hunks retained |
 | `774f60a` | Record invoice revocation verification and next integration gates | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
-| `1879b8a` | Preserve requester identity when reloading permission editors | permission-editor | Held in original backup; extraction pending |
+| `1879b8a` | Preserve requester identity when reloading permission editors | permission-editor | Final requester-bound editor and complete browser/UI tests byte-preserved in #260; specification in #248; full gate pending |
 | `dab6885` | Record editor reload verification and remaining directory integration | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `ee16165` | Connect scoped People directory and requester-bound editing | people-directory | People consumer, original DTO web-expectation removals/import spelling, historical admin/shell/sidebar and UI fixture preserved in #260. Later task-catalog wiring stays separate; gates pending |
 | `1b41033` | Record People integration verification and remaining report scope | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
-| `75f13a1` | Add scoped detailed time report reads | time-report-readers | Held in original backup; extraction pending |
+| `75f13a1` | Add scoped detailed time report reads | time-report-readers | Reader/DTO/endpoint and detailed DB/HTTP assertions in #261 bf452dd; final reader includes totals/filter refinements, grouping separate; specification in #248; full gate pending |
 | `cbc78a8` | Apply scoped permissions to time report spreadsheets | time-report-exports | Held in original backup; extraction pending |
 | `09bd15f` | Apply scoped permissions to streamed time exports | time-report-exports | Native stored-row decoder in #222; streamed exports and remaining hunks retained |
 | `93aaa68` | Support multi-selection filters in time downloads | time-report-exports | Held in original backup; extraction pending |
-| `a23804f` | Include full-period totals in scoped time reports | time-report-readers | Held in original backup; extraction pending |
+| `a23804f` | Include full-period totals in scoped time reports | time-report-readers | One-statement totals, detailed DB/HTTP pagination assertions and exact cache in #261 bf452dd; specification in #248; full gate pending |
 | `7266abb` | Connect scoped time reports with bound downloads | time-report-consumer | Held in original backup; extraction pending |
-| `41ff137` | Add scoped time report grouping with exact totals | time-report-readers | Held in original backup; extraction pending |
+| `41ff137` | Add scoped time report grouping with exact totals | time-report-readers | Grouped reader/contracts,13 final DB tests and original171-line HTTP fixture in #262 66dbf0b; export_filters helper additions stay with exports; specification in #248; full gate pending |
 | `e2e66fb` | Connect scoped time report groups and detail navigation | time-report-consumer | Held in original backup; extraction pending |
 | `ca170c0` | Export scoped time groups to Excel with release authorization | time-report-exports | Held in original backup; extraction pending |
 | `2b59b58` | Stream grouped time reports with scoped authorization | time-report-exports | Held in original backup; extraction pending |
@@ -4345,3 +4347,68 @@ Timesheet user route props and every existing browser suite; verify that new
 head. Continue remaining report/project/task/Clients groups and complete
 original-hunk accounting. Optimization #251/#252 remain the only authorized
 merged priority deliveries; no extraction was merged or closed.
+
+### Report readers extracted; earlier combination verified
+
+Previous goal turn made progress: #260 and original #259 dependency corrections
+published. Current combined gate64407 terminated exit0, all checks passed,
+on015dcd15f97c299fef0799041849f9ffbf8696c0:1037 application tests, remaining
+binaries, browser and deployment/OIDC. It excludes the later UI/report PRs.
+Original #212 retains the same18 dirty paths; #216 reconfirmed merged before
+edits. No originals, #208, real data or activation state changed.
+
+Draft #261 bf452ddc260ac5d1a2427b8f115d767eae6500b2 owns75f13a1/a23804f
+detailed reporting plus final detailed active-project/billability refinements.
+Base #257 supplies unchanged admission; only original helper visibility changes.
+Final reader differs only by deferring grouped registration. All733 lines/
+13 DB tests match final original;122-line HTTP fixture preserves75f13a1 reader
+assertions and exact a23804f totals/pagination additions. Export/access/group
+assertions remain with their owners. DTO runtime matches detailed original;
+historical pre-consumer web expectations remain until UI wiring.
+
+Static inventory matched38 macros to35 original descriptors;19 absent
+descriptors copied exactly. Format45906 and whitespace passed unchanged.
+Owned diff29 paths/1512 additions/one deletion. Full native Nix37229 runs
+onbf452dd; live schema/executable acceptance remains pending.
+
+Draft #26266dbf0bcefd1dee781e9daf9683b40d6235533b3 stacks on #261.
+Final grouped reader153 lines and DB fixture722 lines/13 tests matchdb3935d;
+171-line HTTP reader fixture matches41ff137. Endpoint33 lines original,
+group DTO web expectations retained until consumer wiring. All32 macros
+match27 original descriptors;10 absent descriptors restored. Format73230 and
+whitespace passed unchanged. Owned diff18 paths/1385 additions. Full native
+Nix79456 runs on66dbf0b; no executable pass claimed.
+
+Bounded report review covered scope before filters/aggregation, qualified
+historical parents, distinct entity IDs, requester/policy denial, active actor/
+grant locks, revocation/cancellation, strict cursors/enums, exact64-bit totals,
+effective/frozen rounding and billability, empty/exhausted pages and one-statement
+snapshots. No new dependency/schema/CSS or legacy endpoint replacement.
+No high/critical finding in the inspected boundary.
+
+Scoped Spec Kit analysis used #248's spec/plan/tasks and original report
+contract. Initial prerequisite invocation resolved stale metadata to016 and
+failed for its absent plan. Inspected resolver, then explicitly selected015
+with SPECIFY_FEATURE_DIRECTORY in paths-only mode and independently checked
+all three required files. No feature.json persistence, extension hooks or spec
+edits. This is a read-only invocation adaptation, not an initial-command pass.
+
+FR-006/007/008/010/018 and report-relevant SC-002/003/006 map to T201–T202,
+T213–T215, T219–T220 and reader portions of T222/T235: eight scoped requirements,
+nine relevant tasks, all mapped. No new ambiguity, duplication or constitutional
+conflict found in this boundary. Mapping is not implementation completion.
+T203 remains open; full candidates, exports, consumer, financial families and
+governance/activation remain separate. No spec remediation required/performed.
+
+#25975088 has passed release/Clippy and the exact Calendar create/move/resize/
+reorder/delete assertions after restoring original CSS. #26066677 has passed
+release/Clippy and permission recovery/history/storage browser scenarios.
+Their complete browser and remaining gates are still running; no full passes.
+
+Next collect75088,66677,37229,79456 without duplicate runs. Compose #259/#260
+with verified015dcd1 after standalone results, preserving all five navigation
+guards/tests and route props, then verify that head. Compose report readers
+and extract matching exports/access/consumer next. Original4294aa3's New Project
+dev-login isolation hunk stays with project-editor fixture ownership alongside
+later permission-label changes. Reports, project/task lifecycle/UI, unpublished
+Clients and complete hunk reconciliation remain open. No extraction merge.
