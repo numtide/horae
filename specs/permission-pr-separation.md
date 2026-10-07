@@ -117,8 +117,10 @@ implementation remains incomplete. Do not treat
   logging. Its full gate50229 failed at Clippy: three unused preflight symbols.
   Local compositionf90f60f7 contains #246's function-local lint expectation for this
   deliberately unexposed reader; full gate38699 is running. #2469cc4330e passed
-  exact-head native all-target Clippy. Dependent export
-  refresh and remaining shared-CI rebases are still required.
+  exact-head native all-target Clippy. #264–#268 now inherit the denied-export
+  cleanup. #264's111 focused report tests passed; HTTP verification remains
+  pending. Remaining shared-CI rebases and
+  final prerequisite integration are still required.
 
 ## Remote heads snapshot — 2026-10-07, before the follow-ups above
 
@@ -7235,3 +7237,126 @@ successful evaluation and an in-progress build at their exact published heads.
 Formatting20827 and whitespace passed for this ledger update. This iteration
 is PROGRESS: preflight rebase published, exact-head lint corrected and verified,
 and the full composition gate resumed. Completion remains unproven.
+
+### Denied-export cleanup propagated through the report chain — 2026-10-07
+
+The previous goal turn was PROGRESS (#246 published and verified by native
+Clippy). This continuation re-read the saved objective, AGENTS, constitution
+and applicable Rust/ponytail skills and reconfirmed #216 merged at02f7b58.
+Complete gate38699 was confirmed live and its frozen f90f60f7 worktree was not
+edited. Its client build completed, but the full gate remains pending. Read-only
+process inspection confirmed active Rust compilation, not a stopped job; no
+restart was attempted because of log silence.
+
+The #264 review base still contained #263's previous15bda5cc head. Preserved
+the base and delivery in `backup/export-cleanup-refresh-20261007/*` and verified
+`.scratch/export-cleanup-refresh-20261007.bundle`, SHA-256
+`40df3b5aa4101f41261aed0c43d8701254511d5c3e93640706fb1dfc4c1d2074`.
+Preserved #265–#268 and the grouped prerequisite base in
+`backup/export-cleanup-descendants-20261007/*` and verified
+`.scratch/export-cleanup-descendants-20261007.bundle`, SHA-256
+`441661f82e8f87e7de1640ec1325baeec19623ff99ddf91d25c7ab703153e66f`.
+All worktrees and exact remote heads were checked before changes; rebases
+explicitly disabled updateRefs and commit signing.
+
+| Branch | Previous head | Published head |
+| --- | --- | --- |
+| integration/scoped-time-csv-prerequisites | 07684ac6 | e84f194367d9e5a080a12a084babe40dbe434aa5 |
+| feat/scoped-time-csv (#264) | 6747c051 | 2820e56dbff0a417c7a1294cbdb5e41fcd2e3923 |
+| feat/time-report-access (#265) | cec16d16 | 378462391f70c84351802a4f8106d64c9699703c |
+| integration/grouped-time-export-prerequisites | 28bcf074 | 29f42408e74425de11f6f44a0fda27583bc411e9 |
+| feat/grouped-time-exports (#266) | ae53be44 | 6293a081487699b012d0d4cda1620990542bfcd4 |
+| feat/time-report-download-filters (#267) | 79798acf | 6c271f4191195e7a5853e54c380a4d724c5f7fb4 |
+| feat/scoped-time-report-ui (#268) | 1be11e74 | 95e468218e9c5200bef21a41a042a964a323bb3e |
+
+Replayed the two existing #249 patches over #26334341049 in the CSV review
+base. The recovered limits-module conflict resolution was exactly original
+bloba3a0bfa3. Final base treef38d9913117c4334fb4328b4e65695b458f59577 equals the
+precomputed explicit-old-parent composition. The only range-diff difference in
+the first prerequisite patch is existing module context; its cache patch is
+identical. No descriptor or query was regenerated or replaced.
+
+#264's factoring of `authorize_current` overlaps the same helper already moved
+into #263 for the cleanup fix. Retained #263's explicit awaited rollback and
+the original CSV `authorize_rows` factoring. Its final old/new tree delta is
+exactly two files: the nine-line begin adjustment (one old line removed) and
+the unchanged49-line regression. All other paths are byte-identical. No new
+behavior, grant, API, dependency or source of product decisions was added.
+
+#265's rebased patch is identical and treeb925ce92 equals its expected tree.
+The grouped review base replays #262's existing patch; its recovered HTTP test
+registration file is original blobbcce32d4 and its final tree4f7e4833 equals
+the expected composition. #266 had an insertion collision between the new
+regression and `mod grouped`; retained both unchanged, with the module declaration
+before the test. Its range-diff changes only that insertion's context. #267's
+patch and all three #268 patches are identical by range-diff; their final trees
+6009ae6a and3a3eb8b1 equal the precomputed trees.
+
+Every descendant differs from its preserved head only in the same two files
+(57 additions, one deletion). Byte comparisons independently proved that both
+the complete `begin` function and the regression function exactly match #263
+in all seven updated branches. The helper delta's stable patch-id is
+58919cf0f7faf0b711366967dc2cc0bb4e03aec2 at both ends of the chain. UI/CSS,
+schemas, query caches and all other original tests remain unchanged. The
+complete composition has additional report-consumer functionality in this file;
+whole-file equality to it is neither claimed nor required.
+
+Boundary review preserved denial semantics and database-error propagation when
+rollback fails. The bounded export owns that transaction; streamed CSV retains
+its existing close-on-drop connection and savepoint ownership unchanged. The
+new inherited regression deterministically blocks pool cleanup and checks an
+organization write lock with NOWAIT before releasing it. No sleeps, assertions,
+timeouts or test registrations were removed to get a pass.
+
+Formatting66178/#264,2856/CSV-base,79726/#265,75901/grouped-base,21105/#266,
+22512/#267 and71783/#268 passed with zero changes; whitespace checks passed.
+Focused Nix97638 runs on frozen #2642820e56d using disposable PostgreSQL,
+the existing `reports::` tests and the HTTP export-filter module. Log
+`.scratch/scoped-time-csv-cleanup-check.log`, recipe
+`.scratch/scoped-time-csv-cleanup-check.nix`. It remains pending, not a pass.
+No competing full gate was started;38699 remains the sole full local gate.
+
+Publication65087 completed successfully: all seven branch updates were atomic
+with exact previous-head leases. Updated #264–#268 descriptions preserve their
+historical evidence, clearly label current checks pending and keep all five
+PRs draft. Verified each exact remote head after publication. The new sections
+do not claim that #282/#283 are inherited: that shared-prerequisite refresh,
+retargeted CI and final cross-stack verification remain outstanding. No merge,
+closure, original-worktree change or real-data operation occurred.
+
+Next collect97638 and38699 without restarting live handles on silence. Record
+the exact results, then refresh the remaining shared-CI prerequisite chains
+in dependency order and reconcile the current-head inventory/provenance. This
+iteration is PROGRESS, but the goal remains incomplete.
+
+Post-publication inventory69702 found60 drafts:18 successful aggregates,
+21 failures,20 in progress and one head without a build aggregate yet. No
+local/remote head mismatch or accidental ready PR was found. Direct stale bases
+remain #272/#273/#275/#281; transitive freshness still needs reconciliation.
+The full composition advanced past the application package into Clippy, while
+#26497638 advanced into runtime tests. Neither observation proves a full pass.
+
+Focused97638 then exited0 on #2642820e56d:111 report tests passed, zero failed,
+two existing manual export measurements ignored,994 other tests filtered out.
+The inherited `denied_time_export_releases_authority_before_pool_cleanup`
+regression passed. Its second command selected ZERO tests: `export_filters`
+contains a helper called by the real `job_endpoints_enforce_session_role_and_organization`
+test, not separately registered tests. This command provides NO HTTP evidence;
+the zero exit status is not counted as covering that requirement.
+
+Started a separate exact real-endpoint test on the unchanged #264 head using
+`.scratch/scoped-time-csv-http-check.nix`; log
+`.scratch/scoped-time-csv-http-check.log`. It invokes the HTTP matrix including
+`time_reports::check` and `export_filters::check`, without rerunning the111
+report tests. The shared transport correction #283 is still not inherited by
+this branch; any failure must be retained and diagnosed, not retried into a pass.
+
+The new HTTP-only handle is91192; #264 remains frozen until it ends. Focused
+report derivation:
+`/nix/store/sz64fc991rprh3s2rah07sbgga0pv1p4-horae-scoped-time-csv-cleanup-check-0.1.0.drv`.
+PR status updates60632 distinguish the111 passing report tests from the zero-test
+HTTP selector and the actual pending endpoint check. The next shared-CI review
+base is `integration/materialized-export-prerequisites` at8c990cd6 (parents
+99eab225 andc2d8de05), feeding #2474c6d0110 and #249c808b46c. It has only been
+inspected: no rebase started there. Refresh it against its existing owners'
+current heads before propagating CI changes through the exported report chain.
