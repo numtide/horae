@@ -4100,3 +4100,53 @@ Next collect `64524` and run #258's full native gate, then verify composition
 with #241 and the other reader/editor deliveries before continuing connected
 UI extraction. Preserve the explicit approval-editing limitation. Original
 hunk accounting remains incomplete. No extraction PR was merged or closed.
+
+### Combined Timesheet and permission verification started
+
+Previous turn made progress: published #258 and completed the three standalone
+reader gates. Reconfirmed #216 merged at `02f7b58` before changes. The original
+#212 worktree still has the same18 unpublished paths; none was edited.
+
+Created verification-only branch `integration/timesheet-permission-check` in
+`.worktrees/timesheet-permission-integration`, starting at #258 `d2b45ca`.
+Composed prior reader/editor verification `7a2d61c` locally as `faec57b`, retaining
+both sides of three registration conflicts: models, HTTP harness and profile
+test modules. Then composed #241 `7820f8d` without conflict as
+`6da9981ebe9680b5c0d66bc0e408f09d060d56a7`. This branch is published for
+reproduction only; no delivery PR, GitHub merge or activation occurred.
+
+The combination contains #240/#241/#250/#253–#258 and their inherited
+foundations. All three source heads are ancestors. Twenty-one selected complete
+reader/editor/command/legacy-writer source and test files match their owning
+heads exactly; registrations keep every suite. Formatting `90772` passed with
+zero changes and the worktree is clean. Nix tests/Clippy/live SQLx `25306` is
+running on exact `6da9981`, currently in Clippy; full native gate remains pending.
+This composition evidence does not certify the remaining original UI or task
+lifecycle groups.
+
+#258 `64524` remains live on unchanged `d2b45ca`: strict Clippy and live SQLx
+passed, core compilation finished and the application test build is in progress.
+Do not restart it merely because a poll is quiet. Its full native gate has not
+yet been launched.
+
+Read-only dependency audit clarified the next boundaries. `b8b1c60` changes
+the existing `submit_week` signature to require `TimesheetWriteContext` and
+updates its actual page caller. Extract it with the connected Timesheet UI,
+its124-line submission tests and97-line session HTTP tests; do not ship an
+incompatible standalone endpoint or invent an alternate compatibility API.
+The original still restricts this submission route to legacy-own context.
+
+The command implementation at final original `db3935d` differs from #258's
+`02c4245` source by exactly the later `0591407` task-activity addition: one
+`AND ($5 OR pt.active)` query condition and49 lines of archival test. These
+belong with migration0048 and the project-task lifecycle extraction, alongside
+the matching changed SQLx descriptor. Keep that remaining ownership explicit;
+#258 does not claim the final task-archival behavior. The other command files
+and DTO have no later differences in that comparison.
+
+Next collect `64524` and `25306`, launch their full native gates after targeted
+checks finish, and retain exact-head evidence. Then extract the coherent
+Timesheet UI/weekly-submission group from `e1ddd9a`, `a0632a8`, `b8b1c60` and
+later focus/person-switch/date-offset fixes, preserving browser coverage and
+keeping task lifecycle changes separate. Original hunk accounting, editor,
+report, project/task UI and unpublished client groups remain unfinished.
