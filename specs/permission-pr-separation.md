@@ -4890,3 +4890,54 @@ Project CSV/XLSX and Harvest-compatible list/count/direct-ID release boundaries
 remain separate extractions. Next finish these reader regressions and caller
 checks, publish the bounded draft, collect the two live gates, then continue
 delivery, Tasks, unpublished Clients classification and full hunk accounting.
+
+### Project reader draft published; editor fixture isolation corrected
+
+Reconfirmed #216 merged at02f7b58. The preceding iteration was progress:
+reader source, original fixtures and compatibility adaptations were preserved,
+and the ledger was published as3d61f03. No unchanged check was restarted.
+
+Full native64831 completed with exit0 and all compatible checks passed on
+#268aef180f. Updated its PR body after confirming the live head. Other
+architectures and retargeted GitHub acceptance remain separate.
+
+Full native88044 on #269d5dc1da failed in the existing client-context browser
+fixture after production builds, Clippy and earlier suites passed. Its global
+draft oracle parsed multiple creators' rows as one JSON document. The retained
+new-project-permissions fixture intentionally creates another user's draft.
+Commit fdae71d scopes the oracle to the unique active DEV_LOGIN administrator
+and organization. This matches the real login selection and the per-creator
+draft constraint, retains every assertion and leaves other creators' drafts
+untouched. No production code changed. Formatting traversal/whitespace passed;
+the JavaScript file is not covered by treefmt, so traversal is not a JS syntax
+proof. Published the fix and started full native87701 on the clean head;
+updated #269 to record the failure and pending rerun, not a pass.
+
+Published draft #270 at0723bb3, based on
+integration/project-read-prerequisites c6e96f4. Its89 changed paths comprise
+40 source/test/runner paths and49 SQLx descriptors. Retained the original
+2631186 HTTP fixture and registered it alongside all existing checks.
+Adapted the original browser fixtures to the bound overview and shared
+task/team editor, retaining their failure/retry, rate, bulk-selection and
+keyboard assertions. The new scoped Project-read fixture runs first; all23
+previous suites remain. Modals and responsive fixtures preserve their actual
+base's Timesheet and Client APIs rather than importing unrelated changes.
+
+The scoped query inventory parsed259/259 macros after explicitly handling
+Rust escaped line continuations. Restored49 missing descriptors only after
+query/hash equality against2631186; no heuristic deletion. Core budget,
+project DTO, backend reader and budget implementation match the original
+source exactly. Formatting31397 passed with only component-fixture import
+ordering; whitespace checks passed. Commit/push37975 and draft creation93585
+completed; full native23221 runs on clean0723bb3. No executable acceptance
+or final adversarial sign-off is claimed yet.
+
+Project export links retain the original expected-requester parameters, but
+CSV/XLSX server release guards and Harvest-compatible readers remain separate,
+unextracted responsibilities. The draft explicitly records that limitation.
+Do not activate policy or infer finished delivery enforcement from these links.
+
+Next finish the scoped reader adversarial review, collect87701/23221, correct
+any concrete failures, then extract project delivery/compatibility readers,
+Task lifecycle/readers/UI, classify unpublished Clients and complete hunk-level
+ownership and wider composition. No extraction PR was merged or closed.
