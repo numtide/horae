@@ -154,7 +154,7 @@ Clients MVP as canonical-permission acceptance.
 | Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `fd91c3d`; parent browser corrections propagated with exact expected tree. Full native76300 passed in child #273; own exact-head gate50478 also passed. ARM and wider review remain pending |
 | Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `4b2c87d`; parent browser corrections propagated with exact expected tree. Full native76300 passed on this head. ARM, wider review, task lifecycle and catalog-management UI remain separate pending work |
 | Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; tests/live-schema SQLx96425 and full native71588 passed. ARM/wider acceptance pending. No lifecycle, catalog UI, later atomic rate creation or activation |
-| Task archive/restore and import preservation, [#276](https://github.com/numtide/horae/pull/276) | `feat/scoped-task-lifecycle`, `.worktrees/scoped-task-lifecycle` | integration/task-lifecycle-prerequisites1955c38 (#275/#269/#258/#223/#224/#231) | Draft at `7e883eb`; original ac4c90c+0591407 extracted. Missing original test descriptor2889c08 restored after gate72726 failed. Fresh tests/SQLx60667 and full native95578 running. Base full native65768 passed. Catalog/link/UI controls excluded |
+| Task archive/restore and import preservation, [#276](https://github.com/numtide/horae/pull/276) | `feat/scoped-task-lifecycle`, `.worktrees/scoped-task-lifecycle` | integration/task-lifecycle-prerequisites1955c38 (#275/#269/#258/#223/#224/#231) | Draft at `7e883eb`; tests/live-schema SQLx60667 passed after restoring original descriptor2889c08. Full native95578 running; base full native65768 passed. Catalog/link/UI controls excluded |
 | Existing project-task link authority and currency, [#277](https://github.com/numtide/horae/pull/277) | `feat/scoped-task-links`, `.worktrees/scoped-task-links` | #2767e883eb | Draft at `d1ab522`; original979a594 extracted. Gate23598 passed live-schema SQLx and is executing tests. Full native/ARM gates pending; no UI or activation |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
@@ -5610,3 +5610,19 @@ tests60667 and full native95578 remain live. Ledger82d512f was committed locally
 before this publication result; publish it together with this update. The
 separate #276 body update62777 is still unconfirmed and must not be repeated
 while its handle remains live.
+
+Gate60667 subsequently completed with exit0 on #2767e883eb: live-schema SQLx
+and every database/component/integration suite passed. The app suite reports
+1,224 passed, zero failed and11 inherited ignored. Full native95578 remains live;
+this narrow pass does not close ARM or browser/deployment acceptance. #277's
+gate23598 has passed live-schema SQLx and is compiling its application tests.
+The ledger through0ec9a24 is published successfully.
+
+Refreshed private conservation inventory including #277:1,113 of1,214 original
+paths have an exact blob in an extraction;81 require adaptation/retained-work
+review and20 are original deletions with separately tracked owners. Do not
+interpret this as a completion percentage. Next collect95578/23598 and the
+still-live #276 body update62777, then start #277's full native gate when the
+current builders release resources. Continue with the original catalog plus
+atomic creation and separate editor controls; never alter a checked worktree
+while its gate is running.
