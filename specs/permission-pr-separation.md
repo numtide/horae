@@ -121,6 +121,11 @@ implementation remains incomplete. Do not treat
   at93b3fbaa, is a ten-line draft over #283. Both complete native VM checks and
   full local flake check passed, including explicit Nix store registration.
   Fresh Nixbot402 started on this exact head; ARM benefit remains unproven.
+- [#285](https://github.com/numtide/horae/pull/285), `test/nix-test-parallelism`,
+  at15d9ab5b, makes both Rust runners respect NIX_BUILD_CORES. A sandbox probe
+  measured2 allocated cores versus32 default Rust test threads. All121 core
+  tests passed; the full application suite57770 is running. No Rust assertion
+  or timeout changed, and the CSV failure class is not yet considered resolved.
 - Local complete compositiond5c34851 contains both corrections without diagnostic
   logging. Its full gate50229 failed at Clippy: three unused preflight symbols.
   Local compositionf90f60f7 contains #246's function-local lint expectation for this
@@ -7941,3 +7946,62 @@ failures independently, then choose the verified shared prerequisite base for
 #283 propagation. The goal remains active and incomplete. This iteration made
 progress through fresh failure attribution, the reviewed VM candidate and its
 two passing local deployment checks; no broad CI-readiness claim is made.
+
+### CSV deadline attribution and runner allocation — 2026-10-08
+
+The preceding iteration made progress through published #284 and its complete
+native gate. Revalidated #216 as merged before creating isolated diagnostic
+and runner worktrees. Nixbot402 on exact #284 remained IN_PROGRESS; no retry
+was requested. Its ARM OIDC raw endpoint had no output yet, not a failure or
+completed boot result.
+
+The three CSV failures are current-head evidence. Evaluating Git flakes from
+their worktrees gives exact matches to the failed logs:
+
+| PR / head | Build | x86 tests derivation |
+| --- | --- | --- |
+| #231110b365a | 330 | l658jk2f4lj6v1agn81s6a490xn1fv4x-horae-tests-0.1.0.drv |
+| #2365f0c619c | 337 | d8bb6zr41qdjzpjqc0snwisi8il5jm96-horae-tests-0.1.0.drv |
+| #228951baf9d | 338 | v0f6dz6flkg3qn96ccbz6k8jqb39p0m6-horae-tests-0.1.0.drv |
+
+Build-page commit links also match those heads. An initial absolute path-flake
+evaluation produced different derivations; it is not the Git-flake attribution
+proof. Build338 includes both cancelled-preview and resume-before-EOF failures,
+not only the first failure listed in the previous summary.
+
+The shared interruption helper waits10s for a traced commit, but previously
+aborted without reporting the worker outcome. Diagnostic worktree
+`.worktrees/csv-batch-readiness` adds only failure diagnostics and runs the20
+streaming tests through35205; log `.scratch/csv-batch-readiness-diagnostic.log`.
+This diagnostic source change is not part of any published PR.
+
+Diagnostic35205 finished exit0:16 passed,4 existing manual100k measurements
+ignored,812 filtered out. The selected streaming tests did not reproduce the
+full-suite failure, so no timeout root cause is claimed from this run. Saved
+the exact diagnostic patch at `.scratch/csv-batch-readiness-diagnostic.patch`
+and restored the diagnostic worktree to its original clean93b3fbaa after the
+process completed. Its log remains available; no production/test assertion
+change is being published from that experiment.
+
+A separate sandbox probe96903, using the same `--cores 2` request, reports
+`nix_cores=2 rust_test_default=32`; log
+`.scratch/test-runner-parallelism-probe-with-linker.log`. Thus the checked-in
+runner ignores the per-build test concurrency budget. This demonstrates the
+allocation mismatch, not yet that it explains every CSV deadline failure.
+The pinned stdenv setup normalizes zero/unspecified NIX_BUILD_CORES to a positive
+value; no custom normalization or deprecated RUST_TEST_THREADS setting is needed.
+
+Isolated branch `test/nix-test-parallelism` adds explicit test-thread flags to
+nextest and libtest in one Nix file. Formatting and whitespace checks passed.
+Core tests passed121/121, and full app suite57770 is executing with
+`--test-threads 2`; log `.scratch/nix-test-parallelism-tests.log`. All test
+contents, limits and internal concurrency remain unchanged. The unsigned
+commit15d9ab5b6ed18f0b177d425e0232da9d33f23346 was published via89033 and draft
+#285 opened over #284. Prerequisite order remains #282→#283→#284→#285.
+Verification84488 confirms its exact head, base and draft state; Nixbot404
+started evaluation on that head. This is not a completed remote check.
+
+Next: collect57770, then reconcile #284/#285 remote CI against exact
+heads. Keep CSV failures open until adequately verified; do not propagate a
+speculative remedy across all extraction heads. Original work and completed
+gate evidence remain preserved; no merge or product change was made.
