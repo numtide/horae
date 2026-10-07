@@ -101,7 +101,7 @@ implementation remains incomplete. Do not treat
 | `??` | `crates/horae/src/harvest/pagination_tests/client_permissions.rs` |
 | `??` | `specs/015-scoped-permissions/contracts/client-permissions.md` |
 
-## Current verification follow-ups — 2026-10-07
+## Current verification follow-ups — 2026-10-08
 
 - #263 at34341049 releases denied export authority before pool cleanup. The
   deterministic regression failed before the fix;43 bounded-export tests passed
@@ -112,14 +112,22 @@ implementation remains incomplete. Do not treat
   streamed CSV framing;63 test lines cover immediate denials and byte integrity.
   Diagnostic CLI tests and ten original endpoint runs passed. Exact-branch
   verification80585 also passed:20 CLI tests and the real authorization endpoint.
-  Required remote CI remains separate. Integrate #282 before #283.
+  Remote build352 failed its ARM OIDC boot readiness check; Horae was already
+  listening, but the guest control shell missed the900-second deadline. This
+  is distinct from the corrected CSV transport failure. Integrate #282 before
+  #283; neither the boot candidate nor #283 has been propagated to extraction
+  branches yet.
+- [#284](https://github.com/numtide/horae/pull/284), `test/vm-store-image`,
+  at93b3fbaa, is a ten-line draft over #283. Both complete native VM checks and
+  full local flake check passed, including explicit Nix store registration.
+  Fresh Nixbot402 started on this exact head; ARM benefit remains unproven.
 - Local complete compositiond5c34851 contains both corrections without diagnostic
   logging. Its full gate50229 failed at Clippy: three unused preflight symbols.
   Local compositionf90f60f7 contains #246's function-local lint expectation for this
-  deliberately unexposed reader; full gate38699 is running. #2469cc4330e passed
-  exact-head native all-target Clippy. The complete composition's Clippy and
-  browser derivations have also passed; SQLx and the global result remain pending.
-  #264–#268 now inherit the denied-export
+  deliberately unexposed reader; full gate38699 completed successfully, including
+  Clippy, browser, SQLx, tests and both NixOS deployment checks. This is local
+  x86 evidence, not ARM or fresh individual-head acceptance. #2469cc4330e passed
+  exact-head native all-target Clippy. #264–#268 now inherit the denied-export
   cleanup. #264's111 focused report tests and its actual HTTP session/organization
   matrix passed. Remaining shared-CI rebases and
   final prerequisite integration are still required.
@@ -7831,3 +7839,105 @@ f90f60f7 integration evidence where its exact tree still applies; do not restart
 its completed process. Reconcile final PR readiness and the incomplete-work
 inventory before claiming completion. The goal remains active/incomplete;
 this iteration is PROGRESS, not a wait or a completed delivery claim.
+
+### ARM boot attribution and store-image candidate — 2026-10-08
+
+Revalidated #216 as merged at02f7b58a before creating a new isolated worktree. Original worktrees
+and completed local gate38699 were not changed or restarted.
+
+Resolved the earlier #223 attribution caveat: GitHub check113008754898 attaches
+build323's failed ARM OIDC result to currentbc74af8d. Evaluating that exact
+head yields `/nix/store/d1n5iwcsxxy9zka3ah3qbgzcsbqckypi-vm-test-run-horae-e2e-oidc.drv`,
+identical to the failed log. The build page's older commit label is not grounds
+to dismiss this failure.
+
+Read the actual terminal OIDC log for build352 on #2838d83b853, rather than
+restarting its still-running aggregate. It failed at the900-second control-shell
+readiness wait. Horae was already listening at guest546.76s; a virtio keyboard
+appeared only at879.63s. No OIDC assertions were reached. The failed derivation
+is `/nix/store/i2kgrw4v0kpg431dap9c9nc2157mcw75-vm-test-run-horae-e2e-oidc.drv`.
+Raw evidence: `.scratch/nixbot-352-arm-oidc-complete.log`.
+
+Compared successful build317's raw OIDC log, retained as
+`.scratch/nixbot-317-arm-oidc-complete.log`: Horae listened at429.66s, keyboard
+appeared at521.50s, backdoor started at570.97s, and the full test finished in
+618.52s. Both runs explicitly report unavailable KVM and fallback to TCG.
+The pinned test instrumentation requires hvc0 and ttyAMA0 before starting its
+control shell; the late keyboard event is not itself proof of a keyboard bug.
+
+Candidate branch `test/vm-store-image`, worktree `.worktrees/vm-store-image`,
+starts at #2838d83b853 and enables `virtualisation.useNixStoreImage` in the two
+NixOS checks. Four added lines include comments; there are no application,
+assertion, timeout or platform changes. The pinned qemu-vm module documents
+this option as replacing9p store reads with a local disk image, at the cost
+of image construction time and disk space. This is a performance candidate,
+not yet a proven remedy for the remote failure.
+
+Scope evaluation47541 passed for x86 and ARM: both application derivation paths
+and both complete test scripts are unchanged. Evidence is
+`.scratch/vm-store-image-scope-check.json`. ARM evaluation39555 confirms the
+image is enabled, the host9p store is disabled, and requiredFeatures still
+include kvm and nixos-test. Formatting passed with zero changes. Local complete
+NixOS checks74569 are running; log `.scratch/vm-store-image-x86-check.log`.
+
+A local ARM-driver dry-run81989 succeeded after correcting the diagnostic
+expression to use `extend.modules`. It would require277 derivations and420
+substitutions; this host has neither an ARM builder nor ARM binfmt registration.
+No speculative local ARM build was started and no emulation settings were
+changed. Fresh remote ARM execution remains necessary.
+
+Initial checks74569 completed with exit0, but log inspection found an unacceptable
+VM regression: register-nix-paths failed because the image-backed store lacked
+the writable overlay. The original9p configuration provided that overlay by
+default; useNixStoreImage changes the default. This candidate was not published.
+Preserved the initial log and scope evaluation instead of treating green
+application assertions as proof of a healthy VM.
+
+The corrected candidate explicitly preserves `virtualisation.writableStore`
+and adds `wait_for_unit("register-nix-paths.service")` in both scripts. It adds
+ten lines across two files, without deleting or weakening any existing check.
+Scope evaluation54362 confirms unchanged application derivations and identical
+old test scripts after removing only the new registration guard, on both Linux
+architectures. The writable overlay is enabled on both. Evidence:
+`.scratch/vm-store-image-overlay-scope-check.json`.
+
+Corrected checks8383 passed completely: OIDC30.80s and deployment/recovery84.17s,
+both with successful store registration and its explicit guard. Formatting
+passed with zero changes. Committed93b3fbaa3a988b5dc6b05aa930fa202d4198f335
+without signing; push30413 succeeded and draft
+[#284](https://github.com/numtide/horae/pull/284) was created over #283.
+The ten-line diff uses native VM options; review found no application,
+authorization, timeout, assertion-removal or platform change. Image generation
+adds temporary disk/time overhead, so remote ARM benefit remains unproven.
+
+Full local `nix flake check`34073 passed against published93b3fbaa; log
+`.scratch/vm-store-image-93b3fbaa-full-check.log` ends in all checks passed.
+It reused unchanged derivations, built the new formatting gate, and explicitly
+omitted incompatible ARM/Darwin systems. GitHub verification36118 confirms
+the exact draft head/base and Nixbot402 IN_PROGRESS. This is not a completed
+remote gate or ARM performance proof. Keep completed
+compositionf90f60f7 as content/integration evidence, not proof of the new VM
+configuration. No merge or extraction-head rewrite was performed.
+
+The refreshed remote snapshot40438 is retained at
+`.scratch/permission-ci-20261008-boot-review.json`. It lists60 scoped open PRs.
+Inspected four additional x86 test logs instead of assuming every red check
+was the ARM boot failure:
+
+| Build / PR | Observed failure | Next action |
+| --- | --- | --- |
+| 340 / #234 | CLI CSV dry-run returns indeterminate_submission exit6 instead of1 | Same signature as #283; propagate the verified framing correction |
+| 330 / #231 | reclaimed-lease CSV test unwraps Elapsed at csv_streaming.rs:563 | Inspect its synchronization separately; not fixed by a VM storage change |
+| 337 / #236 | CSV resume test fails its durable-batch-before-EOF assertion | Inspect the batch observation/worker outcome before attributing it to load |
+| 338 / #228 | cancelled-preview CSV test fails its durable-batch-before-EOF assertion | Same fixture boundary class, still unresolved |
+
+Evidence files are `.scratch/nixbot-{330,337,338,340}-x86-tests-tail.log`.
+These are identified build-log failures, not a claim that all four derivations
+have been reconciled against current heads. The three CSV fixture failures
+need independent diagnosis before another broad shared-prerequisite refresh.
+
+Next: collect #284's fresh ARM result; diagnose the three CSV fixture
+failures independently, then choose the verified shared prerequisite base for
+#283 propagation. The goal remains active and incomplete. This iteration made
+progress through fresh failure attribution, the reviewed VM candidate and its
+two passing local deployment checks; no broad CI-readiness claim is made.
