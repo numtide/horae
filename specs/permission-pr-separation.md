@@ -105,7 +105,8 @@ implementation remains incomplete. Do not treat
 
 This snapshot supersedes the commit/status labels in the historical delivery
 table below. All58 extraction PRs remain drafts; all remote heads match the local
-branches. Nixbot reports15 successes,41 failures and2 running checks. A success
+branches. After the exact-head #224 completion refresh, Nixbot reports16 successes,
+41 failures and1 running check. Other rows retain the inventory snapshot. A success
 is not completion of the cross-stack review; a failure is not necessarily a new
 functional defect. Failure classes and exact-head local evidence are recorded
 in the iteration sections. No PR is approved for merging by this inventory.
@@ -117,7 +118,7 @@ in the iteration sections. No PR is approved for merging by this inventory.
 | #221 | 7866b97f | Failed |
 | #222 | 23f258b7 | Failed |
 | #223 | 1dc4b6bc | Failed |
-| #224 | 2afe25e3 | Running |
+| #224 | 2afe25e3 | Passed |
 | #225 | ac723cb6 | Failed |
 | #226 | 5a617c68 | Passed |
 | #227 | 25d75c4e | Failed |
@@ -6398,3 +6399,36 @@ Next: collect71277 and start the serial full composition gate when it terminates
 collect ARM311 on #270b480f9d2. Reconcile the remaining inherited-file/original
 change inventory and dependency delivery after those results, retaining explicit
 unfinished client work and without merging any GitHub PR.
+
+### Session cleanup gates complete; combined gate started — 2026-10-07
+
+The preceding user-facing estimate was no progress. This continuation re-read
+the objective and repository rules, reconfirmed #216's merged commit, polled the
+existing local check rather than restarting it, and collected terminal evidence.
+
+#224 remains at2afe25e3. Local71277 completed with exit0 and `all checks passed!`
+for the bounded `nix flake check -L --max-jobs 1 --cores 2`. This local result is
+x86_64-linux only; the output explicitly excludes incompatible architectures.
+[Nixbot308](https://nixbot.numtide.com/repos/github/numtide/horae/builds/308)
+also succeeded on this head. Its successful-attributes page explicitly lists
+browser, Clippy, e2e, OIDC, package, SQLx, tests and formatting for both Linux
+architectures. The pages are preserved as `.scratch/nixbot-308-final.html` and
+`.scratch/nixbot-308-final-succeeded.html`. GitHub CI37670586943 passed Flake Check
+and Format. The PR description now records these current-head results instead
+of calling them pending. The draft remains while delivery reconciliation and
+cross-stack verification are unfinished; these results do not certify other
+heads or resolve the distinct checkpoint-timeout evidence by inference.
+
+After71277 terminated, clean composition5c43f24a was checked and its full serial
+gate started as74548 with the same bounded command. Output is retained in
+`.scratch/permission-split-full-5c43f24a.log`. Its worktree is frozen during the
+check. This is the only running local full gate;102GB were available before
+launch. No GitHub merge, original-source edit, real-data change or permission
+activation occurred. ARM311 on #270b480f9d2 remains in progress; no rerun was
+requested and its timeout repair is not yet declared verified.
+
+Next: collect74548 and311, investigate any new composed-boundary failure before
+propagation, then reconcile dependent PR bases and carry the verified shared
+repairs into their delivery chains. Preserve the original backups and the
+explicitly unfinished client work. Do not use standalone passes as proof that
+the combined stack passed.
