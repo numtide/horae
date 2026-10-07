@@ -27,6 +27,21 @@ impl TimeReportBillability {
     }
 }
 
+/// Presentation mode for one authenticated requester, not reusable authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeReportPolicy {
+    Legacy,
+    Scoped,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimeReportAccess {
+    pub requester: PermissionRequester,
+    pub policy: TimeReportPolicy,
+}
+
 /// Exclusive bound in date/project/task/entry order, not an authorization token.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

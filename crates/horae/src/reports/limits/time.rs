@@ -7,6 +7,7 @@ use super::*;
 use crate::models::DetailedReportRow;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::TimeReportQuery;
+use crate::models::time_report::{TimeReportAccess, TimeReportPolicy};
 use crate::reports::bounded::ExportPermit;
 use crate::server_fns::{PermissionStorageError, load_person_permissions};
 
@@ -40,6 +41,21 @@ async fn begin(
         }
     };
     Ok((tx, policy, grants))
+}
+
+/// Resolve presentation mode with the same current authority as time downloads.
+pub(crate) async fn read_access(
+    pool: &PgPool,
+    requester: PermissionRequester,
+) -> Result<TimeReportAccess, StatusCode> {
+    let (tx, policy, _) = begin(pool, requester).await?;
+    let policy = match policy {
+        0 => TimeReportPolicy::Legacy,
+        1 => TimeReportPolicy::Scoped,
+        _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+    tx.commit().await.map_err(database_error)?;
+    Ok(TimeReportAccess { requester, policy })
 }
 
 /// The caller configures the transaction and owns the lifetime of these gates.
@@ -94,6 +110,7 @@ pub(in crate::reports) async fn entries(
     org_id: Uuid,
     actor_id: Uuid,
     query: &TimeReportQuery,
+    expected_policy: Option<TimeReportPolicy>,
 ) -> Result<TimeExport, StatusCode> {
     let requester = PermissionRequester {
         org_id,
@@ -109,6 +126,12 @@ pub(in crate::reports) async fn entries(
         return Err(StatusCode::BAD_REQUEST);
     }
     let (mut tx, policy, grants) = begin(pool, requester).await?;
+    if expected_policy.is_some_and(|expected| match expected {
+        TimeReportPolicy::Legacy => policy != 0,
+        TimeReportPolicy::Scoped => policy != 1,
+    }) {
+        return Err(StatusCode::FORBIDDEN);
+    }
     // A single snapshot both bounds and materializes the authorized projection.
     let records = sqlx::query!(
         r#"WITH bounded AS MATERIALIZED (
