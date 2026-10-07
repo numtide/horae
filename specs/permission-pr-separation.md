@@ -153,7 +153,8 @@ Clients MVP as canonical-permission acceptance.
 | Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites` at375e9bd, combining #270 and #267 | Draft at `d61bfd3`; parent browser corrections propagated with exact expected tree. Full native81807 passed on this head; ARM and wider delivery review remain pending |
 | Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `fd91c3d`; parent browser corrections propagated with exact expected tree. Full native76300 passed in child #273; own exact-head gate50478 also passed. ARM and wider review remain pending |
 | Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `4b2c87d`; parent browser corrections propagated with exact expected tree. Full native76300 passed on this head. ARM, wider review, task lifecycle and catalog-management UI remain separate pending work |
-| Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; missing original test-query descriptors restored after gate53475 failed. Tests/live-schema SQLx96425 passed; full native71588 running. No lifecycle, catalog UI, later atomic rate creation or activation |
+| Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; tests/live-schema SQLx96425 and full native71588 passed. ARM/wider acceptance pending. No lifecycle, catalog UI, later atomic rate creation or activation |
+| Task archive/restore and import preservation, [#276](https://github.com/numtide/horae/pull/276) | `feat/scoped-task-lifecycle`, `.worktrees/scoped-task-lifecycle` | integration/task-lifecycle-prerequisites1955c38 (#275/#269/#258/#223/#224/#231) | Draft at `7e883eb`; original ac4c90c+0591407 extracted. Missing original test descriptor2889c08 restored after gate72726 failed. Fresh tests/SQLx60667 and full native95578 running. Base full native65768 passed. Catalog/link/UI controls excluded |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
 Combine or subdivide only after tracing code and test dependencies. Prefer
@@ -456,10 +457,10 @@ Clients documents are separate and are not silently included in #248.
 | `2631186` | Enforce scoped project reads across pages and exports | project-read-permissions | Ordinary readers, budgets, minimal labels and bound overview/detail UI in #270; CSV/XLSX release boundaries in #271; Harvest-compatible project list/count/direct-ID readers in #272. Shared export helpers compose over earlier export PRs. Tests and original descriptors retained; fixture adaptations and failing gates recorded below. Final shared-file hunk audit and complete acceptance remain pending; specifications owned by #248 |
 | `1b81680` | Record project permission delivery acceptance | specification-history | Feature-015 final document state in #248 (`c77abf9`); complete historical revisions preserved in original refs; no runtime or full-feature acceptance |
 | `f6e8bf1` | Enforce task catalog and tracking read permissions | task-permissions-lifecycle | Task catalog/tracking and Harvest-compatible readers, DB/HTTP/browser fixtures, original descriptors and sidebar interaction correction extracted in #273. Full acceptance remains pending; later task creation, editing, activity and linking commands are still retained separately. Specifications owned by #248 |
-| `8dd61d4` | Enforce current task creation and project scope permissions | task-permissions-lifecycle | Creation commands and original DB/HTTP tests extracted into draft #275; current-head verification pending. Later atomic creation changes remain owned by dcadcee's pending extraction |
-| `facfb49` | Protect task rate edits with explicit intent and current permissions | task-permissions-lifecycle | Explicit rate transport, commands, original mutation/DB/HTTP tests and contract extracted into draft #275; current-head verification pending |
-| `ac4c90c` | Authorize task activity changes and guard running timers | task-permissions-lifecycle | Held in original backup; extraction pending |
-| `0591407` | Preserve project task archival across restores and imports | task-permissions-lifecycle | Held in original backup; extraction pending |
+| `8dd61d4` | Enforce current task creation and project scope permissions | task-permissions-lifecycle | Creation commands and original DB/HTTP tests extracted into draft #275f8c1477; full native71588 passed, ARM/wider review pending. Later atomic creation changes remain owned by dcadcee's pending extraction |
+| `facfb49` | Protect task rate edits with explicit intent and current permissions | task-permissions-lifecycle | Explicit rate transport, commands, original mutation/DB/HTTP tests and contract extracted into draft #275f8c1477; full native71588 passed, ARM/wider review pending |
+| `ac4c90c` | Authorize task activity changes and guard running timers | task-permissions-lifecycle | Commands, original tests/descriptors and contract extracted with0591407 in draft #276924dcbe. Fresh gates pending |
+| `0591407` | Preserve project task archival across restores and imports | task-permissions-lifecycle | Migration0048, import/checkpoint/lock-order adaptations, editor transport, tracking admission, original tests/descriptors and contract in draft #276924dcbe. Cache correction/fresh gates pending; later UI remains separate |
 | `979a594` | Enforce scoped project task linking and rate currency | task-permissions-lifecycle | Held in original backup; extraction pending |
 | `5561f14` | Add permission-aware task catalog management | task-consumers | Held in original backup; extraction pending |
 | `dcadcee` | Add atomic task creation to the task catalog | task-consumers | Held in original backup; extraction pending |
@@ -5316,7 +5317,7 @@ checking each owner's current SQLx inventory and any composed consumers:
 | #272 | `1f0c682793eb`, `40899460e93f`, `4c92eb5086da` | Harvest project count, direct lookup and list |
 | #273 | `3036fe659e73` | Harvest task count |
 | #269 | `a1ea432d7440` | Project editor settings update |
-| Retained original0591407 | `2a22de0eb8e0`, `8aae7affad63` | Task activity-aware restore/import inserts; lifecycle extraction still pending |
+| #276, original0591407 | `2a22de0eb8e0`, `8aae7affad63` | Superseded by activity-aware checkpoint restore/import inserts in #276; original descriptors remain recoverable in the parent and preserved source |
 
 Fresh-head native gate51216 is running on #2704a5c7d9. GitHub initially
 rejected the ledger push and PR-body update with internal server errors; the
@@ -5511,3 +5512,51 @@ ac4c90c and0591407 together (global/project activity, migration0048, editor
 intent, tracking admission and import/checkpoint preservation), retaining
 later catalog/link/editor-control work separately. Collect65768 and verify the
 new extraction on its own head before claiming acceptance.
+
+### Task lifecycle extracted and prerequisite gates passed — 2026-10-07
+
+Published draft #276 on feat/scoped-task-lifecycle. Original ac4c90c+0591407
+were extracted together in924dcbe. All67 changed-path added/deleted line sets
+match facfb49..0591407 except the intentionally excluded historical progress
+log; the HTTP registration contexts were adapted to preserve all18 existing
+matrices and add task_activity as the19th. All39 added files are byte-identical
+to the source, including34 query descriptors with matching SHA-256 hashes.
+Removed five superseded descriptors only in the extraction; each remains
+recoverable from its parent and the preserved original. The two previously
+unowned deletions2a22de0 and8aae7af now belong to #276's activity-aware import
+and checkpoint inserts.
+
+Gate72726 failed on one missing descriptor for the existing organization-lock
+NOWAIT regression. Corrective unsigned commit7e883eb restores2889c080
+verbatim from original0591407; no Rust, query or assertion changed. Both commits
+are published. Fresh tests/live-schema SQLx60667 and full native95578 are live
+on unchanged7e883eb. Do not edit this worktree while either check runs.
+
+Full native gate65768 finished with exit0 on prerequisite1955c38. All x86_64
+checks passed, including browser, PostgreSQL suites and deployment/OIDC;
+ARM/Darwin were explicitly omitted. Its main app suite passed1,210 tests with
+zero failures and11 inherited ignored. The successful combined browser run is
+new evidence, not an explanation or permanent fix for #269's earlier lost-ack
+fixture failure. Keep that investigation and ARM deployment acceptance open.
+
+Bounded lifecycle source review traced current actor/grants under organization
+and actor locks, stable project-before-task locking, running-timer exclusion,
+rate redaction after constructing committed event payloads, project authority,
+protected-field preservation and replay identity, tracking admission, and old
+checkpoint/default handling. Reviewed seven global activity tests, three editor
+activity tests, the real session matrix, migration, importer/lock-order and
+tracking regressions. No new critical/high source issue identified within this
+boundary; fresh full and cross-PR gates still determine acceptance.
+
+The next original link increment979a594 depends directly on this lifecycle and
+editor base; its canonical rate-currency rule must be kept alongside authority.
+Catalog5561f14, atomic creationdcadcee and editor controls8c1bf9b remain separate
+retained work. Next collect60667/95578 without restarting live processes,
+continue those extractions, and finish shared-hunk/deletion and unpublished
+Clients accounting. No GitHub merge, original closure or activation performed.
+
+The refreshed private blob inventory includes #276 and identifies1,103 of1,214
+original paths with an exact extraction blob;91 require adaptation/retained-work
+review and20 are original deletions requiring separate ownership review. The
+two #276 deletion owners are now documented above. These counts are not a
+completion percentage and do not replace the shared-hunk or dirty-work audit.
