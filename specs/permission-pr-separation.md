@@ -69,7 +69,7 @@ original worktree.
 
 All 18 original paths below remain preserved and unchanged. Eleven are now
 extracted in draft [#281](https://github.com/numtide/horae/pull/281),
-`feat/scoped-harvest-clients` at `1c254582`: the six cache paths, four Rust paths
+`feat/scoped-harvest-clients` at `cd8d1db7`: the six cache paths, four Rust paths
 and `contracts/client-permissions.md`, plus the original shared-test visibility
 hunk. Publication91690 succeeded after the transient GitHub errors. The other seven
 specification paths remain retained with unfinished client-workflow follow-up:
@@ -5892,3 +5892,91 @@ Next collect15935 (#281),31756 (catalog prerequisites),37940 (#271),31708 (#268)
 and current-head Nixbot295 without restarting live checks. Finish remaining
 shared-hunk/cache-deletion/specification reconciliation and #269's intermittent
 fixture diagnosis; do not mark complete or propagate unverified corrections.
+
+### Retained client decisions and shared-file review — 2026-10-07
+
+The preceding estimate-only answer made no goal progress. This iteration resumed
+the four exact live check handles, reconfirmed #216 merged and verified zero
+tracked difference between the original worktree and saved snapshot d364270a.
+Its 18 dirty paths remain unchanged. No original worktree was edited.
+
+Read the installed Spec Kit analyze procedure and ran its prerequisite command
+with `--json --require-tasks --include-tasks` in the original worktree. It resolved
+feature 015; no extension hooks exist. The task file explicitly says the full
+feature breakdown is incomplete. Consequently this is a focused preservation
+review, not a completed full-feature Analyze or permission-implementation gate.
+No analyzed specification or task checkbox was changed.
+
+Reviewed the seven dirty specification deltas against their saved snapshot,
+the extracted client contract and #248's historical extraction context. FR-035
+and FR-036 remain consistent across the source spec, plan, operation matrix,
+dependent-spec register and T238: global client defaults need global rate plus
+Client authority; archive requires archived projects, restore changes only the
+client. The compatibility reader does not implement either write contract.
+The six named registered-session cases map T237 to client scope, field exclusion,
+tenant/filter/count behavior, strict policy, activity and revocation. These are
+subsets of FR-006/007/008/010/018 and SC-002/003, not completion of those broad
+requirements. T238 maps FR-035/036 but is retained unfinished work, not an
+executable full-workflow acceptance package. No new product decision is needed
+to preserve these artifacts, and no spec regeneration is warranted.
+
+The original historical progress and quickstart results refer to verifier76298,
+not #281's current head. Keep the seven files assigned to the retained follow-up
+above, with their approved decisions also published in #281's contract; #248
+continues to describe the committed db3935d snapshot. This deliberately separates
+unfinished client workflow from the extracted reader rather than duplicating
+seven historical documents or claiming the new policy is ready.
+
+Refreshed the existing shared-line triage report (22732, exit0 after retrying a
+sandbox process-spawn denial). The recovered report icons and requester matrix
+now have matching source ownership. Manual comparison additionally establishes:
+
+- #270's Projects overview keeps the original keyed resource binding and adds
+  `initial_client` to preserve master/#216's client-to-project navigation.
+- #270's browser fixture authenticates through the same dev-login endpoint and
+  verifies its redirect without mounting unrelated legacy Timesheet readers;
+  its project authorization assertions remain intact.
+- #268's scoped Reports production subtree is byte-identical to the original.
+  Its UI test changes only legacy dependency-double signatures (`User` versus
+  `CurrentUser`/`UserListItem`, and the legacy tag call); canonical production
+  models and assertions remain. Combined signature reconciliation is still a
+  cross-PR integration gate, not implied by this standalone comparison.
+- #220 inlines the exact original organization's `FOR SHARE` query; #232 tests
+  inline the exact `FOR NO KEY UPDATE` query. Both match db::lock_organization.
+  #232's previously documented xmin/no-op-row-update adaptation preserves the
+  winning-revocation, unchanged-organization and snapshot-retry assertions
+  without requiring the separate access-revision schema.
+- #259 owns Timesheet navigation messages/tests; #260 owns permission-editor
+  messages/tests. Each also retains master's Client editor behavior. Their
+  combined navigation dispatcher and browser registrations still need a union
+  check; separate passing suites are not that proof.
+- `pub(crate)` audit/editor modules retain the binary's internal consumers;
+  modified storage doc comments do not remove the registered modules. The two
+  relocated HTTP matrices remain explicitly called in #242 and #253.
+
+Live checks remain15935 (#281cd8d1db7),31756 (catalog prerequisite e9f793df),
+37940 (#2715beac2e1),31708 (#2681be11e74). Catalog tests finished and deployment
+VM checks started; client SQLx passed and its application tests are running;
+the two restored-source packages built and are in Clippy. Nixbot295 remains
+IN_PROGRESS on #270737aa13a. None is counted as a completed gate here.
+
+Next collect those exact handles, finish cache-deletion and shared-registration
+ownership, verify the necessary cross-PR unions, and diagnose #269/ARM from new
+evidence. No merges, closures, new functionality or policy activation occurred.
+
+Catalog prerequisite31756 subsequently finished exit0, ending with all checks
+passed on unchanged e9f793df7c1dc6d52c549840f8501d21c3df6e38. This closes its
+fresh full native gate, including SQLx, tests, browser, deployed recovery and
+OIDC. The main deployment script finished in91.90s. This complements #279's
+already-recorded final-head66969 pass; it is not ARM or a complete cross-stack
+verification. Do not restart31756.
+
+The remaining11 original cache deletions were inspected against their candidate
+owners: six in #270, three in #272, one in #273 and one in #269. No complete
+whitespace-normalized old query matched the current Rust sources/tests. The
+#272 project reader and #273 task reader are byte-identical to the original
+replacement modules, using a combined visible/count/page query; the #269 editor
+now uses protected-field CASE assignments in place of its obsolete settings
+update. This narrows the next cache-reconciliation action but does not substitute
+for offline compilation/cache validation after removing descriptors. No cache
+file was deleted during this iteration or while its owner's gate was live.
