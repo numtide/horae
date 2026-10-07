@@ -4,6 +4,7 @@
 
 mod auth;
 mod project_reads;
+mod task_reads;
 mod types;
 
 #[cfg(test)]
@@ -668,7 +669,7 @@ async fn get_client(
 
 // ── Tasks ───────────────────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 pub struct TaskFilters {
     pub is_active: Option<bool>,
     pub page: Option<i64>,
@@ -706,38 +707,7 @@ async fn list_tasks(
 ) -> ApiResult<HarvestPagination<HarvestTask>> {
     let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
 
-    let total = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM tasks t
-         JOIN task_read_access access ON access.task_id = t.id AND access.org_id = t.org_id
-         WHERE t.org_id = $1 AND access.user_id = $3
-           AND ($2::bool IS NULL OR t.active = $2)",
-        user.org_id,
-        filters.is_active,
-        user.user_id,
-    )
-    .fetch_one(&db)
-    .await
-    .map_err(internal)?
-    .unwrap_or(0);
-
-    let rows = sqlx::query_as!(
-        TaskRow,
-        "SELECT t.id, t.name, t.active, t.billable_default,
-                CASE WHEN access.can_view_rates THEN t.default_rate_cents END AS default_rate_cents
-         FROM tasks t JOIN task_read_access access ON access.task_id = t.id AND access.org_id = t.org_id
-         WHERE t.org_id = $1 AND access.user_id = $5
-           AND ($2::bool IS NULL OR t.active = $2)
-         ORDER BY t.name, t.id
-         LIMIT $3 OFFSET $4",
-        user.org_id,
-        filters.is_active,
-        per_page,
-        offset,
-        user.user_id,
-    )
-    .fetch_all(&db)
-    .await
-    .map_err(internal)?;
+    let (total, rows) = task_reads::read(&db, &user, &filters, None, per_page, offset).await?;
 
     let items: Vec<HarvestTask> = rows.iter().map(task_row_to_harvest).collect();
 
@@ -752,22 +722,10 @@ async fn get_task(
     State(db): State<PgPool>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<HarvestTask> {
-    let row = sqlx::query_as!(
-        TaskRow,
-        "SELECT t.id, t.name, t.active, t.billable_default,
-                CASE WHEN access.can_view_rates THEN t.default_rate_cents END AS default_rate_cents
-         FROM tasks t JOIN task_read_access access ON access.task_id = t.id AND access.org_id = t.org_id
-         WHERE t.id = $1 AND t.org_id = $2 AND access.user_id = $3",
-        id,
-        user.org_id,
-        user.user_id,
-    )
-    .fetch_optional(&db)
-    .await
-    .map_err(internal)?
-    .ok_or_else(not_found)?;
+    let (_, rows) = task_reads::read(&db, &user, &TaskFilters::default(), Some(id), 1, 0).await?;
+    let row = rows.first().ok_or_else(not_found)?;
 
-    Ok(Json(task_row_to_harvest(&row)))
+    Ok(Json(task_row_to_harvest(row)))
 }
 
 // ── Users ───────────────────────────────────────────────────────────────────

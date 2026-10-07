@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH visible AS MATERIALIZED (\n             SELECT t.id,t.name,t.active,t.billable_default,\n                    CASE WHEN (CASE WHEN $7 THEN legacy.can_view_rates ELSE $9 END)\n                      THEN t.default_rate_cents END default_rate_cents\n             FROM tasks t\n             LEFT JOIN task_read_access legacy ON legacy.org_id=t.org_id\n               AND legacy.task_id=t.id AND legacy.user_id=$2\n             WHERE t.org_id=$1 AND (CASE WHEN $7 THEN legacy.user_id IS NOT NULL ELSE $8 END)\n               AND ($3::boolean IS NULL OR t.active=$3)\n               AND ($4::uuid IS NULL OR t.id=$4)\n           ), totals AS (SELECT COUNT(*) total FROM visible), page AS (\n             SELECT * FROM visible ORDER BY name,id LIMIT $5 OFFSET $6\n           )\n           SELECT totals.total AS \"total!\",t.id AS \"id?\",t.name AS \"name?\",\n                  t.active AS \"active?\",t.billable_default AS \"billable_default?\",t.default_rate_cents\n           FROM totals LEFT JOIN page t ON true ORDER BY t.name,t.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "active?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "billable_default?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "default_rate_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "2fba527fc9d79f92ba3f7d025dd0a714f07b745e2b490f0426637a5a7751af70"
+}
