@@ -327,6 +327,10 @@ async fn sheet_holds_selected_activity_through_entry_delivery_and_releases_on_ca
         if cancel {
             reader.abort();
             assert!(reader.await.unwrap_err().is_cancelled());
+            // SQLx queues rollback behind the blocked query on task cancellation.
+            // Release our table barrier so cleanup can run without racing the
+            // statement timeout against the archive completion deadline.
+            block_entries.rollback().await.unwrap();
         } else {
             block_entries.rollback().await.unwrap();
             let page = reader.await.unwrap().unwrap();
