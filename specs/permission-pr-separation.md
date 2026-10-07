@@ -3224,3 +3224,31 @@ Next collect `2967` and #251 required CI/merge state. After confirmed #251 merge
 rebase all four own Crane commits onto current master and retarget #252, preserving
 the published head with a lease. No extraction work resumes before build priority
 completion. #250's unresolved browser failure is also recorded publicly in its PR.
+
+### Actual Crane reuse and generated-bundle cleanup
+
+On `6ef7bec`, both dependency builds completed successfully. The final package
+restored the release cache and recompiled workspace crates/build scripts only:
+real WASM completed in 39.85s and the complete build phase in 3m34s. These remain
+indicative local timings under concurrent load, not controlled benchmarks.
+Clippy and SQLx passed using the shared development cache. Full run `2967`
+continues; partial results are not a full gate pass.
+
+Package review found two JS/WASM pairs: the real application plus the dependency
+stub's content-addressed assets. Pinned Dioxus clears its executable directory,
+not all restored public assets. Published unsigned `774966e` removes only
+`target/dx/horae/release/web` inside the package build sandbox before the real
+Dioxus build, preserving Cargo compilation artifacts. No user files or database
+state are removed. Formatting passed; final-head full gate `68290` is running.
+Verify the final bundle contains no stub assets before marking #252 ready.
+
+#251 Nixbot build112 failed its two ARM VM checks. Both raw logs show missing
+KVM, fallback to TCG and guest-shell startup timeout while waiting for PostgreSQL,
+before application assertions. The limitation is documented on the PR, not
+treated as an ARM runtime pass. Required GitHub Flake Check remains pending;
+the exact-head local x86_64 suite passed. No checks or protections were disabled.
+
+Next collect both local runs and the existing #251 required-check watcher.
+After actual #251 merge, rebase all five own Crane commits and retarget #252 to
+master, then require final-head checks before its authorized merge. Original
+extraction work remains deferred until these build-priority PRs are handled.
