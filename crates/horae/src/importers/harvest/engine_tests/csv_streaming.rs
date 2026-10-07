@@ -362,6 +362,9 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption, 
             tokio::time::timeout(Duration::from_secs(5), send.closed())
                 .await
                 .unwrap();
+            tokio::time::timeout(Duration::from_secs(5), wait_for_session_release(&pool, org))
+                .await
+                .expect("cancelled import retained its PostgreSQL session lock");
             sqlx::query!(
                 "UPDATE horae_jobs SET lease_until = clock_timestamp() WHERE id = $1",
                 id
@@ -576,22 +579,40 @@ async fn cancelling_a_csv_waiting_for_more_bytes_releases_its_session(pool: PgPo
     tokio::time::timeout(Duration::from_secs(5), send.closed())
         .await
         .expect("cancelled parser retained the upload body");
-    let retry = tokio::time::timeout(
-        Duration::from_secs(5),
+    let retry = tokio::time::timeout(Duration::from_secs(5), async {
+        wait_for_session_release(&single, org).await;
         import_body(
             &single,
             org,
             "USD",
             Body::from(format!("{HEADER}{ROW}")),
             ImportMode::Commit,
-        ),
-    )
+        )
+        .await
+    })
     .await
     .unwrap()
     .unwrap();
     assert_eq!(retry.summary.time_entries.created, 1);
     assert_eq!(entry_count(&pool, org).await, 1);
     single.close().await;
+}
+
+async fn wait_for_session_release(pool: &PgPool, org: Uuid) {
+    use super::super::{ApiImportError, lock_import, release_import};
+
+    // Parser exit and socket closure do not acknowledge PostgreSQL's session
+    // cleanup. Observe the actual lock before starting a single retry.
+    loop {
+        match lock_import(pool, org).await {
+            Ok(connection) => {
+                release_import(connection).await.unwrap();
+                return;
+            }
+            Err(ApiImportError::Busy) => tokio::task::yield_now().await,
+            Err(error) => panic!("failed to observe import session cleanup: {error}"),
+        }
+    }
 }
 
 #[sqlx::test(migrations = "./migrations")]
