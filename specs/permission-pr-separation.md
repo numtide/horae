@@ -153,7 +153,7 @@ Clients MVP as canonical-permission acceptance.
 | Scoped project CSV/XLSX delivery, [#271](https://github.com/numtide/horae/pull/271) | `feat/scoped-project-exports`, `.worktrees/scoped-project-exports` | `integration/project-delivery-prerequisites` at375e9bd, combining #270 and #267 | Draft at `d61bfd3`; parent browser corrections propagated with exact expected tree. Full native81807 passed on this head; ARM and wider delivery review remain pending |
 | Scoped Harvest-compatible project reads, [#272](https://github.com/numtide/horae/pull/272) | `feat/scoped-harvest-projects`, `.worktrees/scoped-harvest-projects` | #270 | Draft at `fd91c3d`; parent browser corrections propagated with exact expected tree. Full native76300 passed in child #273; own exact-head gate50478 is running |
 | Scoped task catalog/tracking reads, [#273](https://github.com/numtide/horae/pull/273) | `feat/scoped-task-reads`, `.worktrees/scoped-task-reads` | #272 | Draft at `4b2c87d`; parent browser corrections propagated with exact expected tree. Full native76300 passed on this head. ARM, wider review, task lifecycle and catalog-management UI remain separate pending work |
-| Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; missing original test-query descriptors restored after gate53475 failed. Corrected live-schema SQLx passes; tests96425 running. No lifecycle, catalog UI, later atomic rate creation or activation |
+| Current task creation and explicit rate edits, [#275](https://github.com/numtide/horae/pull/275) | `feat/scoped-task-writes`, `.worktrees/scoped-task-writes` | #2734b2c87d | Draft at `f8c1477`; missing original test-query descriptors restored after gate53475 failed. Tests/live-schema SQLx96425 passed; full native71588 running. No lifecycle, catalog UI, later atomic rate creation or activation |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
 Combine or subdivide only after tracing code and test dependencies. Prefer
@@ -5471,3 +5471,12 @@ merged textually, but still require semantic review; an automatic merge is not
 evidence of compatible contracts. No branch/worktree was merged or changed by
 this preflight. Resolve those test unions explicitly when composing the next
 boundary, retain all suites, and keep #269's unresolved lost-ack fixture visible.
+
+Gate96425 subsequently completed with exit0 on publishedf8c1477: 1,117
+application unit tests passed, zero failed and11 inherited ignored, plus all
+component/integration suites. All19 creation/edit regressions and both
+registered-session matrices pass. Full native gate71588 is now running on the
+same unchanged head; gate50478 for #272 also remains live. PR275 now records
+the completed narrow gates and pending full acceptance. The latest ledger
+publication before this update wasb4e7346. Next collect71588/50478 and retain
+the separate ARM and editor-fixture blockers; do not restart live checks.
