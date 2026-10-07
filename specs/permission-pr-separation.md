@@ -146,6 +146,8 @@ Clients MVP as canonical-permission acceptance.
 | Grouped CSV/XLSX time exports, [#266](https://github.com/numtide/horae/pull/266) | `feat/grouped-time-exports`, `.worktrees/grouped-time-exports` | Review base `da493f6` combining #265 and #262 | Draft at `0eec1a4`; original grouped handlers/source/16 DB tests, shared CSV group authorization and18 descriptors; original grouped-filter HTTP fixture retained. Source/format/provenance pass; full native gate40587 running; later URL controls and consumer/browser integration remain open |
 | Time download result filters, [#267](https://github.com/numtide/horae/pull/267) | `feat/time-report-download-filters`, `.worktrees/time-report-download-filters` | #2660eec1a4 and inherited detailed/grouped report/export foundations | Draft at `e029a89`; original active-project/billability URL parser, seven DB tests, strict transport and actual-session fixtures;10 original descriptors. Format/provenance/source review passed; full native gate51012 running; UI/browser filter propagation retained separately |
 | Remaining #212 behavior groups | Original refs plus candidate inventory below | To be resolved from actual dependencies | Not submitted or certified; preserve every group until assigned to a resulting PR |
+| Scoped Reports screen, [#268](https://github.com/numtide/horae/pull/268) | `feat/scoped-time-report-ui`, `.worktrees/scoped-time-report-ui` | #267 `e029a89`, inherited report access/readers and all four export routes | Draft at `810ce57`; original components,15 component tests and538-line isolated Chromium fixture. Format/source/provenance/syntax pass; full native gate50800 running. No CSS/SQL/schema/activation; full T203 remains open |
+| Cross-PR Reports/Timesheet/People verification only | `integration/reports-permission-check`, `.worktrees/reports-permission-integration` | Combines verified `1a87961` with #268 `810ce57` and its report/export foundations | Local integration merge `b7836d7`, not a delivery PR or GitHub merge. Both HTTP registration sets and all30 unique browser suites retained; dedicated source/test blobs unchanged. Format/syntax/source comparison pass; full native gate25958 running |
 
 Candidate groups below are review units, **not a commitment to 31 PRs**.
 Combine or subdivide only after tracing code and test dependencies. Prefer
@@ -437,12 +439,12 @@ Clients documents are separate and are not silently included in #248.
 | `09bd15f` | Apply scoped permissions to streamed time exports | time-report-exports | Native stored-row decoder in #222; scoped streaming source/delivery, shared release helpers and10 DB tests/HTTP assertions in #26455d362b; specification in #248 |
 | `93aaa68` | Support multi-selection filters in time downloads | time-report-exports | Shared URL parser, five unit tests and238-line two-format HTTP fixture in #26455d362b; specification in #248 |
 | `a23804f` | Include full-period totals in scoped time reports | time-report-readers | One-statement totals, detailed DB/HTTP pagination assertions and exact cache in #261 bf452dd; specification in #248; full gate pending |
-| `7266abb` | Connect scoped time reports with bound downloads | time-report-consumer | Backend preflight/DTOs, CSV/XLSX mode binding and parser/HTTP tests in #265f436a29; UI, browser, component fixtures and consumer lint removals retained for the Reports UI extraction; specification in #248 |
+| `7266abb` | Connect scoped time reports with bound downloads | time-report-consumer | Backend preflight/DTOs, CSV/XLSX mode binding and parser/HTTP tests in #265f436a29; UI, browser/component fixtures and consumer lint removals in #268810ce57; specification in #248 |
 | `41ff137` | Add scoped time report grouping with exact totals | time-report-readers | Grouped reader/contracts,13 final DB tests and original171-line HTTP fixture in #26266dbf0b, full gate79456 passed; export_filters helper additions in #2660eec1a4; UI retained separately; specification in #248 |
-| `e2e66fb` | Connect scoped time report groups and detail navigation | time-report-consumer | Held in original backup; extraction pending |
+| `e2e66fb` | Connect scoped time report groups and detail navigation | time-report-consumer | Grouped consumer and original browser/component assertions in #268810ce57; specification in #248 |
 | `ca170c0` | Export scoped time groups to Excel with release authorization | time-report-exports | Grouped XLSX reader/renderer/route and seven DB tests in #2660eec1a4; UI/browser/component assertions retained for Reports consumer; specification in #248 |
 | `2b59b58` | Stream grouped time reports with scoped authorization | time-report-exports | Grouped CSV cursor/delivery/route, nine DB tests and shared group-lifetime authorization in #2660eec1a4; UI/browser assertions retained for Reports consumer; specification in #248 |
-| `ecac66b` | Add scoped individual time reports and nested breakdowns | time-report-consumer | Held in original backup; extraction pending |
+| `ecac66b` | Add scoped individual time reports and nested breakdowns | time-report-consumer | Three original scoped modules, individual/nested transitions and original browser/component assertions in #268810ce57; specification in #248 |
 | `de8f9ad` | Filter time reports to active projects | time-report-consumer | DTO/readers and reader tests in #261/#262; export SQL predicates in #263/#264/#266; strict URL transport and original cross-format snapshot/authority fixtures in #267e029a89. UI/browser/component hunks retained for Reports consumer; specification in #248 |
 | `2497dbe` | Enforce scoped permissions in the project editor | project-editor-permissions | Pure RateEdit code/tests in #221; composable delegation and its transaction tests in `be787ca`; picker reader now #254 retains its historical web lint expectations, whose removal stays with this pending project editor/UI consumer; remaining hunks retained |
 | `2631186` | Enforce scoped project reads across pages and exports | project-read-permissions | Held in original backup; extraction pending |
@@ -4682,3 +4684,41 @@ original Reports consumer, including its component/browser fixtures and filter/
 group/expanded request keys, on the now available reader/export/access/filter
 foundations. Then verify wider composition and continue project/task/Clients
 ownership and the complete original-hunk audit. No extraction merge or closure.
+
+### Reports consumer and wider composition published
+
+Draft #268810ce57 preserves the remaining ordinary Reports consumer on #267:
+three scoped modules, authenticated mode-gated route,15 original component
+tests and the538-line disposable Chromium fixture. Eight paths,2566 additions/
+43 deletions. No shared CSS, SQL, cache, schema, dependencies or activation.
+The three modules, browser fixture and DTO are byte-identical todb3935d.
+Route and test stub retain the existing no-argument project-tag API; only that
+future Project-reader signature is deferred. All test assertions are preserved.
+This assigns the remaining Reports UI/browser hunks from7266abb,41ff137,
+e2e66fb,ca170c0,2b59b58,ecac66b,de8f9ad anddb3935d to #268; each already
+extracted backend/specification owner remains unchanged.
+
+Source review traced access-before-mount, pinned requester/mode, exact ready
+resource keys including every filter/context, stale-response exclusion,
+integer totals, escaped labels and full-period bound downloads without cursors.
+Existing design contract explicitly requires incumbent shared components and
+no shared-CSS changes, not copying the report-builder prototype. Keyboard,
+responsive and theme assertions are preserved, not claimed executed yet.
+T203 full candidate discovery and financial-family requirements remain open.
+Formatter63610 passed without edits; whitespace and browser syntax52651 passed.
+Clean-head full native gate50800 is running; the draft states pending acceptance.
+
+Created isolated integration/reports-permission-check atb7836d7, combining
+previously verified1a87961 with #268 and its complete export foundations.
+Resolved only HTTP module and browser runner registration conflicts by retaining
+both sides; all30 unique browser suites remain, with permission recovery and
+Reports before legacy fixtures. Dedicated Reports and Timesheet/People source
+and tests match their parents exactly. Formatter3606 and shell syntax passed.
+Full native25958 is running; no identical check was restarted. This branch is a
+verification artifact, not another delivery PR or authorization to merge.
+
+Next collect40286/1825/40587/51012/50800/25958 without duplicate builds and
+record actual outcomes. Continue Project reads/editor, task lifecycle/consumers,
+unpublished Clients preservation and complete hunk accounting; the overall
+separation goal is not complete. Ledger state through #267 was published
+at18489b3 before this iteration. No extraction PR merged or closed.
