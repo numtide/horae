@@ -33,12 +33,20 @@ let
 
   # Path patches are dependencies, not dummy workspace code. Dioxus also
   # needs its configuration to select the same server/web profiles and flags.
+  # Its WASM bundler requires wasm-bindgen intrinsics, absent from an empty main.
+  dummyMain = buildPkgs.writeText "horae-deps-main.rs" ''
+    fn main() {
+        #[cfg(feature = "web")]
+        dioxus::launch(|| dioxus::prelude::rsx! {});
+    }
+  '';
   dummySrc = craneLib.mkDummySrc {
     inherit src;
     extraDummyScript = ''
       chmod -R u+w "$out/vendor/dioxus-fullstack-0.7.9"
       cp -r ${../vendor/dioxus-fullstack-0.7.9}/. "$out/vendor/dioxus-fullstack-0.7.9/"
       cp ${../crates/horae/Dioxus.toml} "$out/crates/horae/Dioxus.toml"
+      cp -f ${dummyMain} "$out/crates/horae/src/main.rs"
     '';
   };
   dxInputs = with buildPkgs; [ dioxus-cli wasm-pack binaryen ]
