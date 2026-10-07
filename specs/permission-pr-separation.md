@@ -3142,3 +3142,25 @@ package/browser/VM behavior, correct findings, then merge #251 only when ready.
 Retarget #252 to master afterwards and require its own final checks before merge.
 Both remain draft. Original editor gate `90520` also remains running; preserve
 its result. Resume extraction ownership work only after the build priority.
+
+### Release-profile local gates passed; protected merge requested
+
+On exact #251 `0004659`, full local `nix flake check` (`57447`) completed
+successfully, including browser, deployment VM and OIDC VM checks. Additional
+`cargo test -p horae-core --release --locked` (`33471`) passed all 121 tests.
+The PR is now ready for review, not draft. `gh pr merge --auto --squash` with
+`--match-head-commit 0004659a1d77046a12c18533d68cdcdd3b74e76a` succeeded in requesting
+the protected merge workflow (`12844`); required remote Flake Check was still
+pending, so this is not evidence of an actual merge. No bypass used.
+
+#252 stays draft on `8b4c69d`. Vendor-only preparation `73582` passed after
+parallelizing only the download/unpack derivations; full gate `10968` now builds
+both dependency caches. Actual final-application artifact reuse remains pending.
+Exact-master timing control `91392` and original editor full gate `90520` remain
+live. Do not restart them or count any partial result as full success.
+
+Next collect these runs and #251 merge state. After confirmed merge, rebase the
+two own Crane commits onto updated master (preserving the published head with a
+lease), retarget #252, and run its required final checks before its authorized
+merge. Only then resume the original separation goal. Preserve the measured
+binary/bundle size trade-off and avoid an unsupported benchmark percentage.
