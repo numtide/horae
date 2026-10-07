@@ -3296,3 +3296,36 @@ merge-group run and watcher `37872` are still authoritatively live. Its earlier
 successful PR CI uploaded cache paths successfully; no cache-upload failure was
 found. No build was restarted and no merge protection changed. Next action
 remains to collect that queue result, not to start new functional work.
+
+### Release merge-group failure and selector test synchronization
+
+The previous iteration was PROGRESS (remote Crane evidence and a recovery ref).
+The following wait was verified against live queue watcher `37872`. That watcher
+is now terminal: merge-group `37552522194` failed after37m39s. #251 remains OPEN,
+with no merge commit and no auto-merge request. Do not restart the old watcher.
+
+The failing browser assertion expected `Hours per task` but retained
+`Hours per person` in `chooseField`, New Project scenario near629. This is
+not an ARM virtualization failure. Source review found that the helper focuses
+its target immediately after opening, before asynchronous native `toggle` can
+focus the selected option. A browser-only reproduction with the exact shared
+menu script (`.scratch/select-focus-order.cjs` in the release worktree) confirmed
+that ordering: native pre-toggle focus was body, an early target focus was then
+overwritten by the selected option. Waiting for initial selected-option focus
+before choosing avoids it. Probe runs `7549` and `30646` passed; they use no DB.
+
+Published unsigned `a2b12458af4052617bfd5f2110ea27cb8eadf8e3` adds one readiness
+assertion and a two-line explanation to the existing test helper. No component,
+application behavior, selection assertion, timeout or gate is changed. This is
+a necessary test synchronization repair within #251, not evidence that Thin LTO
+caused the underlying race. Formatting passed (`31490`). Focused complete New
+Project suite `37073` runs against the exact already-built Thin LTO binary with
+a disposable database; it has passed the previously failing reload/selection
+scenario, but the entire suite is not yet complete. Final-head full Nix gate
+`48807` is live. PR body distinguishes old-head successes from new verification.
+
+#252 remains unchanged and fully locally verified on `774966e`; its rebase must
+inherit this test repair after #251 actually merges. Next collect repaired-head
+gates, then re-enable protected auto-merge with exact-head matching. No merges
+have occurred, and the original extraction goal remains deferred until priority
+build PRs are integrated.
