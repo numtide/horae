@@ -1,6 +1,7 @@
 { perSystem, pkgs, ... }:
 perSystem.self.default.overrideAttrs (old: {
   pname = "horae-sqlx-prepare";
+  cargoArtifacts = old.passthru.checkArtifacts;
   nativeBuildInputs = old.nativeBuildInputs ++ [
     pkgs.postgresql
     pkgs.sqlx-cli
