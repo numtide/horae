@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET minutes=17, rounded_minutes=0, notes='Retained history' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a4a815bcf0890533cba082f6499fde82eef6568f330bfe9f892d9bd39d366b16"
+}
