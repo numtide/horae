@@ -9,6 +9,7 @@ mod concurrency;
 mod detail;
 mod overview;
 mod spend;
+mod tasks;
 mod team;
 
 async fn fixture(
