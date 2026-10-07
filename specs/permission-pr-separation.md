@@ -110,11 +110,15 @@ implementation remains incomplete. Do not treat
 - [#283](https://github.com/numtide/horae/pull/283), `fix/csv-upload-framing`,
   at8d83b853, is a separate draft over #282. One Content-Length header preserves
   streamed CSV framing;63 test lines cover immediate denials and byte integrity.
-  Diagnostic CLI tests and ten original endpoint runs passed; its own focused
-  verification80585 and required CI remain pending. Integrate #282 before #283.
+  Diagnostic CLI tests and ten original endpoint runs passed. Exact-branch
+  verification80585 also passed:20 CLI tests and the real authorization endpoint.
+  Required remote CI remains separate. Integrate #282 before #283.
 - Local complete compositiond5c34851 contains both corrections without diagnostic
-  logging. Its full gate has not run. Dependent export refresh and remaining
-  shared-CI rebases are still required; neither fix completes the split goal.
+  logging. Its full gate50229 failed at Clippy: three unused preflight symbols.
+  Local compositionf90f60f7 contains #246's function-local lint expectation for this
+  deliberately unexposed reader; full gate38699 is running. #2469cc4330e passed
+  exact-head native all-target Clippy. Dependent export
+  refresh and remaining shared-CI rebases are still required.
 
 ## Remote heads snapshot — 2026-10-07, before the follow-ups above
 
@@ -7089,3 +7093,145 @@ Next: collect80585; if it passes, run the sole complete-composition full gate at
 d5c34851, keeping that worktree frozen. Continue independent prerequisite refresh
 without dropping either correction, then reconcile current-head CI and provenance.
 No merge, closure, real-data mutation or policy activation. Goal incomplete.
+
+### Current-head CSV check, delegation refresh and complete-gate failure
+
+The prior iteration made progress by verifying the independent CSV fix and
+publishing prerequisite refreshes. The intervening estimate inspected a newly
+terminal Clippy failure; no source changed in that status response. This
+continuation re-read the saved goal, AGENTS and constitution and reconfirmed
+#216 merged as02f7b58. No original worktree, #208, policy or real data changed.
+
+#283 exact-branch check80585 exited0 on8d83b853:20 CLI tests and the real
+authorization endpoint passed (831 other tests filtered out). Log
+`.scratch/csv-upload-framing-check.log`, derivation
+`/nix/store/bp11y2fr34c65xvg4il5mi0hvbw4d7n0-horae-csv-upload-framing-check-0.1.0.drv`.
+Its PR body now distinguishes this evidence from the diagnostic composition.
+Nixbot352/#283 and350/#263 were in progress at the last remote check; neither
+was a passing gate. Inventory30655 found60 drafts,17 successful aggregates,
+21 in progress and22 failures, with no local/remote head mismatch at that time.
+
+Delegation/audit refresh publication38131 succeeded atomically with exact
+previous-head leases; draft #243/#245 bodies were updated and remote heads
+confirmed. Backups remain at `backup/shared-ci-delegation-audit-20261007/*`
+and `.scratch/shared-ci-delegation-audit-20261007.bundle`, SHA-256
+`0fa611a16193aa3941c0267da77de5488da3e95af100a6d2a94d68308e55a0d6`.
+
+| Branch | Previous head | Published head |
+| --- | --- | --- |
+| integration/project-delegation-prerequisites | c19210e8 | f01b6cf4c484c77696e9567f850af8e9ba278681 |
+| feat/project-manager-delegation (#243) | dde4a8a9 | 7ff4a5005198ca8520a73fcf619051cbc72f20fc |
+| integration/permission-audit-prerequisites | 1654d547 | 2053ebbeba861eb0599f7274a221d41799fa0b31 |
+| feat/permission-audit-history (#245) | 7dc76ed3 | 322f62b0b05af8b62209a86f6b02ab3201a3eaed |
+
+All four trees matched explicit-old-parent expected compositions. All four #243
+patches and six #245 patches were identical by range-diff. Prerequisite
+composition replays are patch-equivalent, not current-parent ancestry: the
+assignment SQLx descriptor07580408 already existed in the refreshed parent
+with identical blobe0a84e52; the audit base's recovered import-authorization
+test and permissions module matched original resolution blobs76dcabba and
+2c076899 before staging. No new source conflict decision was introduced.
+Every old/new path except the two shared CI files and README was unchanged;
+these three changes match their established owners. Formatting20760,16096,
+13457 and25054 passed. #283 is not inherited by these branches; required
+current-head CI and final integration remain pending.
+
+Complete compositiond5c34851 full gate50229 exited1, collected from its actual
+session handle. The web release package built, but Clippy failed before the
+whole suite completed. Log `.scratch/permission-delivery-complete-d5c34851.log`;
+failed derivation
+`/nix/store/y8g40mj9s05j2bnss37n0angn04clani-horae-clippy-0.1.0.drv`.
+Errors are unused `PreflightCounts`, `PreflightError` and `preflight::read`.
+The reader has only test callers and deliberately no public endpoint/CLI/UI.
+Original #212 contains the same reader. Standalone #246 inherits a module-wide
+inactive-storage expectation; the composed consumers no longer need that
+general annotation, exposing the three remaining diagnostics. This is not
+evidence that preflight or policy activation is implemented as a public feature.
+
+### Preflight prerequisite refresh and localized lint correction
+
+Preserved original basea5c1a363 and #246af7bc6fd under
+`backup/shared-ci-preflight-20261007/*` and the verified bundle
+`.scratch/shared-ci-preflight-20261007.bundle`, SHA-256
+`9e5c4a4d222c5b60e4d7e50af8a2ef9c66ed6bb46c8ba851f070fda1ea32cff9`.
+Rebase onto #23749189160 completed with updateRefs/signing disabled.
+The pure-foundation add/add conflict was a duplicate: the original composed
+core tree equaled its old requester parent and the expected refreshed core
+tree equaled the new requester parent. Skipped only that duplicate foundation;
+Git also dropped the already-present storage patch. Template commands remain.
+
+New prerequisite head28d7cdbbd3c89fd2f76e10850311f4c98f2da393 has exactly the
+precomputed tree07ff2ed4009e2abd2570b432bbf8bf1dd1613e23. Rebased #246ecd5336a
+has exactly expected tree790635c11e5343365495e8da99bd3fd7983a3c3d; its two original
+patches are unchanged by range-diff. Only README and the two shared CI files
+differ from the old heads. README and e2e match their owner blobs. CSV retains
+its prerequisite-specific tests: its delta, not the entire file, matches #282
+with stable patch-id9b983651968f82a97483988966201a5beb016a8a. Comparing the whole
+CSV file to #282 correctly failed because that base lacks these existing tests;
+no file was overwritten to force equality.
+
+Commitc941040648306722ce6d2102ce5e43c79ad2cfac on #246 adds only three item-local
+`cfg_attr(not(test), expect(dead_code, reason = ...))` annotations. Tests remain
+compiled and unchanged, and all production queries, errors and authorization
+logic are byte-identical. Expectations will become unfulfilled warnings when
+real callers are connected, unlike a blanket allow. This preserves existing
+unexposed work without adding a caller, activating policy or disabling Clippy.
+Review used rust-best-practices lint/documentation guidance and ponytail.
+Formatting56791 applied rustfmt;62664 then passed with zero changes.
+
+Cherry-pickb2bb476a17798778d14d6ae75a1f1c783e9b8e0f carries exactly that commit
+in the local complete composition. A safety review initially rejected the
+write based on stale live-gate context; the actual50229 exit1 and an external
+`ps -C nix` check proving no remaining Nix process resolved that concern before
+the write. No worktree was edited during its gate. Clippy42781 now runs only on
+the frozen #246c9410406 worktree; log `.scratch/preflight-c9410406-clippy.log`.
+No full local gate is currently running. Next collect42781, verify the corrected
+complete composition, publish the preflight refresh with pending checks explicit,
+then continue dependent export/shared-CI refresh and final provenance review.
+No merge or closure; the goal remains incomplete.
+
+Clippy42781 subsequently exited1 on c9410406: expectations on the result struct
+and error enum were unfulfilled once the dormant function had its own expectation.
+No warning was disabled to hide this result. Follow-up9cc4330e removes those two
+redundant annotations; the entire net change is seven lines on `preflight::read`,
+with no query, test, data or authorization change. Complete compositionf90f60f7
+contains the identical follow-up. Exact-branch Clippy58635 is running on9cc4330e;
+log `.scratch/preflight-final-clippy.log`. Prior formatting69935 (complete) and
+99150 (prerequisite) passed unchanged. Next collect58635 before publication and
+resume the complete gate on the corrected composition, one full local gate only.
+
+Clippy58635 exited0 on9cc4330e1dc8b425aa498206f595b681f800d93f, both horae-core
+and horae with all native targets and warnings denied. Derivation
+`/nix/store/gyia5krbv1as6csc0px2rhcxmdskrg7j-horae-clippy-0.1.0.drv`.
+All paths other than the single preflight reader are identical to the rebased
+extraction; its test-only build is unchanged. Both correction commits match
+their composition counterparts by range-diff. Formatting3374 on complete
+f90f60f7 and70602 on #246 passed with zero changes. No database/query cache
+regeneration is needed for this annotation-only change.
+
+Full gate38699 now runs on frozen complete composition
+f90f60f754f359528c1ae08577d895f92bc5702b, using
+`nix flake check -L --max-jobs 1 --cores 2`; log
+`.scratch/permission-delivery-complete-f90f60f7.log`. The previous full gate and
+both focused Clippy processes are terminal; there is only one local full gate.
+Do not edit this worktree until that handle is terminal. No full pass is claimed.
+
+Publication2238 succeeded atomically with exact old-head leases for preflight
+base28d7cdbb and delivery9cc4330e. GitHub confirms #246 remains OPEN/DRAFT with
+that exact head and unchanged review base name; the updated description records
+historical failures, current Clippy success and pending full/remote gates.
+Next: collect complete gate38699 without restarting on silence; refresh the
+remaining prerequisite chains in dependency order and carry #263's explicit
+denied-export rollback into #264 and descendants. A read-only inspection found
+#264 still at6747c051 on base07684ac6, which contains old #26315bda5cc plus #249.
+Neither branch was changed during this iteration. Preserve the rollback helper
+when resolving its existing factoring against the refreshed export owner.
+
+Post-publication inventory39281 confirms60 drafts,17 successful aggregates,
+19 in progress and24 failures, with no local/remote head mismatch. Direct stale
+review bases remain #272/#273/#275/#281; this check does not certify transitive
+prerequisite freshness. #243354, #245355, #246356, #263350 and #283352 each have
+successful evaluation and an in-progress build at their exact published heads.
+Formatting20827 and whitespace passed for this ledger update. This iteration
+is PROGRESS: preflight rebase published, exact-head lint corrected and verified,
+and the full composition gate resumed. Completion remains unproven.
