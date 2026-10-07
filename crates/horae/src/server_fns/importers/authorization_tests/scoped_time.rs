@@ -37,6 +37,32 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     sqlx::query!("UPDATE users SET oidc_subject=id::text, cost_rate_cents=6000, billable_rate_cents=10000 WHERE org_id=$1", ids.org_id).execute(pool).await.unwrap();
     let cookie = api.cookie(ids.user_id).await;
     let request = json!({"query":{"date_from":"2026-09-01","date_to":"2026-09-30","user_id":null,"project_id":null,"after":null}});
+    let mut sheet_request = json!({"query":{"subject_id":target,"date_from":"2026-09-01","date_to":"2026-09-30","after":null,"expected_requester":null,"expected_policy":null}});
+    assert_eq!(
+        api.call("load_timesheet_page", sheet_request.clone(), None, false)
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        api.call(
+            "load_timesheet_page",
+            sheet_request.clone(),
+            Some(&cookie),
+            false
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+    sheet_request["query"]["subject_id"] = json!(null);
+    let own_sheet = api
+        .json("load_timesheet_page", sheet_request.clone(), &cookie)
+        .await;
+    assert_eq!(own_sheet["policy"], "legacy_own");
+    assert_eq!(own_sheet["subject"]["id"], json!(ids.user_id));
+    assert_eq!(own_sheet["entries"], json!([]));
+    sheet_request["query"]["subject_id"] = json!(target);
     assert_eq!(
         api.call("list_visible_time_entries", request.clone(), None, false)
             .await
@@ -83,6 +109,53 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             "state":"open","created_at":"2026-09-07T12:00:00Z"}],
         "next_after":null
     });
+    let mut expected_sheet = expected.clone();
+    expected_sheet["subject"] = json!({"id":target,"name":"Test User"});
+    expected_sheet["policy"] = json!("scoped");
+    assert_eq!(
+        api.json("load_timesheet_page", sheet_request.clone(), &cookie)
+            .await,
+        expected_sheet
+    );
+    sheet_request["query"]["expected_requester"] = expected["requester"].clone();
+    sheet_request["query"]["expected_policy"] = json!("scoped");
+    let mut forged_sheet = sheet_request.clone();
+    forged_sheet["org_id"] = json!(foreign.org_id);
+    forged_sheet["user_id"] = json!(foreign.user_id);
+    assert_eq!(
+        api.json("load_timesheet_page", forged_sheet, &cookie).await,
+        expected_sheet
+    );
+    let foreign_cookie = api.cookie(foreign.user_id).await;
+    assert_eq!(
+        api.call(
+            "load_timesheet_page",
+            sheet_request.clone(),
+            Some(&foreign_cookie),
+            false
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+    for inaccessible in [foreign.user_id, Uuid::now_v7()] {
+        let mut invalid = sheet_request.clone();
+        invalid["query"]["subject_id"] = json!(inaccessible);
+        assert_eq!(
+            api.call("load_timesheet_page", invalid, Some(&cookie), false)
+                .await
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+    let mut invalid_sheet = sheet_request.clone();
+    invalid_sheet["query"]["date_to"] = json!("2026-08-31");
+    assert_eq!(
+        api.call("load_timesheet_page", invalid_sheet, Some(&cookie), false)
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
     assert_eq!(
         api.json("list_visible_time_entries", request.clone(), &cookie)
             .await,
@@ -119,11 +192,41 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .await
     .unwrap();
     assert_eq!(
+        api.call(
+            "load_timesheet_page",
+            sheet_request.clone(),
+            Some(&cookie),
+            false
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
         api.json("list_visible_time_entries", request.clone(), &cookie)
             .await,
         empty
     );
     sqlx::query!("UPDATE person_permission_states SET grants=ARRAY['private_invalid_grant'] WHERE user_id=$1", ids.user_id).execute(pool).await.unwrap();
+    let sheet_error = api
+        .call(
+            "load_timesheet_page",
+            sheet_request.clone(),
+            Some(&cookie),
+            false,
+        )
+        .await;
+    assert_eq!(sheet_error.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = sheet_error.text().await.unwrap();
+    assert!(body.contains("Timesheet is unavailable"));
+    for private in [
+        "private_invalid_grant",
+        "person_permission_states",
+        "SELECT",
+        "sqlx",
+    ] {
+        assert!(!body.contains(private), "{body}");
+    }
     let response = api
         .call(
             "list_visible_time_entries",
@@ -147,6 +250,12 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .execute(pool)
         .await
         .unwrap();
+    assert_eq!(
+        api.call("load_timesheet_page", sheet_request, Some(&cookie), false)
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
     assert_eq!(
         api.call("list_visible_time_entries", request, Some(&cookie), false)
             .await
