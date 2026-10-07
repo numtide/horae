@@ -3,6 +3,7 @@
 // compatibility matrix in specs/001-time-tracking-invoicing/contracts/harvest-api.md.
 
 mod auth;
+mod project_reads;
 mod types;
 
 #[cfg(test)]
@@ -458,7 +459,7 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
 
 // ── Projects ────────────────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 pub struct ProjectFilters {
     pub is_active: Option<bool>,
     pub client_id: Option<Uuid>,
@@ -467,7 +468,6 @@ pub struct ProjectFilters {
     pub updated_since: Option<DateTime<Utc>>,
 }
 
-#[derive(sqlx::FromRow)]
 struct ProjectRow {
     id: Uuid,
     name: String,
@@ -530,56 +530,8 @@ async fn list_projects(
     Query(filters): Query<ProjectFilters>,
 ) -> ApiResult<HarvestPagination<HarvestProject>> {
     let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
-
-    let total = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM projects p
-         JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id
-         WHERE p.org_id = $1 AND access.user_id = $5 AND access.can_view_progress
-           AND ($2::bool IS NULL OR p.active = $2)
-           AND ($3::uuid IS NULL OR p.client_id = $3)
-           AND ($4::timestamptz IS NULL OR p.created_at >= $4::timestamptz)",
-        user.org_id,
-        filters.is_active,
-        filters.client_id,
-        filters.updated_since as Option<DateTime<Utc>>,
-        user.user_id,
-    )
-    .fetch_one(&db)
-    .await
-    .map_err(internal)?
-    .unwrap_or(0);
-
-    let rows = sqlx::query_as!(
-        ProjectRow,
-        r#"SELECT p.id, p.name, p.code, p.project_type::text AS "project_type!: String", p.active,
-         p.budget_kind::text AS "budget_kind!: String", p.budget_amount_cents, p.budget_minutes,
-         p.starts_on as "starts_on: chrono::NaiveDate",
-         p.ends_on as "ends_on: chrono::NaiveDate",
-         p.created_at as "created_at: chrono::DateTime<chrono::Utc>",
-         p.client_id, c.name AS client_name
-         FROM projects p
-         JOIN clients c ON c.id = p.client_id
-         JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id
-         WHERE p.org_id = $1 AND access.user_id = $7 AND access.can_view_progress
-           AND ($2::bool IS NULL OR p.active = $2)
-           AND ($3::uuid IS NULL OR p.client_id = $3)
-           AND ($4::timestamptz IS NULL OR p.created_at >= $4::timestamptz)
-         ORDER BY p.name, p.id
-         LIMIT $5 OFFSET $6"#,
-        user.org_id,
-        filters.is_active,
-        filters.client_id,
-        filters.updated_since as Option<DateTime<Utc>>,
-        per_page,
-        offset,
-        user.user_id,
-    )
-    .fetch_all(&db)
-    .await
-    .map_err(internal)?;
-
-    let items: Vec<HarvestProject> = rows.iter().map(project_row_to_harvest).collect();
-
+    let (total, rows) = project_reads::read(&db, &user, &filters, None, per_page, offset).await?;
+    let items = rows.iter().map(project_row_to_harvest).collect();
     Ok(Json(
         HarvestPagination::new(
             "projects",
@@ -598,28 +550,10 @@ async fn get_project(
     State(db): State<PgPool>,
     Path(id): Path<Uuid>,
 ) -> ApiResult<HarvestProject> {
-    let row = sqlx::query_as!(
-        ProjectRow,
-        r#"SELECT p.id, p.name, p.code, p.project_type::text AS "project_type!: String", p.active,
-         p.budget_kind::text AS "budget_kind!: String", p.budget_amount_cents, p.budget_minutes,
-         p.starts_on as "starts_on: chrono::NaiveDate",
-         p.ends_on as "ends_on: chrono::NaiveDate",
-         p.created_at as "created_at: chrono::DateTime<chrono::Utc>",
-         p.client_id, c.name AS client_name
-         FROM projects p
-         JOIN clients c ON c.id = p.client_id
-         JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id
-         WHERE p.id = $1 AND p.org_id = $2 AND access.user_id = $3 AND access.can_view_progress"#,
-        id,
-        user.org_id,
-        user.user_id,
-    )
-    .fetch_optional(&db)
-    .await
-    .map_err(internal)?
-    .ok_or_else(not_found)?;
-
-    Ok(Json(project_row_to_harvest(&row)))
+    let (_, rows) =
+        project_reads::read(&db, &user, &ProjectFilters::default(), Some(id), 1, 0).await?;
+    let row = rows.first().ok_or_else(not_found)?;
+    Ok(Json(project_row_to_harvest(row)))
 }
 
 // ── Clients ─────────────────────────────────────────────────────────────────
