@@ -358,6 +358,44 @@ do not close #217 yet. Nixbot504 remains live with13 passed, four cached and
 three final checks building. Read-back confirms #212 remains OPEN/draft at
 unchangeddb3935db364f2a8aa193f0e938ce40ecc01a2f92.
 
+### Time-entry response delivery and identity integration — 2026-10-08
+
+Nixbot504 completed successfully, including the ARM deployment recovery test,
+on tree8aca91cd4562dfa70be63b6662bd997d39ba1a13. Revalidated #242 head4c173f0a
+and master27b27ad5, then submitted to the protected queue. Merge-group
+run37793044838 passed and #242 merged at14:31:57 UTC as
+40434acda95755b8f332b3d7f15a036fe724e644. The remote commit tree exactly matches
+the Nixbot-tested tree. Updated the existing PR description; no bypass or
+branch deletion. #212 remains outside delivery.
+
+Prepared #240 in its existing clean worktree after that merge. Backup ref
+refs/backup/pr240-before-master-20261008 preserves ce053157. Rebased its four
+commits onto40434acd with rebase.updateRefs disabled and unsigned commits.
+Resolved the only conflict in authorization_tests.rs by retaining registration
+and execution of all four matrices: time_entry_payload, session_identity,
+user_directory and approval_labels. Range-diff shows only that context
+reconciliation; the other three patches are unchanged. The whole-tree delta
+from the previous head consists of already-merged master changes. #239's
+approval mutations remain intact; #240 only changes approval read labels.
+
+New head4ef9a3c8f9cdf6116a548c36bed287806d05f4af, tree
+acb5d8123615803b46f8e67656681b4076441973. git diff --check and cargo fmt --check
+inside nix develop pass. Previous Nixbot501 is historical, not acceptance of
+the combined tree. Keep #240 draft until fresh CI succeeds. No new feature,
+PR, dependent-branch rewrite or test relaxation.
+
+Publication confirmed with an exact old-head force-with-lease. The initial
+HTTPS push waited for a graphical credential prompt and was interrupted;
+the successful push used the existing GitHub CLI credential helper only for
+that invocation, without changing global configuration. GitHub run37793715132
+and Nixbot505 are live. The latter's stored tree exactly matches acb5d812 above,
+with no failures at this check. Remote #212 remains OPEN/draft at db3935db.
+
+Next: collect these fresh GitHub and Nixbot checks, then protected-queue
+delivery and exact-tree verification. #220
+still needs current-base verification; #217 stays open until its replacement
+actually integrates. Keep #212 and its unpublished work untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
