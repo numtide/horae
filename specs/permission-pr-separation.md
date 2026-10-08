@@ -32,6 +32,12 @@ after a connection reset and queried only the remaining 14 on continuation:
   #218 and #248 have passed GitHub Flake Check and Format on their published
   documentation heads; Nixbot is a separate gate.
 
+Later attribute-level evidence at 02:15 UTC finds an ARM test-compilation failure
+inside #220/Nixbot431 while its overall build is still running. Its rustc process
+also received SIGKILL, on elastic-arm-234f8218. The aggregate pending count above
+must not be read as absence of intermediate failures. The raw log does not
+establish the cause of the kill; no retry or source workaround was introduced.
+
 Full native checks already passed on the published #219/#220/#223/#224 heads
 and on the complete cross-extraction composition `8fc3a44e`. That composition
 passed 1,478 server tests (11 existing ignored cases), 15 auxiliary test binaries,
@@ -9024,3 +9030,35 @@ Evidence: .scratch/permission-delivery-ci-rollup-20261008.json. The first query
 did not execute because approval review timed out; its one permitted retry
 completed successfully. No builds were restarted. Ledger formatting passed
 with zero changes before this observation was appended.
+
+### Intermediate ARM failure and shared-CI delivery boundary — 2026-10-08
+
+The preceding iteration completed preservation bookkeeping and verified live
+checks. Inspected the shared-CI delivery boundary without modifying branches:
+#284 includes all three commits since #282 (the two CSV-framing commits and
+the VM store-image correction), totaling four files and 74 added lines. Its
+existing exact-head build402 passes on both Linux architectures. In contrast,
+#283's own build352 remains red. Corrected #283's obsolete description saying
+that build was still in progress, then verified the updated body and unchanged
+head. No acceptance was transferred from the descendant to the failed parent.
+
+Requested authorization to consolidate the two corrections in #284, with #283
+closed as superseded. This would preserve the three commits and all descendant
+heads instead of forcing another rebase/publication cycle. No retarget, closure,
+merge or consolidation has been performed while that answer is outstanding.
+
+Read Nixbot's actual build pages, not only the aggregate GitHub check. At 02:15
+UTC #220/build431 has 17 of 20 attributes done, one failed ARM tests attribute,
+two running (ARM browser and OIDC), and one pending. #219/build472 has five
+attributes done and 15 pending. Both builds are live; neither was restarted.
+The failed #220 test compilation received signal9/SIGKILL on
+elastic-arm-234f8218, the same builder named by #270/build430. Its complete raw
+log contains no Rust E-code diagnostic. This reinforces the need for builder
+diagnostics but does not prove memory exhaustion or the source of the kill.
+Evidence: .scratch/nixbot-431-arm-test-failure-evidence.json, the raw log and
+the two saved live-page HTML files. The aggregate CI snapshot remains historical
+and is not silently relabeled as a new terminal result.
+
+Next: retain the existing live jobs, obtain the requested infrastructure
+diagnostics, and resolve the shared-CI consolidation choice. No new functionality,
+policy activation, real data mutation, original branch change or merge occurred.
