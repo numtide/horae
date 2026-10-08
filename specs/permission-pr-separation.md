@@ -2222,6 +2222,22 @@ coverage from an unproven runtime repair. Keep it out of delivery until the
 failed combined-tree case has an evidenced resolution; do not bypass524 with
 historical source checks.
 
+#232 combined session73476 completed successfully at unchanged45c923a3/tree
+5013b1d4. Verified189 core,892 server,183 auxiliary tests,1,264 passed, zero
+failures,11 pre-existing manual server cases ignored; server109.39s. All14
+financial snapshot/editor regressions and both CSV rejection schedules passed.
+Full SQLx g9bv28qd and native tests53q570ni succeeded; format510 files unchanged,
+clean worktree and whitespace check passed. Updated local delivery description.
+No local build remains active; #232 remains unpublished until a slot is free.
+
+Current #228 build528 has5 successful checks,4 skipped local packages and11
+pending attributes, no failures; GitHub required checks are green. #231 build529
+has begun ARM Clippy after successful ARM package construction; its exact239d1051
+tree is still not fully accepted. Continue those existing builds without retries
+or speculative source changes. Next: full #228 acceptance → protected merge →
+actual-tree reconciliation of #231, then publish the prepared #232. #238 retains
+its reviewed native-passing independent preparation; #226 stays OPEN/draft held.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2331,8 +2347,8 @@ is now stacked on #228 at a34a1348 with1,250 combined native tests/SQLx passing;
 fresh Nixbot529 is building its exact239d1051 tree. The earlier independent
 head dcf68d2e passed GitHub and both-Linux Nixbot526. Neither result proves
 the shared transport issue repaired.
-#232 is locally stacked at45c923a3 on #231, with fresh combined native/SQLx
-validation running; its earlier independent tree passed1,243 tests. It is not
+#232 is locally stacked at45c923a3 on #231, with1,264 combined native tests,
+SQLx and format passing; its earlier independent tree passed1,243 tests. It is not
 published yet. #238 is locally reviewed/rebased atc6efb30a with1,250
 native tests and SQLx passing, also unpublished.
 The failed #226 combination remains held; independent deliveries may advance
