@@ -291,6 +291,40 @@ Next: collect #242's current combined-tree acceptance and submit to the
 protected queue only when green. Inspect the isolated #220 test result before
 any further retry. #212 remains unchanged; no new feature or PR was created.
 
+### Identity delivery review and isolated CI recovery — 2026-10-08
+
+Previous goal iteration was progress: #239 merged with exact-tree verification.
+Current read-back confirms #242 still open at4c173f0a and both required GitHub
+checks passed in run37788740850. Nixbot504's actual stored tree is the expected
+8aca91cd4562dfa70be63b6662bd997d39ba1a13 and is building without failures;
+the older green conclusion in GitHub must not substitute for its live result.
+
+#220's isolated ARM test retry succeeded without source changes. Requested one
+browser-attribute retry through the authenticated API after confirming that
+success (HTTP200). Build493 now has15 successes, four cached attributes and
+one browser attribute building. This is a verified wait, not a blocker or an
+acceptance claim. Its tree predates #239 and needs integration-base revalidation
+before delivery even if the final retry passes.
+
+Completed renewed #240 source review at unchangedce053157: exact session and
+directory response shapes; preserved activity/role and tenant guards; forged
+targets; archived and renamed approval labels; unchanged internal financial
+projections; frontend consumers; three HTTP matrices and production-page
+rendering/action tests. No critical/high finding in the selected repair.
+Trial merge with master27b27ad5 is clean at treeba906f4a and keeps #239's
+approve/reopen isolation. This trial is not test acceptance.
+
+Trial combination with #242 identifies exactly one textual conflict in the
+shared authorization_tests.rs fixture registration. Both PRs add independent
+modules/calls there; preserve all four matrices when resolving it. No worktree
+or branch was changed by merge-tree. #240 remains draft and will be prepared
+after #242 lands, avoiding another matrix on a soon-obsolete base. Updated
+its PR description with the current review and precise remaining steps.
+
+Next: collect live Nixbot504 and493, deliver #242 when its exact integration
+tree passes, then resolve the identified #240 test-registration conflict in
+its existing worktree. Preserve #212 and all original work.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
