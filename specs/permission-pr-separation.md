@@ -1927,6 +1927,28 @@ Next: collect #226 queue watcher 1234/Nixbot 524, and #227 watcher 34313/Nixbot
 525. Submit #227 only after acceptance; reconcile #228 after its real #227
 prerequisite integrates. Do not create new PRs or repeat already-complete checks.
 
+Read-back of Nixbot524 changes the next action: the combined #226 queue tree
+99d2f45d12b1b10365d3ec1e39e4fe824ccb1df1 failed
+`cli::imports::tests::small_csv_upload_preserves_immediate_authorization_rejections`
+on ARM, attempt13, expecting403 but receiving indeterminate_submission.
+The source-head build522 passed; that does not override this integrated failure.
+Removed #226 from the protected queue and disabled auto-merge; GraphQL confirms
+OPEN, mergeQueueEntry=null and autoMergeRequest=null. No retry was requested.
+Keep #227 draft while its existing build525 completes and investigate the shared
+transport failure before further merges. This is not evidence of a profile-command
+authorization failure: the failed fixture exercises the CLI against an immediate
+HTTP rejection without PostgreSQL or profile commands.
+
+Prepared existing CSV delivery #231 locally on mastereb8eae55. Backup
+refs/backup/pr231-before-current-delivery-20261008 preserves d077bfa3;
+new extraction97d05de2 retains all three original Rust blobs exactly. One of
+the two query descriptors is now inherited unchanged from master. The only
+range-diff change removes that redundant addition. Temporary error diagnostics
+and focused repeated rejection check4067 are investigating the transport failure;
+neither is a published correction. Do not open another PR or weaken assertions.
+Next: collect that reproduction, establish the root cause, and validate a bounded
+CSV correction before resuming the merge queue. #212 remains untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2026,16 +2048,16 @@ deliveries #239, #242, #240, #220, #224 and #219 have also merged, as has
 documentation #248. #217 was closed only
 after #220's final tree was verified. Preserve #212 open and unchanged.
 
-The next independent delivery is #221 (published directly on actual master,
-fresh CI running). #223 remains separately blocked by recurring ARM deployment
-startup failure; its isolated OIDC retry is active. After #221, reconcile #222
-(local preparation, core tests/Clippy/format passed and bounded review complete),
-followed by #225 (bounded review and local
-rebase/format complete) and #227 (last-admin isolation repair, users tests,
-SQLx and formatting verified locally), then #228 (source-preserving local rebase
-on corrected #227; native tests running). Full current CI remains required. These preparation
-bases are an integration sequence, not new functional dependencies. Reconcile
-each onto actual master and verify its complete integration gates before merge.
+Deliveries #221, #223, #222 and #225 are also merged with both-Linux acceptance.
+#226 passed its source-head gates, but its queue build524 exposed an ARM CSV
+transport regression; it is removed from the queue with auto-merge disabled.
+#227 remains draft with fresh CI running; #228 has passed local native tests and
+SQLx on its reconciled #227 base but is not published. The next independent
+CSV delivery #231 is prepared locally and owns the transport investigation;
+#232 is another independent candidate. Resume merges only after the shared
+regression is resolved. Full current CI remains required. These preparation
+bases are an integration sequence, not new functional dependencies. Verify
+actual combined trees and gates without repeatedly rebasing unrelated live builds.
 The documentation deliveries #248 and #218 do not activate features.
 
 | PR | Scope | Delivery prerequisites |
