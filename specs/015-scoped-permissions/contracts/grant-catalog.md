@@ -1,0 +1,64 @@
+# Grant catalog and profile selection
+
+Implementation increment authorized by the user's 2026-10-02 request to implement
+permissions using local fixtures without paid or company Harvest access. This
+contract covers FR-001/003/004/015's confirmed catalog and editor dependencies;
+it does not settle operation authorization, persisted template lifecycle or C01–C07.
+
+## Pure model
+
+- `Permission` is a closed, typed catalog of the 50 observed web grants. Stable
+  snake-case names are Horae wire identifiers; unknown names must fail decoding.
+  Reference IDs 59/60 are not assigned meanings. Billing/estimates/expense grants
+  in the catalog are not evidence that those product surfaces are implemented.
+- `BuiltInProfile` has six distinct variants, not an ordered rank. Direct defaults
+  follow the captured configuration in `current-account-investigation.md` and
+  `reference-profiles.md`; Administrator's two unknown IDs are excluded.
+- `PermissionSelection` is an editable, normalized grant selection, not a trusted
+  authorization context. Construction includes the four immutable Member grants
+  (own time/expense read/write) and transitive prerequisites. Adding a permission
+  adds prerequisites. Removing one removes its dependants transitively; attempting
+  to remove a floor grant fails without changing the selection.
+- Normalization is deterministic and idempotent. Duplicates disappear. The selected
+  set can be inspected to display every included/removed grant before a future save.
+  Decoding raw grants does not deserialize directly into a trusted selection.
+- Profile identity is separate from grant membership. Selecting all grants does
+  not establish Administrator status or authority to assign permissions. There is
+  no conversion from the legacy `OrgRole`, auto-promotion or database migration.
+
+## Prerequisites
+
+Use explicit typed edges matching the observed editor, not English-label parsing:
+write/create/approve includes corresponding read; organization grants include
+managed variants where present; managed reads include own reads; managed writes
+include own writes. Managed invoice management additionally includes draft editing.
+Report reads add no ordinary rate/time grant; approval adds reads, not expense or
+time-write authority; withdrawal adds no implicit approval grant. These editor
+edges are not yet the complete server operation contract.
+
+## Verification and boundary
+
+### Strict restoration of saved selections
+
+`PermissionSelection::from_stored` accepts the saved catalog version and decoded
+grant list. Version 1 identifies the current grant IDs, floor and prerequisite
+semantics; changing those semantics requires an explicit version/migration review.
+Reject unsupported versions (including zero), duplicate grants, missing floor
+grants and missing prerequisites. Input ordering is immaterial because grants are
+a set; successful output uses the existing deterministic iteration order.
+Unknown wire names still fail at `Permission` decoding, never get filtered out.
+Restoration must not call the editor constructor to repair invalid data, derive
+defaults from a profile, or add grants from a newer catalog. Valid custom/revoked
+selections round-trip unchanged. The returned selection proves structural validity
+only: identity, tenant, active status, revision and scope remain trusted-loader
+obligations. This pure boundary does not complete the PostgreSQL storage tasks.
+
+### Catalog checks
+
+Tests cover all catalog entries, exact direct defaults, all six normalized sets,
+every dependency edge and removal, immutable floor, normalization laws, unknown
+wire names, financial/report separation and approval/withdrawal separation.
+The catalog does not infer scope from labels: FR-021's user-approved C03 rule
+maps managed billable rates by their owning person/project during integration.
+No runtime guard consumes this increment before reviewed integration and migration.
+Full feature acceptance remains all five user stories and SC-001–009, not this module.
