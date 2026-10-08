@@ -2202,6 +2202,18 @@ result and current remote gates; deliver #228 first when fully accepted,
 then reconcile #231 against its real squash, preserving verified trees. Do not
 publish #232 or #238 as a third live remote delivery. #226 remains held.
 
+#228 GitHub37858623043 is now terminal successful. Nixbot528 ARM tests also
+succeeded; browser/deployment and remaining platform attributes are still
+pending, so no queue submission yet. #231's combined529 remains live and
+unaccepted. These are verified waits, not failed builds to restart.
+
+Local #232 SQLx g9bv28qdv4afd1sd3lznk0aayjadhqs4 completed successfully
+(compile3m43s, build3m51s). During the quiet interval, process1930659 was confirmed
+alive waiting on the Nix daemon; inspection of its finished SQLx log explained
+the transition. The same session73476 now explicitly reports tests derivation
+53q570nirhqn4vvgz7rrbl76vbzlgcsm building. No restart, cleanup or process kill.
+Next: collect73476 and full528/529 acceptance, then protected #228 merge.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
