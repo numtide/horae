@@ -1227,6 +1227,43 @@ remain live. All x86 Nixbot attributes pass; ARM package/tests and dependent
 browser/VM checks remain outstanding without failure. Next: collect 73585 and
 the existing remote checks. Keep #212 and all published source heads untouched.
 
+### Last-admin isolation repair verified locally — 2026-10-08
+
+The #227 regression confirmed the concern: session 73585 exited with 14 tests
+passing and one failing because concurrent self-demotions left zero active
+administrators, not one. This was the actual application transaction against
+disposable PostgreSQL, with REPEATABLE READ configured on test connections.
+
+Added explicit READ COMMITTED before acquiring the organization lock in
+`begin_user_access_change`. The six-line shared fix preserves predicates and
+lock order and covers creation, role changes and activation. Its 29-line
+regression reuses existing blocker-based synchronization for all four pairs
+of demotion and deactivation, without timing sleeps or new dependencies.
+
+The post-fix Nix run (session 12774) passed all 15 users tests, zero failed or
+ignored, in 8.64 seconds after compilation. Derivation:
+`5adxaycijg7022afsj66ys9lcsi5wgl1-horae-user-authority-isolation-check-0.1.0`.
+Full SQLx preparation verification (session 98386) also passed with server and
+all targets against its own migrated disposable database, with no cache delta:
+`6c7ydxbb1lz642wca5by9w6dxylvsi7n-horae-sqlx-prepare-0.1.0`.
+Pinned-Nix Cargo formatting and whitespace checks passed. No real data changed.
+
+Saved the repair separately as unsigned local commit
+`96fa8d1aa0a19342ba05cb8f56cd3d399e9d70bd`; tree
+`bc7804d9cb5b874a59b399effa7349ef09bbc5d1`, on prepared #225 `3ae5c1f8`.
+The worktree is clean. Remote #227 still has `fb63b766`; no publication or
+current-head remote acceptance is claimed. Prepared delivery description is
+`.scratch/pr227-merge-delivery.md`. Renewed bounded review found no remaining
+critical/high issue in this user-write boundary after the demonstrated repair.
+
+#223 GitHub run 37829568177 is now successful: Flake Check 25 minutes, Format
+41 seconds. Its description records this evidence. Nixbot 514 remains live on
+the exact expected `cc17441f` tree, with only ARM browser/deployment/OIDC checks
+outstanding. Browser logs contain passing cases; no retry has been requested.
+Next: collect watcher 61793, then use the protected queue only after acceptance.
+Continue #221/#222/#225/#227 in order, reconciling onto actual master and
+requiring fresh complete remote checks. Preserve #212 unchanged.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -1329,7 +1366,8 @@ after #220's final tree was verified. Preserve #212 open and unchanged.
 The current execution order is #223 (published on actual master, current CI running),
 then #221 and #222 (local preparations, core tests/Clippy/format passed and
 bounded source reviews complete), followed by #225 (bounded review and local
-rebase/format complete). Full current CI remains required. These preparation
+rebase/format complete) and #227 (last-admin isolation repair, users tests,
+SQLx and formatting verified locally). Full current CI remains required. These preparation
 bases are an integration sequence, not new functional dependencies. Reconcile
 each onto actual master and verify its complete integration gates before merge.
 The documentation deliveries #248 and #218 do not activate features.
