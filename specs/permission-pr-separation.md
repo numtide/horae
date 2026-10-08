@@ -972,6 +972,30 @@ The full deployment script is still running, so no acceptance or merge is claime
 OIDC remains at its initial failure and has not been retried. Next: collect
 85069 to completion before considering the single sequential OIDC retry.
 
+### Deployment accepted; final OIDC retry started — 2026-10-08
+
+Collected watcher 85069: exit 0, deployment accepted. Nixbot 510's raw log
+confirms the full script finished in 1588.83 seconds, including restart recovery,
+entry counts and persisted report checks. Do not poll or restart that watcher.
+The aggregate build still showed failed solely because of the original OIDC
+startup timeout; all other attributes were accepted or cached.
+
+After that verification, requested exactly one isolated OIDC retry through the
+existing authenticated Chrome client. Guard verified expected tree
+`117adb9bb1583481a417d944265770217f90cab6`, failed OIDC and every other attribute
+accepted before POST. HTTP 200 and public read-back confirm OIDC building as
+the sole remaining check. Browser call completed; client 7643 is idle. No
+source, timeout, assertion or complete-build restart. GitHub remains green.
+
+Read-only watcher 43370 observes OIDC every 60 seconds and exits at its terminal
+result. Its first read confirms building. It has no retry logic.
+
+Next: collect watcher 43370. If successful, revalidate current #219 head
+and master, queue via protection, and verify the final integrated tree. If it
+fails, investigate before any additional retry. #219 remains draft/unmerged;
+all prepared work and #212 remain untouched. Receipt is published in #219;
+the separation ledger remains locally committed rather than published.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
