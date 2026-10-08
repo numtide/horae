@@ -132,7 +132,9 @@ implementation remains incomplete. Do not treat
   not yet considered resolved.
   Nixbot404 subsequently passed ARM tests and formatting on this exact head:
   121 core tests,821 server tests and all nine auxiliary binaries passed with
-  an8-thread allocation. Remote VM/full-build acceptance remains pending.
+  an8-thread allocation. The complete exact-head Nixbot404 subsequently passed
+  at2026-10-08 00:06:55 UTC, including the remaining VM checks. This is not
+  acceptance of downstream extraction heads or every earlier CSV failure.
 - [#286](https://github.com/numtide/horae/pull/286), `test/import-cancellation-release`,
   ated286e6b, reuses the CSV session-release observer for the cancelled HTTP-worker
   and page-consumer tests. No production code, SQL, timeout or assertion changes.
@@ -141,8 +143,9 @@ implementation remains incomplete. Do not treat
   Remote Nixbot413 and the full composition remain pending.
   It is a draft over #285. The shared prerequisite order is now
   #282→#283→#284→#285→#286. The refreshed75-branch tree-only preview includes
-  #286 and preserves all57 code-PR review patches; actual propagation remains
-  pending verification of the shared base.
+  #286 and preserves all57 code-PR review patches. All75 local rebases now match
+  their expected trees and all57 review patches retain their edit content;
+  remote publication remains pending verification of the shared base.
 - Local complete compositiond5c34851 contains both corrections without diagnostic
   logging. Its full gate50229 failed at Clippy: three unused preflight symbols.
   Local compositionf90f60f7 contains #246's function-local lint expectation for this
@@ -8484,3 +8487,34 @@ Next: finish local staging, handle only the six previously reviewed insertion
 conflicts, then run the full tree/ancestry/review-patch audit. Continue collecting
 85532 and remote404/413. Do not push rewritten extraction heads or retarget PRs
 until their shared prerequisite checks are accepted. Originals remain excluded.
+
+### Complete local propagation verified — 2026-10-08
+
+The preceding status-only turn did not advance authoritative state. Revalidated
+the stopped task-lifecycle rebase and the live composition handle85532, then
+completed the six remaining local branches. Reconfirmed #216 merged before
+continuing. The only stopped conflict was the previously previewed insertion in
+engine_tests.rs: retained the complete task-archival test followed by the unchanged
+session-release helper. The remaining branches reused the recorded commit mapping.
+No original branch, running test worktree, remote extraction head or PR base changed.
+
+The final verifier passed all75 exact expected trees, clean worktrees, shared-base
+ancestry and backup references. It also checked all57 code-review patches against
+their original merge bases: added/removed content and file modes are unchanged;
+offsets and blob identifiers are deliberately not treated as source differences.
+The original #208/#212/#217 local and remote heads are unchanged, and all75 remote
+leases still match their pre-rebase values. Evidence:
+.scratch/ci-cancellation-propagation-verified.json and the per-branch completed
+receipts. This verifies preservation, not fresh-head test acceptance.
+
+GitHub now reports the complete Nixbot404 aggregate SUCCESS for #28515d9ab5b,
+completed at2026-10-08 00:06:55 UTC. #286ed286e6b still has Nixbot413 in progress
+with evaluation passed. Composition85532 is running server tests, including both
+cancelled-worker tests already passed; its full gate has not yet completed.
+
+Next: collect the existing413/85532 handles. After prerequisite acceptance,
+publish the verified75 branches with explicit remote leases and atomic push,
+retarget the11 extraction roots from #282 to #286, and check the new heads.
+The roots are #219/#220/#223/#224/#225/#227/#231/#238/#239/#240/#242; the shared
+#282→#283→#284→#285→#286 chain remains unchanged. Keep original PRs and retained
+unfinished work intact; no merge or policy activation is authorized by this step.
