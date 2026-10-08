@@ -1808,6 +1808,26 @@ databases. The former 1,247-test result belongs to the prior combined tree,
 not this composition. #228 remains unpublished, as does #227. Next: collect
 the existing checks, deliver #225/#226, then publish the prepared next repair.
 
+### Shared query cache restored after independent rebase — 2026-10-08 UTC
+
+#228's first native preparation session 58298 terminated with a SQLx cache
+failure, not a running/stalled job. Server code checked successfully against
+the disposable database, but `.sqlx` lacked a query previously inherited from
+#225: the shared `pg_stat_activity` blocker-PID query used by user, invoice and
+time-entry race tests. No test assertion or production logic failed.
+
+Restored only descriptor `54b7cb41` from the original published #228 source
+`55382bd7`; Git blob equality verifies it is byte-identical. Unsigned commit
+`1d5d999a89936e1dccf3005d84380b9af5afcd6f` adds its original 22 lines, without
+changing any query, Rust code, schema or assertion. Current tree is
+`39d6411c7ebd80e9f91ead0c20ba7b2f77672ade`; owned total is now 40 files,
+1,722 additions and 84 deletions. Four other shared descriptors remain inherited.
+
+Fresh session 69662 runs formatting, full native tests and SQLx preparation
+on this corrected tree. This is verification after a concrete metadata repair,
+not an unchanged retry. The existing remote builds 522/523 remain in progress
+without a recorded failure. No push, extra PR or real-data operation occurred.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
