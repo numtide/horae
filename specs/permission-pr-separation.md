@@ -1949,6 +1949,29 @@ neither is a published correction. Do not open another PR or weaken assertions.
 Next: collect that reproduction, establish the root cause, and validate a bounded
 CSV correction before resuming the merge queue. #212 remains untouched.
 
+Local transport investigation: check4067 completed successfully on the rebased
+#231 extraction with temporary send-error diagnostics. All40 executions of the
+unchanged single-thread test passed (20,480 immediate401/403 requests). Added a
+two-worker-thread wrapper around the same assertions, retaining the original
+test,256 attempts per status and exact status expectations. Check99129 then
+passed40 executions of both wrappers (40,960 requests). These results do not
+reproduce or repair the observed ARM failure. The related upstream Hyper4176
+report concerns a different successful-response connection leak and is not
+proof of this failure's root cause.
+
+The current two-file diagnostic/test addition is15 insertions/one deletion:
+test-only logging of the underlying send error with its URL removed, and the
+additional scheduling variant. Production error classification, retry behavior,
+streaming, limits, server admission and original assertions are unchanged.
+No runtime fix is claimed. Full formatting passed502 files with zero changes.
+Native suite and SQLx check99600 are live on this worktree snapshot:
+tests y08s0jas8n59v7xzgqhc0pnidnqp7a76 and SQLx
+01fqdj0rlkfc03vwkf8xah4ds61cqwmy. Do not restart or edit its source while live.
+Next: collect this exact check, commit the bounded diagnostics separately, and
+publish the existing #231 for actual ARM evidence only after local acceptance.
+#226 remains out of queue; its public description now records the failure.
+#227 build525 has no failure and still awaits ARM deployment; no queue submission.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
