@@ -431,6 +431,15 @@ async fn invalid_csv_files_fail_before_contacting_the_server() {
 
 #[tokio::test]
 async fn small_csv_upload_preserves_immediate_authorization_rejections() {
+    assert_small_csv_authorization_rejections().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn small_csv_upload_preserves_immediate_authorization_rejections_across_threads() {
+    assert_small_csv_authorization_rejections().await;
+}
+
+async fn assert_small_csv_authorization_rejections() {
     let mut csv = tempfile::NamedTempFile::new().unwrap();
     csv.write_all(
         b"Date,Client,Project,Task,Hours,Email\n2026-09-14,Acme,Widget,Dev,1,user@example.test\n",

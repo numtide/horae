@@ -171,7 +171,12 @@ impl Transport {
             .timeout(Duration::from_secs(300))
             .send()
             .await
-            .map_err(|_| network_error(true))?;
+            .map_err(|_error| {
+                // Retain the transport cause in test failures, not user output.
+                #[cfg(test)]
+                eprintln!("CSV transport failure: {:?}", _error.without_url());
+                network_error(true)
+            })?;
         read_json(response, true).await
     }
 
