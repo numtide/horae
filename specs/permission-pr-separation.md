@@ -1390,6 +1390,25 @@ onto actual integrated master before their respective publication. Do not treat
 old prepared-tree acceptance as current acceptance after changing that base.
 Next: collect #221's new checks, #223 OIDC watcher60653 and #228 native2783.
 
+### Complete prepared project-access native suite passed — 2026-10-08
+
+#228 native session2783 completed with exit0 on unchanged prepared head
+`34be6010cbe0e746f84a01497c13135cd9a4610b`, tree
+`ced533319817a18e2d2edbcf4a5b0b0fddfb47d5`. Derivation
+`h9y3nnaajh49vvpykmkglkshsx96505y-horae-tests-0.1.0` passed189 core tests,
+875 server tests and183 tests in auxiliary/integration binaries, with zero
+failures and11 pre-existing ignored manual server cases. Server tests took
+345.91 seconds after12m43s compilation. The actual editor/revocation,
+invoice/assignment-FK, time-entry cascade and #227 last-admin isolation
+regressions all pass within this composition. Disposable PostgreSQL only.
+
+Updated the local #228 delivery description with that evidence and its limit:
+this prepared tree still includes pending #223, whereas #221's new independent
+delivery does not. Reconcile before publication and require current-tree
+acceptance; this is not full flake/browser/VM/ARM acceptance. No additional
+source edits or remote build were needed. #221's GitHub66738/Nixbot85217 and
+#223's OIDC60653 remain active; deployment514 remains failed after its one retry.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
