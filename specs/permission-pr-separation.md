@@ -1541,6 +1541,25 @@ GitHub37842680338/Nixbot517 on128e9df1. Next: finish those acceptance gates and
 queue the next ready delivery; retain #226's review for its later reconciliation
 onto integrated #222. No extra remote build was started for #226.
 
+Prepared #226 locally on the currently published #222 while existing remote
+checks continue. Backup refs/backup/pr226-before-storage-delivery-20261008
+retains769a0d88. Rebased only its one owned commit from e8d89b46 onto26fe6075;
+new head b64ae15c1e4884089162afde2cf3e6196a54e0c0, tree
+4e1ba3e060cc9fa1faa96d3bbd2372691c826e31. Range-diff is identical and every
+owned file retains its blob, including41 SQLx descriptors and receipt migration.
+The scoped diff remains47 files,2,147 additions and one deletion. Full formatting
+passed (505 files, zero changes), as did whitespace checks. No dependent ref or
+remote #226 changed, and no new source code or test assertion was introduced.
+
+Native full tests and SQLx validation are running sequentially in existing Nix
+checks, one build job/two cores and disposable databases. Derivations are
+j5ycwj3k0mg6l74v2v0pickimbjfzrcr-horae-tests-0.1.0 and
+yc2zffpi1w2n5l7zvk5wdcayp9p2rci5-horae-sqlx-prepare-0.1.0. Sixteen GiB were
+available at start; no cleanup or real-database change was performed. Do not
+modify this worktree while its native validation runs. Next: collect the live
+#222/#223 remote checks and queue a ready delivery; retain #226 locally until
+its predecessor is integrated and its own acceptance is complete.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
