@@ -114,15 +114,40 @@ pkgs.testers.nixosTest {
             + shlex.quote(statement)
         ).strip()
 
-    def wait_sql(statement, expected):
+    # ARM TCG can exceed 90s while still applying a 1000-row CSV without blockers.
+    # Keep x86 waits tight; this is a recovery correctness test, not a benchmark.
+    import_timeout = ${if pkgs.stdenv.hostPlatform.isAarch64 then "300" else "90"}
+
+    def wait_sql(statement, expected, timeout=90):
         command = (
             "sudo -u postgres psql -d horae -At -v ON_ERROR_STOP=1 -c "
             + shlex.quote(statement)
         )
-        server.wait_until_succeeds(
-            "test \"$(" + command + ")\" = " + shlex.quote(expected),
-            timeout=90,
-        )
+        try:
+            server.wait_until_succeeds(
+                "test \"$(" + command + ")\" = " + shlex.quote(expected),
+                timeout=timeout,
+            )
+        except Exception:
+            # Preserve the failed assertion while exposing slow work vs lost leases
+            # or blocked transactions in the disposable recovery-test database.
+            diagnostics = (
+                "sudo -u postgres psql -d horae -x -c " + shlex.quote(
+                    "SELECT id,status,attempts,phase,processed_count,total_count,"
+                    "lease_until,available_at,last_error FROM horae_jobs; "
+                    "SELECT pid,state,wait_event_type,wait_event,pg_blocking_pids(pid) "
+                    "FROM pg_stat_activity WHERE datname='horae'; "
+                    "SELECT pid,classid,objid,granted FROM pg_locks "
+                    "WHERE locktype='advisory'"
+                ),
+                "journalctl -u horae.service --no-pager -n 80",
+            )
+            for diagnostic in diagnostics:
+                try:
+                    print(server.execute(diagnostic, timeout=15))
+                except Exception as diagnostic_error:
+                    print(f"Recovery diagnostics unavailable: {diagnostic_error}")
+            raise
 
     # The next batch blocks on an advisory lock held by a separate connection.
     # Waiting for the actual lock waiter proves the first batch has committed;
@@ -175,6 +200,7 @@ pkgs.testers.nixosTest {
             "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' "
             "AND classid = 198 AND objid = 500 AND NOT granted",
             "1",
+            timeout=import_timeout,
         )
         entries = f"SELECT count(*) FROM time_entries WHERE notes LIKE '{prefix}-%'"
         assert sql(entries) == "500", "First batch was not committed before interruption"
@@ -200,7 +226,7 @@ pkgs.testers.nixosTest {
         """)
         server.succeed("systemctl restart horae.service")
         server.wait_for_open_port(3000)
-        wait_sql(f"SELECT status FROM horae_jobs WHERE id = '{job_id}'", "succeeded")
+        wait_sql(f"SELECT status FROM horae_jobs WHERE id = '{job_id}'", "succeeded", timeout=import_timeout)
         assert sql(entries) == "1000", "Recovered import lost or duplicated entries"
         assert sql(f"SELECT attempts FROM horae_jobs WHERE id = '{job_id}'") == "2"
         report = json.loads(sql(f"SELECT report FROM horae_jobs WHERE id = '{job_id}'"))
@@ -209,7 +235,7 @@ pkgs.testers.nixosTest {
         assert sql(f"SELECT sum(minutes) FROM time_entries WHERE notes LIKE '{prefix}-%'") == "60000"
 
         repeated_id = start_csv()
-        wait_sql(f"SELECT status FROM horae_jobs WHERE id = '{repeated_id}'", "succeeded")
+        wait_sql(f"SELECT status FROM horae_jobs WHERE id = '{repeated_id}'", "succeeded", timeout=import_timeout)
         assert sql(entries) == "1000", "Reimport after recovery duplicated entries"
         report = json.loads(sql(f"SELECT report FROM horae_jobs WHERE id = '{repeated_id}'"))
         assert report["summary"]["time_entries"]["created"] == 0
