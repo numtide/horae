@@ -1852,6 +1852,31 @@ deployment outstanding. Neither has a recorded failure. Next: collect the
 existing GitHub/Nixbot handles, integrate accepted work, and publish #227 when
 one remote-delivery slot is free. Preserve #212 and every source branch.
 
+### Branding merged; profile commands enter the queue — 2026-10-08 UTC
+
+The preceding turn made progress: #228's independently prepared composition
+was repaired only by restoring its original shared SQLx descriptor, then passed
+1,229 native tests and full SQLx preparation. Existing remote checks continued
+without retries. #226's GitHub 37849653227 passed Flake Check in 19m37s and
+Format in 43s; Nixbot 522 passed the exact `e910a2cb` tree on both Linux
+platforms, including ARM browser and both VMs. No review blocker was found.
+
+Marked #226 ready and submitted its unchanged `1cbde180` head to the protected
+queue. Entry `MQE_lQDOTRPZ888AAAABG8Hzx84AA_LZzgMsGwI` is first after #225's
+integration. Merge-group 37852644748 is live at
+`5a6309dec61a69b6244292fe834df58c30ad5fbe`. Expected combined tree is
+`99d2f45d12b1b10365d3ec1e39e4fe824ccb1df1`; the merge-tree calculation preserves
+the profile-command patch `56a4f3971d434da6cca01d884c72390aee0e1c2b` and
+branding patch `5d8b3bcfe99db100e521c8edd7a22fd96447f2e0` exactly.
+
+#225 merged at 22:18:16 UTC as `eb8eae55bf2f1f2defa5867447f950ea2404da6f`.
+Actual master tree is the expected `87ee2dd2aada51e08ea13ec26d1a7a9a062c9e2e`.
+Merge-group 37849797492 passed Flake Check in 24m58s and Format in 44s;
+watcher 20198 completed successfully. Fetched master without changing the root
+checkout or deleting any branch. Nixbot 523 still has its combined ARM
+deployment check running; collect that result before claiming full combined
+acceptance and starting #227's fresh remote build. No source change was needed.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
