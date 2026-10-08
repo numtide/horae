@@ -1902,6 +1902,31 @@ queue combination. Remote read-back confirms master base and six owned files
 (494 additions, 26 deletions). It remains draft pending fresh remote CI. #228 remains local
 and verified; #212 is still preserved. No new feature or PR was introduced.
 
+### User-authority remote composition verified — 2026-10-08 UTC
+
+#227 GitHub run 37853073229 is live with Format passed; watcher 34313 follows
+Flake Check. Nixbot 525 is also live and names source commit `5b966295`, but
+its actual tree is `9182ab1e2232b580c0b4a0d8e949fce1b2edce56`: it automatically
+combines the PR with current master `eb8eae55`. This is not stale source-tree
+acceptance. The local merge-tree calculation produces exactly `9182ab1e`, and
+GitHub's PR merge commit `fec1e76406801373146828a80171192a71d44708` has that
+same tree. The owned six-file patch retains stable ID
+`12697d95c23adc68d2404ca3fd56c42717b53b74` and the 494-addition/26-deletion scope.
+Record source and actual evaluated trees separately when checking future PRs.
+
+Investigated terminal Nixbot 521 instead of assuming it was an active build or
+a master regression: it belongs to old #226 commit `769a0d88` and failed before
+evaluation because that obsolete head conflicted with its base. It has no tree,
+no start time and no running attributes. Current #226 was already reconciled
+and accepted by Nixbot 522; do not retry 521. Current master `eb8eae55` has
+successful push/merge-group Flake and Format, Nixbot 523 and deployment checks.
+The separate Cachix maintenance job is still running, not reported failed.
+
+Remote #212 remains open/draft at `db3935db`. No new local build is active.
+Next: collect #226 queue watcher 1234/Nixbot 524, and #227 watcher 34313/Nixbot
+525. Submit #227 only after acceptance; reconcile #228 after its real #227
+prerequisite integrates. Do not create new PRs or repeat already-complete checks.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
