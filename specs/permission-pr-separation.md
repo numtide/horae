@@ -1409,6 +1409,28 @@ acceptance; this is not full flake/browser/VM/ARM acceptance. No additional
 source edits or remote build were needed. #221's GitHub66738/Nixbot85217 and
 #223's OIDC60653 remain active; deployment514 remains failed after its one retry.
 
+The isolated OIDC retry on #223/Nixbot514 also ended at the same driver
+connection timeout (900.92 seconds). Neither unchanged ARM VM was retried
+again. Published diagnostic-only commit ce371deb9e75fd02e9d8c84d512822d6c0e09245
+on the existing #223 branch, using the exact previous-head lease 1a06d55f;
+tree ca8017ec57930295a3843e0f76488cd849a55c2a. The PR remains draft.
+Its 32 added lines in the two VM checks record pending jobs and console-device
+state before the driver connects. Application code, deployment module,
+assertions and timeouts are unchanged; this is not a claimed ARM fix.
+
+Both complete native VM checks passed on that diagnostic source. Deployment
+derivation q1lvib05yhn9vfpva79xr5n4m17wwdlj finished its script in129.69 seconds;
+OIDC derivation k8ahz1x6fdxxxhk1ck29qjd4pcx8yh0j in73.43 seconds. Their logs
+confirm the diagnostic service ran and emitted device state. Formatting and
+whitespace checks passed. No real database was used. The published PR body
+distinguishes the old failed build from the new diagnostic revision.
+
+#221 remains the independent next delivery at a549a89e, with GitHub
+run37837568734 live and Nixbot515 building its four remaining ARM attributes;
+no failures have been observed in that build. Next: collect that acceptance
+and submit to the protected queue if green, while collecting fresh #223 ARM
+diagnostics separately. Preserve #212 and all downstream unpublished repairs.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
