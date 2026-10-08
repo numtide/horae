@@ -1012,6 +1012,28 @@ attribute. Next: collect that retry, deliver #219 only after complete acceptance
 then reconcile #248's three commits onto the actual merged master and publish
 with its known remote-head lease. Keep #212 and the prepared chain intact.
 
+### Permission domain fully accepted and queued — 2026-10-08
+
+OIDC watcher 43370 exited successfully. Nixbot 510 is green: 16 passed attributes
+and four cached, exact tree `117adb9bb1583481a417d944265770217f90cab6`. The
+single sequential OIDC retry completed its whole script in 708.20 seconds,
+including authenticated API access and rejection of a deactivated account.
+GitHub 37813612403 is already accepted. Neither initial startup timeout's root
+cause is established by the successful retries. Watchers 43370/85069 are done.
+
+Revalidated #219 head `8123201e`, actual master `2d3e6721`, direct ancestry,
+mergeability and absence of unresolved review threads. Published full acceptance,
+marked #219 ready and submitted it to the protected queue without bypass or
+branch deletion. Queue entry `MQE_lQDOTRPZ888AAAABG7MkdM4AA_LZzgMrAGo` is first.
+Merge-group run 37822983601 is active at
+`6d5dd32f6504c732b9431df8a11a8c8f84739e8e`; watcher 40642 observes it every
+60 seconds. Submission is not a completed merge. Browser client 7643 is idle.
+
+Next: collect 40642, verify remote MERGED state and integrated tree, then rebase
+only #248's three owned commits from prepared base `8cef61a0` onto actual
+master. Update its prepared receipt and publish with exact lease `a6d2e091`.
+Preserve #212 and other prepared branches; no new PR or runtime activation.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
