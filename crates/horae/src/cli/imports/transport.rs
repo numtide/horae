@@ -166,6 +166,7 @@ impl Transport {
             .header("X-Horae-Import", "csv")
             .header("X-Horae-Idempotency-Key", key.to_string())
             .header(reqwest::header::CONTENT_TYPE, "text/csv")
+            .header(reqwest::header::CONTENT_LENGTH, metadata.len())
             .body(reqwest::Body::wrap_stream(stream))
             .timeout(Duration::from_secs(300))
             .send()

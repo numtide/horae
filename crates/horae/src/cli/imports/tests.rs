@@ -429,6 +429,69 @@ async fn invalid_csv_files_fail_before_contacting_the_server() {
     }
 }
 
+#[tokio::test]
+async fn small_csv_upload_preserves_immediate_authorization_rejections() {
+    let mut csv = tempfile::NamedTempFile::new().unwrap();
+    csv.write_all(
+        b"Date,Client,Project,Task,Hours,Email\n2026-09-14,Acme,Widget,Dev,1,user@example.test\n",
+    )
+    .unwrap();
+    csv.flush().unwrap();
+    for status in [
+        axum::http::StatusCode::UNAUTHORIZED,
+        axum::http::StatusCode::FORBIDDEN,
+    ] {
+        let server = MockServer::start(axum::Router::new().route(
+            "/upload",
+            axum::routing::post(move || async move { status }),
+        ))
+        .await;
+        let client = transport::Transport::load(server.session.path()).unwrap();
+        for attempt in 0..256 {
+            let error = client
+                .csv("/upload", csv.path(), Uuid::now_v7())
+                .await
+                .unwrap_err();
+            assert_eq!(
+                error.http_status,
+                Some(status.as_u16()),
+                "attempt {attempt}: {}",
+                error.category
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn csv_upload_preserves_bytes_across_stream_chunk_boundaries() {
+    let server = MockServer::start(axum::Router::new().route(
+        "/upload",
+        axum::routing::post(
+            |headers: axum::http::HeaderMap, bytes: axum::body::Bytes| async move {
+                axum::Json(json!({
+                    "length": headers.get(axum::http::header::CONTENT_LENGTH)
+                        .and_then(|value| value.to_str().ok()),
+                    "bytes": bytes.to_vec(),
+                }))
+            },
+        ),
+    ))
+    .await;
+    let client = transport::Transport::load(server.session.path()).unwrap();
+    for length in [1, 64 * 1024 - 1, 64 * 1024, 64 * 1024 + 1, 256 * 1024] {
+        let bytes: Vec<u8> = (0..length).map(|index| (index % 251) as u8).collect();
+        let mut csv = tempfile::NamedTempFile::new().unwrap();
+        csv.write_all(&bytes).unwrap();
+        csv.flush().unwrap();
+        let response = client
+            .csv("/upload", csv.path(), Uuid::now_v7())
+            .await
+            .unwrap();
+        assert_eq!(response["length"], length.to_string());
+        assert_eq!(response["bytes"], json!(bytes));
+    }
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn csv_named_pipe_is_rejected_without_waiting_for_a_writer() {

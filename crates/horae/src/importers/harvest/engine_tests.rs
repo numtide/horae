@@ -17,6 +17,23 @@ use super::{RowSource, VecSource, run_import};
 mod csv_streaming;
 mod lookup_cache;
 
+pub(super) async fn wait_for_session_release(pool: &PgPool, org: Uuid) {
+    use super::{ApiImportError, lock_import, release_import};
+
+    // Worker exit and socket closure do not acknowledge PostgreSQL's session
+    // cleanup. Observe the actual lock before starting a single retry.
+    loop {
+        match lock_import(pool, org).await {
+            Ok(connection) => {
+                release_import(connection).await.unwrap();
+                return;
+            }
+            Err(ApiImportError::Busy) => tokio::task::yield_now().await,
+            Err(error) => panic!("failed to observe import session cleanup: {error}"),
+        }
+    }
+}
+
 struct PausedSource {
     before_pause: Option<SourceRow>,
     rows: VecSource,
@@ -158,10 +175,10 @@ async fn cancelled_http_waiter_keeps_the_lock_until_its_worker_exits(pool: PgPoo
     // for blocking tasks, so a failing regression must not hang the test suite.
     release.send(()).unwrap();
     assert!(matches!(competing, Err(super::ApiImportError::Busy)));
-    let retry = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        super::lock_import(&one_connection, org),
-    )
+    let retry = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        wait_for_session_release(&one_connection, org).await;
+        super::lock_import(&one_connection, org).await
+    })
     .await
     .unwrap()
     .unwrap();

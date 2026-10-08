@@ -10,6 +10,10 @@ pkgs.testers.nixosTest {
   name = "horae-e2e-oidc";
   nodes.server = { config, lib, ... }: {
     imports = [ flake.nixosModules.horae ];
+    # Keep guest executable reads off 9p when the builder falls back to TCG.
+    virtualisation.useNixStoreImage = true;
+    # Preserve the writable overlay needed by register-nix-paths.service.
+    virtualisation.writableStore = true;
     # Under TCG, coldplug can exceed the test harness's five-minute device limit.
     # Keep the console dependency alive until the driver's readiness deadline.
     systemd.settings.Manager.DefaultDeviceTimeoutSec = lib.mkForce 900;
@@ -62,6 +66,7 @@ pkgs.testers.nixosTest {
     # Wait for the guest's serial readiness signal before connecting to its shell.
     # Read the complete log: wait_for_console_text drains only one line per second.
     retry(lambda _: "connecting to host..." in server.get_console_log(), timeout_seconds=900)
+    server.wait_for_unit("register-nix-paths.service")
     server.wait_for_unit("postgresql.service")
     server.wait_for_unit("dex.service")
     server.wait_for_unit("horae.service")

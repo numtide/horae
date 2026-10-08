@@ -291,10 +291,13 @@ async fn cancelled_page_consumer_retains_lock_until_worker_exits_and_rolls_back(
     let competing = lock_import(&pool, org).await;
     release.send(()).unwrap();
     assert!(matches!(competing, Err(ApiImportError::Busy)));
-    let retry = tokio::time::timeout(std::time::Duration::from_secs(5), lock_import(&one, org))
-        .await
-        .unwrap()
-        .unwrap();
+    let retry = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        super::super::engine_tests::wait_for_session_release(&one, org).await;
+        lock_import(&one, org).await
+    })
+    .await
+    .unwrap()
+    .unwrap();
     retry.close().await.unwrap();
     assert_eq!(
         sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1", org)
