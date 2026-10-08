@@ -113,8 +113,12 @@ implementation remains incomplete. Do not treat
   exact-head acceptance, sessions16392/67402 respectively. #219 passed158 core
   and821 server tests; #220 passed121 core and828 server tests. Each passed nine
   auxiliary binaries, browser, Clippy, SQLx, formatting and both VMs, with11
-  existing ignored measurements. These heads are not yet published; remote
+  existing ignored measurements. These heads are now published; remote
   checks and final coordinated delivery remain required.
+- Refreshed #22368661980 and #224af4656d7 also passed their complete native gates,
+  sessions12382/61314. Both passed121 core tests and nine auxiliary binaries;
+  server counts were826/824, with zero failures and11 existing ignored cases.
+  Browser, Clippy, SQLx, formatting and both VMs passed on these exact heads.
 - #263 at4b43acf8 releases denied export authority before pool cleanup. The
   deterministic regression failed before the fix;43 bounded-export tests passed
   on its own branch and54 on the diagnostic composition. Nixbot382 was running
@@ -152,18 +156,21 @@ implementation remains incomplete. Do not treat
   and page-consumer tests. No production code, SQL, timeout or assertion changes.
   Native full check91786 passed:121 core and821 server tests,11 existing ignored
   measurements, nine auxiliary binaries, browser, Clippy, SQLx and both VMs.
-  Remote Nixbot413 remains pending. The complete native composition8fc3a44e
+  Remote Nixbot413 passed completely at2026-10-08 01:07:21 UTC on this exact head.
+  ARM deployment/recovery947.88s and OIDC397.54s passed; the aggregate covers
+  both Linux architectures. The complete native composition8fc3a44e
   passed gate85532; individual refreshed-head verification is still required.
   Exact-head ARM tests on413 now passed:821 server tests,11 existing ignored
   measurements and nine auxiliary binaries, including both corrected cases.
-  ARM package, Clippy and SQLx also passed; full CI remains open. A subsequent
-  direct observation shows ARM formatting building again, so its earlier
-  succeeded observation is not treated as final acceptance.
+  ARM package, Clippy, SQLx and formatting are now included in the complete pass.
+  Earlier partial-state observations are superseded by exact-head aggregate
+  acceptance, not used independently to infer completion.
   It is a draft over #285. The shared prerequisite order is now
   #282→#283→#284→#285→#286. The refreshed75-branch tree-only preview includes
   #286 and preserves all57 code-PR review patches. All75 local rebases now match
   their expected trees and all57 review patches retain their edit content;
-  remote publication remains pending verification of the shared base.
+  all75 branches were published atomically after shared-base acceptance, and
+  the11 extraction-root bases were changed to #286. New-head CI remains required.
 - Local complete compositiond5c34851 contains both corrections without diagnostic
   logging. Its full gate50229 failed at Clippy: three unused preflight symbols.
   Local compositionf90f60f7 contains #246's function-local lint expectation for this
@@ -8745,3 +8752,38 @@ building; browser and x86 tests have advanced out of the building group. Both VM
 logs show successful register-nix-paths.service and continuing guest startup
 around130–140s, not a terminal result. Keep waiting on the same executions without
 raising timeouts or modifying tested worktrees.
+
+### Shared prerequisite accepted and code branches published — 2026-10-08
+
+The preceding iteration scoped the documentation follow-ups and recorded active
+checks in local95fbde08/d61997ac. Used a single gh-pr-checks watcher87658 at300s
+intervals for #286 while continuing the existing local12382/61314 checks.
+Collected all three handles with exit0; none was replaced or restarted.
+
+The GitHub commit-specific API confirms #286ed286e6b completed both required
+Nixbot checks successfully, aggregate413 at2026-10-08 01:07:21 UTC. ARM VM logs
+end in successful artifact upload: deployment/recovery947.88s and OIDC397.54s.
+Evidence: .scratch/nixbot-413-complete-summary.json and the public413 URLs.
+Updated #286's PR verification, retaining draft state and no-merge instructions.
+
+#22368661980 and #224af4656d7 both completed the full native gate on unchanged
+clean worktrees. Counts are recorded above and in
+.scratch/refreshed-root-native-acceptance.json, with session IDs and full-log
+SHA256. Deployment/OIDC took76.00s/19.22s for #223 and65.85s/27.69s for #224.
+Neither result claims remote ARM acceptance for those extraction heads.
+
+Publication preflight confirmed75 exact local trees,57 draft PRs with unchanged
+old bases/heads, matching remote leases and protected original references, plus
+the accepted shared base and native composition. Re-ran the full patch/ancestry
+verifier and coverage bridge. Atomic push35748 exited0 and updated all75 existing
+branches with explicit force-with-lease guards; no original branch was included.
+The private publication receipt records all exact heads. Retarget4269 exited0
+after updating #219/#220/#223/#224/#225/#227/#231/#238/#239/#240/#242 to #286.
+Other review-base names and the #282→#283→#284→#285→#286 chain are unchanged.
+
+Next: collect the post-publication verification, refresh #248/#218 separately
+with recoverable backups and exact documentation patch checks, and reconcile
+the PR descriptions and fresh-head CI. The code publication is not completion
+of final verification. Original #208/#212/#217 remain untouched; no merge or
+policy activation occurred. The two import-root native handles and watcher87658
+are now terminal and must not be polled again.
