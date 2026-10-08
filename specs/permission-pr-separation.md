@@ -527,6 +527,30 @@ guest progressing through PostgreSQL initialization. #220 remains fully green
 but draft on its feature-branch base. Next: collect505, then integrate #240
 and #220 in that order. Preserve #212 and keep #217 until #220 is verified merged.
 
+### Local domain foundation preparation — 2026-10-08
+
+While the existing505 OIDC retry runs, prepared #219 locally after #224.
+Preserved published55234123 at
+refs/backup/pr219-before-import-cleanup-20261008, then rebased only its single
+commit from f29e72b4 onto local #224 headd9edb456 with updateRefs disabled.
+New local head8cef61a060e9743c5b56c095cd9ef91a26890f41 has tree
+117adb9bb1583481a417d944265770217f90cab6. The rebase had no conflicts;
+range-diff reports an identical patch and comparing crates/core against the
+published head produces no difference. No source or test edits were needed.
+
+`nix develop --command cargo test -p horae-core` passed all158 tests, with no
+failures or ignored tests. Core Clippy with all targets and `-D warnings` also
+passed. `git diff --check` passed and the worktree is clean.
+These domain tests do not certify server integration or the full Nix matrix.
+No push or extra remote build was started; #219 remains published at55234123.
+After the preceding deliveries merge, reconcile the single owned commit onto
+actual master, preserve this patch, and require combined CI before merging.
+
+Nixbot505 remains building as of15:44 UTC. The read-only watcher session62108
+observes that same build every60 seconds and does not retry builds. Next:
+collect its terminal result, then integrate #240 and #220 if accepted; keep
+#217 open until #220 is verified integrated and leave #212 unchanged.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
