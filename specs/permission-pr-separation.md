@@ -1516,6 +1516,31 @@ that current composition. Next: collect the two published deliveries' checks,
 then reconcile any changed base before protected-queue delivery. No new PR,
 feature, real-data operation or downstream branch rewrite was performed.
 
+While the two published builds run, completed a read-only bounded review of
+#226 at769a0d8808dc88ca880556ba4d38374167d0412f, relative to its actual owned
+base e8d89b46 (not a moving branch name). Read its321-line command module,
+transaction configuration/loaders, DTOs, receipt migration, all19 command tests,
+the real PostgreSQL blocker helper and template-commands contract. Verified
+the command/test/migration blobs match the preserved #212 reference exactly.
+
+No high/critical finding within this internal create/delete boundary: explicit
+READ COMMITTED/READ WRITE precedes the organization gate; current active actor
+and canonical administrator identity are checked before receipt lookup; tenant
+scoping, canonical idempotent replay, count50, strict grants, checked increments,
+detachment preservation and receipt/audit rollback are retained. Row order is
+organization, actor, template, sorted person states. Transaction-local limits
+preserve stricter pool timeouts. The19 tests include real blocked revocations,
+concurrent retries/count admission and injected audit failure. No mutation
+endpoint or policy activation is introduced, and no production caller exists
+in this extraction. This is source review, not fresh runtime/ARM acceptance or
+closure of the cross-feature lock audit. No #226 file or branch changed.
+
+Current published checks remain live without observed failures:
+#222 GitHub37843072424/Nixbot518 on9678d004; #223
+GitHub37842680338/Nixbot517 on128e9df1. Next: finish those acceptance gates and
+queue the next ready delivery; retain #226's review for its later reconciliation
+onto integrated #222. No extra remote build was started for #226.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
