@@ -1289,6 +1289,42 @@ The #227 description now explicitly distinguishes published `fb63b766` (known
 isolation defect) from verified local `96fa8d1a`; it remains draft and unpushed.
 Remote #221/#222/#225 heads remain unchanged with no new submitted reviews.
 
+### Project-access delivery prepared on the repaired user boundary — 2026-10-08
+
+Confirmed #223's isolated deployment restart returned HTTP200 in the existing
+Chrome session. Watcher95726 remains live; OIDC is still failed and has not been
+retried. The deployment guest is progressing through PostgreSQL initialization.
+No second restart or extra remote build has been submitted.
+
+While that check runs, renewed #228's bounded project-family review against
+T024–T026/T068–T070. Traced all creation-actor and task-link production callers,
+organization-before-actor/resource ordering, final gate modes, assignment
+tenant discovery/recheck, revision triggers and real editor/revocation,
+invoice-FK and time-entry-cascade regressions. No critical/high issue identified
+within this bounded extraction; full T042 and other writers remain separate.
+
+Preserved published `55382bd7c731f704b67dcf81a9f6d90a7a0e0d9b` at
+`refs/backup/pr228-before-delivery-chain-20261008`, then rebased its single owned
+commit onto corrected local #227 `96fa8d1a`, with automatic ref updates disabled.
+Local head `34be6010cbe0e746f84a01497c13135cd9a4610b`, tree
+`ced533319817a18e2d2edbcf4a5b0b0fddfb47d5`; worktree clean, no conflicts.
+
+All15 Rust files remain byte-identical to the published extraction. Fourteen
+match original `3ae8e08`; the remaining file retains already-integrated #216
+client validation. Every added/replacement SQLx descriptor is preserved;
+range-diff only removes five already-inherited descriptors from the owned patch
+(`07580408`, `33678a5f`, `54b7cb41`, `7d778a4c`, `832f8ead`). Owned diff:
+39 files,1700 additions,84 deletions. Pinned-Nix Cargo formatting and whitespace
+checks passed. No migration, policy, UI, dependency or real-data change occurred.
+
+Started the complete native Nix test check on this prepared tree with two cores
+and one job. Session2783 is live, derivation
+`h9y3nnaajh49vvpykmkglkshsx96505y-horae-tests-0.1.0`; its PostgreSQL is disposable
+inside the Nix sandbox. The result is pending, not acceptance. Prepared local
+description: `.scratch/pr228-merge-delivery.md`. Remote #228 remains unchanged
+and draft, based on #227. Next: collect2783 and #223 watcher95726; reconcile
+#228 onto actual master only after #227 integration and require fresh full CI.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -1392,7 +1428,8 @@ The current execution order is #223 (published on actual master, current CI runn
 then #221 and #222 (local preparations, core tests/Clippy/format passed and
 bounded source reviews complete), followed by #225 (bounded review and local
 rebase/format complete) and #227 (last-admin isolation repair, users tests,
-SQLx and formatting verified locally). Full current CI remains required. These preparation
+SQLx and formatting verified locally), then #228 (source-preserving local rebase
+on corrected #227; native tests running). Full current CI remains required. These preparation
 bases are an integration sequence, not new functional dependencies. Reconcile
 each onto actual master and verify its complete integration gates before merge.
 The documentation deliveries #248 and #218 do not activate features.
