@@ -707,6 +707,29 @@ for509. If that retry repeats the failure, retain evidence and investigate
 before another attempt. Keep #224 draft and unmerged until full acceptance;
 #219/#248 remain locally prepared and unpublished, and #212 stays unchanged.
 
+### Deployment accepted; single OIDC retry running — 2026-10-08
+
+Nixbot509's ARM deployment check passed its complete1776-second functional
+script, including both interrupted-import recovery scenarios and final row/report
+assertions. The initial build is terminal failed only because of OIDC startup;
+watcher22948 exited normally and must not be polled again. Public API read-back
+confirmed the deployment success, the unchanged385dcca9 tree, and only OIDC failed.
+
+After those checks, requested exactly one restart of
+checks.aarch64-linux.e2e-oidc through the authenticated Chrome session7643.
+The request revalidated the tree, failed OIDC state and all other attributes'
+acceptance before POST. API returned200 and public read-back confirms OIDC is
+building. No full restart, source edit, timeout change or assertion relaxation.
+The browser call completed; no browser request is pending. Updated #224's
+published body with deployment acceptance and the isolated retry status.
+
+Read-only watcher96352 now observes the retry every60 seconds; its initial
+16:42 UTC read confirms only OIDC building. GitHub37804884447 is already green.
+Next: collect96352. If successful, revalidate #224 headbe84b332, master7b85d2c3
+and expected tree385dcca9 before protected queue submission and final-tree
+verification. If the same retry fails, investigate before another attempt.
+Do not send a second automatic retry. #219/#248 preparations and #212 remain intact.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
