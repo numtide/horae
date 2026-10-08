@@ -140,7 +140,8 @@ implementation remains incomplete. Do not treat
   and page-consumer tests. No production code, SQL, timeout or assertion changes.
   Native full check91786 passed:121 core and821 server tests,11 existing ignored
   measurements, nine auxiliary binaries, browser, Clippy, SQLx and both VMs.
-  Remote Nixbot413 and the full composition remain pending.
+  Remote Nixbot413 remains pending. The complete native composition8fc3a44e
+  passed gate85532; individual refreshed-head verification is still required.
   It is a draft over #285. The shared prerequisite order is now
   #282→#283→#284→#285→#286. The refreshed75-branch tree-only preview includes
   #286 and preserves all57 code-PR review patches. All75 local rebases now match
@@ -162,6 +163,13 @@ implementation remains incomplete. Do not treat
   binaries and all other compatible checks, including deployment/recovery91.22s
   and OIDC29.07s. This preserves f90f60f7 as earlier evidence; neither result is
   an ARM VM pass or verification of yet-unpublished extraction heads.
+- Complete composition8fc3a44e adds #286's test synchronization to604c0481.
+  Native gate85532 exited0:1478 server tests, zero failures,11 existing ignored
+  measurements,15 auxiliary binaries, browser, Clippy, SQLx and both VMs passed.
+  OIDC took28.24s and deployment/recovery67.24s. Unchanged derivations were reused
+  where applicable; ARM/Darwin were explicitly omitted. The exact-head log and
+  exit receipt are .scratch/permission-delivery-ci-8fc3a44e-full-check.log and
+  .scratch/permission-delivery-ci-8fc3a44e-acceptance.json.
 
 ## Remote heads snapshot — 2026-10-07, before the follow-ups above
 
@@ -8541,3 +8549,21 @@ Fresh comparisons also confirm the original #212 tracked worktree still matches
 snapshotd364270a and its six untracked files still match the saved tar archive.
 Next: collect85532 and413 without restarting; record exact-head acceptance before
 publication, then verify the remote heads, the11 review-base changes and new CI.
+
+### Complete native composition accepted — 2026-10-08
+
+Collected the original85532 handle with exit0, not a replacement execution.
+All compatible checks passed on clean composition8fc3a44e. The1478 server tests
+and15 auxiliary binaries passed, with only the11 existing ignored measurements;
+both cancellation cases passed. Browser, Clippy and SQLx passed, and the final
+OIDC/deployment VM scripts completed in28.24s/67.24s. The final flake result
+explicitly omitted ARM/Darwin, so this is not their acceptance or acceptance of
+each unpublished extraction. Saved the exact head, session, exit status, counts
+and SHA256 of the complete log in the publication receipt.
+
+Remote #286 Nixbot413 still reports build IN_PROGRESS and evaluation SUCCESS.
+The publication gate therefore remains closed only on remote prerequisite CI;
+the complete native composition prerequisite is now satisfied. Next: collect413,
+then run the prepared guarded publication and retargeting procedure, followed by
+new-head CI and final delivery audit. Do not rerun85532 or claim old extraction
+checks apply to their new commits.
