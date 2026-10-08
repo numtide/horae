@@ -51,6 +51,12 @@ activation is claimed. #208/#212/#217 and original unpublished work remain
 preserved; no merges or closures have been performed. Dated checkpoints below
 retain historical hashes/results and must not override this handoff.
 
+The final preservation bridge also passed: all 57 code review patches and all
+56 changed documentation blobs remain identical across the CI rebases. The
+original dirty worktree still matches its tracked snapshot and six-file backup
+archive. All 30 unchecked source tasks have exactly one retained-work
+classification; no checkbox was changed to claim feature completion.
+
 ## Verified starting state — 2026-10-06
 
 - #216 merged at 13:16:59 UTC as `02f7b58acdcf126415f9ec89215da8cdada7d03f`.
@@ -8981,3 +8987,40 @@ the prepublication verification checkpoint historical. Next: reconcile the
 current documentation preservation proof with the existing content-coverage
 bridge, finish final ownership/readiness evidence, and resolve the failed or
 pending exact-head CI. The goal is not complete; no merge or original closure.
+
+### Published-content preservation and unfinished-task audit — 2026-10-08
+
+The preservation verifier completed successfully after explicitly accommodating
+the already-published documentation rebase. It compares the old and current
+full-index binary review patches, not merely their file lists. All 57 code
+extraction patches are unchanged. Documentation #248 has 56 byte-identical
+changed blobs and an identical review patch, SHA256
+681c919ae5b75e7edd0f4c0b565d0225b43ce721ad733cd9897e904350d73886.
+Its old merge base is 8b3cc257, and its current base is #286/ed286e6b.
+Evidence: .scratch/permission-delivery-published-coverage-bridge.json.
+
+The composed delivery's delta from the prior content audit equals exactly the
+six-file shared-CI correction delta. The prior coverage accounting therefore
+remains applicable: 1,159 exact single-variant paths, 108 shared paths, seven
+explicitly reconciled paths, zero unaccounted paths and zero target-only paths.
+This is preservation evidence, not a new semantic review or ARM acceptance.
+
+The original scoped-permissions worktree still matches saved tracked snapshot
+d364270a; tar comparison also passed for all six original untracked files.
+An anchored task-checkbox audit found 238 unique IDs, 208 checked and 30
+unchecked. Every unchecked ID occurs exactly once in the retained-work
+classification, with no missing or extra IDs. Evidence:
+.scratch/retained-task-classification-20261008.json. Source task state was not
+changed, and checked source tasks are not treated as extraction acceptance.
+
+Next: collect changes in the existing CI runs and resolve remaining exact-head
+gates. Keep original branches, incomplete work and draft PRs intact. The last
+user-facing estimate was a status-only turn, not additional completed work.
+
+A single read-only GitHub rollup at 02:13 UTC revalidated all 64 published
+heads, bases and draft flags. No check status, conclusion, URL or completion
+timestamp changed from the last commit-specific audit; 57 checks remain live.
+Evidence: .scratch/permission-delivery-ci-rollup-20261008.json. The first query
+did not execute because approval review timed out; its one permitted retry
+completed successfully. No builds were restarted. Ledger formatting passed
+with zero changes before this observation was appended.
