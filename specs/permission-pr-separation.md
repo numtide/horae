@@ -683,6 +683,30 @@ GitHub37804884447 still runs Flake Check. This iteration is a verified wait on
 the same watcher22948/66999 handles, with no restart, branch change or merge.
 Next remains full CI acceptance followed by exact-tree queue verification.
 
+### GitHub accepted; initial ARM OIDC startup failed — 2026-10-08
+
+GitHub37804884447 completed successfully for #224: Flake Check25m34s and
+Format41s. Watcher66999 exited0 and must not be polled again. Nixbot509's
+ARM OIDC attribute then failed its initial driver wait at900.81 seconds,
+before any login assertion. Horae had started; late virtual-console/device
+initialization continued near the deadline. The failure is not evidence of an
+OIDC application regression, nor proof of its infrastructure root cause.
+Both Nix VM definitions and flake.lock are byte-identical to integrated master.
+
+The deployment VM did connect before its deadline and is actively exercising
+functional tests, including database privilege repair. Do not restart or cancel
+that live attribute. Chrome client7643 remains connected to Nixbot; a read-only
+authenticated API call confirmed509's exact385dcca9 tree, failed OIDC and
+building deployment. That browser call finished; no browser request is pending.
+Published #224's body now reflects the successful GitHub run and OIDC failure.
+
+Next: collect deployment through watcher22948. After deployment finishes,
+revalidate its result and request exactly one isolated OIDC-attribute retry,
+without source, timeout or assertion changes. No retry has yet been requested
+for509. If that retry repeats the failure, retain evidence and investigate
+before another attempt. Keep #224 draft and unmerged until full acceptance;
+#219/#248 remain locally prepared and unpublished, and #212 stays unchanged.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
