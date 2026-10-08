@@ -2180,6 +2180,28 @@ remains here. Next delivery order: finish #228 acceptance/merge, reconcile and
 deliver #231, then use locally validated #232/#238. #226 stays held and #212
 untouched. No new PR or feature was added.
 
+Revalidated active deliveries: #228 remains draft/mergeable at9ea69fa2, with
+GitHub37858623043 and Nixbot528 live; ARM tests are producing passing output.
+#231 remains draft ona34a1348/basefix/project-access-lock-order; Nixbot529 is
+building the exact239d1051 combination, not yet accepted. No retries or merges.
+
+Prepared the next #232 integration locally on the existing #228 → #231 stack.
+Backup refs/backup/pr232-before-delivery-stack-20261008 preserves19bcd96b.
+Local head45c923a3703718771fb7401e83e8d9bd0583f791,
+tree5013b1d437f63a76e4d0237beebb4a2b2922d294, basea34a1348. Merge-tree and
+actual rebased tree agree. Its single owned commit is identical in range-diff;
+no conflicts or source repairs. The two changed Rust blobs relative to19bcd96b
+are invoices/tests.rs and projects.rs; their delta patch IDs exactly match the
+inherited base changes (19a0e1e7 and419eed38). Other owned Rust blobs unchanged.
+No functional dependency was invented and published #232 remains untouched.
+
+Format510 files/zero changes passed. Local combined native/SQLx session73476
+is live with derivations53q570nirhqn4vvgz7rrbl76vbzlgcsm-horae-tests-0.1.0 and
+g9bv28qdv4afd1sd3lznk0aayjadhqs4-horae-sqlx-prepare-0.1.0. Next: collect this
+result and current remote gates; deliver #228 first when fully accepted,
+then reconcile #231 against its real squash, preserving verified trees. Do not
+publish #232 or #238 as a third live remote delivery. #226 remains held.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2289,8 +2311,9 @@ is now stacked on #228 at a34a1348 with1,250 combined native tests/SQLx passing;
 fresh Nixbot529 is building its exact239d1051 tree. The earlier independent
 head dcf68d2e passed GitHub and both-Linux Nixbot526. Neither result proves
 the shared transport issue repaired.
-#232 is locally rebased and reviewed, with1,243 native tests and SQLx passing;
-it is not published yet. #238 is locally reviewed/rebased atc6efb30a with1,250
+#232 is locally stacked at45c923a3 on #231, with fresh combined native/SQLx
+validation running; its earlier independent tree passed1,243 tests. It is not
+published yet. #238 is locally reviewed/rebased atc6efb30a with1,250
 native tests and SQLx passing, also unpublished.
 The failed #226 combination remains held; independent deliveries may advance
 only on exact current-tree acceptance, without claiming that failure repaired.
