@@ -144,7 +144,9 @@ implementation remains incomplete. Do not treat
   passed gate85532; individual refreshed-head verification is still required.
   Exact-head ARM tests on413 now passed:821 server tests,11 existing ignored
   measurements and nine auxiliary binaries, including both corrected cases.
-  ARM package, Clippy, SQLx and formatting also passed; full CI remains open.
+  ARM package, Clippy and SQLx also passed; full CI remains open. A subsequent
+  direct observation shows ARM formatting building again, so its earlier
+  succeeded observation is not treated as final acceptance.
   It is a draft over #285. The shared prerequisite order is now
   #282→#283→#284→#285→#286. The refreshed75-branch tree-only preview includes
   #286 and preserves all57 code-PR review patches. All75 local rebases now match
@@ -8603,3 +8605,27 @@ modified. No claim of full-feature acceptance is added.
 Next: wait for the complete413 prerequisite, publish the guarded75-branch update,
 retarget the11 roots and verify fresh-head CI. Local85532 is finished and must not
 be restarted. Keep incomplete acceptance and original #208/#212/#217 untouched.
+
+### Independent refreshed-root checks started — 2026-10-08
+
+The preceding iteration made progress through the coverage bridge and ARM test
+acceptance, published in ledger2f4c2e51. Reconfirmed #286's exact-head build413
+IN_PROGRESS. Its tests/package/Clippy/SQLx remain succeeded. The formatting
+attribute, previously returned in the succeeded group, now appears only in the
+building group and its raw log only announces the derivation. Recorded this
+state correction without guessing a cause, requesting a retry or claiming a
+completed gate. The full aggregate remains the publication prerequisite.
+
+Advanced independent fresh-head verification while remote CI continues. No local
+Nix/Cargo build was running;82GiB disk and56GiB available RAM were observed.
+Started two bounded full native checks, each --max-jobs1 --cores2, on clean frozen
+worktrees: #220ea78c27c in session67402 and #219690cce20 in session16392.
+Both passed formatting and are compiling the app. Their logs are
+.scratch/pr220-ea78c27c-full-check.log and .scratch/pr219-690cce20-full-check.log.
+They certify distinct refreshed extraction heads only if their full checks pass;
+neither duplicates the completed composition or #286's standalone check.
+
+Next: collect those two existing handles and remote413. Do not edit their
+worktrees, start replacement builds or treat source-preservation receipts as CI
+success. Publication and the11 root-base changes still await remote prerequisite
+acceptance; original branches remain excluded and no merge is requested.
