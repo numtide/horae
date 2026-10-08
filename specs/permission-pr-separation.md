@@ -10,6 +10,47 @@ activate canonical policy, alter real data, or modify #208.
 This is the single separation ledger. Existing feature contracts remain the
 source of product requirements; do not restart or duplicate them.
 
+## Current handoff — 2026-10-08
+
+The separation is published, but verification is not complete. All 57 code
+extractions and the two documentation PRs (#248 and this ledger) now have
+descriptions naming their published head, review base, preserved scope and
+historical versus current checks. A final read-back verified all 59 descriptions
+and draft states. The five separate shared-CI PRs bring the delivery inventory
+to 64; the 18 integration-base branches are not additional delivery PRs.
+
+The latest commit-specific CI audit spans 01:50–01:58 UTC. It retained 50 responses
+after a connection reset and queried only the remaining 14 on continuation:
+
+- Passed checks: #282, #284, #285 and #286.
+- Failed: #228 and #270 have new ARM compilation failures. Both test and Clippy
+  compilers received SIGKILL; package compilation exited 1. Logs do not establish
+  OOM or who sent the kill. No blind build retry or source workaround was made.
+- #283 still has its historical ARM VM failure on its own head; downstream
+  #284–#286 pass, but their results do not turn #283's checks green.
+- The other 57 PRs still await Nixbot build acceptance at their observed heads.
+  #218 and #248 have passed GitHub Flake Check and Format on their published
+  documentation heads; Nixbot is a separate gate.
+
+Full native checks already passed on the published #219/#220/#223/#224 heads
+and on the complete cross-extraction composition `8fc3a44e`. That composition
+passed 1,478 server tests (11 existing ignored cases), 15 auxiliary test binaries,
+browser, Clippy, SQLx, formatting, package and deployment/OIDC checks. This is
+not ARM acceptance or a substitute for individual current-head gates.
+
+The shared prerequisite order is #282 → #283 → #284 → #285 → #286. The eleven
+direct extraction roots and both documentation PRs are based on #286. Each
+dependent PR describes its functional prerequisite order; integration branches
+are review/test compositions, not merge targets. #220 carries the independent
+legacy-reader repair from #217; do not integrate both overlapping deliveries.
+
+Remaining work: resolve the failed/pending exact-head gates, finish the final
+ownership and readiness audit, and publish this ledger checkpoint with the
+delivery order and explicit incomplete work. No feature completion or policy
+activation is claimed. #208/#212/#217 and original unpublished work remain
+preserved; no merges or closures have been performed. Dated checkpoints below
+retain historical hashes/results and must not override this handoff.
+
 ## Verified starting state — 2026-10-06
 
 - #216 merged at 13:16:59 UTC as `02f7b58acdcf126415f9ec89215da8cdada7d03f`.
@@ -101,7 +142,7 @@ implementation remains incomplete. Do not treat
 | `??` | `crates/horae/src/harvest/pagination_tests/client_permissions.rs` |
 | `??` | `specs/015-scoped-permissions/contracts/client-permissions.md` |
 
-## Current verification follow-ups — 2026-10-08
+## Verification checkpoint before publication — 2026-10-08 (historical)
 
 - #248's prior documentation headb6e13979 has green GitHub checks but failed
   Nixbot216 ARM VMs: OIDC shell readiness exceeded900s; deployment reached the
@@ -8902,3 +8943,41 @@ investigate the ARM compiler kills without assuming their cause, and complete
 the exact-head gates and final ownership/readiness audit. No feature, migration,
 runtime data, original branch or merge state was changed. Keep this progress
 checkpoint local until substantive publication is useful.
+
+### Description refresh completed and ARM diagnostic narrowed — 2026-10-08
+
+The preceding iteration made concrete progress on metadata and exact-head CI.
+Finished the remaining25 descriptions in batches30442/6420/35707, all exit0:
+#255–#269, #271–#273 and #275–#281. Removed superseded current-status sections,
+updated prerequisite hashes, retained feature limitations and labeled older
+verification/conservation records as historical. No application source changed.
+Final read-back31300 verified all59 expected bodies, published heads, review
+bases and draft flags; evidence is
+.scratch/published-description-verification-20261008.json.
+
+CI audit77238 stopped with a GitHub connection reset after50 recorded responses.
+Its terminal failure was collected before resuming. Continuation58833 retained
+those exact-head observations, verified heads/bases again and queried only the14
+missing results; it completed with64 records and no build restarts. The combined
+01:50–01:58 UTC snapshot has four passed, three failed and57 pending, unchanged
+in classification from the earlier complete snapshot. #248's GitHub Flake Check
+and Format now both passed. The earlier complete snapshot remains saved as
+.scratch/permission-delivery-ci-20261008-0135.json; the current file records the
+later mixed-time observation rather than claiming simultaneous checks.
+
+Read the pinned Crane setup hook at
+/nix/store/44k6cm6lbjpfq3xnl9wg0jpqa5rpsvmf-source/lib/setupHooks/configureCargoCommonVarsHook.sh.
+It already exports CARGO_BUILD_JOBS from NIX_BUILD_CORES when unset, and the
+failure logs show that hook ran. The inspected repository package/check files
+do not override that variable. This rules out assuming an absent Cargo job
+budget; it does not establish the actual remote allocation or cause of SIGKILL.
+The public Nixbot427 page exposes failure logs but no OOM/cgroup diagnostics.
+Requested builder OOM/cgroup or scheduler logs for the two recorded ARM workers
+around01:29 UTC. Continue independent audits while that evidence is unavailable;
+no resource workaround, new dependency or blind retry has been introduced.
+
+Added the current handoff at the beginning of this ledger and explicitly labeled
+the prepublication verification checkpoint historical. Next: reconcile the
+current documentation preservation proof with the existing content-coverage
+bridge, finish final ownership/readiness evidence, and resolve the failed or
+pending exact-head CI. The goal is not complete; no merge or original closure.
