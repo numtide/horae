@@ -103,6 +103,12 @@ implementation remains incomplete. Do not treat
 
 ## Current verification follow-ups — 2026-10-08
 
+- #248's existing documentation headb6e13979 has green GitHub checks but failed
+  Nixbot216 ARM VMs: OIDC shell readiness exceeded900s; deployment reached the
+  application but its repeated-import wait exceeded90s. Its separate CI-base
+  refresh is still required. A tree-only preview over #286 is clean and retains
+  the exact56-file documentation patch; no branch has moved. Refresh #218's
+  ledger base separately as well, preserving its unpublished progress commits.
 - Locally staged #219690cce20 and #220ea78c27c now have complete native
   exact-head acceptance, sessions16392/67402 respectively. #219 passed158 core
   and821 server tests; #220 passed121 core and828 server tests. Each passed nine
@@ -8697,3 +8703,38 @@ and .scratch/pr224-af4656d7-full-check.log. Observed94GiB free before starting;
 only these two local checks are now live. No previous check was restarted.
 Next action includes collecting these handles alongside413; do not edit their
 worktrees while they run. This checkpoint is committed locally, not pushed.
+
+### Documentation CI gap scoped independently — 2026-10-08
+
+The preceding iteration completed native #219/#220 verification and started
+#223/#224, saved in local commitsca4de908/879ed925. The same12382/61314 checks
+remain live; both client builds passed. Remote413 is still in progress, with
+ARM browser and VMs plus x86 browser/tests active at the last observation.
+
+Reviewed first-delivery PR descriptions and #248's current checks while those
+builds run. #248b6e13979 still has failed Nixbot216 ARM VMs despite successful
+GitHub Flake Check/Format. Direct logs distinguish the causes: OIDC timed out
+waiting900s for the shell connection, whereas deployment got through startup
+and timed out after92.49s waiting for the repeated job's succeeded status under
+the90s bound. Do not collapse the latter into a boot failure or claim either is
+resolved on #248 without refreshed-head verification.
+
+Prepared separate documentation tree previews, not branch rewrites. #248's three
+commits touch only56 Markdown files. Merging its current head with shared #286
+produces treec811b935 with no conflict; the full-index binary review patch is
+byte-identical before/after, SHA256681c919ae5b75e7edd0f4c0b565d0225b43ce721ad733cd9897e904350d73886.
+#218 at checkpoint879ed925 also previews cleanly and touches only the ledger.
+Its head will change as progress is recorded, so recompute its final preview
+before rebasing. Evidence: .scratch/documentation-ci-refresh-preview.json.
+
+Keep the verified75-code/review-base publication distinct. After that publication,
+refresh #248 and #218 onto #286 with their own backups, exact patch checks,
+explicit remote leases and review-base changes. The existing code coverage bridge
+requires #248's old head until the code publication and must not be invalidated
+prematurely. The11 code-root retargets stay unchanged; the two documentation bases
+are additional follow-ups, not new features or newly split deliveries. Preserve
+all54 original feature documents, New Project transition rules and cache guidance.
+
+Next: collect12382/61314 and413; publish code only after prerequisite acceptance,
+then complete the two documentation refreshes and reconcile PR descriptions with
+their actual published heads and check results. No merges or original-ref edits.
