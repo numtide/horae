@@ -2131,6 +2131,28 @@ originated on0.14.2. No speculative transport or fixture change was applied.
 Next: collect live20247/526/528 and reconcile actual integration gates;
 keep #226 held and #212 intact.
 
+#238 local20247 completed successfully:189 core,878 server,183 auxiliary tests,
+1,250 passed, zero failures,11 existing manual cases ignored; server80.05s.
+All13 authority regressions and complete SQLx preparation passed. Clean worktree;
+only disposable PostgreSQL and local sender stubs were used. Updated its local
+delivery description; it remains unpublished behind #232 in the prepared backlog.
+
+#231 build526 subsequently completed successfully onff336229, with every Linux
+attribute accepted and no retry; GitHub37856544984 also passed. Its combination
+with newer master still differs, so do not merge on that earlier tree's evidence.
+Prepared a delivery stack #228 → #231 to validate the future combined content
+before #228 merges. This is integration order, not a new functional prerequisite.
+Backup refs/backup/pr231-before-project-access-stack-20261008 preservesdcf68d2e.
+Local head a34a13487fdaf5d16a1eab54d33df5365e0fe166 on9ea69fa2,
+tree239d105157037d991a007baf08326e68faa87013. Both owned commits are identical
+in range-diff; all five owned Rust blobs are unchanged, six-file250/11 diff.
+Format505 files/zero changes passed. Fresh combined native/SQLx session90950
+is running. Published head/base remain dcf68d2e/master until that acceptance;
+then retarget the existing #231 to #228's branch and publish with an exact lease.
+After #228 actually merges, reconcile onto its real squash without altering
+the accepted combined tree and verify protected checks. No source change or
+new PR. The CSV transport issue is still not described as repaired.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
