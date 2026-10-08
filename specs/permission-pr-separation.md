@@ -192,6 +192,49 @@ Source: https://github.com/Mic92/nixbot#authentication-backend (restart/login
 roles); deployed version and the cause of the attribution discrepancy remain
 unverified. No claim that the completed native checks imply ARM acceptance.
 
+### Authenticated CI provenance correction — 2026-10-08 13:41 UTC
+
+The user opened Nixbot in Chrome. The existing Playwright client now has an
+authenticated session and exposes the per-attribute restart controls; no API
+token or cookie was extracted. The dedicated Nixbot tab leaves other tabs alone.
+
+The preceding attribution-blocker diagnosis was incorrect. Read-only Nixbot
+API responses expose the actual stored tree hashes:
+
+- Build492 / #219: c58b6c2b711102eaa8b29897322815a2bc3a066c, exactly the tree
+  of current55234123 and of merging old690cce20 into master f29e72b4.
+- Build493 / #220: c6f34c82f8db7dcc5326538acd7cc8a5689ebd17, exactly the tree
+  of currentfa9eeaaa and of merging oldea78c27c into master f29e72b4.
+
+Verified with git merge-tree --write-tree and git rev-parse; neither operation
+changes branches or worktree files. Upstream orchestrator.py merges the PR
+into its base before identifying a build by tree hash; build_reuse.py replays
+the result onto other commits with identical trees. Thus the older displayed
+commit is not a provenance failure: these are failing checks of the current
+content. No new commit, reopen, or reevaluation is needed to fix attribution.
+
+Both builds are now terminal failures. #219 has five failed/dependency-failed
+ARM attributes; #220 has three failed ARM attributes (browser, sqlx-prepare,
+tests). Current-head GitHub Flake Check and Format remain successful. Browser
+inspection of #220 sqlx-prepare confirms rustc received signal9/SIGKILL;
+this does not prove OOM or identify who terminated it. Separate browser
+failures still need their own diagnosis. No merge acceptance is claimed.
+
+The repository list now also shows successful builds500–503 for #239, #240,
+#242 and #248. The earlier all-failed inventory is stale; these are candidates
+for fresh head/tree and scope verification, not automatic merge approvals.
+
+Requested one bounded diagnostic retry through the inspected per-attribute
+restart form for #220's ARM sqlx-prepare. API read-back confirms it is building
+since13:40:48 UTC on the same stored tree. Browser and tests retain their
+earlier failed results; no other attribute was restarted. Next: inspect this
+retry's result before any further retry. Do not restart the whole matrix or
+weaken checks. Keep #212 unchanged.
+
+Sources: Nixbot /api/repos/github/numtide/horae/builds/492 and /493;
+https://github.com/Mic92/nixbot/blob/main/nixbot/nixbot/orchestrator.py;
+https://github.com/Mic92/nixbot/blob/main/nixbot/nixbot/build_reuse.py.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
