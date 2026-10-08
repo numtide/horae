@@ -1625,6 +1625,29 @@ was cancelled. #226 retains its complete passing local suite and unpublished
 b64ae15c head. Next: follow #222's actual queue entry/run, verify integration,
 then reconcile #226 and the remaining prepared deliveries onto the merged base.
 
+#222 is first in the protected queue, entry
+MQE_lQDOTRPZ888AAAABG7l00M4AA_LZzgMr38I, awaiting checks. Run 37846421902
+is live on temporary commit c4aa27c1; its actual tree is exactly the expected
+373150c401ec7bbe32db3bf3ce466cfcc7701369 combination with merged #223.
+Format passed; Flake Check remains in progress. No source rebase or duplicate
+remote matrix was requested for this independent combination.
+
+Prepared and published the next independent repair, #225, on actual master
+d79a7d4e. Backup refs/backup/pr225-before-independent-delivery-20261008 retains
+3ae5c1f8. Rebased only its owned branding-authority commit from b0acd09f, with
+updateRefs/signing disabled. New head 1bce0030f1b738c1dd8127f4f9d488e69058437c,
+tree f352a52924eb0b3368f6a967f5baed1675b0d616. The patch is identical in
+range-diff and all six owned files preserve their blobs: 402 additions and 12
+deletions. Full formatting passed (499 files, zero changes) and whitespace
+checks passed. No fresh local database acceptance is claimed on this tree.
+
+Published with exact remote lease edd44094 and updated the existing PR body;
+no new PR or dependent ref change. #225 remains draft until current-head
+GitHub/Nixbot checks pass. #222 was only an earlier delivery-order predecessor,
+not a functional prerequisite for branding authority. Next: collect #222's
+queue result and verify integration; follow #225's fresh checks and retain the
+passing local #226 preparation for reconciliation after its storage prerequisite.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
