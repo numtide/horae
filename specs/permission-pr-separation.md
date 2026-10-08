@@ -996,6 +996,22 @@ fails, investigate before any additional retry. #219 remains draft/unmerged;
 all prepared work and #212 remain untouched. Receipt is published in #219;
 the separation ledger remains locally committed rather than published.
 
+### Documentation delivery receipt prepared while OIDC runs — 2026-10-08
+
+Revalidated #248's draft remote head `a6d2e091` and clean local preparation
+`f8f029fd` (tree `e3a656f4b276149826c76ac160b0c68393d9c540`). All 56 owned
+Markdown files still match the published blobs. Prepared the concise delivery
+body at `.scratch/pr248-merge-delivery.md`, explicitly separating preserved
+research/task history from fresh acceptance, leaving the constitution proposal
+unadopted, and noting #217's separate closure after #220. This receipt is local
+and must be updated with the actual rebased/published head before use. No push,
+new CI, source edit, changed product decision or new review-completion claim.
+
+The existing OIDC watcher 43370 remains live on Nixbot 510's sole pending
+attribute. Next: collect that retry, deliver #219 only after complete acceptance,
+then reconcile #248's three commits onto the actual merged master and publish
+with its known remote-head lease. Keep #212 and the prepared chain intact.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
