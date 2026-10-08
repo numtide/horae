@@ -2238,6 +2238,24 @@ or speculative source changes. Next: full #228 acceptance â†’ protected merge â†
 actual-tree reconciliation of #231, then publish the prepared #232. #238 retains
 its reviewed native-passing independent preparation; #226 stays OPEN/draft held.
 
+Locally stacked #238 on accepted local #232 at45c923a3 without publishing a
+third remote delivery. New head30cb18af46bfa98c68ea2318154f2f099351ca86,
+treec63d5d969ed87deab661ac40e509ee2f357f826b; backup
+refs/backup/pr238-before-delivery-stack-20261008 preserves c6efb30a. The owned
+production/test commit remains range-diff identical and all four Rust files
+are byte-identical. Three SQLx descriptors are now inherited; owned diff51
+files,1,867 additions,53 deletions. No assertion or runtime change.
+
+Formatting512 files passed unchanged. Session61733 completed SQLx derivation
+2934qmzpkdwazsim078bikawbyjjg7mb and is building native tests
+4lraknvq7y51ld9j57f5pb81ib5sx81a. Its live handle is confirmed; collect the
+same process without restarting. #228 build528 still runs native tests and
+awaits six browser/deployment attributes, with no failures. #231 build529
+continues platform checks, also without failures. #226 stays draft and held.
+A bounded local network-trace harness is prepared for the unchanged CSV
+rejection tests; instrumentation is diagnostic, not a repair or CI acceptance.
+Run it after61733 finishes; no extra remote job or source change is requested.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2349,8 +2367,9 @@ head dcf68d2e passed GitHub and both-Linux Nixbot526. Neither result proves
 the shared transport issue repaired.
 #232 is locally stacked at45c923a3 on #231, with1,264 combined native tests,
 SQLx and format passing; its earlier independent tree passed1,243 tests. It is not
-published yet. #238 is locally reviewed/rebased atc6efb30a with1,250
-native tests and SQLx passing, also unpublished.
+published yet. #238 is locally stacked on #232 at30cb18af; format and SQLx
+passed, native tests61733 are live. Its earlier independent c6efb30a passed
+1,250 native tests. Both preparations remain unpublished.
 The failed #226 combination remains held; independent deliveries may advance
 only on exact current-tree acceptance, without claiming that failure repaired.
 Full current CI remains required. These preparation
