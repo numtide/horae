@@ -121,8 +121,17 @@ single pure-domain extraction patch unchanged; only the existing master
 helper differs in the full tree. Published with an exact old-head lease and
 updated the existing PR description. No other feature branch was rewritten.
 Keep delivery concurrency to #219/#220 until these checks resolve. #220's
-GitHub run37755060825 and Nixbot493 are active; Format has passed. Both PRs
+GitHub run37755060825 is active; Format has passed. Both PRs
 remain drafts pending fresh acceptance, with no auto-merge requested yet.
+
+Direct build-page verification finds stale Nixbot detail links in the fresh
+check rollups: build493 still names old #220 head ea78c27c, and build492 names
+old #219 head690cce20. Both old builds are running and already have failed
+attributes; they must not be counted as acceptance for fa9eeaaa/55234123.
+The repository build list currently ends at503 and does not yet show either
+new SHA. Do not cancel/restart these builds solely because the links are stale.
+GitHub's current #219 run is37755399793 and #220 is37755060825; their SHA
+associations are correct. Verify Nixbot's actual commit before using results.
 
 ## Objective and limits
 
