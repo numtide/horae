@@ -597,6 +597,33 @@ run37804193972 is live on91244589 for Flake Check and Format. Watcher11465
 follows that run every60 seconds; collect it rather than starting another run.
 Both #240's final merge evidence and #220's refreshed delivery body are published.
 
+### Reader merged, duplicate closed, import cleanup published — 2026-10-08
+
+GitHub37804193972 passed for #220 at91244589. Marked ready and submitted to
+the protected queue with an exact-head guard; merge-group37804431884 passed.
+#220 merged at15:54:41 UTC as7b85d2c3c85472d579f312b1b4149c16747fef3d.
+GitHub confirms MERGED, master at that commit, and the remote tree exactly
+df84fa67, matching Nixbot506. Updated its published delivery receipt.
+
+After this verification, closed #217 as superseded by #220. Read-back confirms
+CLOSED at unchangeddd141c5c; its branch was not deleted. #212 remains
+OPEN/draft atdb3935db and its worktree/unpublished changes were not touched.
+
+Rebased #224's two prepared commits onto actual master7b85d2c3, producing
+be84b332ec74c8dac7943691288109720dbe0083. Both patches are identical in
+range-diff and the whole tree still equals the prepared385dcca9 tree. The
+review delta is10 files,268 additions/19 deletions, including the17-line
+duplicate-helper removal. Published with an exact af4656d7 lease; no new PR
+or branch was created. Fresh combined-tree CI is required before merge.
+Next: collect #224 current-head GitHub/Nixbot results and review any failures
+before retrying. #219 remains local at8cef61a0 with158 core tests and Clippy
+passed; reconcile it after #224 integrates, without rewriting other branches.
+
+#224 read-back confirms master base andbe84b332 head. GitHub37804884447 is
+live (Format passed); watcher66999 follows it every60 seconds. Nixbot509 is
+building exact tree385dcca9, with no failed attributes at the initial check.
+Use those existing handles; do not substitute historical447 or restart on silence.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
