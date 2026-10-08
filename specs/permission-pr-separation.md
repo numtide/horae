@@ -2003,6 +2003,20 @@ No local build remains active. #232 metadata is revalidated as the next
 independent candidate (clean2ff243b9, draft/master, no reviews, prerequisite
 #220 integrated); no source review, rebase, edit or new build was performed for it.
 
+Revalidated #227 after full remote acceptance: master remains eb8eae55,
+head5b966295 is clean/mergeable with no reviews or unresolved review threads.
+Its local merge-tree and current GitHub merge ref fec1e764 both produce exactly
+9182ab1e2232b580c0b4a0d8e949fce1b2edce56, already accepted by both-Linux
+Nixbot525. GitHub's required checks are green. Narrowed the earlier blanket hold
+to the failed #226 delivery: independent #227 can advance on verified acceptance
+of its exact current combination, without claiming the CSV issue is fixed or
+retrying the failed524 tree until green. Marked #227 ready and submitted with
+the exact-head guard to the protected squash queue, entry
+MQE_lQDOTRPZ888AAAABG8TNPs4AA_LZzgMsQzg, first/QUEUED. No bypass or merge yet.
+Next: verify the actual queue commit/tree and gates, then the completed merge
+before reconciling #228. #231 build526 remains live, native tests passed, ARM
+tests building; #226 remains out of queue and its failure stays open.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
