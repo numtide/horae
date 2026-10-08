@@ -1163,6 +1163,37 @@ acceptance. No retry, source change or merge-queue request occurred. The #248
 description now links the accepted GitHub run and pending exact-tree Nixbot
 build. Keep #248 draft until full acceptance; collect watcher 26568 next.
 
+### Specifications merged; converter repair published — 2026-10-08
+
+#248 completed all checks without retry: GitHub 37823408244 succeeded and
+Nixbot 513 accepted 16 attributes plus four cached. ARM deployment completed
+the full restart/repeated-import script in 1766.17 seconds. Both old watchers
+83691/26568 are terminal. Verified current head/base, no review threads or
+review blockers, then submitted to the protected queue without bypass.
+Merge-group 37829252481 passed on the identical accepted tree.
+
+#248 merged at 19:06:20 UTC as
+`036aeebfb4877c572aa0f9d669f420a276511b61`; actual master tree is exactly
+`e3a656f4b276149826c76ac160b0c68393d9c540`. Final receipt is published in its
+description. This delivers documentation, not permission activation. Queue
+watcher 35024 exited successfully; no branch was deleted.
+
+Reconciled only #223's owned commit from prepared base `f8f029fd` onto the
+actual master. Backup `refs/backup/pr223-before-specification-merge-20261008`
+preserves `8a9efae5`. New head
+`1a06d55f1fe2c28e1037d075fd713b08d5f8e6d1` has unchanged complete tree
+`cc17441f8aea988af103e9568b4928d9045811c7`; range-diff identical, no conflicts,
+whitespace clean. Published with exact lease against `68661980`, updated its
+description to the actual integration, and left it draft pending acceptance.
+No source/test/SQLx content changed and no dependent branch was rewritten.
+
+Current #223 checks started: GitHub 37829568177 (watcher 76044) and Nixbot 514
+(read-only watcher 61793, every 60 seconds, no restart logic).
+The Nixbot stored tree matches `cc17441f`; builds are live, not stale acceptance.
+Remote #212 remains open/draft at `db3935db364f2a8aa193f0e938ce40ecc01a2f92`.
+Next: collect #223's current checks, deliver through the queue after acceptance,
+then reconcile #221/#222/#225 in order. Ledger updates remain local on #218.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -1258,13 +1289,14 @@ Historical tables below do not certify a newer published head.
 
 The shared-CI prerequisites are integrated: #282 and the consolidated #286
 merged; #283–#285 were closed with their content preserved. Functional
-deliveries #239, #242, #240, #220, #224 and #219 have also merged. #217 was closed only
+deliveries #239, #242, #240, #220, #224 and #219 have also merged, as has
+documentation #248. #217 was closed only
 after #220's final tree was verified. Preserve #212 open and unchanged.
 
-The current execution order is documentation #248 (published, current CI running),
-then #223 (local rebase, converter review complete and owned source blobs unchanged),
+The current execution order is #223 (published on actual master, current CI running),
 then #221 and #222 (local preparations, core tests/Clippy/format passed and
-bounded source reviews complete; full current CI still required). These preparation
+bounded source reviews complete), followed by #225 (bounded review and local
+rebase/format complete). Full current CI remains required. These preparation
 bases are an integration sequence, not new functional dependencies. Reconcile
 each onto actual master and verify its complete integration gates before merge.
 The documentation deliveries #248 and #218 do not activate features.
