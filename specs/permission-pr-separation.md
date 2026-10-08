@@ -1716,6 +1716,36 @@ at `db3935db`. #222's queue and #225's own-head jobs remain live. Next: collect
 those jobs, reconcile #226 after actual #222 integration, and publish the next
 bounded delivery without exceeding the current two-build remote concurrency.
 
+### Storage integrated and profile commands reconciled — 2026-10-08
+
+The preceding iteration made progress by preparing independent #227 and
+completing its full native/SQLx checks. Continued observation of the existing
+jobs required no rerun. #222 merged through the protected queue at 21:48:10 UTC
+as `c4aa27c1e0aaf9d12ac9f7c89050d8a76993a2cd`. GitHub merge-group 37846421902
+passed Flake Check in 24m12s and Format in 45s. Its actual master tree exactly
+matches the planned combination `373150c401ec7bbe32db3bf3ce466cfcc7701369`.
+
+Nixbot 519 then completed successfully on that same combined tree, including
+both ARM VMs and browser. The final deployment result arrived after the merge;
+it has now been collected and is green. No retry or weaker assertion was used.
+Watcher 79166 completed successfully. Fetched master without changing the root
+checkout, and retained #222's source branch.
+
+Rebased only #226's owned commit from published #222 onto the actual merge,
+with automatic reference updates disabled. Backup
+`refs/backup/pr226-before-storage-merge-20261008` preserves `b64ae15c`.
+New local head is `1cbde180781c4bf11c429ee560bedccc897b0e97`, tree
+`e910a2cbb31027e5f7ec7c2899112bd3f91c36f7`. Range-diff is identical and every
+owned file retains its prior blob: 47 files, 2,147 additions and one deletion.
+No source edit or dependent-branch rewrite occurred. The new base additionally
+includes #223; the earlier 1,238-test native result remains previous-tree
+evidence, not full acceptance of this final combination.
+
+Next: publish and retarget existing #226 to master after formatting, then
+collect its fresh GitHub/Nixbot checks. #225 remains the other active delivery;
+#227's independently verified head stays local until a slot is available.
+Keep #212 open and unchanged. No new PR was created.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
