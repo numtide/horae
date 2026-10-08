@@ -1592,6 +1592,21 @@ existing run IDs. Next: collect the final VM/GitHub results, submit ready heads
 to the protected queue, and verify the actual merged tree against the accepted
 individual tree or the precomputed373150c4 combination, as applicable.
 
+#223 passed its current-head gates at 6986dfcd: GitHub 37842680338 completed
+Flake Check in 20m55s and Format in 45s; Nixbot 517 accepted all 20 attributes
+(16 built, four already built) on exact tree 128e9df1, including both ARM VM
+checks, without retries of this revision. Fresh preflight found no conflict or
+outstanding review, with master still at 7212fc89. Published the acceptance
+body, marked #223 ready and submitted it to the protected squash queue.
+
+Queue entry MQE_lQDOTRPZ888AAAABG7tw-M4AA_LZzgMr25c is first and awaiting
+checks. Merge-group run 37845978321 is live on temporary commit d79a7d4e.
+This is not yet a completed merge. #222 remains at its unchanged published
+head with GitHub and its final ARM deployment VM still running. Next: collect
+the queue result and verify actual #223 integration, then submit #222 only
+after its own current-head gates pass; verify its combined tree against the
+already checked 373150c4 combination instead of forcing an unnecessary rebase.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
