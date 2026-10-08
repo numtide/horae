@@ -325,6 +325,39 @@ Next: collect live Nixbot504 and493, deliver #242 when its exact integration
 tree passes, then resolve the identified #240 test-registration conflict in
 its existing worktree. Preserve #212 and all original work.
 
+### Verified waits and documentation provenance — 2026-10-08
+
+Revalidated master27b27ad5 and live Nixbot493/504. #220's browser retry has
+passed the original initial-project-list failure point and progressed through
+invoice recovery assertions, but remains building. #242's current integration
+has12 successful and four cached attributes; only its two browsers and ARM
+deployment/OIDC tests remain live. No failure, restart or acceptance inferred
+from elapsed time. These are verified waits on actual build records.
+
+Independently reviewed #248 preservation at a6d2e091. Exactly54 feature015
+documents exist;48 match originaldb3935db byte-for-byte. Read the complete
+six-file delta: only extraction/historical-evidence context and clarification
+that constitution1.1.0 remains an unadopted proposal. No requirement or task
+state changed. AGENTS matches the original; the three New Project permission
+transition hunks retain pre-cutover boundaries. The review patch changes56
+Markdown paths only; git diff --check passes. This is provenance review, not
+fresh Spec Kit completion or renewed Harvest research. Keep #248 draft until
+its current integration gates are verified; no extra build was triggered.
+
+Next remains #242 after Nixbot504 succeeds, followed by #240's known fixture
+registration reconciliation. Preserve the running #220 retry and revalidate
+its new merge base before delivery. No source changes or additional merges
+occurred in this iteration; #212 remains untouched.
+
+Nixbot493 subsequently finished successfully:16 attributes passed and four
+were cached. The three isolated ARM retries all passed without source or
+assertion changes; original failures remain evidence, not a diagnosed root
+cause. Updated #220's description to distinguish this verified treec6f34c82
+from the still-unverified combination with updated master. Keep it draft and
+do not close #217 yet. Nixbot504 remains live with13 passed, four cached and
+three final checks building. Read-back confirms #212 remains OPEN/draft at
+unchangeddb3935db364f2a8aa193f0e938ce40ecc01a2f92.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
