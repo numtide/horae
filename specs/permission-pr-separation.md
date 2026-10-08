@@ -1494,6 +1494,28 @@ change that worktree until completion. SQLx and189 core tests already passed.
 Next: collect its server/integration result, reconcile its two unchanged owned
 commits onto7212fc89, and publish the existing #222 branch with its exact lease.
 
+#222's native build completed successfully:189 core tests,847 server tests and
+183 auxiliary/integration tests passed (1,219 total, zero failed,11 existing
+manual cases ignored). All11 permission-storage regressions passed, including
+legacy preservation, tenant isolation, malformed grants, concurrent equivalent
+names and Unicode migration rollback. SQLx preparation already passed on the
+same independent tree. Both databases were disposable Nix-sandbox instances.
+
+After the process exited, reconciled its two owned commits from a549a89e onto
+actual merged master7212fc89. Backup
+refs/backup/pr222-before-domain-merge-20261008 retains82f3e706. Range-diff is
+identical and the complete tree remains9678d00463b7257da0014ccd2d9682ee4a890d6c.
+New head26fe6075ca60b468bbb113925448be8578014225 passed full formatting
+(502 files, zero changes) and whitespace validation. Published to the existing
+#222 branch using exact remote lease e8d89b46 and updated its acceptance body.
+It remains draft until fresh GitHub and both-Linux Nixbot checks pass.
+
+#223's current head6986dfcd is independently running GitHub37842680338 and
+Nixbot517 on tree128e9df1. Its earlier green516 result is not substituted for
+that current composition. Next: collect the two published deliveries' checks,
+then reconcile any changed base before protected-queue delivery. No new PR,
+feature, real-data operation or downstream branch rewrite was performed.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
