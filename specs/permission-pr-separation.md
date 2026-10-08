@@ -113,6 +113,17 @@ the PR body with current hashes and explicit historical-versus-current gates.
 Next: verify fresh #220 checks, deliver through the protected queue when green,
 then verify integration before closing overlapping #217. Do not merge #212.
 
+Started a bounded second independent delivery while #220's fresh CI runs:
+#219 now has head552341232c273eac3cd1dea33c223a669b7f91fb on master f29e72b4.
+Its clean worktree was rebased with updateRefs disabled; backup ref
+refs/backup/pr219-before-master-20261008 retains690cce20. Range-diff proves the
+single pure-domain extraction patch unchanged; only the existing master
+helper differs in the full tree. Published with an exact old-head lease and
+updated the existing PR description. No other feature branch was rewritten.
+Keep delivery concurrency to #219/#220 until these checks resolve. #220's
+GitHub run37755060825 and Nixbot493 are active; Format has passed. Both PRs
+remain drafts pending fresh acceptance, with no auto-merge requested yet.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
