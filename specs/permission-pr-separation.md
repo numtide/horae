@@ -9197,3 +9197,49 @@ The prior 4–8 hour delivery estimate is no longer reliable given the expanded
 failure inventory. Next: diagnose the builder/timeout evidence and the distinct
 browser failure, while preserving live work and awaiting the consolidation
 decision. The goal remains incomplete.
+
+### Bounded upstream timeout investigation — 2026-10-08
+
+The preceding iteration produced new attribute-level failure evidence, not just
+a status poll. Read public upstream sources at identified commits without
+modifying Horae or any infrastructure:
+
+- Nixbot at 2474092c426a5656dc9493fa57558171acca2615:
+  [instance settings](https://github.com/Mic92/nixbot/blob/2474092c426a5656dc9493fa57558171acca2615/nixbot/nixbot/config.py)
+  default build_max_silent_time to1,200 seconds and build_timeout to10,800.
+  [build_nix_command](https://github.com/Mic92/nixbot/blob/2474092c426a5656dc9493fa57558171acca2615/nixbot/nixbot/executor.py)
+  passes the silence limit to nix build. Its separate process-group timeout is
+  the wall-clock limit, not the same setting.
+- The inspected
+  [repository configuration schema](https://github.com/Mic92/nixbot/blob/2474092c426a5656dc9493fa57558171acca2615/nixbot/nixbot/repo_config.py)
+  does not expose those instance settings. Adding guessed timeout keys to
+  Horae's nixbot.toml is not a demonstrated fix.
+- The gRPC backend at b049a5a23130dfe07fd0d749824350bb34acfaee
+  [transmits both limits](https://github.com/Mic92/nix-grpc-store/blob/b049a5a23130dfe07fd0d749824350bb34acfaee/src/client/build.cc)
+  and its
+  [backend options](https://github.com/Mic92/nix-grpc-store/blob/b049a5a23130dfe07fd0d749824350bb34acfaee/src/daemon/backend.cc)
+  pass them to Nix. The
+  [farm documentation](https://github.com/Mic92/nix-grpc-store/blob/b049a5a23130dfe07fd0d749824350bb34acfaee/docs/farm.md)
+  distinguishes concurrent-build maxJobs from resource protection of the Nix
+  and RPC services.
+
+The1,200-second silence default is consistent with the three observed farm
+timeouts, but the deployed revision and effective configuration are unknown.
+It is an investigation lead, not proof that this exact setting caused them.
+It does not explain the15 compiler SIGKILLs or the browser timeout. Research
+receipts and selected sources are saved in .scratch/upstream-nixbot-timeout-research.json
+and .scratch/upstream-grpc-timeout-research.json.
+
+The browser failure is at newFeeInvoice filling Period from. Its locator had
+resolved the input, and the failure handler could not obtain a body snapshot
+within three seconds. Reading the fixture confirms no missing selector in that
+path; this still does not prove resource starvation or exclude an application
+issue. Its x86 pass cannot substitute for ARM verification.
+
+Next requires the requested builder diagnostics: deployed revisions, effective
+silence/wall-clock limits, concurrent build allocation, and kernel/cgroup or
+scheduler kill records for the three named workers. Keep SIGKILL, silence
+timeout and browser failure as separate hypotheses. Do not extend timeouts,
+emit artificial keepalive logs, lower assertions, or rerun the full matrix
+without a supported diagnosis. Existing builds remain live; no new build,
+retarget, consolidation or merge was requested in this investigation.
