@@ -8518,3 +8518,26 @@ retarget the11 extraction roots from #282 to #286, and check the new heads.
 The roots are #219/#220/#223/#224/#225/#227/#231/#238/#239/#240/#242; the shared
 #282→#283→#284→#285→#286 chain remains unchanged. Keep original PRs and retained
 unfinished work intact; no merge or policy activation is authorized by this step.
+
+### Publication guards prepared while acceptance runs — 2026-10-08
+
+The preceding iteration made progress: all75 local rebases and57 review patches
+were verified and recorded in published ledgera6a410f3. The existing85532 and413
+handles remain live; neither was restarted. Build413 is now running ARM tests.
+The complete native composition has finished its Rust test phase and is building
+the VM dependencies; no full-gate pass is claimed yet.
+
+Prepared .scratch/publish-ci-cancellation-propagation.mjs using the saved
+manifest and final verifier. Syntax and read-only audit passed for all75 branches
+and57 still-open draft PRs. Its audit confirms original remote heads, unchanged
+review bases and both acceptance gates pending. Publication requires #286's exact
+head to pass both Nixbot checks and a collected exit0 receipt for85532 on unchanged
+composition8fc3a44e. It rechecks patch identity, clean worktrees, original heads,
+backups and remote leases, then uses an atomic push with explicit per-ref leases.
+Retargeting is a separate resumable step allowed only after all75 remote heads
+match the verified publication. No publish or retarget mode was executed.
+
+Fresh comparisons also confirm the original #212 tracked worktree still matches
+snapshotd364270a and its six untracked files still match the saved tar archive.
+Next: collect85532 and413 without restarting; record exact-head acceptance before
+publication, then verify the remote heads, the11 review-base changes and new CI.
