@@ -8689,3 +8689,11 @@ Next: collect413; the two root native handles are terminal and must not be polle
 or restarted. Their exact heads remain eligible for guarded publication once
 #286 is accepted, alongside the other staged branches. Continue fresh-head
 verification without modifying any worktree that has a live check.
+
+After both roots completed, started the next two independent native checks on
+clean exact heads: #22368661980, session12382, and #224af4656d7, session61314.
+Each uses --max-jobs1 --cores2. Logs are .scratch/pr223-68661980-full-check.log
+and .scratch/pr224-af4656d7-full-check.log. Observed94GiB free before starting;
+only these two local checks are now live. No previous check was restarted.
+Next action includes collecting these handles alongside413; do not edit their
+worktrees while they run. This checkpoint is committed locally, not pushed.
