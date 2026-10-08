@@ -2069,6 +2069,32 @@ All15 owned Rust files are byte-identical. Clean worktree,39 files1700 additions
 Next: run fresh native/SQLx acceptance once local #232 check85188 finishes,
 then publish #228 with its exact old-head lease. Keep #231's live CI undisturbed.
 
+Local #232 check85188 completed successfully:189 core,871 server and183 auxiliary
+tests,1,243 passed, zero failed,11 pre-existing manual cases ignored; server
+suite81.60s. Both previously recorded derivations passed, including complete
+SQLx preparation. All financial snapshot/editor concurrency and cancellation
+regressions passed. Saved its bounded delivery description locally; #232 is
+not published while #228/#231 occupy the two remote delivery slots.
+
+After that completion, #228 check80202 passed on9ea69fa2:505 formatted files,
+zero changes, whitespace clean, and fresh complete SQLx preparation
+5np3yp726dr7g8qgp6mcj9c7b8zxhw9y-horae-sqlx-prepare-0.1.0. Evaluating the exact
+current native tests resolves to already successful derivation
+h9y3nnaajh49vvpykmkglkshsx96505y-horae-tests-0.1.0. Nix reused it without a
+new execution; verified log contains189 core,875 server and183 auxiliary tests,
+1,247 passed, zero failed,11 pre-existing manual checks ignored. Identical
+derivation inputs, not an unrelated historical head, establish this reuse.
+
+Published #228 with an exact55382bd7 old-head lease. Read-back confirms OPEN/
+draft on master at9ea69fa2c7cb43df4de1ff73d506b2cf8ca8260a. Existing PR body
+records preservation, current acceptance and outstanding remote checks. Fresh
+GitHub run37858623043 is queued on that exact SHA. No new PR was created.
+#231 build526 remains live with only ARM deployment still building; both Linux
+tests, browser and OIDC have passed. GitHub37856544984 remains in progress.
+#212 was reverified OPEN/draft at unchangeddb3935db. Next: collect those live
+checks and verify actual combined-tree gates before queueing either delivery;
+keep #226's failed combination held and #232's verified preparation local.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2172,11 +2198,12 @@ Deliveries #221, #223, #222 and #225 are also merged with both-Linux acceptance.
 #226 passed its source-head gates, but its queue build524 exposed an ARM CSV
 transport regression; it is removed from the queue with auto-merge disabled.
 #227 is merged with exact combined-tree and protected-queue acceptance. #228
-is locally rebased onto its actual merge at9ea69fa2; fresh native validation
-is required before publication. Independent
+is published at9ea69fa2 on its actual merge, with1,247 native tests accepted
+and fresh SQLx/format passing; remote checks are running. Independent
 CSV delivery #231 is published at dcf68d2e with1,232 native tests/SQLx passing,
 fresh CI526 running, and owns the transport investigation;
-#232 is locally rebased and reviewed, with fresh native validation running.
+#232 is locally rebased and reviewed, with1,243 native tests and SQLx passing;
+it is not published yet.
 The failed #226 combination remains held; independent deliveries may advance
 only on exact current-tree acceptance, without claiming that failure repaired.
 Full current CI remains required. These preparation
