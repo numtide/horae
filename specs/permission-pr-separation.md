@@ -2028,6 +2028,32 @@ tests successful, ARM tests building and no reported failure. Next: collect
 the existing queue run, verify actual merge/tree, then reconcile #228 from its
 clean prepared1d5d999a head; its published remote is still55382bd7, draft on227.
 
+Prepared independent #232 locally while the two remote deliveries run. Backup
+refs/backup/pr232-before-current-delivery-20261008 preserves published2ff243b9;
+the clean isolated worktree now has19bcd96bf2849cf76a431102ad6c2016c3ed20c3
+on mastereb8eae55, tree254f8ad3ad95bc537ae8a1db0967186ff980a107. Rebased only
+its owned commit with updateRefs disabled. Range-diff preserves the patch;
+35 of36 owned files are byte-identical, and the shared authorization harness
+retains its two additions alongside already integrated modules. No Rust repair
+or new feature was added. Published #232 remains unchanged and draft.
+
+Bounded review covers the four financial readers and the existing shared
+snapshot prelude, authenticated requester provenance, repeatable-read retries,
+tenant isolation, draft/revision checks, cancellation and transaction settings.
+No critical/high finding was identified within T098–T103; this is not full
+permission activation or acceptance of later export contracts. Formatting passed
+(507 files, zero changes). Local check85188 is confirmed live: SQLx derivation
+1rphnfv1lf0dnmpj900qk91p0b50lp5v-horae-sqlx-prepare-0.1.0 completed and tests
+2x3z3yb39lkydkd9wr4y4qal3d6hcvsa-horae-tests-0.1.0 are building. Do not claim
+suite acceptance before collecting the terminal result.
+
+Queue run37856941601 for #227 has now completed successfully. The PR read-back
+still says OPEN, so actual integration is not claimed yet. #231 Nixbot526 has
+passed both Linux test suites and browser checks; only ARM deployment/OIDC
+remain building. Next: confirm #227's merge and exact tree, reconcile #228,
+and collect the existing #232 check without restarting it. #226 remains held;
+passing independent builds do not establish a CSV transport repair.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2130,13 +2156,15 @@ after #220's final tree was verified. Preserve #212 open and unchanged.
 Deliveries #221, #223, #222 and #225 are also merged with both-Linux acceptance.
 #226 passed its source-head gates, but its queue build524 exposed an ARM CSV
 transport regression; it is removed from the queue with auto-merge disabled.
-#227 passed its fresh combined GitHub and both-Linux Nixbot gates and remains
-draft while the shared failure is investigated; #228 has passed local native
-tests and SQLx on its reconciled #227 base but is not published. Independent
+#227 passed its fresh combined GitHub and both-Linux Nixbot gates and its
+protected queue checks; actual merge confirmation is pending. #228 has passed
+local native tests and SQLx on its #227 source base but is not published. Independent
 CSV delivery #231 is published at dcf68d2e with1,232 native tests/SQLx passing,
 fresh CI526 running, and owns the transport investigation;
-#232 is another independent candidate. Resume merges only after the shared
-regression is resolved. Full current CI remains required. These preparation
+#232 is locally rebased and reviewed, with fresh native validation running.
+The failed #226 combination remains held; independent deliveries may advance
+only on exact current-tree acceptance, without claiming that failure repaired.
+Full current CI remains required. These preparation
 bases are an integration sequence, not new functional dependencies. Verify
 actual combined trees and gates without repeatedly rebasing unrelated live builds.
 The documentation deliveries #248 and #218 do not activate features.
