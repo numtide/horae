@@ -2017,6 +2017,17 @@ Next: verify the actual queue commit/tree and gates, then the completed merge
 before reconciling #228. #231 build526 remains live, native tests passed, ARM
 tests building; #226 remains out of queue and its failure stays open.
 
+#227 queue commit3df38af8dd325bd4a04b1feb54deb63c91977553 is now verified:
+tree9182ab1e2232b580c0b4a0d8e949fce1b2edce56, exactly the accepted525
+combination. Its GitHub check-runs expose Nixbot525 success directly on the
+queue commit; no new ARM build or retry is needed for an identical tree.
+Protected GitHub run37856941601 is confirmed live, watcher95990, with both
+required jobs queued awaiting runners. This is not a failed or stopped build.
+Do not restart on silence. #231's separate build526 remains live with native
+tests successful, ARM tests building and no reported failure. Next: collect
+the existing queue run, verify actual merge/tree, then reconcile #228 from its
+clean prepared1d5d999a head; its published remote is still55382bd7, draft on227.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
