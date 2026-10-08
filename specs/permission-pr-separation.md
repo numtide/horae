@@ -1767,6 +1767,22 @@ ID: branding `5d8b3bcfe99db100e521c8edd7a22fd96447f2e0`, storage
 duplicate individual-head build is needed. Submit #225 to the protected queue,
 then verify its actual combined commit and checks; submission is not a merge.
 
+### Branding queued; exact profile-command CI confirmed — 2026-10-08
+
+#225 is ready and first in the protected queue, entry
+`MQE_lQDOTRPZ888AAAABG8AcHM4AA_LZzgMr__4`, AWAITING_CHECKS. Its source head
+remains `1bce0030`; no source rewrite or bypass was used. Merge-group run
+37849797492 is live on `eb8eae55bf2f1f2defa5867447f950ea2404da6f`. Verify its
+actual tree against expected `87ee2dd2aada51e08ea13ec26d1a7a9a062c9e2e` and
+collect both queue and Nixbot results before claiming completed acceptance.
+
+#226 GitHub 37849653227 is live; Format passed in 43 seconds. Its read-only
+watcher is session 77574. Nixbot 522 is building exactly
+`e910a2cbb31027e5f7ec7c2899112bd3f91c36f7` on both Linux platforms. No failed
+attribute was observed. The PR remains draft until acceptance completes.
+Next: collect these existing jobs, confirm actual integration, and then publish
+the independently verified #227 rather than start another feature or PR.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
