@@ -1648,6 +1648,29 @@ not a functional prerequisite for branding authority. Next: collect #222's
 queue result and verify integration; follow #225's fresh checks and retain the
 passing local #226 preparation for reconciliation after its storage prerequisite.
 
+### Combined queue validation verified — 2026-10-08
+
+The preceding status turn was a verified wait: #222 remained open while its
+specific merge-group job and Nixbot build were confirmed running. No duplicate
+run or source change was requested.
+
+Nixbot 519 automatically builds queue commit
+`c4aa27c1e0aaf9d12ac9f7c89050d8a76993a2cd`, not merely #222's source branch.
+Its stored tree is `373150c401ec7bbe32db3bf3ce466cfcc7701369`, matching the
+previously verified combination with integrated #223. ARM browser, native
+tests and both deployment VMs are running; x86 browser is also running. No
+failure has been observed. GitHub merge-group 37846421902 remains live, with
+Format passed. Integration and complete combined acceptance remain pending.
+
+#225's GitHub run is 37846756514; Format passed, Flake Check is running.
+Nixbot 520 is building the exact published tree
+`f352a52924eb0b3368f6a967f5baed1675b0d616`, with no failed attribute observed.
+These are independent deliveries with fresh checks, not unchanged retries.
+
+Next: collect these existing jobs. Verify #222's actual merge before rebasing
+and publishing #226. Preserve #212 and all source branches. The ledger remains
+locally committed until its own existing documentation delivery is reconciled.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
