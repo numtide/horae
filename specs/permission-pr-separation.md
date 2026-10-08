@@ -789,9 +789,17 @@ identifies the actual head, base and acceptance boundary. #248 and #223 remain
 local preparations, not published or CI-certified combinations. #212 remains
 the untouched reference. No additional PR was created.
 
-Next: collect #219's current GitHub/Nixbot checks, verify the integration tree,
-and use the protected queue only after acceptance. Then reconcile #248 and
-#223 in order onto actual merged master; retain all source branches.
+Current checks started at 17:03 UTC: GitHub 37813612403 and Nixbot 510.
+Nixbot's stored tree is exactly `117adb9bb1583481a417d944265770217f90cab6`;
+both formatting attributes passed, eight compilation/test attributes are
+building, and browser/VM checks remain pending. Read-only GitHub watcher
+42207 checks every 60 seconds. Remote #212 read-back remains open/draft at
+`db3935db364f2a8aa193f0e938ce40ecc01a2f92`. The ledger is committed locally;
+its newer delivery receipts have not yet been pushed to #218.
+
+Next: collect watcher 42207 and Nixbot 510, verify complete acceptance, and use
+the protected queue only after acceptance. Then reconcile #248 and #223 in
+order onto actual merged master; retain all source branches.
 
 ## Objective and limits
 
