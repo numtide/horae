@@ -63,6 +63,89 @@ original dirty worktree still matches its tracked snapshot and six-file backup
 archive. All 30 unchecked source tasks have exactly one retained-work
 classification; no checkbox was changed to claim feature completion.
 
+## Current delivery order
+
+This index names the actual delivery PRs rather than their temporary integration
+branches. Each row requires its listed predecessors and their dependencies;
+independent rows need not wait for unrelated features. All rows remain drafts,
+not merge authorizations. See the current handoff for failed and pending checks;
+the historical tables below do not certify the published heads.
+
+First resolve the shared-CI chain #282 → #283 → #284 → #285 → #286. The proposed
+consolidation of #283 into #284 is awaiting authorization and is not reflected
+as an accomplished change. Prefer #220 as the first independent functional
+delivery after the shared prerequisites: it replaces #217's overlapping repair.
+Documentation #248 and ledger #218 also use #286 but do not activate features.
+
+| PR | Scope | Delivery prerequisites |
+| --- | --- | --- |
+| #219 | Pure permission scopes and catalog | #286 |
+| #220 | Legacy report and invoice snapshot authority | #286 |
+| #221 | Pure rate, management and approval rules | #219 |
+| #222 | Inactive permission-profile storage | #219 |
+| #223 | Import report conversion lock order | #286 |
+| #224 | Interrupted import session cleanup | #286 |
+| #225 | Current authority for organization branding | #286 |
+| #226 | Internal reusable-profile commands | #222 |
+| #227 | Current administrator authority for user changes | #286 |
+| #228 | Project-access writer coordination | #227 |
+| #231 | CSV preparation outside transactions | #286 |
+| #232 | Financial snapshot reader authority | #220 |
+| #233 | Invoice writer and revocation ordering | #228, #232 |
+| #234 | Atomic person-profile commands | #226, #221 |
+| #235 | Harvest connection change authority | #228 |
+| #236 | Import job commands and error downloads | #235, #231 |
+| #237 | Original import requester provenance | #236, #222 |
+| #238 | Budget email recipient authority | #286 |
+| #239 | Approval tenant isolation | #286 |
+| #240 | Restricted identity response projections | #286 |
+| #241 | Time-entry writer account activity | #228 |
+| #242 | Time-entry invoice identity boundary | #286 |
+| #243 | Project-manager delegation | #234, #228 |
+| #244 | Own permissions in Settings | #234 |
+| #245 | Permission change history | #243, #244 |
+| #246 | Read-only legacy permission diagnostics | #237, #226 |
+| #247 | Materialized spreadsheet and invoice PDF authority | #228, #232, #222 |
+| #249 | CSV delivery authority | #247 |
+| #250 | Requester-bound permission editor API | #245 |
+| #253 | Scoped people directory reads | #245 |
+| #254 | Identity-only project team choices | #253 |
+| #255 | Scoped time-entry reads | #245 |
+| #256 | Timesheet person discovery | #255, #253 |
+| #257 | Requester/subject Timesheet context | #256 |
+| #258 | Person-bound Timesheet commands | #257 |
+| #259 | Selected-person Timesheet screen | #258 |
+| #260 | People directory and permission editor UI | #240, #250, #254 |
+| #261 | Detailed time reports and period totals | #257 |
+| #262 | Grouped time report readers | #261 |
+| #263 | Scoped time spreadsheets | #261, #247 |
+| #264 | Scoped time CSV and shared download filters | #263, #249 |
+| #265 | Permission-mode-bound time downloads | #264 |
+| #266 | Grouped time CSV and spreadsheets | #265, #262 |
+| #267 | Active-project and billability download filters | #266 |
+| #268 | Scoped Reports screen | #267 |
+| #269 | Protected project editing | #240, #250, #254 |
+| #270 | Scoped project overview and detail | #240, #250, #254, #232 |
+| #271 | Project export and monetary delivery authority | #267, #270 |
+| #272 | Harvest-compatible project reads | #270 |
+| #273 | Task catalog and tracking reads | #272 |
+| #275 | Task creation and explicit rate edits | #273 |
+| #276 | Task archive/restore and import preservation | #275, #269, #258, #223, #224, #231 |
+| #277 | Project-task links and rate currency | #276 |
+| #278 | Atomic task and initial-rate creation | #277 |
+| #279 | Task catalog and editor UI | #278, #260 |
+| #280 | Project task archive/restore controls | #276 |
+| #281 | Harvest-compatible client reads | #272 |
+
+The index contains all 57 code extractions exactly once. Its dependency graph
+is acyclic and references no omitted delivery. Multi-parent entries name the
+component deliveries documented by their review bases, not a claim that each
+rewritten head is an ancestor. Integration branches are never merge targets.
+After prerequisites land, retarget/rebase only the owned change and require
+fresh checks for any new head. The combined-tree acceptance does not waive that
+gate. The retained-work classification below separately covers unfinished
+features, policy cutover and broad acceptance tasks.
+
 ## Verified starting state — 2026-10-06
 
 - #216 merged at 13:16:59 UTC as `02f7b58acdcf126415f9ec89215da8cdada7d03f`.
