@@ -235,6 +235,35 @@ Sources: Nixbot /api/repos/github/numtide/horae/builds/492 and /493;
 https://github.com/Mic92/nixbot/blob/main/nixbot/nixbot/orchestrator.py;
 https://github.com/Mic92/nixbot/blob/main/nixbot/nixbot/build_reuse.py.
 
+### Protected delivery resumed — 2026-10-08
+
+The user requested continuation. Build493's isolated ARM sqlx-prepare retry
+succeeded at13:42:57 UTC without source changes. Requested one isolated retry
+of its ARM tests through the authenticated per-attribute API (HTTP200), not a
+full-matrix restart. Browser's original failure is separately identified:
+project-bulk-recovery.cjs expects two .proj-row elements at line49 but observes
+zero within5 seconds; slow SQL statements accompany it, without proving cause.
+
+Revalidated independent #239 at53633d76 against master f29e72b4. Nixbot500
+succeeded on both architectures and its stored tree45e0c85f exactly matches
+the proposed merge. Renewed bounded source review traced session-derived
+manager identity, approve/reopen paths, organization filters, entry state
+preservation, event totals and four regression tests; no new blocker within
+the tenant-isolation repair. No new permission policy is activated.
+
+Marked #239 ready and closed/reopened it once, unchanged, to activate the
+master-only GitHub workflow after automatic base retargeting. Updated its
+description with current evidence. Run37788133547 passed Format38s and Flake
+Check57s. Protected auto-merge entered position1, AWAITING_CHECKS, with
+merge-group run37788371582 at27b27ad5f1f58a50eaf04cf219647d8437b11e57.
+Next: collect that queue result and verify the integrated tree before claiming
+merge. #212 remains untouched. No source edits or new PRs were made.
+
+#242 and #240 also have successful Nixbot502/501 builds. #242's renewed review
+checks shared-model serialization, internal SQLx invoice relation, separate
+Harvest/plugin payloads, frontend consumers and preserved HTTP/unit assertions.
+It remains a candidate, not queued; revalidate its integration base after #239.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
