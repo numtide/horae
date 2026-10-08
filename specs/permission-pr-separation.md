@@ -763,6 +763,36 @@ UTC). Do not retry it again automatically. If it passes, revalidate and queue
 #224, verify its merged tree, then reconcile and deliver the prepared roots in
 order. Keep #212 unchanged and do not create additional PRs.
 
+### Import cleanup merged; permission domain published — 2026-10-08
+
+#224 merged at 16:58:22 UTC as
+`2d3e67217b75b374bb5002ffed30b9a15f7325c6`. GitHub CI 37804884447,
+protected merge-group 37812776719 and Nixbot 509 passed. The integrated tree
+`385dcca94f7008093c422b931db2bfbe5c5d45bc` exactly matches acceptance.
+Nixbot finished with 16 passed attributes and four cached. Its one isolated ARM
+OIDC retry passed the complete login/API/deactivation script in 780.91 seconds;
+the initial startup-delay cause remains unproven. No further retry is needed.
+The completed watchers are no longer active. The final receipt is in #224.
+
+Reconciled #219's one owned commit onto that actual master with automatic ref
+updates disabled. Backup `refs/backup/pr219-before-import-merge-20261008`
+preserves `8cef61a0`. Published head
+`8123201e86bbbda7445a37e2991a2d26160ad3fc` with an exact lease against
+`552341232c273eac3cd1dea33c223a669b7f91fb`. Range-diff confirms the unchanged
+patch and its entire tree equals the prepared tree
+`117adb9bb1583481a417d944265770217f90cab6`. Local Nix-shell acceptance on that
+tree remains 158 core tests and all-target core Clippy with warnings denied.
+No source change, migration or permission activation occurred.
+
+#219 remains draft pending current combined CI; its published description now
+identifies the actual head, base and acceptance boundary. #248 and #223 remain
+local preparations, not published or CI-certified combinations. #212 remains
+the untouched reference. No additional PR was created.
+
+Next: collect #219's current GitHub/Nixbot checks, verify the integration tree,
+and use the protected queue only after acceptance. Then reconcile #248 and
+#223 in order onto actual merged master; retain all source branches.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -858,12 +888,13 @@ Historical tables below do not certify a newer published head.
 
 The shared-CI prerequisites are integrated: #282 and the consolidated #286
 merged; #283–#285 were closed with their content preserved. Functional
-deliveries #239, #242, #240 and #220 have also merged. #217 was closed only
+deliveries #239, #242, #240, #220 and #224 have also merged. #217 was closed only
 after #220's final tree was verified. Preserve #212 open and unchanged.
 
-The current execution order is #224 (published, CI running), then #219 (local
-rebase, core tests and Clippy passed), then documentation #248 (local rebase,
-owned documents byte-identical and formatting passed). These local preparation
+The current execution order is #219 (published, combined CI pending; local
+core tests and Clippy passed), then documentation #248 (local rebase,
+owned documents byte-identical and formatting passed), then #223 (local rebase,
+converter review complete and owned source blobs unchanged). These preparation
 bases are an integration sequence, not new functional dependencies. Reconcile
 each onto actual master and verify its complete integration gates before merge.
 The documentation deliveries #248 and #218 do not activate features.
