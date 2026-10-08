@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE approvals\n             SET state = $2, approved_by = $3, approved_at = now()\n           WHERE id = ANY($1) AND state = $4\n        RETURNING id, org_id, user_id,\n                  period_start as \"period_start: chrono::NaiveDate\",\n                  period_end as \"period_end: chrono::NaiveDate\",\n                  state as \"state: EntryState\",\n                  submitted_at as \"submitted_at: chrono::DateTime<chrono::Utc>\",\n                  approved_by,\n                  approved_at as \"approved_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "UPDATE approvals\n             SET state = $2, approved_by = $3, approved_at = now()\n           WHERE id = ANY($1) AND state = $4 AND org_id = $5\n        RETURNING id, org_id, user_id,\n                  period_start as \"period_start: chrono::NaiveDate\",\n                  period_end as \"period_end: chrono::NaiveDate\",\n                  state as \"state: EntryState\",\n                  submitted_at as \"submitted_at: chrono::DateTime<chrono::Utc>\",\n                  approved_by,\n                  approved_at as \"approved_at: chrono::DateTime<chrono::Utc>\"",
   "describe": {
     "columns": [
       {
@@ -90,7 +90,8 @@
               ]
             }
           }
-        }
+        },
+        "Uuid"
       ]
     },
     "nullable": [
@@ -105,5 +106,5 @@
       true
     ]
   },
-  "hash": "9035facf74f4413558fae3aa21e499170fc564d79ad677182073090409921dcc"
+  "hash": "7196a1f824685976ccd37cb6bc23c3b29ba6da20a0d7121f7d3218455c6ec415"
 }

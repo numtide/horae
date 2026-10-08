@@ -259,16 +259,18 @@ pub(crate) fn submission_payload(
 pub(crate) async fn week_total_minutes(
     db: impl sqlx::PgExecutor<'_>,
     user_id: uuid::Uuid,
+    org_id: uuid::Uuid,
     start: chrono::NaiveDate,
     end: chrono::NaiveDate,
 ) -> Result<i32, ServerFnError> {
     sqlx::query_scalar!(
         r#"SELECT COALESCE(SUM(minutes), 0)::int as "total!"
            FROM time_entries
-           WHERE user_id = $1 AND spent_date BETWEEN $2 AND $3"#,
+           WHERE user_id = $1 AND org_id = $4 AND spent_date BETWEEN $2 AND $3"#,
         user_id,
         start as chrono::NaiveDate,
         end as chrono::NaiveDate,
+        org_id,
     )
     .fetch_one(db)
     .await
