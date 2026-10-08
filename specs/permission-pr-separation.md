@@ -923,6 +923,20 @@ this review. Existing local 189-core-test/Clippy/format acceptance remains valid
 fresh database/full integration acceptance is still required after publication.
 Next: finish #219's existing checks, then follow the recorded delivery order.
 
+### Permission domain GitHub CI and ARM browser passed — 2026-10-08
+
+Verified wait produced new acceptance: GitHub run 37813612403 completed
+successfully (Flake Check 24m2s; Format 42s). Watcher 42207 is finished; do not
+restart or poll it. Nixbot 510's ARM browser also passed. Only ARM deployment
+and OIDC remain building, with no failure recorded. Both logs show Horae
+listening at approximately 17:25 UTC, but that does not certify their complete
+functional scripts. No retry was requested. Published #219's updated check
+summary without changing its head or draft state.
+
+Next: collect Nixbot 510's two VM results. If accepted, revalidate #219's head,
+master and exact integration tree before protected queue submission. Preserve
+all prepared work and #212; do not create another PR or restart completed checks.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
