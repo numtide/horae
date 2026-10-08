@@ -103,12 +103,12 @@ implementation remains incomplete. Do not treat
 
 ## Current verification follow-ups — 2026-10-08
 
-- #248's existing documentation headb6e13979 has green GitHub checks but failed
+- #248's prior documentation headb6e13979 has green GitHub checks but failed
   Nixbot216 ARM VMs: OIDC shell readiness exceeded900s; deployment reached the
   application but its repeated-import wait exceeded90s. Its separate CI-base
-  refresh is still required. A tree-only preview over #286 is clean and retains
-  the exact56-file documentation patch; no branch has moved. Refresh #218's
-  ledger base separately as well, preserving its unpublished progress commits.
+  refresh is now staged at a6d2e091 over #286, preserving the exact56-file
+  documentation patch; formatting passed and fresh CI is required. #218's
+  ledger was also rebased, preserving every unpublished progress commit.
 - Locally staged #219690cce20 and #220ea78c27c now have complete native
   exact-head acceptance, sessions16392/67402 respectively. #219 passed158 core
   and821 server tests; #220 passed121 core and828 server tests. Each passed nine
@@ -8787,3 +8787,26 @@ the PR descriptions and fresh-head CI. The code publication is not completion
 of final verification. Original #208/#212/#217 remain untouched; no merge or
 policy activation occurred. The two import-root native handles and watcher87658
 are now terminal and must not be polled again.
+
+### Documentation branches refreshed without content loss — 2026-10-08
+
+Post-publication verification37949 exited0: all75 remote heads and all57 review
+bases match the accepted plan, including the11 root retargets. The originals are
+unchanged. Prepared separate documentation backups before moving either branch:
+backup/docs-ci-propagation-20261008/permission-specification atb6e13979 and
+backup/docs-ci-propagation-20261008/permission-pr-separation atc349b112, including
+the locally recorded progress since the last push. Bundle
+.scratch/documentation-before-ci-refresh-20261008.bundle verifies as complete,
+SHA25661bd8494063b2f1fff0d57d89b452fc2a08c42092fb90c664b3bf82728d2545e.
+
+Rebased #248's three commits and #218's195 commits onto #286 without conflicts,
+with unsigned commits and rebase.updateRefs explicitly disabled. #248 is now
+a6d2e091 with expected treec811b935. The ledger rebase head6da072ee has expected
+tree37267f21. Both clean worktrees and full-index binary review diffs matched
+their backups exactly. Formatting passed for both. This subsequent log entry
+adds progress only; it does not alter the preserved specification patch.
+
+Next: publish these two documentation branches with exact leases, retarget them
+to #286, and check their new-head CI. Update PR descriptions to distinguish the
+new publication from historical checks, then finish the remaining exact-head
+verification and final delivery audit. No merge or full-feature completion claim.
