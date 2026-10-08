@@ -1877,6 +1877,31 @@ checkout or deleting any branch. Nixbot 523 still has its combined ARM
 deployment check running; collect that result before claiming full combined
 acceptance and starting #227's fresh remote build. No source change was needed.
 
+### Branding combined acceptance complete; user repair published — 2026-10-08 UTC
+
+Nixbot 523 completed successfully on merged #225 tree
+`87ee2dd2aada51e08ea13ec26d1a7a9a062c9e2e`: 16 successful attributes and four
+cached, including ARM browser and both VMs, with no retries. Its last ARM
+deployment result arrived after merge and has now been collected. #225's
+source-head and combined-tree acceptance are both complete.
+
+#226's actual queue commit `5a6309dec61a69b6244292fe834df58c30ad5fbe` was
+verified to have the predicted tree `99d2f45d12b1b10365d3ec1e39e4fe824ccb1df1`.
+GitHub 37852644748 passed Format in 44 seconds and is running Flake Check;
+watcher 1234 follows that run. Nixbot 524 is building this same combined tree
+and queue branch, not merely the source head. Integration remains pending.
+
+With #225 fully accepted, published #227's unchanged independently verified head
+`5b96629521ca31b3232740ac020db007bdbcf858` using an exact lease against former
+remote `fb63b766175359811d71d97be2134a2813e4c5fa`. The clean worktree and head
+were revalidated before push. Its tree remains
+`de9c2f3dfd0db2d78785d266d2e41f7b5f022fe6`, the exact tree with 1,219 passing
+native tests, full SQLx preparation and formatting. No extra rebase invalidates
+that evidence; current independent merges must be checked in the protected
+queue combination. Remote read-back confirms master base and six owned files
+(494 additions, 26 deletions). It remains draft pending fresh remote CI. #228 remains local
+and verified; #212 is still preserved. No new feature or PR was introduced.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
