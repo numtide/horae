@@ -1325,6 +1325,42 @@ description: `.scratch/pr228-merge-delivery.md`. Remote #228 remains unchanged
 and draft, based on #227. Next: collect2783 and #223 watcher95726; reconcile
 #228 onto actual master only after #227 integration and require fresh full CI.
 
+### Deployment retry failed; OIDC retry and native suite active — 2026-10-08
+
+#223 deployment watcher95726 exited failed: the one isolated retry again
+timed out waiting for the test-driver readiness signal, after900.79 seconds.
+The retry log shows Horae listening by guest time404 seconds, PostgreSQL still
+checkpointing later, and virtual console setup completing at854 seconds.
+It never reports the required controller connection before the900-second
+deadline. No functional deployment assertion ran. Do not submit another
+unchanged deployment retry or claim that serial execution solved this issue.
+
+Read the pinned NixOS instrumentation and test driver at nixpkgs source
+`ifpab9hxqmk2biwy594da8ipxzsp3y4s-source`: the controller service waits for
+`dev-hvc0.device` and the architecture's serial device before its readiness
+message. Logs show those device expectations and the built-in virtio-console
+module, but do not establish why readiness is delayed. Searches of primary
+upstream sources did not identify a matching issue; no upstream fix is claimed.
+No timeout, required check, app code or deployment configuration was changed.
+
+After the failed deployment terminated, requested the first OIDC-only retry
+through the existing Chrome connection, guarded by exacttree and failed-state
+checks. HTTP200 and public BUILDING state are confirmed. Read-only watcher60653
+is live at60-second intervals; it never restarts work. The browser call finished
+normally. #223 remains draft with its current failure and retry state published.
+Deployment has now had two attempts total; OIDC's second attempt is active.
+
+Evaluated `.scratch/pr223-arm-vm-local.nix` as a dry run only: existing ARM
+guest test with native x86 controller. It lists251 build derivations; this host
+advertises no aarch64 extra platform and has no ARM binfmt registration. Do not
+claim an ARM reproduction or start that large build as a routine check. No host
+configuration was modified and no VM/build was launched by the dry run.
+
+#228 native session2783 passed all189 core tests and completed server compilation
+in12m43s; the886 server tests are now running. Result remains pending. Next:
+collect2783 and OIDC watcher60653, retain the deployment failure as a merge
+blocker, and investigate with new evidence rather than automatic retries.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
