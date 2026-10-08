@@ -1467,6 +1467,15 @@ timeouts remains unproven. Only ARM deployment is still building on516.
 Next: follow #221's queue check and verify the actual merge tree, then reconcile
 the next prepared delivery onto that master without changing owned source.
 
+#221 merged through the protected queue at2026-10-08T20:46:32Z as
+7212fc89299668f135fd51f212b67acdfdd420da. Merge-group37841801227 passed Flake
+Check in55s and Format in40s. Read-back confirms MERGED and actual master tree
+f8c601ada1fbe112fdf188a69115d669f2ffe9ab, exactly the accepted source tree.
+No branch was deleted. #212 remains OPEN/draft at its original db3935db head.
+Next: collect the running #222 native server suite before reconciling its
+worktree onto actual7212fc89 master; #223/Nixbot516 still has its live ARM
+deployment VM executing recovery assertions. Keep both existing checks running.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
