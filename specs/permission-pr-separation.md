@@ -838,6 +838,42 @@ Next: collect #219 watcher 42207 and Nixbot 510; only queue after all required
 acceptance. Continue #248 then #223, followed by the prepared #221. #212 and
 all source branches remain preserved. This ledger update is local, not yet pushed.
 
+### Inactive storage mechanically reconciled locally — 2026-10-08
+
+The preceding iteration made progress by reviewing and preparing #221 with
+187 passing core tests and Clippy. #219's existing GitHub 37813612403 watcher
+42207 and Nixbot 510 remain live. The current Nixbot read-back has no failed
+attribute; ARM compilation/tests and browser/VM checks are still outstanding.
+No queue submission or retry was made while acceptance is incomplete.
+
+Confirmed #222 is still draft at published
+`e8d89b469b57f49eaffab2262cc54c1b93517ac7`, with two owned commits based on
+`690cce20`. Preserved it at
+`refs/backup/pr222-before-delivery-chain-20261008`, then rebased those two
+commits onto local #221 `c05533c1` with automatic ref updates disabled.
+Local head `b0acd09fc4b927dae9b99b7febec7a90c157ee71` has tree
+`0fb2e447576bd610fff8c9efd42685d132b292d1`. Both patches are identical in
+range-diff and the rebase had no conflicts. #221 is a local delivery-order
+predecessor, not a new functional dependency; #222 still requires only #219.
+
+Compared all 29 owned files against the published head. All are byte-identical
+except `server_fns.rs`, whose differences have exactly the same stable patch ID
+as the inherited base changes from #239/#220 (tenant-bound week totals and the
+snapshot module). Both migrations retain original blobs/checksums; all 19 SQLx
+descriptors and the original README note are unchanged. No schema statement,
+name-comparison policy, stored-grant rule or assertion was changed.
+
+Fresh Nix-shell core tests passed: 189, zero failed/ignored. Full formatting
+check processed 502 files with zero changes; whitespace checks passed. All-target
+core Clippy with warnings denied passed (session 47822 completed). No database connection, migration execution,
+SQLx regeneration, push or additional remote build occurred. This mechanical
+preparation does not replace storage review or full combined-tree CI; prior
+database results in #222 remain historical.
+
+Next: collect #219's existing checks. Deliver #219 only after
+acceptance, followed by #248/#223/#221 and then #222 after its storage-specific
+verification. Keep #212 and original branches intact. Ledger remains local.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
