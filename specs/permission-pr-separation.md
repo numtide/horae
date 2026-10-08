@@ -2054,6 +2054,21 @@ remain building. Next: confirm #227's merge and exact tree, reconcile #228,
 and collect the existing #232 check without restarting it. #226 remains held;
 passing independent builds do not establish a CSV transport repair.
 
+#227 merged at23:14:16 UTC as3df38af8dd325bd4a04b1feb54deb63c91977553.
+GraphQL confirms MERGED and actual tree9182ab1e2232b580c0b4a0d8e949fce1b2edce56,
+identical to accepted Nixbot525 and protected queue run37856941601. No retry or
+bypass. Fetched master without moving the root checkout.
+
+Rebased only #228's two prepared commits onto that actual merge, preserving
+1d5d999a under refs/backup/pr228-before-master-integration-20261008. New local
+head9ea69fa2c7cb43df4de1ff73d506b2cf8ca8260a,
+tree1b93261f9943d4c5455ec515f3a7c24cbd409177. Range-diff preserves the extraction
+exactly; the cache-only commit drops because #225 already supplies its descriptor.
+All15 owned Rust files are byte-identical. Clean worktree,39 files1700 additions/
+84 deletions; published55382bd7 remains draft and GitHub now targets master.
+Next: run fresh native/SQLx acceptance once local #232 check85188 finishes,
+then publish #228 with its exact old-head lease. Keep #231's live CI undisturbed.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2156,9 +2171,9 @@ after #220's final tree was verified. Preserve #212 open and unchanged.
 Deliveries #221, #223, #222 and #225 are also merged with both-Linux acceptance.
 #226 passed its source-head gates, but its queue build524 exposed an ARM CSV
 transport regression; it is removed from the queue with auto-merge disabled.
-#227 passed its fresh combined GitHub and both-Linux Nixbot gates and its
-protected queue checks; actual merge confirmation is pending. #228 has passed
-local native tests and SQLx on its #227 source base but is not published. Independent
+#227 is merged with exact combined-tree and protected-queue acceptance. #228
+is locally rebased onto its actual merge at9ea69fa2; fresh native validation
+is required before publication. Independent
 CSV delivery #231 is published at dcf68d2e with1,232 native tests/SQLx passing,
 fresh CI526 running, and owns the transport investigation;
 #232 is locally rebased and reviewed, with fresh native validation running.
