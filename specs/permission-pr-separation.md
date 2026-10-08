@@ -142,6 +142,9 @@ implementation remains incomplete. Do not treat
   measurements, nine auxiliary binaries, browser, Clippy, SQLx and both VMs.
   Remote Nixbot413 remains pending. The complete native composition8fc3a44e
   passed gate85532; individual refreshed-head verification is still required.
+  Exact-head ARM tests on413 now passed:821 server tests,11 existing ignored
+  measurements and nine auxiliary binaries, including both corrected cases.
+  ARM package, Clippy, SQLx and formatting also passed; full CI remains open.
   It is a draft over #285. The shared prerequisite order is now
   #282→#283→#284→#285→#286. The refreshed75-branch tree-only preview includes
   #286 and preserves all57 code-PR review patches. All75 local rebases now match
@@ -8567,3 +8570,36 @@ the complete native composition prerequisite is now satisfied. Next: collect413,
 then run the prepared guarded publication and retargeting procedure, followed by
 new-head CI and final delivery audit. Do not rerun85532 or claim old extraction
 checks apply to their new commits.
+
+### Refreshed coverage bridge and ARM cancellation acceptance — 2026-10-08
+
+The preceding iteration completed the native composition gate and recorded it in
+published ledger50bd30ef. Continued the same remote413 execution without a rerun.
+Its ARM tests now succeeded:821 server tests with zero failures and11 existing
+ignored measurements in88.12s, plus all nine auxiliary binaries. Both corrected
+HTTP-waiter and page-consumer cancellation tests passed. Four filtered child
+process summaries are not extra suites. The succeeded endpoint also confirms ARM
+package, Clippy, SQLx and formatting. Full Nixbot413 remains IN_PROGRESS; browser
+and VM acceptance are not inferred from these results. Evidence and source URLs:
+.scratch/nixbot-413-arm-tests-summary.json.
+
+Ran .scratch/verify-delivery-coverage-bridge.mjs successfully. It connects the
+existing60-input content audit atf90f60f7 to the passed composition8fc3a44e: their
+entire normalized edit patch matches exactly the shared #283→#286 correction
+patch across six files. All57 old input heads match the preserved pre-rebase
+manifest, all57 new review edit patches are unchanged, and every new head/tree
+matches its verified receipt. #248's specification head is unchanged. Both the
+browser runner and HTTP-matrix registration files are byte-identical to the
+previously audited composition, preserving its34/25 registration coverage.
+
+This is a preservation bridge, not another semantic review or proof that the
+rebased commits are ancestors of the older composition. The prior seven explicit
+query/fixture reconciliations remain recorded; no new production-source resolution
+is introduced by the six-file correction. Saved the proof in
+.scratch/permission-delivery-coverage-bridge.json and made it an additional
+pre-publication guard. No source, migration, product contract or original ref was
+modified. No claim of full-feature acceptance is added.
+
+Next: wait for the complete413 prerequisite, publish the guarded75-branch update,
+retarget the11 roots and verify fresh-head CI. Local85532 is finished and must not
+be restarted. Keep incomplete acceptance and original #208/#212/#217 untouched.
