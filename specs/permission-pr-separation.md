@@ -1772,9 +1772,11 @@ then verify its actual combined commit and checks; submission is not a merge.
 #225 is ready and first in the protected queue, entry
 `MQE_lQDOTRPZ888AAAABG8AcHM4AA_LZzgMr__4`, AWAITING_CHECKS. Its source head
 remains `1bce0030`; no source rewrite or bypass was used. Merge-group run
-37849797492 is live on `eb8eae55bf2f1f2defa5867447f950ea2404da6f`. Verify its
-actual tree against expected `87ee2dd2aada51e08ea13ec26d1a7a9a062c9e2e` and
-collect both queue and Nixbot results before claiming completed acceptance.
+37849797492 is live on `eb8eae55bf2f1f2defa5867447f950ea2404da6f`. The actual
+tree was verified equal to `87ee2dd2aada51e08ea13ec26d1a7a9a062c9e2e`.
+Format passed in 44 seconds; watcher 20198 follows Flake Check. Nixbot 523
+is pending on this same combined tree and queue branch. Collect both queue
+and Nixbot results before claiming completed acceptance.
 
 #226 GitHub 37849653227 is live; Format passed in 43 seconds. Its read-only
 watcher is session 77574. Nixbot 522 is building exactly
