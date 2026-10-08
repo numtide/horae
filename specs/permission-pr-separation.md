@@ -648,6 +648,21 @@ GitHub37804884447 and Nixbot509 remain live;509 has eight successful and four
 cached attributes with no failures at this check. Next: collect those existing
 handles, merge #224 only after acceptance, then continue #219 and #248.
 
+### Delivery index clarified; same import CI still running — 2026-10-08
+
+Marked the obsolete pre-merge handoff explicitly historical and updated the
+delivery-index introduction to reflect the six merged PRs and four superseded
+closures. Kept the dependency rows for traceability rather than presenting
+completed entries as pending deliveries. A fresh GitHub read confirms #212,
+#219, #224, #248 and #218 remain at their expected published heads.
+
+Nixbot509 remains live at16:08 UTC with16 of20 attributes successful/cached.
+Only ARM tests, browser, deployment and OIDC remain building; no failures are
+recorded. Read-only watcher22948 now follows that exact build every60 seconds;
+it cannot restart it. GitHub watcher66999 still follows37804884447. Next:
+collect those handles, then revalidate #224 head/master/tree before protected
+queue submission. No new source change, remote build or PR was created.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -658,7 +673,11 @@ activate canonical policy, alter real data, or modify #208.
 This is the single separation ledger. Existing feature contracts remain the
 source of product requirements; do not restart or duplicate them.
 
-## Current handoff — 2026-10-08
+## Pre-merge handoff — 2026-10-08 (historical)
+
+This checkpoint predates the authorized delivery phase above. Its blocker,
+draft-state and pending-authorization statements are historical, not current
+instructions or current CI acceptance.
 
 Completion is blocked on external ARM builder diagnostics. The failed #228 and
 #270 checks were revalidated at their unchanged published heads; they are
@@ -732,15 +751,22 @@ classification; no checkbox was changed to claim feature completion.
 
 This index names the actual delivery PRs rather than their temporary integration
 branches. Each row requires its listed predecessors and their dependencies;
-independent rows need not wait for unrelated features. All rows remain drafts,
-not merge authorizations. See the current handoff for failed and pending checks;
-the historical tables below do not certify the published heads.
+independent rows need not wait for unrelated features. Retain completed rows for
+traceability; this is a dependency index, not a list of exclusively open PRs.
+The active delivery phase above records current heads, gates and merge receipts.
+Historical tables below do not certify a newer published head.
 
-First resolve the shared-CI chain #282 → #283 → #284 → #285 → #286. The proposed
-consolidation of #283 into #284 is awaiting authorization and is not reflected
-as an accomplished change. Prefer #220 as the first independent functional
-delivery after the shared prerequisites: it replaces #217's overlapping repair.
-Documentation #248 and ledger #218 also use #286 but do not activate features.
+The shared-CI prerequisites are integrated: #282 and the consolidated #286
+merged; #283–#285 were closed with their content preserved. Functional
+deliveries #239, #242, #240 and #220 have also merged. #217 was closed only
+after #220's final tree was verified. Preserve #212 open and unchanged.
+
+The current execution order is #224 (published, CI running), then #219 (local
+rebase, core tests and Clippy passed), then documentation #248 (local rebase,
+owned documents byte-identical and formatting passed). These local preparation
+bases are an integration sequence, not new functional dependencies. Reconcile
+each onto actual master and verify its complete integration gates before merge.
+The documentation deliveries #248 and #218 do not activate features.
 
 | PR | Scope | Delivery prerequisites |
 | --- | --- | --- |
