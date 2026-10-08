@@ -103,6 +103,12 @@ implementation remains incomplete. Do not treat
 
 ## Current verification follow-ups — 2026-10-08
 
+- Locally staged #219690cce20 and #220ea78c27c now have complete native
+  exact-head acceptance, sessions16392/67402 respectively. #219 passed158 core
+  and821 server tests; #220 passed121 core and828 server tests. Each passed nine
+  auxiliary binaries, browser, Clippy, SQLx, formatting and both VMs, with11
+  existing ignored measurements. These heads are not yet published; remote
+  checks and final coordinated delivery remain required.
 - #263 at4b43acf8 releases denied export authority before pool cleanup. The
   deterministic regression failed before the fix;43 bounded-export tests passed
   on its own branch and54 on the diagnostic composition. Nixbot382 was running
@@ -8649,3 +8655,37 @@ composition and remote acceptance still false. No publication was attempted.
 
 Next: collect the same three live handles. Do not restart silent compilations,
 modify the two test worktrees or use earlier extraction checks as new-head proof.
+
+### Two refreshed roots accepted natively — 2026-10-08
+
+The preceding iteration recorded the exact-head publication guard in published
+ledger3c305db0. Continued verified waits on the same67402/16392/413 executions,
+without replacements or source edits. Collected local16392 and67402 exit0 on
+unchanged clean worktrees: #219690cce20 and #220ea78c27c. Both complete native
+flakes passed, including application build, all-target Clippy, browser matrices,
+live-schema SQLx cache verification, tests and deployment/OIDC VMs.
+
+#219 passed158 nextest core tests,821 server tests and nine auxiliary binaries;
+VM scripts took75.10s/17.82s. #220 passed121 core tests,828 server tests and nine
+auxiliary binaries; VMs took66.00s/17.31s. Each retains11 existing ignored manual
+measurements. Four filtered child-process summaries are not additional suites.
+Saved exact heads, session exit codes and full-log hashes in
+.scratch/refreshed-root-native-acceptance.json. Both logs explicitly omit ARM and
+Darwin, so these are fresh native results, not remote or all-platform acceptance.
+
+Remote413 remains in_progress with evaluation success. Its latest active work
+includes ARM browser/deployment/OIDC and x86 browser/deployment/OIDC/tests; no
+failed attribute was returned in the observed failed group. This is a verified
+wait, not a reason to restart CI or publish before prerequisite acceptance.
+
+Also checked progress-publication overhead: each ledger push opens Nixbot CI
+(current426), while the preceding425 was cancelled. The package source filter
+excludes .md, so this does not prove redundant Rust recompilation; it does add
+evaluation/format activity. Keep incremental records in local unsigned commits
+and publish them at substantive delivery checkpoints instead of every status
+update. No CI was cancelled manually and no CI configuration changed.
+
+Next: collect413; the two root native handles are terminal and must not be polled
+or restarted. Their exact heads remain eligible for guarded publication once
+#286 is accepted, alongside the other staged branches. Continue fresh-head
+verification without modifying any worktree that has a live check.
