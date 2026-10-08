@@ -1560,6 +1560,24 @@ modify this worktree while its native validation runs. Next: collect the live
 #222/#223 remote checks and queue a ready delivery; retain #226 locally until
 its predecessor is integrated and its own acceptance is complete.
 
+Verified the repository's actual queue contract before further delivery:
+master requires Flake Check and Format, allows squash only, and uses an
+ALLGREEN merge queue (up to five entries). The checked-in merge_group workflow
+runs full native `nix flake check -L` and `nix fmt -- --ci` on the temporary
+combined commit. Branch protection does not require an artificial source-branch
+rebase after every independent merge. Both #222 and #223 were already rebased
+onto master7212fc89 containing the repaired CI baseline.
+
+A non-checkout `git merge-tree --write-tree` of published #22226fe6075 and
+#2236986dfcd succeeds without conflicts; expected combined tree is
+373150c401ec7bbe32db3bf3ce466cfcc7701369. No branch or working file changed.
+Once each head passes its own GitHub and both-Linux Nixbot checks, the queue
+can validate this independent combination without discarding completed CI just
+because the other delivery merged first. Verify the actual queue tree and
+results; rebase if a conflict, dependency change or new source difference
+requires it. Do not describe per-head ARM checks as a new combined-tree ARM
+execution, and do not bypass or weaken any required gate.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
