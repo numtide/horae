@@ -899,6 +899,30 @@ Flake Check in 37813612403 (watcher 42207). No failure or retry is recorded.
 #219's description now links these exact runs and distinguishes partial from
 complete acceptance. Next: collect the remaining checks before queue entry.
 
+### Inactive storage review completed on the prepared tree — 2026-10-08
+
+While #219's same three ARM checks continue, reviewed #222 at local `b0acd09f`
+against its existing storage contract/checklist. Read both complete migrations,
+both loaders and native decoder, models/module wiring, name-validation changes,
+strict catalog restoration and all 11 database regressions. Confirmed by source
+search that no application caller consumes the new storage or activates policy.
+
+Loaders bind tenant and record identity, distinguish absence from malformed
+state, reject unknown/duplicate/incomplete/future grants without repair, and
+preserve administrative identity independently of provenance. Composite FKs,
+source-shape checks and restrictive template deletion retain tenant boundaries.
+The Unicode-name index replacement and its rollback regressions preserve the
+original storage contract; UUIDs, roles and existing assignments are not rewritten.
+Consumers still own authentication, current activity, locking and activation;
+none is inferred from successful loading. No new high/critical finding in this
+bounded storage review. No new Harvest observation or broader parity claim.
+
+Reviewed source/migration blobs remain identical to published `e8d89b46`; the
+worktree is clean. No code, test or migration was changed or executed during
+this review. Existing local 189-core-test/Clippy/format acceptance remains valid;
+fresh database/full integration acceptance is still required after publication.
+Next: finish #219's existing checks, then follow the recorded delivery order.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
