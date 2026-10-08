@@ -2153,6 +2153,33 @@ After #228 actually merges, reconcile onto its real squash without altering
 the accepted combined tree and verify protected checks. No source change or
 new PR. The CSV transport issue is still not described as repaired.
 
+Combined #231 check90950 completed successfully:189 core,878 server,183 auxiliary
+tests,1,250 passed, zero failures,11 pre-existing manual checks ignored;
+server97.53s. Both CLI rejection schedules passed. Native derivation
+kinzg3fylrim5jk86wd4mgibwc97f9xi-horae-tests-0.1.0 and complete SQLx derivation
+vj1gl7zvi6mfrm1grlnnqajx287kmx14-horae-sqlx-prepare-0.1.0 both succeeded.
+Retargeted existing #231 to fix/project-access-lock-order and published a34a1348
+using the exactdcf68d2e lease. Read-back confirms draft,6 files250 additions/
+11 deletions; no broader #228 diff is exposed as owned work.
+
+Fresh evaluation on a34a1348 points to Nixbot529. That build was created by
+the preceding base-retarget event and labels source commitdcf68d2e, but its
+actual tree239d105157037d991a007baf08326e68faa87013 exactly matches the newly
+published stack. Do not mistake the older source label for acceptance of a
+different tree; collect actual build/check results before claiming acceptance.
+It is building with16 pending attributes and4 skipped local packages. The
+GitHub PR workflow targets master only, so the stacked base does not start a
+new required Actions run yet. After #228's real squash, reconcile #231 onto
+master with the same tree, collect master-targeted checks and protected queue
+acceptance; do not bypass either gate. #228 build528 remains live, ARM tests
+building without recorded failures. No local build remains active.
+
+Simplified #228's public description by removing superseded preparation
+sections and correcting inherited #225 cache provenance; the detailed history
+remains here. Next delivery order: finish #228 acceptance/merge, reconcile and
+deliver #231, then use locally validated #232/#238. #226 stays held and #212
+untouched. No new PR or feature was added.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2257,11 +2284,14 @@ Deliveries #221, #223, #222 and #225 are also merged with both-Linux acceptance.
 transport regression; it is removed from the queue with auto-merge disabled.
 #227 is merged with exact combined-tree and protected-queue acceptance. #228
 is published at9ea69fa2 on its actual merge, with1,247 native tests accepted
-and fresh SQLx/format passing; remote checks are running. Independent
-CSV delivery #231 is published at dcf68d2e with1,232 native tests/SQLx passing,
-fresh CI526 running, and owns the transport investigation;
+and fresh SQLx/format passing; remote checks are running. CSV delivery #231
+is now stacked on #228 at a34a1348 with1,250 combined native tests/SQLx passing;
+fresh Nixbot529 is building its exact239d1051 tree. The earlier independent
+head dcf68d2e passed GitHub and both-Linux Nixbot526. Neither result proves
+the shared transport issue repaired.
 #232 is locally rebased and reviewed, with1,243 native tests and SQLx passing;
-it is not published yet.
+it is not published yet. #238 is locally reviewed/rebased atc6efb30a with1,250
+native tests and SQLx passing, also unpublished.
 The failed #226 combination remains held; independent deliveries may advance
 only on exact current-tree acceptance, without claiming that failure repaired.
 Full current CI remains required. These preparation
