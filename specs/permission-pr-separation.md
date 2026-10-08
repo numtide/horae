@@ -937,6 +937,31 @@ Next: collect Nixbot 510's two VM results. If accepted, revalidate #219's head,
 master and exact integration tree before protected queue submission. Preserve
 all prepared work and #212; do not create another PR or restart completed checks.
 
+### Permission domain VM startup failures and isolated retry — 2026-10-08
+
+Nixbot 510's original ARM deployment and OIDC attempts both terminated in the
+900-second test-driver connection wait, before functional assertions. Exact
+timeouts were 900.58s and 900.61s. Logs show network/backdoor initialization
+near the deadline; the underlying delay cause is not proven. All other Nixbot
+attributes and GitHub 37813612403 remain accepted. No full restart is warranted.
+
+Used the existing authenticated Chrome connection to request exactly one
+isolated deployment retry. The browser-side guard verified origin, tree
+`117adb9bb1583481a417d944265770217f90cab6`, both terminal VM failures and all
+other accepted/cached attributes before POST. HTTP 200 confirmed; public
+read-back at approximately 17:34 UTC shows deployment building and OIDC still
+failed. Browser call completed and client 7643 is idle. No code, timeout or
+assertion changes. OIDC has not been retried and must not be started in parallel.
+
+Read-only watcher 85069 checks deployment every 60 seconds and exits when that
+attribute becomes terminal. Its initial read confirms building; no restart logic
+is included. #219's published body records the same partial acceptance boundary.
+
+Next: collect watcher 85069; if successful, consider one isolated OIDC
+retry. If deployment fails again, inspect the new evidence before any further
+attempt. #219 stays draft and unmerged. Preserve the existing prepared delivery
+chain and #212; do not restart GitHub or already accepted checks.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
