@@ -133,6 +133,29 @@ new SHA. Do not cancel/restart these builds solely because the links are stale.
 GitHub's current #219 run is37755399793 and #220 is37755060825; their SHA
 associations are correct. Verify Nixbot's actual commit before using results.
 
+#220 GitHub run37755060825 completed successfully on fa9eeaaa: Flake Check
+10m50s and Format37s. Its watcher exited normally. #219 run37755399793 remains
+live. Nixbot's fresh evaluation check runs remain in progress with links to
+old builds492/493; no new-head Nixbot acceptance is established yet. Keep the
+two deliveries out of the merge queue until those current-head gates resolve.
+
+#219 GitHub run37755399793 also passed (Flake Check11m6s, Format37s); both
+GitHub watchers have exited successfully. Its Nixbot evaluation check then
+completed and reported failure through build492, still labelled690cce20 rather
+than current55234123. Build492's ARM test compiler received SIGKILL and the
+package failed, preventing browser/deployment/OIDC dependencies from running.
+No OOM diagnosis or current-tree acceptance follows from those logs.
+Requested a single reevaluation of current-head check113238559934 through
+GitHub's rerequest endpoint; it returned404 and did not start a run. Next
+fallback is one close/reopen of #219 without changing its head, then verify
+the build's actual SHA. Do not loop retries or interrupt live #220 work.
+
+That single close/reopen completed. Read-back confirms #219 OPEN/draft at
+unchanged55234123. GitHub started run37757142397; the earlier run remains a
+pass for the same SHA. Nixbot has not yet exposed a replacement build in the
+repository list (still ending at503). #220's evaluation check remains live.
+Next: follow those exact runs and verify any Nixbot replacement's source SHA.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
