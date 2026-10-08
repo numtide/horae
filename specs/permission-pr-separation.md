@@ -1476,6 +1476,24 @@ Next: collect the running #222 native server suite before reconciling its
 worktree onto actual7212fc89 master; #223/Nixbot516 still has its live ARM
 deployment VM executing recovery assertions. Keep both existing checks running.
 
+#223/Nixbot516 completed successfully on diagnostic tree ca8017ec: six built
+and14 already-built attributes, including both ARM VM checks, without retries
+of that revision. Only after collecting that terminal result, published the
+prepared rebase onto actual master7212fc89. New head
+6986dfcd6630f26d2b7450cf90b706a7b7fedeb0, tree
+128e9df1022f53e587599463352795f2e7d60f96; exact push lease ce371deb preserved
+the remote boundary. Backup refs/backup/pr223-before-domain-rules-20261008
+retains ce371deb. Both range-diff entries and every owned file are unchanged;
+the only whole-tree addition is the seven files already merged in #221.
+Full formatting passed (499 files, zero changes) and whitespace checks passed.
+No dependent refs, source assertions or timeouts changed. #223 remains draft
+pending fresh combined-tree checks and protected-queue verification.
+
+#222's existing native test process is still running; do not restart it or
+change that worktree until completion. SQLx and189 core tests already passed.
+Next: collect its server/integration result, reconcile its two unchanged owned
+commits onto7212fc89, and publish the existing #222 branch with its exact lease.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
