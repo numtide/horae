@@ -1695,6 +1695,27 @@ Wait for acceptance before publication; retain only the existing two active
 remote deliveries until one finishes. #222 queue build 519 still has browser
 and ARM VM checks running without a recorded failure; its ARM tests passed.
 
+### Independent user-authority native acceptance — 2026-10-08
+
+Session 79286 completed successfully on unchanged #227 head `5b966295`, tree
+`de9c2f3dfd0db2d78785d266d2e41f7b5f022fe6`. Full native checks passed:
+187 core, 849 server and 183 auxiliary/integration tests, totaling 1,219 passed,
+zero failed and 11 pre-existing manual cases ignored. All 15 user tests passed,
+including the four-case REPEATABLE READ last-administrator regression. The
+server suite took 74.60 seconds. Full SQLx preparation passed without a cache
+delta; formatting processed 500 files without changes, and whitespace passed.
+
+Derivations: `kwgrlgif5gbpv3iy9fa0dll9hq0h7695-horae-tests-0.1.0` and
+`95ziyjxxv7xj4s4b37vfdmbsl5yvqr33-horae-sqlx-prepare-0.1.0`. Only disposable
+Nix databases were used. The worktree is clean, no local build remains active,
+and the filesystem has 16 GiB free; no cleanup was needed.
+
+#227 is still not pushed. Current remote read-back confirms its old draft head
+`fb63b766`, #226's old draft head `769a0d88`, and unchanged open/draft #212
+at `db3935db`. #222's queue and #225's own-head jobs remain live. Next: collect
+those jobs, reconcile #226 after actual #222 integration, and publish the next
+bounded delivery without exceeding the current two-build remote concurrency.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
