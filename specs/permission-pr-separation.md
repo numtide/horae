@@ -801,6 +801,43 @@ Next: collect watcher 42207 and Nixbot 510, verify complete acceptance, and use
 the protected queue only after acceptance. Then reconcile #248 and #223 in
 order onto actual merged master; retain all source branches.
 
+### Dependent domain rules prepared without another remote build — 2026-10-08
+
+The preceding iteration made progress: #219's rebased head was published and
+its exact-tree GitHub/Nixbot acceptance started. Current read-back confirms
+GitHub 37813612403 and Nixbot 510 remain live, not stopped. Formatting passed;
+the x86 SQLx, Clippy, package and OIDC checks have passed while other checks
+continue. No retry or duplicate CI run was requested.
+
+Renewed #221's bounded review against its person-management, rate-scope and
+approval-visibility contracts. Read all six implementation/test files and the
+shared scope/prerequisite rules. Exact original-source comparison still passes
+against #212 at `db3935db364f2a8aa193f0e938ce40ecc01a2f92`. There are no runtime
+callers in this delivery. Field ownership cannot cross the person/project
+namespace, cost grants remain independent, explicit reset/zero writes require
+write authority, and approval/read coverage must hold for every supplied record.
+Complete selection acquisition, self-approval, locks and transaction authority
+remain explicit consumer obligations, not claims of this pure module. No new
+high/critical finding within this extraction boundary.
+
+Saved `37b124bea7188f0ee84ad49055f44ba4d7cd920c` at
+`refs/backup/pr221-before-delivery-chain-20261008`. Rebased only its owned commit
+from `690cce20` onto the prepared #223 head `8a9efae5`, with automatic ref updates
+disabled. Local head `c05533c1ec6a23466741880798527b30ed92c51d` has tree
+`11d2953ef6f85e9ae891d9515c9ca27372f2fd92`. No conflict; range-diff is identical
+and all seven owned file blobs are unchanged. This composition order does not
+add a functional dependency beyond #219.
+
+Fresh local Nix-shell checks passed: 187 core tests, zero failed/ignored;
+all-target core Clippy with warnings denied; Cargo formatting and whitespace.
+No source edit, new dependency, database operation, push or remote build.
+#221 remains published/draft at `37b124be`; the new combination still needs
+reconciliation onto actual master and full applicable CI before delivery.
+
+Next: collect #219 watcher 42207 and Nixbot 510; only queue after all required
+acceptance. Continue #248 then #223, followed by the prepared #221. #212 and
+all source branches remain preserved. This ledger update is local, not yet pushed.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
