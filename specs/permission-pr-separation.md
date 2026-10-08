@@ -264,6 +264,33 @@ checks shared-model serialization, internal SQLx invoice relation, separate
 Harvest/plugin payloads, frontend consumers and preserved HTTP/unit assertions.
 It remains a candidate, not queued; revalidate its integration base after #239.
 
+### Approval isolation integrated; next bounded delivery — 2026-10-08
+
+#239 merged at13:57:50 UTC as27b27ad5f1f58a50eaf04cf219647d8437b11e57.
+Merge-group run37788371582 passed Flake Check59s and Format47s. The actual
+integrated tree45e0c85fc943f8fb817d7391175cf33f368fb7c4 exactly equals the
+Nixbot500 tree and the predicted merge; master read-back confirms the commit.
+Updated the PR description with the completed integration evidence.
+
+Prepared #242 at unchanged4c173f0a: renewed review found no blocker in the
+serialization boundary, SQLx preservation or separate UI/plugin/Harvest
+consumers. Marked ready and closed/reopened once to activate required GitHub
+checks. Current base27b27ad5 produces expected tree
+8aca91cd4562dfa70be63b6662bd997d39ba1a13; its net delta is exactly six payload
+and test/cache files,173 additions, preserving all of #239 and the shared CI
+helper. Updated #242's description; no auto-merge is enabled yet.
+
+GitHub run37788740850 is the new workflow. Nixbot now links build504; inspect
+its actual stored tree and terminal attributes before trusting the rollup,
+which temporarily retains timestamps/conclusions from earlier build502.
+#220's ARM test retry remains live after the successful SQLx retry. Its
+browser failure was traced to initial fixture loading in project-bulk-recovery,
+before any mocked mutation; no timeout or assertion was changed.
+
+Next: collect #242's current combined-tree acceptance and submit to the
+protected queue only when green. Inspect the isolated #220 test result before
+any further retry. #212 remains unchanged; no new feature or PR was created.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
