@@ -570,6 +570,33 @@ treeacb5d812, then reconcile #220 onto actual master and require the existing
 df84fa67 acceptance to match exactly. Close #217 only after #220 integrates.
 Local #224/#219 preparations remain unpublished; #212 remains untouched.
 
+### Identity merged; reader delivery reconciled — 2026-10-08
+
+Merge-group37803792651 passed and #240 merged at15:49:56 UTC as
+1998388f1040b161b88bca144dccb4bc22491e87. GitHub confirms MERGED and master
+at that commit. Its remote tree is exactlyacb5d812, the accepted505 tree.
+The merge-group watcher59999 exited successfully. No protection bypass or
+branch deletion was used.
+
+Retargeted #220 to master and rebased only its single owned commit from4ef9a3c8
+onto actual master1998388f. Backup
+refs/backup/pr220-before-identity-merge-20261008 preserves6afef017. New head
+91244589414b05cbe6d8ee85a5dc04227a247db8 has exactly the same complete tree
+df84fa671f9db4175e3a7d2dc4e97beebccbf8a6 already accepted by Nixbot506.
+No conflict; range-diff reports the same patch, and a whole-tree diff is empty.
+Publication uses an exact old-head lease. Current-head GitHub and protected
+merge-group checks remain required before final integration. Next: verify the
+published head and check read-back, queue #220 when accepted, then verify its
+actual merge tree before closing #217. #212 remains unchanged; #224/#219 stay
+local until their preceding deliveries integrate.
+
+Published #220 read-back confirms OPEN/draft, master base and91244589 head.
+Nixbot has already replayed506's successful evaluation/build onto this exact
+head because its tree is unchanged; no matrix restart was requested. GitHub
+run37804193972 is live on91244589 for Flake Check and Format. Watcher11465
+follows that run every60 seconds; collect it rather than starting another run.
+Both #240's final merge evidence and #220's refreshed delivery body are published.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
