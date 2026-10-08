@@ -1,5 +1,40 @@
 # Permission PR separation
 
+## Active delivery phase — 2026-10-08
+
+The current goal supersedes the earlier no-merge phase: reduce open PRs by
+integrating verified work through the protected merge queue and closing only
+superseded deliveries whose content is preserved. Do not add new features.
+Keep #212 open and unchanged as the reference, including its original branch,
+worktree and unpublished changes, as explicitly requested. Historical
+no-merge statements below describe the previous phase, not current authority.
+
+Revalidated #282 at e39f033a against master8b3cc257: required Flake Check/Format
+and Nixbot317 passed, the diff remains two test/configuration files, and no
+review blocker is recorded. After source-boundary review, marked it ready and
+submitted it without bypass to the protected queue. Entry MQE_lQDOTRPZ888AAAABHMRHd84AA_LZzgMoeSs
+is first, AWAITING_CHECKS. Merge-group run37750157434 is live at
+c9ea1f39964784115ca52b7c41af32ad94ff73c7. Submission is not a completed merge.
+
+The existing #286 head ed286e6b already contains all #283–#286 corrections and
+passed native and both-Linux Nixbot413 gates. Deliver these together through
+#286 instead of four sequential PRs: eight files,105 additions/27 deletions
+beyond #282, with just one production header addition. Preserve every commit
+and downstream head. Required master/merge-group checks still apply. Close
+#283/#284/#285 only after their content is confirmed integrated; preserve their
+branches. #212 must not be merged or closed. Next: confirm #282's queue result
+and retarget the unchanged #286 delivery to master with its complete scope.
+
+Collected run37750157434: Flake Check and Format both succeeded. #282 merged
+through the queue at08:30:34 UTC as c9ea1f39964784115ca52b7c41af32ad94ff73c7.
+Retargeted #286 to master, updated its title/body to describe the complete
+consolidated scope, and marked it ready. Its head remains ed286e6b; no branch
+rewrite or new code. Auto-merge was enabled at08:32:18 UTC and awaits required
+master-targeted checks before queue entry. #283/#284/#285 remain open until
+integration is confirmed. Live read-back verifies #212 still OPEN/draft at
+db3935db364f2a8aa193f0e938ce40ecc01a2f92. Next: collect #286's required checks
+and queue result, then confirm the integrated tree before closing duplicates.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
