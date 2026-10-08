@@ -889,6 +889,16 @@ No source edit, branch publication, retry or queue submission during this wait.
 Next: collect those four ARM attributes and the existing GitHub run; only then
 consider #219 ready for protected delivery. Other local preparations stay parked.
 
+### Permission domain ARM tests accepted — 2026-10-08
+
+Verified wait continued on the same live handles, not a new build. Nixbot 510's
+ARM server suite now passes: 836 successful tests, 11 existing manual ignored
+cases and all auxiliary binaries successful. The raw log confirms the terminal
+test summaries. ARM browser/deployment/OIDC remain building, as does GitHub
+Flake Check in 37813612403 (watcher 42207). No failure or retry is recorded.
+#219's description now links these exact runs and distinguishes partial from
+complete acceptance. Next: collect the remaining checks before queue entry.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
