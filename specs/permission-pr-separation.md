@@ -12,6 +12,14 @@ source of product requirements; do not restart or duplicate them.
 
 ## Current handoff — 2026-10-08
 
+Completion is blocked on external ARM builder diagnostics. The failed #228 and
+#270 checks were revalidated at their unchanged published heads; they are
+terminal, not merely slow jobs. Other builds, including documentary build486,
+remain live and have not been cancelled. Live work may produce additional
+evidence, but does not repair these terminal failures or identify their cause.
+The requested operator evidence and #283/#284 consolidation decision have not
+arrived. Do not treat this handoff as completion or permission to merge.
+
 The separation is published, but verification is not complete. All 57 code
 extractions and the two documentation PRs (#248 and this ledger) now have
 descriptions naming their published head, review base, preserved scope and
@@ -9243,3 +9251,37 @@ timeout and browser failure as separate hypotheses. Do not extend timeouts,
 emit artificial keepalive logs, lower assertions, or rerun the full matrix
 without a supported diagnosis. Existing builds remain live; no new build,
 retarget, consolidation or merge was requested in this investigation.
+
+### Completion-blocker audit and handoff — 2026-10-08
+
+The same external dependency has remained through more than three consecutive
+goal iterations: builder/scheduler diagnostics are unavailable for terminal
+ARM failures. Independent work was completed meanwhile: preservation and task
+classification, publication of the complete delivery index, intermediate-build
+failure classification, and bounded upstream research. The last investigation
+was progress; this audit does not mistake a live job for a stopped process.
+
+Revalidated #228 at55382bd7 and #270 at479cfe3f: Nixbot427/430 remain terminal
+failures, with no replacement acceptance. #218 at092d25f4 still has live
+Nixbot486. Original PRs remain out of scope for closure or merge. Pending tests
+are not a reason to change or weaken the completion criteria.
+
+| Completion requirement | Evidence and remaining gap |
+| --- | --- |
+| Original work inventoried and recoverable | Source accounting, saved refs/bundles, tracked snapshot and six-file archive verified |
+| Every change owned or explicitly retained | Preserved coverage bridge: zero unaccounted/target-only paths; all 30 unchecked task IDs classified once |
+| Bounded deliveries with dependency order | 57 code PRs and current acyclic index published; documentation and shared-CI increments separately identified |
+| Source/adversarial and combined verification | Bounded review records retained; complete native composition passed; not a substitute for current-head remote acceptance |
+| Required extraction gates | Not met: terminal ARM failures and intermediate failures remain, with other builds live |
+| Incomplete work separated | Original refs and seven unpublished Clients documents retained; broad acceptance/cutover not claimed complete |
+| No unauthorized feature, activation, real-data or original-PR changes | This diagnostic sequence changes only the existing ledger and PR descriptions; no infrastructure mutation or merge |
+| Final ready delivery | Not achieved; drafts and failed/pending checks remain explicit |
+
+Safe autonomous investigation has reached the available evidence boundary.
+The next useful input is the operator's deployed revisions, effective build
+concurrency and timeout settings, and kernel/cgroup/scheduler kill records for
+the three named ARM builders around01:29–02:18 UTC. Use those to select and
+test a bounded correction before any retry. The separate consolidation request
+can remove the obsolete shared-CI delivery boundary but cannot fix ARM kills.
+Preserve all live jobs and do not repeat unchanged checks as a substitute for
+that missing evidence. No completion claim is made.
