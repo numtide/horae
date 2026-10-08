@@ -598,23 +598,6 @@ async fn cancelling_a_csv_waiting_for_more_bytes_releases_its_session(pool: PgPo
     single.close().await;
 }
 
-async fn wait_for_session_release(pool: &PgPool, org: Uuid) {
-    use super::super::{ApiImportError, lock_import, release_import};
-
-    // Parser exit and socket closure do not acknowledge PostgreSQL's session
-    // cleanup. Observe the actual lock before starting a single retry.
-    loop {
-        match lock_import(pool, org).await {
-            Ok(connection) => {
-                release_import(connection).await.unwrap();
-                return;
-            }
-            Err(ApiImportError::Busy) => tokio::task::yield_now().await,
-            Err(error) => panic!("failed to observe import session cleanup: {error}"),
-        }
-    }
-}
-
 #[sqlx::test(migrations = "./migrations")]
 async fn durable_csv_cancel_joins_parser_and_preserves_committed_rows(pool: PgPool) {
     use super::super::csv_source::import_body_with_lease;

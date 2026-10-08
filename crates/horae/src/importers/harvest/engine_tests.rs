@@ -134,6 +134,151 @@ fn disconnected_config() -> crate::config::HarvestConfig {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn import_cleanup_recovers_unacknowledged_savepoint_release(pool: PgPool) {
+    use sqlx::Acquire;
+
+    let single = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    for nested_twice in [false, true] {
+        let org = seed_org(&pool).await;
+        sqlx::query!(
+            "UPDATE organizations SET name = 'committed' WHERE id = $1",
+            org
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let mut connection = super::lock_import(&single, org).await.unwrap();
+        let mut outer = connection.begin().await.unwrap();
+        sqlx::query!(
+            "UPDATE organizations SET name = 'uncommitted' WHERE id = $1",
+            org
+        )
+        .execute(&mut *outer)
+        .await
+        .unwrap();
+        let mut nested = outer.begin().await.unwrap();
+        // Simulate a server-accepted RELEASE whose acknowledgement was lost to
+        // cancellation before SQLx 0.8.6 updated its transaction depth.
+        if nested_twice {
+            let mut inner = nested.begin().await.unwrap();
+            sqlx::query!("RELEASE SAVEPOINT _sqlx_savepoint_1")
+                .execute(&mut *inner)
+                .await
+                .unwrap();
+            drop(inner);
+        } else {
+            sqlx::query!("RELEASE SAVEPOINT _sqlx_savepoint_1")
+                .execute(&mut *nested)
+                .await
+                .unwrap();
+        }
+        drop(nested);
+        drop(outer);
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            super::release_import(connection),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            sqlx::query_scalar!("SELECT name FROM organizations WHERE id = $1", org)
+                .fetch_one(&pool)
+                .await
+                .unwrap(),
+            "committed"
+        );
+        let retry = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            super::lock_import(&single, org),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        super::release_import(retry).await.unwrap();
+    }
+    single.close().await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn import_cleanup_rolls_back_an_untracked_server_transaction(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    let previous = sqlx::query_scalar!("SELECT name FROM organizations WHERE id = $1", org)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let mut connection = super::lock_import(&pool, org).await.unwrap();
+    // Model a BEGIN accepted by PostgreSQL before the cancelled driver future
+    // could increase its transaction depth or construct a Transaction guard.
+    sqlx::query!("BEGIN")
+        .execute(&mut *connection)
+        .await
+        .unwrap();
+    assert!(!sqlx::Connection::is_in_transaction(&*connection));
+    sqlx::query!(
+        "UPDATE organizations SET name = 'uncommitted' WHERE id = $1",
+        org
+    )
+    .execute(&mut *connection)
+    .await
+    .unwrap();
+    super::release_import(connection).await.unwrap();
+    let retry = super::lock_import(&pool, org).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar!("SELECT name FROM organizations WHERE id = $1", org)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        previous
+    );
+    super::release_import(retry).await.unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn import_cleanup_does_not_hide_a_backend_failure(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    let single = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    let mut connection = super::lock_import(&single, org).await.unwrap();
+    let pid = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *connection)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        sqlx::query_scalar!("SELECT pg_terminate_backend($1, 5000)", pid)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(true)
+    );
+    let error = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        super::release_import(connection),
+    )
+    .await
+    .unwrap()
+    .unwrap_err();
+    assert!(error.downcast_ref::<sqlx::Error>().is_some(), "{error}");
+    let retry = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        super::lock_import(&single, org),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    super::release_import(retry).await.unwrap();
+    single.close().await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn completed_imports_allow_immediate_retries(pool: PgPool) {
     let org = seed_org(&pool).await;
     for _ in 0..64 {
