@@ -2,8 +2,31 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, de::value::StrDeserializer};
 
-use super::{BuiltInProfile, Permission, PermissionEditError, PermissionSelection};
+use super::{
+    BuiltInProfile, Permission, PermissionEditError, PermissionSelection, validate_template_name,
+};
 use Permission::*;
+
+#[test]
+fn template_names_trim_without_changing_display_or_internal_spaces() {
+    assert_eq!(
+        validate_template_name("\u{2003} Equipo  Ágil \t").unwrap(),
+        "Equipo  Ágil"
+    );
+    assert_eq!(
+        validate_template_name("Administrator").unwrap(),
+        "Administrator"
+    );
+}
+
+#[test]
+fn template_names_reject_empty_and_overlong_unicode_names() {
+    for blank in ["", " \t\n", "\u{2003}"] {
+        assert!(validate_template_name(blank).is_err());
+    }
+    assert!(validate_template_name(&"á".repeat(100)).is_ok());
+    assert!(validate_template_name(&"á".repeat(101)).is_err());
+}
 
 fn set(permissions: &[Permission]) -> BTreeSet<Permission> {
     permissions.iter().copied().collect()
