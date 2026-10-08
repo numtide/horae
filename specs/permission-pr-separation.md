@@ -505,6 +505,28 @@ head4ef9a3c8/current master40434acd and treeacb5d812, then mark ready and submit
 to the protected queue. Verify its final tree before reconciling #220 and
 using506's acceptance. Close #217 only after #220 integrates. Preserve #212.
 
+### Local import cleanup preparation — 2026-10-08
+
+Preserved #224's published af4656d7 at
+refs/backup/pr224-before-reader-20261008. Rebasing its single correction onto
+#220 head6afef017 completed without conflicts as072d0c35; range-diff confirms
+the original patch is identical. Added local unsigned commitd9edb456, removing
+only the17-line duplicate CSV test helper. Both existing CSV callers now use
+the identical parent helper through their existing super import. Assertions,
+deadlines, SQL descriptors and production behavior were not changed by that
+cleanup. `nix develop --command cargo fmt --all -- --check` and
+`git diff --check` passed. No database or full-suite execution is claimed for
+this combined tree385dcca94f7008093c422b931db2bfbe5c5d45bc.
+
+This preparation remains local, with no push or additional remote CI. #224's
+published head remains af4656d7. After #240 and #220 integrate, rebase these
+two commits onto actual master, verify the resulting tree and patch range,
+then publish using an exact-head lease and require combined CI acceptance.
+At15:38 UTC,505's isolated OIDC retry is still building; its log shows the
+guest progressing through PostgreSQL initialization. #220 remains fully green
+but draft on its feature-branch base. Next: collect505, then integrate #240
+and #220 in that order. Preserve #212 and keep #217 until #220 is verified merged.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
