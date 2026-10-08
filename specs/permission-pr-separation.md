@@ -1607,6 +1607,24 @@ the queue result and verify actual #223 integration, then submit #222 only
 after its own current-head gates pass; verify its combined tree against the
 already checked 373150c4 combination instead of forcing an unnecessary rebase.
 
+#223 is now confirmed MERGED at 2026-10-08T21:20:59Z as
+d79a7d4e815422dbdf517f7613fcf1939a3d3f15. Merge-group 37845978321 passed
+Flake Check in 43s and Format in 42s. The actual master tree is
+128e9df1022f53e587599463352795f2e7d60f96, exactly the accepted #223 tree.
+No branch was deleted or protection bypassed.
+
+#222 also completed its current-head gates at 26fe6075: GitHub 37843072424
+passed Flake Check in 24m44s and Format in 47s; Nixbot 518 accepted all 20
+attributes (16 built, four already built) on exact tree 9678d004 without
+retries. Published its acceptance body and requested protected-queue delivery
+with the unchanged head. Its combined integration with #223 must pass the
+queue checks and match expected tree 373150c4 before claiming a merge.
+
+Stopped only the owned read-only monitor for completed builds 517/518; no build
+was cancelled. #226 retains its complete passing local suite and unpublished
+b64ae15c head. Next: follow #222's actual queue entry/run, verify integration,
+then reconcile #226 and the remaining prepared deliveries onto the merged base.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
