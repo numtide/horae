@@ -1447,6 +1447,26 @@ Reconcile onto actual integrated master before publishing #222. #223 now has
 GitHub run37840158446 and Nixbot516 on the exact diagnostic tree ca8017ec;
 #221/Nixbot515 has accepted everything except its two still-running ARM VMs.
 
+#221 is accepted on its exact published tree: GitHub37837568734 passed Flake
+Check in24m53s and Format in1m35s; Nixbot515 succeeded with16 built and four
+already-built attributes, including both ARM VMs, without retries. Fresh
+preflight confirms master036aeebf, unchanged a549a89e head, no merge conflict
+and no outstanding reviews/threads. Published the acceptance body, marked the
+PR ready and submitted it to the protected squash queue without bypass.
+Entry MQE_lQDOTRPZ888AAAABG7ZUBM4AA_LZzgMrtG0 is first and QUEUED; merge-group
+checks and actual integration are still pending. This is not a completed merge.
+
+#223 GitHub37840158446 passed (Flake3m4s, Format49s). Nixbot516's ARM OIDC VM
+passed its complete script in441.04 seconds. Diagnostics show real console
+devices existed while systemd still classified them as tentative, before the
+driver eventually connected. The root cause of intermittent earlier startup
+timeouts remains unproven. Only ARM deployment is still building on516.
+
+#222 native SQLx preparation passed and189 core tests passed on independent
+82f3e706; the full server suite is still compiling in its existing build.
+Next: follow #221's queue check and verify the actual merge tree, then reconcile
+the next prepared delivery onto that master without changing owned source.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
