@@ -1972,6 +1972,37 @@ publish the existing #231 for actual ARM evidence only after local acceptance.
 #226 remains out of queue; its public description now records the failure.
 #227 build525 has no failure and still awaits ARM deployment; no queue submission.
 
+Check99600 completed successfully:189 core,860 server and183 auxiliary tests,
+1,232 passed, zero failures and11 pre-existing manual checks ignored. Both CLI
+scheduling variants and durable CSV transaction/cancellation/recovery/stale-lease
+regressions passed; server suite112.59s. Full SQLx preparation also passed.
+Committed the two-file diagnostic addition separately as dcf68d2e after the
+preserved97d05de2 extraction. Current #231 head
+dcf68d2ecc9ef2144aeb5c3aa14366eed68c6e75, tree
+ff3362296e3b820fb784a37224c5484729ac9e5d, six files250 additions/11 deletions.
+Published using the exact former-head lease; verified clean worktree and remote
+head, OPEN/draft. Fresh GitHub37856544984 passed Format and is running Flake
+Check; Nixbot526 is building the exact ff336229 tree. No new PR was opened.
+
+#227 now has full remote acceptance without retries: GitHub37853073229 passed
+Flake Check24m20s/Format48s and Nixbot525 passed both Linux platforms, including
+all ARM browser/deployment/OIDC checks, on the verified combined9182ab1e tree.
+Its head remains5b966295, mergeable, with no reviews. It remains draft/outside
+the queue while the shared transport failure is investigated. Nixbot524 is now
+terminal FAILED with only the immediate-rejection ARM test failing; all other
+attributes completed successfully. #226 stays OPEN with queue and auto-merge
+both null. Public #226/#227/#231 descriptions reflect these distinct states.
+
+RFC9112 section9.6 documents how immediate TCP closure can lose a final HTTP
+response: <https://www.rfc-editor.org/rfc/rfc9112.html#section-9.6>.
+This is a candidate mechanism, not an observed cause for build524; avoid a
+speculative runtime patch or weakening the rejection assertions. Next: collect
+actual ARM test output from526, using the new URL-redacted diagnostic if it
+fails; do not treat another passing run as proof of a transport repair.
+No local build remains active. #232 metadata is revalidated as the next
+independent candidate (clean2ff243b9, draft/master, no reviews, prerequisite
+#220 integrated); no source review, rebase, edit or new build was performed for it.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2074,9 +2105,11 @@ after #220's final tree was verified. Preserve #212 open and unchanged.
 Deliveries #221, #223, #222 and #225 are also merged with both-Linux acceptance.
 #226 passed its source-head gates, but its queue build524 exposed an ARM CSV
 transport regression; it is removed from the queue with auto-merge disabled.
-#227 remains draft with fresh CI running; #228 has passed local native tests and
-SQLx on its reconciled #227 base but is not published. The next independent
-CSV delivery #231 is prepared locally and owns the transport investigation;
+#227 passed its fresh combined GitHub and both-Linux Nixbot gates and remains
+draft while the shared failure is investigated; #228 has passed local native
+tests and SQLx on its reconciled #227 base but is not published. Independent
+CSV delivery #231 is published at dcf68d2e with1,232 native tests/SQLx passing,
+fresh CI526 running, and owns the transport investigation;
 #232 is another independent candidate. Resume merges only after the shared
 regression is resolved. Full current CI remains required. These preparation
 bases are an integration sequence, not new functional dependencies. Verify
