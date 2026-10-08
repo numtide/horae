@@ -1828,6 +1828,30 @@ on this corrected tree. This is verification after a concrete metadata repair,
 not an unchanged retry. The existing remote builds 522/523 remain in progress
 without a recorded failure. No push, extra PR or real-data operation occurred.
 
+### Project lock-order native acceptance completed — 2026-10-08 UTC
+
+Corrected #228 session 69662 completed successfully on head `1d5d999a`, tree
+`39d6411c7ebd80e9f91ead0c20ba7b2f77672ade`. Native results: 187 core,
+859 server and 183 auxiliary/integration tests, totaling 1,229 passed, zero
+failed and 11 pre-existing manual cases ignored. Server execution took
+109.03 seconds. Actual editor/revocation, assignment and task-grant races,
+foreign-key compatibility and last-admin isolation-default tests passed.
+The lower total than the old 1,247-test composition reflects the absent
+unrelated storage and branding groups, not removal of any owned test.
+
+Full SQLx preparation passed with all server targets and no remaining cache
+delta; formatting processed 502 files with zero changes. Derivations are
+`lmmb6zfvd3jnglink6cqjjsz5has5849-horae-tests-0.1.0` and
+`fkx2731nm5hdkihy06ffjg7ygkbrfvli-horae-sqlx-prepare-0.1.0`.
+The worktree is clean. Temporary build space was released and 16 GiB is free;
+no cleanup or real-database operation was performed. No local build remains.
+
+#227 and #228 remain local, not pushed. #225 is still in its protected queue;
+Nixbot 523 has ARM browser and both VMs running. #226 Nixbot 522 has only ARM
+deployment outstanding. Neither has a recorded failure. Next: collect the
+existing GitHub/Nixbot handles, integrate accepted work, and publish #227 when
+one remote-delivery slot is free. Preserve #212 and every source branch.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
