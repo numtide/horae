@@ -38,6 +38,15 @@ also received SIGKILL, on elastic-arm-234f8218. The aggregate pending count abov
 must not be read as absence of intermediate failures. The raw log does not
 establish the cause of the kill; no retry or source workaround was introduced.
 
+The broader attribute audit at 02:22 UTC supersedes that partial failure inventory:
+15 of the 57 live builds already have failed ARM attributes (#220, #225, #227,
+#238, #240, #245, #256, #268, #269, #272, #275, #276, #277, #278 and #280).
+Across those builds, 20 retrieved logs show 15 compiler SIGKILLs, three explicit
+1,200-second farm timeouts, one browser timeout, and one package compile failure
+without an exposed signal. Nine other failed attributes never ran because their
+package dependency failed. The failure categories must not be collapsed into
+an unproven OOM diagnosis or reported as 15 independent product defects.
+
 Full native checks already passed on the published #219/#220/#223/#224 heads
 and on the complete cross-extraction composition `8fc3a44e`. That composition
 passed 1,478 server tests (11 existing ignored cases), 15 auxiliary test binaries,
@@ -9145,3 +9154,46 @@ and is not silently relabeled as a new terminal result.
 Next: retain the existing live jobs, obtain the requested infrastructure
 diagnostics, and resolve the shared-CI consolidation choice. No new functionality,
 policy activation, real data mutation, original branch change or merge occurred.
+
+### Current index publication and intermediate-CI inventory — 2026-10-08
+
+Published the documentation-only checkpoint on #218 as 092d25f4, fast-forward
+from ff1192da. Verified its body, head, #286 base and draft state after the push.
+Only specs/permission-pr-separation.md changed; no code branch was republished.
+The current dependency index contains all 57 code extractions exactly once;
+every listed dependency resolves and the graph is acyclic. Evidence:
+.scratch/permission-current-dependency-index.json and
+.scratch/pr218-delivery-index-publication.json. Formatting passed unchanged.
+
+A 02:21 UTC GitHub comparison found no changed code-PR aggregate checks. Only
+#218's new head changed: Nixbot486 evaluation passed and its build is running.
+The old head's checks are not reused as acceptance of this commit.
+
+Inspected all 57 live build pages once, verifying each page's linked commit
+against its published head. All pages were retrieved; 15 already contain ARM
+failures even though their aggregate checks remain in progress. At 02:22 UTC
+#218/build486 had 18 reused attributes and two pending. Saved page observations
+in .scratch/permission-live-attribute-audit.json rather than changing terminal
+GitHub results in the older snapshot.
+
+Collected 20 actual failure logs and their hashes. Fifteen show compiler
+SIGKILLs; three explicitly report a farm timeout after 1,200 seconds (#240's
+package, #269's package and #276's tests). #256's package compiler exited
+without an exposed signal. #220's browser fixture reached invoice preparation
+then timed out filling Period from after 30 seconds; even the subsequent body
+snapshot timed out after three seconds. Earlier browser assertions passed and
+the server log reports multi-second database statements, but these observations
+do not establish the browser timeout's root cause. No timeout or assertion
+was relaxed. Nine raw-log requests returned404 because their attributes were
+dependency_failed; verified that status in the saved pages instead of treating
+those as executed test failures.
+
+Classification and complete evidence:
+.scratch/permission-intermediate-failure-classification.json. Three ARM builders
+are named across these logs: elastic-arm-0b1d6a93, elastic-arm-234f8218 and
+elastic-arm-976bb8e2. The requested scheduler/cgroup diagnostics remain needed;
+no source workaround, retry, cancellation or infrastructure mutation was made.
+The prior 4–8 hour delivery estimate is no longer reliable given the expanded
+failure inventory. Next: diagnose the builder/timeout evidence and the distinct
+browser failure, while preserving live work and awaiting the consolidation
+decision. The goal remains incomplete.
