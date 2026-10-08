@@ -1785,6 +1785,29 @@ attribute was observed. The PR remains draft until acceptance completes.
 Next: collect these existing jobs, confirm actual integration, and then publish
 the independently verified #227 rather than start another feature or PR.
 
+### Project lock-order delivery reconciled locally — 2026-10-08
+
+The preceding turn made progress: #222 merged with complete native/ARM
+acceptance, #226 was published, and #225 entered the protected queue. Current
+checks remain live: #225 merge-group 37849797492 and Nixbot 523 (pending on
+the verified combined tree), plus #226 GitHub 37849653227 and Nixbot 522.
+No new remote build or retry was requested in this iteration.
+
+Saved #228's prior prepared head `34be6010` at
+`refs/backup/pr228-before-independent-delivery-20261008`, then rebased only
+its one owned commit onto independently verified #227 `5b966295`. Automatic
+reference updates were disabled. The rebase was conflict-free; range-diff is
+identical and all owned file blobs are unchanged. Local head is
+`38ac02c9e20e5b9df75ace22877f84205eccc35a`, tree
+`a2371111c9877b20b99040e507b6138b814efd25`; 39 files, 1,700 additions and 84
+deletions. No code edit or dependent-branch rewrite occurred.
+
+Session 58298 is running fresh formatting, full native tests and SQLx
+preparation with one local build job and four cores, using disposable Nix
+databases. The former 1,247-test result belongs to the prior combined tree,
+not this composition. #228 remains unpublished, as does #227. Next: collect
+the existing checks, deliver #225/#226, then publish the prepared next repair.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
