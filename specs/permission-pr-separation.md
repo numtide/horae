@@ -663,6 +663,19 @@ it cannot restart it. GitHub watcher66999 still follows37804884447. Next:
 collect those handles, then revalidate #224 head/master/tree before protected
 queue submission. No new source change, remote build or PR was created.
 
+### Import regression evidence on the current tree — 2026-10-08
+
+Nixbot509's ARM test suite passed:836 server tests, zero failures and11 existing
+ignored cases. Its log explicitly confirms untracked-transaction rollback,
+savepoint-release recovery and CSV cancellation/checkpoint regressions pass.
+The build now has17 successful/cached attributes. Only ARM browser, deployment
+and OIDC remain live; browser logs show passing mobile fee-form cases and the
+OIDC guest is still booting. GitHub37804884447 remains live on Flake Check.
+Updated #224's published body with the current run links and this partial
+acceptance, without claiming full CI acceptance. No retries or source changes.
+Next: continue watcher22948 and watcher66999; require both terminal passes
+before revalidating the exact head/tree and submitting #224 to the queue.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
