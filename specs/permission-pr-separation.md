@@ -1087,6 +1087,29 @@ Next: collect #248's existing GitHub/Nixbot checks, then protected delivery and
 tree verification. Afterwards publish the already prepared #223 using its known
 remote lease; keep #212 and every prepared source branch intact.
 
+### Remaining foundation descriptions prepared — 2026-10-08
+
+Prepared local delivery descriptions for #221 and #222 in
+`.scratch/pr221-merge-delivery.md` and `.scratch/pr222-merge-delivery.md`.
+They distinguish the already recorded bounded reviews and local core checks
+from still-required full current-tree acceptance. Both clearly state that the
+application does not yet use or activate these extracted permissions. Rechecked
+clean local heads/trees and whitespace; no new source review or test execution
+is claimed by this documentation step.
+
+Remote read-back shows both PRs already target master (their old body text still
+describes the former stack). Their heads remain `37b124be` and `e8d89b46`;
+prepared local heads remain `c05533c1` and `b0acd09f`. Do not retarget them
+unnecessarily or publish either description before reconciling actual heads.
+
+#248 remains draft/mergeable at `76b76750`, with no reviews or review threads.
+Master is still `6d5dd32f`. Existing GitHub 37823408244 and Nixbot 513 watchers
+remain live; formatting/evaluation passed, with no failure reported. No retry,
+queue submission, branch publication, migration or additional PR occurred.
+
+Next: collect those existing checks, queue #248 only after full acceptance,
+verify the merged tree, then reconcile and publish #223. Preserve #212.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
