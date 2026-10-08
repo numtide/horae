@@ -156,6 +156,19 @@ pass for the same SHA. Nixbot has not yet exposed a replacement build in the
 repository list (still ending at503). #220's evaluation check remains live.
 Next: follow those exact runs and verify any Nixbot replacement's source SHA.
 
+The reopen run37757142397 finished successfully (Flake Check47s, Format37s),
+but Nixbot still reports the terminal492 failure on current55234123 and has
+not created a replacement build. The documented rerequest endpoint is the
+POST path already attempted (GitHub REST Checks documentation); no malformed
+method explains the404. No browser/MCP tools are loaded in this session.
+Asked the user asynchronously for Nixbot operator assistance to verify the
+old-build/current-SHA association and run the actual current commit. Do not
+repeat close/reopen or change source to work around unverified CI provenance.
+#220's evaluation check remains live and its linked old build493 still runs
+three attributes, with two earlier failed attributes. This is not acceptance
+of fa9eeaaa and not evidence that the live work has stopped. Continue watching
+the existing evaluation while keeping both PRs out of the merge queue.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
