@@ -730,6 +730,39 @@ and expected tree385dcca9 before protected queue submission and final-tree
 verification. If the same retry fails, investigate before another attempt.
 Do not send a second automatic retry. #219/#248 preparations and #212 remain intact.
 
+### Import report converter reviewed and prepared locally — 2026-10-08
+
+While509's single OIDC retry runs, renewed the bounded #223 review using the
+Rust, async and minimal-change guidance. Traced the migration caller, complete
+converter, chunk writer, lease checkpoint fence, FK definitions and all five
+added concurrency regressions. Discovery holds no job lock; organization SHARE
+precedes the tenant/job/oversize recheck under explicit READ COMMITTED. Waiting
+converters preserve newly bounded worker checkpoints and claims; replacement,
+deletion, competing converters and ungated worker FK checks are covered by the
+retained tests. The transaction stays on one connection and rolls back partial
+archive work on errors. No new critical/high finding within this repair.
+
+Preserved published68661980 at
+refs/backup/pr223-before-delivery-chain-20261008, then rebased its single commit
+fromed286e6b onto local #248 headf8f029fd with updateRefs disabled. New local
+head8a9efae5b60454130c02bdec74fcc9d2ba56ce3b has tree
+cc17441f8aea988af103e9568b4928d9045811c7. No conflict. Both owned Rust files and
+all14 added/replacement SQLx descriptors are byte-identical to68661980; the
+obsolete locking-discovery descriptor remains absent. The only range-diff
+change is descriptor33678a5f now inherited unchanged from the base.
+
+Nix-shell Cargo formatting and whitespace checks passed; the worktree is clean.
+No runtime test or full CI acceptance is claimed for this new composition.
+Historical native acceptance of68661980 does not certify this tree. No source
+edit, database operation, push or extra remote build occurred. #223 remains
+published at68661980 and follows the already prepared #224/#219/#248 sequence;
+these local composition bases are not new functional dependencies.
+
+Next: collect watcher96352 for #224's one OIDC retry (still building at16:47
+UTC). Do not retry it again automatically. If it passes, revalidate and queue
+#224, verify its merged tree, then reconcile and deliver the prepared roots in
+order. Keep #212 unchanged and do not create additional PRs.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
