@@ -136,7 +136,9 @@ implementation remains incomplete. Do not treat
 - [#286](https://github.com/numtide/horae/pull/286), `test/import-cancellation-release`,
   ated286e6b, reuses the CSV session-release observer for the cancelled HTTP-worker
   and page-consumer tests. No production code, SQL, timeout or assertion changes.
-  Native full check91786 and remote Nixbot413 are running; formatting passed.
+  Native full check91786 passed:121 core and821 server tests,11 existing ignored
+  measurements, nine auxiliary binaries, browser, Clippy, SQLx and both VMs.
+  Remote Nixbot413 and the full composition remain pending.
   It is a draft over #285. The shared prerequisite order is now
   #282→#283→#284→#285→#286. The refreshed75-branch tree-only preview includes
   #286 and preserves all57 code-PR review patches; actual propagation remains
@@ -8444,3 +8446,41 @@ backups and original source branches remain unchanged.
 Next: collect the remaining exact-head checks and complete-composition result,
 then begin guarded propagation only when the shared base is verified. No merge
 or original-branch modification occurred.
+
+### Local staged rebases and complete native cancellation verification — 2026-10-08
+
+The preceding iteration made progress through complete #284 remote acceptance,
+published in ledger41a7ce7f. Reconfirmed #216 merged and remote404/413 live.
+Adjusted the earlier operational hold to allow reversible local staging while
+remote CI queues, not publication: the backup refs/bundle are verified, every
+expected tree was precomputed, and neither running local gate uses an extraction
+worktree. Remote heads and PR bases remain unchanged until prerequisites pass.
+This keeps the original scope and publication gate intact without treating a
+local rebase as test acceptance.
+
+The guarded procedure has staged41/75 branches at this checkpoint, preserving
+shared ancestry through the rewrite map and checking each resulting tree exactly
+against the preview. The next bounded batch is live; every operation disables
+rebase.updateRefs and unsigned commits are retained. Receipts are in
+.scratch/ci-cancellation-propagation-completed.jsonl. The final review-diff and
+remote-lease verifier is prepared but will run only when all75 are staged.
+
+Rechecked original preservation: master, #212, #217 and #208 retain their
+original heads. #212 still has the same18 dirty paths. Its tracked worktree is
+identical to snapshotd364270a; tar comparison verifies the six untracked files.
+The original unstaged patch SHA matchesd90b1797 when core.abbrev=7 is used,
+matching the saved patch format; Git's now-longer automatic object abbreviation
+changes patch text, not source content. The staged patch remains empty.
+
+Collected native check91786 exit0 on clean #286ed286e6b. All121 core tests,
+821 server tests with11 existing ignored measurements and nine auxiliary test
+binaries passed. Both changed cancellation tests passed. Browser, Clippy, SQLx,
+deployment/recovery82.10s and OIDC26.04s passed; the final log says all checks
+passed and explicitly omits ARM/Darwin. Evidence remains
+.scratch/import-cancellation-release-ed286e6b-full-check.log. Updated #286's
+verification without claiming pending remote413 or composition85532 passed.
+
+Next: finish local staging, handle only the six previously reviewed insertion
+conflicts, then run the full tree/ancestry/review-patch audit. Continue collecting
+85532 and remote404/413. Do not push rewritten extraction heads or retarget PRs
+until their shared prerequisite checks are accepted. Originals remain excluded.
