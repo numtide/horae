@@ -1147,6 +1147,22 @@ GitHub 37823408244 Flake Check remains live. No failure or retry recorded.
 Next: collect #248's existing watchers 26568/83691 and merge only after full
 acceptance; continue #223, #221, #222, then prepared #225. Keep #212 unchanged.
 
+### Specification GitHub checks accepted; ARM execution continues — 2026-10-08
+
+The preceding turn made concrete progress reviewing/preparing #225. This
+iteration verified the existing #248 processes repeatedly without restarting
+them. GitHub run 37823408244 now succeeded: Flake Check 23m22s, Format 58s;
+watcher 83691 exited successfully and must not be restarted.
+
+Nixbot 513 remains live on tree `e3a656f4`. All x86 attributes and ARM
+package/tests/Clippy/SQLx/formatting are accepted. ARM browser/deployment/OIDC
+remain building, not failed. Two raw-log observations several minutes apart
+showed new passing browser cases and guest boot progress; the deployment guest
+now logs Horae listening. This is progress within the check, not terminal
+acceptance. No retry, source change or merge-queue request occurred. The #248
+description now links the accepted GitHub run and pending exact-tree Nixbot
+build. Keep #248 draft until full acceptance; collect watcher 26568 next.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
