@@ -396,6 +396,33 @@ delivery and exact-tree verification. #220
 still needs current-base verification; #217 stays open until its replacement
 actually integrates. Keep #212 and its unpublished work untouched.
 
+### Follow-on integration review during #240 CI — 2026-10-08
+
+Nixbot505 remains live on exact treeacb5d812, with no failed attributes;
+GitHub37793715132 Format passed while Flake Check remains running. This is a
+verified wait. No retry, new build or branch change was requested this iteration.
+
+Renewed #224 review at af4656d7 covered release_import, every production caller,
+worker joins and the three cleanup regressions. Read the pinned local SQLx0.8.6
+flush/wait_until_ready/start_rollback implementation: the loop consumes queued
+responses, recovers only3B001, and does not enqueue retries of mutations. Explicit
+ROLLBACK precedes unlock and close; close-on-drop protects error exits. No new
+critical/high source finding in this boundary. Its patch is still nine files;
+all seven query descriptors and three regression tests are retained. Current
+combined runtime acceptance remains required.
+
+Read-only trial merge of #224 with #240 is clean at tree1a57ea03. The inherited
+17-line local CSV wait_for_session_release duplicates the parent's helper;
+remove that local definition during #224 integration, retaining the existing
+wildcard import, calls, deadlines and assertions. Do not create another PR.
+
+Trial #220/#240 combination identifies one test-registration conflict, not a
+production conflict: retain legacy_readers plus all four existing matrices and
+their calls. Its improved exact route matching merges independently. No branch
+or worktree was changed by either trial. Next remains #240 after current checks
+pass, then #220's preserved replacement of #217; #224 review is ready for its
+subsequent integration. #212 remains excluded.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
