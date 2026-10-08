@@ -1264,6 +1264,31 @@ Next: collect watcher 61793, then use the protected queue only after acceptance.
 Continue #221/#222/#225/#227 in order, reconciling onto actual master and
 requiring fresh complete remote checks. Preserve #212 unchanged.
 
+### Import delivery VM startup failure and isolated retry — 2026-10-08
+
+Nixbot514/watch61793 completed with 18 attributes accepted and two failed:
+ARM deployment and OIDC. Both logs fail at the initial driver-connection wait,
+after 900.61 and 900.64 seconds respectively, before functional assertions.
+The applications had started listening inside both guests. This establishes
+the failed boundary, not the root cause of the driver delay or a source defect.
+Derivations: `qlpdpbqlk5kq8wv9vafdj8dk4i7ya1p0-vm-test-run-horae-e2e`
+and `ca3kfsvvgfsgx5ys7w27y4rahmqw719g-vm-test-run-horae-e2e-oidc`.
+
+Reused the existing authenticated Nixbot Chrome connection. After checking
+origin, exact `cc17441f8aea988af103e9568b4928d9045811c7` tree and the two failed
+attributes with every other attribute accepted, sent one deployment-only
+restart request. Public read-back confirms that attribute is now building;
+OIDC remains failed and was not restarted. Do not duplicate the request while
+the browser response is pending. Read-only watcher95726 polls the deployment
+attribute every60 seconds and has no restart logic. #223 remains draft.
+
+Next: collect that retry, then consider one isolated OIDC retry only after the
+deployment result is known. Require complete acceptance and protected queue
+verification before merge. No source modification or new PR was created.
+The #227 description now explicitly distinguishes published `fb63b766` (known
+isolation defect) from verified local `96fa8d1a`; it remains draft and unpushed.
+Remote #221/#222/#225 heads remain unchanged with no new submitted reviews.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
