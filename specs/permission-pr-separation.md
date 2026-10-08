@@ -8810,3 +8810,55 @@ Next: publish these two documentation branches with exact leases, retarget them
 to #286, and check their new-head CI. Update PR descriptions to distinguish the
 new publication from historical checks, then finish the remaining exact-head
 verification and final delivery audit. No merge or full-feature completion claim.
+
+### Published documentation and current-head review metadata — 2026-10-08
+
+The preceding user-facing estimate was a status-only turn, not implementation
+progress. Re-read the goal and repository rules before continuing. The pending
+inventory tool failed because its approval review timed out; it did not produce
+a remote snapshot. A subsequent read-only GitHub query succeeded and saved
+.scratch/permission-delivery-post-propagation-20261008.json. This snapshot is
+historical once another query or PR-body edit occurs, not a live CI feed.
+
+Documentation publication59951 and retarget43966 both exited0. Remote #248
+a6d2e091 and #218ff1192da are drafts based on test/import-cancellation-release.
+The inventory confirms all57 code PR heads/bases match the accepted propagation
+manifest; together with the two documentary and five shared-CI PRs, the delivery
+inventory contains64 PRs. All57 code PRs had fresh Nixbot evaluation/build checks
+in progress. This observation does not claim final acceptance or independently
+attribute every build to its commit; exact-head check-run validation remains.
+
+#218 GitHub run37712168908 attempt1 failed both jobs before tests: Hestia's
+attestation lookup received HTTP503 from api.github.com. Verified the run is
+terminal and belongs to ff1192da, then requested one failed-job retry98343,
+exit0. Query44256 confirms attempt2 is in_progress on that same head. No workflow,
+cache-verification rule, application code or test was changed. Nixbot484 remains
+separate. #216 was reconfirmed merged at02f7b58acdcf126415f9ec89215da8cdada7d03f.
+
+Updated and read back descriptions for #219/#220/#223/#224/#248/#218 in44537,
+exit0. Each edit checked the old body, current head, base and draft flag before
+writing, and verified the exact new body and unchanged metadata afterward.
+The four code descriptions now cite their passed native full checks on the
+published heads and link fresh Nixbot472/431/470/447 without claiming completion.
+The documentary descriptions distinguish preserved patches and formatting from
+pending full CI. Earlier-head test evidence is retained explicitly as historical.
+
+Next: finish the same metadata refresh for the seven remaining root PRs and the
+dependent extractions, collect the existing #218 retry, and validate fresh-head
+CI before the final ownership/readiness audit. Keep the ledger progress local
+until the next substantive publication checkpoint to avoid needless CI churn.
+No original source branch, runtime data, feature scope or merge state changed.
+
+Collected both follow-ups in the same iteration. Description update50279 exited0
+after verifying #225/#227/#231/#238/#239/#240/#242. All11 direct code roots and
+both documentary PR descriptions now name their published heads and #286 base;
+the46 dependent code descriptions remain to refresh. Their original scopes and
+review findings are retained; old test executions are explicitly historical.
+
+GitHub query74535 confirms #218 run37712168908 attempt2 completed successfully
+on unchanged ff1192da: Format at01:31:14 UTC and Flake Check at01:31:35 UTC.
+The previous503 remains recorded. No second retry was needed. Updated #218's
+description to distinguish this success from still-separate Nixbot acceptance.
+Targeted ledger formatting94993 exited0 without changes. Next: refresh the46
+dependent descriptions and correlate their fresh CI with exact published heads;
+do not restart the now-completed #218 GitHub run.
