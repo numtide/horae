@@ -454,6 +454,28 @@ patch and verify the same combined tree before trusting506. Only after #220
 passes current-base and protected-queue checks may #217 be closed as replaced.
 Do not merge the stack out of order; keep #212 unchanged. No build was retried.
 
+### ARM VM failure and isolated recovery — 2026-10-08
+
+GitHub37793715132 passed #240 Flake Check (19m44s) and Format (42s); its watcher
+exited0. Nixbot505 then failed both ARM VM checks while its other18 attributes
+passed or were cached. Both failures are the initial900-second wait for the
+guest's connecting-to-host driver signal, before functional assertions. Logs
+show QEMU cannot initialize KVM and the guest still progressing through boot;
+this does not identify the root cause or prove an application defect.
+
+Inspected both failing logs and the matching checked-in test scripts. Requested
+one isolated e2e retry through the authenticated browser API; HTTP200 confirmed
+acceptance and the public API now shows that same attribute building. The slow
+browser response was observed, not treated as failure or duplicated. No source,
+timeout, assertion or infrastructure setting changed. OIDC remains failed and
+has not been retried. Updated #240's PR description with the outstanding gates.
+Nixbot506 for #220 remains live with its three ARM browser/VM checks running.
+
+Next: collect the existing e2e retry and506. If the isolated #240 e2e passes,
+request one OIDC-attribute retry, not a full-matrix restart. If the same failure
+recurs, preserve its evidence and investigate before another retry. No merge
+until the exact combined tree has full acceptance. #212 remains untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
