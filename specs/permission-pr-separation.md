@@ -1431,6 +1431,22 @@ no failures have been observed in that build. Next: collect that acceptance
 and submit to the protected queue if green, while collecting fresh #223 ARM
 diagnostics separately. Preserve #212 and all downstream unpublished repairs.
 
+Prepared #222 independently of #223 while #221 checks finish. Backup
+refs/backup/pr222-before-independent-delivery-20261008 retains b0acd09f.
+Rebased only the two storage/documentation commits from c05533c1 onto published
+#221 a549a89e, with updateRefs and signing disabled. New local head is
+82f3e7064a0046db79b0bba83f1eb32d0e1ca117, tree
+9678d00463b7257da0014ccd2d9682ee4a890d6c. Both range-diff entries are identical
+and every owned file preserves its previous blob. The complete-tree difference
+is exactly the absent #223 repair. No downstream ref or remote #222 changed.
+
+Fresh native tests and SQLx validation are running in disposable Nix sandboxes
+on this independent composition (derivations drvzbzz0g8kkgrl9qvxi90vb761h3psh
+and blyywdda1ilpr43fgr6yk99y2jrwwxjp). Do not claim acceptance before completion.
+Reconcile onto actual integrated master before publishing #222. #223 now has
+GitHub run37840158446 and Nixbot516 on the exact diagnostic tree ca8017ec;
+#221/Nixbot515 has accepted everything except its two still-running ARM VMs.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
