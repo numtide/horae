@@ -1361,6 +1361,35 @@ in12m43s; the886 server tests are now running. Result remains pending. Next:
 collect2783 and OIDC watcher60653, retain the deployment failure as a merge
 blocker, and investigate with new evidence rather than automatic retries.
 
+### Independent domain delivery published while import CI is blocked — 2026-10-08
+
+#221 functionally depends on merged #219, not the import-report repair in #223.
+Revalidated actual master `036aeebf`, the unchanged published #221 `37b124be`,
+and its seven pure-domain files. Remove the delivery-order-only dependency so
+the recurring #223 deployment-startup failure does not stop unrelated delivery.
+#223 remains open/draft with its repair preserved and required checks unresolved.
+
+Preserved the earlier local preparation `c05533c1` at
+`refs/backup/pr221-before-independent-delivery-20261008`. Rebased only its owned
+commit directly onto master, disabling automatic ref updates. New head:
+`a549a89e19bcb1ee9e8504b870d7a68f0d5dd805`; tree
+`f8c601ada1fbe112fdf188a69115d669f2ffe9ab`. Range-diff is identical; all seven
+owned blobs are unchanged, with1179 additions and no extra source changes.
+Fresh pinned-Nix validation passed:187 core tests, all-target core Clippy with
+warnings denied, Cargo formatting and whitespace checks. Worktree is clean.
+
+Published with an exact lease on remote `37b124be`; GitHub read-back confirms
+the new head, master base and draft status. Updated #221's description with its
+independent scope and current verification. GitHub run37837568734/watch66738
+and Nixbot515/watch85217 are live. Nixbot's stored tree matches `f8c601ad`.
+No protected merge has been requested and full native/ARM checks still apply.
+
+No dependent branch was rewritten. #222/#225/#227/#228 still retain their prior
+local prepared compositions through #223; reconcile only their owned commits
+onto actual integrated master before their respective publication. Do not treat
+old prepared-tree acceptance as current acceptance after changing that base.
+Next: collect #221's new checks, #223 OIDC watcher60653 and #228 native2783.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -1460,9 +1489,11 @@ deliveries #239, #242, #240, #220, #224 and #219 have also merged, as has
 documentation #248. #217 was closed only
 after #220's final tree was verified. Preserve #212 open and unchanged.
 
-The current execution order is #223 (published on actual master, current CI running),
-then #221 and #222 (local preparations, core tests/Clippy/format passed and
-bounded source reviews complete), followed by #225 (bounded review and local
+The next independent delivery is #221 (published directly on actual master,
+fresh CI running). #223 remains separately blocked by recurring ARM deployment
+startup failure; its isolated OIDC retry is active. After #221, reconcile #222
+(local preparation, core tests/Clippy/format passed and bounded review complete),
+followed by #225 (bounded review and local
 rebase/format complete) and #227 (last-admin isolation repair, users tests,
 SQLx and formatting verified locally), then #228 (source-preserving local rebase
 on corrected #227; native tests running). Full current CI remains required. These preparation
