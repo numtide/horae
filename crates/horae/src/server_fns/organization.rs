@@ -66,7 +66,7 @@ pub async fn update_org_branding(branding: OrgBranding) -> Result<OrgBranding, S
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
     let (branding, changed) =
-        update_org_branding_record(&state.db, manager.org_id, &branding).await?;
+        update_org_branding_record(&state.db, manager.org_id, manager.id, &branding).await?;
     if changed {
         state
             .plugins
@@ -86,9 +86,14 @@ pub async fn update_org_branding(branding: OrgBranding) -> Result<OrgBranding, S
 async fn update_org_branding_record(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
     branding: &OrgBranding,
 ) -> Result<(OrgBranding, bool), ServerFnError> {
     let mut tx = db.begin().await.map_err(server_err)?;
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        .execute(&mut *tx)
+        .await
+        .map_err(server_err)?;
     // Compare with the latest locked row, including edits committed while
     // this request waited. A missing organization is not an unchanged save.
     let before = sqlx::query_as!(
@@ -104,6 +109,22 @@ async fn update_org_branding_record(
     .await
     .map_err(server_err)?
     .ok_or_else(|| not_found("Organization not found"))?;
+
+    // Admission may predate an organization/actor lock wait. Even an unchanged
+    // save returns private branding, so retain current authority through commit.
+    let role = sqlx::query_scalar!(
+        r#"SELECT org_role as "org_role: OrgRole" FROM users
+           WHERE id = $1 AND org_id = $2 AND active FOR SHARE"#,
+        actor_id,
+        org_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| forbidden("Active manager access required"))?;
+    if !role.is_manager_or_above() {
+        return Err(forbidden("Manager access required"));
+    }
 
     let branding = sqlx::query_as!(
         OrgBranding,

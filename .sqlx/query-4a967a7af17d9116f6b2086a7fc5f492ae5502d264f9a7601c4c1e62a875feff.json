@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE organizations DROP CONSTRAINT reject_branding_write",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "4a967a7af17d9116f6b2086a7fc5f492ae5502d264f9a7601c4c1e62a875feff"
+}
