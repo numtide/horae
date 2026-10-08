@@ -1194,6 +1194,39 @@ Remote #212 remains open/draft at `db3935db364f2a8aa193f0e938ce40ecc01a2f92`.
 Next: collect #223's current checks, deliver through the queue after acceptance,
 then reconcile #221/#222/#225 in order. Ledger updates remain local on #218.
 
+### User-write review and isolation regression in progress — 2026-10-08
+
+While #223's existing CI runs, reviewed #227's three user-write paths, trusted
+actor provenance, last-administrator checks, post-commit events and all seven
+authority regressions plus existing concurrency cases. Found an unverified
+isolation-default concern: the shared access transaction does not explicitly
+choose READ COMMITTED, so the last-admin count may use a pre-wait snapshot
+when the connection defaults to REPEATABLE READ. Do not certify or merge #227
+until the actual regression result is known and any confirmed defect is fixed.
+
+Preserved remote `fb63b766175359811d71d97be2134a2813e4c5fa` at
+`refs/backup/pr227-before-delivery-chain-20261008`, then rebased its one commit
+onto local #225 `3ae5c1f8` without automatic ref updates. Local committed head
+`3eb8f9244beca4b1dc3e19d868253ac6791034db`, tree
+`4ecfc6ceb8f0b22edf5ed397fe1ae2bb062ccd49`. No conflict: range-diff only reflects
+the inherited backend-PID descriptor and #240's safe identity-list context.
+The new regression is an uncommitted edit to `users/tests/concurrency.rs`;
+no production fix or branch publication has occurred.
+
+The regression reuses the real concurrent last-admin helper under a REPEATABLE
+READ connection default, exercising all four demotion/deactivation pairings.
+Diagnostic `.scratch/pr227-isolation-check.nix` runs the user tests in a Nix
+sandbox with its own ephemeral PostgreSQL, not a real/development database.
+Initial local session 62551 was deliberately stopped to correct a misplaced
+Cargo argument before test execution; it is not a failing regression result.
+Corrected session 73585 is live, compiling the actual application/test code.
+Derivation: `hjprljs15lshqf922xj4wn7ragbin5kc-horae-user-authority-isolation-check-0.1.0`.
+
+Latest #223 read-back: GitHub 37829568177/watch76044 and Nixbot514/watch61793
+remain live. All x86 Nixbot attributes pass; ARM package/tests and dependent
+browser/VM checks remain outstanding without failure. Next: collect 73585 and
+the existing remote checks. Keep #212 and all published source heads untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
