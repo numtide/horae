@@ -1746,6 +1746,27 @@ collect its fresh GitHub/Nixbot checks. #225 remains the other active delivery;
 #227's independently verified head stays local until a slot is available.
 Keep #212 open and unchanged. No new PR was created.
 
+### Profile commands published; branding ready for queue — 2026-10-08
+
+#226 formatting passed on the final tree (505 files, zero changes), as did
+whitespace validation. Retargeted the existing draft PR to master and published
+`1cbde180781c4bf11c429ee560bedccc897b0e97` with an exact old-head lease against
+`769a0d8808dc88ca880556ba4d38374167d0412f`. Remote read-back confirms master,
+47 files and unchanged owned scope. GitHub 37849653227 is running on this head.
+Fresh both-Linux Nixbot acceptance and protected-queue verification are pending.
+
+#225's current-head GitHub 37846756514 passed Flake Check in 23m53s and Format
+in 41s. Nixbot 520 passed the exact `f352a529` tree on both Linux platforms,
+including ARM browser and both VMs, without retries. Watcher 45586 exited
+successfully. No review blocker is recorded and the branch is unchanged.
+
+After #222 integrated, merge-tree calculates the clean combination
+`87ee2dd2aada51e08ea13ec26d1a7a9a062c9e2e`. Each side preserves its stable patch
+ID: branding `5d8b3bcfe99db100e521c8edd7a22fd96447f2e0`, storage
+`a3c6211ba1528d2bbb1608dca13b69a812c3a9e7`. No unnecessary source rebase or
+duplicate individual-head build is needed. Submit #225 to the protected queue,
+then verify its actual combined commit and checks; submission is not a merge.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
