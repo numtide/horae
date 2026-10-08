@@ -35,6 +35,16 @@ integration is confirmed. Live read-back verifies #212 still OPEN/draft at
 db3935db364f2a8aa193f0e938ce40ecc01a2f92. Next: collect #286's required checks
 and queue result, then confirm the integrated tree before closing duplicates.
 
+GitHub did not start its required pull-request workflow on base retarget or
+ready-for-review: it listens to the default opened/synchronize/reopened events.
+Closed and immediately reopened only #286 to trigger that workflow, verified
+the unchanged ed286e6b head/master base, and re-enabled protected auto-merge.
+No empty commit, branch rewrite or protection bypass was used. Run37750804732
+is now live on ed286e6b: Format passed, Flake Check remains in progress. Poll
+that existing run at60-second intervals; do not rerun it on silence. Nixbot489
+also passed on the unchanged head. #282's remote merge tree matches e39f033a's
+tree exactly (2493f371dc87b6f7bcd57efce0a3319aa9669358).
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
