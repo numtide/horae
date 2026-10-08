@@ -8738,3 +8738,10 @@ all54 original feature documents, New Project transition rules and cache guidanc
 Next: collect12382/61314 and413; publish code only after prerequisite acceptance,
 then complete the two documentation refreshes and reconcile PR descriptions with
 their actual published heads and check results. No merges or original-ref edits.
+
+Continued verified waits after that checkpoint: both12382/61314 completed their
+application builds and entered Clippy. Remote413 now reports only the two ARM VMs
+building; browser and x86 tests have advanced out of the building group. Both VM
+logs show successful register-nix-paths.service and continuing guest startup
+around130–140s, not a terminal result. Keep waiting on the same executions without
+raising timeouts or modifying tested worktrees.
