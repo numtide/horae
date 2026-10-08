@@ -169,6 +169,29 @@ three attributes, with two earlier failed attributes. This is not acceptance
 of fa9eeaaa and not evidence that the live work has stopped. Continue watching
 the existing evaluation while keeping both PRs out of the merge queue.
 
+Blocked audit: the current-SHA/old-build attribution problem has persisted
+through three consecutive goal turns, including the single reopen fallback,
+the operator request, and fresh API/build-page checks. #219's check is terminal
+failure on the current SHA but still refers to old-head build492. #220's
+current evaluation remains live while its referenced old-head build493 already
+has failed attributes; finishing that old build does not provide current-head
+acceptance. All code extraction gates in the last full inventory were failed;
+starting additional branches would not resolve this verification problem.
+
+The documented Nixbot restart/cancel interface requires an authenticated
+Nixbot login (repo writers and PR authors qualify); anonymous access here is
+read-only. The GitHub rerequest attempt returned404, and no browser/MCP session
+is available. No safe verified merge remains until an operator or authorized
+Nixbot session resolves the attribution and evaluates current55234123 and
+fa9eeaaa. Mark the goal blocked, not complete; do not cancel still-running
+builds. Completed delivery stays #282/#286 merged and #283–#285 closed. Keep
+#212 OPEN and unchanged. Resume by inspecting actual head/build associations,
+then follow protected-queue delivery and close #217 only after #220 integrates.
+
+Source: https://github.com/Mic92/nixbot#authentication-backend (restart/login
+roles); deployed version and the cause of the attribution discrepancy remain
+unverified. No claim that the completed native checks imply ARM acceptance.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
