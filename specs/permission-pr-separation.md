@@ -551,6 +551,25 @@ observes that same build every60 seconds and does not retry builds. Next:
 collect its terminal result, then integrate #240 and #220 if accepted; keep
 #217 open until #220 is verified integrated and leave #212 unchanged.
 
+### Identity CI accepted and queued — 2026-10-08
+
+Nixbot505 finished successfully for exact treeacb5d812:16 attributes passed
+and four were cached. The single isolated ARM OIDC retry completed its full
+test script in819 seconds, including authenticated API access and rejection
+after account deactivation. The original startup failures remain recorded;
+no code, timeout or assertion changed for either isolated VM retry. The
+read-only watcher session62108 completed normally and must not be restarted.
+
+Revalidated #240 OPEN/draft at4ef9a3c8, master40434acd, a clean worktree and
+an exact head tree matching505. GitHub37793715132 already passed. Updated the
+PR body with acceptance, marked ready and requested protected auto-merge with
+an exact-head guard. Read-back confirms queue entry
+MQE_lQDOTRPZ888AAAABG-OeHs4AA_LZzgMqRxY at position1, stateQUEUED. This is not
+yet a completed merge. Next: collect its merge-group checks and verify final
+treeacb5d812, then reconcile #220 onto actual master and require the existing
+df84fa67 acceptance to match exactly. Close #217 only after #220 integrates.
+Local #224/#219 preparations remain unpublished; #212 remains untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
