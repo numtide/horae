@@ -1034,6 +1034,36 @@ only #248's three owned commits from prepared base `8cef61a0` onto actual
 master. Update its prepared receipt and publish with exact lease `a6d2e091`.
 Preserve #212 and other prepared branches; no new PR or runtime activation.
 
+### Permission domain merged; specification delivery published — 2026-10-08
+
+#219 merged at 18:17:41 UTC as
+`6d5dd32f6504c732b9431df8a11a8c8f84739e8e`. Protected merge-group 37822983601
+passed; watcher 40642 is finished. Remote master tree exactly matches Nixbot
+510's accepted `117adb9bb1583481a417d944265770217f90cab6`. Final receipt is
+published in #219. Its branch and #212 remain intact; no runtime policy is active.
+
+Fetched actual master and preserved local #248 `f8f029fd` at
+`refs/backup/pr248-before-domain-merge-20261008`. Rebased only its three owned
+commits from prepared #219 base `8cef61a0` onto `6d5dd32f`, with automatic ref
+updates disabled. New head `76b767503994c8a0d8d68ba1aefcadd06b5eb0de` has tree
+`e3a656f4b276149826c76ac160b0c68393d9c540`. No conflict; range-diff confirms
+all three unchanged patches and whole-tree diff against `f8f029fd` is empty.
+Existing exact-tree formatting remains valid; whitespace check passed.
+
+Published only #248 with exact lease against `a6d2e091` and updated its body
+to the real head/base. It remains draft pending GitHub 37823408244 and Nixbot
+513, started at 18:19 UTC. No source/spec decision changes or dependent branch
+rewrites. #223/#221/#222 remain locally prepared, not newly published.
+
+Nixbot 513 stores exactly the expected tree `e3a656f4b276149826c76ac160b0c68393d9c540`;
+its compilation/test attributes are building and browser/VM checks are pending.
+GitHub watcher 83691 observes run 37823408244 every 60 seconds. These are
+current checks, not assumed reuse merely because the owned diff is documentation.
+
+Next: collect #248's current checks, then protected
+queue and final-tree verification. After its merge, reconcile only #223's
+owned commit onto actual master. Keep #212 unchanged and create no new PRs.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -1129,13 +1159,13 @@ Historical tables below do not certify a newer published head.
 
 The shared-CI prerequisites are integrated: #282 and the consolidated #286
 merged; #283–#285 were closed with their content preserved. Functional
-deliveries #239, #242, #240, #220 and #224 have also merged. #217 was closed only
+deliveries #239, #242, #240, #220, #224 and #219 have also merged. #217 was closed only
 after #220's final tree was verified. Preserve #212 open and unchanged.
 
-The current execution order is #219 (published, combined CI pending; local
-core tests and Clippy passed), then documentation #248 (local rebase,
-owned documents byte-identical and formatting passed), then #223 (local rebase,
-converter review complete and owned source blobs unchanged). These preparation
+The current execution order is documentation #248 (published, current CI running),
+then #223 (local rebase, converter review complete and owned source blobs unchanged),
+then #221 and #222 (local preparations, core tests/Clippy/format passed and
+bounded source reviews complete; full current CI still required). These preparation
 bases are an integration sequence, not new functional dependencies. Reconcile
 each onto actual master and verify its complete integration gates before merge.
 The documentation deliveries #248 and #218 do not activate features.
