@@ -85,6 +85,34 @@ Merge-group run37754261233 is queued on f29e72b46dd7c023c4366c127a3a1d81fc087689
 against master c9ea1f39964784115ca52b7c41af32ad94ff73c7. Follow this run rather
 than the completed PR run. No merge is claimed yet and #283–#285 stay open.
 
+Merge-group run37754261233 passed both required checks and #286 merged as
+f29e72b46dd7c023c4366c127a3a1d81fc087689. The actual tree is
+4a72442027ece979333e42c5262efc3ab1b21290, not the expected ed286e6b tree:
+the squash integration retained the17-line local wait_for_session_release
+helper in csv_streaming.rs from #282 alongside the shared helper in its parent.
+Direct two-tree comparison finds no other difference and no lost delivery
+content. Both helpers have the same lock/release/Busy handling; this is test
+duplication, not a runtime change. The queue's checks cover the integrated tree.
+An attempted auto-merge disable failed because the PR had already merged;
+no bypass, rollback, or branch rewrite was performed. Reconcile the retained
+helper when integrating existing import-cleanup #224, not in a new PR.
+Close #283–#285 as superseded while preserving their branches. #212 remains open.
+
+Read-back confirms #283/#284/#285 CLOSED, not merged separately; #283 was
+already closed when the explicit close command ran. #212 remains OPEN at
+db3935db364f2a8aa193f0e938ce40ecc01a2f92. Source branches were not deleted.
+
+Prepared only the next functional delivery, #220. Its clean isolated worktree
+was rebased from ed286e6b onto master f29e72b4 with rebase.updateRefs disabled.
+Backup ref refs/backup/pr220-before-master-20261008 preserves ea78c27c.
+New head fa9eeaaa964cd1963ddde16e9e503795df5fdfd8 was published with an exact
+old-head force-with-lease; no dependent branch was rewritten. Range-diff shows
+the repair commit unchanged. The only whole-tree delta from its previous head
+is the17-line helper inherited from the master squash integration. Updated
+the PR body with current hashes and explicit historical-versus-current gates.
+Next: verify fresh #220 checks, deliver through the protected queue when green,
+then verify integration before closing overlapping #217. Do not merge #212.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
