@@ -1110,6 +1110,43 @@ queue submission, branch publication, migration or additional PR occurred.
 Next: collect those existing checks, queue #248 only after full acceptance,
 verify the merged tree, then reconcile and publish #223. Preserve #212.
 
+### Branding save review and local delivery preparation — 2026-10-08
+
+The preceding turn made progress by preparing #221/#222 descriptions and was
+also a verified wait on the same live #248 checks. Refreshed the open-PR
+inventory without publishing branches or starting builds. Continued with the
+independent #225 write boundary while the existing CI runs.
+
+Using the repository Rust/async/minimal-change review guidance, traced the
+authenticated wrapper, complete branding helper, current role/activity writer
+lock order, post-commit event and all ten branding regressions. Compared the
+bounded T071–T073 contract. Current tenant/activity/role checks apply to changed
+and unchanged saves; organization-before-actor order and explicit READ COMMITTED
+handle both lock waits. Authority remains locked through commit; failures roll
+back and release locks. No critical/high source finding within this write
+boundary. Other readers, CompanyWrite mapping and policy activation remain out
+of scope. This was source review, not a new database-test execution.
+
+Saved published `edd44094a7c83a9852b0b7fcf11a78affc67de9e` at
+`refs/backup/pr225-before-delivery-chain-20261008`. Rebased its one owned commit
+from `ed286e6b` onto prepared #222 `b0acd09f`, with updateRefs disabled.
+Local head `3ae5c1f8eee5c2ad9ab84b5282eceb38e00ff319` has tree
+`9268b6bf493417c9475b41bf011a8587364c3346`; no conflicts. Both Rust files and
+all six original SQLx blobs still match the published head and original
+`907bc88`. Range-diff only drops two descriptors already inherited unchanged:
+`6ec0b36d` (REPEATABLE READ default) and `bcd26390` (READ COMMITTED transaction).
+The owned diff is now six files, 402 additions/12 deletions. Nix-shell Cargo
+format and whitespace checks passed; worktree clean. No database, migration,
+cache regeneration, push or remote build was performed. A local delivery body
+is prepared in `.scratch/pr225-merge-delivery.md`; update it after reconciliation
+onto actual master. This preparation adds no functional dependency on #222.
+
+Nixbot 513 now accepts all x86 attributes and the ARM package, core/server
+tests, Clippy and SQLx checks. ARM browser/deployment/OIDC remain building;
+GitHub 37823408244 Flake Check remains live. No failure or retry recorded.
+Next: collect #248's existing watchers 26568/83691 and merge only after full
+acceptance; continue #223, #221, #222, then prepared #225. Keep #212 unchanged.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
