@@ -8862,3 +8862,43 @@ description to distinguish this success from still-separate Nixbot acceptance.
 Targeted ledger formatting94993 exited0 without changes. Next: refresh the46
 dependent descriptions and correlate their fresh CI with exact published heads;
 do not restart the now-completed #218 GitHub run.
+
+### Exact-head CI audit and dependent descriptions — 2026-10-08
+
+The preceding iteration made progress: thirteen descriptions were updated and
+the unchanged #218 retry passed. The current read-only audit73290 completed for
+all64 delivery PRs. Each commit-specific check-run response was checked against
+the expected published head, with the newest run per check name selected.
+The snapshot at01:35:31 UTC is saved in
+.scratch/permission-delivery-ci-current.json: four accepted (#282/#284/#285/#286),
+three failed (#228/#270/#283), and57 pending. #283's old VM failures are already
+addressed by its downstream #284; this does not make #283's own red checks green.
+The audit started no builds and changed no branches.
+
+New failures are #22855382bd7/Nixbot427 and #270479cfe3f/Nixbot430. Downloaded
+the package, Clippy and server-test logs from both terminal builds. Both Clippy
+and test compilers exited on signal9/SIGKILL; both package compilers exited1
+without a Rust E-code diagnostic in these logs. Each build's three logs name
+one ARM builder, respectively elastic-arm-0b1d6a93 and elastic-arm-234f8218.
+The logs do not establish OOM, a timeout, who sent SIGKILL, or a source-code
+defect. No retry, timeout adjustment, assertion change or resource workaround
+was made. Six complete logs and SHA256 values are recorded in
+.scratch/nixbot-427-430-arm-failure-evidence.json. Infrastructure/resource
+evidence or a controlled diagnostic reproduction is needed before choosing a fix.
+
+Description batches50159/88531/16606 completed successfully: #221/#222/#226/#228,
+#232–#237, #241/#243–#247, #249/#250/#253/#254. Each of these20 edits checked the
+prior body, exact head/base and draft state, then read back and verified the
+updated description. Removed superseded current-status sections, updated review
+bases and prerequisite references, and kept source scopes and historical tests.
+#228 explicitly reports the new failed CI rather than retaining old acceptance.
+#270's equivalent update was also published and read back in52663, exit0, after
+one approval-review timeout that executed nothing. Both current ARM failures are
+now explicit in their PR descriptions. In total34 descriptions are refreshed
+(32 code extractions and two documentary PRs);25 dependent descriptions remain.
+
+Next: refresh the remaining25 dependent PR descriptions,
+investigate the ARM compiler kills without assuming their cause, and complete
+the exact-head gates and final ownership/readiness audit. No feature, migration,
+runtime data, original branch or merge state was changed. Keep this progress
+checkpoint local until substantive publication is useful.
