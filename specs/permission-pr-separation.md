@@ -2256,6 +2256,22 @@ A bounded local network-trace harness is prepared for the unchanged CSV
 rejection tests; instrumentation is diagnostic, not a repair or CI acceptance.
 Run it after61733 finishes; no extra remote job or source change is requested.
 
+#238 combined native session61733 completed with exit0 at unchanged30cb18af,
+treec63d5d96. Tests4lraknvq passed189 core,905 server,183 auxiliary cases:
+1,277 passed, zero failures,11 existing manual cases ignored. All13 authority
+tests and both small CSV rejection runtime schedules passed; server99.84s.
+SQLx2934qmzp completed successfully (compile1m07s, build1m10s). The current
+stack is locally validated, not published or remotely accepted. The previous
+independent1,250-test result remains historical, not current-tree acceptance.
+
+Started bounded diagnostic62243 only after61733 finished. The scratch Nix
+override instruments the two unchanged CSV rejection tests with strace for
+at most four iterations, stops at the first failure and preserves traces.
+No HTTP fixture, production code, status assertion or external account changed.
+This is additional cause-gathering for held #226, not a CI retry or a repair.
+Next: collect62243 and full #228/#231 remote gates; merge #228 only after all
+current-tree gates pass, then reconcile downstream prepared deliveries.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2367,9 +2383,9 @@ head dcf68d2e passed GitHub and both-Linux Nixbot526. Neither result proves
 the shared transport issue repaired.
 #232 is locally stacked at45c923a3 on #231, with1,264 combined native tests,
 SQLx and format passing; its earlier independent tree passed1,243 tests. It is not
-published yet. #238 is locally stacked on #232 at30cb18af; format and SQLx
-passed, native tests61733 are live. Its earlier independent c6efb30a passed
-1,250 native tests. Both preparations remain unpublished.
+published yet. #238 is locally stacked on #232 at30cb18af with1,277 native
+tests, SQLx and format passing. Its earlier independent c6efb30a passed1,250
+native tests. Both preparations remain unpublished.
 The failed #226 combination remains held; independent deliveries may advance
 only on exact current-tree acceptance, without claiming that failure repaired.
 Full current CI remains required. These preparation
