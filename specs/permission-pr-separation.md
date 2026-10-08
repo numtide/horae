@@ -676,6 +676,13 @@ acceptance, without claiming full CI acceptance. No retries or source changes.
 Next: continue watcher22948 and watcher66999; require both terminal passes
 before revalidating the exact head/tree and submitting #224 to the queue.
 
+At16:22 UTC,509's ARM browser passed, leaving only ARM deployment and OIDC
+running (18 of20 attributes successful/cached). Both guest logs show Horae
+listening on its application port; functional VM completion is not yet claimed.
+GitHub37804884447 still runs Flake Check. This iteration is a verified wait on
+the same watcher22948/66999 handles, with no restart, branch change or merge.
+Next remains full CI acceptance followed by exact-tree queue verification.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
