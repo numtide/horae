@@ -624,6 +624,30 @@ live (Format passed); watcher66999 follows it every60 seconds. Nixbot509 is
 building exact tree385dcca9, with no failed attributes at the initial check.
 Use those existing handles; do not substitute historical447 or restart on silence.
 
+### Documentation delivery prepared locally — 2026-10-08
+
+While #224's existing CI runs, preserved #248 publisheda6d2e091 at
+refs/backup/pr248-before-delivery-chain-20261008. Rebased its three owned
+documentation commits fromed286e6b onto local #219 head8cef61a0, with dependent
+ref updates disabled. The rebase had no conflicts; range-diff marks all three
+patches identical. New local headf8f029fd85fe831d42b0919e22ef5d54efc3ea82 has
+treee3a656f4b276149826c76ac160b0c68393d9c540.
+
+All56 owned Markdown files compare byte-for-byte with the published #248 head.
+The broader specs-directory comparison additionally shows only the inherited
+legacy-reader-authority.md from #220; that file exactly matches the new base
+and is not a #248 edit. No requirements, product decisions, task checkboxes or
+constitution adoption changed. `nix fmt -- --ci` passed:493 files processed,
+zero changed. `git diff --check` passed. This is integration/provenance work,
+not a fresh Spec Kit completion or a server-test acceptance claim.
+
+No #248 push or extra remote build was started. Its published head remains
+a6d2e091. After #224 and #219 integrate, reconcile only these three documentation
+commits onto actual master and require current integration gates. #224's
+GitHub37804884447 and Nixbot509 remain live;509 has eight successful and four
+cached attributes with no failures at this check. Next: collect those existing
+handles, merge #224 only after acceptance, then continue #219 and #248.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
