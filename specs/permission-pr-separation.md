@@ -66,6 +66,25 @@ its three callers and all seven reader regressions: no new source blocker
 identified in that boundary. Do not merge it on native-only historical results
 or start a mass retry/rebase. #212 remains excluded from delivery.
 
+GitHub run37750804732 completed successfully at08:45:57 UTC: Flake Check
+and Format both passed on ed286e6b. The existing watcher exited successfully.
+Nixbot490 remains live with17 of20 attributes successful; ARM browser,
+deployment and OIDC VM tests are still running. Its live browser log contains
+passing cases and the OIDC guest is booting; neither is assumed stuck.
+Auto-merge remains disabled until this build finishes. All three heads from
+#283–#285 are ancestors of ed286e6b; final integrated-tree verification is still
+required before closing those PRs.
+
+Nixbot490 subsequently completed successfully: all20 attributes succeeded on
+the unchanged ed286e6b head. GitHub's required checks also passed. Submit the
+verified delivery to the protected squash queue; do not bypass its merge-group
+checks. Expected integrated tree:1a3b16230479c34c2e7b0363e711ae5fd4630514.
+
+Queue submission confirmed: #286 is first, AWAITING_CHECKS, head unchanged.
+Merge-group run37754261233 is queued on f29e72b46dd7c023c4366c127a3a1d81fc087689
+against master c9ea1f39964784115ca52b7c41af32ad94ff73c7. Follow this run rather
+than the completed PR run. No merge is claimed yet and #283–#285 stay open.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
