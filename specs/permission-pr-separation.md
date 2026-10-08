@@ -962,6 +962,16 @@ retry. If deployment fails again, inspect the new evidence before any further
 attempt. #219 stays draft and unmerged. Preserve the existing prepared delivery
 chain and #212; do not restart GitHub or already accepted checks.
 
+### Deployment retry reaches functional assertions — 2026-10-08
+
+Verified wait on watcher 85069 continues without another retry. At approximately
+17:48 UTC, Nixbot 510's ARM deployment log has passed the driver connection,
+TCP port wait and `/health` assertion and is starting the database backup test.
+This attempt therefore progressed beyond the original connection timeout.
+The full deployment script is still running, so no acceptance or merge is claimed.
+OIDC remains at its initial failure and has not been retried. Next: collect
+85069 to completion before considering the single sequential OIDC retry.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
