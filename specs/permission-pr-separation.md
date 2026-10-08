@@ -1671,6 +1671,30 @@ Next: collect these existing jobs. Verify #222's actual merge before rebasing
 and publishing #226. Preserve #212 and all source branches. The ledger remains
 locally committed until its own existing documentation delivery is reconciled.
 
+### User authority repair prepared independently — 2026-10-08
+
+Rechecked #227's three production wrappers, shared transaction initializer,
+last-admin guard, all authority/concurrency tests and the real database-blocker
+helper. Its dependencies are already in master after #223; neither inactive
+storage #222 nor branding #225 is required. Existing findings and their repair
+remain unchanged. No new high/critical issue was found in this bounded review.
+
+Saved `96fa8d1aa0a19342ba05cb8f56cd3d399e9d70bd` at
+`refs/backup/pr227-before-independent-delivery-20261008`. Rebased only the two
+owned commits from prepared #225 onto master
+`d79a7d4e815422dbdf517f7613fcf1939a3d3f15`, with automatic reference updates
+disabled. Both range-diff entries are identical; all six owned file blobs are
+unchanged. Local head is `5b96629521ca31b3232740ac020db007bdbcf858`, tree
+`de9c2f3dfd0db2d78785d266d2e41f7b5f022fe6`; 494 additions, 26 deletions.
+Published #227 remains at `fb63b766`, and #228's prepared branch is untouched.
+
+Started formatting, full native tests and SQLx preparation against disposable
+Nix databases (session 79286), with one local build job and four cores. These
+are fresh checks of the independent tree, not a rerun of a stalled process.
+Wait for acceptance before publication; retain only the existing two active
+remote deliveries until one finishes. #222 queue build 519 still has browser
+and ARM VM checks running without a recorded failure; its ARM tests passed.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
