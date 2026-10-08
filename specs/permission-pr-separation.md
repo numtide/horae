@@ -8629,3 +8629,23 @@ Next: collect those two existing handles and remote413. Do not edit their
 worktrees, start replacement builds or treat source-preservation receipts as CI
 success. Publication and the11 root-base changes still await remote prerequisite
 acceptance; original branches remain excluded and no merge is requested.
+
+### Exact check identity verified during root compilation — 2026-10-08
+
+The preceding iteration started independent checks and recorded their handles in
+published ledgerbc5174bc. Continued verified waits on67402/16392 and remote413.
+Both local client builds completed; the two server rustc processes are active at
+approximately183–184% CPU after about four minutes, consistent with their two-core
+budgets. No terminal result or stalled-build inference is made from silent logs.
+
+The GitHub commit-specific check-runs API confirms both #286 check runs have
+head_sha ed286e6b4d72687963290dda7b51242313886cd2 and point to build413. Evaluation
+is completed/success; build remains in_progress. Updated the private publication
+guard to inspect the newest check run by ID for each required name and require
+its exact head, completed state and success conclusion. This rejects an older
+successful attempt when a newer check is pending or failed. Syntax and read-only
+audit passed:75 local branches,57 PRs, original remote heads, accepted local
+composition and remote acceptance still false. No publication was attempted.
+
+Next: collect the same three live handles. Do not restart silent compilations,
+modify the two test worktrees or use earlier extraction checks as new-head proof.
