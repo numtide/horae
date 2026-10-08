@@ -874,6 +874,21 @@ Next: collect #219's existing checks. Deliver #219 only after
 acceptance, followed by #248/#223/#221 and then #222 after its storage-specific
 verification. Keep #212 and original branches intact. Ledger remains local.
 
+### Permission domain CI advances to final ARM checks — 2026-10-08
+
+The preceding iteration made progress by preparing #222 without publication.
+This iteration is a verified wait on GitHub 37813612403 (watcher 42207) and
+Nixbot 510, both confirmed live. At approximately 17:14 UTC, every x86 Nixbot
+attribute is accepted, and ARM Clippy, SQLx, formatting and package checks are
+accepted. ARM tests, browser, deployment VM and OIDC VM remain building with
+no recorded failure. Direct log tails show executing tests and successful
+browser cases, not just a stale status flag. The stored tree remains
+`117adb9bb1583481a417d944265770217f90cab6`.
+
+No source edit, branch publication, retry or queue submission during this wait.
+Next: collect those four ARM attributes and the existing GitHub run; only then
+consider #219 ready for protected delivery. Other local preparations stay parked.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
