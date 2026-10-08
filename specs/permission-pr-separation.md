@@ -1578,6 +1578,20 @@ results; rebase if a conflict, dependency change or new source difference
 requires it. Do not describe per-head ARM checks as a new combined-tree ARM
 execution, and do not bypass or weaken any required gate.
 
+#226's native validation completed successfully on b64ae15c/tree4e1ba3e0:
+189 core,866 server and183 auxiliary/integration tests passed (1,238 total,
+zero failed,11 existing manual cases ignored). The server suite took161.08
+seconds after4m04s compilation. SQLx preparation also passed, with no cache
+delta. Updated the local delivery body with this exact-tree evidence; #226
+remains unpublished and requires integration of #222 plus fresh remote gates.
+
+Both current remote builds have now accepted everything except their live
+ARM deployment VM: #223/Nixbot517 and #222/Nixbot518. Neither has reported a
+failure or been retried. GitHub checks remain separately monitored at their
+existing run IDs. Next: collect the final VM/GitHub results, submit ready heads
+to the protected queue, and verify the actual merged tree against the accepted
+individual tree or the precomputed373150c4 combination, as applicable.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
