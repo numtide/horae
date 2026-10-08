@@ -12,11 +12,14 @@ use super::{CHUNK_BYTES, REPORT_BYTES, append_report_chunk};
 pub(crate) async fn upgrade_legacy_reports(pool: &PgPool) -> anyhow::Result<()> {
     loop {
         let mut tx = pool.begin().await?;
+        sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+            .execute(&mut *tx)
+            .await?;
         let Some(job) = sqlx::query!(
             r#"SELECT id, org_id FROM horae_jobs
                WHERE octet_length(report::text) > $1
                   OR octet_length((checkpoint->'report')::text) > $1
-               ORDER BY id LIMIT 1 FOR UPDATE"#,
+               ORDER BY id LIMIT 1"#,
             REPORT_BYTES as i32,
         )
         .fetch_optional(&mut *tx)
@@ -25,6 +28,35 @@ pub(crate) async fn upgrade_legacy_reports(pool: &PgPool) -> anyhow::Result<()> 
             tx.commit().await?;
             return Ok(());
         };
+        // Chunk FKs also lock the organization. Take that gate before the job
+        // to avoid a cycle with domain writers publishing their checkpoints.
+        let organization = sqlx::query_scalar!(
+            "SELECT id FROM organizations WHERE id = $1 FOR SHARE",
+            job.org_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        if organization.is_none() {
+            tx.commit().await?;
+            continue;
+        }
+        let current = sqlx::query_scalar!(
+            r#"SELECT id FROM horae_jobs WHERE id = $1 AND org_id = $2
+               AND (octet_length(report::text) > $3
+                    OR octet_length((checkpoint->'report')::text) > $3)
+               FOR UPDATE"#,
+            job.id,
+            job.org_id,
+            REPORT_BYTES as i32,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        // Another converter or worker may have finished while we waited. Do
+        // not invalidate its lease, and release this gate before rediscovery.
+        if current.is_none() {
+            tx.commit().await?;
+            continue;
+        }
         let header = sqlx::query!(
             r#"WITH current AS (
                  SELECT COALESCE(checkpoint->'report', report) AS report,

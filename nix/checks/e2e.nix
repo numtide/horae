@@ -13,6 +13,22 @@ pkgs.testers.nixosTest {
     # initdb can exceed PostgreSQL's 120-second startup limit under ARM TCG.
     # Leave the shutdown timeout unchanged.
     systemd.services.postgresql.serviceConfig.TimeoutStartSec = 900;
+    # Keep startup diagnostics available before the test driver's console connects.
+    systemd.services.test-console-diagnostics = {
+      wantedBy = [ "multi-user.target" ];
+      path = [ pkgs.systemd pkgs.coreutils ];
+      script = ''
+        while ! systemctl is-active --quiet backdoor.service; do
+          systemctl list-jobs --no-pager || true
+          systemctl show backdoor.service dev-hvc0.device dev-ttyAMA0.device dev-ttyS0.device \
+            --property=Id,ActiveState,SubState,Result,After,Requires || true
+          for device in /dev/hvc0 /dev/ttyAMA0 /dev/ttyS0; do
+            udevadm info --query=property --name="$device" || true
+          done
+          sleep 60
+        done
+      '';
+    };
     services.horae.enable = true;
     services.horae.database.createLocally = true;
     systemd.services.horae.environment.DEV_LOGIN = "1";
