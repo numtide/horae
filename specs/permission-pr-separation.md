@@ -476,6 +476,14 @@ request one OIDC-attribute retry, not a full-matrix restart. If the same failure
 recurs, preserve its evidence and investigate before another retry. No merge
 until the exact combined tree has full acceptance. #212 remains untouched.
 
+GitHub37795259871 subsequently completed successfully for #220 at6afef017.
+Nixbot506's ARM browser also passed; its deployment VM has connected to the
+driver and passed the health check, now exercising database backup. Both VM
+checks remain running, not accepted yet. #240's single deployment retry is
+also live; its OIDC attribute remains failed and unretried. These are verified
+waits, with no new source change or restart in this iteration. Continue the
+same handles and do not equate both green GitHub workflows with full acceptance.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
