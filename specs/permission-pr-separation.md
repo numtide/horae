@@ -2214,6 +2214,14 @@ the transition. The same session73476 now explicitly reports tests derivation
 53q570nirhqn4vvgz7rrbl76vbzlgcsm building. No restart, cleanup or process kill.
 Next: collect73476 and full528/529 acceptance, then protected #228 merge.
 
+Aligned #226's GitHub lifecycle with its existing hold: read-back confirmed
+unchanged1cbde180, no queue entry and no auto-merge, but ready status. Converted
+it back to draft and verified OPEN/draft at the same head. No source edit or
+closure. Its public description now explicitly distinguishes #231's diagnostic
+coverage from an unproven runtime repair. Keep it out of delivery until the
+failed combined-tree case has an evidenced resolution; do not bypass524 with
+historical source checks.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
