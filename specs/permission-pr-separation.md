@@ -41,9 +41,30 @@ Closed and immediately reopened only #286 to trigger that workflow, verified
 the unchanged ed286e6b head/master base, and re-enabled protected auto-merge.
 No empty commit, branch rewrite or protection bypass was used. Run37750804732
 is now live on ed286e6b: Format passed, Flake Check remains in progress. Poll
-that existing run at60-second intervals; do not rerun it on silence. Nixbot489
-also passed on the unchanged head. #282's remote merge tree matches e39f033a's
+that existing run at60-second intervals; do not rerun it on silence. #282's remote merge tree matches e39f033a's
 tree exactly (2493f371dc87b6f7bcd57efce0a3319aa9669358).
+
+Direct Nixbot page verification corrects the earlier build489 attribution:
+build413 succeeded on ed286e6b (16 succeeded, four already built); build489
+was cancelled by the close/reopen transition, not successful. Its cancelled
+attributes appear as failures in GitHub. Build490 is the replacement for the
+same head and is actively building, with15 of20 attributes successful at08:42
+UTC. GitHub's aggregate check still exposes an older cancellation timestamp,
+so consult the actual build page as well as the PR rollup. Disabled auto-merge
+temporarily until the replacement build and required GitHub checks finish.
+No source change, retry, or additional build was requested. Next: collect
+build490 and run37750804732; restore protected auto-merge only after acceptance.
+
+Readiness audit after that correction: all57 code extractions have terminal
+Nixbot failures at their published heads, not still-running checks. #220 at
+ea78c27c remains the first functional candidate after shared CI, but build431
+failed ARM tests during compilation, browser interaction, and OIDC VM startup.
+The OIDC log shows the guest booting slowly and hitting the900-second driver
+connection deadline, before authentication assertions. These observations do
+not prove a source defect or OOM. Re-read the production snapshot helper,
+its three callers and all seven reader regressions: no new source blocker
+identified in that boundary. Do not merge it on native-only historical results
+or start a mass retry/rebase. #212 remains excluded from delivery.
 
 ## Objective and limits
 
