@@ -137,6 +137,35 @@ async fn concurrent_deactivations_keep_an_active_admin(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn repeatable_read_default_cannot_remove_every_administrator(pool: PgPool) {
+    let requests = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(5)
+        .after_connect(|connection, _| {
+            Box::pin(async move {
+                sqlx::query!(
+                    "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ"
+                )
+                .execute(connection)
+                .await?;
+                Ok(())
+            })
+        })
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    for (first, second) in [
+        (Change::Demote, Change::Demote),
+        (Change::Deactivate, Change::Deactivate),
+        (Change::Demote, Change::Deactivate),
+        (Change::Deactivate, Change::Demote),
+    ] {
+        concurrent_changes_keep_an_admin(&requests, first, second).await;
+    }
+    requests.close().await;
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn the_last_admin_cannot_be_demoted_or_deactivated(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     for change in [Change::Demote, Change::Deactivate] {

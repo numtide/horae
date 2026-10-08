@@ -93,6 +93,12 @@ async fn begin_user_access_change(
     actor_id: uuid::Uuid,
 ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
     let mut tx = db.begin().await.map_err(server_err)?;
+    // The last-admin count must include changes committed while the
+    // organization lock was awaited, regardless of the connection default.
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        .execute(&mut *tx)
+        .await
+        .map_err(server_err)?;
     // Both role and activation changes must serialize before counting admins;
     // locking only the target user lets two admins remove each other.
     sqlx::query!(
