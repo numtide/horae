@@ -423,6 +423,37 @@ or worktree was changed by either trial. Next remains #240 after current checks
 pass, then #220's preserved replacement of #217; #224 review is ready for its
 subsequent integration. #212 remains excluded.
 
+### Bounded two-PR delivery pipeline — 2026-10-08
+
+#240/Nixbot505 progressed to its last three ARM checks (browser, deployment,
+OIDC), without failures. Rather than prepare #220 against a soon-obsolete base,
+stacked that existing PR on the exact #240 head4ef9a3c8. This preserves a bounded
+two-delivery pipeline and a reviewable #220 diff; it does not add features or PRs.
+
+Preserved fa9eeaaa at refs/backup/pr220-before-identity-20261008, then rebased its
+single repair commit in the existing worktree with updateRefs and signing off.
+The only conflict was fixture registration; all five test matrices and calls
+remain. Range-diff confirms unchanged production and regression-test patches;
+the identical query07580408 descriptor is now inherited from #240. Explicit
+old/new comparisons confirm its blob and the snapshot/reader tests unchanged.
+An initial read-only comparison accidentally used the root worktree's old HEAD;
+discarded that output and repeated with explicit fa9eeaaa/6afef017 revisions.
+
+Published6afef017ac15cef7d902a967c08a700bb4376c9e with the exact previous-head
+lease; no dependent branch was rewritten. Updated #220's base to
+fix/identity-response-projections and documented the dependency. Its own delta
+is26 files,1119 additions/17 deletions; remains draft without auto-merge.
+Nix-shell cargo fmt and git diff --check pass. GitHub37795259871 and Nixbot506
+are live. Nixbot's stored treedf84fa671f9db4175e3a7d2dc4e97beebccbf8a6 exactly
+matches the head and its merge with current master40434acd. No failed attribute
+at this check; previous Nixbot493 is explicitly historical.
+
+Next: deliver #240 first after505 and GitHub37793715132 pass. Verify its actual
+merge tree, then retarget/reconcile #220 onto that master without dropping any
+patch and verify the same combined tree before trusting506. Only after #220
+passes current-base and protected-queue checks may #217 be closed as replaced.
+Do not merge the stack out of order; keep #212 unchanged. No build was retried.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
