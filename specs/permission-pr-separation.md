@@ -1064,6 +1064,29 @@ Next: collect #248's current checks, then protected
 queue and final-tree verification. After its merge, reconcile only #223's
 owned commit onto actual master. Keep #212 unchanged and create no new PRs.
 
+### Converter delivery receipt prepared while specifications validate — 2026-10-08
+
+The preceding iteration made progress by verifying #219's merge and publishing
+#248. Revalidated #248 head `76b76750`, draft/mergeable state, exact Nixbot 513
+tree `e3a656f4` and live GitHub run 37823408244 (watcher 83691). GitHub formatting
+passed in 58 seconds; full checks remain in progress. No new retry or queue entry.
+
+Revalidated #223's clean local `8a9efae5` preparation and unchanged remote
+`68661980`. Its two owned Rust files remain byte-identical; whitespace checks
+passed. Prepared `.scratch/pr223-merge-delivery.md` with the reviewed lock-order
+boundary, five retained races, unchanged query-cache accounting and historical
+versus combined-tree acceptance clearly distinguished. This body remains local
+until the one owned commit is reconciled onto actual master after #248 merges.
+No new source edit, review claim, database operation, branch push or extra CI.
+
+Nixbot watcher 26568 observes build 513 every 60 seconds and exits at a terminal
+result; it has no restart logic. Its initial read confirms the expected tree and
+active checks. GitHub watcher 83691 remains the corresponding Actions handle.
+
+Next: collect #248's existing GitHub/Nixbot checks, then protected delivery and
+tree verification. Afterwards publish the already prepared #223 using its known
+remote lease; keep #212 and every prepared source branch intact.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
