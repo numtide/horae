@@ -2095,6 +2095,42 @@ tests, browser and OIDC have passed. GitHub37856544984 remains in progress.
 checks and verify actual combined-tree gates before queueing either delivery;
 keep #226's failed combination held and #232's verified preparation local.
 
+Prepared existing independent #238 locally while #228/#231 remote checks run.
+Backup refs/backup/pr238-before-current-delivery-20261008 preserves published
+e17ed8dd. Rebased its two owned commits fromed286e6b onto actualmaster3df38af8,
+with updateRefs disabled and no conflicts. Current local
+c6efb30ad933cecb1a4123a0bdc75a7ad8b7aac2,
+tree8296130a4b5b2a75def13c3819dfb9dbdc51a396. The production/test extraction
+is identical in range-diff; all four Rust files and original added SQLx blobs
+are unchanged. Four cache descriptors are now inherited from master, leaving
+54 files1915 additions/53 deletions. No new code, dependency or PR was added.
+
+Reviewed the budget-email authority contract, complete prepare/deliver/send
+flow, outbox claim/acknowledgement helpers, migration0039 parent triggers,
+existing notification tests and all13 new authority tests. No critical/high
+finding within T114–T116; no claim of OP37, enqueue integration, policy cutover
+or exactly-once delivery. Only local sender stubs/disposable PostgreSQL are used.
+Formatting passed505 files with zero changes; local session20247 is live,
+tests mn1qacxmhywsd6ig129hq7i645np148a-horae-tests-0.1.0 building after SQLx
+mv7q4fyvv7qhwdnjdrz8h97f8f6bw03v-horae-sqlx-prepare-0.1.0. #238 stays unpublished.
+
+#231 GitHub37856544984 is now successful. Nixbot526 still has one live ARM
+deployment check; its VM log advances through real import/restart scenarios,
+so it is not treated as stopped. #228 Nixbot528 is live on exact9ea69fa2/tree
+1b93261f; its attributes have begun building without failures. No retry.
+The future #231/master combination is5b5d63e1e60fab47d8ef8e003d41ee07557ed350,
+not build526'sff336229 tree; source acceptance cannot substitute for that
+combination. Verify combined acceptance before merge.
+
+Further shared-transport research found the maintainer's explanation in
+<https://github.com/hyperium/hyper/issues/2384>: closing a connection with unread
+data can reset it and lose an early response; automatic draining has resource
+costs. This remains a candidate mechanism, not proof of build524's cause.
+The current dependency is Hyper1.10.1 via reqwest0.12.28, whereas that report
+originated on0.14.2. No speculative transport or fixture change was applied.
+Next: collect live20247/526/528 and reconcile actual integration gates;
+keep #226 held and #212 intact.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
