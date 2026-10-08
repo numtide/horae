@@ -484,6 +484,27 @@ also live; its OIDC attribute remains failed and unretried. These are verified
 waits, with no new source change or restart in this iteration. Continue the
 same handles and do not equate both green GitHub workflows with full acceptance.
 
+### Reader acceptance and final identity gate — 2026-10-08
+
+Nixbot506 completed successfully for #220:16 passed and four cached attributes,
+including both architectures' browsers, deployment recovery and OIDC. Its
+stored treedf84fa671f9db4175e3a7d2dc4e97beebccbf8a6 matches the combined head;
+no attribute retry was needed for506. GitHub37795259871 also passed. Updated
+the PR body. Keep #220 draft until its parent #240 integrates, then verify the
+actual master combination; never merge this PR into the feature-branch base.
+
+#240's single ARM deployment retry subsequently passed its full functional
+scenario. Nixbot505 then had only OIDC failed. Requested exactly one OIDC retry
+after checking that deployment was succeeded; authenticated API returned200,
+and public read-back confirms only checks.aarch64-linux.e2e-oidc is building.
+No code, timeout, assertion or infrastructure change. Both original startup
+timeouts remain recorded; retries do not establish a root-cause fix.
+
+Next: collect the live OIDC retry. If505 is fully successful, revalidate #240
+head4ef9a3c8/current master40434acd and treeacb5d812, then mark ready and submit
+to the protected queue. Verify its final tree before reconciling #220 and
+using506's acceptance. Close #217 only after #220 integrates. Preserve #212.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
