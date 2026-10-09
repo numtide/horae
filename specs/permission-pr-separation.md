@@ -4738,6 +4738,14 @@ head and base. Its only remaining acceptance is required GitHub37960529444;
 the accepted Nixbot589 tree is unchanged. Continue with #257's protected merge
 once those checks pass, and preserve #258's live build during that transition.
 
+#257 required GitHub37960529444 passed. Read-back confirms a6ad1800/master,
+CLEAN and all checks successful; its GitHub commit tree is exactly68b2e2ca,
+matching accepted Nixbot589. Marked ready and submitted exact-head protected
+auto-merge. Command14111 succeeded; queue entryMQE_lQDOTRPZ888AAAABHDRulc4AA_LZzgMvpQQ
+is first, AWAITING_CHECKS. This is not yet a completed merge. #258/Nixbot591
+is building both Linux deliveries on5205f8ce; #259 remains local. Next: collect
+#257's integration checks and verify its actual squash before another rebase.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
