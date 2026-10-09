@@ -5077,6 +5077,27 @@ unpublished preparation from acceptance. No remote source or base was changed.
 Next remains full598 acceptance and protected #259 merge, then262 ancestry
 reconciliation only after600 terminates, and collection of2031.
 
+### #259 fully accepted and queued; #262 native results collected
+
+Nix598 succeeded at2026-10-09 19:37:30 UTC on exactcee459de and tree6087c861.
+All16 build/test attributes succeeded on both Linux architectures, with only
+six local-only skips. Required GitHub37978973703 attempt2 is green. Rechecked
+the exact head, clean merge state and empty reviews/threads, published current
+acceptance in the existing PR body, marked #259 ready and submitted it through
+the protected queue with --match-head-commit. Queue position1, stateQUEUED;
+not yet claimed merged. Publication/queue session94177 completed0.
+
+#262Nix600 has14 succeeded and2 building. Native results on both architectures:
+189 core,1221 server and201 auxiliary tests passed, zero failures and11 inherited
+ignored; x86 server197.03s and ARM214.20s. The current full tree is not yet
+fully accepted while browser/deployment gates remain live. Remote423a36ea is
+unchanged; preserve it until terminal acceptance before ancestry reconciliation.
+
+#263 local2031 passed Clippy and live SQLx validation and has started the
+native test derivation1qx0v8ix. No worktree edits during validation. Next:
+verify #259 merge-group and actual integrated tree, await600, reconcile #262
+onto the actual merge without tree changes, and collect2031. No new PRs.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
