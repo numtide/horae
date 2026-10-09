@@ -4540,6 +4540,30 @@ The client/WASM phase completed; package completion and browser reproduction
 remain pending. No source edits while this local build is live. Disk has 15GiB
 available. Keep #258 local until a remote delivery slot is free.
 
+The #259 baseline package built successfully at bd3a6a60 as
+`/nix/store/8b73flkdq38agrdanxm6azpn1c3s1f4x-horae-0.1.0`.
+Browser regression run64183 then reproduced all three historical calendar
+failures (move, resize and reorder without current tracking choices), while
+the six pre-existing error-handling checks passed. The pending correction
+changes one mouse-move guard and adds49 regression lines; it does not change
+CSS, server authorization or creation eligibility. The test uses a disposable
+database and stubs only the tracking-choice response, not mutation commands.
+
+Local validation85545 passed formatting (588 files unchanged), then failed
+while decompressing Cargo artifacts: four simultaneous derivations exhausted
+the disk before tests ran. Nix cleanup restored approximately14–15GiB;
+no repository files or developer databases were deleted. Retrying the package
+alone with `--max-jobs 1` in session78555; native tests, SQLx and clippy must
+also run sequentially. Do not interpret the infrastructure failure as a
+source regression or a successful validation.
+
+Nixbot586 remains live at #256 head46fd884d. Its x86 native log contains
+failures in six durable CSV streaming tests; final panic diagnostics are not
+yet available. ARM deployment, x86 browser and x86 native checks remain
+unfinished. Do not merge #256 or blindly rerun it. Next: collect the final
+diagnostics, validate #259's historical-calendar correction against the new
+package, and retain the two-delivery limit (#256/#257). #258/#259 remain local.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
