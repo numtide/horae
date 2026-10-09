@@ -5045,6 +5045,23 @@ succeeded and6 building. Neither source has been replaced. Next: collect
 these exact gates, integrate #259 when fully accepted, then reconcile #262
 without changing its accepted tree. Preserve #212 and the21-PR remaining scope.
 
+### #259 GitHub interruption inspected; unchanged retry requested
+
+GitHub37978973703 attempt1 terminated at19:30:18 UTC with exit143. Its log
+and annotations contain no compiler/test failure or established timeout/OOM
+cause. Compared its exact evaluated x86 derivations against Nix598: package
+jy16b54g, tests2nlkkzmx, browser3ggdr17k, Clippyyspicj0c, SQLx7bznfmcv,
+treefmt08phjx0g, deploymentvyrnzwrv and OIDCfzljyx05 all match and succeeded
+in Nixbot. Retried only the failed job on unchangedcee459de. Required GitHub
+acceptance is still pending, not replaced by Nixbot's results.
+
+Nix598 server results are1208 passed on each architecture, zero failures,
+11 inherited ignored; x86187.80s and ARM281.66s. Both have189 core and201
+auxiliary successes. At last API check15 attributes succeeded, one ARM
+deployment check remained live, and six local-only attributes were skipped.
+Review threads and reviews remain empty. Local #263 session2031 is still
+running; no source has been edited during that validation.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
