@@ -2677,6 +2677,22 @@ performed. Continue the accepted sequence rather than claiming that failure
 resolved. Next: collect535, publish #232's identical-tree ancestry update,
 and complete its fresh GitHub/protected queue gates.
 
+Nixbot535 completed successfully on #232 ce812ded/tree5d7aa453, including
+both Linux platforms. Published its prepared31f7061c ancestry-only rebase
+with an exact ce812ded lease and empty full-tree diff. Nixbot reused535 on
+the identical tree. GitHub37900093599 passed (Flake Check56s, Format37s).
+Marked #232 ready and requested protected delivery. Entry
+MQE_lQDOTRPZ888AAAABG81G9s4AA_LZzgMtmhI is first, AWAITING_CHECKS; merge-group
+37900256054 is live on483be1cd0583bb009f448245ceab942a5dc0f709. No merge yet.
+
+Nixbot537 also completed successfully on #238 c5402afa/treeb41bf687; all
+both-Linux gates passed, including ARM deployment827.17s. Its watcher52355
+and #232 watcher68222 are terminal-success. Wait for #232's imminent actual
+merge before reconciling #238 directly onto it, avoiding an intermediate
+ancestry publication. #235575b7b05 remains locally accepted and unpublished.
+Next: verify #232's queue tree/result, then reconcile and deliver #238, using
+the second remote slot for the existing #235 only after its base is published.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
