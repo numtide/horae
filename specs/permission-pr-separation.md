@@ -4799,6 +4799,26 @@ had42GiB available before launch. Next: collect this exact validation before
 publishing #261 as the second remote delivery; collect #258's current build
 before publishing its already-conserved master rebase. #212 stays untouched.
 
+### #258 accepted tree and master-targeted publication
+
+Nix591 succeeded at2026-10-09 17:02:04 UTC on5205f8ce, tree
+e23dc812f89f667f6a19e7ba78fadc8ea4b8bb54. All16 build/test attributes succeeded;
+six local-only attributes were skipped. Native suites passed on both Linux
+architectures:189 core,1174 server,201 auxiliary, zero failures and11 existing
+ignored. Server elapsed149.66s x86 and216.27s ARM. Both-Linux browser, package,
+SQLx, Clippy, formatting and deployment/OIDC all passed.
+
+Only after terminal success, published the already-prepared4970789548b27611cecac3317d993c3fa069f175
+with exact lease5205f8ce. Full-tree comparison is empty. GitHub confirms master
+base and reuses successful Nix591 for this identical tree. Updated the existing
+PR body; required workflow37963545570 is now running. Review threads and reviews
+are empty. No queue submission or merge claimed yet.
+
+#261 session46887 remains live: formatting, Clippy, SQLx and189 core tests have
+passed; application tests are compiling. Its source remains untouched while
+validation runs. Next: collect #258's required workflow and submit through the
+protected queue when green; collect #261 native completion before publication.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
