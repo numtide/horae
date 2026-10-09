@@ -2662,6 +2662,21 @@ only state changes. No local test or remote build was restarted. Next: collect
 27282 and these two builds, publish #23231f7061c only after535 completes,
 then use the protected queue and verify the actual integrated tree.
 
+#23527282 completed successfully on575b7b05/treed9ae89ad:189 core,914 server
+and183 auxiliary tests,1,286 passed, zero failures,11 existing manual cases
+ignored. Server suite122.91s. SQLx8pzwbyiq and treefmt qgryw3al passed along
+with tests4cpl79z5. Outputs remain rooted; no local test is still running and
+#235 remains unpublished. #232 Nixbot535 now awaits only ARM deployment;
+ARM browser/OIDC and all native checks passed. #238 Nixbot537 remains live.
+Watchers68222/52355 continue following those existing builds.
+
+Read-only reinspection of #226 confirms its hold remains justified: the
+merged #231 diagnostics do not establish a root-cause repair for its historical
+ARM transport failure. No #226 branch rewrite, retry, publication or merge was
+performed. Continue the accepted sequence rather than claiming that failure
+resolved. Next: collect535, publish #232's identical-tree ancestry update,
+and complete its fresh GitHub/protected queue gates.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2778,7 +2793,7 @@ stacked on the currently published #232, with1,277 native tests, SQLx and
 format accepted. Nixbot537 is evaluating. Local451d5b70 follows31f7061c
 with the identical whole tree. These are the two active remote deliveries.
 #235 is locally prepared on #238451d5b70 at575b7b05/treed9ae89ad;
-fresh native validation27282 is live and it remains unpublished. Its previous
+fresh native validation27282 passed1,286 tests, SQLx and format; it remains unpublished. Its previous
 7f89ce45 tree passed1,286 native tests, SQLx and format. Reconcile downstream ancestry
 with the accepted integrated base before publishing; do not attribute their
 historical tests to a future tree. #228's browser/VM corrections now have
