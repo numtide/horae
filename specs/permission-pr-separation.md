@@ -3180,6 +3180,27 @@ Local #24949164 remains live in SQLx preparation on673d95a2, with no source
 edits. Next: collect550/49164, complete #249's test review and deliver #247
 through its own master-targeted checks/queue. No new PR or feature was added.
 
+Completed #249's bounded review on673d95a2/tree18266223. Read the complete
+815-line authorization module, HTTP CSV module and changed HTTP matrix,
+the snapshot fixture update and preserved exact-value assertions, inherited
+transport timeout/admission/cancellation tests, and deployment migration role
+wiring. Combined with the production review from the preceding iteration,
+T110–T113 have no critical/high finding in this extraction boundary. Reused
+integer formatting and the project release predicate; no new abstractions,
+dependencies or source changes. The shared contract's later canonical/grouped
+refinements remain separate deliveries. The SECURITY INVOKER helper retains
+its original0046 checksum and PUBLIC execution denial; distinct deployment
+roles still need an explicit runtime grant. Batch thresholds allow one oversized
+record, and queued authorized blocks cannot be recalled.
+
+Local49164 completed SQLx verification in57.04s and formatting530 files with
+zero changes; tests remain live (core189 passed, server compiling at last
+observation). Do not publish on partial acceptance. Prepared the existing
+PR249 body locally, explicitly marking the suite pending. Nixbot550 for #247
+remains building without failed attributes; x86 tests have now passed. Next:
+collect49164 and publish reviewed #249 only after native acceptance; collect550
+before reconciling/pushing #247 onto actualmaster81194134. No new PRs.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
