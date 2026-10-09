@@ -5179,6 +5179,40 @@ No local build remains active. Open functional inventory is now exactly
 UI and #91 Renovate remain outside that count. Next: collect602/37983147107
 and review the existing #264 CSV successor without adding a new delivery.
 
+### #264 CSV successor reviewed and prepared locally
+
+Reviewed #264 at74b98399 against csv-exports.md and the previously checked
+time-report download contract. Read native cursor declaration/decoder,
+source-snapshot authority including invalid/empty sentinels, complete private
+metadata byte accounting, block-context retention, capacity-before-authority,
+savepoint rollback/release and synchronous send, cancellation/error propagation,
+shared filter parsing,10 database tests,5 parser tests and both HTTP formats.
+Reuses #263's current-authority and captured-row helper; its explicit denial
+rollback remains intact. No critical/high finding in this delivery. Policy
+activation, grouped exports, UI and later URL policy/filter controls stay separate.
+
+Confirmed old Nix471 terminal and a clean worktree. Backed up74b98399 in
+refs/backup/pr264-before-current-spreadsheet-stack-20261009 and rebased its one
+owned commit from91d6e7b8 onto #263224b8204. Resolved the sole conflict by
+retaining both groups::check and export_filters::check in the shared HTTP
+fixture. Range-diff changes are that context and three SQLx descriptors now
+inherited; all17 original added descriptors remain byte-identical. The complete
+cursor, delivery, scoped database tests, parser tests, two-format HTTP fixture
+and shared XLSX authorization module are identical to the previous source.
+
+Local head83f1fddc834073c5ef3fa3a0b9ae26bda42d8bb5,
+treef2b5654801a3c665570f4ab720142eee719d3dab. Started local2612 for formatting,
+native tests, live SQLx and strict Clippy,8 cores,one build job, disposable
+PostgreSQL only. Disk27 GiB before start. Do not modify/rebase this worktree
+until2612 terminates. Remote #264 remains74b98399 and its old review base;
+publication is pending this gate, retargeting and an exact old-head lease.
+
+#263 remains224b8204 on master: Nix602 has4 succeeded,9 building and3 pending;
+required GitHub37983147107 remains live. No remote source was replaced. Next:
+collect602/GitHub and2612, then publish the existing #264 as the second ordered
+delivery on #263 (or its actual merge), conserving content.19 functional PRs
+remain; #212 is untouched. No new PR, policy activation or real-data mutation.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
