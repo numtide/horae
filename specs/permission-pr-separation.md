@@ -2335,6 +2335,23 @@ live compiling/running native tests5iikp8g3 on clean7f89ce45. Do not restart.
 Next: collect88750, reproduce and correct only the evidenced browser-test
 synchronization defect, then validate and publish the existing #228 repair.
 
+#235 combined session88750 completed successfully at7f89ce45/treed0501497:
+189 core,914 server,183 auxiliary cases passed (1,286 total), zero failures,
+11 existing manual cases ignored. All seven connection-authority tests and
+both safe-error projections passed. Server148.26s; SQLx already passed2m09s.
+The reviewed stack is locally validated but remains unpublished. No original
+source behavior or assertion was changed for this preparation.
+
+Started controlled browser reproduction56556 after88750 finished, using the
+unchanged #228 server and isolated runner. Diagnostic derivation
+75lq3n9zkd0dzkx88vpq9xd7mhhw0fmd-horae-permission-readiness-red needs package
+jrqgdlxj73z9v17s9ipxjv06sinlvylk-horae-0.1.0. It delays the real options
+response6.5s for project-admin only; a paired green variant adds response
+synchronization without changing access/status/UI assertions. No source repair
+yet. Next: collect56556; if it reproduces the observed loading-state failure,
+verify the synchronized variant, apply the minimal test fix to existing #228,
+and run current-tree gates before publication/merge.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2449,6 +2466,10 @@ SQLx and format passing; its earlier independent tree passed1,243 tests. It is n
 published yet. #238 is locally stacked on #232 at30cb18af with1,277 native
 tests, SQLx and format passing. Its earlier independent c6efb30a passed1,250
 native tests. Both preparations remain unpublished.
+#235 is locally reviewed and stacked on #238 at7f89ce45, with1,286 combined
+native tests, SQLx and format passing; it remains unpublished. #228's original
+build528 now has an ARM browser readiness failure and stays out of the queue
+while a controlled local reproduction runs. No current repair is published.
 The failed #226 combination remains held; independent deliveries may advance
 only on exact current-tree acceptance, without claiming that failure repaired.
 Full current CI remains required. These preparation
