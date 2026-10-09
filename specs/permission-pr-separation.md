@@ -3656,6 +3656,49 @@ continues unchanged; watcher42630 remains active until both builds terminate.
 Previous turn was progress (#243 published); this interval is a verified wait
 that also established final Nix acceptance for #246. No builds were restarted.
 
+The next continuation revalidated both existing jobs as live (verified wait),
+then advanced independent local preparation of #244 rather than restarting CI.
+Reviewed all own-reader/DTO/wrapper/UI code, seven PostgreSQL cases, registered
+session assertions, nine SSR cases, resource wiring and the isolated browser
+script against own-permissions.md T095–T097/T120–T122. No critical/high finding
+in this boundary. Identity is session-derived, activity rechecked under the
+organization/actor locks, legacy staging hidden, stored grants strictly decoded,
+and errors sanitized. Settings preserves exact grants and independent admin
+identity; pending refresh suppresses stale content and does not offer editing.
+
+Rust/async/testing and minimal-change guidance informed this review; Impeccable
+checked the incumbent Settings implementation without redesign. Its detector
+returned no findings. The earlier 6c4e4d1 desktop-dark/narrow-light captures were
+inspected: no clipping or overlap; CSS, utility generator, theme and Settings
+components remain byte-identical to that source. Limited code/capture audit:
+accessibility3, performance4, theming4, responsive3, integrity4 (18/20), not a
+current browser or WCAG certification. The existing compact refresh control is
+below the skill's preferred44px touch target (P3); it retains the shared button
+convention. Native text zoom, touch gestures and cross-browser remain unproven.
+No CSS change, new component abstraction or visual polish was introduced.
+
+Preserved #24431e2cfc4 under refs/backup/pr244-before-current-delivery-20261009.
+Rebased its three owned commits from64c6e2b2 onto reviewed #2437f51e98c locally,
+with updateRefs disabled. New heada1d56c8640f4c6ea3793bd6caa88be8cb84fcfba,
+treec53bbafbff91fe46c78027c61f02e82002a460f8. This is delivery sequencing, not a
+new product dependency: #244 still requires only the already merged #234.
+Additive conflict resolution retains preflight/project-management declarations
+and all eight inherited HTTP checks beside own_permissions. Nine complete
+owned implementation/test files are byte-identical; browser commit unchanged
+by range-diff. Four old cache additions are now inherited, not lost. Owned diff
+is38 files,1,604 additions/one deletion; format553 files unchanged. Remote #244
+remains untouched at31e2cfc4 while #246/#243 consume the two remote build slots.
+
+Native check68358 stopped at evaluation because sqlx/formatting were not actual
+attribute names; no compilation/test failed. After reading nix/checks/, check94723
+uses tests/sqlx-prepare/treefmt on the frozen a1d56c86 source. Formatting passed;
+SQLx is live. Derivations s8wn4xkn98hy5hx1cpp97429np5kg3ys (tests),
+v57c10lzh6ksgr9pxdqdrhphzfpmdqy4 (SQLx), i8isz7xa8szhgjr0iv2vhdrqfd7n11n7
+(format). Keep this source unchanged while running; collect the same handle.
+Next remains #246 source37920533055 then protected queue, reconcile #243 to its
+actual squash preserving treebd7d2d2f, and publish #244 only when a slot opens
+and its native checks pass. #212 and the dirty reference worktree are untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
