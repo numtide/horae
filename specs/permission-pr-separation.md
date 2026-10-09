@@ -4610,6 +4610,36 @@ timeouts, assertions, test selection or internal race scenarios are changed.
 Next: run the complete native check with `--cores 48`, verify the effective
 eight-thread command, and publish only after local acceptance and terminal586.
 
+#256 validation98706 passed with a48-core budget:189 core tests at48 threads,
+1155 server plus201 auxiliary tests at eight threads, zero failures and11
+inherited ignored. All six previously failing CSV cases passed. Main server
+suite270.41s; output `/nix/store/snq4llgq5p6w2m9szbkrbqjv1b2m18z2-horae-tests-0.1.0`.
+Formatting passed577 files unchanged. Nix's existing automatic garbage
+collection activated during compilation and removed regenerable store cache;
+no repository files or developer databases were deleted.
+
+Nixbot586 became terminal FAILED at15:40:10 UTC with only the six x86 CSV
+fixture timeouts. Committed the one-file runner correction as
+ac636945b9528e102811ebbe43c2c00cdfc67dd7, tree253dc0963b2a522cf1c381308e33b3a19cc2676a.
+Backup `refs/backup/pr256-before-database-test-cap-20261009` retains46fd884d.
+Published with an exact lease and updated #256's body; push31960 finished
+successfully. GitHub37955056655 and Nixbot588 are live on the correct new head.
+588 already reuses all accepted gates except the two native Linux checks,
+which are running. Keep draft until both-Linux and protected checks pass.
+
+Rebased dependents locally with updateRefs disabled and explicit backups:
+#257 now2f0bb5e9607baa268c04574ac0c7da0c5a4382c7, tree68b2e2caf20f5f3c26dbe48627a7781e6ba5ddff;
+#258 now21c0b0d4797f3e674f095e9706a6f17a2b40f857, treee23dc812f89f667f6a19e7ba78fadc8ea4b8bb54;
+#259 now668437854dcce2321d8cb4d8520bc4ecdee59bbb, treecf31a07b9dc078a88a06f26d3151f32b11977a88.
+For each, a whole-tree comparison proves only the same six-line Nix hunk
+changed; every other file is identical to its backed-up predecessor. Their
+prepared body files are updated locally. Remote heads remain74c76c0f,
+6391cdbe and90105351 respectively. Nixbot587 has passed native checks on both
+Linux systems but its x86 browser remains live; do not replace that head yet.
+Next: collect588/GitHub acceptance for #256, then use the protected merge
+queue and reconcile actual squash ancestry. Publish #257's next delivery only
+after587 is terminal. Preserve the two-remote-delivery limit and #212 reference.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
