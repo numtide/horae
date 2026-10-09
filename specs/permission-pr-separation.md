@@ -4275,6 +4275,24 @@ source/queue gates and actual squash, retain #256 live head until CI completes,
 then publish prepared #257 as slots permit. #212 remains untouched; journal
 updates remain local on the existing #218 branch until explicitly published.
 
+#255 source37940439122 passed Format47s/Flake59s. After checks became green,
+explicit protected enqueue placed it first; queue37940766833 passed Format46s
+and Flake48s. Verified actual merge at14:00:12 UTC: squash
+bbdfb8f7d602513619b679b693f0c2e48af426a4, parent0d3b0ef0, expected whole tree
+d995c9610d8f282e460227dc6feda5d3bd406c87. No bypass or source change.
+
+After local #257 validation completed, backed up at
+refs/backup/pr257-before-discovery-reconciliation-20261009 and rebased its two
+owned commits onto published #256ee648e08. Verified whole-tree equality and
+unchanged six-file owned diff. New head8e24f13a2f54c413aef51c74157b8f602f3c305e,
+tree66830de5183eb8a02559191e965094119705df8e. Review query found no threads.
+With #255 merged, exact-lease published #257 on its existing temporary #256
+base. Keep draft; no merge into the dependency branch. #256 Nix581 continues
+on unchanged ee648e08; do not rebase its active build. Two remote deliveries
+are now #256/#257, and25functional deliveries remain. Next: collect both-Linux
+acceptance, reconcile #256 onto actual bbdfb8f7 preserving its complete tree,
+then use protected master checks/queue. Prepare #258 independently if useful.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
