@@ -4768,6 +4768,37 @@ pr259 ref. Updated only the locally prepared body files; remote #258 remains
 Next: collect591, retarget/publish the conserved #258 head on master, and then
 publish the prepared #259 delivery against that reconciled parent.
 
+### Independent report-reader preparation after #257
+
+Revalidated #258 Nix591 on remote5205f8ce: native tests, SQLx and Clippy
+have passed on both Linux architectures; browser and ARM deployment checks
+remain live. Do not replace its remote head while this build is running.
+GitHub automatically retargeted #258 and #261 to master after #257 merged.
+
+Prepared existing #261 independently, since its only outstanding dependency
+was #257. Reviewed the DTO, scoped SQL, session endpoint, registrations and
+all reader/endpoint tests against the checked-in time-report contract. No
+new high/critical issue identified in this reader boundary; downstream grouped
+reports, consumers and downloads remain separate deliveries. The old Nix592
+failure is an ancestry merge conflict with no evaluated tree, not a new test
+result.
+
+Backup refs/backup/pr261-before-page-context-merge-20261009 preserves7ac67a9d.
+Rebased only its owned commit from2c0cb369 onto merged master888240f6 with
+rebase.updateRefs disabled. Local head22334b1f8099806eeb35f0429d27d310171aaba1,
+tree84b5fcf9633432f35b7348f1aac942c190e16781. Resolved one module-registration
+conflict by retaining all master modules and adding time_reports. Range-diff
+contains only registration/context movement; all four added Rust source/test
+files and all19 owned SQLx descriptors remain byte-identical. Scope remains
+29 files,1512 additions/one deletion. No policy activation or production data
+change. Remote remains7ac67a9d pending validation.
+
+Local session46887 runs formatting and sequential Nix native tests, SQLx and
+Clippy with eight cores and max-jobs1, using only disposable databases. Disk
+had42GiB available before launch. Next: collect this exact validation before
+publishing #261 as the second remote delivery; collect #258's current build
+before publishing its already-conserved master rebase. #212 stays untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
