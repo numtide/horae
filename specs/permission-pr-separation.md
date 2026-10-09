@@ -2714,6 +2714,20 @@ no failed attributes. #238/#235 are the only active remote deliveries; no
 local test remains live. Next: verify #238's actual queue merge, then reconcile
 #235 locally without interrupting539 and deliver it when current gates pass.
 
+#238 merged at07:44:30 UTC as b60ed44f3158df43b1360e446395fd3319ba64ff.
+Source37900536578 and protected merge-group37900658766 passed; the actual
+b41bf687 tree is identical to both-Linux Nixbot537. #212 remains OPEN/draft
+at db3935db, and the root worktree is untouched.
+
+Prepared #235's final ancestry locally: head
+7726c85fb8972005d326e0f58866d55e78869771 on b60ed44f, with the identical
+d9ae89ad tree and both owned patches preserved. Backup
+refs/backup/pr235-before-budget-merge-20261009 retains2635cfb6. Remote #235
+remains2635cfb6 and was automatically retargeted to master; its Nixbot539
+continues without interruption. #235 is now the only active remote delivery.
+Next: collect539 before publishing7726c85f, revalidate reviews/current-head
+GitHub gates and use the protected queue. #226 remains held, not retried.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2822,18 +2836,14 @@ GitHub37893663978 and merge-group37896516881 passed. #231 is also merged:
 2b441a92/treea746b82d after both-Linux Nixbot531, source GitHub37897897267
 and protected merge-group37898041964 passed. This does not establish a fix
 for the historical intermittent CSV transport failure in #226.
-#232 is published atce812ded/tree5d7aa453, automatically targeting master,
-with1,264 native tests, SQLx and format accepted. Nixbot535 is live. Local
-31f7061c reconciles onto the actual #231 merge with the identical whole tree;
-publish it only after535 finishes. #238 is published atc5402afa/treeb41bf687,
-stacked on the currently published #232, with1,277 native tests, SQLx and
-format accepted. Nixbot537 is evaluating. Local451d5b70 follows31f7061c
-with the identical whole tree. These are the two active remote deliveries.
-#235 is locally prepared on #238451d5b70 at575b7b05/treed9ae89ad;
-fresh native validation27282 passed1,286 tests, SQLx and format; it remains unpublished. Its previous
-7f89ce45 tree passed1,286 native tests, SQLx and format. Reconcile downstream ancestry
-with the accepted integrated base before publishing; do not attribute their
-historical tests to a future tree. #228's browser/VM corrections now have
+#232 merged as483be1cd/tree5d7aa453 after Nixbot535, source37900093599 and
+protected merge-group37900256054 passed. #238 merged asb60ed44f/treeb41bf687
+after Nixbot537, source37900536578 and protected merge-group37900658766 passed.
+#235 is published at2635cfb6/treed9ae89ad, automatically targeting master;
+Nixbot539 is live. Its fresh native validation27282 passed1,286 tests, SQLx
+and format. Local7726c85f reconciles onto the actual #238 merge with the
+identical whole tree; publish it only after539 finishes. This is the only
+active remote delivery. #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
 only on exact current-tree acceptance, without claiming that failure repaired.
