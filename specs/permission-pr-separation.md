@@ -3020,6 +3020,28 @@ passed50.31s; formatting521 files/zero changes. Rooted outputs:
 on test counts alone. No local test is live. Next: finish #237 review while
 collecting existing545, then publish the accepted #236 ancestry reconciliation.
 
+Completed #237's bounded T086–T088 review oned4f2f21/tree6c66f37f: read the
+storage contract, all seven owned schema/source/test paths, caller graph,
+shared authority transaction, foreign-key prerequisite and all five requester
+regressions. Only trusted, revalidated session actors reach production inserts;
+nullable actor adapters are private/test-only entry paths. Duplicate SQL never
+updates original_requester_id; the new FK follows already-held organization and
+actor locks. Historical NULLs, report artifacts, upload failures, conflicts and
+DTO omission remain covered. No critical/high finding in this boundary. No
+worker-policy activation, SQL immutability or upgraded-old-binary guarantee is
+claimed. Migration0045/checksum and existing code were not modified. The earlier
+0047-before-0045 upgrade receipt stays explicitly historical; the current native
+populated migration regression passed separately.
+
+Published #237ed4f2f21 with exactd2ed2226 lease after retargeting its existing PR
+to fix/import-job-authority; publication7027 exited0. PR remains draft, with no
+review threads before publication, and has the new bounded scope/review/current
+test description. No new PR or feature. #236545 remains live (ARM browser and
+deployment pending; OIDC passed); watcher68541 checks545 every55s and prints
+only changes. These are the two active remote deliveries. Next: collect #237's
+exact-head CI identifier and545; publish #236 local66ff076b only after545 ends,
+then require GitHub and protected merge-group checks before claiming integration.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -3146,8 +3168,9 @@ review complete and native tests (1,310 passed), SQLx and format accepted.
 Correct-head Nixbot545 is active;544 was an old-head retarget merge conflict
 before evaluation. #236 is the only active remote delivery. Its local66ff076b
 reconciles onto master82c11cda with the identical ada47e05 tree; publish only
-after545 finishes. #237 is locally prepared ated4f2f21/tree6c66f37f and has passed
-native tests (1,315), SQLx and format; bounded source review is still pending.
+after545 finishes. #237 is published ated4f2f21/tree6c66f37f after passing
+native tests (1,315), SQLx, format and bounded source review. Its remote checks
+remain required; #236 and #237 are the two active remote deliveries.
 #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
