@@ -3042,6 +3042,13 @@ only changes. These are the two active remote deliveries. Next: collect #237's
 exact-head CI identifier and545; publish #236 local66ff076b only after545 ends,
 then require GitHub and protected merge-group checks before claiming integration.
 
+Read-back confirms #237 OPEN/draft ated4f2f21 on fix/import-job-authority.
+Nixbot547 is building that exact head/tree6c66f37f with no failed attribute.
+Nixbot546 was the oldd2ed2226 head evaluated during retargeting; it failed the
+base merge before evaluation and has no tree or attribute result. Preserve it
+as an obsolete-head delivery receipt, not a current source failure. Active
+remote handles are545 (#236) and547 (#237); no local build remains live.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
