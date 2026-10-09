@@ -3049,6 +3049,25 @@ base merge before evaluation and has no tree or attribute result. Preserve it
 as an obsolete-head delivery receipt, not a current source failure. Active
 remote handles are545 (#236) and547 (#237); no local build remains live.
 
+Prepared the next independent existing delivery #247 locally, on published #237
+ed4f2f21, to validate the expected merge sequence once rather than change the
+combined tree after each predecessor. Functional dependencies #228/#232/#222
+are merged; #236/#237 are delivery ordering only. Head
+5950fdb10071990105f4ea6d32cb7c8e8e339899, tree535ae5a74c2970aeaa0a02fc795c55d75f37bcbb.
+Backup refs/backup/pr247-before-current-delivery-20261009 retains published
+1b7adcd1. Remote draft/base unchanged; no publication or new PR.
+
+Rebase was conflict-free. Eight owned source/test files are byte-identical;
+server_fns.rs and the shared HTTP test only inherit prerequisite changes. The
+complete owned Rust patch has identical zero-context stable patch ID
+a3702a0c723c4de357effb45708c9c19ac751f4e. Three SQLx descriptors (0842ccee,
+4cf5cbc3,e6f2f3d3) now come from the base. Owned diff57 files,3,176 additions,
+149 deletions, retaining the original10 source/test files and SQLx cache scope.
+Current bounded review and fresh native tests/SQLx/format are required; earlier
+remote481/historical tests do not certify this new combined tree. Next: collect
+#236545/#237547 and finish #247's local review/validation without publishing a
+third concurrent remote delivery.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
