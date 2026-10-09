@@ -6312,6 +6312,35 @@ GitHub CI with tree-preserving metadata refresh and exact lease. Collect270's
 remaining gates and bounded captures;271 is prepared but unpublished and has
 no heavy build. No new PR, source change, activation or212 modification.
 
+### Harvest project reader prepared without another build
+
+The preceding iteration was a verified wait with capture preparation. Current
+269Nix615/watch97081 is12 passed/4 building/6 local-only skips, no failed
+attribute. Local27049430 completed the server/WASM package in287.88s and
+advanced to live SQLx preparation. Worktree remains frozen; native/browser
+acceptance and screenshots are still pending.
+
+Verified clean existing272160a5477, base270479cfe3f, and oldNix483 terminal
+failed. Backed up refs/backup/pr272-before-current-delivery-stack-20261009.
+Rebased its two owned commits onto the prepared sequential delivery base
+27163119b68 without conflicts. Actual runtime dependency is still270; using
+271 is delivery-order verification, not a newly introduced code dependency.
+Newheadc2ffc3a4ae5bda4fc8265d9baddde429ff63fd79/tree
+01a071df70b32cd5a4ce03007b8a8e9297c76d76. The removal follow-up is equal;
+main range-diff differs only because three exact SQLx descriptors are already
+inherited and snapshot module visibility changed upstream.18/19 original
+paths are byte-identical, including runtime reader, all original regressions,
+ten added descriptors and three removed obsolete descriptors. The shared
+server_fns module retains upstream tenant/permission changes, with only the
+same server-gated reader re-export owned by272. No conflict edits or assertion
+changes. Formatting60047 passed with no changes; whitespace passed.
+
+Prepared .scratch/pr272-current-delivery.md with current provenance and pending
+acceptance. No272 build/push, new PR, real-data mutation or activation. Next
+collect615 and49430; after615 terminal trigger269's missing required GitHub
+CI without changing its accepted tree. Finish270 before publishing, then run
+271 and272 in order using the single local build slot.212 unchanged.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
