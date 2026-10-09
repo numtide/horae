@@ -4473,6 +4473,16 @@ status, then publish #256 with exact leasef0d61e24. #257585 remains live; do not
 push over it. #258 remains unpublished. Next: fresh remote acceptance of the
 corrected head and protected merge, not acceptance of the older tree alone.
 
+Watcher12123 observed Nix584 terminal success. After that, exact-lease pushed
+#256f0d61e24→46fd884d and published its updated body. GitHub read-back confirms
+OPEN/draft on46fd884d, master base; fresh source run37947671958 and Nix586
+are live. Older584 success does not override the independently failed GitHub
+run or certify the changed tree. Keep draft until fresh acceptance. #257585
+still runs ARMdeployment/x86browser/x86native; local74c76c0f is ready but not
+published. #258d25c08dd remains local-only. Next: collect586 and585, publish
+#257's inherited correction only after585 terminal, and continue protected
+merges without another remote delivery or changes to #212.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
