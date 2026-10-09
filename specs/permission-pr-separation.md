@@ -4483,6 +4483,28 @@ published. #258d25c08dd remains local-only. Next: collect586 and585, publish
 #257's inherited correction only after585 terminal, and continue protected
 merges without another remote delivery or changes to #212.
 
+Further #259 review confirms a medium-severity interaction regression to fix
+before its delivery: render_calendar_view gates column mousemove with can_create
+(!busy && !tracking.is_empty()), while tracking::editable permits legacy-own
+historical Open entries without an active tracking choice. Such an event can
+start a Move/Resize/Reorder drag, but its pointer updates are discarded. The
+pre-extraction handler had no creation gate on mousemove. Traced the server's
+legacy_billable and Reschedule/Reorder branches: historical edits remain an
+intentional boundary, not permission to create new entries. Keep independent
+creation/edit predicates and add an interaction regression test; do not grant
+new tracking access or change canonical/delegated rules. No #259 edit yet.
+
+Read the remainder of Timesheet through EOF, plus the full Design System
+prototype (315 lines) and app/support.js (1911 lines). Shared Components and
+direct imported prototypes remain to be read before UI changes under the
+handoff procedure. Existing design tokens/layout are to be preserved; this is
+not a new visual redesign. Nix585's native and deployment checks now pass on
+both Linux architectures; only x86browser remains live with passing cases.
+Watch46732 polls585 every55seconds and prints changes only. Nix586 is live on
+#25646fd884d; GitHub37947671958 Format passed and FlakeCheck remains live.
+Next: collect585 terminal, publish prepared #25774c76c0f with exact lease5900462a,
+then keep #256 first in protected delivery order. No new remote front or PR.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
