@@ -5801,6 +5801,48 @@ handle. Next: collect that gate for264's protected queue, collect609/86184,
 and finish268's bounded runtime evidence. No new PRs, remote head changes or
 merge claim in this verified-wait iteration.
 
+### Reports browser acceptance and isolated Project editor preparation
+
+The previous status turn was a verified wait: required GitHub run37990586429,
+Nix609 and local86184 were confirmed live. Nix609 now has15 passed attributes
+and only checks.aarch64-linux.e2e building; no failed attribute. GitHub264's
+same required Flake Check remains in progress. No restart or protection bypass.
+
+On exact268 d3cdf579, the complete browser derivation finished and local86184
+advanced to native tests. Retrieved its completed log: the scoped Reports
+scenario passed paging, totals, all four individual contexts, all four nested
+breakdowns, filtered exports, stale/invalid states and policy binding in
+Chromium148.0.7778.96. Retrieved SQLx log also confirms successful live-schema
+prepare --check (server1m21s). Native acceptance and bounded visual capture
+remain pending. The worktree stays frozen while86184 runs.
+
+Prepared existing269 independently without starting another build or publishing
+another remote delivery. Verified #240/#250/#253/#254 are merged and fetched
+master4c824d8b. Backed up original b08ef5ade6dac562c3413fe67f6146490f33e7ba at
+refs/backup/pr269-before-current-master-20261009. Rebased all four owned commits
+from9ab47abd onto master, producing3058f43d1789453cd3f6d17be19c3a371a10c463,
+treeb2c62561836a4ab09b0a3127198f81da9f9959ba. Remote269 remains b08ef5ad;
+its old Nix444 is terminal failed, not an active build.
+
+Only conflicts were the HTTP fixture registry and browser suite list. Kept all
+master registrations/order, added project_editor after project_managers once,
+and prepended project-editor-permissions to all27 inherited browser suites.
+Range-diff changes only those registration contexts; the three follow-up
+commits remain equal. Of84 original owned paths,81 remain byte-identical,
+including all48 added SQLx descriptors and the original obsolete-descriptor
+deletion. The other three differences are those two registries and master's
+existing hydration-response synchronization in new-project-permissions;
+its response-status assertion and all editor assertions are preserved. Shared
+CSS, utility generation and DESIGN.md are unchanged. Shell syntax and diff
+whitespace checks passed. This is rebase/conflict conservation review using
+rust-best-practices and ponytail, not fresh full executable/UI acceptance.
+
+Next: prioritize264's required gate and protected queue; after609 terminates,
+publish the already native-verified267 exactf11 head on its verified266 parent
+without exceeding two active remote deliveries. Collect268 native results and
+its isolated focused screenshots before another heavy local build;269's full
+gate follows. No new PR, policy activation, real-data mutation or #212 change.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
