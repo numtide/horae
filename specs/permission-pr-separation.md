@@ -3813,6 +3813,17 @@ resources/infrastructure before another retry. #245 remains unpublished; #212 an
 its worktree stay untouched. Next: collect attempt2, Nixbot563 and local21679, then
 reconcile #243 only after #246's actual protected squash is verified.
 
+Local #245 session21679 exited0 on733f1b27/tree5019fb77. All four requested
+checks passed: tests, full SQLx preparation, treefmt and the full isolated browser
+suite. Tests passed189 core +1,109 server +201 auxiliary =1,499, with zero failures
+and11 existing manual cases ignored; server196.02s. Four plugin child-process
+results are not counted twice. Tests outputi62c4pyfxx43s5271v8xi6l7j9d33l7h,
+SQLxpmyw258jq1h42pw3dk1pimx1fi5fjq1a, treefmtnh55wcrk1jvzxnr6bkq8ybm4473n6dmm,
+browsergig0kjabk2qck107dal4ssvapjil75bm. Worktree is clean. This is native/local
+acceptance, not final ARM or protected merge acceptance; remote #245 remainsa6982442.
+Next: publish the prepared #245 once an active remote-build slot is free, keeping
+it draft on #244, and collect #246's retry before any downstream master rebase.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
