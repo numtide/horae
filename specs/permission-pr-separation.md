@@ -1924,7 +1924,7 @@ The separate Cachix maintenance job is still running, not reported failed.
 
 Remote #212 remains open/draft at `db3935db`. No new local build is active.
 Next: collect #226 queue watcher 1234/Nixbot 524, and #227 watcher 34313/Nixbot
-525. Submit #227 only after acceptance; reconcile #228 after its real #227
+525\. Submit #227 only after acceptance; reconcile #228 after its real #227
 prerequisite integrates. Do not create new PRs or repeat already-complete checks.
 
 Read-back of Nixbot524 changes the next action: the combined #226 queue tree
@@ -3461,6 +3461,52 @@ transport limitation without calling it fixed. After #226's actual squash,
 reconcile #234 onto master with the identical accepted tree and require its
 master-targeted/protected gates. #212 remains untouched; no new PR was opened.
 
+### #226 integrated and #234 squash reconciliation — 2026-10-09
+
+The preceding status turn yielded new authoritative evidence: #226 is merged,
+not merely queued. Current source GitHub37916121654 passed (Flake Check24m58s,
+Format42s), both-Linux Nixbot553 succeeded, and protected merge-group37918902378
+passed. Actual squash ff3fde1067037e71394b8e135297ea4e41d3ad7a has parent6d19a88f
+and tree92b3e1fc31934306f646b4dcf293d0ddc3bb1dfe, exactly the accepted source
+tree. Merged at10:40:30 UTC. Historical524 remains unresolved; no repair claim.
+
+Reconciled #234's clean worktree onto that actual squash with updateRefs disabled.
+Backup refs/backup/pr234-before-parent-squash-20261009 retains daf09672.
+New head ed340ef3af1028343b524a910478cb99a2cf143b preserves the complete accepted
+tree43fb4002d5ea2c7d214820544eea3ca35be6483b; both owned commits are range-diff
+identical. GitHub automatically retargeted the PR to master after its parent
+merged. Exact-daf09672 lease publication11853 is live; collect it before claiming
+publication. Nixbot555 remains building only ARM deployment e2e; no failed
+attribute or retry. Require the new master-targeted GitHub checks and protected
+queue acceptance before merging. #246's prerequisites are now merged, allowing
+its bounded review/preparation independently. #212 and root worktree untouched.
+
+Publication11853 terminated without a write because HTTPS askpass was unavailable.
+Publication92630 then succeeded using the existing gh credential helper, scoped
+to that command only. #234 now publishes ed340ef3 on master. Nixbot555 completed
+successfully on the identical43fb4002 tree. Build556 failed before evaluation
+because GitHub had retargeted old daf09672 onto the parent's squash; it is not a
+test failure. The ancestry reconciliation resolves that obsolete-head conflict.
+
+Reviewed #246 against migration-preflight.md and T117–T119: full98-line reader,
+451-line/seven-case test module and wiring. No critical/high finding. Explicit
+READ COMMITTED, organization then actor SHARE locks, current legacy admin after
+wait, version-zero-only access, one statement snapshot, count-only projection,
+bounded statements, no DML/public caller and typed failure cleanup match its
+contract. Canonical activation and full migration acceptance remain separate.
+Skills favored preserving the existing minimal reader and scoped dead-code
+expectation; no new abstraction or source edit was needed.
+
+Rebased its four owned commits from19bc96cf onto actual masterff3fde10 with
+updateRefs disabled. Backup refs/backup/pr246-before-current-delivery-20261009
+retains786af946. New local heade5b9f62a64218e2a56262cb6855f38ff20e7e016,
+tree356c14e921b340a0e94327a10914f56b7bb4b711. Three source/lint commits are
+range-diff identical; cache drops only two additions now inherited. Reader and
+all tests remain byte-identical. Owned20 files/916 additions (three source paths,
+17 SQLx descriptors). Native formatting/tests/cache validation is starting;
+do not publish or merge on old evidence. Next collect that check, publish only
+after acceptance, and collect #234's master-targeted CI. No new PR or data work.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -3561,8 +3607,8 @@ documentation #248. #217 was closed only
 after #220's final tree was verified. Preserve #212 open and unchanged.
 
 Deliveries #221, #223, #222 and #225 are also merged with both-Linux acceptance.
-#226 passed its source-head gates, but its queue build524 exposed an ARM CSV
-transport regression; it is removed from the queue with auto-merge disabled.
+#226's historical queue build524 exposed an intermittent ARM CSV transport
+failure. Its current-tree delivery and residual limitation are recorded below.
 #227 and #228 are merged with exact-tree and protected-queue acceptance.
 #228 integrated as cea013c9/tree9e6a1625 after both-Linux Nixbot530, source
 GitHub37893663978 and merge-group37896516881 passed. #231 is also merged:
@@ -3599,12 +3645,13 @@ protected merge-group37912987938 passed; #247 merged as34ef9f81/tree535ae5a7.
 critical/high issue. Nixbot551 passed. Published ancestry-only92e56565 on
 actualmaster34ef9f81 with identical18266223 tree; source37913664711 and protected
 merge-group37913931083 passed. #249 merged as6d19a88f/tree18266223.
-No local build, remote delivery or watcher remains live. Next resolve the held
-#226 ARM transport case before advancing dependent permission deliveries.
+#226 merged asff3fde10/tree92b3e1fc after current both-Linux Nixbot553,
+source37916121654 and protected merge-group37918902378 passed. #234 is being
+reconciled onto this actual squash without changing its accepted tree43fb4002.
 #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
-The failed #226 combination remains held; independent deliveries may advance
-only on exact current-tree acceptance, without claiming that failure repaired.
+The historical524 failure is not claimed repaired. Deliveries require exact
+current-tree acceptance; any new failure stops that delivery for investigation.
 Full current CI remains required. These preparation
 bases are an integration sequence, not new functional dependencies. Verify
 actual combined trees and gates without repeatedly rebasing unrelated live builds.
