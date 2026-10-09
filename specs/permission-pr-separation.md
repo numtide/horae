@@ -5456,6 +5456,25 @@ the same inherited fix and fresh gates. Maximum two active remote deliveries;
 18 functional PRs remain, #212 unchanged. This iteration completed native
 acceptance and downstream conservation; remaining waits are verified live.
 
+### Corrected browser suite passed the failing boundary; full run remains active
+
+Session66690 built the corrected package successfully (server199.24s) and is
+executing the complete browser runner. The exact formerly failing historical
+move/resize/reorder cases and subsequent day timer case passed. Delegated
+Timesheet, responsive navigation, bulk operations, project forms, invoice
+preparation and the project-role matrix have also passed so far. No failure
+reported, but the full runner has not terminated; do not claim final acceptance.
+The worktree remains clean atf331ba60, frozen during this build; disk27 GiB.
+
+Fresh review threads for #264/#265 are empty; remote heads remain83f1fddc and
+a31f8e59 respectively. Nix604/watch65000 is still active with ARM deployment
+and x86 native tests outstanding; other12 attributes passed, two browser
+failures known, six local-only skipped. Direct x86 log shows further passing
+tests, including a slow test subsequently passing: no restart or hang claim.
+Next: collect local66690 and remote65000 terminal results, then perform the
+recorded ancestry reconciliation and exact-lease publication. This iteration
+is a verified wait with new browser regression evidence;18 PRs remain.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
