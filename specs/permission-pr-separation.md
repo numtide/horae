@@ -3366,6 +3366,16 @@ of524 or a claim that prior successful runs repaired it. Keep draft/auto-merge
 off pending evidence. Public delivery description is prepared in
 `.scratch/pr226-current-delivery.md`; publication must be verified separately.
 
+Publication9984 completed successfully using an exact1cbde180 lease. Remote
+#226 is now verified at0bacb3b1, OPEN/draft, auto-merge null, with the updated
+current-base description. No new PR or queue request. GitHub37916121654 is live
+(watcher31136,55-second interval); Nixbot553 is building exactly tree92b3e1fc
+and source0bacb3b1 on both Linux platforms. Collect these specific jobs rather
+than rerunning them. #212 remains OPEN/draft atdb3935db unchanged. No local
+build remains live;82262 and35617 are terminal. Next: inspect fresh ARM
+results/diagnostics, then decide readiness on evidence while preserving the
+historical524 failure and the hold against blind retries.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
