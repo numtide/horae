@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT current_setting('statement_timeout') AS timeout, current_setting('default_transaction_read_only') AS readonly",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "timeout",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "readonly",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "1f964f71ab41b467c50954902448a931765844550c9bc0d63b39ba8dc1998b8a"
+}
