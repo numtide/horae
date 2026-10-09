@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT jsonb_build_object(\n          'orgs', (SELECT jsonb_agg(o ORDER BY id) FROM organizations o),\n          'users', (SELECT jsonb_agg(u ORDER BY id) FROM users u),\n          'projects', (SELECT jsonb_agg(p ORDER BY id) FROM projects p),\n          'memberships', (SELECT jsonb_agg(a ORDER BY id) FROM assignments a),\n          'approvals', (SELECT jsonb_agg(a ORDER BY id) FROM approvals a),\n          'jobs', (SELECT jsonb_agg(j ORDER BY id) FROM horae_jobs j),\n          'uploads', (SELECT jsonb_agg(u ORDER BY job_id) FROM horae_job_uploads u),\n          'chunks', (SELECT jsonb_agg(c ORDER BY id) FROM horae_job_report_error_chunks c),\n          'audit', (SELECT jsonb_agg(a ORDER BY id) FROM audit_log a),\n          'receipts', (SELECT jsonb_agg(r ORDER BY id) FROM permission_change_receipts r))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "jsonb_build_object",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e554d324cd2cd9a0699d9c87d1bded535a27d292ae8ac05b14b6049338601eef"
+}

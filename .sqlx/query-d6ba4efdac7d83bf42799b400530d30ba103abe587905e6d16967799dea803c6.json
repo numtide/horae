@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (id, org_id, email, name, org_role, active)\n         VALUES ($1, $2, 'historic@test.com', 'Historical approver', 'member', false)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d6ba4efdac7d83bf42799b400530d30ba103abe587905e6d16967799dea803c6"
+}

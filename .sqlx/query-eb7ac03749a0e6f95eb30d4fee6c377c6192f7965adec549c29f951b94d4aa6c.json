@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO horae_jobs (id, org_id, kind, status, payload, original_requester_id,\n                       worker_id, lease_until, report, checkpoint)\n                     VALUES ($1, $2, $3, $4, '{\"private\":\"source\"}', $5,\n                       'retained-worker', now() + interval '1 hour', '{\"errors\":[]}', '{\"offset\":23}')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eb7ac03749a0e6f95eb30d4fee6c377c6192f7965adec549c29f951b94d4aa6c"
+}
