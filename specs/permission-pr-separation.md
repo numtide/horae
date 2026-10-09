@@ -6655,6 +6655,22 @@ live SQLx passed; full browser suite is running against disposable PostgreSQL.
 No edits to that frozen worktree. Next: collect the exact-head #270 retry/Nix
 and #271 local outcomes, then queue #270 only if accepted. #212 stays untouched.
 
+### Project reader required-CI retry passed — 2026-10-10
+
+GitHub run38005137996 attempt2 passed on unchanged703cde78: Flake Check58s,
+Format45s. Watch42279 exited zero. Attempt1's unexplained SIGTERM did not require
+a source change. Exact-head readiness inspection confirmed base master,
+MERGEABLE, no review threads (no pagination) and no reviews. Nix617 last reported
+14 succeeded,2 building,6 skipped-local; still live, not final acceptance.
+Retain its watcher5274. Do not queue before that result or bypass merge-group CI.
+
+#271 session40820 remains live, currently running the browser keyboard/layout
+matrix; Clippy, server/WASM package and live SQLx passed. Keep its worktree
+frozen. All remaining deliveries now have prepared local compositions and
+recovery refs; no new remote heads were published this iteration. Next: finish
+#270 remote acceptance and queue, collect #271 full local gate, then reconcile
+#271 onto the actual merge with complete-tree proof before publishing it.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
