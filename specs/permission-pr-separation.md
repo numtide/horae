@@ -2748,6 +2748,18 @@ delivery: watcher74994 confirms539 live, now only ARM browser/deployment/OIDC
 checks remain. GitHub confirms masterb60ed44f and no review threads on #235.
 Next: collect existing539/83821; publish only their accepted prepared heads.
 
+Session83821 completed successfully on #241 b4edd434/tree51da9d21: 189 core,
+910 server and183 auxiliary tests passed (1,282 total,zero failures,11 existing
+manual cases ignored), server120.08s. All five activity regressions passed.
+SQLx verification passed52.90s; treefmt passed515 files,zero changes.
+Rooted outputs: tests2k48w751,SQLxmqvg4153,treefmtlni91l8b. Published b4edd434
+with the exact52df7c01 lease and replaced the stale PR description with current
+scope, provenance, review limits and acceptance. No source changes or new PR.
+Remote and protected queue gates remain outstanding; #241 stays draft.
+#235539 still runs only ARM deployment. Next: verify #241's new CI handle;
+collect539, then publish its identical-tree7726c85f ancestry and queue it after
+required GitHub checks. #235/#241 are now the two remote deliveries.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2863,7 +2875,10 @@ after Nixbot537, source37900536578 and protected merge-group37900658766 passed.
 Nixbot539 is live. Its fresh native validation27282 passed1,286 tests, SQLx
 and format. Local7726c85f reconciles onto the actual #238 merge with the
 identical whole tree; publish it only after539 finishes. This is the only
-active remote delivery. #228's browser/VM corrections now have
+active remote delivery at that observation. #241 has since been published at
+b4edd434/tree51da9d21 on masterb60ed44f after fresh native tests (1,282 passed),
+SQLx and formatting succeeded. It remains draft pending remote and queue gates;
+#235/#241 are the two active remote deliveries. #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
 only on exact current-tree acceptance, without claiming that failure repaired.
