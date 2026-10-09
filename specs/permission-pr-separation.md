@@ -4879,6 +4879,32 @@ terminal failures within the existing scope, then use the protected merge
 queue and verify the actual integrated tree. Earlier approval interruption
 is resolved; commit this accumulated journal record without publishing #218.
 
+### Read-only preparation of the next grouped-report delivery
+
+While #259595 and #261596 remain live, reviewed existing #262 at
+3cd060bad5642e1589ee938c1bacb4587dfd3589 without rebasing, editing or publishing
+it. It remains stacked on #261's historical7ac67a9d. Owned scope:18 files,
+1385 additions. Read the153-line grouped reader,68-line DTO additions,
+33-line endpoint wrapper, all722 lines of database tests,171-line HTTP fixture
+and registrations against the ordinary grouped-time contract. No critical/high
+finding in this bounded reader review.
+
+Verified scope precedes filters/aggregation, identity separates duplicate names,
+C collation agrees across ordering/cursors, integer totals cover the entire
+period, requester/policy/active-actor gates remain server-owned, errors do not
+expose storage details, and cancellation drops the transaction. Existing tests
+cover all four groupings, own/managed/all unions, active/billability filters,
+503 same-name groups across pages, zero/frozen/large sums, malformed parents,
+invalid cursors, revocation and actor deactivation. The reader and database tests
+are byte-identical to preserved212db3935db; the HTTP fixture matches original
+41ff137; all10 owned SQLx descriptors match212 exactly. No new test result or
+browser/consumer acceptance is claimed. Keep this branch unchanged until its
+parent delivery is ready; fresh base reconciliation and gates are still needed.
+
+Both active deliveries still have no terminal failure; monitor session2279
+polls only595/596 at45-second intervals and prints state changes. Required
+GitHub37975649246/37975763858 remain live. No third remote delivery was started.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
