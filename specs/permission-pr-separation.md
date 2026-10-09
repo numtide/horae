@@ -4396,6 +4396,15 @@ FlakeCheck remains live. No merge claimed. #25812dbe8a0 remains local-only until
 a remote slot opens. Next: collect corrected #256 native/ARM acceptance and
 protected master gates, then deliver existing #258. #212 still untouched.
 
+Verified-wait iteration on corrected #256584 and #257585; no CI restart or
+new remote front. #256 ARMnative now succeeded:189core+1155server+201aux=1545,
+zero failures/11ignored,server218.35s. Explicit raw-log evidence confirms the
+corrected legacy_project_lock_returns_busy test passed on ARM, where581 failed.
+This resolves that observed fixture failure but is not full CI acceptance;
+browser/deployment/OIDC ARM and x86 gates remain live/pending. GitHub source
+37943359692 still runs. #257585 is building. Watch12123 checks584 every55seconds
+and emits changes only. Next remains full acceptance and protected #256 merge.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
