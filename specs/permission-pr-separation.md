@@ -6205,6 +6205,57 @@ it. Publish accepted269 using exact old-head lease and update its existing
 review base, without creating another PR. Collect80772 as the sole heavy
 local build. No real-data change, policy activation or change to212.
 
+### Reports merged; editor published; reader test composition corrected
+
+Protected26838000848110 passed (watch23199 exit0, Flake59s/Format42s).
+GitHub confirms MERGED at2026-10-09T22:46:59Z as
+7abdb3a850255e68b980961a92543192b17e771d. Fetched master without pruning and
+verified complete tree3130cd43 equals accepted9cf07dd3. Thirteen functional
+deliveries remain. Root checkout and reference212 remain untouched.
+
+Backed up2697e230099 at refs/backup/pr269-before-reports-merge-20261009,
+then rebased its four owned commits fromd3cdf579 ontoactualmerge7abdb3a8.
+All four range-diff entries are equal and entire tree0079046c unchanged.
+Newhead188750d8a9f4096b987eb37cafba56dd2e96a604. Reconfirmed old remote
+b08ef5ad/Nix444 terminal, published with exact lease and retargeted the existing
+PR to master. Push/base/body update44778 exited0; no new PR.268 description
+now records its actual merge receipt;269 records completed local/visual gates.
+
+The push just before the base edit produced transientNix614 on188750d8 with
+null tree: it could not fetch obsolete base reference16468c0d, not a test
+failure. CurrentNix615 has exacttree0079046c and is building; watcher97081
+emits changes only. GitHub's check rollup briefly retains the earlier failure
+while615 is active; direct build API is authoritative. The CI workflow handles
+push/master, default pull_request/master and merge_group, not edited/base
+changes or workflow_dispatch. No required GitHub run exists yet for269.
+After615 terminates, trigger the missing required run with a metadata-only
+head refresh, whole-tree equality and exact lease; never replace this active
+head. Required/master and protected merge-group checks remain mandatory.
+
+Local27080772 terminated exit1 in strict Clippy. Concrete E0061 at the included
+Reports page: list_project_tags(None) now matches the production reader, but
+the inherited scoped_reports_ui stub still accepted zero arguments. No test
+assertion or production behavior failed here; no native/browser acceptance
+is claimed for that run. Waited for the handle to terminate before editing.
+
+Backed upcf9c75f0 at refs/backup/pr270-before-published-editor-20261009 and
+rebased its seven commits from7e230099 onto published269188750d8. All entries
+equal; intermediatec4998369 retained entiretree319cf920. Minimal follow-up
+e70c06b9b04633ce6961c775339965b03469e1e8 adds the actual optional requester
+argument to the test stub only (three added/one removed lines). Production,
+all existing assertions, SQLx and UI/CSS are unchanged. Currenttree
+e66eb9a5864ab2e8b32e2e1dcc78cd91ca3d4c7b. This is a concrete compiler RED;
+GREEN remains pending, not asserted. Rust best-practice/testing guidance and
+all callers/stubs were checked for the signature boundary.
+
+Started the same full local gate49430 on cleane70c06b9: format, tests, SQLx,
+strict Clippy and browser, one job/eight cores. Freeze this worktree; do not
+start another heavy build. Remote270 still479cfe3f. Next collect615/97081 and
+49430, obtain missing required CI for269 without changing its accepted tree,
+then advance its protected queue. No new PR, real-data mutation or policy
+activation. This iteration includes an actual merge, accepted-tree publication
+and a focused failing-test correction, not status-only work.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
