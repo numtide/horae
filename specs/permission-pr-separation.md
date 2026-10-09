@@ -5486,6 +5486,41 @@ Watch65000 still observes the existing build. No restarts, head replacements,
 source edits, additional local builds or acceptance claims. Next remains collect
 both terminal results, reconcile/publish the corrected existing264 and then265.
 
+### Full corrected browser gate passed; #265 published and #266 native gate started
+
+Local66690 completed exit0 on #264f331ba60/treef678797f. Formatting601 unchanged,
+package9kjw9jdb58b1bjcm0zjh48hcq7ajxp6s and complete browser runner
+9najj2p9fsyr9i6f1wcrrafv62xnasiw passed, including the failing Timesheet boundary,
+all subsequent suites, own permissions and permission history. Published this
+exact evidence in #264's existing body, clearly separate from remote acceptance.
+
+No browser build remained active. Started full native/SQLx/Clippy validation of
+reviewed #2661fa434d4/treea00a6968 in session17446, one job/eight cores,
+disposable PostgreSQL, disk30 GiB. Freeze that worktree until terminal.
+
+After fresh remote-head/terminal-old-check verification, published #26569cbd68c
+with exacta31f8e59 lease; session4691 exited0 and GitHub confirms the head/base.
+Nix605 is the fresh build. #265 intentionally includes the parent's already
+validated browser cleanup before parent publication: while remote264 remains83,
+the review diff is10 files,258 additions/9 deletions (owned nine files plus that
+three-line fixture). The body explicitly separates189/1249/201 native acceptance
+onbe7b7749, inherited browser acceptance onf331ba60, and pending exact-head
+both-Linux/master/queue gates. It stays draft. This pipelines the second remote
+delivery without replacing the still-running #264Nix604 head.
+
+Fetched current master4c824d8b, then backed up clean264f331ba60 at
+refs/backup/pr264-before-spreadsheet-merge-20261009. With its local build already
+terminal, reconciled both owned commits onto master, producing
+9c44db39159d28619aece101f63464b3ea819ff9 (0d602559 plus9c44db39).
+Both range-diff patches equal and full treef678797f1fb64c1e16452935d9e1c5be40ad04c8
+is byte-identical to the full corrected browser-tested tree. This was local
+bookkeeping only: remote264 remains83f1fddc while604 finishes its x86 tests.
+Do not publish until604 is terminal. No real data, new PR or #212 changes.
+
+Next: collect Nix604/watch65000, publish prepared2649c44 with exact83 lease,
+collect fresh gates plus Nix605, and keep native266session17446 running without
+source edits. At most two remote deliveries remain active;18 functional PRs.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
