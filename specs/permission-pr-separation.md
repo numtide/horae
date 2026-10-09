@@ -5573,6 +5573,42 @@ all its fresh gates pass, and finish266 native validation. Keep max two remote
 deliveries,18 functional PRs remaining, #212 unchanged. This iteration made
 publication progress; current checks are live, not an external blocker.
 
+### #266 native acceptance and #267 filter review refresh
+
+Local session17446 completed successfully on #266
+`1fa434d433d1a9f95f22f05acb2d4135ef3708dd`, tree
+`a00a696899296e01f2c8d2449389d1cfdcfee428`. Formatting, strict Clippy,
+live SQLx and native tests passed:189 core,1266 server and201 auxiliary tests,
+zero failures and11 inherited ignored. Server tests took215.66s. Remote
+acceptance and parent integration remain required; #266 has not been published.
+
+Reviewed #267's complete owned runtime delta, parser assertions, seven database
+tests and HTTP filter fixture against the active-project/billability contract.
+Strict decoding feeds the existing source predicates; defaults retain history,
+project activity is independent of client/task activity, effective billability
+retains invoice-linked values, and empty results still require authority.
+No new critical/high source finding. HTTP assertions exercise both detailed and
+grouped CSV/XLSX billability paths; active-only coverage here is parser/database
+coverage, not a new browser acceptance claim. Reports UI acceptance remains
+with #268 and the original contract, not closed by this transport review.
+
+Confirmed remote #26733390c07's Nix468 is terminal failed, not still running as
+its historical body says. Backed up the exact head under
+`refs/backup/pr267-before-current-grouped-stack-20261009`, then rebased the sole
+owned commit from76dcd48b onto local #2661fa434d4 without conflicts. New local
+head `f11bb3b3828656867ac73e62fc9b09a99c190184`, tree
+`944c37bfb2e5d9c3745a20ec950f3472dd80b4a0`. Range-diff is equal; the grouped
+handler, parser fixture, both database fixtures, HTTP fixture and all ten owned
+SQLx descriptors remain byte-identical. Working tree and whitespace checks
+are clean. No push, third remote delivery, new feature or #212 change.
+
+Fresh #264607 and #265605 observations are building with no failed attributes;
+#264's required GitHub workflow37990586429 is also live. Continue these exact
+watchers rather than restarting builds. Next: local native validation of267,
+then collect remote gates and queue264 only when all acceptance requirements
+pass. After264 merges and605 terminates, reconcile265's ancestry with complete
+tree conservation before its master checks. Eighteen functional PRs remain.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
