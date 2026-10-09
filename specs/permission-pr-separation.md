@@ -6256,6 +6256,33 @@ then advance its protected queue. No new PR, real-data mutation or policy
 activation. This iteration includes an actual merge, accepted-tree publication
 and a focused failing-test correction, not status-only work.
 
+### Project exports prepared on the corrected reader stack
+
+The preceding turn was progress:268 merged,269 was published and270's concrete
+test-stub error corrected. CurrentNix615/watch97081 is still building exact
+269188750d8, now7 passed/6 building/3 pending/6 local-only skipped, no failed
+attribute. Local27049430 remains in strict Clippy on corrected e70c06b9;
+no error reported so far, but no GREEN claim. Both heads remain frozen.
+
+Prepared existing271 independently, without another heavy build or publication.
+Confirmed clean local/remote3a018714, original review baseac9e66a3 and oldNix455
+terminal failed. Backed up at refs/backup/pr271-before-current-reader-stack-20261009.
+Rebased its two owned commits onto270e70c06b9 without conflict, yielding
+63119b689367e7d1dcc83234f3b83e28a1877cb5/tree
+bd863cc7b9ff2aa7789ef0b447c269351be5b7f8. Both range-diff entries are equal.
+Twenty-two of23 original paths are byte-identical, including five SQLx files,
+all runtime changes and the requester HTTP fixture. The only difference is
+the parent's already merged10-second closed_backend test timeout; its checks
+and all owned patches are retained. No newly weakened assertion or code edit.
+Formatting92344 exited0 (641 files unchanged); whitespace checks passed.
+Prepared .scratch/pr271-current-delivery.md with explicit pending acceptance.
+
+Next collect615 and trigger269's still-missing required GitHub check only after
+its current build ends, preserving the whole accepted tree and exact lease.
+Collect27049430, complete its runtime/visual acceptance before publishing, and
+run271's full gate only when the sole local build slot is free. No new PR,
+real-data mutation, policy activation, journal push or change to212.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
