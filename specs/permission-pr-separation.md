@@ -3753,6 +3753,34 @@ Next: collect21679 and45517; once #246 source accepts, submit protected queue,
 verify actual merge, then reconcile/publish downstream without changing tested
 trees. No new PR, feature, real-data operation or #212 change was introduced.
 
+The following continuation first revalidated45517 and21679 as live; the preceding
+turn was PROGRESS (two reviewed rebases, native acceptance and the test-only
+fixture correction). GitHub's running-job log endpoint returned BlobNotFound,
+not a failed check. No retry or cancellation was requested.
+
+Adjusted the scheduling hold, not the acceptance gates: #246's complete review
+and both-Linux acceptance allow marking it ready and arming protected auto-merge
+while GitHub source37920533055 continues. Revalidated exact headb5f1942c, no
+review threads, masterb50ec27e and proposed merge7d2db9f3/treefeacc028 with the
+expected parents. The repository uses a ruleset rather than classic branch
+protection: master requires Flake Check and Format, squash-only PRs, and an
+ALLGREEN merge queue with60-minute check-response timeout. No bypass is used.
+
+Updated #246's description, marked it ready and requested auto squash merge with
+the exact-head guard. Read-back confirms OPEN/non-draft, unchanged head and
+autoMergeRequest enabled2026-10-09T11:42:13Z; no queue entry yet because source
+checks remain live. GitHub reports the auto-request method MERGE while the queue
+ruleset owns the SQUASH method, as the CLI explicitly notes. Verify the actual
+integrated commit/tree after the protected queue; no merge is claimed now.
+This supersedes the earlier draft-until-source-finishes scheduling statement.
+
+#24521679 remains live on733f1b27/tree5019fb77: format559 unchanged, release
+client built; package/server and remaining checks continue. Its range-diff shows
+four browser commits unchanged, only additive registration contexts and two
+now-inherited cache descriptors differ. Keep that worktree frozen. Next collect
+the same two jobs; source success should admit #246 automatically, after which
+watch its new merge-group run and reconcile #243 to the verified squash.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
