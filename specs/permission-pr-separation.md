@@ -6588,6 +6588,31 @@ Next: collect #270's current-head remote gates, review readiness and use the
 protected queue if accepted; independently collect #271 session40820. No new
 PRs, source scope, real-data changes or policy activation. #212 stays untouched.
 
+### People editor composition — 2026-10-10
+
+Completed the stopped #260 rebase onto prepared #278 after checking all four
+conflict resolutions. New local head `6f1db8361c294990383c85e17f7f29e9be67be4b`,
+tree `6878cf56094ac4fe1aa413f1116208ca23e1fe72`; remote remains3dba1db6.
+Backup: `refs/backup/pr260-before-current-consumer-stack-20261009`.
+Fifteen of23 original paths remain byte-identical. The eight shared-file
+differences preserve current Timesheet routes, all five navigation kinds,
+scroll-only history updates, current server registrations and #278 requester
+loading inside LegacyAdminUsers. The browser runner preserves all31 inherited
+suites and adds the two recovery suites. No CSS, DESIGN.md or build.rs changes.
+
+Nix formatting passed:667 files unchanged. Session45138 exited zero with all19
+isolated navigation/recovery-storage tests passing. Impeccable's bounded source
+detector exited zero without findings on the shell, People and permission
+editor sources; no current rendered or full-runtime acceptance is claimed.
+Saved the pending handoff in `.scratch/pr260-current-delivery.md` at the root.
+
+#270 Nix617 remains building on703cde78:10 succeeded,6 building,6 skipped-local;
+required GitHub run38005137996 remains live. #271 session40820 remains live:
+strict Clippy and server/WASM package build passed; SQLx preparation is running
+against disposable PostgreSQL. Its worktree remains frozen. Next: collect these
+gates and prepare #279 on the reconciled #278/#260 composition without starting
+a second heavy build. #212 and all real data remain untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
