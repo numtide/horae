@@ -4429,6 +4429,25 @@ drafts during refresh. This is partial review, not UI or feature acceptance;
 remaining Timesheet code, browser tests and shared design references still
 need review. Branch90105351 remains untouched and no new PR was opened.
 
+#259's source review now reaches Timesheet line1970 and includes the complete
+timesheet-permissions browser scenario, route/CSS/Nix deltas and shared
+navigation script/test. Ran `nix develop --command node --test
+crates/horae/tests/browser/editor-navigation.cjs` on unchanged90105351:
+10 passed,0 failed (105.51ms). This covers navigation guards for Timesheet,
+Clients, Invoices, Projects, scroll-state preservation and the legacy opt-in;
+it does not certify live browser behavior or the remaining UI review.
+Follow up on calendar mousemove's can_create guard versus legacy historical
+entry editability when no tracking choices exist before concluding review.
+No #259 files were changed. The design prototype is fully read; shared
+support/Design System/Components references remain pending.
+
+#256 correction validation18581 has passed SQLx and formatting and is now
+running the native suite after successful compilation (4m06s). The cancelled
+fetch regression passed; collect the final suite result before committing or
+publishing. Nix584 still runs ARMdeployment/x86browser; its native checks
+passed, but GitHub's independently observed cancellation failure still requires
+the correction and fresh acceptance. #257585 remains the second remote front.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
