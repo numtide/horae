@@ -4153,6 +4153,32 @@ Next: collect #253's master/queue checks and confirm its actual squash; reconcil
 #254 onto that master without changing the validated tree. No new PR, feature,
 real-data mutation or #212 change.
 
+#253 MERGED at13:29:13 UTC as e41250e1c3efcb80545e8e68f8c2ee57783683d6,
+parenta06ac539, treee78bb7f76ceea5c2afd0f77af54cbb2e7961b534 exactly matching
+the accepted tree. Source37936729070 passed Format44s / Flake Check58s;
+queue37937015624 passed Format46s / Flake Check59s. #254 Nix575 remains live;
+do not restart it or treat partial acceptance as a pass. Its head55ebf248 and
+treef02ad4ee remain unchanged, temporarily based on the now-merged #253 branch.
+
+#255 composed-tree validation37707 completed successfully at8e648a26 /
+treed995c961:189core+1147server+201auxiliary=1537 passed, zero failures and
+11existing ignored, server260.65s. Full SQLx and formatting576unchanged passed.
+Outputs: testsm9s1gasz09bffwr6gncgscsz65ahmhfl,
+SQLxmngp1n2wiix4jh2wsh71768k6g6s2siq, formatter0kngwkhklzmpaks67cycskp5jzw2253f.
+Backed up at refs/backup/pr255-before-picker-delivery-20261009, rebased onto
+published #254 55ebf248, and verified complete-tree equality. Final head
+0355dee46ffb3415e4b89daa454541bfc26bd91c. Retargeted existing #255 to
+feat/project-people-picker before exact-lease push34a52be6→0355dee4. Remains
+draft; never merge into the temporary branch. Updated the PR body with scoped
+acceptance and remaining gates. Both #254/#255 have no review-thread objections.
+
+Active remote deliveries now #254/#255;27functional deliveries remain after
+this turn's two verified merges. Next: collect Nix575 and #255's new Nix build;
+reconcile #254 onto actual mastere41250e1 preserving treef02ad4ee, then run its
+master-targeted/protected queue gates. #212 remains unchanged and excluded;
+no new PR, feature or real-data operation. This journal is still local-only
+on the existing #218 branch; do not claim it has been published.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
