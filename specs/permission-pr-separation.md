@@ -3116,6 +3116,21 @@ pending; tests alone do not authorize publication. No local process remains live
 Next: review #247's T104–T109 production/read/release/permit boundaries while
 Nixbot547 finishes; then advance #237 through its master-targeted gates.
 
+Completed the current-tree #247 T104–T109 bounded review on5950fdb1/tree535ae5a7:
+read both contracts, all changed production paths and all four new test files,
+the inherited manager snapshot and organization gates, visibility view and
+parent-invalidation triggers, rendering admission/cancellation and real-cookie
+route wiring. No critical/high finding in this boundary. The implementation
+preserves legacy authorization; it does not activate canonical permissions or
+complete CSV streaming. Response-release checks are not continuous revocation.
+Re-read native logs: all21 new authorization regressions and the real-cookie
+matrix passed within the recorded1,336 tests. SQLx outputs remain rooted and
+the owned diff passes whitespace validation. Existing PR247 is still draft at
+1b7adcd1 with no review threads. Prepared its delivery description; next publish
+the reviewed5950fdb1 with exact lease, targeting #237, as the second remote
+delivery. #237547 is live with only checks.aarch64-linux.e2e building; do not
+interrupt or restart it. #212, root checkout and #226 hold remain unchanged.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
