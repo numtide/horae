@@ -65,7 +65,7 @@ fi
 # Explicit filenames allow focused iteration without bypassing database isolation.
 suites=("$@")
 if [[ ${#suites[@]} == 0 ]]; then
-  suites=(editor-navigation modals timesheet-errors timesheet-permissions projects-design responsive-layout menu-popovers mobile-navigation project-bulk-actions project-bulk-recovery action-errors new-project invoice-preparation project-task-rates new-project-permissions new-project-task-errors new-project-keyboard new-project-transport project-edit new-project-navigation clients client-context clients-access clients-errors clients-visual own-permissions permission-history)
+  suites=(reports-permissions editor-navigation modals timesheet-errors timesheet-permissions projects-design responsive-layout menu-popovers mobile-navigation project-bulk-actions project-bulk-recovery action-errors new-project invoice-preparation project-task-rates new-project-permissions new-project-task-errors new-project-keyboard new-project-transport project-edit new-project-navigation clients client-context clients-access clients-errors clients-visual own-permissions permission-history)
 fi
 for suite in "${suites[@]}"; do
   if [[ ! $suite =~ ^[a-z][a-z-]*$ || ! -f "$browser_tests/$suite.cjs" ]]; then

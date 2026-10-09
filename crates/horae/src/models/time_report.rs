@@ -55,10 +55,6 @@ pub struct TimeReportCursor {
 /// Empty filter lists leave authorized rows unrestricted along that dimension.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(dead_code, reason = "T203 connects the canonical Reports consumer.")
-)]
 pub struct TimeReportQuery {
     pub date_from: NaiveDate,
     pub date_to: NaiveDate,
@@ -104,10 +100,6 @@ pub struct TimeReportTotals {
 /// A bounded page and full-period totals from one snapshot, not filter candidates.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(dead_code, reason = "T203 connects the canonical Reports consumer.")
-)]
 pub struct TimeReportPage {
     pub requester: PermissionRequester,
     pub entries: Vec<TimeReportEntry>,
@@ -133,13 +125,6 @@ pub struct TimeReportGroupCursor {
     pub id: Uuid,
 }
 
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Grouped Reports consumer integration is pending in T221."
-    )
-)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TimeReportGroupQuery {
@@ -167,13 +152,6 @@ pub struct TimeReportGroup {
     pub totals: TimeReportTotals,
 }
 
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Grouped Reports consumer integration is pending in T221."
-    )
-)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TimeReportGroupPage {
