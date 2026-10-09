@@ -4664,6 +4664,15 @@ Nixbot589/#257 is also live with only its two native Linux checks unfinished.
 Do not merge #256 until its final native check succeeds; keep the accepted
 head and unchanged master basis pinned for protected queue submission.
 
+Nixbot588 x86 has now passed all six CSV cases that failed in586; its remaining
+server tests are still running and advancing through permissions. This proves
+those cases passed on x86, not that the full suite or build is accepted yet.
+Nixbot589 has also completed ARM and has only its x86 native check unfinished.
+Watcher29831 remains live. No branch was rewritten, no check was restarted and
+no PR was merged during this verified wait. Next action remains exact-head
+protected submission of #256 only after588 succeeds, followed by squash
+conservation and #257 prerequisite reconciliation.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
