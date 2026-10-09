@@ -4928,6 +4928,22 @@ these two deliveries. Next: collect their remaining ARM/browser/deployment and
 GitHub gates, integrate the first accepted delivery through the protected queue,
 then reconcile the remaining tree only after its current build terminates.
 
+### Targeted retry of interrupted required check on #261
+
+GitHub37975763858 attempt1 failed at18:58:23 UTC: Flake Check exited143 after
+compilation output, without a compiler/test assertion failure. Workflow has no
+configured step/job timeout, and the only failure annotation is exit143; the
+reason for the termination signal is not established. Format passed. Do not
+label this a source defect, OOM or timeout without evidence.
+
+Nix596 subsequently passed every x86 build/test attribute on the identical
+dce0b134 source. Compared exact derivations with the GitHub log: tests109vn5zc,
+browserribk06xw, Clippyc2a57agg, SQLxlg43qjw2, packagecx6k5mzx, treefmtrd1i3j9q,
+deployment7w31n775 and OIDChi930nqw match. Reran only the failed GitHub job on
+the unchanged commit; attempt2 is queued. No source, assertion, timeout or gate
+was weakened. Nix595/596 still run their remaining ARM/browser/deployment checks,
+and local #26244480 remains active. Next: collect these exact existing handles.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
