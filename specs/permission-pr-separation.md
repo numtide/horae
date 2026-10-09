@@ -3280,6 +3280,15 @@ is live with exact673d95a2 lease. Next: collect57776 and current-head GitHub
 checks, verify Nixbot exact-tree reuse, then submit #249 to the protected queue.
 No source change, new PR, or extra validation build was requested.
 
+Publication57776 completed successfully. GitHub confirms #24992e56565/master,
+no review threads, and exact-tree Nixbot551 reuse for both accepted checks.
+Source workflow37913664711 passed Format45s and Flake Check48s; watcher66595
+exited0. Submit the validated head to the protected merge queue and collect its
+own group workflow and actual tree, not another PR's previous completed run.
+No local build or Nixbot build remains live at this point. #226's historical
+ARM transport failure is still unresolved and must not be declared fixed by
+these independent export merges. #212 remains excluded from delivery.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
