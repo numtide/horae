@@ -2571,6 +2571,26 @@ was published for #232, and downstream #238/#235 were not rewritten.
 Next: collect this validation while following existing #228 GitHub watcher22358
 and #231 Nixbot531; do not start a third remote delivery.
 
+#228 merged at07:01:17 UTC through the protected queue as
+cea013c9029c8a9c2694aef519394717dfb85c4e. GitHub source run37893663978 and
+merge-group37896516881 both passed. The actual master tree9e6a1625 matches
+the head accepted by both-Linux Nixbot530 exactly. #212 remains OPEN/draft
+at db3935db, and the root worktree was not updated.
+
+Reconciled #231 locally onto actual master, preserving216440b5 in
+refs/backup/pr231-before-project-access-merge-20261009. New head
+07d30fc9a85b149fa254a30764f2e301b4db9163 has the identical a746b82d tree;
+both owned commits are unchanged in range-diff. Remote231 is still216440b5,
+automatically retargeted to master. Let its live Nixbot531 finish before
+publishing the ancestry-only rewrite; do not cancel its existing validation.
+
+#232 validation46276 completed successfully on75695511/tree5d7aa453:
+189 core,892 server and183 auxiliary tests,1,264 passed, zero failures and11
+existing ignored manual cases. Server suite136.84s. Tests8h5x87rk, SQLx7lkf2myx
+and treefmt n6g1ffkl passed and remain rooted. No local tests/watchers remain
+live; #231 Nixbot531 is the active remote delivery. Next: finish/reconcile #231,
+then publish #232 in the available delivery slot on the correct ancestry.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2673,29 +2693,27 @@ after #220's final tree was verified. Preserve #212 open and unchanged.
 Deliveries #221, #223, #222 and #225 are also merged with both-Linux acceptance.
 #226 passed its source-head gates, but its queue build524 exposed an ARM CSV
 transport regression; it is removed from the queue with auto-merge disabled.
-#227 is merged with exact combined-tree and protected-queue acceptance. #228
-is published at f465f7a0 on its actual merge, with browser synchronization and
-test-only systemd corrections. Native Rust/browser/SQLx acceptance and the
-extended TCG regression passed; final native VM checks and remote530 are live.
-The earlier remote528 failed ARM browser/OIDC. CSV delivery #231 remains
-published at a34a1348, with1,250 native tests/SQLx passing on that old tree;
-Nixbot529 failed ARM deployment/OIDC on its exact239d1051 tree. Local216440b5
-now inherits f465f7a0, with fresh native tests/SQLx validation15705 in progress.
-Both owned commits are unchanged; the new head is not published. The earlier independent
+#227 and #228 are merged with exact-tree and protected-queue acceptance.
+#228 integrated as cea013c9/tree9e6a1625 after both-Linux Nixbot530, source
+GitHub37893663978 and merge-group37896516881 passed. CSV delivery #231 is
+published at216440b5, now targeting master, with1,250 native tests/SQLx and
+format passing. Nixbot531 remains live. Local07d30fc9 reconciles onto the
+actual #228 squash while preserving the exact a746b82d tree and both commits;
+publish it only after the existing build finishes. Historical529 failed ARM
+VM startup on the older a34a1348 tree. The earlier independent
 head dcf68d2e passed GitHub and both-Linux Nixbot526. Neither result proves
 the shared transport issue repaired.
-#232 is locally stacked at45c923a3 on #231, with1,264 combined native tests,
+#232 is locally stacked at75695511 on #231, with1,264 combined native tests,
 SQLx and format passing; its earlier independent tree passed1,243 tests. It is not
 published yet. #238 is locally stacked on #232 at30cb18af with1,277 native
 tests, SQLx and format passing. Its earlier independent c6efb30a passed1,250
 native tests. Both preparations remain unpublished.
 #235 is locally reviewed and stacked on #238 at7f89ce45, with1,286 combined
-native tests, SQLx and format passing; it remains unpublished. These three
-local downstream heads still use the earlier a34a1348 base. Reconcile them
+native tests, SQLx and format passing; it remains unpublished. #238/#235
+still use the earlier a34a1348 base. Reconcile downstream ancestry
 with the accepted integrated base before publishing; do not attribute their
-historical tests to a future tree. #228 stays out of the queue until its
-current remote acceptance finishes; the published VM correction has passed
-controlled local regressions, but ARM acceptance is not yet established.
+historical tests to a future tree. #228's browser/VM corrections now have
+both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
 only on exact current-tree acceptance, without claiming that failure repaired.
 Full current CI remains required. These preparation
