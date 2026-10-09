@@ -4577,6 +4577,39 @@ Nixbot586 still has unfinished x86 native/browser checks; its native command
 runs48 test threads. The CSV failures remain undiagnosed pending captured
 panic details. Do not infer a source defect or change timeouts from load alone.
 
+Full Chromium run48256 passed every suite in the existing browser runner on
+the corrected #259 package, including cross-screen project/client/invoice,
+selected-person, error recovery, keyboard, responsive and permission-history
+checks. Clippy and SQLx checks passed in sequential run98417; native tests
+remain live. Retain the distinction between complete local browser coverage
+and pending exact-head remote acceptance. No new design or product scope was
+added, and no real database was used.
+
+#259 sequential native run98417 passed:189 core,1195 server and201 auxiliary
+tests, zero failures and11 inherited ignored. The main server suite took170.02s
+with32 threads. SQLx and clippy outputs are respectively
+`/nix/store/1bxnph99z04gcrlnq4br2bka0y5riynp-horae-sqlx-prepare-0.1.0` and
+`/nix/store/ljw353kxk4g4j0w9vl8prwnh0drcbpcb-horae-clippy-0.1.0`;
+tests output is `/nix/store/8n6pfdnhh4kr6w32vv2afa5zrq4ks26i-horae-tests-0.1.0`.
+Committed the two-file correction unsigned as8668735e50182501126c74361a97a4c59eccf2c4,
+tree ea7241115393c140de2d2f93f1bbd228b8ebcac3. Worktree is clean, remote
+remains90105351, and no exact-head remote acceptance is claimed.
+
+Nixbot586 x86 native finished with1149 passed,6 failed and11 ignored in1371.92s.
+All six failures are fixture timeouts: four first-batch observers at
+`csv_streaming.rs:494`, the stalled-input observer at73 and the single-connection
+preview at366. No value-comparison assertion failed. The command ran48 tests
+concurrently; GitHub and local full checks on this source passed. Nixbot's
+browser job is still live, so do not replace the published head yet.
+
+Prepared a local #256 test-runner correction: cap database-test concurrency
+at the lesser of8 and the Nix CPU budget, retaining unrestricted pure-core
+parallelism within that budget. Each SQLx fixture creates and migrates its
+own database on a shared PostgreSQL/disk. No runtime deadlines, fixture
+timeouts, assertions, test selection or internal race scenarios are changed.
+Next: run the complete native check with `--cores 48`, verify the effective
+eight-thread command, and publish only after local acceptance and terminal586.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
