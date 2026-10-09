@@ -3638,6 +3638,14 @@ After #246's actual squash, reconcile onto master preserving the accepted tree
 and require final master-targeted/protected checks. No local build remains live;
 #246's existing Nixbot559/GitHub37920533055 remain the same live jobs.
 
+Publication39707 completed. #243 is verified OPEN/draft at7f51e98c on
+feat/permission-preflight, with Nixbot561 building exact treebd7d2d2f.
+Change-only watcher42630 monitors builds559/561 every55s; GitHub watcher45517
+continues on37920533055. Latest559 pending attributes are ARM browser/e2e;
+ARM OIDC has passed. No local build/publication remains live. Next collect
+these same checks, queue #246 only after full acceptance, then reconcile #243
+to the verified actual squash without changing its tree. No new PR or #212 edit.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
