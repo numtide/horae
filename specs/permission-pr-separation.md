@@ -6415,6 +6415,25 @@ handle. Local #270 session42631 remains live and continues passing browser
 scenarios. Next actions remain #269 terminal acceptance and missing required
 CI trigger, followed by #270 completion and the prepared #271 gate.
 
+### Project editor Linux acceptance and required CI trigger — 2026-10-09
+
+Nix615 completed successfully at23:13:43 UTC: all sixteen Linux attributes
+passed, including the final ARM deployment test; six local skips. Verified
+tree `0079046cb28ac04c9552a5d7a22ea41fc79ba822` against clean #269. After that
+terminal result, saved `refs/backup/pr269-before-master-ci-trigger-20261009`
+and amended only the final commit's metadata, unsigned. New published head:
+`8ed14b596031d8bbfe96a67e5f11345652e82932`; complete tree unchanged. The push
+used the exact old188750d8 lease and succeeded. No code was changed.
+
+Read-back confirms master base, both successful Nixbot checks attached to
+the new head using Nix615, and required GitHub pull-request run38003426285
+in progress with Flake Check and Format started. The missing CI trigger is
+resolved; protected queue acceptance is still required. Updated the existing
+PR description with exact evidence. No review threads or submitted blocking
+reviews were present in the immediately preceding audit. Next: collect this
+required run, revalidate readiness, and submit #269 to the protected queue.
+Local #270 session42631 remains running; do not rebase its worktree meanwhile.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
