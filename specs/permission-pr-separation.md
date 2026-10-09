@@ -4381,6 +4381,21 @@ only the inherited fixture changed. Disk recovered to26GiB after local builds;
 no cleanup performed. Next: collect fresh #256 CI and #257582, advance only
 accepted existing deliveries through master protection. #212 untouched.
 
+Next iteration was a verified wait on #256584 and #257582, then progressed.
+Watcher78092 observed #257582 finish successfully at14:26:26 UTC on8e24f13a /
+tree66830de5: all both-Linux native/browser/deployment/OIDC accepted. Native
+189core+1161server+201auxiliary per architecture; zero failures/11ignored,
+server197.89s ARM and539.60s x86. No restart or false terminal assumption.
+After that terminal result, updated existing #257 body and exact-lease published
+8e24f13a→5900462a427b8db1b349d4610c3affb1124c1510, temporarily based on #256f0d61e24.
+Only the inherited lock-fixture correction differs from the previously validated
+tree; acceptance of582 is not certification of this new head. Keep draft and
+wait for fresh both-Linux validation before master reconciliation/merge.
+#256584 continues on corrected f0d61e24; master GitHub37943359692 format passed,
+FlakeCheck remains live. No merge claimed. #25812dbe8a0 remains local-only until
+a remote slot opens. Next: collect corrected #256 native/ARM acceptance and
+protected master gates, then deliver existing #258. #212 still untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
