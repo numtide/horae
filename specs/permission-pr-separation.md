@@ -5742,6 +5742,41 @@ remains956c2147, untouched. Next: prioritize264's required check and protected
 queue; collect609 and86184. A fresh source/UI review of268 remains required
 before its remote delivery. No new PR, policy activation or #212 change.
 
+### #268 current-source review and visual evidence limits
+
+Completed current-source review on d3cdf579: Reports access gate, all three
+scoped modules, DTO/icon delta, all15 component tests and the full540-line
+browser fixture against the existing ordinary-time contract. No new critical/
+high source finding. Checked access-before-mount with no legacy fallback,
+retained requester/mode across refresh/error/remount, exact resource keys,
+late-response suppression, both cursor stacks, four individual contexts, all
+four nested breakdowns, escaped labels, integer formatting and full-period
+bound CSV/XLSX links without pagination cursors. No source edits were needed.
+
+Impeccable context ran successfully once for this worktree and allowed the
+narrow incumbent-system audit despite absent PRODUCT.md. DESIGN.md was read
+fully; no new product/design artifacts were created. Its detector returned[]
+for the four Reports modules. Shared CSS, utility generator and DESIGN.md are
+unchanged by268. The existing DataTable scroll container, wrapping header/
+actions, labelled controls and semantic status/alert/expanded states are reused.
+This is not a WCAG certification or completed visual acceptance: the browser
+fixture tests1440-dark and390-light, keyboard and overflow, but does not prove
+all theme/width combinations, touch gestures or200% text. Current browser
+execution and visual inspection remain pending; do not assign an unsupported
+audit score from source inspection alone. No visual redesign is authorized.
+
+Local86184 passed strict Clippy (server1m29s) and now builds the server/WASM
+package before browser/native gates. Worktree stays frozen. Browser derivation
+d6wvvgjz9hml2xrvacc90lwmj73ffcmz; packagezpcf3pdpdk8kj4m7h9dvi8fl8l1vir5r;
+testspq144303s9k3l84l1jyhrgd7jwxr4mar; SQLxb3yskrgk2zvw75m1lmbpz8z8147d8g5b;
+Clippyqgpphmdhhq0mizbwsp5x0xw7blz4w01b. Standard browser derivation does not
+persist screenshots; a bounded focused capture can follow the active gate.
+
+Required264 workflow37990586429/watch23637 is still live; no restart or bypass.
+#266609/watch5166 is11 passed/5 building with no failures. Next: prioritize264
+merge readiness, collect609/86184, and complete268's runtime evidence before
+publication. No new PR, real-data mutation or #212 change.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
