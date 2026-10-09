@@ -2544,6 +2544,21 @@ draft, with no queue entry or auto-merge, and GitHub's Flake Check is live.
 Next: complete existing #228 gates, protected merge, then reconcile/publish
 the prepared #231 without changing its owned patch.
 
+Nixbot530 completed successfully on f465f7a0/tree9e6a1625: every check passed
+on both Linux architectures, including ARM browser, deployment, OIDC and the
+new udev regression. Marked #228 ready and requested protected squash delivery
+with an exact head match. Read-back confirms auto-merge enabled06:50:00 UTC,
+no queue entry yet, and no merge: required GitHub37893663978 remains live.
+Watcher22358 follows that existing workflow at55-second intervals.
+
+Published prepared #231216440b5/treea746b82d using an exact a34a1348 lease;
+the isolated worktree is clean and the PR remains draft, stacked on #228.
+Nixbot531 is evaluating that head. Updated both existing PR bodies with the
+actual acceptance boundaries. Only #228 and #231 are active remote deliveries;
+no new PR or retry was created. #232/#238/#235 and preserved #212 are unchanged.
+Next: collect #228's GitHub/protected queue result, verify the actual integrated
+tree, then reconcile #231 onto master without changing its accepted content.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
