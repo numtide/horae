@@ -4208,6 +4208,19 @@ Both #256/#257 remain local-only; prior CI441/473 does not certify these new hea
 Next: collect active Nix575/577 and local69900, merge accepted deliveries through
 master protection, then publish these prepared branches as slots become available.
 
+Collected #254 native Nix575 results:189core and1139server tests passed on each
+Linux architecture, zero failures and11existing ignored; server135.87s x86 /
+212.00s ARM. Latest live watcher2470 leaves ARM browser/deployment only; OIDC
+has passed. GitHub automatically retargeted #254 to master after #253 merged;
+its head55ebf248 is unchanged and still needs squash-ancestry reconciliation
+before a synchronize event starts master-targeted CI. Do not infer readiness
+from the automatic retarget alone. #255 Nix577 watcher7172 is live, no terminal
+failure observed. #256 local69900 passed full SQLx and189core; server compilation
+is still live. #257 remains prepared8211bb20, formatting passed, no fresh suite
+yet. No additional push, merge or CI restart in this wait interval. Next safe
+action after69900 succeeds: start #257 tests/SQLx; after575 succeeds: reconcile
+#254 onto e41250e1, preserving whole treef02ad4ee, and publish with exact lease.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
