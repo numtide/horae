@@ -3614,6 +3614,30 @@ former integration base. Next collect23735, publish with exact old-head lease
 after acceptance, and continue #246's current gates. Final target is master,
 never the temporary #246 branch. #212 remains untouched.
 
+#246 Nixbot559 now accepts both Linux test attributes on final treefeacc028.
+ARM log confirms189 core +1,033 server +183 auxiliary =1,405 passed, zero
+failures,11 existing manual cases ignored; server158.52s. All seven preflight
+and both immediate CSV rejection schedules passed. Browser and ARM VM checks
+remain live; no overall acceptance or merge yet. #243 native23735 passed SQLx
+in68s and format545 unchanged; server suite is running. Existing jobs were
+retained without retries. Next collect both complete results before delivery.
+
+#243 native23735 completed successfully on unchanged7f51e98c/treebd7d2d2f:
+189 core +1,066 server +183 auxiliary =1,438 passed, zero failures,11 existing
+manual cases ignored. All32 delegation PostgreSQL cases, the registered-session
+exercise and both CSV rejection schedules passed; server169.45s. SQLx68s and
+format545 files unchanged also passed. Roots in its worktree
+`.scratch/pr243-current-delivery-checks`: tests05p6apdi3l5abqxvy298fk46pc7cm0l2,
+SQLxi6p25syjgmzz6ch43byfxg07j5pv7qdl, formatn7hp8q6xx2y9mbq3y2wyswq16fbbnrqm.
+
+Updated prepared description with exact current-tree evidence. Publication39707
+retargets existing #243 to #246's feat/permission-preflight branch and pushes
+with exact8aab1048 lease. Collect and read back before claiming publication.
+This is a temporary delivery base, not a merge target or product dependency.
+After #246's actual squash, reconcile onto master preserving the accepted tree
+and require final master-targeted/protected checks. No local build remains live;
+#246's existing Nixbot559/GitHub37920533055 remain the same live jobs.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
