@@ -5421,6 +5421,41 @@ then validate #264's fixed browser suite; keep remote83f1fddc untouched until
 Nix604 is terminal. Prior turn made source-review/fix progress; this iteration
 is a verified wait with further failure evidence, not a blocker.
 
+### #265 full local gate passed; inherited browser correction conserved downstream
+
+Session15065 terminated exit0 on be7b7749/treec8c47d5d. Recovered complete Nix
+log from cyqlid14f05921351di7qk4hrnp8fcd6:189 core,1249 server,201 auxiliary
+tests passed, zero failures and11 inherited ignored; server213.19s. The mode
+parser regression and registered-session HTTP fixture passed. Formatting,
+strict Clippy and live SQLx already passed in this same chained gate.
+
+Started #264 full browser validation only after15065 finished: session66690 on
+f331ba60/treef678797f, one job/eight cores, disposable PostgreSQL. Formatting
+passed601 unchanged. Package9kjw9jdb58b1bjcm0zjh48hcq7ajxp6s is compiling;
+browser9najj2p9fsyr9i6f1wcrrafv62xnasiw remains pending. Do not edit or rebase
+#264 while66690 runs. No second heavy local build. Nix604/watch65000 is still
+live with ARM deployment/OIDC and x86 tests active; both browsers failed by
+the reproduced race. Its remote head remains83f1fddc.
+
+Now that #265's local gate is terminal, backed up be7b7749 at
+refs/backup/pr265-before-browser-cleanup-20261009 and rebased only its owned
+commit onto corrected264f331ba60. Result69cbd68cbf6ab9351aca1d8c49b415113b0c7a45,
+treeab956f714ba93cf7d9c4dcc08164263d2632c629. Range-diff equal; whole-tree diff
+is exactly the inherited three-line browser fixture cleanup. No runtime, native
+test, query or schema change. Updated the prepared body with exact head-specific
+evidence, not a claim of acceptance of the newly combined browser tree.
+
+Likewise backed up266d3ebacd1 at
+refs/backup/pr266-before-browser-cleanup-20261009, then rebased its owned patch
+onto69cbd68c. Result1fa434d433d1a9f95f22f05acb2d4135ef3708dd,
+treea00a696899296e01f2c8d2449389d1cfdcfee428. Range-diff equal; whole-tree delta
+again only the browser cleanup. No266 build or remote update. Next: collect
+local66690 and Nix604; after both terminal, reconcile264 onto actual263 merge
+with tree conservation, publish corrected264, then reconcile/publish265 with
+the same inherited fix and fresh gates. Maximum two active remote deliveries;
+18 functional PRs remain, #212 unchanged. This iteration completed native
+acceptance and downstream conservation; remaining waits are verified live.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
