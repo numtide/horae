@@ -2693,6 +2693,27 @@ ancestry publication. #235575b7b05 remains locally accepted and unpublished.
 Next: verify #232's queue tree/result, then reconcile and deliver #238, using
 the second remote slot for the existing #235 only after its base is published.
 
+#232 merged at07:40:33 UTC as483be1cd0583bb009f448245ceab942a5dc0f709.
+Source37900093599 and protected merge-group37900256054 passed; the actual
+5d7aa453 tree matches both-Linux Nixbot535 exactly. #212 remains OPEN/draft
+at db3935db. Rebased #238's unchanged two commits onto that actual merge:
+head90eb629495d7c23030fdae249ba4877cb1c95280, identical b41bf687 tree.
+Backup refs/backup/pr238-before-financial-merge-20261009 retains451d5b70.
+Published with an exact c5402afa lease. Nixbot reused537; GitHub37900536578
+passed. Marked ready and requested protected delivery: queue
+MQE_lQDOTRPZ888AAAABG92iNM4AA_LZzgMtnVQ is first, AWAITING_CHECKS;
+merge-group37900658766 is live on b60ed44f3158df43b1360e446395fd3319ba64ff.
+
+Reconciled #235 onto published #23890eb6294: head
+2635cfb6af296dbe77b789bf4cb151b0db18e8ae retains the exact locally accepted
+d9ae89ad tree and both owned commits. Backup
+refs/backup/pr235-before-financial-merge-20261009 preserves575b7b05.
+Published with an exact e1e27f38 lease and retargeted to fix/budget-email-authority.
+Read-back confirms draft; Nixbot539 is building2635cfb6/tree d9ae89ad, with
+no failed attributes. #238/#235 are the only active remote deliveries; no
+local test remains live. Next: verify #238's actual queue merge, then reconcile
+#235 locally without interrupting539 and deliver it when current gates pass.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
