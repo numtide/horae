@@ -6277,6 +6277,11 @@ and all owned patches are retained. No newly weakened assertion or code edit.
 Formatting92344 exited0 (641 files unchanged); whitespace checks passed.
 Prepared .scratch/pr271-current-delivery.md with explicit pending acceptance.
 
+Subsequent same-run output confirms270's corrected strict Clippy passed
+(server3m17s) and49430 advanced to the server/WASM package. The E0061 compiler
+failure is resolved; full native/browser/SQLx acceptance is still pending.
+Nix615 advanced to9 passed/4 building/3 pending, with no failed attribute.
+
 Next collect615 and trigger269's still-missing required GitHub check only after
 its current build ends, preserving the whole accepted tree and exact lease.
 Collect27049430, complete its runtime/visual acceptance before publishing, and
