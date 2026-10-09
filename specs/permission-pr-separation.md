@@ -6169,6 +6169,42 @@ checked tree when accepted, then start270's one heavy local gate. Prioritize
 268's required and protected merge checks. No new PR, real-data change,
 policy activation or reference212 modification.
 
+### Reports queued; project editor fully accepted locally
+
+The previous iteration was progress:267 merged and268 was reconciled/published
+onto master. Required268 run38000465974 now passed (watch95431 exit0,
+Flake52s/Format45s). Fresh exact9cf07dd3/master, all checks green and no review
+threads. Marked ready and submitted exact head to the protected merge queue.
+GitHub confirmed position1 at2026-10-09T22:44:24Z. Protected38000848110 uses
+queuehead7abdb3a8; watcher23199 is live. No actual merge claimed yet.
+
+Full local26951569 finished exit0 on7e230099/tree0079046c. Retrieved its complete
+native log:189 core,1326 server and253 auxiliary tests passed,1768 total, zero
+failures and11 inherited ignored. Four subprocess reruns are excluded from
+those totals. Server test compilation8m06s, execution364.67s. Format624 files
+unchanged, strict Clippy, server/WASM, live SQLx, complete browser and focused
+six-state visual acceptance are all complete. Prepared269 description updated;
+remote stillb08ef5ad pending parent reconciliation/publication. Its oldNix444
+is terminal failed, not an active delivery.
+
+With51569 terminal, started one full local270 gate80772 on cleancf9c75f0/tree
+319cf920, parentaccepted2697e230099.37GiB free at start. Format636 files
+unchanged passed; Clippy is now building. Freeze this worktree until80772
+terminates. Derivations: SQLxa7l7vphls2a0lfycpn5lingw906jms75,
+testsbw4rpyjk8i3zrvimzs3df6bv05ybvv3g, packages378gniycxrpcgs82ii0gvysm9dykd4i,
+browserhfrimc68gajsqrxs303bvviwcf66m97q, Clippyi9kmhk85pgxczph9scrb4y4yw3hs44vr.
+
+Loaded Impeccable context once for270's Projects surface, preserving the
+incumbent system; detector returned no findings for its four changed page
+modules. Shared CSS/build.rs/DESIGN.md equality to269 was verified. Current
+runtime and visual acceptance remain pending; this is not delivery of the
+separate208 dashboard or a comprehensive accessibility certification.
+
+Next collect23199 and verify actual268 merge/tree before reconciling269 onto
+it. Publish accepted269 using exact old-head lease and update its existing
+review base, without creating another PR. Collect80772 as the sole heavy
+local build. No real-data change, policy activation or change to212.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
