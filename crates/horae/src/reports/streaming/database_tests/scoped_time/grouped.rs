@@ -1,6 +1,8 @@
 use super::*;
 use crate::models::time_report::TimeReportGrouping;
 
+mod active_projects;
+
 async fn project_entries(pool: &PgPool, ids: &SeedIds, owner: Uuid, count: usize) -> Vec<Uuid> {
     let projects: Vec<_> = (0..count).map(|_| Uuid::now_v7()).collect();
     let entries: Vec<_> = (0..count).map(|_| Uuid::now_v7()).collect();

@@ -1,6 +1,7 @@
 use super::*;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
+mod billability;
 mod grouped;
 
 async fn scoped(pool: &PgPool, role: OrgRole, selection: &[Permission]) -> SeedIds {
