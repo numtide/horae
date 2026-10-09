@@ -763,13 +763,11 @@ async fn legacy_project_lock_returns_busy_instead_of_forming_an_org_fk_cycle(poo
     .await
     .unwrap();
     let mut gate = pool.begin().await.unwrap();
-    sqlx::query!(
-        "SELECT id FROM organizations WHERE id = $1 FOR UPDATE",
-        ids.org_id
-    )
-    .fetch_one(&mut *gate)
-    .await
-    .unwrap();
+    // Pause the command after it owns the organization gate, before authorization.
+    sqlx::query!("SELECT id FROM users WHERE id = $1 FOR UPDATE", ids.user_id)
+        .fetch_one(&mut *gate)
+        .await
+        .unwrap();
     let gate_pid = sqlx::query_scalar!("SELECT pg_backend_pid()")
         .fetch_one(&mut *gate)
         .await
@@ -782,6 +780,8 @@ async fn legacy_project_lock_returns_busy_instead_of_forming_an_org_fk_cycle(poo
     let worker_pool = pool.clone();
     let pending = tokio::spawn(async move { execute(&worker_pool, org, actor, &command).await });
     wait_for_blocked(&pool, gate_pid).await;
+    let command_pid = sqlx::query_scalar!("SELECT pid FROM pg_stat_activity WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid))", gate_pid)
+        .fetch_one(&pool).await.unwrap().unwrap();
     let editor_wait = tokio::spawn(async move {
         sqlx::query!("SELECT id FROM organizations WHERE id = $1 FOR SHARE", org)
             .fetch_one(&mut *editor)
@@ -789,6 +789,8 @@ async fn legacy_project_lock_returns_busy_instead_of_forming_an_org_fk_cycle(poo
             .unwrap();
         editor.commit().await.unwrap();
     });
+    // The editor must still hold project UPDATE when the command tries NOWAIT.
+    wait_for_blocked(&pool, command_pid).await;
     gate.commit().await.unwrap();
     let result = tokio::time::timeout(Duration::from_secs(5), pending)
         .await

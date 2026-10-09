@@ -663,7 +663,9 @@ async fn streamed_authority_releases_successful_locks_and_overrides_inherited_se
 }
 
 async fn closed_backend(pool: &PgPool, pid: i32) {
-    tokio::time::timeout(Duration::from_secs(5), async {
+    // Both the blocked statement and SQLx's graceful close may take five seconds.
+    // Allow the backend to observe termination without racing those deadlines.
+    tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             if !sqlx::query_scalar!(
                 "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid=$1) AS \"exists!\"",

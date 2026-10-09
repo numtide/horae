@@ -36,8 +36,10 @@ perSystem.self.default.overrideAttrs (old: {
     # cargo test rather than nextest: the integration tests are #[serial], and
     # serial_test's lock is in-process. nextest runs each test in its own
     # process, which would leave them running concurrently regardless.
-    # libtest otherwise uses all host CPUs, independently of Nix's job budget.
-    cargo test -p horae --features server -- --test-threads "$NIX_BUILD_CORES"
+    # Database creation and migrations share one PostgreSQL instance and disk;
+    # large CPU budgets must not turn fixture setup into unbounded I/O contention.
+    database_test_threads=$((NIX_BUILD_CORES < 8 ? NIX_BUILD_CORES : 8))
+    cargo test -p horae --features server -- --test-threads "$database_test_threads"
 
     pg_ctl -D "$PGDATA" stop
     runHook postBuild
