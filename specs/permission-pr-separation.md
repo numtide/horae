@@ -5169,6 +5169,16 @@ requesting exact130d166f-lease publication. This is not a test failure of224b820
 Next: confirm publication, update the existing body and collect fresh both-Linux
 Nix plus required GitHub gates. No policy activation, real-data change or new PR.
 
+### #263 publication confirmed; fresh gates running
+
+Push68299 completed0; GitHub confirms224b8204 on master. Published the current
+review, conservation and full local-test evidence in the existing #263 body.
+Nix602 is evaluating the new tree; required GitHub37983147107 is running.
+No local build remains active. Open functional inventory is now exactly
+260,263–273,275–281 (19 PRs); #218 documentation, #212 reference, #208 separate
+UI and #91 Renovate remain outside that count. Next: collect602/37983147107
+and review the existing #264 CSV successor without adding a new delivery.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
