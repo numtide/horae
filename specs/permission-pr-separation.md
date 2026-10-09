@@ -6511,6 +6511,28 @@ Next remains #270's native result and exact-tree reconciliation onto merged
 #269 before publication, then #271's single heavy gate. Do not equate these
 local dependency preparations with accepted or published PRs.
 
+### Task-link preparation and reader native execution — 2026-10-09
+
+Prepared existing #277 locally over #276 after confirming the original
+`be3f3513` head, clean worktree and terminal historical Nix432. Backup:
+`refs/backup/pr277-before-current-task-stack-20261009`. New head:
+`5a51e1901e1f32c24fe87b5ab247592eea3319c6`; tree:
+`2fb3728de122edf68b8dfc1ecfbd1e677acdbcc0`, parent318f7bb4.
+Twelve of fourteen original paths remain byte-identical, including production
+code, task-link tests and seven added SQLx descriptors. The shared HTTP registry
+retains all inherited cases plus task_links once. The original contract is an
+exact prefix of the retained complete parent contract; that was the only
+conflict. Nix formatting session1709 passed,658 files unchanged, and whitespace
+passed. No push, heavy build, migration, activation or runtime acceptance.
+Prepared description: `.scratch/pr277-current-delivery.md`.
+
+Revalidated #270's live compiler rather than restarting on silence: rustc was
+using CPU, and28GiB remained free. Session42631 then completed server test
+compilation in7m04s and began1385 server tests. The full browser gate and191
+core tests are already successful; server/auxiliary completion remains pending.
+Next: collect this same session, reconcile #270 onto the actual #269 merge with
+exact-tree proof, and publish the existing PR; then start #271's heavy gate.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
