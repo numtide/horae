@@ -5867,6 +5867,59 @@ then reconcile265 onto the actual merged parent. Finish268 native and visual
 evidence before starting269's local gate. No additional remote publication,
 real data changes, policy activation or #212 modification.
 
+### Reports local gate and bounded visual acceptance completed
+
+Local26886184 terminated with exit0 on exactd3cdf579/tree3130cd43. All requested
+gates passed: format, strict Clippy, live SQLx, server/WASM package, complete
+browser runner and native tests. Retrieved complete native log:189 core,
+1278 server and221 auxiliary tests passed, zero failed and11 inherited ignored;
+server suite216.11s. Auxiliary totals exclude separately reported subprocess
+reruns. The scoped Reports component binary ran in that complete gate.
+
+After the build ended, focused capture34170 also exited0 using the exact built
+package and existing isolated runner, reports-permissions only. Disposable
+PostgreSQL was migrated/seeded by the runner; no real database or mail transport
+was used. Six screenshots are in .scratch/pr268-visual-d3cdf579: detailed,
+grouped and nested states at1440-dark and390-light, Chromium148.0.7778.96.
+Inspected all six in one batch. No new overlap in those states; actions/totals
+wrap and dense tables retain internal scrolling, not page overflow. Mobile
+grouped capture is scrolled to the focused row; nested capture shows the full
+page. Shared tokens/shell remain intact. No UI/CSS changes were needed.
+
+Impeccable audit remained bounded to verified source/browser evidence; its
+context/detector were not rerun. No full WCAG, touch, performance,200%-text or
+all-theme/viewport score is claimed. Reports handoff07 includes a custom
+builder outside this preserved ordinary-time delivery; do not equate current
+acceptance with full design/Harvest report parity. Prepared, but did not
+publish, .scratch/pr268-current-delivery.md with these exact results/limits.
+
+### Project editor composed on the verified report chain
+
+To inherit the already corrected browser cleanup and test the next sequential
+delivery composition, backed up269's local3058f43d under
+refs/backup/pr269-before-current-report-stack-20261009 and rebased its same four
+owned commits onto locally accepted268d3cdf579. New local head
+7e2300994f4c14de2b90243f2de6b97824e54fdb, tree
+0079046cb28ac04c9552a5d7a22ea41fc79ba822. The sole additional conflict was the
+suite list: project-editor-permissions now precedes all28 inherited suites,
+including reports-permissions. Range-diff changes only this registry context;
+the three follow-ups are equal. Original81/84 owned paths remain byte-identical;
+the only differences remain the two registries and inherited hydration guard.
+Shell syntax and whitespace passed. No runtime/CSS/assertion change or new PR.
+
+Started full local269 gate51569: format, native tests, SQLx, Clippy and browser,
+one job/eight cores.38GiB free before launch. Freeze this worktree while live;
+remote269 remains b08ef5ad. The new parent is a local sequential verification
+base, not evidence that268 is already merged or remotely accepted.
+
+Next: prioritize264 required GitHub37990586429/watch23637 and its protected
+queue when green; Nix610/watch22380 is10 passed/6 building, no failures.
+Publish prepared268 only after a remote slot is free, preserving the two-
+delivery bound. Collect26951569 without starting another heavy local build.
+The previous turn was progress (266 acceptance,267 publication,269 rebase);
+this turn adds complete268 acceptance/visual evidence and the next local gate.
+No merge claimed, policy activation, real-data change or #212 modification.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
