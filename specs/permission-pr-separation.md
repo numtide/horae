@@ -4746,6 +4746,28 @@ is first, AWAITING_CHECKS. This is not yet a completed merge. #258/Nixbot591
 is building both Linux deliveries on5205f8ce; #259 remains local. Next: collect
 #257's integration checks and verify its actual squash before another rebase.
 
+Merge-group37960986752 passed on888240f659bbc553afbf3f7b8ff32e8a284cc4a8.
+#257 is MERGED at16:43:17 UTC. Master read-back confirms that commit, parent
+2165320f and exact accepted tree68b2e2caf20f5f3c26dbe48627a7781e6ba5ddff.
+Both #256 and #257 are now verified integrations;23 functional PRs remain.
+
+#258/Nixbot591 remains live on5205f8ce. Prepare its local ancestry on the actual
+#257 squash and preserve the full tree, then propagate that ancestry locally
+to #259. Do not publish a replacement for #258 or retarget its PR while591 is
+live. The next immediate merge candidate is #258 after terminal acceptance
+and master-targeted checks; #259 is the following prepared UI delivery.
+
+Prepared #258 locally on actual master888240f6 as4970789548b27611cecac3317d993c3fa069f175,
+retaining treee23dc812f89f667f6a19e7ba78fadc8ea4b8bb54. #259 is now
+bb0c1240227c4a2fbe1de09b40ed829a6d4f6cc0, retaining treecf31a07b9dc078a88a06f26d3151f32b11977a88.
+Both full-tree diffs against their prior heads are empty; worktrees are clean.
+Backups: `refs/backup/pr258-before-page-context-merge-20261009` and the matching
+pr259 ref. Updated only the locally prepared body files; remote #258 remains
+5205f8ce on its temporary base while591 runs, remote #259 remains90105351.
+#212 read-back is still OPEN/draft atdb3935db364f2a8aa193f0e938ce40ecc01a2f92.
+Next: collect591, retarget/publish the conserved #258 head on master, and then
+publish the prepared #259 delivery against that reconciled parent.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
