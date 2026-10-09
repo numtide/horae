@@ -2289,6 +2289,31 @@ build529 continues on exact239d1051 with no failures observed. Continue both
 existing jobs. Begin bounded local review of existing #235 while waiting;
 do not publish a third live delivery or modify #212.
 
+Completed bounded #235 source review against015 T074–T076 and the connection
+transaction contract. Read all three writers, production callers/OAuth callback,
+generation and reservation helpers, safe errors, seven authority regressions and
+changed fixtures. Current trusted actor/tenant/admin revalidation remains under
+organization SHARE then actor SHARE through commit; external HTTP stays outside.
+No critical/high finding within this boundary; service refresh/worker policy
+and full cross-feature T042 remain separate, not implicitly certified.
+
+Prepared #235 locally on native-accepted #23830cb18af: new head
+7f89ce45efd2fc29637c0f70d94312946d30a1b2, tree
+d0501497c33a6b0b6ec97dcc32d624a25b3f83c7. Backup
+refs/backup/pr235-before-delivery-stack-20261009 retains remote e1e27f38.
+Owned production/test commit is range-diff identical; two SQLx descriptors are
+now inherited.17 files,715 additions,49 deletions. Five Rust files preserve
+their full blobs; the other three differ only by inherited base changes with
+matching stable patch IDs: harvest.rs e2ea8cf3, engine_tests.rs4f7db389 and
+authorization_tests.rs4b2d0f5f. No conflict, runtime fix or assertion change.
+
+Format513 files passed unchanged; native tests5iikp8g3 and SQLx8kvp427y are
+running in local session88750. Collect that existing process, do not restart.
+No push or third remote delivery. #228/#231 continue browser/deployment and
+platform gates; #232/#238 remain locally accepted but unpublished, #226 held.
+Next: finish88750 and full528/529, then protected #228 merge and actual-tree
+reconciliation of #231 before publishing the next prepared delivery.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
