@@ -455,8 +455,10 @@ async fn assert_small_csv_authorization_rejections() {
             axum::routing::post(move || async move { status }),
         ))
         .await;
-        let client = transport::Transport::load(server.session.path()).unwrap();
         for attempt in 0..256 {
+            // Each CSV command creates a fresh transport. Reusing a rejected
+            // upload's connection can race its close before the next response.
+            let client = transport::Transport::load(server.session.path()).unwrap();
             let error = client
                 .csv("/upload", csv.path(), Uuid::now_v7())
                 .await
@@ -469,6 +471,37 @@ async fn assert_small_csv_authorization_rejections() {
             );
         }
     }
+}
+
+#[tokio::test]
+async fn csv_connection_closed_without_response_remains_indeterminate() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let session = session(
+        &format!("http://{}", listener.local_addr().unwrap()),
+        "test_session",
+    );
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut request = [0; 1024];
+        assert_ne!(socket.read(&mut request).await.unwrap(), 0);
+        socket.shutdown().await.unwrap();
+    });
+    let mut csv = tempfile::NamedTempFile::new().unwrap();
+    csv.write_all(b"Date,Client,Project,Task,Hours,Email\n")
+        .unwrap();
+    csv.flush().unwrap();
+    let client = transport::Transport::load(session.path()).unwrap();
+    let error = client
+        .csv("/upload", csv.path(), Uuid::now_v7())
+        .await
+        .unwrap_err();
+    server.await.unwrap();
+
+    assert_eq!(error.code, 6);
+    assert_eq!(error.category, "indeterminate_submission");
+    assert_eq!(error.http_status, None);
 }
 
 #[tokio::test]
