@@ -4293,6 +4293,30 @@ are now #256/#257, and25functional deliveries remain. Next: collect both-Linux
 acceptance, reconcile #256 onto actual bbdfb8f7 preserving its complete tree,
 then use protected master checks/queue. Prepare #258 independently if useful.
 
+Next iteration: previous turn made progress (#255 merged, #257 published).
+Revalidated #256 Nix581 and #257 Nix582 live; no terminal failure observed.
+Prepared #258 locally without creating a third remote delivery. Read the full
+approved Timesheet integration contract and applied Rust/testing/async/minimal
+change guidance. Reviewed complete521-line command module, DTO/35-line endpoint,
+13DB tests and169-line registered HTTP exercise: no critical/high finding.
+Checked identity/policy and current scope, tenant/eligibility fences, both move
+ends, atomic sets, owner-only terminal recovery, legacy history, approval boundary,
+revocation order, cancellation, normalized effects and post-commit dispatch.
+
+Backed up6391cdbe at refs/backup/pr258-before-current-delivery-20261009 and rebased
+its one owned commit onto published #2578e24f13a. The only conflict was HTTP test
+registration; inspected the reused resolution, which retains all inherited tests
+and adds delegated_time once. Complete implementation/four test files/DTO match
+the old head exactly; all39original SQLx descriptors match, one now inherited.
+Endpoint additions unchanged. New local headeda54b82b73f97ab645a70010fb2522d13f83ad0,
+tree304ce43faf67e290138e79c4f9e3e50dc306750d, owned46files/2822adds. No behavior
+change, weakened assertion or new product decision. Started native/fullSQLx/fmt
+validation25828 on this frozen tree; formatting583unchanged passed, fullSQLx is
+live. Tests drv744agl8sn79cqa8kxwy8l0nz5s1ill4d-horae-tests-0.1.0.drv.
+Do not edit/rebase during validation. Prepared body is local-only. Next: collect
+581/582 acceptance and25828; merge #256 through protected master after same-tree
+squash reconciliation, publish #258 only when its validation and slot permit.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
