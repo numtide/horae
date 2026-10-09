@@ -3131,6 +3131,21 @@ the reviewed5950fdb1 with exact lease, targeting #237, as the second remote
 delivery. #237547 is live with only checks.aarch64-linux.e2e building; do not
 interrupt or restart it. #212, root checkout and #226 hold remain unchanged.
 
+Published reviewed #2475950fdb1/tree535ae5a7 with exact1b7adcd1 lease and updated
+its existing PR body/base to feat/import-job-requester. Nixbot550 is evaluating
+that exact tree. Build549 was the obsolete1b7adcd1 retarget merge conflict,
+before evaluation; no test failure or manual retry. The worktree remains clean.
+
+Nixbot547 completed successfully on #237ed4f2f21/tree6c66f37f, including the
+last ARM e2e attribute. Published the already-reconciledfcf1250f onto actual
+masteraa8e9ef9 with exacted4f2f21 lease after confirming zero tree diff. GitHub
+reused547 successfully for both Nixbot checks. Source workflow37910361697 is
+live onfcf1250f; no unresolved review threads. Updated its existing body to
+record the actual base and acceptance. Build548 was the prior automatic
+master-retarget merge conflict on obsoleteed4f2f21, with no evaluated tree.
+Next: collect37910361697, then submit #237 to the protected queue; keep #247550
+running untouched and reconcile its ancestry only after it is terminal.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -3257,12 +3272,12 @@ review complete and native tests (1,310 passed), SQLx and format accepted.
 Correct-head Nixbot545 passed;544 was an old-head retarget merge conflict
 before evaluation. #23666ff076b is published on master82c11cda with the identical
 ada47e05 tree and merged asaa8e9ef9 after GitHub37909003313 and protected
-merge-group37909249946 passed. #237 is published ated4f2f21/tree6c66f37f after passing
-native tests (1,315), SQLx, format and bounded source review. Its remote checks
-remain required; #237547 is the only active remote delivery. Localfcf1250f
-reconciles onto actual masteraa8e9ef9 with the same tree, awaiting547 before push.
-#247 is locally prepared on #237 as5950fdb1/tree535ae5a7; native40270 passed
-1,336 tests, SQLx and format. Bounded code review remains required before publication.
+merge-group37909249946 passed. #237 is published atfcf1250f/tree6c66f37f on actual
+masteraa8e9ef9 after native tests (1,315), SQLx, format, bounded review and
+both-Linux Nixbot547 passed. Source workflow37910361697 is live; protected
+queue acceptance remains required. #247 is published on #237 as5950fdb1/tree535ae5a7;
+native40270 passed1,336 tests, SQLx and format. Its bounded T104–T109 review
+found no critical/high issue; Nixbot550 is live. These are the two remote deliveries.
 #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
