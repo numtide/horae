@@ -2591,6 +2591,20 @@ and treefmt n6g1ffkl passed and remain rooted. No local tests/watchers remain
 live; #231 Nixbot531 is the active remote delivery. Next: finish/reconcile #231,
 then publish #232 in the available delivery slot on the correct ancestry.
 
+Reconciled #232 locally onto #231's actual-master ancestry07d30fc9. Head
+ce812ded81c082720fa81f2b432402ca5d453b53 retains the exact accepted5d7aa453
+tree and the identical owned commit. Backup
+refs/backup/pr232-before-project-access-merge-20261009 preserves75695511.
+Prepared #238 on ce812ded: head c5402afa925afef2add93d4b4456b6dbab520938,
+tree b41bf687694122b1a0ca12d209310badcd2cd28b. Backup
+refs/backup/pr238-before-ci-correction-20261009 preserves30cb18af. Both owned
+commits are unchanged; only the five inherited CI/browser files differ from
+the previous whole tree. Format passed514 files, zero changes; native
+tests m75adhk2, SQLx przckg5g and treefmt5ymi1lhp are live in77585, rooted at
+.scratch/pr238-ci-correction-checks. #238 remains unpublished; #235 untouched.
+Nixbot531 is still running its ARM browser/deployment/OIDC checks. Next:
+collect it before publishing #231's ancestry-only update and the prepared #232.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
