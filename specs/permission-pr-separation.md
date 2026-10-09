@@ -2445,6 +2445,29 @@ qz875f9f20qg5h2bz5sxg4yvj7hg9dcl. Next: collect both controls and11583;
 if the candidate is confirmed, validate its scope before applying it to the
 existing CI delivery. No new PR, merge, host service change or data change.
 
+Collected current e6e258be Rust gates: tests850r1mdxy262s6h4lsqji6x2ryjfbhad
+passed1,247 tests (189 core,875 server,183 auxiliary), zero failed and11
+existing ignored tests. Clippy9fix3i8h, SQLx dv9mzfky and treefmt w47ps3jk
+also passed. Full native11583 is now running the deployment VM3mvnijgal,
+with OIDC wsyyszb2 still required. The browser's21 suites remain accepted.
+
+The corrected control harness20280 finished expected-red on unpatched systemd:
+VM bvh0yiwg0sib7zz7kw5bhd73qmmz79vd connected its console and then detected
+50 reloads of unchanged udev rules. Unlike the earlier inactive-service
+failure, this directly trips the intended reload regression assertion.
+Patched83419 remains live compiling systemd dd727vf; no green result or remote
+ARM correction is claimed. Audited all parser callers (daemon, verifier and
+fuzzer): each receives a ConfFile with a populated resolved-parent result.
+
+Prepared, but have not yet run, an additional check in the scratch probe:
+create and update a real temporary VM rule, then wait for its property to
+appear after device events without an explicit reload command. This checks
+that eliminating false reloads does not disable detection of actual changes.
+The already-running83419 retains its original frozen test script; collect it
+before running the extended check. Next: finish11583 and83419, then verify
+real-rule changes before applying/publishing any dependency patch. #228's
+remote9ea and #212's preserved db3935db were revalidated unchanged.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
