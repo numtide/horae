@@ -2819,6 +2819,28 @@ Remote #233 stays draft on its existing integration base. No current combined
 review, tests or remote acceptance is claimed yet. Next: finish #241's active
 validation and review #233's T192–T194 boundary before its own fresh tests.
 
+#241's combined-tree56742 completed successfully: 189 core,919 server,183
+auxiliary tests passed (1,291 total,zero failures,11 existing manual cases
+ignored), server122.05s. SQLx passed51.40s; formatting516 files,zero changes.
+Rooted outputs: testsnq41c85l,SQLxy3jc666b,treefmtg1zapyxd. Local325e4fc5
+still has the identical tested cca1729a tree. Remote540 on previousb4edd434
+continues with ARM browser/deployment pending; do not claim it covers cca1729a.
+
+Completed the bounded #233 T192–T194 review: read all three writers and trusted
+production callers, replay checks, actorless test-only adapters, actual user-role
+command, and four regression tests. Organization SHARE precedes invoice advisory
+serialization and active same-tenant actor SHARE; no lock upgrade or external
+work inside the transaction was added. Money, revisions and events stay unchanged.
+No critical/high finding in this boundary. Cancellation establishes eventual
+rollback after the blocked statement is released, not immediate database cancel
+or mid-mutation interruption; full T042/source hierarchy remain separate gates.
+Four invoice files match6b12f302 byte-for-byte; users.rs only inherits base changes
+(both stable patch IDs ec7b8bf010c34b8507c03e7358c44749cd1e86cc).
+Fresh native tests/SQLx/treefmt run in19877 on fe88a965/treeb5f3f055, rooted under
+.scratch/pr233-current-delivery-checks. No remote #233 update yet. Next: collect
+existing540/19877, publish locally accepted #241 once540 finishes, then publish
+#233 against that exact base only after its own current native acceptance.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
