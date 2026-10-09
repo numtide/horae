@@ -4344,6 +4344,27 @@ it still inherits the old fixture until its live build finishes. Next: collect
 66864 and25828; publish corrected #256 when validated, then propagate the same
 fixture through existing children without touching a live local build.
 
+Collected #25825828 terminal success oneda54b82:189core+1174server+201aux=1564,
+zero failures/11ignored,server222.63s; SQLx and formatting583unchanged passed.
+Testskgrvqzxvcigav53m8k38v6rmmccn95n7, SQLx3xgz35z8hqs3n44rcz049l1qggqppd66.
+The old inherited fixture happened to pass locally; that does not invalidate
+the observed ARM race or certify its correction.
+
+Prepared propagation locally without changing published CI heads: backed up
+#257 at refs/backup/pr257-before-lock-fixture-fix-20261009 and rebased its two
+owned commits onto corrected #256f0d61e24. New5900462a427b8db1b349d4610c3affb1124c1510,
+treeecaa17bf4f304e974f5e6ba1994ad4eaf6d45915. After25828 finished, backed up #258
+at refs/backup/pr258-before-lock-fixture-fix-20261009 and rebased its one commit
+onto5900462a. New12dbe8a0620d074c895593cdc1a3ec83a5cd8886,
+treebbf353ed614125f096f1796cfda487b56ae8dbc1. In both, verified the only full-tree
+difference is the exact inherited9add/7delete project-lock fixture; owned changes
+are untouched. Bodies remain local pending publication/fresh acceptance.
+#256 corrected66864 passed fullSQLx/format and is running its1166server cases.
+Nix581 remains failed-native plus live ARMdeployment;582 remains live, ARMnative
+passed. Next: collect66864, publish corrected #256 against master with exact
+lease, then publish the prepared #257 after its old CI completes. Keep #258
+unpublished until a slot opens. No source or test weakened, no new PR.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
