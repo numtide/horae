@@ -3083,6 +3083,15 @@ treefmt wcw54afbb9h6svzrqpvma2lmxq58djqp. No current bounded review or complete
 native acceptance yet. Next: collect #236 GitHub checks and #237547/40270;
 do not publish #247 before bounded review or as a third remote delivery.
 
+Current #23666ff076b GitHub37909003313 passed (Flake49s,Format42s), and
+Nixbot reused545 for its unchanged ada47e05 tree. Watcher18714 exited0.
+Marked ready and submitted without bypass to the protected queue;
+publication82279 exited0. EntryMQE_lQDOTRPZ888AAAABG9fV3s4AA_LZzgMt5HM is
+first,QUEUED. Do not reuse #233's completed merge-group as #236 evidence.
+Next: identify #236's own queue run and actual merge/tree, then reconcile #237
+only after547 finishes. Local #24740270 remains live in server tests; bounded
+source review remains pending and no remote #247 publication is authorized yet.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -3206,10 +3215,9 @@ before retargeting, not a source test. #233 merged as82c11cda/treeb5f3f055 after
 current-head GitHub37907383369 and protected merge-group37907635431 passed.
 #236 is published at a437337b/treeada47e05 on #233, with its T077–T082
 review complete and native tests (1,310 passed), SQLx and format accepted.
-Correct-head Nixbot545 is active;544 was an old-head retarget merge conflict
-before evaluation. #236 is the only active remote delivery. Its local66ff076b
-reconciles onto master82c11cda with the identical ada47e05 tree; publish only
-after545 finishes. #237 is published ated4f2f21/tree6c66f37f after passing
+Correct-head Nixbot545 passed;544 was an old-head retarget merge conflict
+before evaluation. #23666ff076b is published on master82c11cda with the identical
+ada47e05 tree and is queued after GitHub37909003313 passed. #237 is published ated4f2f21/tree6c66f37f after passing
 native tests (1,315), SQLx, format and bounded source review. Its remote checks
 remain required; #236 and #237 are the two active remote deliveries.
 #228's browser/VM corrections now have
