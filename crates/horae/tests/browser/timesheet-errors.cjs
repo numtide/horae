@@ -211,7 +211,8 @@ function resetEntries() {
         await page.keyboard.press('Escape');
       }
     } finally {
-      await page.unroute(trackingPattern);
+      // Finish intercepted refreshes before the next case navigates away.
+      await page.unrouteAll({ behavior: 'wait' });
       sql(`UPDATE projects SET active=true WHERE id='${id(2)}'`);
     }
     await check('day-view timer failure is visible', async () => {
