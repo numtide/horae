@@ -5695,6 +5695,22 @@ proving complete treeab956f71 conservation before exact-lease publication.
 #267 full local acceptance remains ready for the next remote slot. Eighteen
 functional PRs remain; #212 and the separate drafts are unchanged.
 
+### #264 corrected both-Linux acceptance
+
+Nix607 succeeded at2026-10-09 21:25:54 UTC on exact9c44db39/treef678797f:
+all16 applicable checks passed and six local-only outputs skipped. Watch73128
+exited0. The last ARM deployment completed in1021.38s; both corrected browser
+suites, both native suites, Clippy, SQLx, packages, formatting and OIDC passed.
+Updated the existing264 delivery description with fresh corrected-tree evidence.
+
+Required GitHub37990586429/job114023419503 remains authoritatively in_progress
+in its Flake check step, watch23637 live. This workflow runs its own
+`nix flake check -L`; nixbot success is not a substitute for that required gate.
+No restart, skip, bypass or merge has occurred. #266609/watch5166 remains live
+at3 passed/10 building/3 pending, no failures. No local build remains active.
+Next: collect required264 GitHub, then fresh reviews/head and protected queue;
+after the actual264 merge reconcile265 with complete-tree conservation.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
