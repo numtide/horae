@@ -5777,6 +5777,30 @@ Required264 workflow37990586429/watch23637 is still live; no restart or bypass.
 merge readiness, collect609/86184, and complete268's runtime evidence before
 publication. No new PR, real-data mutation or #212 change.
 
+### #268 runtime validation advancing; #264 required check still live
+
+Local86184 built the server/WASM package successfully (reported133.63s) and
+is now running the full browser runner. Partial output confirms existing
+layout, navigation, project bulk and new-project recovery suites advancing;
+do not claim the entire gate complete. Retrieve complete browser/SQLx/native
+summaries once the handle terminates. Worktree d3cdf579 remains frozen.
+
+Resolved exact runtime paths without another build (eval45311 exited0): server
+`/nix/store/nhb8s8x9hdfyb28bqc3ac8rk9fd1czap-horae-0.1.0/bin/horae`;
+Playwright modulei6xnc927g8yrwq0fws8wbmjvj4y36fq5, browsers2br1n8v0cx3zlqs4bik69d5fm2qm0z3m,
+font configyd0dxiqr0r8hcmfb7grlr3zdb968xjdr-fonts.conf. After86184 finishes,
+the existing isolated runner with reports-permissions and
+HORAE_BROWSER_ARTIFACTS can capture the bounded desktop/mobile review without
+touching real PostgreSQL. No second runtime or heavy build was launched.
+
+#266609/watch5166 is13 passed/3 building with no failures. Required264
+workflow37990586429 is authoritatively in_progress; direct active-job log API
+returned404 BlobNotFound, an observation limitation, not a failed job. Do not
+retry/cancel/restart or bypass protection. Watch23637 remains the same live
+handle. Next: collect that gate for264's protected queue, collect609/86184,
+and finish268's bounded runtime evidence. No new PRs, remote head changes or
+merge claim in this verified-wait iteration.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
