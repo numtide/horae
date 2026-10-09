@@ -3376,6 +3376,40 @@ build remains live;82262 and35617 are terminal. Next: inspect fresh ARM
 results/diagnostics, then decide readiness on evidence while preserving the
 historical524 failure and the hold against blind retries.
 
+### #234 current-base preparation and review — 2026-10-09
+
+The previous turn made progress: #226 was rebased, accepted locally and
+published for current-tree CI; it was not merged. Revalidated its exact live
+Nixbot 553 tree 92b3e1fc and GitHub 37916121654 (watcher 31136). No retry.
+
+Prepared the next dependent delivery in the existing clean
+`.worktrees/person-profile-commands` worktree. Backup
+`refs/backup/pr234-before-current-delivery-20261009` preserves 64c6e2b2.
+Rebased its two owned commits from 9ab9ec8b onto #226 head 0bacb3b1 with
+`rebase.updateRefs=false`. New local head daf09672673e114be25b8ccb5d5cd3aa16f92600,
+tree 43fb4002d5ea2c7d214820544eea3ca35be6483b. Source commit aaa5e7b1 is
+range-diff identical; cache commit daf09672 only drops five descriptor additions
+now inherited from master. Owned diff: 37 files, 2,349 additions, two deletions.
+Original command, 1,262-line test module, migration 0044, command DTO and audit
+snapshot blobs are unchanged. Published #234 remains at its former head/base.
+
+Completed bounded review of the full command/test modules, DTOs, additive
+management schema and person-profile command contract (T056–T058 plus retained
+activity hardening). Checked organization-first serialization, active canonical
+authority before replay, explicit identity versus grants/provenance, stale and
+overflowed revisions, exact outgoing removal sets, no implicit restoration or
+historical cleanup, last-admin survivor locks, tenant FKs, no-op receipts,
+cancellation and atomic audit rollback. No critical/high finding in this
+internal boundary. It adds no endpoint, UI, activation or mixed-policy support.
+Full-feature acceptance and cross-feature activation remain separate.
+
+Formatting passed 536 files with zero changes. Native composition check 36003
+is live on this unchanged tree: tests jmmj75xps4jjv8cqgph7rwmlk7l5f0pn, SQLx
+yvq94vjaxn6yjian7fs5ibakk7mh4mlq and format v9rbm4d6i8gxbzbr5gyzj608g3a6b10y.
+Do not edit its source or restart the check while live. Next: collect 36003 and
+#226 remote gates; retain the draft/queue holds until delivery acceptance is
+decided on the current evidence. No new PR, real-data operation or #212 change.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
