@@ -2971,6 +2971,22 @@ No production migration or remote publication. Bounded current review remains
 required. Next: collect the existing merge-group and545/66164; verify actual
 #241 merge/tree before reconciling #233 ancestry.
 
+#241 MERGED at2026-10-09 08:48:14 UTC as
+919b1e7b506b5c2bde46458ea5501c26c6a4e5d5. GitHub merge-group37907089652
+passed (Format41s,Flake58s); watcher38727 exited0. The actual commit tree is
+cca1729adea923691b9f07a56bb4932e0a1fb839, exactly the native/Nixbot541 accepted
+tree. API confirms master919b1e7b and #212 still OPEN/draft atdb3935db;
+root remains unchanged with only its existing untracked .playwright-mcp/.
+
+GitHub automatically retargeted #233 to master. Reconciled it locally onto
+actual919b1e7b: headd78000c44c7978436ab7b7cc9774a4b40ade8c38, unchanged tree
+b5f3f055a38790ba9b5fac4f9b72f173c1202e06. Both commits are identical in range-diff;
+backup refs/backup/pr233-before-time-write-merge-20261009 preservesfe88a965.
+Publishing with exactfe88a965 lease in55479, followed by the updated PR body.
+No source or accepted-tree change; current-head GitHub and queue gates still
+required. #236545 remains live, #23766164 remains local/live. Next: collect55479
+and current #233 checks, then queue only on full acceptance.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -3085,14 +3101,17 @@ after Nixbot537, source37900536578 and protected merge-group37900658766 passed.
 #235 merged as82e85160/treed9ae89ad after Nixbot539, source
 37902677508 and protected merge-group37902926064 passed. #241 is published at
 325e4fc5/treecca1729a on master82e85160: combined native56742 passed1,291 tests,
-SQLx and format; Nixbot541 passed, GitHub37904465910 remains active. #233 is published
+SQLx and format; Nixbot541 and GitHub37904465910 passed. #241 merged as919b1e7b
+with the same cca1729a tree after protected merge-group37907089652 passed.
+#233 was published
 atfe88a965/treeb5f3f055 on #241 after native19877 passed1,295 tests, SQLx and
 format. Its correct-base Nixbot543 passed;542 failed against the obsolete base
-before retargeting, not a source test. #233 awaits #241's actual merge.
+before retargeting, not a source test. #233 now has the identical b5f3f055 tree
+rebased locally to actual master919b1e7b asd78000c4; publication55479 is active.
 #236 is published at a437337b/treeada47e05 on #233, with its T077–T082
 review complete and native tests (1,310 passed), SQLx and format accepted.
 Correct-head Nixbot545 is active;544 was an old-head retarget merge conflict
-before evaluation. #241's GitHub run and #236 are the two active deliveries.
+before evaluation. #233 and #236 are the two active remote deliveries.
 #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
