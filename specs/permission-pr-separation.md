@@ -4521,6 +4521,25 @@ No local build is running. #256 Nixbot586 and #257 Nixbot585 remain live; the
 latter's only pending attribute is x86 browser, whose log continues advancing.
 Do not replace its published head before that execution becomes terminal.
 
+Nixbot585 completed successfully at 15:10:13 UTC on #257 `5900462a`, tree
+`ecaa17bf4f304e974f5e6ba1994ad4eaf6d45915`: 16 attributes passed and six were
+already built, with no unfinished or failed attribute. Only after collecting
+that terminal result, published prepared head `74c76c0f` with an exact lease on
+`5900462a` and updated the existing PR body. Read-back confirms OPEN/draft,
+temporary #256 base unchanged, and fresh Nixbot587 evaluating the new head.
+Old-head acceptance does not certify this inherited correction; wait for new CI
+and the actual #256 squash before master reconciliation.
+
+For #259, the static UI detector completed with no output/findings (not visual
+or accessibility certification). Finished reading the Components handoff,
+Dropdown, DevBar and DatePicker plus the relevant browser-suite adaptations.
+Started local baseline package build42787 at unchanged `bd3a6a60` to support a
+focused calendar regression reproduction; derivation
+`/nix/store/7c59axh4pn6djs5yfichpi500wfn6xzj-horae-0.1.0.drv`.
+The client/WASM phase completed; package completion and browser reproduction
+remain pending. No source edits while this local build is live. Disk has 15GiB
+available. Keep #258 local until a remote delivery slot is free.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
