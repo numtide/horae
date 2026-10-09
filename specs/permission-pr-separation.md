@@ -3699,6 +3699,60 @@ Next remains #246 source37920533055 then protected queue, reconcile #243 to its
 actual squash preserving treebd7d2d2f, and publish #244 only when a slot opens
 and its native checks pass. #212 and the dirty reference worktree are untouched.
 
+#243 Nixbot561 completed successfully on7f51e98c/treebd7d2d2f, all both-Linux
+attributes including browser/deployment/OIDC. Watcher42630 exited zero. Updated
+the existing public PR description; final ancestry and GitHub/protected gates
+remain outstanding. #246 source37920533055 is still live at41 minutes; no restart.
+
+#244 native94723 exited zero on a1d56c86/treec53bbafb. Results:189 core +1,083
+server +194 auxiliary =1,466 passed, zero failures,11 existing manual cases
+ignored. All own-reader/SSR/resource cases, registered HTTP and both CSV schedules
+passed; server167.20s, SQLx72s, format553 unchanged. Four plugin child-process
+summaries are not counted a second time. No source changed while this ran.
+
+Review of #245's existing fixture correction exposed the same P2 test fragility
+in #244: own-permissions.cjs selected admin@example.com while DEV_LOGIN selects
+an unordered active Administrator; new-project-permissions.cjs leaves another
+active admin. This can prepare state for a different person from the session.
+After94723 finished, fixed only the fixture to read the actual get_me response
+before preparing state, reusing #245's compiled-endpoint discovery. Every original
+behavioral assertion remains; cleanup is guarded until setup commits. Commit
+3f443fbdc7f272c1041a9ed76bb7264f4e13a0aa, tree5690ad2d2ac4a37cbd919121479874d6f5e5b90a.
+Syntax/format81925 passed (553 unchanged); runtime Rust/SQL/CSS unchanged.
+The earlier6c4e4d1 package path is no longer present locally, so the attempted
+focused browser launch stopped at test -x, before creating any database. No
+browser success is claimed for this correction. Final combined browser remains
+required. #244's prepared description records both results and this limitation;
+its remote head has not been changed.
+
+Completed #245 source review against audit-lookup.md T062–T064/T123–T125/
+T182–T185: full reader/decoder/DTO/wrappers, UI/shell/navigation,26 reader/decoder
+cases, registered HTTP checks, controlled UI/shell tests and browser script.
+No critical/high finding in this boundary. Verified current explicit admin gates
+before record lookup, read deadlines/cancellation, tenant-scoped stable25/26
+pagination, requester binding, strict historical versions/revisions/nullable
+fields, three real writer shapes and explicit no-ops, sanitized failures,
+stale-page suppression and independent canonical-admin navigation. #243's
+audit-denial assertions remain present. No history fabrication/retention rule.
+UI detector returned no findings. Retained desktop-dark/narrow-light captures
+were inspected; UI/shell/CSS match065a96b. Same limited18/20 technical assessment
+as Settings (compact controls and no native-touch/contrast certification); do
+not replace final combined browser acceptance with these earlier captures.
+
+Preserved #245a6982442 under refs/backup/pr245-before-current-delivery-20261009.
+Rebased its six owned commits from29c4d5ef onto prepared #2443f443fbd, with
+updateRefs disabled. Head733f1b2792fd4f853bca422c006a01667a57d844,
+tree5019fb7743efe0154756e514472c97097450f4e3. One additive HTTP registration
+conflict retains all nine inherited checks and adds permission_audit exactly
+once. Eleven complete owned source/test files remain byte-identical; two cache
+adds are now inherited. Owned diff48 files,3,971 additions/14 deletions.
+Remote #245 remains untouched. Local21679 runs formatting plus Nix tests,
+SQLx, treefmt and the full disposable browser suite on this frozen composition,
+including the #244 fixture correction. Do not edit either source mid-build.
+Next: collect21679 and45517; once #246 source accepts, submit protected queue,
+verify actual merge, then reconcile/publish downstream without changing tested
+trees. No new PR, feature, real-data operation or #212 change was introduced.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
