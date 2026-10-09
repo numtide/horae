@@ -28,6 +28,7 @@ mod cli;
 mod exports;
 mod financial_snapshots;
 mod legacy_readers;
+mod own_permissions;
 mod project_managers;
 mod session_identity;
 mod time_entry_payload;
@@ -357,6 +358,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     financial_snapshots::check(&pool, &api).await;
     exports::check(&pool, &api).await;
     project_managers::check(&pool, &api).await;
+    own_permissions::check(&pool, &api).await;
     let admin = api.cookie(owner.user_id).await;
     let expired = api.cookie(owner.user_id).await;
     assert_eq!(
