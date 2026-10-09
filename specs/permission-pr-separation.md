@@ -2510,6 +2510,18 @@ auto-merge/queue entry, and #212 open/draft at its preserved db3935db head.
 Next: collect60625 and the existing remote gates; submit #228 to the protected
 queue only when accepted, then reconcile #231 with the actual integrated base.
 
+While the existing #228 gates run, prepared #231 locally on f465f7a0 without
+publishing or modifying any dependent branch. New head216440b5ff8d90f7c50b851987c3e2bc382e7a76,
+tree a746b82d0e4f87e0f5094690062dccf4723d403e. Backup
+refs/backup/pr231-before-ci-correction-20261009 retains a34a1348. Range-diff
+confirms both owned commits unchanged; the whole-tree delta is only the five
+inherited CI/browser repair files. Format passed507 files, zero changes, and
+whitespace validation passed. New test/SQLx derivations fixdzsqk and xyiz955n
+require fresh acceptance: native validation15705 is live, rooted at
+.scratch/pr231-ci-correction-checks. Remote #231 remains a34a1348; #232/#238/#235
+remain unchanged. No new remote build or PR was requested. Next: collect the
+existing #228 remote/native gates and #231 local checks before publishing.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
