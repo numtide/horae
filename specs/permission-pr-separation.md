@@ -6533,6 +6533,29 @@ core tests are already successful; server/auxiliary completion remains pending.
 Next: collect this same session, reconcile #270 onto the actual #269 merge with
 exact-tree proof, and publish the existing PR; then start #271's heavy gate.
 
+### Atomic creation dependency preparation — 2026-10-09
+
+Prepared existing #278 over local #277 after verifying original `cdcefa91`,
+clean worktree and terminal historical Nix439. Backup:
+`refs/backup/pr278-before-current-task-stack-20261009`. Rebase had no conflicts;
+both original commits remain range-diff identical and all12 owned files are
+byte-identical. New head `9854769a9c0133fb547403c2523d21e1cd57ac1a`, tree
+`9834e6231f0149aded521ebbfe18c1b114b205c2`, parent5a51e190. Whitespace passed;
+Nix formatting session9513 passed with658 files unchanged. No source edits,
+push or extra heavy build. Description: `.scratch/pr278-current-delivery.md`.
+
+Rechecked the remaining consumer dependency: #279's existing integration base
+combines #278 and #260. Prepare/integrate #260 before #279, retaining #278's
+loaded requester inside LegacyAdminUsers and all navigation guards/suites.
+Neither UI branch was changed by this inspection. #260's backend foundations
+are already in the refreshed stack; #279 is not independent of its shell split.
+
+Local #270 session42631 continues its1385 server tests with no terminal outcome
+yet. Browser and191 core tests are accepted; final native/auxiliary acceptance
+remains pending. Next remains collecting this same gate, exact-tree rebase onto
+actual #269 merge21452bdd, publication with the correct base, and then #271's
+single heavy gate. Do not substitute dependency preparation for acceptance.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
