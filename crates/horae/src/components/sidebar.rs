@@ -32,7 +32,7 @@ pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Elemen
 
             div { class: "sidebar-section", "Track" }
             div { class: "sidebar-group",
-                SideLink { to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default() }, icon: "timesheet", label: "Timesheet", on_navigate }
+                SideLink { to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default(), user: String::new() }, icon: "timesheet", label: "Timesheet", on_navigate }
             }
 
             div { class: "sidebar-section", "Organize" }
