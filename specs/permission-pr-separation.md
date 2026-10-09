@@ -3430,6 +3430,37 @@ use its diagnostics; never bypass or weaken the check. This narrows the earlier
 blanket hold, not the product scope or the mandatory CI gates. #226 is still
 draft and outside the queue until all current gates complete successfully.
 
+#234 native check 36003 completed successfully on unchanged daf09672/tree43fb4002:
+189 core, 1,026 server and 183 auxiliary tests, 1,398 passed, zero failures,
+11 pre-existing manual cases ignored. All 27 profile-command cases and both
+CSV rejection schedules passed; server 161.40s. Full SQLx preparation passed
+in64s and format536 files was unchanged. Source/schema stable patch ID
+25021b50343aa770a6edc4b241d8138e10f73194 matches the original extraction.
+Outputs are rooted at `.worktrees/person-profile-commands/.scratch/pr234-current-delivery-checks`:
+tests ilxzyv66n8iw26bfb6fzhh16q68dyybx, SQLx j9xcy6inf0hsjs0cv65xk4yffxkmyj7l,
+format i3l4qkj29a6kggp0vb387ls4r5bwild4. No local build remains active.
+Publication96885 retargeted existing #234 to `refactor/permission-template-commands`
+and is pushing with exact old64c6e2b2 lease; do not treat publication as verified
+until that handle completes and remote head/body are read back.
+
+Publication 96885 completed successfully. Remote #234 is verified OPEN/draft,
+auto-merge null, head daf09672 on `refactor/permission-template-commands`, with
+the exact37-file diff and updated description. Current Nixbot555 is building
+its accepted-local tree43fb4002. Build554 records the obsolete64c6e2b2 head's
+retarget conflict before evaluation, not a source/test failure or a retry.
+The master-only GitHub workflow will run after final retargeting; none is
+claimed for this stacked head. Do not merge #234 into #226's branch.
+
+Two remote deliveries are live: #226 Nixbot553/GitHub37916121654, and #234
+Nixbot555. Change-only Nixbot watcher84950 polls both every55s; existing GitHub
+watcher31136 continues unchanged. Latest553 pending attributes are ARM browser
+and e2e; ARM OIDC now passed. No local build or publication handle is live.
+Next: collect those same handles, verify all current #226 gates and reviews,
+then use the protected queue with exact-head guard. Preserve the historical
+transport limitation without calling it fixed. After #226's actual squash,
+reconcile #234 onto master with the identical accepted tree and require its
+master-targeted/protected gates. #212 remains untouched; no new PR was opened.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
