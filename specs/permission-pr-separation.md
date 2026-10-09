@@ -2766,6 +2766,16 @@ unchanged. #235539 ARM deployment is still executing recovery assertions;
 watcher74994 remains live. Do not restart either remote build on observation
 silence. Local tests83821 and publication94135 are terminal-success.
 
+Nixbot539 completed successfully on #2352635cfb6/tree d9ae89ad, including
+both Linux browser/deployment/OIDC checks. Watcher74994 is terminal-success.
+Rechecked the clean7726c85f worktree and empty full-tree diff, then published
+that ancestry-only update with the exact2635cfb6 lease. Publication36977
+completed successfully and the PR description now records current ancestry,
+accepted tree and outstanding GitHub/queue gates. #241 remains b4edd434 with
+GitHub37902523144 and Nixbot540 running; Format already passed.
+Next: confirm #235's inherited Nixbot acceptance and fresh GitHub checks, then
+request protected queue delivery without bypass. No merge is claimed yet.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
