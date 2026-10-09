@@ -4944,6 +4944,42 @@ the unchanged commit; attempt2 is queued. No source, assertion, timeout or gate
 was weakened. Nix595/596 still run their remaining ARM/browser/deployment checks,
 and local #26244480 remains active. Next: collect these exact existing handles.
 
+### #261 merged; #259 refreshed on its accepted reader
+
+Nix595 succeeded at19:09:56 UTC on #259b3a182cb, treecf31a07b. Nix596
+succeeded at19:10:32 UTC on #261dce0b134, treed834d554. Both passed all16
+build/test attributes on both Linux architectures; only six local-only
+attributes were skipped. ARM server results:1195 passed in219.48s for595;
+1187 passed in222.02s for596, zero failures and11 inherited ignored. Matching
+x86 results are recorded above. Browser, Clippy, SQLx, package, formatting and
+deployment/OIDC all passed. Monitor2279 terminated successfully.
+
+#261's required GitHub retry37975763858 attempt2 passed unchanged. Rechecked
+empty reviews/threads, submitted through the protected queue, then verified
+successful merge-group37978620900. #261 MERGED at2026-10-09 19:13:43 UTC as
+94585bf2da008b244342acfb1ec180caafec6ff6, parent5e3b241f. Actual integrated
+treed834d554a6aa0ba1434cb65669d647187e825244 exactly matches accepted source.
+There are21 remaining functional PRs. No reference branch was removed.
+
+#259's required GitHub37975649246 also terminated with exit143, at19:12:24,
+without a compiler/test failure in the log. Since master advanced, did not
+retry the obsolete source. After both old jobs were terminal, backed upb3a182cb
+in refs/backup/pr259-before-report-reader-merge-20261009 and rebased onto actual
+master94585bf2 without conflicts. New headcee459de4db59a6c209ab9d2a175d487b894522d,
+tree6087c8616baf63b3bd657ddb314935bb04778a50. All four owned commits are equal
+in range-diff; only the27-file merged report-reader patch changes the full tree.
+Published with exact leaseb3a182cb and updated the PR body. Current Nix598 and
+GitHub37978973703 are running. No gate/timeout/assertion changed.
+
+#262 local44480 remains active on1e725e53: formatting590 unchanged, Clippy,
+SQLx and189 core tests passed; the server suite is compiling. Do not edit or
+rebase its worktree until terminal completion. To avoid another independent
+tree rebuild after #259 merges, the next #262 publication will be stacked on
+#259's current delivery while preserving its separate grouped-reader patch.
+This is delivery ordering, not a new product dependency. Rebase/conservation,
+base retargeting and fresh combined-tree Nix checks are required before that
+publication. No third delivery or new PR has been opened.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
