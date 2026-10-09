@@ -3950,6 +3950,36 @@ Next: collect #244 Nix566 and GitHub37929467171, and #245 Nix568. Request
 protected #244 merge only after acceptance, then reconcile #245 with its actual
 squash before delivery. Keep #250/#253 unpublished until a remote slot is free.
 
+Nixbot568 accepted #245 head9b831d08/treeac90e7e7 at12:39:47 UTC:
+both Linux tests/Clippy/SQLx/format/package/browser/deployment/OIDC passed.
+Collected complete test logs: each architecture189core+1110server+201aux,
+zero failures and11existing ignored; server143.71s x86 and199.80s ARM.
+Published that evidence in the existing PR body, without changing its head/base.
+#245 remains draft on #244's branch; protected master delivery still requires
+#244's actual squash. #244 Nix566 is still active only on ARM e2e; the log
+advanced from the advisory-gate wait to post-restart job status polling.
+Its GitHub37929467171 is live. Neither live job was restarted.
+
+Reviewed the complete #254 project-team reader boundary against
+project-people-picker.md T154–T157:144line reader,66line DTO, session wrapper,
+nine DB cases/705lines,113line HTTP exercise. No critical/high finding.
+Verified separate create/exact-project-edit authority, no directory/identity
+bypass, minimal active-tenant labels, literal Unicode searches,50/51paging,
+500/501resolution, no assignment promotion/writes, revoked grants/designations,
+direct deactivation, both lock orders, cancellation and safe errors. UI and
+assignment finalization remain separate; this is not full parity acceptance.
+Backed up7a3139c1 as refs/backup/pr254-before-current-delivery-20261009;
+rebased only its owned commit onto prepared #253 head1d51f89b with updateRefs
+disabled. Local head1d5d84f99667c33c6f8e4819078a4b709e19422b,
+treed440921f5fd5ad7c1016466023f1971751929d20. Five complete source/test files
+remain byte-identical, including project_creation.rs. Registered the HTTP
+exercise once alongside every inherited check. SQLx descriptor ea2ed265 is
+already inherited unchanged, leaving18files/1244additions. No source fix,
+assertion removal, new query, migration or dependency. #254 is unpublished and
+not yet tested on its new head. Next local validation follows #253's live22205;
+do not change that frozen source or start duplicate builds. Remote delivery
+continues with #244/#245 only. #212 and the root checkout remain unchanged.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
