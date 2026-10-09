@@ -5258,6 +5258,20 @@ keeping both-Linux and protected GitHub acceptance pending. Next: confirm push,
 publish that body, collect the fresh Nix build, and integrate #263 only after
 its still-live GitHub gate passes.19 functional PRs remain; no new PRs.
 
+### #264 published; current two-delivery state
+
+Push7986 completed0; GitHub confirms83f1fddc on feat/scoped-time-xlsx. Published
+the updated existing PR body. Nix604 is evaluating treef2b56548. There is no
+master-targeted GitHub workflow yet while its base is the prerequisite branch;
+after #263 merges, conserve the full tree during ancestry reconciliation and
+run required master/merge-group gates. No local builds remain active.
+
+#263Nix602 is fully accepted; required GitHub37983147107 remains in_progress,
+watch21542 live. Do not cancel or retry a still-live workflow. Current remote
+deliveries are only #263224b8204 and #26483f1fddc. Next: collect these exact
+gates, and use independent time to review existing #265 without publishing a
+third active delivery. Preserve #212 and the19 remaining functional PRs.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
