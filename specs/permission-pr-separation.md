@@ -3107,6 +3107,15 @@ Do not publish until547 finishes, then require current-head GitHub/queue gates.
 #24740270 remains live; its bounded code review is still pending. Next: collect
 547/40270 and advance the existing PRs without creating a new delivery.
 
+#247 local40270 completed successfully on5950fdb1/tree535ae5a7:189 core,964
+server,183 auxiliary tests passed (1,336 total,zero failures,11 existing manual
+cases ignored), server138.68s. SQLx passed57.03s; formatting526 files/zero changes.
+Rooted outputs: .scratch/pr247-current-delivery-checks → v51h5ncw (tests),
+-1 → 9rjaksyj (SQLx),-2 → 5pbda83i (treefmt). Bounded source review is still
+pending; tests alone do not authorize publication. No local process remains live.
+Next: review #247's T104–T109 production/read/release/permit boundaries while
+Nixbot547 finishes; then advance #237 through its master-targeted gates.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -3237,8 +3246,8 @@ merge-group37909249946 passed. #237 is published ated4f2f21/tree6c66f37f after p
 native tests (1,315), SQLx, format and bounded source review. Its remote checks
 remain required; #237547 is the only active remote delivery. Localfcf1250f
 reconciles onto actual masteraa8e9ef9 with the same tree, awaiting547 before push.
-#247 is locally prepared on #237 as5950fdb1/tree535ae5a7; native40270 and its
-bounded code review must complete before publication.
+#247 is locally prepared on #237 as5950fdb1/tree535ae5a7; native40270 passed
+1,336 tests, SQLx and format. Bounded code review remains required before publication.
 #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
