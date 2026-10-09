@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT last_value FROM pg_sequences WHERE schemaname='snapshot_fault' AND sequencename='attempts'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last_value",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "276960785e36224feba5b74ab98e81ec554b7e7cac321b7f8fdcbc90655f1a5c"
+}
