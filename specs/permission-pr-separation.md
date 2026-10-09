@@ -3410,6 +3410,26 @@ Do not edit its source or restart the check while live. Next: collect 36003 and
 #226 remote gates; retain the draft/queue holds until delivery acceptance is
 decided on the current evidence. No new PR, real-data operation or #212 change.
 
+Nixbot 553 now accepts the current #226 ARM test attribute: 189 core and
+999 server tests passed, including both immediate CSV rejection schedules;
+server 143.49s, zero failures, 11 existing manual cases ignored. Browser/VM
+attributes and GitHub Flake Check remain live, so it is not merge-ready yet.
+
+Reassessed the earlier delivery hold against the actual requested merge goal.
+The historical 524 failure remains an unresolved intermittent shared transport
+issue, not a demonstrated profile-command regression or authorization bypass:
+its uncertain acknowledgement fails closed, and its fixture never invokes these
+commands. Neither the successful diagnostics nor 553 is described as a fix.
+Do not invent a speculative transport patch or retry a failed tree until green.
+However, proving the unknowable cause from a log that discarded it must not
+become an indefinite additional gate on every unchanged permission extraction.
+The delivery criterion is full current-tree native/both-Linux acceptance,
+bounded source review and protected merge-group checks, with the residual
+transport limitation explicitly retained. If any current gate fails, stop and
+use its diagnostics; never bypass or weaken the check. This narrows the earlier
+blanket hold, not the product scope or the mandatory CI gates. #226 is still
+draft and outside the queue until all current gates complete successfully.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
