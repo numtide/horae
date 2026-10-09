@@ -6038,6 +6038,29 @@ scoped Reports scenarios. Its full gate is still live; worktree stays frozen.
 Next collect266 queue and verify actual merge/tree before reconciling267;
 collect613/51569 without duplicate builds. #212 and real data remain untouched.
 
+### Grouped exports merged; filter delivery reconciled onto master
+
+Protected266 merge-group37998622546 passed (watch3329 exit0, Flake58s/
+Format47s). GitHub confirms266 MERGED at2026-10-09T22:21:20Z as
+29242324757862ef51cb7a8f6b48d3bac9c71cbf. Fetched master without pruning;
+its entire treea00a6968 equals accepted36bfa7bf.15 functional deliveries remain.
+
+Backed up267f11bb3b3 at refs/backup/pr267-before-grouped-export-merge-20261009.
+Rebased its single owned commit fromactualoldparent1fa434d4 ontoactualmerge
+29242324. Newhead0e85eb68015bf90a45b73f6131de2cfb186f0b01 and complete
+tree944c37bfb2e5d9c3745a20ec950f3472dd80b4a0; equal range-diff and whole-tree
+equality retain Nix610 acceptance. GitHub had automatically retargeted267 to
+master. Confirmed existing checks terminal before exactf11 lease publication.
+Push/body updates5136 exited0. Required267 workflow37998878384 is queued
+on the reconciled head. Updated266's body with its verified merge receipt.
+
+Two active remote deliveries remain267's required workflow and268 Nix613
+(watch81667,3 passed/7 building/6 pending). Local26951569 continues the full
+browser suite without a failure so far; native tests still pending. Keep269
+frozen. Next collect267 required checks and queue only after fresh green/head/
+review verification; collect613/51569 and use the existing270 preparation
+after the current local gate ends. No additional PR or policy/data changes.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
