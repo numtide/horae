@@ -3215,6 +3215,19 @@ base fix/materialized-export-authority, no review threads. Update its body
 and publish with that exact lease as the second remote delivery. #247550
 remains live; watcher97723 prints changes only. No local builds remain live.
 
+Published #249673d95a2/tree18266223 with exactc990d11e lease; push/body
+process22392 exited successfully. GitHub read-back confirms OPEN/draft on
+fix/materialized-export-authority and Nixbot551 evaluating that exact head/tree.
+The existing public body now describes current review/native acceptance and
+remaining remote gates, rather than old443 evidence. #247550 has passed both
+platform test suites and native browser; only ARM browser/e2e/OIDC are still
+building. Existing watcher97723 is live and reports changes every55s. These
+are the only two remote deliveries, with no local build running. Do not rewrite
+either live branch, clear #226's hold, or claim #212 delivered. Next: collect550
+and551; once550 is terminal and successful, reconcile #247 fromed4f2f21 onto
+actualmaster81194134, verify identical535ae5a7 tree, then publish and run its
+master-targeted source and protected merge-group gates.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -3348,8 +3361,9 @@ passed; #237 merged as81194134/tree6c66f37f. #247 is published as5950fdb1/tree53
 native40270 passed1,336 tests, SQLx and format. Its bounded T104–T109 review
 found no critical/high issue; Nixbot550 is live, the sole active remote delivery.
 It auto-retargeted to master after #237 merged; reconcile ancestry after550 ends.
-#249 is prepared locally as673d95a2/tree18266223, native49164 live and test review
-pending; its remote remainsc990d11e. No third remote build has been requested.
+#249 is published as673d95a2/tree18266223; native49164 passed1,352 tests, SQLx
+and format, and bounded review found no critical/high issue. Nixbot551 is live.
+#247550 and #249551 are the two remote deliveries; no local build is running.
 #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
