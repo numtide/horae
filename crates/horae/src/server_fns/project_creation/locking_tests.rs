@@ -87,7 +87,13 @@ async fn every_project_entry_gates_before_actor_and_rechecks_revocation(pool: Pg
             id: Uuid::now_v7(),
             project_id: ids.project_id,
             expected_revision: editor.revision,
+            expected_requester: editor.access.as_ref().map(|access| access.requester),
+            managers: editor
+                .access
+                .as_ref()
+                .map(|access| (&access.managers).into()),
             form: editor.form,
+            unchanged: Vec::new(),
         };
         let draft = Uuid::now_v7();
         save_draft_record(&pool, ids.user_id, ids.org_id, draft, 0, &request.form)

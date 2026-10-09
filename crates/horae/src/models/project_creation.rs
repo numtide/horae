@@ -6,6 +6,9 @@ use horae_core::types::ProjectType;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Stable error-detail reason; ordinary revision conflicts must retain local input.
+pub const PROJECT_EDITOR_SESSION_CHANGED: &str = "project_editor_session_changed";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReportVisibility {
@@ -219,6 +222,27 @@ pub struct EditableProject {
     pub selection: CreationSelection,
     pub inactive_task_ids: Vec<Uuid>,
     pub inactive_user_ids: Vec<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<ProjectEditorAccess>,
+}
+
+/// Display metadata only; writes must reauthorize using current server state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectEditorAccess {
+    pub requester: crate::models::permission_editor::PermissionRequester,
+    pub managers: crate::models::project_managers::ProjectManagers,
+    pub billable: ProjectFieldAccess,
+    pub costs: ProjectFieldAccess,
+    pub private_notes: ProjectFieldAccess,
+}
+
+/// Withheld is distinct from a readable field with no stored override.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectFieldAccess {
+    Withheld,
+    ReadOnly,
+    Editable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -227,7 +251,47 @@ pub struct ProjectEditRequest {
     pub id: Uuid,
     pub project_id: Uuid,
     pub expected_revision: i64,
+    /// Identity captured when opening the editor, never a source of authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_requester: Option<crate::models::permission_editor::PermissionRequester>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub managers: Option<ProjectManagerSelection>,
     pub form: ProjectForm,
+    /// Retain these protected fields from current storage without echoing them.
+    /// Every other protected field is an explicit edit, including empty or zero.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unchanged: Vec<ProtectedProjectField>,
+}
+
+/// Complete delegation intent, independent of tracking membership.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectManagerSelection {
+    pub expected_access_revision: i64,
+    pub manager_ids: Vec<Uuid>,
+}
+
+impl From<&crate::models::project_managers::ProjectManagers> for ProjectManagerSelection {
+    fn from(snapshot: &crate::models::project_managers::ProjectManagers) -> Self {
+        Self {
+            expected_access_revision: snapshot.access_revision,
+            manager_ids: snapshot.managers.iter().map(|manager| manager.id).collect(),
+        }
+    }
+}
+
+/// Narrow preservation intent for the existing-project editor, not authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProtectedProjectField {
+    ProjectRate,
+    TaskRate(Uuid),
+    PersonRate(Uuid),
+    CostRate(Uuid),
+    Budget,
+    Fees,
+    InvoiceDefaults,
+    PrivateNotes,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -302,6 +366,34 @@ pub struct CreationSearch {
     pub people: CatalogSearch,
 }
 
+/// The authorized editor that owns a catalog request, not a source of authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectEditorContext {
+    pub project_id: Uuid,
+    pub requester: crate::models::permission_editor::PermissionRequester,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectEditorCatalogSearch {
+    pub clients: CatalogSearch,
+    pub tasks: CatalogSearch,
+}
+
+/// Existing-project choices; teammate identities have their own bounded reader.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectEditorCatalog {
+    pub context: ProjectEditorContext,
+    pub organization_currency: String,
+    pub email_available: bool,
+    pub clients: Vec<CreationClient>,
+    pub tasks: Vec<CreationTask>,
+    pub more_clients: bool,
+    pub more_tasks: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,6 +416,20 @@ mod tests {
         let mut payload = serde_json::to_value(ProjectForm::default()).unwrap();
         payload["org_id"] = serde_json::json!(Uuid::now_v7());
         assert!(serde_json::from_value::<ProjectForm>(payload).is_err());
+    }
+
+    #[test]
+    fn legacy_project_edit_roundtrip_keeps_omitted_identity_and_intent() {
+        let payload = serde_json::json!({
+            "id": Uuid::now_v7(),
+            "project_id": Uuid::now_v7(),
+            "expected_revision": 1,
+            "form": ProjectForm::default(),
+        });
+        let request: ProjectEditRequest = serde_json::from_value(payload.clone()).unwrap();
+        assert!(request.expected_requester.is_none());
+        assert!(request.unchanged.is_empty());
+        assert_eq!(serde_json::to_value(request).unwrap(), payload);
     }
 
     #[test]

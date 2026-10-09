@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET client_id = $3, name = $4, code = $5, starts_on = $6, ends_on = $7,\n             project_type = $8, rate_cents = CASE WHEN $14 THEN rate_cents ELSE $9 END,\n             budget_kind = CASE WHEN $13 THEN budget_kind ELSE $10 END,\n             budget_amount_cents = CASE WHEN $15 THEN budget_amount_cents ELSE $11 END,\n             budget_minutes = CASE WHEN $16 THEN budget_minutes ELSE $12 END\n             WHERE id = $1 AND org_id = $2\n               AND (client_id, name, code, starts_on, ends_on, project_type, rate_cents, budget_kind, budget_amount_cents, budget_minutes)\n                 IS DISTINCT FROM ($3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Date",
+        "Date",
+        {
+          "Custom": {
+            "name": "project_type",
+            "kind": {
+              "Enum": [
+                "time_and_materials",
+                "fixed_fee",
+                "non_billable",
+                "retainer"
+              ]
+            }
+          }
+        },
+        "Int8",
+        {
+          "Custom": {
+            "name": "budget_kind",
+            "kind": {
+              "Enum": [
+                "none",
+                "amount",
+                "hours"
+              ]
+            }
+          }
+        },
+        "Int8",
+        "Int8",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "157851d8e085c97dac326bae938e0576e40db2ad0ee6cad7026543baf9cf37a3"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT jsonb_build_array(\n          (SELECT to_jsonb(p) FROM projects p WHERE id=$1),\n          (SELECT jsonb_agg(to_jsonb(t) ORDER BY task_id) FROM project_tasks t WHERE project_id=$1),\n          (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM project_task_settings t WHERE project_id=$1),\n          (SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM project_edit_requests r WHERE project_id=$1)\n        ) AS \"state!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "114e642f134a4034ae4008eab4a0554acf9c4a7ccaeb42f86ff6fabab2295112"
+}

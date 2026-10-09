@@ -1,0 +1,45 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT budget_kind as \"budget_kind: BudgetKind\", budget_minutes, budget_amount_cents FROM projects WHERE id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "budget_kind: BudgetKind",
+        "type_info": {
+          "Custom": {
+            "name": "budget_kind",
+            "kind": {
+              "Enum": [
+                "none",
+                "amount",
+                "hours"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "budget_minutes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "budget_amount_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "6a6fec39f8008f35b9d13415109402eaab1fa2a36254158b2b801db1f84b0580"
+}

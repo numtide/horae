@@ -6,18 +6,23 @@ use crate::components::form::{FormGroup, Input, Select, Textarea};
 use crate::components::modal::Modal;
 use crate::components::select_field::SelectField;
 use crate::models::project_creation::{
-    CreationClient, CreationOptions, CreationSearch, ProjectForm, ProjectFormField,
+    CreationClient, CreationOptions, CreationSearch, ProjectEditorContext, ProjectFieldAccess,
+    ProjectForm, ProjectFormField,
 };
 use crate::server_fns;
 
 use super::FormRow;
 use super::date_field::DateField;
+use crate::models::project_creation::ProtectedProjectField;
 
 #[component]
 pub(super) fn Basics(
     mut form: Signal<ProjectForm>,
     mut options: Signal<CreationOptions>,
     #[props(default)] editing: bool,
+    #[props(default)] editor_context: Option<ProjectEditorContext>,
+    notes_access: ProjectFieldAccess,
+    on_edit: EventHandler<ProtectedProjectField>,
     #[props(default)] invalid_field: Option<ProjectFormField>,
     #[props(default)] error_message: Option<String>,
 ) -> Element {
@@ -37,7 +42,7 @@ pub(super) fn Basics(
         async move {
             let mut search = CreationSearch::default();
             search.clients.query = query;
-            server_fns::project_creation_options(search).await
+            super::catalog::options(editor_context, search).await
         }
     });
     let clients_pending = clients.state()() != UseResourceState::Ready;
@@ -81,7 +86,6 @@ pub(super) fn Basics(
         selected.is_some() && !choices.iter().any(|client| Some(client.id) == selected);
     let previous_code = catalog.previous_code.clone();
     let suggested_code = catalog.suggested_code.clone();
-    let can_edit_private = catalog.can_edit_private_settings;
     let organization_currency = catalog.organization_currency.clone();
     drop(catalog);
     let mut client_choices = vec![(String::new(), "Select a client…".into())];
@@ -237,9 +241,9 @@ pub(super) fn Basics(
                 p { id: "np-basic-field-error", class: "text-sm text-danger", "{message}" }
             }
         }
-        if can_edit_private {
+        if notes_access != ProjectFieldAccess::Withheld {
             FormRow { label: "Notes", id: "np-notes", hint: "Optional · admins only",
-                Textarea { id: "np-notes", error_id: error_id(ProjectFormField::AdminNotes), rows: 3, value: form.read().admin_notes.clone(), placeholder: "Private context for administrators", oninput: move |event: FormEvent| form.write().admin_notes = event.value() }
+                Textarea { id: "np-notes", error_id: error_id(ProjectFormField::AdminNotes), rows: 3, disabled: notes_access != ProjectFieldAccess::Editable, value: form.read().admin_notes.clone(), placeholder: "Private context for administrators", oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::PrivateNotes); form.write().admin_notes = event.value(); } }
                 if let Some(message) = error_for(&[ProjectFormField::AdminNotes]) {
                     p { id: "np-basic-field-error", class: "text-sm text-danger", "{message}" }
                 }

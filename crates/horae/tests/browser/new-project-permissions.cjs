@@ -54,10 +54,12 @@ const name = 'Permission fixture project';
   let projectId;
   try {
     sql(`UPDATE users SET cost_rate_cents = 4321 WHERE id = '${actor.id}';
-      INSERT INTO users (id, org_id, email, name, org_role) VALUES ('${other}', '${actor.org_id}', 'permission-owner@example.test', 'Other draft owner', 'admin');
+      INSERT INTO users (id, org_id, email, name, org_role) VALUES ('${other}', '${actor.org_id}', 'permission-owner@example.test', 'Other draft owner', 'manager');
       INSERT INTO organizations (id, name) VALUES ('${foreignOrg}', 'Permission foreign organization');
       INSERT INTO clients (id, org_id, name, currency) VALUES ('${foreignClient}', '${foreignOrg}', 'Permission foreign client', 'EUR');
       INSERT INTO projects (id, org_id, client_id, name, currency) VALUES ('${foreignProject}', '${foreignOrg}', '${foreignClient}', 'Permission foreign project', 'EUR')`);
+    // The other draft owner needs project creation access, not another DEV_LOGIN candidate.
+    assert.equal(sql("SELECT count(*) FROM users WHERE active AND org_role='admin'"), '1');
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
@@ -77,7 +79,7 @@ const name = 'Permission fixture project';
     await screen.getByRole('button', { name: 'Development', exact: true }).click();
     await screen.locator('#np-add-person').click();
     await page.getByRole('dialog', { name: 'Choose teammate', exact: true }).getByRole('option', { name: 'Admin User', exact: true }).click();
-    await screen.getByLabel('Cost rate for Admin User (EUR/h) · admins only', { exact: true }).fill('47.25');
+    await screen.getByLabel('Cost rate for Admin User (EUR/h)', { exact: true }).fill('47.25');
     await expect(screen.locator('header').getByRole('status')).toContainText('Draft saved at');
     await screen.getByRole('button', { name: 'Save project', exact: true }).click();
     await page.waitForURL(/\/projects\/[0-9a-f-]{36}$/);
@@ -179,7 +181,7 @@ const name = 'Permission fixture project';
       if (scenario.rates) {
         await expect(screen).toBeVisible();
         await expect(screen.getByLabel('Notes', { exact: true })).toHaveCount(scenario.private ? 1 : 0);
-        await expect(screen.getByLabel('Cost rate for Admin User (EUR/h) · admins only', { exact: true })).toHaveCount(scenario.private ? 1 : 0);
+        await expect(screen.getByLabel('Cost rate for Admin User (EUR/h)', { exact: true })).toHaveCount(scenario.private ? 1 : 0);
         const options = await json('project_creation_options', optionsArgs);
         assert.equal(options.can_edit_private_settings, scenario.private);
         assert.equal(options.clients.some(client => client.id === foreignClient), false);

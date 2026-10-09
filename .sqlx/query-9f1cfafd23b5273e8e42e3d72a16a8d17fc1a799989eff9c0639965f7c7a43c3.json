@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE clients SET name='Équipe %_ 王', active=$2 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9f1cfafd23b5273e8e42e3d72a16a8d17fc1a799989eff9c0639965f7c7a43c3"
+}
