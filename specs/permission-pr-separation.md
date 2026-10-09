@@ -2393,6 +2393,28 @@ verified test repair; separately resolve the now-evidenced console readiness
 failure before either delivery can merge. #235's1,286-test preparation remains
 accepted locally and unpublished; #212 and the root checkout stay unchanged.
 
+Controlled browser reproduction completed: original #228 test failed under
+a6.5-second delay of the actual project-admin options response, retaining its
+status/body (75lq3n9zkd0dzkx88vpq9xd7mhhw0fmd). The paired response-synchronized
+variant passed all focused scenarios with the identical delay
+(0jwvmcjfcrq9w0y42din311jw1rk7ick). This establishes an assertion/readiness
+defect, not the precise cause of latency on the remote worker.
+
+Committed only that browser synchronization as e6e258bea1f17000ff3bf4e4e8e00c057ab48a43
+in existing #228's worktree; local tree b1e433f1b34027dcd6f33d185bfa116cf2a17152.
+No application code, timeout or existing assertion changed; expected HTTP
+status is now checked too. Syntax, whitespace and format passed. Full native
+browser validation remains live in session73216, building package2h3ghx04
+and browser5flkx9pd. Remote228 is still9ea69fa2, draft and unqueued.
+
+Nixbot528 is terminal failed: ARM deployment passed, ARM browser and OIDC
+failed as recorded. #231529 is terminal failed on both ARM VM console waits;
+both browsers passed. Master remains3df38af8. Neither delivery is merge-ready.
+Next: collect73216, resolve or reproduce the missing console-device readiness
+without weakening dependencies/checks, then publish a verified correction to
+the existing delivery. Downstream local preparations require the corrected
+base before publication. #212 and root master remain untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2497,9 +2519,9 @@ Deliveries #221, #223, #222 and #225 are also merged with both-Linux acceptance.
 transport regression; it is removed from the queue with auto-merge disabled.
 #227 is merged with exact combined-tree and protected-queue acceptance. #228
 is published at9ea69fa2 on its actual merge, with1,247 native tests accepted
-and fresh SQLx/format passing; remote checks are running. CSV delivery #231
+and fresh SQLx/format passing; remote528 failed ARM browser/OIDC. CSV delivery #231
 is now stacked on #228 at a34a1348 with1,250 combined native tests/SQLx passing;
-fresh Nixbot529 is building its exact239d1051 tree. The earlier independent
+Nixbot529 failed ARM deployment/OIDC on its exact239d1051 tree. The earlier independent
 head dcf68d2e passed GitHub and both-Linux Nixbot526. Neither result proves
 the shared transport issue repaired.
 #232 is locally stacked at45c923a3 on #231, with1,264 combined native tests,
@@ -2510,7 +2532,9 @@ native tests. Both preparations remain unpublished.
 #235 is locally reviewed and stacked on #238 at7f89ce45, with1,286 combined
 native tests, SQLx and format passing; it remains unpublished. #228's original
 build528 now has an ARM browser readiness failure and stays out of the queue
-while a controlled local reproduction runs. No current repair is published.
+while local browser repair e6e258be completes full validation. Its controlled
+red/green reproduction passed; the VM readiness defect remains unresolved.
+No current repair is published.
 The failed #226 combination remains held; independent deliveries may advance
 only on exact current-tree acceptance, without claiming that failure repaired.
 Full current CI remains required. These preparation
