@@ -6341,6 +6341,50 @@ collect615 and49430; after615 terminal trigger269's missing required GitHub
 CI without changing its accepted tree. Finish270 before publishing, then run
 271 and272 in order using the single local build slot.212 unchanged.
 
+### Reader visual confirmation and interrupted gate recovery — 2026-10-09
+
+Revalidated the open delivery inventory: thirteen functional PRs remain;
+#212 stays an unchanged draft reference. Nix615 is still building the exact
+#269 tree `0079046cb28ac04c9552a5d7a22ea41fc79ba822`: fifteen attributes have
+succeeded, six are skipped locally, and only `checks.aarch64-linux.e2e`
+remains building. The GitHub check rollup still shows an obsolete failure;
+do not treat it as the authoritative outcome of this live build or as merge
+acceptance. Do not replace the head while the build is running.
+
+Collected local #270 session49430: it terminated with `interrupted by the
+user`, not a failing assertion. SQLx and Clippy completed, but neither the
+partial browser output nor that exit establishes full acceptance. Reissued
+the same four Nix check targets on unchanged, clean `e70c06b9` in session42631.
+Nix reused the completed outputs and requested only the browser and native
+test derivations. The worktree remains frozen during this gate. SQLx's
+potentially-unused-query warning is not a failure and did not authorize
+heuristic deletion of descriptors.
+
+Focused capture session59797 passed the original project-reader assertions.
+The first six screenshots exposed pale controls during programmatic theme
+switching. Shared CSS contains 140ms foreground/background transitions;
+the scratch hook captured them immediately after switching. Confirmed the
+installed Playwright API fast-forwards finite transitions with screenshot
+`animations: 'disabled'`, then changed only that scratch hook. Confirmation
+session20741 exited zero with the same built package and a separate disposable
+PostgreSQL. All three original authorization scenarios passed again.
+
+Inspected the six confirmation images in
+`.scratch/pr270-visual-e70c06b9-settled/`: overview, detail and revoked access
+at 1440px dark and 390px light. The transient button colors are gone; detail
+cards and recovery controls fit, and revoked content is cleared. The narrow
+overview retains the existing internal table scroll. No production CSS,
+components, test assertions or design tokens changed. This bounded inspection
+does not certify comprehensive contrast, touch, performance or Harvest design
+parity; #208 remains a separate dashboard delivery.
+
+Next: collect Nix615's terminal outcome, then trigger the missing required
+master-targeted workflow for #269 with an exact-tree-preserving metadata
+refresh and exact lease. Required PR and protected merge-group checks remain
+mandatory. Collect session42631 before changing or publishing #270; only then
+start the already-prepared #271 heavy gate. #271/#272 remain local preparations,
+not accepted or published deliveries.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
