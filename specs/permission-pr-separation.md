@@ -4564,6 +4564,19 @@ unfinished. Do not merge #256 or blindly rerun it. Next: collect the final
 diagnostics, validate #259's historical-calendar correction against the new
 package, and retain the two-delivery limit (#256/#257). #258/#259 remain local.
 
+Sequential #259 package build78555 passed (release server and WASM) at
+`/nix/store/s4zrcdpb45vap6v6nyxazil2ri0xl0n5-horae-0.1.0`.
+Focused Chromium run36194 passed all24 checks across Timesheet errors,
+modals and selected-person permissions. The three historical calendar cases
+now pass against real mutation commands; the earlier baseline failed them.
+Full browser run48256 and sequential native/SQLx/clippy run98417 are live on
+the same unchanged source snapshot. No local fix has been published yet.
+
+GitHub run37947671958 passed both required jobs on #256 head46fd884d.
+Nixbot586 still has unfinished x86 native/browser checks; its native command
+runs48 test threads. The CSV failures remain undiagnosed pending captured
+panic details. Do not infer a source defect or change timeouts from load alone.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
