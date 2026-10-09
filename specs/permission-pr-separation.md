@@ -4317,6 +4317,33 @@ Do not edit/rebase during validation. Prepared body is local-only. Next: collect
 581/582 acceptance and25828; merge #256 through protected master after same-tree
 squash reconciliation, publish #258 only when its validation and slot permit.
 
+Following iteration: previous turn progressed by reviewing/rebasing #258 and
+starting25828. Revalidated581/582 and25828 live. New authoritative failure in
+#256581 ARM native:1154passed/1failed/11ignored,209.69s. The inherited
+legacy_project_lock_returns_busy_instead_of_forming_an_org_fk_cycle expected
+Busy but returned Ok(changed=true); no application crash or compiler failure.
+Read production execute/authorization/NOWAIT and the complete fixture. The
+fixture released its initial org lock before establishing the editor's wait;
+the editor could complete and release project UPDATE before the command got
+there. Do not retry unchanged or claim full CI acceptance.
+
+Corrected only that fixture in #256: pause public execute on actor UPDATE after
+its organization gate is held, query the blocked command PID, wait until the
+editor's org SHARE blocks behind that command, then release actor barrier.
+Preserved public wrapper, Busy assertion, five-second bounds, rollback/receipt
+checks and successful retry. No production change or new SQLx query text.
+Applied Rust/testing/async/minimal guidance; formatting577unchanged passed.
+Committed64d4cb7f, backed up at refs/backup/pr256-before-reader-squash-20261009,
+and rebased onto actual #255bbdfb8f7. Verified unchanged whole tree across rebase.
+Local headf0d61e24966fa574a55456a924f58270e4f4c2b0,
+tree0569c9baf6982b16934e0edb717add042f0b3192. Fix commit nowf0d61e24, featuread4ad81e.
+Started fresh native/fullSQLx/fmt66864 on frozen corrected head; not published
+yet. Remote #256 remains ee648e08. #2578e24f13a remains unchanged while582runs.
+#25825828 passedSQLx/format and is compiling server tests on frozeneda54b82;
+it still inherits the old fixture until its live build finishes. Next: collect
+66864 and25828; publish corrected #256 when validated, then propagate the same
+fixture through existing children without touching a live local build.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
