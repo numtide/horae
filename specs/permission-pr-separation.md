@@ -2314,6 +2314,27 @@ platform gates; #232/#238 remain locally accepted but unpublished, #226 held.
 Next: finish88750 and full528/529, then protected #228 merge and actual-tree
 reconciliation of #231 before publishing the next prepared delivery.
 
+#228 build528 now has a concrete ARM browser failure, not full acceptance.
+new-project-permissions.cjs:191 timed out after5s waiting for the forbidden
+project-settings alert in the project-admin scenario. The attached accessible
+snapshot still shows "Loading project settings…" and an uninitialized identity
+label; it does not show an unauthorized editor. Earlier role scenarios passed.
+The test starts its assertion after page navigation, without waiting for the
+current options response. Current evidence supports investigating response
+readiness, not claiming a security bypass or increasing all test timeouts.
+
+A local scratch reproduction is prepared to delay the actual options response
+by6.5s in that one scenario, preserving status/body and all assertions. Compare
+the unchanged test with explicit response synchronization before editing #228.
+No source fix or CI retry has been published. Remaining528 deployment checks
+continue; do not cancel or restart them. #231529 is still an independent live
+validation of the older stacked tree, not acceptance of any future repair.
+
+#235 local SQLx8kvp427y passed (compile2m09s, build2m13s); session88750 remains
+live compiling/running native tests5iikp8g3 on clean7f89ce45. Do not restart.
+Next: collect88750, reproduce and correct only the evidenced browser-test
+synchronization defect, then validate and publish the existing #228 repair.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
