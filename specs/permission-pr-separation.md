@@ -2760,6 +2760,12 @@ Remote and protected queue gates remain outstanding; #241 stays draft.
 collect539, then publish its identical-tree7726c85f ancestry and queue it after
 required GitHub checks. #235/#241 are now the two remote deliveries.
 
+Read-back confirms #241 OPEN/draft at b4edd434, with fresh GitHub37902523144
+(Flake Check/Format running) and Nixbot540 evaluation running. Source head is
+unchanged. #235539 ARM deployment is still executing recovery assertions;
+watcher74994 remains live. Do not restart either remote build on observation
+silence. Local tests83821 and publication94135 are terminal-success.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
