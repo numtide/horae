@@ -3092,6 +3092,21 @@ Next: identify #236's own queue run and actual merge/tree, then reconcile #237
 only after547 finishes. Local #24740270 remains live in server tests; bounded
 source review remains pending and no remote #247 publication is authorized yet.
 
+#236 MERGED at2026-10-09 09:08:53 UTC as
+aa8e9ef95bfc7ed68e7f94760d119ed92a52ff66. Its own protected merge-group
+37909249946 passed (Format48s,Flake52s); watcher81933 exited0. Actual commit
+treeada47e059518498f71626ee22ee3c72273858e59 exactly matches native and
+Nixbot545 acceptance. API confirms masteraa8e9ef9 and #212 remains OPEN/draft
+atdb3935db. #237 automatically retargeted to master, still remoteed4f2f21.
+
+Reconciled #237 locally onto actualaa8e9ef9: head
+fcf1250f3b6230f6dba0d91bdaad2b39a07091d7, unchanged tree6c66f37ffd2be09125831f556235e625560bbbf3.
+Both commits remain identical in range-diff. Backup
+refs/backup/pr237-before-import-authority-merge-20261009 preservesed4f2f21.
+Do not publish until547 finishes, then require current-head GitHub/queue gates.
+#24740270 remains live; its bounded code review is still pending. Next: collect
+547/40270 and advance the existing PRs without creating a new delivery.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -3217,9 +3232,13 @@ current-head GitHub37907383369 and protected merge-group37907635431 passed.
 review complete and native tests (1,310 passed), SQLx and format accepted.
 Correct-head Nixbot545 passed;544 was an old-head retarget merge conflict
 before evaluation. #23666ff076b is published on master82c11cda with the identical
-ada47e05 tree and is queued after GitHub37909003313 passed. #237 is published ated4f2f21/tree6c66f37f after passing
+ada47e05 tree and merged asaa8e9ef9 after GitHub37909003313 and protected
+merge-group37909249946 passed. #237 is published ated4f2f21/tree6c66f37f after passing
 native tests (1,315), SQLx, format and bounded source review. Its remote checks
-remain required; #236 and #237 are the two active remote deliveries.
+remain required; #237547 is the only active remote delivery. Localfcf1250f
+reconciles onto actual masteraa8e9ef9 with the same tree, awaiting547 before push.
+#247 is locally prepared on #237 as5950fdb1/tree535ae5a7; native40270 and its
+bounded code review must complete before publication.
 #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
