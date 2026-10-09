@@ -2794,6 +2794,14 @@ delivery composition, not a new functional dependency. Next: verify #235's
 actual merge tree, reconcile #241 ancestry locally, collect56742/540 before
 publishing its combined tree. Do not use old-tree success for the new tree.
 
+#235 merged at08:07:45 UTC as82e8516007966414040d4da271a7d6ceac583909.
+The actual master tree d9ae89ad31201375f79d1071534058e33b17ad5d exactly matches
+both-Linux Nixbot539. Source GitHub37902677508 and protected merge-group
+37902926064 passed. Queue watcher17690 is terminal-success. #212 remains
+OPEN/draft atdb3935db and the root worktree was not updated.
+Next: retain #241's remote540 while its combined-tree native56742 runs;
+reconcile ancestry onto actual82e85160 without changing the tested tree.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2912,7 +2920,10 @@ identical whole tree; publish it only after539 finishes. This is the only
 active remote delivery at that observation. #241 has since been published at
 b4edd434/tree51da9d21 on masterb60ed44f after fresh native tests (1,282 passed),
 SQLx and formatting succeeded. It remains draft pending remote and queue gates;
-#235/#241 are the two active remote deliveries. #228's browser/VM corrections now have
+#235 has since merged as82e85160/tree d9ae89ad after Nixbot539, source
+37902677508 and protected merge-group37902926064 passed. #241 is now the only
+active remote delivery (540); its local combination with #235 is being validated
+in56742. #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
 only on exact current-tree acceptance, without claiming that failure repaired.
