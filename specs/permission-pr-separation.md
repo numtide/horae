@@ -6613,6 +6613,48 @@ against disposable PostgreSQL. Its worktree remains frozen. Next: collect these
 gates and prepare #279 on the reconciled #278/#260 composition without starting
 a second heavy build. #212 and all real data remain untouched.
 
+### Remaining consumer and API preparation — 2026-10-10
+
+Prepared the final three existing deliveries locally, without publication or
+starting another heavy build:
+
+- #279: `da30c5833c4b7ae8ef779ff5acc7015db4c04fcf`, tree
+  `8ad6aae0a9a8e37465a72f9ea594b2226b36bca8`, parent6f1db836 (#260 plus #278).
+  Thirteen of21 original paths are byte-identical. Shared differences preserve
+  current routes/icons/registrations, all33 inherited browser suites plus the
+  catalog suite, and the complete task contract. Format672 unchanged; bounded
+  source detector passed without findings. Runtime/rendered acceptance pending.
+- #280: `894d12bdcd7cc8e9eb0f4b452db975dab22b6410`, tree
+  `f55930e367ebfeb186744d7cbb2c3f99430973c3`, parentda30c583. All three code and
+  browser files byte-identical; lifecycle appendix already inherited in full.
+  Format672 unchanged; bounded source detector passed. Runtime/rendered
+  acceptance pending. Actual runtime dependency remains #276.
+- #281: `74440f728212284aa5384d79baffffe7daa37a5f`, tree
+  `cbb129707d0ce510c282a26f82ea7f74f3b1585c`, parent894d12bd. Eleven of13 original
+  paths byte-identical; two registries retain inherited task API/tests. The
+  helper/cache follow-ups were omitted as already inherited, verified through
+  original-file equality. Format675 unchanged. Runtime acceptance pending;
+  actual dependency remains #272, not the task UI.
+
+Recovery refs are `refs/backup/pr279-before-current-catalog-stack-20261010`,
+`refs/backup/pr280-before-current-task-activity-stack-20261010` and
+`refs/backup/pr281-before-current-client-reader-stack-20261010`. Pending bodies
+are root `.scratch/pr279-current-delivery.md` through281. No CSS, additional
+features, policy activation, real-data changes or new PRs.
+
+#270 GitHub run38005137996 attempt1 terminated with exit143 at23:43:53UTC.
+The failure log and annotations show SIGTERM without a compiler/test failure
+or a stated reason; do not infer an OOM or code defect. Nix617 independently
+passed x86_64 package, tests, SQLx, Clippy and deployment/OIDC, plus ARM package,
+SQLx and Clippy. Its browser and remaining ARM gates are still live. Requested
+one failed-job-only retry on the unchanged703cde78 head after those expensive
+outputs became available; retain required green-check and queue gates.
+
+#271 session40820 remains the only heavy local gate: strict Clippy, package and
+live SQLx passed; full browser suite is running against disposable PostgreSQL.
+No edits to that frozen worktree. Next: collect the exact-head #270 retry/Nix
+and #271 local outcomes, then queue #270 only if accepted. #212 stays untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
