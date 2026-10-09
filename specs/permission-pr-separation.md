@@ -5062,6 +5062,21 @@ deployment check remained live, and six local-only attributes were skipped.
 Review threads and reviews remain empty. Local #263 session2031 is still
 running; no source has been edited during that validation.
 
+### #259 required GitHub retry passed; deployment gate still running
+
+GitHub37978973703 attempt2 succeeded on unchangedcee459de; Flake Check56s,
+Format46s. Watch68909 exited0. Nix598 remains live with15 succeeded and the
+ARM deployment test pending: its log has advanced through job success and
+advisory-lock recovery checks, so it is not treated as stopped. Watch95799
+remains active. #262Nix600 now has13 succeeded and3 building; no failures.
+
+Local #2632031 remains active after passing formatting and core Clippy; server
+Clippy is compiling. Its worktree is frozen during validation. Prepared a local
+PR-body draft at.scratch/pr263-current-delivery.md, explicitly distinguishing
+unpublished preparation from acceptance. No remote source or base was changed.
+Next remains full598 acceptance and protected #259 merge, then262 ancestry
+reconciliation only after600 terminates, and collection of2031.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
