@@ -6061,6 +6061,46 @@ frozen. Next collect267 required checks and queue only after fresh green/head/
 review verification; collect613/51569 and use the existing270 preparation
 after the current local gate ends. No additional PR or policy/data changes.
 
+### Project editor browser and bounded visual evidence completed
+
+The preceding status turn was a verified wait: #267 required workflow37998878384
+and #268 Nix613 were confirmed live. Both remain live this iteration. #267's
+two GitHub jobs are queued, not failed; its Nix610 acceptance remains green.
+Fresh review inspection found no reviews or unresolved threads. No restart,
+head replacement or protection bypass was performed. Nix613 advanced to11
+passed/5 building/6 local-only skipped, with no failed attribute.
+
+Local26951569 completed the full browser runner, including the five canonical
+editor scenarios and inherited Reports, keyboard, recovery, Clients and
+permission-history suites. It advanced through189 core tests into native
+server compilation. Full native acceptance remains pending; the worktree
+7e230099/tree0079046c remains frozen. No second heavy build was launched.
+
+After the full browser phase ended, focused capture12511 exited0 against the
+already built server l87kw504pjkm73y2nl817ns6h778n2k8, using a separate disposable
+PostgreSQL from the existing runner. Scratch copies add screenshot hooks only;
+the committed fixture, all assertions and runtime code remain unchanged.
+The five editor scenarios passed again. Six PNGs in
+.scratch/pr269-visual-7e230099 cover withheld Team fields, read-only billable
+rates and access-revocation recovery at1440-dark and390-light. All six were
+inspected in one batch, with no new overlap in those states. They are scrolled
+viewport captures, not complete page or all-state coverage.
+
+Impeccable context was loaded once for this editor worktree; the existing
+visual system is retained. Its detector returned no findings for all nine
+changed page modules. Shared CSS/build.rs/DESIGN.md equality to268 was verified.
+No UI edit was necessary. This bounded evidence is not WCAG, touch, performance
+or all-theme/width certification, and no unsupported audit score is assigned.
+Prepared .scratch/pr269-current-delivery.md with completed evidence and explicit
+pending gates; it is not yet published. Remote269 remains b08ef5ad.
+
+Next: collect267's required CI for protected queue admission, preserve268's
+head until Nix613 terminates, and collect26951569's native results. Publish269
+only after acceptance and an available remote slot;270's next heavy local gate
+must wait for51569 to end. No new PR, real-data mutation, policy activation or
+change to212. This iteration adds completed runtime/visual evidence rather
+than repeating a status-only report.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
