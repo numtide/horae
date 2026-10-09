@@ -2468,6 +2468,28 @@ before running the extended check. Next: finish11583 and83419, then verify
 real-rule changes before applying/publishing any dependency patch. #228's
 remote9ea and #212's preserved db3935db were revalidated unchanged.
 
+Full native #22811583 completed successfully on e6e258be/b1e433f1: all native
+flake checks passed, including deployment104.03s and OIDC34.82s. ARM remains
+unaccepted; no protected merge is requested on native-only evidence.
+
+Patched console probe83419 passed: zero false reloads versus the control's50,
+with console readiness and both device-state assertions intact. VM
+qz875f9f20qg5h2bz5sxg4yvj7hg9dcl finished in295.17s. Systemd package
+dd727vf38sxq2lfqsjnw38xad3zpda30 also verified44 distributed rules, zero
+failures. This proves the local symlink-path reload defect/correction, not yet
+the complete remote ARM repair. No application or production host was changed.
+
+The extended real-rule-change probe initially could not evaluate because its
+unrooted frozen source path15zyv2hi had disappeared from the store. Replaced
+that scratch reference with the same immutable local Git commit9ea69fa2;
+also repaired the browser reproduction's source reference. No feature source
+changed. Extended probe4163 is now live with an output GC root at
+.scratch/console-coldplug-fixed-result. The previous patched package had also
+disappeared and is rebuilding under the same dd727vf derivation; this is cache
+loss, not a source change or a retry of a failed test. Next: collect4163's
+real-change assertions, then incorporate the bounded test-only dependency
+correction into existing #228 and validate/publish its exact final tree.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
