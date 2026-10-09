@@ -6456,6 +6456,36 @@ onto actual #269 merge21452bdd, verify exact-tree preservation, and deliver
 the existing PR with the correct base before pushing. Prepared #271–#273
 remain local and unaccepted; start only one heavy gate after #270 completes.
 
+### Browser gate accepted and task-write composition prepared — 2026-10-09
+
+Local #270 session42631 completed the full browser runner, including the final
+permission-history suite, then moved to native checks. All191 core tests passed;
+server tests are still compiling. This is not complete native acceptance. The
+worktree remains clean at `e70c06b9`, frozen until this same session terminates.
+
+Prepared existing #275 over local #273 while keeping the single-heavy-build
+limit. Verified original remote/local `83b5495c`, clean worktree and terminal
+historical Nix450. Saved `refs/backup/pr275-before-current-task-stack-20261009`.
+Rebase onto `e05048bf` produced `8d4f4fb5f79315eb68892adc6b94ac30c80d2808`,
+tree `bf856e8ebeec347d36e377f9b91c2f6c421992bd`. No push or runtime build.
+
+Resolved the HTTP registry by retaining all inherited cases and adding task
+creation/edit checks once. The add/add contract conflict was an older partial
+copy: retained the parent's more complete contract, whose differences clarify
+the historical baseline and retain later lifecycle/consumer sections. No product
+choice changed. Thirty-three of thirty-six original owned paths remain
+byte-identical, including all production changes, task-specific fixtures and
+all25 added SQLx descriptors. Other differences are the shared HTTP registry,
+inherited editor fixture fields and the already-integrated contract. The three
+descriptors from the second original commit were verified identical in the new
+parent; Git omitted that fully inherited patch. Backup retains both originals.
+Whitespace and Nix formatting passed. Prepared description lives in
+`.scratch/pr275-current-delivery.md`; full current-tree acceptance remains open.
+
+Next: collect #270's native result, reconcile its exact tree onto actual #269
+merge21452bdd, and publish the existing PR with its correct base before the
+head update. Then start the prepared #271 gate. No new PRs or activation.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
