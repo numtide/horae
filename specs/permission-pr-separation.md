@@ -3255,6 +3255,19 @@ historical run to this delivery. Next: identify #247's actual queue workflow
 and verify its final merge/tree. #249551 now has only ARM e2e building; its
 new change-only watcher68585 is live. No code or assertion changes.
 
+Verified #247 MERGED at2026-10-09T09:43:41Z as
+34ef9f813fb4436c1b03c1aa1acc0be02d23fcb7, parent81194134. Actual tree
+535ae5a74c2970aeaa0a02fc795c55d75f37bcbb exactly matches native acceptance,
+bounded review and both-Linux Nixbot550. Its protected merge-group37912987938
+passed Flake Check52s and Format45s; watcher99182 exited0. GitHub API confirms
+remote master34ef9f81. #249 automatically retargeted to master, unchanged
+673d95a2/tree18266223; Nixbot551 and change-only watcher68585 remain live with
+ARM e2e the last pending attribute. Do not treat automatic retarget as acceptance
+of a different tree. #212 remains OPEN/draft atdb3935db, unchanged. Next:
+collect551, then reconcile #249 from5950fdb1 onto actualmaster34ef9f81 with
+identical tree verification and exact lease; run its source/queue gates before
+merge. No local build, new PR, production-data change or feature was introduced.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -3387,11 +3400,13 @@ both-Linux Nixbot547 passed. Source37910361697 and protected merge-group37910555
 passed; #237 merged as81194134/tree6c66f37f. #247 is published as5950fdb1/tree535ae5a7;
 native40270 passed1,336 tests, SQLx and format. Its bounded T104–T109 review
 found no critical/high issue; Nixbot550 passed. Published ancestry-only04cb9137
-on actualmaster81194134, with identical535ae5a7 tree. GitHub37912724705 is live;
-protected queue acceptance remains required.
+on actualmaster81194134, with identical535ae5a7 tree. GitHub37912724705 and
+protected merge-group37912987938 passed; #247 merged as34ef9f81/tree535ae5a7.
 #249 is published as673d95a2/tree18266223; native49164 passed1,352 tests, SQLx
 and format, and bounded review found no critical/high issue. Nixbot551 is live.
-#247550 and #249551 are the two remote deliveries; no local build is running.
+#249551 is the sole active remote delivery; watcher68585 is live. It now targets
+master after #247 merged; reconcile ancestry only after551 is terminal.
+No local build is running.
 #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
