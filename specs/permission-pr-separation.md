@@ -6671,6 +6671,31 @@ recovery refs; no new remote heads were published this iteration. Next: finish
 #270 remote acceptance and queue, collect #271 full local gate, then reconcile
 #271 onto the actual merge with complete-tree proof before publishing it.
 
+### Project reader merged — 2026-10-10
+
+#270 Nix617 completed at2026-10-09T23:53:48.888088Z on exact703cde78/treee66eb9a5:
+16 attributes succeeded,6 skipped-local, including both architectures' browser,
+native tests, package, Clippy, SQLx and deployment/OIDC. ARM deployment script
+completed in727.22s. Watch5274 exited zero. Fresh checks and review inspection
+were green with no unresolved threads; marked ready and entered the protected
+queue at23:54:44UTC, position1, without an admin bypass.
+
+Protected merge-group run38006714281 passed: Flake Check56s, Format47s;
+watch7209 exited zero. The first post-check read was still OPEN and was not
+reported as merged. Subsequent authoritative read confirmed MERGED at
+2026-10-09T23:56:24Z, commit `4088334400e7aa9d3ac0b3501ef470e2432ef151`.
+Fetched origin/master and proved complete-tree equality to703cde78:
+`e66eb9a5864ab2e8b32e2e1dcc78cd91ca3d4c7b`. Root checkout is unchanged.
+Eleven functional PRs remain; #212 stays open/draft as reference.
+
+#271 session40820 is still live and its worktree remains frozen atb8ae4fdd:
+full browser, strict Clippy, package and live SQLx passed;191 core tests passed.
+Server test compilation completed in4m45s and1397 server tests are running.
+Do not count the four filtered subprocess reruns as extra suite tests. Next:
+collect full terminal acceptance, rebase its two commits onto actual40883344
+with tree-equality proof, retarget the existing PR and publish via exact lease.
+No new PR, feature, policy activation or real-data change.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
