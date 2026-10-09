@@ -4031,6 +4031,32 @@ changes. Protected auto-merge cannot pass while its required check is red.
 Next: collect attempt2, investigate any actual failure before another retry,
 and verify queue/squash before retargeting #245. No broad unchanged retry loop.
 
+#244 MERGED at12:56:28 UTC as6c301447635ae32c6c0158e2f8a35c00d0806c13,
+parentbf144b7f, verified treeb0d99134 exactly equal to accepted c8819fb6.
+The single failed-job retry of GitHub37929467171 passed55s on the unchanged
+head; protected queue37933216441 passed Flake45s/Format49s. That acceptance
+does not establish the root cause of attempt1's exit143. No tests were weakened.
+
+Backed up #245 9b831d08 as refs/backup/pr245-before-settings-squash-20261009,
+rebased its six commits onto the actual #244 squash with updateRefs disabled,
+and verified the entire tree remainsac90e7e7. Retargeted master before exact-lease
+push9b831d08→487042cb6a9e51423ea992912e7c6a89f65bd36e. Nixbot reused568's
+complete both-Linux success for the identical tree. No review threads. Marked
+ready and enabled protected auto-merge at12:58:27 UTC. GitHub37933494243 passed
+Flake44s/Format48s. Queue acceptance and the actual squash still remain;
+do not confuse auto-merge with MERGED. Updated the existing #245 body.
+
+#254 local acceptance completed at1d5d84f9/treed440921f:189core+1126server+201aux,
+zero failures and11existing ignored. Server197.55s. Nine project-picker DB
+cases and real-session exercise passed, full SQLx and formatting567unchanged
+passed. Tests outputy7rz6b5shg49cr7sb8whh5cjgq1kjs5b,
+SQLxh1bia651gs1h06amnqq51adyfmyr5gxx, formatter7scqzc1yjpsf5xcrw22h507x0x1667vz.
+Collected #255 formatting563unchanged and started tests/SQLx/treefmt on frozen
+98688ffd, live20217, after #254 terminated. #250/#253/#254 remain unpublished
+with completed local evidence, #255 unpublished with testing live. Next delivery:
+verify #245's actual squash, reconcile #250 onto that exact base preserving
+treea6b78309 and publish it to master with an exact lease. Keep #212 untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
