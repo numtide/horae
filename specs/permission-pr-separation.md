@@ -5398,6 +5398,29 @@ branches before publishing them. Do not publish #265's now-outdated inherited
 fixture or replace any head under active validation.18 functional PRs remain;
 #212 untouched. These are active validation/fix steps, not an external blocker.
 
+### Browser failure confirmed on both architectures; native tests still running
+
+Nix604 x86 browser log now confirms the same Route is already handled error
+at timesheet-errors.cjs:174 as ARM, after historical move/resize/reorder pass.
+Published that evidence and the clearly unpublished local correction in #264's
+existing body. No remote head replacement or new PR. Latest observed604 counts:
+ten succeeded, four building, two browser failures and six local-only skipped;
+watcher65000 remains live. The body must be updated again after the correction
+is actually published and validated.
+
+Verified f331ba6094ece32b83e4f1404a2e4c8303b0ab79 has
+treef678797f1fb64c1e16452935d9e1c5be40ad04c8 and changes only the three-line
+browser-fixture cleanup; app/core sources, SQLx cache, dependencies and migrations
+are identical to83f1fddc. Worktree clean; disk21 GiB before another heavy build.
+
+#265 local15065 remains active. Server test compilation finished in5m00s;
+189 core tests passed and the registered HTTP authorization fixture passed.
+The complete server suite is still running, so no final test count or acceptance
+is claimed. No second heavy local build started. Next: collect15065 terminal,
+then validate #264's fixed browser suite; keep remote83f1fddc untouched until
+Nix604 is terminal. Prior turn made source-review/fix progress; this iteration
+is a verified wait with further failure evidence, not a blocker.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
