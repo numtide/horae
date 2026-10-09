@@ -2532,6 +2532,18 @@ Nixbot530 now has every native check accepted; four ARM browser/VM checks
 remain live. #231 native validation15705 is still live. Next: finish remote
 acceptance and protected delivery of #228; do not restart live jobs.
 
+#231 validation15705 completed successfully on216440b5/a746b82d:189 core,
+878 server and183 auxiliary tests,1,250 passed, zero failed,11 existing manual
+cases ignored. Server suite126.24s. SQLx and treefmt also passed; outputs
+fixdzsqkavbaac9xzr7ppch7kl80jjyb, xyiz955n99mvw2xd8zqsql08qfdia0nk and
+n4pq0hbvmlgg6pjnbjcdnmh5bx0qsaqv remain rooted by the scratch result link.
+No local validation remains live. #231's new head is still unpublished.
+Nixbot530 has accepted ARM browser and OIDC; ARM deployment has reached real
+application assertions and the udev regression remains live. #228 is still
+draft, with no queue entry or auto-merge, and GitHub's Flake Check is live.
+Next: complete existing #228 gates, protected merge, then reconcile/publish
+the prepared #231 without changing its owned patch.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
