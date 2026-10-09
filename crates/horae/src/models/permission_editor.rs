@@ -1,10 +1,20 @@
 //! Permission command values; callers supply authenticated authority separately.
 
+#[cfg(feature = "server")]
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Session identity captured by an authorized read, not a source of authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PermissionRequester {
+    pub org_id: Uuid,
+    pub user_id: Uuid,
+}
+
 /// Confirmed intent; actor identity is supplied separately by the server.
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TemplateCommand {
@@ -13,6 +23,7 @@ pub struct TemplateCommand {
     pub action: TemplateAction,
 }
 
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum TemplateAction {
@@ -26,6 +37,7 @@ pub enum TemplateAction {
     },
 }
 
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TemplateOutcome {
@@ -34,6 +46,7 @@ pub struct TemplateOutcome {
     pub detached_people: usize,
 }
 
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProfileCommand {
@@ -47,6 +60,7 @@ pub struct ProfileCommand {
     pub remove_people: Vec<Uuid>,
 }
 
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ProfileAction {
@@ -55,6 +69,7 @@ pub enum ProfileAction {
     Template { id: Uuid, expected_revision: i64 },
 }
 
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProfileOutcome {
@@ -65,6 +80,7 @@ pub struct ProfileOutcome {
 }
 
 /// Unsaved explicit proposal; revisions fence confirmation, not authority.
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProfileDraft {

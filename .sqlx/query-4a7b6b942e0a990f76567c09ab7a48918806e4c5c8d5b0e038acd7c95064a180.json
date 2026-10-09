@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE permission_change_receipts ADD CONSTRAINT reject_receipt CHECK (false) NOT VALID",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "4a7b6b942e0a990f76567c09ab7a48918806e4c5c8d5b0e038acd7c95064a180"
+}

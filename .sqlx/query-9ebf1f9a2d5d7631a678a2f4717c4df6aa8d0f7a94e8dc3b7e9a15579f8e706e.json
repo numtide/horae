@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE permission_change_receipts SET format_version = 2 WHERE request_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9ebf1f9a2d5d7631a678a2f4717c4df6aa8d0f7a94e8dc3b7e9a15579f8e706e"
+}

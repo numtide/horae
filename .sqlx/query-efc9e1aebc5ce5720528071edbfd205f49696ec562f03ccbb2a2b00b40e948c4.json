@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_member_costs (id, org_id, project_id, user_id, cost_rate_cents) VALUES ($1, $2, $3, $4, 6789)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "efc9e1aebc5ce5720528071edbfd205f49696ec562f03ccbb2a2b00b40e948c4"
+}
