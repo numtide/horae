@@ -3980,6 +3980,29 @@ not yet tested on its new head. Next local validation follows #253's live22205;
 do not change that frozen source or start duplicate builds. Remote delivery
 continues with #244/#245 only. #212 and the root checkout remain unchanged.
 
+Nixbot566 completed successfully at12:43:41 UTC on #244 c8819fb6/treeb0d99134:
+all applicable both-Linux gates accepted, including browser/deployment/OIDC.
+Collected ARM tests189core+1084server+194aux, zero failures/11existing ignored,
+server170.90s; x86 server130.02s with the same counts. Confirmed master base,
+exact head, mergeability and no review threads. Marked #244 ready and enabled
+protected auto-merge at12:45:01 UTC, matching c8819fb6. GitHub37929467171's
+Flake Check is still live, Format passed; protection keeps the PR OPEN/BLOCKED
+until required checks and its queue pass. This is not a completed merge or
+protection bypass. Updated the existing PR body with exact acceptance evidence.
+
+Collected #253's complete local Nix acceptance at1d51f89b/tree94b0b9c8:
+189core+1117server+201aux passed, zero failures and11existing ignored;
+server201.17s. All seven directory cases and the registered HTTP exercise passed.
+Full SQLx and formatting563unchanged passed. Tests outputd0ciara5xgwpp1xnkw5igsifir90fvyk,
+SQLxdmfz3c89l55c95haq3njwrvnrz3l564y, formattersslcxqmq0y2acvd5brflnkjibkya9gg2.
+#253 remains unpublished. Started #254's local Nix tests/SQLx/treefmt at frozen
+head1d5d84f9 only after #253 completed; live session29247, no pass yet.
+Next: wait on the existing #244 GitHub watcher92707; if accepted, collect its
+protected queue and verify actual squash treeb0d99134. Reconcile #245's ancestry
+onto that squash preserving treeac90e7e7, retarget master before exact-lease push,
+and collect its required GitHub/queue gates. Then publish #250 when a delivery
+slot is free. No new PRs, real-data operations or change to #212.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
