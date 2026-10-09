@@ -4696,6 +4696,41 @@ based onbbdfb8f7. Updated the PR body to reflect acceptance and queue submission
 unchanged. Next: collect the merge-group result and verify actual merge/tree,
 then reconcile the next dependent against that actual squash.
 
+Protected merge-group37959744078 passed; watcher94675 exited successfully.
+#256 is MERGED at16:32:54 UTC as2165320f2ebc396730be7954cbb5732d3f2be5a9.
+GitHub master read-back confirms parentbbdfb8f7 and exact accepted tree
+253dc0963b2a522cf1c381308e33b3a19cc2676a. This is verified integration, not
+only queue submission. Twenty-four functional deliveries remain in this block.
+
+#257/Nixbot589 still has its x86 native check live on2f0bb5e9. Reconcile its
+local branch with the actual #256 squash while preserving the full tree; hold
+publication/base retarget until589 is terminal. Then publish #258 on the
+reconciled #257 parent, using the newly free second remote slot. Preserve #212
+and the original root checkout; do not delete any source branch or worktree.
+
+Nixbot589 passed at16:35:23 UTC on2f0bb5e9, tree68b2e2caf20f5f3c26dbe48627a7781e6ba5ddff.
+Fetched actual master2165320f, leaving the original root branch unchanged.
+Rebased #257 locally as a6ad1800960e6a59b8a5f2946121cba92079e1e8 with that exact
+accepted tree. Propagated the ancestry only: #258 is5205f8ce41a24b3a32b23611698b5f81a5a5d276
+(treee23dc812f89f667f6a19e7ba78fadc8ea4b8bb54), #259 isd91d3dc5f1611babc32b357ed91f1df046cd1f2b
+(treecf31a07b9dc078a88a06f26d3151f32b11977a88). Each whole-tree comparison is
+empty; backups are `refs/backup/prNNN-before-discovery-merge-20261009`.
+
+After589 became terminal, changed #257's base to master. Nixbot590 immediately
+failed before evaluation: the old2f0bb5e9 ancestry conflicted with the new base;
+tree_hash is null and no checks ran. This is not a source/test regression.
+The already-reconciled a6ad1800 resolves that ancestry while preserving every
+file. Publishing it with an exact lease now, after verifying590 is terminal;
+the master-targeted synchronize event must start required GitHub CI.
+
+#257 push52502 succeeded. Remote is a6ad1800, master base, draft. Nixbot reused
+the accepted589 result because the complete tree is identical; required GitHub
+run37960529444 is live on the new head. No old failed590 check remains in the
+current rollup. #258's pre-publication audit confirms a clean worktree, exact
+tree conservation versus21c0b0d4, and the unchanged46-file/2822-addition owned
+patch. Publishing5205f8ce with an exact lease against6391cdbe; it stays draft
+on #257's branch, with fresh remote acceptance required. #259 remains local.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
