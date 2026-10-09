@@ -6486,6 +6486,31 @@ Next: collect #270's native result, reconcile its exact tree onto actual #269
 merge21452bdd, and publish the existing PR with its correct base before the
 head update. Then start the prepared #271 gate. No new PRs or activation.
 
+### Task lifecycle dependency refresh — 2026-10-09
+
+Prepared existing #276 over local #275 while #270 session42631 remains live
+compiling server tests. Verified clean original `d7fe29f6` and terminal
+historical Nix436, saved `refs/backup/pr276-before-current-task-stack-20261009`,
+and rebased owned commits from integration parent492e5c34 onto8d4f4fb5.
+New head `318f7bb457fff5fca886cbe70d0c5a7086711bb2`; tree
+`56e6a80be0b6383dd0077e1b8f7f0216683f2bc9`. No push or heavy build.
+
+Only the task contract conflicted: the incoming text is an exact prefix of
+the parent's complete contract, retained unchanged. Sixty-four of68 original
+paths (rename endpoints counted separately) remain byte-identical, including
+migration0048, lifecycle commands, editor activity intent, tracking changes and
+new test modules. The other differences retain inherited Harvest connection
+authorization/fixture corrections, the shared HTTP registry and the complete
+contract. All existing checks remain registered; task activity is added once.
+The descriptor follow-up was already byte-identical in the parent, so its
+automatic omission loses no content. Whitespace and Nix formatting passed;
+no migration, real-data mutation or activation. Prepared description:
+`.scratch/pr276-current-delivery.md`. Current-tree full acceptance remains open.
+
+Next remains #270's native result and exact-tree reconciliation onto merged
+#269 before publication, then #271's single heavy gate. Do not equate these
+local dependency preparations with accepted or published PRs.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
