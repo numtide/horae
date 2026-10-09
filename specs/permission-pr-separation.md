@@ -5142,6 +5142,33 @@ only when green, then verify its actual merge and tree.
 the registered HTTP authorization test already passing. Full-suite completion
 is still pending; no source edits, publication or acceptance claim yet.
 
+### #262 merged; #263 full local gate passed and conserved
+
+Required GitHub37982513538 passed on80291e42 (Flake Check51s, Format44s).
+Rechecked clean merge state and submitted #262 through the protected queue.
+Merge-group37982757678 passed (Flake Check55s, Format40s); watcher32152 exited0.
+#262 MERGED at2026-10-09 19:49:57 UTC as
+2216446f31aa493cfc6d294b78a52586cff0f1c4, parent03dc0bbb. Verified actual
+tree12250f9e83726b1922a74a44b62fbc5a08370a1c exactly matches accepted source.
+Fetched master with --no-prune; root checkout unchanged.19 functional PRs remain.
+
+Local #2632031 completed exit0 oncf8be2c4: formatting597 unchanged, strict
+Clippy, live SQLx,189 core,1233 server and201 auxiliary tests passed, zero
+failures and11 inherited ignored; server241.69s. All12 scoped XLSX regressions
+and registered HTTP authorization assertions passed. Tests derivation1qx0v8ix,
+SQLx2081ra14 and Clippyiknwh8nz completed. No local build remains active.
+
+After validation and the actual parent merge, backed upcf8be2c4 in
+refs/backup/pr263-before-grouped-reader-merge-20261009 and rebased both owned
+commits onto2216446f. No conflicts, both patches equal, full-tree diff empty.
+New head224b8204ebfabce14fc6e42ba0c592a46c8e6904 retains tested
+tree9625fd9df43cf0d0577794f6c672b6f947748fd1. Reviews/threads are empty.
+Retargeted existing #263 to master. Retarget-only Nix601 on old130d166f failed
+immediately with a merge conflict and null tree; confirmed terminal before
+requesting exact130d166f-lease publication. This is not a test failure of224b8204.
+Next: confirm publication, update the existing body and collect fresh both-Linux
+Nix plus required GitHub gates. No policy activation, real-data change or new PR.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
