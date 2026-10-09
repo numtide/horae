@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DECLARE horae_csv NO SCROLL CURSOR FOR SELECT 1::bigint value,$1::bigint export_bytes",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e08d5011bc9e1eb94ec530f1db8d14e7f00a159277c50e956fa4bf2b75e8b803"
+}

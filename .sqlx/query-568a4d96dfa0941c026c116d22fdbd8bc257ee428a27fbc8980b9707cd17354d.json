@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE SCHEMA csv_fetch_test",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "568a4d96dfa0941c026c116d22fdbd8bc257ee428a27fbc8980b9707cd17354d"
+}

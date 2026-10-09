@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE public.invoices SET number='CHANGED',currency='USD',total_cents = 200 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "45213f4d3dab9b0031808b24fee49bf830e5a26b06183d9f8bf241fb409bd302"
+}
