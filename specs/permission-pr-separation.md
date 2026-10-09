@@ -6137,6 +6137,38 @@ verify its whole tree is unchanged, then publish with an exact lease. Start
 270's prepared gate only after51569 terminates. No new PR, real-data mutation,
 policy activation, remote journal publication or change to212.
 
+### Filtered downloads merged; Reports reconciled onto master
+
+Protected267 run38000052799 passed; watch81112 exited0. GitHub confirms
+MERGED at2026-10-09T22:38:49Z as80014914a0a355b08b0496de55e1fc67ee75c57a.
+Fetched master without pruning and verified its complete tree equals accepted
+0e85eb68/tree944c37bf. Fourteen functional deliveries remain;212 is unchanged.
+
+Nix613 also finished succeeded at2026-10-09T22:38:47.867843Z on268d3cdf579,
+tree3130cd439d40a13c75bd16eb847be9ed551c9b06: all16 applicable attributes
+passed across both Linux architectures, six local-only skips. Watch81667
+exited0. No active replacement build was observed before publication.
+
+Backed up268d3cdf579 under
+refs/backup/pr268-before-filter-download-merge-20261009 and rebased its three
+owned commits fromactualparentf11bb3b3 ontoactualmerge80014914. All three
+range-diff entries are equal; newhead9cf07dd3abe73e70c16eae3dac27500e2be3025b
+retains the exact complete tree3130cd43. GitHub automatically retargeted the
+PR to master. Published with exactd3cdf579 lease; push/body update81027 exited0.
+Updated267's description with the actual merge receipt and268's with Nix613
+acceptance/current ancestry. Nix613 success is attached to new9cf07dd3.
+Required GitHub38000465974 is queued on that head; its watcher is started.
+The PR remains draft pending required/master and protected queue acceptance.
+
+Local26951569 completed server test compilation in8m06s and is now running
+the native suite, not stalled or complete. No failure seen in collected output;
+full counts remain pending. The second remote slot is free, but269 is not
+published until native acceptance is complete.270 stays prepared atcf9c75f0,
+without a heavy build. Next collect269, publish its already reviewed/visual-
+checked tree when accepted, then start270's one heavy local gate. Prioritize
+268's required and protected merge checks. No new PR, real-data change,
+policy activation or reference212 modification.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
