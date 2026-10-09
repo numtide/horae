@@ -2605,6 +2605,24 @@ tests m75adhk2, SQLx przckg5g and treefmt5ymi1lhp are live in77585, rooted at
 Nixbot531 is still running its ARM browser/deployment/OIDC checks. Next:
 collect it before publishing #231's ancestry-only update and the prepared #232.
 
+Nixbot531 completed successfully on #231216440b5/treea746b82d, including
+both Linux platforms, browser, deployment and OIDC. Published the prepared
+07d30fc9 ancestry-only reconciliation with an exact old-head lease. Nixbot
+reused531 successfully on the identical tree; fresh GitHub37897897267 also
+passed. Marked #231 ready and requested protected delivery. Read-back confirms
+queue entry MQE_lQDOTRPZ888AAAABG8o7h84AA_LZzgMtiCg, position1, QUEUED;
+no merge claimed yet. Current master remains the verified #228 merge.
+
+Published #232 at ce812ded/tree5d7aa453, stacked on fix/csv-batch-transaction-boundary,
+using an exact2ff243b9 lease. It remains draft; Nixbot535 is evaluating the
+new delivery. Updated both existing PR bodies; neither has pending review
+threads. #23877585 completed successfully on c5402afa/treeb41bf687:1,277 tests
+passed (189 core,905 server,183 auxiliary), zero failures,11 existing ignored
+manual cases; server148.16s. SQLx przckg5g and treefmt5ymi1lhp passed alongside
+tests m75adhk2. #238 remains unpublished; #235 and #212 remain unchanged.
+Next: collect and verify #231's protected merge, reconcile #232's ancestry
+without interrupting535, and continue the already prepared sequence.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
