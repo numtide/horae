@@ -4640,6 +4640,20 @@ Next: collect588/GitHub acceptance for #256, then use the protected merge
 queue and reconcile actual squash ancestry. Publish #257's next delivery only
 after587 is terminal. Preserve the two-remote-delivery limit and #212 reference.
 
+Nixbot587 finished SUCCEEDED at15:58:52 UTC on74c76c0f:16 successful gates
+and six skipped_local entries, including both native/browser/deployment Linux sets.
+The next #257 refresh2f0bb5e9 was held until this terminal result. Its owned
+implementation remains unchanged; only the inherited six-line Nix check hunk
+differs across the full tree. #256 GitHub37955056655 remains live. Watcher29831
+is observing existing Nixbot588 every45 seconds without starting another build.
+
+#257 push44513 finished successfully using an exact lease. Remote read-back
+confirms2f0bb5e9, draft and temporary #256 base. Nixbot589 is the fresh build;
+588/#256 and589/#257 are the only active remote deliveries. #258/#259 remain
+unpublished locally prepared successors. Next: collect #256's gates, submit
+the exact accepted head to the protected queue, and reconcile the actual merge
+before retargeting #257. Do not merge a temporary stacked base.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
