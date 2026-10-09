@@ -2272,6 +2272,23 @@ This is additional cause-gathering for held #226, not a CI retry or a repair.
 Next: collect62243 and full #228/#231 remote gates; merge #228 only after all
 current-tree gates pass, then reconcile downstream prepared deliveries.
 
+CSV diagnostic62243 completed successfully. Unchanged #231 tree239d1051 was
+built as vnr7dh672ym39w20cls7466a6l9mg3qx-horae-csv-rejection-network-trace:
+four iterations, both runtime schedules,4,096 requests total; all status
+assertions passed. Traces are retained under
+/nix/store/9nhld4nr6am1p021v88r0qhc7wf3f5zg-horae-csv-rejection-network-trace-0.1.0
+(7.1MiB). No ECONNRESET, EPIPE, ETIMEDOUT or ECONNABORTED was present in
+these instrumented runs. This does not reproduce or explain the ARM524 failure;
+do not change transport, drain the fixture or clear #226's hold on this basis.
+The bounded diagnostic is finished, not scheduled for repeated retries.
+
+Fresh #228 readiness inspection finds no unresolved review threads or conflicts,
+unchanged master3df38af8 and exact combined tree1b93261f matching build528.
+Native tests passed remotely; browser/deployment/OIDC gates still run. #231
+build529 continues on exact239d1051 with no failures observed. Continue both
+existing jobs. Begin bounded local review of existing #235 while waiting;
+do not publish a third live delivery or modify #212.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
