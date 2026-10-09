@@ -5920,6 +5920,26 @@ The previous turn was progress (266 acceptance,267 publication,269 rebase);
 this turn adds complete268 acceptance/visual evidence and the next local gate.
 No merge claimed, policy activation, real-data change or #212 modification.
 
+### Required CSV check lost its runner; one isolated retry
+
+Watch23637 terminated exit1: required264 workflow37990586429 attempt1 failed
+after1h2m25s with GitHub's hosted-runner-lost-communication annotation.
+Format passed. The completed failed-job log request returned log-not-found
+for114023419503; no concrete test failure, OOM or network cause is established.
+Nix607's exact-head acceptance remains valid but cannot replace this gate.
+
+Reconfirmed head9c44db39 and terminal attempt1, then requested exactly one
+failed-job rerun (command25638 exit0), without source changes or a Nixbot retry.
+Watch30125 confirms the new Flake Check114045801288 live; Format's success is
+retained. Updated264's existing description with failure provenance and the
+pending retry. Do not re-poll terminal23637 or restart this new live execution.
+
+Local26951569 passed formatting (624 files unchanged) and is running strict
+Clippy. Keep its worktree frozen. Nix610/watch22380 is11 passed/5 building,
+no failures. Next prioritize this single264 retry and protected queue after
+success; collect610/51569, then publish prepared268 when a remote slot frees.
+No merge, bypass, additional PR, real-data mutation or #212 change.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
