@@ -2957,6 +2957,20 @@ attribute. No third concurrent delivery was introduced:543 had already finished.
 Next: collect GitHub37904465910 and545; queue #241 only after required checks,
 verify its actual merge tree, then reconcile #233 without changing accepted content.
 
+GitHub37904465910 completed successfully (Flake Check23m41s,Format46s);
+watcher36775 exited0. Fresh read-back confirmed #241325e4fc5,master82e85160,
+no review threads and all checks passed. Marked #241 ready and submitted it
+without bypass to the protected queue. Entry
+MQE_lQDOTRPZ888AAAABG-ZBMs4AA_LZzgMt0nY is first,AWAITING_CHECKS;
+merge-group37907089652 runs on919b1e7b506b5c2bde46458ea5501c26c6a4e5d5.
+This is queue submission, not a completed merge. Publication87651 exited0.
+
+Started #237 native tests/SQLx/treefmt in66164 on ed4f2f21/tree6c66f37f,
+rooted at .scratch/pr237-current-delivery-checks, with disposable PostgreSQL.
+No production migration or remote publication. Bounded current review remains
+required. Next: collect the existing merge-group and545/66164; verify actual
+#241 merge/tree before reconciling #233 ancestry.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
