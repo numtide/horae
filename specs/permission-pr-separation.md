@@ -4221,6 +4221,19 @@ yet. No additional push, merge or CI restart in this wait interval. Next safe
 action after69900 succeeds: start #257 tests/SQLx; after575 succeeds: reconcile
 #254 onto e41250e1, preserving whole treef02ad4ee, and publish with exact lease.
 
+Collected #256 validation69900: completed successfully on3930b09e /
+tree4568e053. Tests189core+1155server+201auxiliary=1545 passed, zero failures,
+11existing ignored; server263.98s. Full SQLx and formatting577unchanged passed.
+Outputsjhjbsq904n7461r71bwrmjirfwychim0 tests,
+drk8s4znzn2c5z6gvf4bz4anynx00yan SQLx andp3b1q6ncg7lzyjhpjm2d9ivn5x91g3sv formatter.
+Started #257 native/SQLx/treefmt validation93005 on frozen8211bb20 after that
+terminal result. #256 remains local-only until a delivery slot opens.
+#254 Nix575 still has only ARM deployment live; #255 Nix577 passed native suites
+189core+1147server on both architectures, zero failures/11ignored,
+server144.01s x86 and220.42s ARM, with browser/deployment/OIDC ARM still live.
+Next remains #254 full acceptance, squash-ancestry reconciliation and protected
+master delivery. No new source edits, retries or additional remote fronts.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
