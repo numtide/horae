@@ -246,7 +246,7 @@ pub async fn enqueue(
         current.account_generation == 0,
         crate::importers::harvest::account_switch::ChangeError::OldImport
     );
-    let id = enqueue_in(&mut tx, org_id, payload, idempotency_key, policy, 0).await?;
+    let id = enqueue_in(&mut tx, org_id, payload, idempotency_key, policy, 0, None).await?;
     tx.commit().await?;
     Ok(id)
 }
@@ -261,20 +261,22 @@ pub async fn enqueue_api(
     generation: i64,
 ) -> anyhow::Result<Uuid> {
     let mut tx = pool.begin().await?;
-    let id = enqueue_api_in(
+    let id = enqueue_api_request(
         &mut tx,
         org_id,
         payload,
         idempotency_key,
         policy,
         generation,
+        None,
     )
     .await?;
     tx.commit().await?;
     Ok(id)
 }
 
-/// Enqueue within the caller's authorized transaction; never acquire a worker reservation.
+/// Record the original actor within the caller's authorized transaction.
+/// Existing jobs keep their attribution; this is not worker authorization.
 pub async fn enqueue_api_in(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
@@ -282,6 +284,28 @@ pub async fn enqueue_api_in(
     idempotency_key: &str,
     policy: JobPolicy,
     generation: i64,
+    requester_id: Uuid,
+) -> anyhow::Result<Uuid> {
+    enqueue_api_request(
+        tx,
+        org_id,
+        payload,
+        idempotency_key,
+        policy,
+        generation,
+        Some(requester_id),
+    )
+    .await
+}
+
+async fn enqueue_api_request(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: Uuid,
+    payload: &JobPayload,
+    idempotency_key: &str,
+    policy: JobPolicy,
+    generation: i64,
+    original_requester_id: Option<Uuid>,
 ) -> anyhow::Result<Uuid> {
     use crate::importers::harvest::account_switch::{self, ChangeError};
     let current = account_switch::gate(tx, org_id).await?;
@@ -295,7 +319,16 @@ pub async fn enqueue_api_in(
         let connection = account_switch::status(&mut **tx, org_id, true).await?;
         anyhow::ensure!(connection.connected, ChangeError::NotConnected);
     }
-    let id = enqueue_in(tx, org_id, payload, idempotency_key, policy, generation).await?;
+    let id = enqueue_in(
+        tx,
+        org_id,
+        payload,
+        idempotency_key,
+        policy,
+        generation,
+        original_requester_id,
+    )
+    .await?;
     Ok(id)
 }
 
@@ -306,14 +339,15 @@ async fn enqueue_in(
     idempotency_key: &str,
     policy: JobPolicy,
     generation: i64,
+    original_requester_id: Option<Uuid>,
 ) -> anyhow::Result<Uuid> {
     let policy = policy.validate()?;
     let id = Uuid::now_v7();
     let encoded = encode_payload(payload)?;
     let report = payload.initial_report()?;
     let row = sqlx::query!(
-        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report, account_generation)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report, account_generation, original_requester_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            ON CONFLICT (org_id, kind, idempotency_key)
            DO UPDATE SET updated_at = now()
            WHERE horae_jobs.payload = EXCLUDED.payload AND horae_jobs.account_generation = EXCLUDED.account_generation
@@ -326,6 +360,7 @@ async fn enqueue_in(
         policy.max_attempts,
         report,
         generation,
+        original_requester_id,
     )
     .fetch_optional(&mut **tx)
     .await?
@@ -343,12 +378,14 @@ pub async fn enqueue_csv(
     policy: JobPolicy,
 ) -> anyhow::Result<Uuid> {
     let mut tx = pool.begin().await?;
-    let id = enqueue_csv_in(&mut tx, org_id, mode, body, idempotency_key, policy).await?;
+    let id =
+        enqueue_csv_request(&mut tx, org_id, mode, body, idempotency_key, policy, None).await?;
     tx.commit().await?;
     Ok(id)
 }
 
 /// Persist the accepted upload and job atomically in the authorization transaction.
+/// The original actor is retained across identical submissions and retries.
 pub async fn enqueue_csv_in(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
@@ -356,6 +393,28 @@ pub async fn enqueue_csv_in(
     body: Vec<u8>,
     idempotency_key: &str,
     policy: JobPolicy,
+    requester_id: Uuid,
+) -> anyhow::Result<Uuid> {
+    enqueue_csv_request(
+        tx,
+        org_id,
+        mode,
+        body,
+        idempotency_key,
+        policy,
+        Some(requester_id),
+    )
+    .await
+}
+
+async fn enqueue_csv_request(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: Uuid,
+    mode: ImportMode,
+    body: Vec<u8>,
+    idempotency_key: &str,
+    policy: JobPolicy,
+    original_requester_id: Option<Uuid>,
 ) -> anyhow::Result<Uuid> {
     let policy = policy.validate()?;
     let id = Uuid::now_v7();
@@ -364,10 +423,10 @@ pub async fn enqueue_csv_in(
     let payload = encode_payload(&payload)?;
     crate::importers::harvest::account_switch::gate(tx, org_id).await?;
     let row = sqlx::query!(
-        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report)
+        r#"INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report, original_requester_id)
            VALUES ($1, $2, 'harvest_csv_import',
                    $3::jsonb || jsonb_build_object('upload_sha256', encode(sha256($7::bytea), 'hex')),
-                   $4, $5, $6)
+                   $4, $5, $6, $8)
            ON CONFLICT (org_id, kind, idempotency_key)
            DO UPDATE SET updated_at = now()
            WHERE horae_jobs.payload = EXCLUDED.payload
@@ -379,6 +438,7 @@ pub async fn enqueue_csv_in(
         policy.max_attempts,
         report,
         &body,
+        original_requester_id,
     )
     .fetch_optional(&mut **tx)
     .await?

@@ -364,7 +364,7 @@ async fn legacy_upgrade_preserves_job_states_and_existing_archives(pool: sqlx::P
             "state: {state}"
         );
         let stored = sqlx::query!(
-            "SELECT report, checkpoint, claim_token, account_generation,
+            "SELECT report, checkpoint, claim_token, account_generation, original_requester_id,
                     lease_until <= clock_timestamp() AS expired
              FROM horae_jobs WHERE id = $1",
             id,
@@ -373,6 +373,7 @@ async fn legacy_upgrade_preserves_job_states_and_existing_archives(pool: sqlx::P
         .await
         .unwrap();
         assert_eq!(stored.account_generation, 0);
+        assert_eq!(stored.original_requester_id, None);
         assert!(stored.claim_token.is_none());
         assert_eq!(stored.expired, (state == "running").then_some(true));
         let metadata = stored.report.unwrap();
@@ -412,7 +413,7 @@ async fn legacy_upgrade_preserves_job_states_and_existing_archives(pool: sqlx::P
 
 async fn legacy_job_metadata(pool: &sqlx::PgPool, id: Uuid) -> serde_json::Value {
     sqlx::query_scalar!(
-        "SELECT to_jsonb(j) - ARRAY['report', 'checkpoint', 'claim_token', 'lease_until', 'updated_at', 'account_generation'] AS \"metadata!\"
+        "SELECT to_jsonb(j) - ARRAY['report', 'checkpoint', 'claim_token', 'lease_until', 'updated_at', 'account_generation', 'original_requester_id'] AS \"metadata!\"
          FROM horae_jobs j WHERE id = $1", id,
     ).fetch_one(pool).await.unwrap()
 }

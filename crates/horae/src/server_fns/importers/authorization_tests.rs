@@ -149,6 +149,11 @@ impl Api {
             request = request
                 .header("X-Horae-Import", "csv")
                 .body("Date,Client,Project,Task,Hours,Email\n");
+            for field in ["org_id", "original_requester_id", "actor_id"] {
+                if let Some(value) = body.get(field).and_then(Value::as_str) {
+                    request = request.query(&[(field, value)]);
+                }
+            }
             if unread_upload {
                 request = request.header("X-Test-Unread-Upload", "true");
             }
@@ -594,13 +599,29 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         let started: crate::models::JobStatus = serde_json::from_value(
             api.json(
                 name,
-                json!({"mode":"DryRun","sync":"Full","org_id":foreign.org_id}),
+                json!({"mode":"DryRun","sync":"Full","org_id":foreign.org_id,"original_requester_id":foreign.user_id,"actor_id":foreign.user_id}),
                 &admin,
             )
             .await,
         )
         .unwrap();
         let id = started.id;
+        assert_eq!(
+            sqlx::query_scalar!(
+                "SELECT original_requester_id FROM horae_jobs WHERE id = $1",
+                id
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+            Some(owner.user_id),
+        );
+        assert!(
+            serde_json::to_value(&started)
+                .unwrap()
+                .get("original_requester_id")
+                .is_none()
+        );
         assert_eq!(started.status, "queued");
         assert_eq!(
             serde_json::to_value(&started).unwrap()["retry_availability"],

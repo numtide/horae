@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO horae_jobs (id, org_id, kind, payload, idempotency_key, max_attempts, report, original_requester_id)\n           VALUES ($1, $2, 'harvest_csv_import',\n                   $3::jsonb || jsonb_build_object('upload_sha256', encode(sha256($7::bytea), 'hex')),\n                   $4, $5, $6, $8)\n           ON CONFLICT (org_id, kind, idempotency_key)\n           DO UPDATE SET updated_at = now()\n           WHERE horae_jobs.payload = EXCLUDED.payload\n           RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb",
+        "Text",
+        "Int4",
+        "Jsonb",
+        "Bytea",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6de3d9e832e521784b8fa6a99a0fca8d100eba5078e7a9c729d5a00699475855"
+}
