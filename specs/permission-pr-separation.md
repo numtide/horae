@@ -5649,6 +5649,26 @@ pass; then reconcile265 after its build terminates. No additional remote
 delivery, no merge claim, no #212 change. This iteration is a verified wait
 plus preparation of the existing267 delivery description.
 
+### #267 full native acceptance
+
+Session67323 terminated successfully onf11bb3b3828656867ac73e62fc9b09a99c190184,
+tree944c37bfb2e5d9c3745a20ec950f3472dd80b4a0: formatting609 unchanged,
+strict Clippy, live SQLx,189 core/1278 server/201 auxiliary tests passed,
+zero failures and11 inherited ignored. Server elapsed236.93s. Updated the
+prepared267 description with completed exact-head evidence. No further local
+heavy build is running from this delivery sequence.
+
+Nix605/watch26435 advanced to15 passed/1 building, no failures; its ARM VM
+deployment completed successfully in819.78s and x86 tests completed. Nix607/
+watch73128 is14 passed/2 building, no failures. Both have six local-only skips.
+Required264 workflow37990586429 remains live. Fresh266 remote verification
+confirms76dcd48b, old integration base, draft, and terminal failed Nix453.
+Prepared local266 remains clean1fa434d4 with the original34-file owned patch.
+Next: publish266 onto265 when one remote execution terminates, respecting the
+two-delivery cap; prioritize264's protected queue as soon as its full gates
+pass. Keep265's head stable until605 terminates and preserve complete trees
+when reconciling ancestry after parent merges. No new PRs or #212 changes.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
