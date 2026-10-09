@@ -4112,6 +4112,26 @@ available delivery slots. #250/#253 are still the only active remote deliveries;
 their review threads have no objections. Next: collect Nix571/573 and GitHub
 37933977940, then merge only verified heads into master through protection.
 
+Nixbot571 completed successfully for #250 e9873701 / treea6b78309 on both Linux
+architectures, including browser, deployment and OIDC. Each native suite passed
+189core+1123server+201auxiliary=1513, zero failures and11existing ignored;
+server150.23s x86 and209.64s ARM. GitHub37933977940 attempt1 ended during server
+compilation after12m03s with exit143; logs and annotations show no Rust/assertion
+failure or established OOM/root cause. One failed-job retry on the same head
+passed in59s; Format49s retained. Marked #250 ready and submitted to the protected
+master queue, position1 QUEUED. Actual merge is not yet confirmed.
+
+#254 composition549f7054/treef02ad4ee validation12246 completed successfully:
+189core+1139server+201auxiliary=1529 passed, zero failures and11existing ignored;
+server201.01s. Full SQLx and formatting572unchanged passed. Outputs:
+testsfxfc2dkghirwy20r4wr4awil9zjybsfh, SQLx3305wry10kv0dnpkykncn78pbdcdswdi.
+Started #255 composition validation37707 on frozen8e648a26 after that terminal
+result. Formatting576unchanged and full SQLx passed; native tests remain live.
+#253 Nix573 has passed both native suites (189core+1130server, zero failures,
+11ignored; server149.22s x86/205.72s ARM), browser and OIDC; ARM deployment
+still runs. Keep draft until full acceptance and master reconciliation. Next:
+verify #250 squash tree/parent, then retarget/rebase #253 preserving treee78bb7f7.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
