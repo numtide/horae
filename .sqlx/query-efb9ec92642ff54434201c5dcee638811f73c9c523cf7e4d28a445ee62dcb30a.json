@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, p.name, p.code, c.name AS client_name, p.currency,\n            CASE WHEN (CASE WHEN $4 THEN u.org_role IN ('admin', 'manager')\n              ELSE ($8 OR ($9 AND management.id IS NOT NULL))\n                AND ($10 OR ($11 AND management.id IS NOT NULL)) END)\n              AND p.project_type <> 'non_billable'\n              AND (settings.project_id IS NULL\n                OR (p.project_type = 'time_and_materials' AND settings.rate_mode = 'task'))\n              THEN p.currency END AS task_rate_currency,\n            p.starts_on as \"starts_on: chrono::NaiveDate\",\n            p.ends_on as \"ends_on: chrono::NaiveDate\",\n            ARRAY(SELECT t.name FROM project_tag_links l\n                JOIN project_tags t ON t.id = l.tag_id AND t.org_id = l.org_id\n                WHERE l.project_id = p.id AND l.org_id = p.org_id\n                ORDER BY lower(t.name), t.id) as \"tags!\",\n            CASE WHEN (CASE WHEN $4 THEN u.org_role = 'admin' ELSE $7 END)\n              THEN private.admin_notes END AS admin_notes\n        FROM projects p\n        JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id\n        JOIN users u ON u.id = $2 AND u.org_id = p.org_id AND u.active\n        LEFT JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id AND a.user_id = u.id\n        LEFT JOIN project_management_assignments management ON management.org_id = p.org_id\n          AND management.project_id = p.id AND management.manager_id = u.id\n        LEFT JOIN assignments member ON member.project_id = p.id AND member.user_id = u.id\n        LEFT JOIN project_private_settings private ON private.project_id = p.id AND private.org_id = p.org_id\n        LEFT JOIN project_settings settings ON settings.project_id = p.id AND settings.org_id = p.org_id\n        WHERE p.org_id = $1 AND p.id = $3\n          AND CASE WHEN $4 THEN COALESCE(a.can_view_progress, false)\n            ELSE $5 OR ($6 AND management.id IS NOT NULL)\n              OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members') = 'project_members') END",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "client_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "task_rate_currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "starts_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 7,
+        "name": "ends_on: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 8,
+        "name": "tags!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 9,
+        "name": "admin_notes",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      null,
+      true,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "efb9ec92642ff54434201c5dcee638811f73c9c523cf7e4d28a445ee62dcb30a"
+}

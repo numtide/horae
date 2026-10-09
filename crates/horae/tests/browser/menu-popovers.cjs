@@ -63,7 +63,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
     await check('late popover initialization restores missing focus without overriding deliberate focus', async () => {
-      await visit('/projects', 'list_projects');
+      await visit('/projects', 'get_project_overview');
       const script = await page.locator('script[src]').evaluateAll(scripts => scripts.find(script => /\/menu[^/]*\.js$/.test(script.src)).src);
       for (const [kind, content] of [
         ['calendar', '<button id="first" class="dp-day picked">Selected day</button><button id="inside" class="dp-day">Other day</button>'],
@@ -87,7 +87,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
       }
     });
     await check('content reflow preserves an open menu while deliberate scrolling still dismisses it', async () => {
-      await visit('/projects', 'list_projects');
+      await visit('/projects', 'get_project_overview');
       await page.evaluate(() => document.fonts.ready);
       const row = page.locator('.proj-row').first();
       const trigger = row.getByRole('button', { name: 'Actions' });
@@ -130,7 +130,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await check('first and last project-row actions are initially visible and clickable', async () => {
       for (const [width, height] of [[320, 1000], [390, 320], [1440, 800]]) {
         await page.setViewportSize({ width, height });
-        await visit('/projects', 'list_projects');
+        await visit('/projects', 'get_project_overview');
         await expect(page.locator('.proj-row').first()).toBeVisible();
         for (const row of [page.locator('.proj-row').first(), page.locator('.proj-row').last()]) {
           await row.getByRole('button', { name: 'Actions' }).click();
@@ -192,7 +192,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     });
     await check('scroll and resize dismiss without leaving stale menus or focus', async () => {
       await page.setViewportSize({ width: 390, height: 600 });
-      await visit('/projects', 'list_projects');
+      await visit('/projects', 'get_project_overview');
       const row = page.locator('.proj-row').last();
       const trigger = row.getByRole('button', { name: 'Actions' });
       const menu = row.getByRole('menu');
@@ -243,7 +243,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     });
     await check('filter and calendar menus keep their callbacks and survive route changes', async () => {
       await page.setViewportSize({ width: 390, height: 600 });
-      await visit('/projects', 'list_projects');
+      await visit('/projects', 'get_project_overview');
       const filter = page.getByRole('button', { name: /^Active projects/ });
       await filter.click();
       let geometry = await visibleItems(page.getByRole('menu'));

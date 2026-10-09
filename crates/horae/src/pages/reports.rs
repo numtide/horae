@@ -131,7 +131,7 @@ fn LegacyReports() -> Element {
     // Dropdown sources. Projects narrow to the chosen client.
     let clients = use_resource(|| async move { server_fns::list_clients(false).await });
     let users = use_resource(|| async move { server_fns::list_users(false).await });
-    let mut tags = use_resource(|| async move { server_fns::list_project_tags().await });
+    let mut tags = use_resource(|| async move { server_fns::list_project_tags(None).await });
     let projects = use_resource(move || {
         let c = opt(client_filter.read().clone());
         async move { server_fns::list_projects(c, false).await }

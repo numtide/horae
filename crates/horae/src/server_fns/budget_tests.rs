@@ -8,6 +8,22 @@ use crate::server_fns::test_seed::{SeedIds, time_entry};
 use horae_core::types::EntryState;
 use uuid::Uuid;
 
+async fn visible_scopes(
+    pool: &PgPool,
+    org_id: Uuid,
+    viewer_id: Uuid,
+    date: chrono::NaiveDate,
+) -> Result<Vec<crate::models::ProjectBudgetProgress>, super::ServerFnError> {
+    super::budgets::progress_for_viewer(pool, org_id, viewer_id, date)
+        .await
+        .map(|projects| {
+            projects
+                .into_iter()
+                .flat_map(|project| project.breakdown)
+                .collect()
+        })
+}
+
 async fn configured(pool: &PgPool) -> SeedIds {
     let ids = seed(pool, OrgRole::Manager).await;
     sqlx::query!(
@@ -53,8 +69,7 @@ async fn overview_budget_progress_is_current_period_scoped_and_authorized(pool: 
     .await
     .unwrap();
     let date = "2026-09-07".parse().unwrap();
-    let mut connection = pool.acquire().await.unwrap();
-    let rows = super::budgets::progress_for_viewer(&mut connection, ids.org_id, ids.user_id, date)
+    let rows = visible_scopes(&pool, ids.org_id, ids.user_id, date)
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -68,7 +83,7 @@ async fn overview_budget_progress_is_current_period_scoped_and_authorized(pool: 
         .unwrap();
     assert_eq!(lifetime[0].spent_minutes, 120);
     assert!(
-        super::budgets::progress_for_viewer(&mut connection, ids.org_id, foreign.user_id, date)
+        visible_scopes(&pool, ids.org_id, foreign.user_id, date)
             .await
             .unwrap()
             .is_empty()
@@ -81,7 +96,7 @@ async fn overview_budget_progress_is_current_period_scoped_and_authorized(pool: 
     .await
     .unwrap();
     assert!(
-        super::budgets::progress_for_viewer(&mut connection, ids.org_id, ids.user_id, date)
+        visible_scopes(&pool, ids.org_id, ids.user_id, date)
             .await
             .unwrap()
             .is_empty()
@@ -102,7 +117,7 @@ async fn overview_budget_progress_is_current_period_scoped_and_authorized(pool: 
     .execute(&pool)
     .await
     .unwrap();
-    let rows = super::budgets::progress_for_viewer(&mut connection, ids.org_id, ids.user_id, date)
+    let rows = visible_scopes(&pool, ids.org_id, ids.user_id, date)
         .await
         .unwrap();
     assert_eq!(rows[0].consumed, 60);
@@ -124,7 +139,7 @@ async fn overview_budget_progress_is_current_period_scoped_and_authorized(pool: 
         .await
         .unwrap();
     assert!(
-        super::budgets::progress_for_viewer(&mut connection, ids.org_id, ids.user_id, date)
+        visible_scopes(&pool, ids.org_id, ids.user_id, date)
             .await
             .unwrap()
             .is_empty()
@@ -187,7 +202,7 @@ async fn overview_budget_progress_batches_projects_without_mixing_scopes(pool: P
     .unwrap();
     let mut connection = pool.acquire().await.unwrap();
     let date = "2026-09-01".parse().unwrap();
-    let rows = super::budgets::progress_for_viewer(&mut connection, ids.org_id, ids.user_id, date)
+    let rows = visible_scopes(&pool, ids.org_id, ids.user_id, date)
         .await
         .unwrap();
     assert_eq!(rows.len(), 2);
@@ -216,7 +231,7 @@ async fn overview_budget_progress_batches_projects_without_mixing_scopes(pool: P
     .execute(&pool)
     .await
     .unwrap();
-    let rows = super::budgets::progress_for_viewer(&mut connection, ids.org_id, ids.user_id, date)
+    let rows = visible_scopes(&pool, ids.org_id, ids.user_id, date)
         .await
         .unwrap();
     let row = rows.iter().find(|row| row.project_id == second).unwrap();
@@ -234,7 +249,7 @@ async fn overview_budget_progress_batches_projects_without_mixing_scopes(pool: P
     .execute(&pool)
     .await
     .unwrap();
-    let rows = super::budgets::progress_for_viewer(&mut connection, ids.org_id, ids.user_id, date)
+    let rows = visible_scopes(&pool, ids.org_id, ids.user_id, date)
         .await
         .unwrap();
     let row = rows.iter().find(|row| row.project_id == second).unwrap();
@@ -250,7 +265,7 @@ async fn overview_budget_progress_batches_projects_without_mixing_scopes(pool: P
     .execute(&pool)
     .await
     .unwrap();
-    let rows = super::budgets::progress_for_viewer(&mut connection, ids.org_id, ids.user_id, date)
+    let rows = visible_scopes(&pool, ids.org_id, ids.user_id, date)
         .await
         .unwrap();
     let row = rows.iter().find(|row| row.project_id == second).unwrap();
@@ -262,7 +277,7 @@ async fn overview_budget_progress_batches_projects_without_mixing_scopes(pool: P
         .execute(&pool)
         .await
         .unwrap();
-    let rows = super::budgets::progress_for_viewer(&mut connection, ids.org_id, ids.user_id, date)
+    let rows = visible_scopes(&pool, ids.org_id, ids.user_id, date)
         .await
         .unwrap();
     assert_eq!(
@@ -314,8 +329,8 @@ async fn overview_budget_progress_includes_people_without_an_allowance(pool: PgP
     .unwrap();
     sqlx::query!("INSERT INTO project_member_budgets (id,org_id,project_id,user_id,budget_minutes) VALUES ($1,$2,$3,$4,75)",
         Uuid::now_v7(), ids.org_id, ids.project_id, other).execute(&pool).await.unwrap();
-    let rows = super::budgets::progress_for_viewer(
-        &mut pool.acquire().await.unwrap(),
+    let rows = visible_scopes(
+        &pool,
         ids.org_id,
         ids.user_id,
         "2026-09-01".parse().unwrap(),

@@ -39,7 +39,7 @@ assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
     for (const scenario of [
-      { path: '/projects', resource: 'list_projects', trigger: 'Export', title: 'Export projects' },
+      { path: '/projects', resource: 'get_project_overview', trigger: 'Export', title: 'Export projects' },
       { path: '/timesheet/week/2027-10-04', resource: 'load_timesheet_page', trigger: 'Add entry', title: /New time entry/ },
       { path: '/timesheet/week/2027-10-04', resource: 'load_timesheet_page', trigger: '＋ Add row', title: 'Add a row' },
     ]) {

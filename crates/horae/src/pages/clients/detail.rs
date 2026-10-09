@@ -104,7 +104,7 @@ fn ClientProjects(client_id: Uuid) -> Element {
     let mut projects = use_resource(move || async move {
         server_fns::list_projects(Some(client_id.to_string()), true).await
     });
-    let mut spend = use_resource(|| async { server_fns::list_project_spend().await });
+    let mut spend = use_resource(|| async { server_fns::list_project_spend(None).await });
     let ready = projects.state()() == UseResourceState::Ready;
     let spend_ready = spend.state()() == UseResourceState::Ready;
     let data = projects.read();
@@ -154,7 +154,7 @@ fn ClientProjects(client_id: Uuid) -> Element {
                                     {
                                         let total = totals.and_then(|rows| rows.iter().find(|row| row.project_id == project.id));
                                         let hours = total.map(|row| format_hhmm(row.spent_minutes)).unwrap_or_else(|| "—".into());
-                                        let amount = total.map(|row| format_cents(row.spent_cents, project.currency.trim())).unwrap_or_else(|| "—".into());
+                                        let amount = total.and_then(|row| row.spent_cents).map(|cents| format_cents(cents, project.currency.trim())).unwrap_or_else(|| "—".into());
                                         rsx! { tr { key: "{project.id}",
                                             td {
                                                 Link { to: Route::ProjectDetail { id: project.id }, class: "font-semibold text-strong wrap-anywhere",

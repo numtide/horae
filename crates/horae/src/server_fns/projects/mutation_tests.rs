@@ -182,7 +182,7 @@ mod project {
             assert_eq!(spend.len(), 1);
             assert_eq!(
                 (spend[0].spent_minutes, spend[0].spent_cents),
-                (60, expected_spend)
+                (60, Some(expected_spend))
             );
         }
     }
