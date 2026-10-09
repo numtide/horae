@@ -2415,6 +2415,36 @@ without weakening dependencies/checks, then publish a verified correction to
 the existing delivery. Downstream local preparations require the corrected
 base before publication. #212 and root master remain untouched.
 
+Full #228 browser session73216 passed at e6e258be: all21 configured suites,
+including the corrected permission matrix, keyboard/transport/edit flows and
+client layouts. Exact derivation5flkx9pdbiffnflmfda5vs248dzwgd8q is accepted
+locally. Full native flake check11583 is running on the same untouched tree;
+Clippy and SQLx builds completed and tests850r1mdx are now running. This new
+tree's derivations differ from historical9ea results; do not reuse old counts
+as current execution evidence. Remote228 remains9ea and draft.
+
+The isolated native TCG console probe25510 did not reproduce a lost console:
+hvc0 was triggered at129s, queued at159s, still untagged at205s, processed at338s,
+and the backdoor connected. The probe then failed because its short diagnostic
+service was inactive after successful exit; that harness error is now corrected
+with Type=oneshot/RemainAfterExit. No ARM result or successful full probe is
+claimed. Importantly, the log exposes repeated 'Udev rules need reloading'
+while the unchanged device event waits in the queue.
+
+Pinned systemd260.2 source gives a concrete candidate: udev_rules_parse_file
+keys stats by ConfFile.original_path, while config_get_stats_by_path uses
+conf_files_list_strv's ConfFile.result (resolved parent directory). The guest's
+/etc/udev/rules.d points into the Nix store, so these keys differ. This may
+explain repeated reloads; the remote ARM causal link remains unproven.
+Prepared a one-line experimental key correction only in
+.scratch/console-coldplug-repro.nix, not in any PR or host configuration.
+Control20280 and patched83419 now run the same TCG probe, preserving console
+device dependencies and checking for repeated reloads of unchanged rules.
+The patched run builds systemd dd727vf38sxq2lfqsjnw38xad3zpda30 and VM
+qz875f9f20qg5h2bz5sxg4yvj7hg9dcl. Next: collect both controls and11583;
+if the candidate is confirmed, validate its scope before applying it to the
+existing CI delivery. No new PR, merge, host service change or data change.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
