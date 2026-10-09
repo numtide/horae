@@ -5213,6 +5213,25 @@ collect602/GitHub and2612, then publish the existing #264 as the second ordered
 delivery on #263 (or its actual merge), conserving content.19 functional PRs
 remain; #212 is untouched. No new PR, policy activation or real-data mutation.
 
+### Current delivery gates remain live; #264 Clippy passed
+
+Revalidated Nix602 on224b8204:10 attributes succeeded,6 building,6 local-only
+skips and no failures. Both architectures passed package, Clippy, SQLx and
+formatting; x86 deployment/OIDC also passed. Native tests, browser checks and
+ARM deployment/OIDC remain active. GitHub37983147107 still runs its Flake Check.
+Watch84250 monitors Nix602 and watch21542 monitors GitHub, both at45-second
+intervals. Observation is a verified wait, not an infrastructure blocker.
+
+#264 local2612 passed formatting601 unchanged and strict core/server Clippy
+(server2m44s); live SQLx is running, followed by native tests. Exact derivations:
+Clippyx55wc8f34l4rjma4q7y7120d74hnypib,
+SQLxd4hc8nbba2swjvwq823zvjmr3l7h7w3h,
+testsz67z3fbf4xa8frwyhg7ii1ff91qd1cz3. Worktree remains clean and frozen.
+Prepared.scratch/pr264-current-delivery.md locally, explicitly marking pending
+validation and unpublished status. Disk21 GiB during the single local build;
+no additional build or cleanup started. Next: collect these same handles and
+publish #264 only after its local gate completes.19 functional PRs remain.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
