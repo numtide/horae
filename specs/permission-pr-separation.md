@@ -5609,6 +5609,13 @@ then collect remote gates and queue264 only when all acceptance requirements
 pass. After264 merges and605 terminates, reconcile265's ancestry with complete
 tree conservation before its master checks. Eighteen functional PRs remain.
 
+Local #267 native gate is now running as session67323 onf11bb3b3, after17446
+terminated successfully. Formatting passed609 files unchanged. Freeze that
+worktree until the gate terminates. Disk observation before launch:20GiB free.
+Prepared `.scratch/pr266-current-delivery.md` for the next existing-PR delivery;
+it explicitly distinguishes local acceptance from unpublished/remote evidence
+and must have its ancestry refreshed before publication. No remote writes.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
