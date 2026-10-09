@@ -5940,6 +5940,55 @@ no failures. Next prioritize this single264 retry and protected queue after
 success; collect610/51569, then publish prepared268 when a remote slot frees.
 No merge, bypass, additional PR, real-data mutation or #212 change.
 
+### CSV delivery merged; report-access delivery reconciled
+
+Required264 retry37990586429 passed (Flake Check54s; watch30125 exit0).
+Fresh head9c44db39, all checks green, no reviews/unresolved threads. Marked
+ready and queued with exact-head protection; no admin bypass. Protected
+merge-group37997559146 passed (Flake58s, Format45s; watch48616 exit0).
+GitHub confirms264 MERGED at2026-10-09T22:09:50Z, actual commit
+7f9d42c8889e393c8207bcb9f56c000ee8101b13. Fetched master without pruning;
+entire treef678797f matches accepted9c44db39.17 functional deliveries remain.
+
+Backed up26569cbd68c at refs/backup/pr265-before-csv-merge-20261009. Rebased
+its one owned commit from actualoldparentf331ba60 onto actual264 merge7f9d42c8.
+Newhead6a4b599ee171155072439e1f4bd77d2894f6ea06 has equal range-diff and
+identical whole treeab956f714ba93cf7d9c4dcc08164263d2632c629, accepted by605.
+GitHub automatically retargeted265 to master. Its old-head Nix611 comparison
+failed terminally with null tree; confirmed no live check before publishing.
+Exact69cbd68c lease push and updated265 description completed (56391 exit0).
+Required GitHub37997847638 is now live on6a4b599e. No merge claim for265.
+
+### Project reads prepared locally without another build
+
+Existing270 remains remote479cfe3f/draft; old Nix430 is terminal failed.
+Backed up at refs/backup/pr270-before-current-editor-stack-20261009, then
+rebased all six owned commits fromf9b02578 onto local2697e230099. Conflicts
+were fixture registries, the navigation-model re-export, modal API context
+and the inherited hydration guard. Preserved all29 browser suites and added
+project-read-permissions, kept all HTTP checks once, current Timesheet APIs,
+the new detail-contract assertions and the hydration-response/status check.
+Reviewed the reused modal conflict resolution; it retains both parent changes.
+
+Original unused-manager import removal no longer applies to the composed
+editor DTO: ProjectEditData and ProjectManagerSelection reference that module.
+Scoped follow-upcf9c75f0 restores its fixture declaration/re-export only, with
+no production change or removed assertion. Final localhead
+cf9c75f0715306712bdbd138addeb158eea87104/tree
+319cf9203f7e564623918096058cd92606f74f3c.85/97 original owned paths remain
+byte-identical, including all49 added SQLx descriptors (two now inherited)
+and six original descriptor deletions. The twelve differing paths carry
+reviewed inherited changes/registry adaptations. Range-diff records these
+contexts and the explicit fixture compatibility commit. Node/shell syntax,
+whitespace and format (40389 exit0,636 files unchanged) pass. No full current-
+tree runtime or new adversarial acceptance is claimed; no270 build/push.
+
+Local26951569 passed Clippy and server/WASM package (249.54s) and now runs
+SQLx; worktree remains frozen. Nix610/watch22380 is14 passed/2 building.
+Next prioritize265 required/master acceptance and protected queue; collect610
+and51569, then publish prepared268 when a remote slot frees. No new PR,
+additional heavy build, real-data mutation, policy activation or #212 change.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
