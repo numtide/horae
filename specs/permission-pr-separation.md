@@ -2879,6 +2879,35 @@ and GitHub37904465910. These are the two active remote deliveries; no local
 test is live. Next: monitor541/543 and current GitHub checks, then deliver #241
 through the protected queue before reconciling #233 ancestry onto its actual merge.
 
+Prepared #236 locally on #233 fe88a965: head
+a437337b9d36fcda30909468efd6ced81ff03e9b, tree
+ada47e059518498f71626ee22ee3c72273858e59. Backup
+refs/backup/pr236-before-current-delivery-20261009 preserves remote29137cc3;
+the published draft and its integration base remain unchanged. Owned scope is
+15 files,1,617 additions,111 deletions. Seven production/test files are identical
+to the previous head; authorization_tests.rs only inherits base changes and its
+owned patch remains e3208414b82d5acf3b1e6cc1b792c4d0de173c18. The report-update
+SQLx descriptor is inherited, not deleted from the combined tree.
+
+Completed the bounded T077–T082 review against permission-state.md: all six
+session-derived importer commands use current tenant-bound Admin authority;
+queue mutations and returned projections share that transaction. CSV buffering
+precedes locks, generation/idempotency/upload-retention semantics are preserved,
+and actorless queue adapters are test-only. Downloads authorize preparation,
+each bounded 16-fragment page and the inline/empty tail, release connections
+before client-paced output, preserve the captured snapshot, and abort denied
+bodies rather than reporting successful EOF. Read the production call graph,
+queue SQL, nine command tests, stream regressions and added HTTP cases. No
+critical/high finding in this boundary. Already-buffered bytes may drain;
+worker execution authority and complete OP28/T042 remain separate work.
+
+Current native tests/SQLx/treefmt process67401 remains live on a437337b; formatting
+processed520 files with zero changes. Do not claim complete acceptance until its
+terminal result. Remote541 (#241) and543 (#233) remain live;543's API contradicts
+the stale red GitHub check and has no failed attribute. Keep the two-delivery
+limit and do not publish #236 while those deliveries occupy both slots.
+Next: collect67401 and541/543; queue #241 only after its exact-tree remote gates.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
