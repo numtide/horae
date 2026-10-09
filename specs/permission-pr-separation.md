@@ -3919,6 +3919,37 @@ Do not edit this worktree while the build runs. Remote #250 stays9a014c24/draft;
 no third remote delivery. Next: collect those results and final #244/#245 gates,
 then publish #250 only when a remote slot is free and its acceptance is ready.
 
+Collected the completed local #250 validation at a23e765f/tree a6b78309:
+189 core, 1,123 server and 201 auxiliary tests passed, zero failures and
+11 existing ignored cases. The server suite took196.48s. Full SQLx preparation
+and formatting (564 unchanged files) passed. Tests output22sjn3lkxifn4hj0wbl0bvn04ix2phdq,
+SQLx w8jb8ax0frs4411007s5qlyyc4mq89zv, formatter sf60c86idv5452glv096di1988hwp8h9.
+This is native evidence only; #250 remains locally prepared and unpublished
+while the two remote delivery slots are occupied by #244 and #245.
+
+Completed the scoped #253 source review against people-directory.md T148–T150:
+108-line transactional reader, 56-line DTOs, 34-line session wrapper,
+seven database cases (572 lines) and registered-session exercise (152 lines).
+Verified current all/managed-person grants without role or project fallback,
+organization-first/active-actor SHARE locks, strict state decoding, minimal
+identity fields, activity/scope before 50+1 pagination, name/UUID cursor bounds,
+revocation after waits, cancellation and sanitized failures. No critical/high
+finding in this reader boundary. This does not certify directory UI, lifecycle
+writes, activation or full Harvest parity.
+
+Backed up published970c4f1b as refs/backup/pr253-before-current-delivery-20261009
+and rebased its two commits onto reviewed #245 head9b831d08 with updateRefs
+disabled. Prepared head1d51f89b3d424bb6aaeaf4c5453f0ca46770c282,
+tree94b0b9c8369b049b32bb9d7a826561bb7c8cb7f2. The four complete new
+DTO/reader/database/HTTP files remain byte-identical. Resolved HTTP registration
+without duplicating project-manager checks and retained the already-merged
+legacy UserListItem projection; the new list_people wrapper is unchanged.
+Owned diff remains23files/1,177 additions. No feature, query, migration or CSS
+change. Local Nix tests/SQLx/treefmt started on this frozen head; no pass yet.
+Next: collect #244 Nix566 and GitHub37929467171, and #245 Nix568. Request
+protected #244 merge only after acceptance, then reconcile #245 with its actual
+squash before delivery. Keep #250/#253 unpublished until a remote slot is free.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
