@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET search_path=project_export_test,public",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "7a40bfe0586ecd51eeb1e8372b8fbfdc97933624df15f58a1f1238d94e0779ac"
+}

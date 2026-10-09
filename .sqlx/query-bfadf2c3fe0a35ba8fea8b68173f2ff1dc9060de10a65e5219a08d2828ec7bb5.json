@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents) VALUES ($1,$2,$3,'EXPORT-PRIVATE','2026-09-07','2026-10-07','EUR',1234)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bfadf2c3fe0a35ba8fea8b68173f2ff1dc9060de10a65e5219a08d2828ec7bb5"
+}
