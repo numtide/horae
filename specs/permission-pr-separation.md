@@ -4731,6 +4731,13 @@ tree conservation versus21c0b0d4, and the unchanged46-file/2822-addition owned
 patch. Publishing5205f8ce with an exact lease against6391cdbe; it stays draft
 on #257's branch, with fresh remote acceptance required. #259 remains local.
 
+#258 push25999 completed successfully. Remote read-back confirms5205f8ce,
+draft and the correct #257 base; Nixbot591 is evaluating this delivery.
+#257's fresh review-thread audit is empty, with the expected a6ad1800/master
+head and base. Its only remaining acceptance is required GitHub37960529444;
+the accepted Nixbot589 tree is unchanged. Continue with #257's protected merge
+once those checks pass, and preserve #258's live build during that transition.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
