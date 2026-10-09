@@ -5669,6 +5669,32 @@ two-delivery cap; prioritize264's protected queue as soon as its full gates
 pass. Keep265's head stable until605 terminates and preserve complete trees
 when reconciling ancestry after parent merges. No new PRs or #212 changes.
 
+### #265 both-Linux acceptance and #266 publication
+
+Nix605 succeeded at2026-10-09 21:22:19 UTC on exact69cbd68c/treeab956f71:
+all16 applicable attributes passed, six local-only skipped, zero failures.
+Watcher26435 exited0. This includes both browser architectures, deployment,
+OIDC, native tests, Clippy, SQLx and package/format checks. #265 still awaits
+parent264 integration, conserved-tree ancestry reconciliation and master/
+protected-queue gates; it is not merged.
+
+With one remote slot free, retargeted existing #266 tofeat/time-report-access.
+Nix608 immediately failed the obsolete76dcd48b ancestry with null tree; no live
+build was replaced. Published locally validated1fa434d4 with exact76dcd48b
+lease and the current prepared description; push/body session2799 exited0.
+Fresh read-back confirms1fa434d433d1a9f95f22f05acb2d4135ef3708dd, intended
+parent branch and draft state. Nix609 is evaluating its exact treea00a6968.
+No new PR or scope change. Active remote deliveries are now264607 and266609.
+Do not replace266 while609 is live, even when265's ancestry is reconciled.
+Changes-only watcher5166 observes609 every45 seconds. Watch26435 is terminal
+success; no need to poll it again. No local heavy build remains active.
+
+Next: monitor264607/required37990586429 and266609; queue264 on full acceptance,
+then rebase only265's owned f331ba60..69cbd68c patch onto the actual264 merge,
+proving complete treeab956f71 conservation before exact-lease publication.
+#267 full local acceptance remains ready for the next remote slot. Eighteen
+functional PRs remain; #212 and the separate drafts are unchanged.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
