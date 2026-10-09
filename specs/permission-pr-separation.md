@@ -3289,6 +3289,24 @@ No local build or Nixbot build remains live at this point. #226's historical
 ARM transport failure is still unresolved and must not be declared fixed by
 these independent export merges. #212 remains excluded from delivery.
 
+Verified #249 MERGED at2026-10-09T09:52:38Z as
+6d19a88f8ff36f496679b6ef526f96fcca6b15e3, parent34ef9f81. Protected queue
+entry MQE_lQDOTRPZ888AAAABHAIY1M4AA_LZzgMuCnQ used merge-group37913931083;
+Flake Check57s and Format45s passed, watcher21201 exited0. Actual merged tree
+1826622320668adf47cdf6dc3e370c75f748f4bb equals the reviewed/native/Nixbot551
+tree. Remote master is6d19a88f. CSV worktree is clean at delivered92e56565;
+both backups and source history remain preserved. #212 is still OPEN/draft
+atdb3935db364f2a8aa193f0e938ce40ecc01a2f92; root checkout and its untracked
+.playwright-mcp directory remain untouched.
+
+No local build, remote delivery or watcher remains running. Next focus is the
+held #226 ARM CSV transport failure524, because the remaining permission
+deliveries depend on it. Its live PR remains OPEN/draft at1cbde180/master.
+Investigate the unresolved cause using new diagnostic evidence or a controlled
+reproduction; do not repeat the exhausted native loops, declare it repaired
+from unrelated export CI, weaken its status assertions, or blindly rerun524.
+Continue to preserve #212 and use existing isolated branches/PRs only.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -3423,11 +3441,12 @@ native40270 passed1,336 tests, SQLx and format. Its bounded T104–T109 review
 found no critical/high issue; Nixbot550 passed. Published ancestry-only04cb9137
 on actualmaster81194134, with identical535ae5a7 tree. GitHub37912724705 and
 protected merge-group37912987938 passed; #247 merged as34ef9f81/tree535ae5a7.
-#249 is published as673d95a2/tree18266223; native49164 passed1,352 tests, SQLx
-and format, and bounded review found no critical/high issue. Nixbot551 is live.
-#249551 is the sole active remote delivery; watcher68585 is live. It now targets
-master after #247 merged; reconcile ancestry only after551 is terminal.
-No local build is running.
+#249 native49164 passed1,352 tests, SQLx and format; bounded review found no
+critical/high issue. Nixbot551 passed. Published ancestry-only92e56565 on
+actualmaster34ef9f81 with identical18266223 tree; source37913664711 and protected
+merge-group37913931083 passed. #249 merged as6d19a88f/tree18266223.
+No local build, remote delivery or watcher remains live. Next resolve the held
+#226 ARM transport case before advancing dependent permission deliveries.
 #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
