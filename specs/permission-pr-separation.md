@@ -2645,6 +2645,23 @@ are the two active remote deliveries. #235 remains at local7f89ce45 and
 remotee1e27f38; its CI correction is still to prepare. Next: finish535 before
 publishing #232's ancestry-only update, and follow #238's existing new build.
 
+Prepared #235 locally on #238451d5b70: new head
+575b7b05c9b28a5cab354042bfbc14663e5d0d11, tree
+d9ae89ad31201375f79d1071534058e33b17ad5d. Backup
+refs/backup/pr235-before-ci-correction-20261009 preserves7f89ce45. Both owned
+commits are identical in range-diff; only the five inherited browser/CI files
+change the full tree. Format passed515 files, zero changes; whitespace passed.
+Validation27282 is live: tests4cpl79z5, SQLx8pzwbyiq, treefmt qgryw3al, rooted
+under.scratch/pr235-ci-correction-checks. No real Harvest connection or other
+production data is touched, and no third remote delivery was started.
+
+Revalidated Nixbot535 on #232 ce812ded/tree5d7aa453 and537 on #238
+c5402afa/treeb41bf687: both live without failed attributes. Watchers68222
+and52355 respectively poll those existing builds every55 seconds, emitting
+only state changes. No local test or remote build was restarted. Next: collect
+27282 and these two builds, publish #23231f7061c only after535 completes,
+then use the protected queue and verify the actual integrated tree.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2760,9 +2777,9 @@ publish it only after535 finishes. #238 is published atc5402afa/treeb41bf687,
 stacked on the currently published #232, with1,277 native tests, SQLx and
 format accepted. Nixbot537 is evaluating. Local451d5b70 follows31f7061c
 with the identical whole tree. These are the two active remote deliveries.
-#235 is locally reviewed and stacked on #238 at7f89ce45, with1,286 combined
-native tests, SQLx and format passing; it remains unpublished. #235
-still uses the earlier a34a1348 base. Reconcile downstream ancestry
+#235 is locally prepared on #238451d5b70 at575b7b05/treed9ae89ad;
+fresh native validation27282 is live and it remains unpublished. Its previous
+7f89ce45 tree passed1,286 native tests, SQLx and format. Reconcile downstream ancestry
 with the accepted integrated base before publishing; do not attribute their
 historical tests to a future tree. #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
