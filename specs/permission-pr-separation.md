@@ -2847,6 +2847,26 @@ build every55s and emits only changed summaries. Local #23319877 remains
 live after format517 files/zero changes, SQLx and189 core tests passed; server
 tests are compiling. No second remote delivery was started prematurely.
 
+Nixbot540 completed successfully on #241's previousb4edd434/tree51da9d21;
+watcher23429 is terminal-success. Published the locally accepted combined
+325e4fc5/treecca1729a with an exactb4edd434 lease; publication55863 succeeded.
+The PR description distinguishes historical540 acceptance from the required
+fresh combined-tree CI. #241 remains draft; no merge is claimed.
+
+#233 local19877 completed successfully onfe88a965/treeb5f3f055: 189 core,923
+server,183 auxiliary tests (1,295 passed,zero failures,11 existing manual
+cases ignored), server122.61s. All four invoice-authority regressions passed.
+SQLx passed47.35s; format517 files/zero changes. Rooted outputs: testsxn2y76yb,
+SQLxr6avbkjr,treefmtw1vkl2hs. Publication47004 is in progress with exact6b12f302
+lease, followed by retargeting to published #241325e4fc5. Preserve draft and
+require fresh both-Linux acceptance. No local test remains live.
+
+Read-only reinspection of the #226 transport boundary found no new failed
+receipt or proven repair. Existing CSV Content-Length framing and the diagnostic
+fixture remain unchanged; that historical ARM transport failure stays held.
+Next: collect47004 and new #241/#233 CI identifiers; use protected queues only
+after exact-tree acceptance and actual-master ancestry reconciliation.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
