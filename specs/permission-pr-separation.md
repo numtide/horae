@@ -5272,6 +5272,46 @@ deliveries are only #263224b8204 and #26483f1fddc. Next: collect these exact
 gates, and use independent time to review existing #265 without publishing a
 third active delivery. Preserve #212 and the19 remaining functional PRs.
 
+### #263 merged; #265 conserved on the current CSV prerequisite
+
+Required GitHub37983147107 completed successfully at2026-10-09 20:19:09 UTC
+on224b8204. Fresh review threads were empty and the PR was clean. Published
+the evidence, marked the existing PR ready and submitted it to the protected
+queue without bypass. Merge-group37986418517 passed: Flake Check58s,
+Format47s; watcher18996 exited0. #263 merged at20:22:41 UTC as
+4c824d8bf89e587368cd6e825ffd8784a3ff8a08, parent2216446f. Fetched master and
+verified its entire tree9625fd9df43cf0d0577794f6c672b6f947748fd1 equals the
+tested source tree.18 functional PRs remain. Root checkout and #212 unchanged.
+
+#264 remains83f1fddc, Nix604 pending evaluation, queue position2 behind
+numtide/go2nix-nix-plugin build1. This is an observed queue wait, not a code
+failure or permission blocker. Do not replace this head until604 is terminal.
+After acceptance, reconcile its ancestry onto actual #263 merge, preserving
+treef2b56548, then require master and protected merge-group checks.
+
+Reviewed #265's complete owned diff and its current authorization/streaming
+call paths against the report contract. Existing tests cover session-derived
+identity, requester mismatch, unsupported/missing permission state, inactive
+actors, both mode transitions for actual CSV/XLSX routes, compatible omitted
+bindings and malformed/repeated modes. No new critical/high finding in this
+delivery. The Rust skills guided reuse of existing authority gates and checking
+error paths; no new abstraction, dependency, UI or policy activation was added.
+
+Old #265a31f8e59 has terminal Nix452 failures, not a live build. Clean worktree
+backed up at refs/backup/pr265-before-current-csv-stack-20261009. Rebased only
+its one owned commit from old26474b98399 onto current26483f1fddc, producing
+be7b7749aeb6500cbdea8dc3c76aded53bfaaa2d, tree
+c8c47d5d7bb9e45459780fe4bba42ed506531d0c. Sole conflict was HTTP fixture
+registration: retained both groups::check and export_filters::check with all
+new access/mode assertions. Range-diff differs only by that inherited context;
+owned scope remains9 files,256 additions/8 deletions. Runtime time authority,
+streaming and parser test files are byte-identical to the original head.
+No SQLx query changes in the owned patch. Local full native gate requested,
+one job/eight cores, disposable Nix PostgreSQL; disk32 GiB available before
+starting. Do not edit this worktree while validation runs. #265 is not published
+or claimed accepted yet. Next: collect this local gate and current #264Nix604;
+publish at most two simultaneous remote deliveries with current evidence.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
