@@ -3268,6 +3268,18 @@ collect551, then reconcile #249 from5950fdb1 onto actualmaster34ef9f81 with
 identical tree verification and exact lease; run its source/queue gates before
 merge. No local build, new PR, production-data change or feature was introduced.
 
+Nixbot551 completed successfully at09:47 UTC on #249673d95a2/tree18266223;
+watcher68585 exited0. Both-Linux browser, deployment/OIDC, tests, cache and lint
+gates are accepted. Verified remote master34ef9f81 and the clean CSV worktree,
+preserved673d95a2 under refs/backup/pr249-before-materialized-merge-20261009,
+then reconciled both owned commits onto actualmaster34ef9f81 with updateRefs
+disabled. Local head92e56565f5e6d1ce01d2ca6af8e4326f4514b357 retains exact tree
+1826622320668adf47cdf6dc3e370c75f748f4bb; both commits are identical in range-diff
+and git diff against the accepted head is empty. Publication/body process57776
+is live with exact673d95a2 lease. Next: collect57776 and current-head GitHub
+checks, verify Nixbot exact-tree reuse, then submit #249 to the protected queue.
+No source change, new PR, or extra validation build was requested.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
