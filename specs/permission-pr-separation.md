@@ -5843,6 +5843,30 @@ without exceeding two active remote deliveries. Collect268 native results and
 its isolated focused screenshots before another heavy local build;269's full
 gate follows. No new PR, policy activation, real-data mutation or #212 change.
 
+### Grouped exports accepted; filtered downloads published
+
+Nix609 finished succeeded at2026-10-09T21:49:22.258939Z on exact266
+1fa434d433d1a9f95f22f05acb2d4135ef3708dd/treea00a6968: all16 applicable
+attributes passed across both Linux architectures, six local-only skipped.
+Watch5166 exited0. Updated the existing266 description with this acceptance;
+master-required and protected merge-group gates remain separate.
+
+With the second remote slot free, revalidated267's clean localf11bb3b3,
+remote33390c07 and parent2661fa434d4, then published with an exact old-head
+lease. Push/body update56858 exited0. Existing267 remains draft, based on
+feat/grouped-time-exports; no new PR. Nix610 is evaluating the exact published
+headf11bb3b3828656867ac73e62fc9b09a99c190184 and
+tree944c37bfb2e5d9c3745a20ec950f3472dd80b4a0. Its description now records
+the conserved patch, completed local gate and remaining remote/master gates.
+
+The two remote deliveries are264's required GitHub37990586429 and267's
+Nix610. Local26886184 passed189 core tests and is compiling the server test
+binary after successful browser/SQLx/Clippy; full native gate remains live.
+Next: collect these exact executions, prioritize264's queue/actual merge,
+then reconcile265 onto the actual merged parent. Finish268 native and visual
+evidence before starting269's local gate. No additional remote publication,
+real data changes, policy activation or #212 modification.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
