@@ -5544,6 +5544,35 @@ Next: collect current604/605/17446; publish prepared264 immediately after604
 terminal confirmation. This iteration is a verified wait plus publication
 preparation;18 functional PRs remain, no new PRs or #212 changes.
 
+### #264 corrected head published after old build terminated
+
+Nix604 terminated failed at2026-10-09 20:57:32 UTC on83f1fddc:14 attributes
+passed, six local-only skipped, only x86/ARM browser failures. Watch65000 exited1;
+both failures are the already reproduced and locally corrected interceptor race.
+Fresh read-back confirmed unchanged remote83, master base, draft and no reviews.
+Clean prepared9c44db39 still equals browser-tested f331ba60's entire tree.
+
+Published existing2649c44db39159d28619aece101f63464b3ea819ff9 with exact83 lease;
+session35290 exited0. Published.scratch/pr264-corrected-delivery.md with exact
+native/browser evidence and fresh-gate requirements. New master workflow
+37990586429 is live, watch23637 every45s. Nix607 is evaluating corrected tree,
+watch73128 every45s. Nix606 is a terminal old83 ancestry-conflict result with
+null tree, not a corrected-code test failure. Never use it as607's outcome.
+
+#265 remains69cbd68c, Nix605/watch26435 live (five succeeded, eight building,
+three pending, six local-only skipped, no failures). Updated its body to explain
+the parent's current9c44 base and temporary old ancestry. Do not force-push265
+during605; after terminal acceptance reconcile its owned f331..69 patch with
+full-tree conservation onto the actual parent/merge. Its scope is still nine
+files, not the temporary GitHub ancestor comparison. No new branch or PR.
+
+#266 local17446 passed live SQLx (server1m59s), now builds server tests after
+189 core tests passed. Tests5jpsn0x7v9gc0a04rbks2f4vxbmfszh8. Worktree1fa434d4
+unchanged/frozen. Next: collect264607/37990586429 and265605, queue264 only after
+all its fresh gates pass, and finish266 native validation. Keep max two remote
+deliveries,18 functional PRs remaining, #212 unchanged. This iteration made
+publication progress; current checks are live, not an external blocker.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
