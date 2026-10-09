@@ -3201,6 +3201,20 @@ remains building without failed attributes; x86 tests have now passed. Next:
 collect49164 and publish reviewed #249 only after native acceptance; collect550
 before reconciling/pushing #247 onto actualmaster81194134. No new PRs.
 
+Local #24949164 finished successfully on673d95a2/tree18266223:189 core,980
+server and183 auxiliary tests,1,352 passed, zero failures,11 existing manual
+cases ignored. Server152.09s; SQLx57.04s and formatting530 files unchanged
+also passed. Read final logs for all15 new authorization-module regressions,
+inactive-project-actor denial, preserved streaming tests and the real-cookie
+matrix. Roots: fswlr0mi7dv8d42sn5dh9vgcy6i34mq7-horae-tests-0.1.0,
+a9zjvnayjs1rvhyqbif8xq0d2g6ha68k-horae-sqlx-prepare-0.1.0 and
+3n06hw33sn26kbfap1nyqg48w244z1j0-treefmt-check, under the existing worktree's
+.scratch/pr249-current-delivery-checks links. Worktree clean; original owned
+patch and backup preserved. Current remote249 is unchangedc990d11e, draft,
+base fix/materialized-export-authority, no review threads. Update its body
+and publish with that exact lease as the second remote delivery. #247550
+remains live; watcher97723 prints changes only. No local builds remain live.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
