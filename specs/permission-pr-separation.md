@@ -2802,6 +2802,23 @@ OPEN/draft atdb3935db and the root worktree was not updated.
 Next: retain #241's remote540 while its combined-tree native56742 runs;
 reconcile ancestry onto actual82e85160 without changing the tested tree.
 
+#241 local ancestry now points at actual82e85160: head
+325e4fc58b2b1ca4987633fb591d2ed6049cae8a, unchanged combined treecca1729a.
+Both owned commits remain identical; backup
+refs/backup/pr241-before-connection-merge-20261009 retainsf6e7383c.
+Nix56742 builds immutable source for the same tree, so no restart is needed.
+
+Prepared the existing #233 locally, not published: head
+fe88a965701699454dea936f41dbb3006c6503f8,treeb5f3f055a38790ba9b5fac4f9b72f173c1202e06,
+based on prepared #241325e4fc5. Backup
+refs/backup/pr233-before-current-delivery-20261009 preserves remote6b12f302.
+The source commit is identical in range-diff; four SQLx descriptors now come
+from the base. Owned diff is9 files,749 additions,8 deletions. Functional
+prerequisites #228/#232 are merged; #241 is only delivery ordering/composition.
+Remote #233 stays draft on its existing integration base. No current combined
+review, tests or remote acceptance is claimed yet. Next: finish #241's active
+validation and review #233's T192–T194 boundary before its own fresh tests.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
