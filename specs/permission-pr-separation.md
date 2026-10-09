@@ -2776,6 +2776,24 @@ GitHub37902523144 and Nixbot540 running; Format already passed.
 Next: confirm #235's inherited Nixbot acceptance and fresh GitHub checks, then
 request protected queue delivery without bypass. No merge is claimed yet.
 
+Nixbot reused539 successfully for #2357726c85f's identical tree. Fresh GitHub
+37902677508 passed (Format34s,Flake Check53s); no review threads or changed
+master/head were found. Marked ready and requested protected delivery.
+Queue entry MQE_lQDOTRPZ888AAAABG9SndM4AA_LZzgMtr6U is first; merge-group
+37902926064 runs on82e8516007966414040d4da271a7d6ceac583909. Not merged yet.
+
+Prepared #241's composition with the accepted #235 locally, without interrupting
+remote540. Local head f6e7383c74c367085ac66c8c48bf081cddcffabd has tree
+cca1729adea923691b9f07a56bb4932e0a1fb839. Backup
+refs/backup/pr241-before-connection-integration-20261009 preservesb4edd434.
+Both owned commits are identical in range-diff and all four owned Rust files
+remain byte-identical. Fresh native combined-tree tests/SQLx/treefmt run in
+56742, rooted under .scratch/pr241-connection-integration-checks. Published
+head staysb4edd434; Nixbot540 continues normally. The additional base is only
+delivery composition, not a new functional dependency. Next: verify #235's
+actual merge tree, reconcile #241 ancestry locally, collect56742/540 before
+publishing its combined tree. Do not use old-tree success for the new tree.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
