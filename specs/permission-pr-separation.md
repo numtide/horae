@@ -2352,6 +2352,23 @@ yet. Next: collect56556; if it reproduces the observed loading-state failure,
 verify the synchronized variant, apply the minimal test fix to existing #228,
 and run current-tree gates before publication/merge.
 
+#228528 also failed ARM OIDC before any authentication assertion: the existing
+900-second console-readiness wait expired at900.63s. Unlike earlier missing
+diagnostics, this log identifies backdoor.service as inactive/dead with a
+pending Requires/After dependency on dev-hvc0.device, still activating at870s.
+dev-ttyAMA0.device is active/plugged. udev info finds /dev/hvc0 but reports no
+systemd tag; the cause of that absent readiness is not yet established. Horae
+itself started and listened on127.0.0.1:3000 near778s. This is separate from
+the browser's5s options-readiness failure, not an OIDC behavior assertion.
+
+Inspected the pinned Nixpkgs test-instrumentation module at
+/nix/store/ifpab9hxqmk2biwy594da8ipxzsp3y4s-source: its backdoor requires hvc0
+and the architecture serial device, redirects the shell to hvc0 and emits the
+expected readiness signal only afterward. No device dependency, timeout or
+test assertion has been removed. Do not label the browser fix a VM repair or
+blindly rerun either failure. Native browser/deployment/OIDC checks passed;
+the remaining ARM deployment and #231529 checks are still being observed.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
