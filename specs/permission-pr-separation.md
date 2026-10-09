@@ -3507,6 +3507,21 @@ all tests remain byte-identical. Owned20 files/916 additions (three source paths
 do not publish or merge on old evidence. Next collect that check, publish only
 after acceptance, and collect #234's master-targeted CI. No new PR or data work.
 
+#234 source GitHub37919410433 passed (Flake Check56s, Format42s); the current
+head's Nixbot checks reuse accepted555. Verified proposed mergef21d5359 has
+tree43fb4002 and no review threads. Updated its body, marked ready and submitted
+with exact ed340ef3 head guard, without bypass. Queue entry
+MQE_lQDOTRPZ888AAAABG9HYlc4AA_LZzgMuOGQ is first/AWAITING_CHECKS.
+Protected run37919726153 is live on b50ec27e46c9a304df9db620fe7c8f6f949cf534;
+source watcher51417 completed successfully. Next verify this queue result and
+actual squash tree before claiming merge.
+
+#246 local21576 remains live on frozen e5b9f62a/tree356c14e9. Format535 files
+passed unchanged; full SQLx preparation passed in72s. Tests are compiling.
+Source stable patch ID73e590396047ecddd066982ed54d40b0787cdcb0 matches the
+former delivery. Prepared its replacement description in root
+`.scratch/pr246-current-delivery.md`, not yet published. No real DB touched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
