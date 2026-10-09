@@ -6556,6 +6556,38 @@ remains pending. Next remains collecting this same gate, exact-tree rebase onto
 actual #269 merge21452bdd, publication with the correct base, and then #271's
 single heavy gate. Do not substitute dependency preparation for acceptance.
 
+### Project reader accepted locally and published on master — 2026-10-09
+
+Local #270 session42631 exited zero. Full browser, strict Clippy, live SQLx
+and native tests passed on `e70c06b9`:191 core,1374 server and262 auxiliary
+tests,1827 total, zero failed and11 inherited ignored. Excludes four separate
+subprocess reruns. Server test build7m04s; main suite318.88s. Preserved the
+SQLx warning and bounded visual-review limitations already recorded above.
+
+Saved `refs/backup/pr270-before-editor-merge-20261009` and rebased all eight
+owned commits onto actual #269 merge21452bdd. Every range-diff entry is equal;
+new head `703cde7810d37f2281b6cdf5828160f4407d57bf` retains complete tree
+`e66eb9a5864ab2e8b32e2e1dcc78cd91ca3d4c7b`, identical to local acceptance.
+Retargeted the existing PR to master first. Nix616 then terminated on the old
+479cfe3f merge conflict before obtaining a tree; no active build was replaced.
+Published703cde78 using the exact479cfe3f lease. Updated the existing PR body.
+Required GitHub run38005137996 is queued; Nix617 is pending on the exact new
+head/tree. Remote acceptance and protected queue gates remain mandatory.
+
+With #270 terminal, saved
+`refs/backup/pr271-before-published-reader-stack-20261009` and reconciled #271's
+two commits onto703cde78. Both range-diff entries and the complete tree remain
+equal. New local head `b8ae4fddfe1d68ae666d3eebfe0202274b9b340b`, tree
+`bd863cc7b9ff2aa7789ef0b447c269351be5b7f8`. Session40820 is now the sole heavy
+local gate: tests, SQLx, strict Clippy and full browser. Freeze its worktree;
+it is not accepted or published.39GiB was free before starting. Prepared
+descendants #272–#278 retain their recorded old-parent local compositions;
+reconcile them only when needed for their own gate, preserving tree equality.
+
+Next: collect #270's current-head remote gates, review readiness and use the
+protected queue if accepted; independently collect #271 session40820. No new
+PRs, source scope, real-data changes or policy activation. #212 stays untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
