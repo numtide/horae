@@ -6101,6 +6101,42 @@ must wait for51569 to end. No new PR, real-data mutation, policy activation or
 change to212. This iteration adds completed runtime/visual evidence rather
 than repeating a status-only report.
 
+### Filtered downloads entered the protected merge queue
+
+The previous iteration was progress:269 completed browser/visual evidence,
+recorded locally atfa67a201. Required267 workflow37998878384 then finished
+successfully on0e85eb68; watch17165 exited0. Flake Check59s and Format46s
+followed the initial hosted-runner queue wait. No retry was needed.
+Rechecked exacthead, base master, all checks green and no review threads.
+Marked267 ready and submitted its exact head to the protected merge queue.
+GitHub confirmed position1/QUEUED at2026-10-09T22:35:20Z. Protected run
+38000052799 uses queuehead80014914; watcher81112 is now live. Actual merge
+and tree equality remain unproven; do not reconcile268 until they are verified.
+
+Nix613/#268 advanced to15 applicable checks passed, with only
+checks.aarch64-linux.e2e building and six local-only skips. Watch81667 remains
+live and its published headd3cdf579 is unchanged. Local26951569 is still
+compiling native server tests after passing the full browser gate and core
+tests. Worktree remains frozen; no second heavy build or new PR was started.
+
+Reviewed270's composed reader/editor boundary with rust-best-practices and
+rust-testing: current requester/policy UI binding, minimal detail labels,
+withheld money versus zero, legacy-only fee panel and real-session browser
+denial/recovery checks. Rechecked the effective inherited-conflict diffs:
+Reports retains268's access gate; its only owned adjustment is the tag-reader
+argument. HTTP and browser registries preserve all inherited suites and add
+project reads once. The modal change only switches Projects to the overview
+contract while retaining the new Timesheet API. Navigation fixtures retain the
+manager module needed by269's DTO. No new critical/high issue was identified
+in this bounded composition review; full270 runtime/visual acceptance is still
+pending. No runtime or assertion edits were made this iteration.
+
+Next collect81112 for267's actual merge,81667 for268 acceptance and51569 for
+269 native acceptance. Reconcile268 onto the actual merge only after613 ends,
+verify its whole tree is unchanged, then publish with an exact lease. Start
+270's prepared gate only after51569 terminates. No new PR, real-data mutation,
+policy activation, remote journal publication or change to212.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
