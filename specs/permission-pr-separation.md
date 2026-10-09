@@ -3793,6 +3793,26 @@ still requires that completed browser result. #24645517 remains live around52
 minutes; protected auto-merge remains armed, not a completed merge. No additional
 remote publication or build has been started. Retain these same handles.
 
+The complete isolated browser suite passed on #245's prepared733f1b27/tree5019fb77,
+including #244's session-bound fixture and the history writer/paging/reauthorization
+flows. Native tests remain live in session21679; do not change its worktree.
+With #243's Nixbot561 finished, published the prepared #244 at3f443fbd/tree5690ad2d
+using an exact lease against31e2cfc4 and retargeted it to
+feat/project-manager-delegation. Nixbot563 is building that head; #244 remains
+draft and must not merge into its intermediate base. This replaces the completed
+#243 build in the two-active-remote-build schedule, not a new feature or PR.
+
+GitHub37920533055 attempt1 for #246 terminated at11:54:29 UTC after59m17s.
+Its failure annotation explicitly reports lost communication with the hosted
+runner; the Flake Check step never supplied a terminal result or uploaded log.
+The run archive contains only Format logs. Do not label this an assertion failure,
+timeout or proven OOM. Both-Linux Nixbot559 remains accepted on the identical head.
+Requested one retry of the failed job only; attempt2 is queued on unchangedb5f1942c.
+No source edits, weakened checks or merge bypass. If runner loss repeats, investigate
+resources/infrastructure before another retry. #245 remains unpublished; #212 and
+its worktree stay untouched. Next: collect attempt2, Nixbot563 and local21679, then
+reconcile #243 only after #246's actual protected squash is verified.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
