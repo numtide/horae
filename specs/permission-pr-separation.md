@@ -5342,6 +5342,62 @@ or push it during this live build. Next: collect local15065 and remote65000;
 publish #265 only after full local success, and reconcile #264 only after604
 is terminal.18 functional PRs remain. These are verified waits, not blockers.
 
+### #266 reviewed and conserved; #264 browser race reproduced and corrected locally
+
+Reviewed all owned #266 runtime paths, seven XLSX and nine CSV database tests,
+transport parsing and HTTP registration/fixture diff against time-reports.md
+and csv-exports.md. Checked canonical-only admission, ID grouping, scope before
+aggregation, bounded workbook group/context probes, captured pair correlation,
+strict native source-state validation including empty results, complete-group
+authorization across fragment batches, output reservation before gates and
+synchronous delivery after successful release. Existing cancellation, source
+edits, partial revocation, Unicode and >10,000-group/entry assertions remain.
+No new critical/high source finding. This is not UI acceptance: the current
+HTTP addition exercises grouped reader filters; later grouped download/filter
+HTTP assertions belong to #267. Do not claim that registration alone tests
+both grouped download routes end-to-end.
+
+Original #26676dcd48b/Nix453 is terminal failed. Backed up clean head at
+refs/backup/pr266-before-current-access-stack-20261009. Rebased its single
+owned commit from a08deac0 onto #265be7b7749 without conflicts, yielding
+d3ebacd1779ec4ed25651f643b7e9ea18aa92e5e,
+tree823dcd85a2120929a9b8ad211b1ad8137e6f440e. Range-diff is equal. All eight
+selected full runtime/test files and all18 original added SQLx descriptors
+remain byte-identical. No build or publication requested for #266.
+
+#265 session15065 passed live SQLx (server1m59s) after strict Clippy. Native
+tests are building;189 core tests already passed. Native tests derivation
+cyqlid14f05921351di7qk4hrnp8fcd6; SQLxw8x4nrh859b2b1qrhp92ar3zlqa164qi.
+This worktree stays untouched until the handle terminates.
+
+Nix604 is still building, but its ARM browser attribute failed at20:29:29 UTC.
+The full raw log identifies an uncaught Playwright Route is already handled
+at timesheet-errors.cjs:174 after all three historical edit cases passed.
+This is not a PostgreSQL shutdown failure: shutdown lines are fixture cleanup.
+The tracking interceptor performs async fetch/fulfill, while finally used
+page.unroute without waiting before the next navigation. Official Playwright
+Page.unrouteAll documentation confirms behavior wait drains running handlers;
+default removal does not. No ignoreErrors, retries or assertions were removed.
+
+Created local diagnostic.scratch/route-cleanup-race.cjs using pinned Playwright
+1.60 and Chromium against an ephemeral loopback server, no database. Baseline
+session66767 reproduced the exact uncaught Route is already handled failure,
+exit1. Fixed run with unrouteAll({behavior:'wait'}) passed exit0 and confirmed
+fulfilled precedes cleanup. Changed only existing browser fixture cleanup:
+two additions/one deletion, commitf331ba60 on #264's existing branch. No app
+code changes or remote push; remote #264 stays83f1fddc during live Nix604.
+The newly evaluated package path is not locally realized, so the full browser
+suite has not been rerun yet. Do not claim full acceptance from this diagnostic.
+
+Next: collect unchanged local15065 and remote watcher65000. After local tests
+finish, run the corrected full browser gate with one local build job. After604
+is terminal, reconcile #264's two owned commits onto actual #263 merge4c824d8b,
+retain the correction, and publish with exact83f1fddc lease and fresh CI. Then
+carry this fixture correction into #265/#266 through their existing isolated
+branches before publishing them. Do not publish #265's now-outdated inherited
+fixture or replace any head under active validation.18 functional PRs remain;
+#212 untouched. These are active validation/fix steps, not an external blocker.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
