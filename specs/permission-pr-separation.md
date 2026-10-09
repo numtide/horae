@@ -4448,6 +4448,31 @@ publishing. Nix584 still runs ARMdeployment/x86browser; its native checks
 passed, but GitHub's independently observed cancellation failure still requires
 the correction and fresh acceptance. #257585 remains the second remote front.
 
+Validation18581 completed successfully on the cancellation observer correction:
+1155server+201auxiliary tests, zero failures/11existing ignored,server172.86s.
+Both cancelled-authorization and cancelled-fetch cases explicitly passed.
+FullSQLx and format577unchanged also passed. Tests output:
+/nix/store/n1ywisjy1dqkvnahwr90nwydsqhp66wx-horae-tests-0.1.0;
+SQLx /nix/store/xhphbnnlm7lmrvxd41mqx08qj80a0izy-horae-sqlx-prepare-0.1.0.
+After the local build stopped, committed unsigned46fd884d7c34b2697b272410a9e8fdce3867be95
+on #256,treefa6e6a0cb283a318a64d0901cf68ec62c8fcc4bb. Backup at
+refs/backup/pr256-before-export-close-observer-20261009 preservesf0d61e24.
+No runtime/query changes; three additions and one deletion in one test helper.
+
+Prepared inheritance locally, without changing live remote heads. #257 backed
+up at refs/backup/pr257-before-export-close-observer-20261009 and rebased onto
+46fd884d: head74c76c0fd836241a9bdcd90a7f2fa86e6846fcd3,
+tree925a2ed1cd60a14887cea187a132384a2c9c5dd7. #258 backed up at
+refs/backup/pr258-before-export-close-observer-20261009 and rebased onto74c76c0f:
+headd25c08ddb218e54a493d85b3a44b9bf8f6516ac9,
+tree996434585cfafbff0c3b2ad6efaeb5890dd32534. Each full-tree delta is exactly
+the same four-line helper correction; owned implementation/tests are unchanged.
+Bodies updated locally for all three heads. Nix584 now has only x86browser live;
+its raw log reaches passing browser cases and successful upload. Await terminal
+status, then publish #256 with exact leasef0d61e24. #257585 remains live; do not
+push over it. #258 remains unpublished. Next: fresh remote acceptance of the
+corrected head and protected merge, not acceptance of the older tree alone.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
