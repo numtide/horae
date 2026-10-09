@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT status AS \"status: InvoiceStatus\", total_cents,\n                (SELECT count(*) FROM invoice_edit_requests WHERE org_id=$1) AS edits,\n                (SELECT count(*) FROM invoice_generation_requests WHERE org_id=$1) AS generations,\n                (SELECT count(*) FROM invoices WHERE org_id=$1) AS invoices\n                FROM invoices WHERE id=$2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status: InvoiceStatus",
+        "type_info": {
+          "Custom": {
+            "name": "invoice_status",
+            "kind": {
+              "Enum": [
+                "draft",
+                "sent",
+                "paid",
+                "void"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "total_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "edits",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "generations",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "invoices",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "d1deb158300b7b35e01816a6d860e17488f28b431dbc8340c2ad40e8cb51bc53"
+}

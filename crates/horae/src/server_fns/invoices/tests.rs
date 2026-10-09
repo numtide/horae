@@ -2,6 +2,7 @@ use super::*;
 use crate::server_fns::test_seed::{seed, time_entry};
 use sqlx::PgPool;
 
+mod authority;
 mod imported_rates;
 
 #[sqlx::test(migrations = "./migrations")]
