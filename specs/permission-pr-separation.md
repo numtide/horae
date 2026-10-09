@@ -4057,6 +4057,35 @@ with completed local evidence, #255 unpublished with testing live. Next delivery
 verify #245's actual squash, reconcile #250 onto that exact base preserving
 treea6b78309 and publish it to master with an exact lease. Keep #212 untouched.
 
+#245 MERGED at13:00:22 UTC asf23895249f96f9fa8f8f8c5a2efa00615e4558a4,
+parent6c301447, treeac90e7e7 exactly equal to the accepted delivery. Protected
+queue37933673741 passed. Fetched actual master without changing the root checkout.
+Backed up prepared #250 a23e765f at refs/backup/pr250-before-audit-squash-20261009;
+rebased its four owned commits onto that actual squash and verified the complete
+tree remainsa6b78309. Retargeted master before exact-lease publication
+9a014c24→e9873701ca0503ae420b260af78b788a79036183. GitHub37933977940 and
+Nixbot571 are live; Format passed. #250 remains draft pending both-Linux acceptance.
+
+Prepared #253 as the second remote delivery behind #250, not a product
+dependency on editor operations. Backup refs/backup/pr253-before-editor-delivery-20261009
+preserves locally accepted1d51f89b. Rebased onto e9873701 with updateRefs disabled;
+head0e8cd125afa20c51dcfd1dcff3c740b829914388, treee78bb7f76ceea5c2afd0f77af54cbb2e7961b534.
+Five whole implementation/test files including users.rs are unchanged. The
+registration composition keeps editor/subject tests and all inherited HTTP
+checks, adding directory once. Both shared SQLx descriptors remain byte-identical
+in the base, so their redundant commit drops; owned diff21files/1148adds.
+Formatting568unchanged passed. Prior local tests on tree94b0b9c8 are not claimed
+as acceptance of this new composition. Retargeted to feat/permission-editor-api
+and exact-lease pushed970c4f1b→0e8cd125. Nixbot573 is live. Draft; do not merge
+into the temporary branch. Updated both existing PR descriptions with evidence
+and remaining gates. Active remote deliveries now #250/#253 only.
+
+Read-back confirms #212 stilldb3935db and root checkout still only its preexisting
+untracked .playwright-mcp/. #254 remains prepared/local at1d5d84f9 with completed
+checks; #255 frozen98688ffd validation20217 is live. Next: collect #250 required
+GitHub/Nix571 and #253 Nix573, then use protected master merges and preserve
+accepted whole trees through squash reconciliation. No new PR or real-data write.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
