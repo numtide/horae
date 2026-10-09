@@ -4654,6 +4654,16 @@ unpublished locally prepared successors. Next: collect #256's gates, submit
 the exact accepted head to the protected queue, and reconcile the actual merge
 before retargeting #257. Do not merge a temporary stacked base.
 
+Revalidated #256 readiness at ac636945: master remainsbbdfb8f7, and GitHub
+reports no review threads or submitted review objections. Required run37955056655
+completed successfully. Nixbot588 ARM passed with16 core-test threads and eight
+database-test threads:1155 server tests passed, zero failed,11 inherited ignored,
+228.87s. All six previously failing CSV cases passed explicitly. Only588's
+x86 native check remains live; watcher29831 continues observing that build.
+Nixbot589/#257 is also live with only its two native Linux checks unfinished.
+Do not merge #256 until its final native check succeeds; keep the accepted
+head and unchanged master basis pinned for protected queue submission.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
