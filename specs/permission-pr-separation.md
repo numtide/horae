@@ -4086,6 +4086,32 @@ checks; #255 frozen98688ffd validation20217 is live. Next: collect #250 required
 GitHub/Nix571 and #253 Nix573, then use protected master merges and preserve
 accepted whole trees through squash reconciliation. No new PR or real-data write.
 
+Collected #255 local validation20217: completed successfully on98688ffd /
+tree9d4e05f2. Native tests:189core+1118server+201auxiliary=1508 passed,
+zero failures,11existing ignored; server198.63s. Full SQLx and formatting passed.
+Tests output5v3dn84wk4n98cd82glky8c2pgp4h3vq, SQLxbymw1gi8ccr98kqbnsjnp5gp13wpg1br.
+
+Prepared the next two existing deliveries without adding remote CI fronts.
+Backed up #254 at refs/backup/pr254-before-editor-composition-20261009 and rebased
+onto published #253 0e8cd125. New head549f705426d00522ced9ad802bc9c8075be1f2b4,
+treef02ad4eeb20f8751623a43cd293726f3e37f95bc. Resolved only registration conflicts,
+keeping every inherited editor/subject/directory test and adding picker once.
+Five whole implementation/test files remain byte-identical to accepted1d5d84f9.
+Owned diff18files/1244adds unchanged. New composition formatting572unchanged and
+full SQLx passed; native suite is live12246 on frozen549f7054. No full pass claimed.
+
+Backed up #255 at refs/backup/pr255-before-picker-composition-20261009 and rebased
+its one owned commit onto549f7054 with updateRefs disabled. New head
+8e648a26bcda26834f09265982ca358cbf8c22a1, treed995c9610d8f282e460227dc6feda5d3bd406c87.
+All implementation/endpoint/test files remain unchanged. Model and test module
+conflicts retain all inherited registration and add scoped time once. All SQLx
+descriptors match the validated head; six more are now inherited, reducing the
+owned diff to23files/1328adds. Prior1508-test acceptance is not attributed to this
+new composition. Both #254/#255 remain local-only pending fresh acceptance and
+available delivery slots. #250/#253 are still the only active remote deliveries;
+their review threads have no objections. Next: collect Nix571/573 and GitHub
+37933977940, then merge only verified heads into master through protection.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
