@@ -2998,6 +2998,28 @@ not yet been observed; do not confuse #241's completed run with #233 acceptance.
 Next: collect #233's own queue run and actual merge/tree, then reconcile #236
 only after545 is terminal. Local #23766164 continues; no source edits made.
 
+#233 MERGED at2026-10-09 08:53:33 UTC as
+82c11cdab13f5f1226d67946093e789932bc062a. Its own merge-group37907635431 passed.
+The actual tree b5f3f055a38790ba9b5fac4f9b72f173c1202e06 exactly matches native
+and both-Linux543 acceptance. API confirms master82c11cda and automatically
+retargeted #236 to master. No feature-branch merge or protection bypass occurred.
+
+Reconciled #236 locally onto actual82c11cda: head
+66ff076be1ddf12f1ee84eae05fe669e8c6ec05f, unchanged accepted native/current CI
+treeada47e059518498f71626ee22ee3c72273858e59. Both commits remain identical in
+range-diff; backup refs/backup/pr236-before-invoice-merge-20261009 retainsa437337b.
+Remote remainsa437337b while545 builds its browser/ARM VM checks. Do not publish
+66ff076b until545 is terminal, then require current-head GitHub and protected queue.
+
+#237 local66164 completed successfully oned4f2f21/tree6c66f37f:189 core,943
+server,183 auxiliary tests passed (1,315 total,zero failures,11 existing manual
+cases ignored), server128.06s. All five original-requester tests passed. SQLx
+passed50.31s; formatting521 files/zero changes. Rooted outputs:
+.scratch/pr237-current-delivery-checks → za67ax1f (tests),-1 → y4pnrnz9 (SQLx),
+-2 → dsk21niqj (treefmt). Bounded source review still required; do not publish
+on test counts alone. No local test is live. Next: finish #237 review while
+collecting existing545, then publish the accepted #236 ancestry reconciliation.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -3117,12 +3139,15 @@ with the same cca1729a tree after protected merge-group37907089652 passed.
 #233 was published
 atfe88a965/treeb5f3f055 on #241 after native19877 passed1,295 tests, SQLx and
 format. Its correct-base Nixbot543 passed;542 failed against the obsolete base
-before retargeting, not a source test. #233 now has the identical b5f3f055 tree
-rebased locally to actual master919b1e7b asd78000c4; publication55479 is active.
+before retargeting, not a source test. #233 merged as82c11cda/treeb5f3f055 after
+current-head GitHub37907383369 and protected merge-group37907635431 passed.
 #236 is published at a437337b/treeada47e05 on #233, with its T077–T082
 review complete and native tests (1,310 passed), SQLx and format accepted.
 Correct-head Nixbot545 is active;544 was an old-head retarget merge conflict
-before evaluation. #233 and #236 are the two active remote deliveries.
+before evaluation. #236 is the only active remote delivery. Its local66ff076b
+reconciles onto master82c11cda with the identical ada47e05 tree; publish only
+after545 finishes. #237 is locally prepared ated4f2f21/tree6c66f37f and has passed
+native tests (1,315), SQLx and format; bounded source review is still pending.
 #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
