@@ -3538,6 +3538,35 @@ acceptance. Publish existing #246 with an exact786af946 lease, not a new PR.
 #243/#244 are also now dependency-ready, but keep at most two remote deliveries
 active. Both #234 watchers are terminal; no queue watcher remains live.
 
+### #246 native acceptance and final-base composition — 2026-10-09
+
+Previous turn: progress (#234 merged with exact-tree verification). Revalidated
+native21576 as live and did not modify its files until it completed successfully.
+At e5b9f62a/tree356c14e9: 189 core +1,006 server +183 auxiliary =1,378 passed,
+zero failures,11 existing manual cases ignored. All seven preflight cases and
+both CSV rejection schedules passed; server166.58s. SQLx passed72s, formatting535
+files unchanged. Root `.scratch/pr246-current-delivery-checks` retains tests
+mjmf672645m7bljrsgnvaj2dvlimqkh8, SQLx55sqc00bv0721mfy8gynv8pk6d1g08zm and
+format5pnw9i3jrrqm2qyrrc0k1ra7k21c8q7z. Corresponding derivations: tests
+xwyh0yvdx9p0jdk6z0vzpzk9d2aalrkk, SQLxn592k0vqrdd0z9cs7rsnjdnb38hfl3f4.
+
+After21576 terminated, rebased the four owned patches onto actual masterb50ec27e.
+Backup refs/backup/pr246-before-profile-squash-20261009 retains e5b9f62a. Resolved
+only the additive permissions.rs conflict by retaining both preflight/profiles
+module and test declarations. Rust/Ponytail guidance kept this to wiring, with
+no extra abstraction. Reader and451-line/seven-case tests remain byte-identical;
+cache and both lint commits remain range-diff identical. Source patch context
+changes only around the newly inherited module declarations.
+
+Final local headb5f1942cb8faf1d3a521b3f034eef3618fa43eea,
+treefeacc02892601e608d0f433534ccd4b14868914a;20 files/916 additions beyond master.
+Final format538 files passed unchanged, diff check clean. Public description
+explicitly distinguishes prior-base native acceptance from required final-tree
+CI. Retarget/publication is starting with exact786af946 lease. No local build is
+live. Next verify publication, identify fresh both-Linux and GitHub jobs for
+b5f1942c, then merge only after exact combined-tree and protected checks pass.
+No claim that the historical shared CSV failure was repaired. #212 untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
