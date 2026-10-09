@@ -4179,6 +4179,35 @@ master-targeted/protected queue gates. #212 remains unchanged and excluded;
 no new PR, feature or real-data operation. This journal is still local-only
 on the existing #218 branch; do not claim it has been published.
 
+Prepared the next existing backend deliveries while #254/#255 CI runs. No new
+remote delivery front. Read the complete master Timesheet integration and scoped
+entry contracts. Reviewed #256 discovery/shared admission/DTO/session wrapper,
+all711lines/eight DB tests and135-line HTTP addition against T179–T181: no
+critical/high finding. Verified active zero-entry participants, retained history,
+own/managed/all union, tenant parents, minimal labels, 50-row keyset/search/ID
+narrowing, revocation both orders, cancellation and strict state. Rebased its
+single commit frombf0b398b onto published #2550355dee4 after backing up at
+refs/backup/pr256-before-current-delivery-20261009. Head3930b09ed48d4a7c66d13af81637a2b66118d1c1,
+tree4568e053c062431ef3062b29aa67418265baefc4. Four complete source/test files and
+endpoint unchanged; containing endpoint file additionally retains merged writer
+activity fences. Owned11files/1105adds/8deletes unchanged. Formatting577unchanged
+passed; full SQLx/native validation69900 live on frozen3930b09e, no pass claimed.
+
+Reviewed #257 context reader/DTO/33-line endpoint, six DB cases358lines and109-line
+HTTP addition against atomic-page contract: no critical/high finding. Checked
+requester/policy binding, explicit legacy-own path without canonical fallback,
+active subject fencing, unchanged entry scope, 501-entry continuation and both
+archive orders/cancellation. Preserved the existing four-line cancellation-test
+barrier-release correction; no weakened assertion or timeout. Backed up at
+refs/backup/pr257-before-current-delivery-20261009 and rebased its two owned commits
+onto3930b09e. Head8211bb20c9e805a3de07527ebf4ddbe48284c7e3,
+tree66830de5183eb8a02559191e965094119705df8e. Four complete source/test files and
+endpoint unchanged; six owned files717adds/33deletes; no SQLx descriptor changes.
+Formatting578unchanged passed. Native/SQLx validation waits for69900 to finish.
+Both #256/#257 remain local-only; prior CI441/473 does not certify these new heads.
+Next: collect active Nix575/577 and local69900, merge accepted deliveries through
+master protection, then publish these prepared branches as slots become available.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
