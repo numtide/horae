@@ -5632,6 +5632,23 @@ merge in this iteration: verified waits on live handles, not a blocker.
 Next action remains collecting these gates, queueing264 only on full acceptance,
 and reconciling265 after its current execution and parent merge finish.
 
+### Download filter SQLx acceptance and next-delivery preparation
+
+#267 session67323 passed live SQLx (server2m03s) and all189 core tests;
+server-test compilation is still live. No head change or restart. Prepared
+`.scratch/pr267-current-delivery.md` with the exact local revision, preserved
+scope, evidence limitations and outstanding native/remote gates. Do not publish
+that draft without updating final results and ancestry.
+
+Nix607/watch73128 advanced to12 passed/4 building with no failures. Nix605/
+watch26435 remains live at13 passed/3 building; remaining checks are ARM
+deployment and x86 browser/tests. Direct x86 logs show passing tests and browser
+scenarios advancing, not a terminal failure. Required GH37990586429 remains
+live. Next: collect those existing handles and queue264 only once all gates
+pass; then reconcile265 after its build terminates. No additional remote
+delivery, no merge claim, no #212 change. This iteration is a verified wait
+plus preparation of the existing267 delivery description.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
