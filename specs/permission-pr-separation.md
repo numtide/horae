@@ -2369,6 +2369,30 @@ test assertion has been removed. Do not label the browser fix a VM repair or
 blindly rerun either failure. Native browser/deployment/OIDC checks passed;
 the remaining ARM deployment and #231529 checks are still being observed.
 
+#231529 is now terminal failed, not still pending: all server/browser checks
+passed on both Linux platforms, but ARM deployment and OIDC each timed out
+before the driver console connected (900.65s and900.61s). Both diagnostics show
+backdoor.service waiting for dev-hvc0.device and dev-ttyAMA0.device. No functional
+deployment/OIDC assertion ran in those two checks. Preserve this failure; no
+retry or new publication was requested. #228528 still has its ARM deployment
+running, with terminal ARM browser and OIDC failures already recorded.
+
+Pinned systemd260.2 99-systemd.rules already tags both hvc and tty console
+devices for systemd. The failed528 guest reports completion of stage-two
+coldplug near447s yet hvc0 remains untagged near871s. Duplicating that rule or
+raising the900s deadline is not an evidenced root-cause fix. Further work must
+distinguish device-event processing/readiness from application startup without
+removing backdoor dependencies or authentication assertions.
+
+Browser reproduction56556 remains live at the same invocation: after fetching
+dependencies it is compiling the exact228 package jrqgdlxj; rustc2041117 was
+confirmed active, not stopped. The generated delayed test passed node --check.
+No original PR source has been edited. Next: collect56556, compare its paired
+green variant if the observed loading failure reproduces, then publish only a
+verified test repair; separately resolve the now-evidenced console readiness
+failure before either delivery can merge. #235's1,286-test preparation remains
+accepted locally and unpublished; #212 and the root checkout stay unchanged.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
