@@ -4132,6 +4132,27 @@ result. Formatting576unchanged and full SQLx passed; native tests remain live.
 still runs. Keep draft until full acceptance and master reconciliation. Next:
 verify #250 squash tree/parent, then retarget/rebase #253 preserving treee78bb7f7.
 
+#250 MERGED at13:23:58 UTC as a06ac539ce81a4be99001d8463ca28e93877428b,
+parentf2389524, treea6b783098f2a3a8bc109c6c40ded4c22dfce2210 exactly equal to
+the accepted tree. Queue37936394173 passed Format46s and Flake Check49s.
+#253 Nix573 also completed successfully at13:22:41 UTC on treee78bb7f7.
+Backed up0e8cd125 at refs/backup/pr253-before-editor-squash-20261009, rebased
+onto the actual #250 squash and verified whole-tree equality. Final head
+fdfd77228efe97d9e8b4b170be1748997fdb853b. Retargeted master before exact-lease
+push0e8cd125→fdfd7722. Nixbot reused same-tree acceptance; GitHub37936729070
+is live. Marked ready and enabled protected auto-merge at13:25:27 UTC.
+
+Prepared #254 on this final #253 head, preserving accepted treef02ad4ee exactly:
+head55ebf248a4f4bded92c75960e57b9acfc0eed03b. Backup
+refs/backup/pr254-before-directory-delivery-20261009 retains549f7054. Updated
+the existing PR body and exact-lease published7a3139c1→55ebf248 with temporary
+basefeat/scoped-people-directory. Remains draft; do not merge into the temporary
+branch. Active remote deliveries are now #253/#254 only. #255 native validation
+37707 remains live at frozen8e648a26; its full SQLx and formatting already passed.
+Next: collect #253's master/queue checks and confirm its actual squash; reconcile
+#254 onto that master without changing the validated tree. No new PR, feature,
+real-data mutation or #212 change.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
