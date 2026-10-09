@@ -6014,6 +6014,30 @@ CPU, not restarted. Worktree remains frozen. Next prioritize266 required and
 protected gates, collect610/51569, and publish prepared268 only when the next
 remote slot frees. No new PR, real-data change, policy activation or #212 edit.
 
+### Filter downloads accepted; Reports published; grouped exports queued
+
+The previous turn was progress:264/265 merged and266 was reconciled/published.
+Nix610 now succeeded at2026-10-09T22:16:46.780545Z on exact267f11bb3b3/
+tree944c37bf: all16 applicable checks passed on both Linux architectures,
+six local-only skipped. Watch22380 exited0. Updated267's existing description.
+
+With a remote slot free, confirmed268 remote956c2147, terminal old Nix469 and
+clean locald3cdf579/tree3130cd43, then published its three conserved commits
+with an exact956c2147 lease. Push/body updates8242 exited0. Nix613 evaluates
+that exact head/tree; changes-only45s watch81667 is live. Existing268 remains
+draft on267f11; local acceptance and bounded visual evidence are in its body.
+No additional PR was created and no third remote delivery was started.
+
+Required26637998325895 passed (watch62896 exit0, Flake54s/Format41s).
+Fresh36bfa7bf head/master base, all checks green, no reviews/unresolved threads.
+Marked ready and queued with exact-head protection. Queue entry is position1,
+AWAITING_CHECKS; merge-group37998622546 targets29242324757862ef51cb7a8f6b48d3bac9c71cbf.
+No266 merge is claimed yet. Local26951569 passed live SQLx (server5m45s) and
+now advances through the complete browser suite, including passing editor and
+scoped Reports scenarios. Its full gate is still live; worktree stays frozen.
+Next collect266 queue and verify actual merge/tree before reconciling267;
+collect613/51569 without duplicate builds. #212 and real data remain untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
