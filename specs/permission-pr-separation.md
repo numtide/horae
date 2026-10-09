@@ -2987,6 +2987,17 @@ No source or accepted-tree change; current-head GitHub and queue gates still
 required. #236545 remains live, #23766164 remains local/live. Next: collect55479
 and current #233 checks, then queue only on full acceptance.
 
+Publication55479 completed successfully: #233 now targets master atd78000c4.
+Nixbot reused successful543 for the identical b5f3f055 tree; no rebuild was
+needed. Current-head GitHub37907383369 passed Flake Check52s and Format42s;
+watcher90588 exited0. Fresh review-thread/head/master read-back is unchanged
+and clear. Marked #233 ready and submitted it without bypass to the protected
+queue; publication35726 exited0. Entry
+MQE_lQDOTRPZ888AAAABG89I6M4AA_LZzgMt1ss is first,QUEUED. Its merge-group has
+not yet been observed; do not confuse #241's completed run with #233 acceptance.
+Next: collect #233's own queue run and actual merge/tree, then reconcile #236
+only after545 is terminal. Local #23766164 continues; no source edits made.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
