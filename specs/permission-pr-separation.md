@@ -5098,6 +5098,28 @@ native test derivation1qx0v8ix. No worktree edits during validation. Next:
 verify #259 merge-group and actual integrated tree, await600, reconcile #262
 onto the actual merge without tree changes, and collect2031. No new PRs.
 
+### #259 merged with exact-tree conservation
+
+Merge-group37981680817 passed (Flake Check46s, Format38s), watcher94310 exited0.
+#259 MERGED at2026-10-09 19:40:27 UTC as
+03dc0bbbd2cf4647f3cc2b1b6de6475b2838cfcd, parent94585bf2. Verified actual
+tree6087c8616baf63b3bd657ddb314935bb04778a50 matches accepted sourcecee459de
+exactly. Fetched origin/master with --no-prune; root checkout remains untouched.
+There are20 functional PRs remaining. #212 and all reference branches remain
+intact. Nix598 watcher95799 is terminal success.
+
+GitHub automatically retargeted #262 to master03dc0bbb. Its source423a36ea
+remains unchanged while Nix600 finishes the last ARM deployment gate;15
+attributes have passed. Watch21618 polls600 every45 seconds and prints only
+changes. Next, after600 terminates, back up423a36ea and rebase the owned commit
+fromcee459de onto actualmaster03dc0bbb. Prove the entire tree remains12250f9e
+before exact-lease publication, collect required GitHub acceptance and queue.
+
+#2632031 remains active atcf8be2c4: format597 unchanged, Clippy, live SQLx and
+189 core tests passed; server test binary is compiling. Do not change its
+worktree until terminal completion. Its full acceptance and publication remain
+pending. No new PR, source edit, policy activation or real-data mutation.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
