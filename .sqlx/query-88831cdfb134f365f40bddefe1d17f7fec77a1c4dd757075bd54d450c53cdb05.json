@@ -1,0 +1,111 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH scoped AS NOT MATERIALIZED (\n           SELECT e.id, e.spent_date, p.name AS project_name,\n                  t.name AS task_name, u.name AS user_name, e.minutes,\n                  effective_minutes(e.minutes,e.rounded_minutes,o.round_minutes,o.round_dir) AS rounded_minutes,\n                  (e.billable AND (e.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable'\n                    AND COALESCE(pt.billable,t.billable_default)))) AS billable, e.notes\n           FROM time_entries e\n           JOIN organizations o ON o.id=e.org_id\n           JOIN users u ON u.id=e.user_id AND u.org_id=e.org_id\n           JOIN projects p ON p.id=e.project_id AND p.org_id=e.org_id\n           JOIN tasks t ON t.id=e.task_id AND t.org_id=e.org_id\n           JOIN clients c ON c.id=p.client_id AND c.org_id=e.org_id\n           LEFT JOIN project_tasks pt ON pt.project_id=p.id AND pt.task_id=t.id\n           WHERE e.org_id=$1 AND (\n             $5::bool OR ($3::bool AND e.user_id=$2) OR ($4::bool AND (\n               EXISTS (SELECT 1 FROM person_management_assignments m\n                 WHERE m.org_id=e.org_id AND m.manager_id=$2 AND m.managed_user_id=e.user_id)\n               OR EXISTS (SELECT 1 FROM project_management_assignments m\n                 WHERE m.org_id=e.org_id AND m.manager_id=$2 AND m.project_id=e.project_id))))\n             AND e.spent_date BETWEEN $6 AND $7\n             AND (NOT $17::bool OR p.active)\n             AND ($18::bool IS NULL OR $18 = (e.billable AND (e.invoice_id IS NOT NULL\n               OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable,t.billable_default)))))\n             AND (cardinality($8::uuid[])=0 OR p.client_id=ANY($8))\n             AND (cardinality($9::uuid[])=0 OR e.project_id=ANY($9))\n             AND (cardinality($10::uuid[])=0 OR e.user_id=ANY($10))\n             AND (cardinality($11::uuid[])=0 OR e.task_id=ANY($11))\n             AND (cardinality($12::uuid[])=0 OR EXISTS (\n               SELECT 1 FROM project_tag_links l JOIN project_tags tag ON tag.id=l.tag_id AND tag.org_id=l.org_id\n               WHERE l.org_id=e.org_id AND l.project_id=e.project_id AND tag.id=ANY($12)))\n           ), stats AS (\n             SELECT COUNT(*) AS entry_count,\n                    COALESCE(SUM(minutes),0)::bigint AS total_minutes,\n                    COALESCE(SUM(rounded_minutes),0)::bigint AS rounded_minutes,\n                    COALESCE(SUM(rounded_minutes) FILTER (WHERE billable),0)::bigint AS billable_minutes\n             FROM scoped\n           ), page AS (\n             SELECT * FROM scoped\n             WHERE ($13::date IS NULL OR (spent_date,project_name COLLATE \"C\",task_name COLLATE \"C\",id)\n               > ($13,$14::text COLLATE \"C\",$15::text COLLATE \"C\",$16::uuid))\n             ORDER BY spent_date,project_name COLLATE \"C\",task_name COLLATE \"C\",id LIMIT 501\n           )\n           SELECT s.entry_count AS \"entry_count!\", s.total_minutes AS \"total_minutes!\",\n                  s.rounded_minutes AS \"total_rounded_minutes!\", s.billable_minutes AS \"billable_minutes!\",\n                  p.id AS \"id?\", p.spent_date AS \"spent_date?: chrono::NaiveDate\",\n                  p.project_name AS \"project_name?\", p.task_name AS \"task_name?\", p.user_name AS \"user_name?\",\n                  p.minutes AS \"minutes?\", p.rounded_minutes AS \"rounded_minutes?\", p.billable AS \"billable?\", p.notes\n           FROM stats s LEFT JOIN page p ON true\n           ORDER BY p.spent_date,p.project_name COLLATE \"C\",p.task_name COLLATE \"C\",p.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entry_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "total_minutes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "total_rounded_minutes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "billable_minutes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "spent_date?: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 6,
+        "name": "project_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "task_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "user_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "minutes?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "rounded_minutes?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "billable?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "notes",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Date",
+        "Date",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "Date",
+        "Text",
+        "Text",
+        "Uuid",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "88831cdfb134f365f40bddefe1d17f7fec77a1c4dd757075bd54d450c53cdb05"
+}
