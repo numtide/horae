@@ -3860,6 +3860,44 @@ all assertions and preserves its terminal trace; no production/worktree source
 was edited. Next: inspect its evidence and resolve the failing gate before
 publishing further downstream deliveries. #212 remains untouched.
 
+The isolated connection diagnostic19150 completed with a preserved reproduction,
+not a passing regression: iteration63, expected403 attempt30, failed with BodyWrite /
+BrokenPipe. The trace shows socketef4dcbe3 received the previous403, was pooled,
+then reused for the next POST without receiving any response. The prior CI failure
+was IncompleteMessage, not the exact same error variant. This proves the reused
+fixture can demand an HTTP status when there is no response; it does not prove a
+runtime authorization failure. Trace outputvj5720c4pxr4cf5a7n6jrgyg0f4m117h retains
+the request sequence. Hyper's maintainers describe this connection-reuse race in
+https://github.com/hyperium/hyper/issues/2136#issuecomment-589345238.
+
+Corrected only the CLI tests: create Transport inside each rejection iteration,
+matching run_async's one-client/one-CSV-command lifetime. Keep256 exact401/403
+assertions on both Tokio schedules. Add a raw socket-close test requiring exit6,
+indeterminate_submission and no HTTP status; its observed error is IncompleteMessage.
+No production transport, retry, security or CSS change. Isolated check42873 exited0:
+all22 CLI tests plus32 additional two-schedule runs (32,768 rejected requests),
+no retries on failure. Derivationppplj93kg8jh2kyzcf91icd77qjfh50p. Formatting553
+unchanged. Nixbot563 is terminal: onlyx86_64 tests failed; all other attributes passed.
+
+After both builds ended, applied the tested correction to #244, unsignedcommit10f5004b,
+then rebased its five commits onto #243's actual squashbf144b7f with updateRefs
+disabled. Corrected tree conserved by empty diff against backup
+refs/backup/pr244-before-delegation-squash-20261009. Published exactlease3f443fbd
+as c8819fb663bca428c45aa3ddd24da17fdfebd6cc/treeb0d99134f2d5c79eac55526125fb207c860ebe0c,
+master-targeted/draft. Compared with3f443fbd, only CLI tests change (34 additions,
+one deletion). GitHub37929467171 and Nixbot566 are live; no merge requested yet.
+
+Rebased #245's six owned commits onto that corrected #244. Range-diff is identical
+for all six; complete diff against locally accepted733f1b27 is only the same35-line
+CLI test correction. Backup refs/backup/pr245-before-settings-csv-correction-20261009.
+Published exactleasea6982442 as9b831d089cf9bc0ffb9ab7c45fa01dfa297d183d,
+treeac90e7e7a492a32670a264553f4aa2d5908b6fdd, temporarybasefeat/own-permission-settings,
+still draft. Nixbot568 is evaluating. This fills the second remote delivery slot;
+no new PR. Next: collect #244's final gates and #245's both-Linux acceptance;
+merge #244 through the protected queue only after green acceptance, then reconcile
+#245 onto its actual squash. #212 remains unchanged. Do not claim complete CI or
+all transport failures solved from the focused correction alone.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
