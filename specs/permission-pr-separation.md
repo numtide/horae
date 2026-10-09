@@ -3898,6 +3898,27 @@ merge #244 through the protected queue only after green acceptance, then reconci
 #245 onto its actual squash. #212 remains unchanged. Do not claim complete CI or
 all transport failures solved from the focused correction alone.
 
+While #244/#245 final CI remains live, reviewed existing #250 against the full
+permission-editor contract and T127–T132/T139–T141: reader270 lines, session
+wrappers149, wire DTOs, seven editor/six subject DB cases and678-line registered
+HTTP checks. No critical/high finding in this boundary. Current explicit identity,
+policy gates, tenant-only cursor bounds, preview/save equivalence, names only for
+exact outgoing effects, last-admin behavior, requester/replay binding, concurrent
+profile capacity, cancellation and sanitized errors are preserved. UI/recovery
+portions and activation are not claimed complete.
+
+Prepared #250 locally over9b831d08 with backup
+refs/backup/pr250-before-current-delivery-20261009 and rebase.updateRefs=false.
+The only conflict was HTTP registration: retain all ten inherited checks plus
+editor once. All six complete owned implementation/test files compare identical
+to remote9a014c24. Newheada23e765f1c675160943739caf34c53e416f7b7ef,
+treea6b783098f2a3a8bc109c6c40ded4c22dfce2210. Formatting564 unchanged. Started local
+session96110 for tests, SQLx and treefmt, maxjobs1/cores2; tests derivation
+gisd14lij68jm97m7gwrkbghqhlj9bzq, SQLxrn9nn1bwmky3cifk44fc6k4dy2yr7n57.
+Do not edit this worktree while the build runs. Remote #250 stays9a014c24/draft;
+no third remote delivery. Next: collect those results and final #244/#245 gates,
+then publish #250 only when a remote slot is free and its acceptance is ready.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
