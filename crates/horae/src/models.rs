@@ -5,6 +5,7 @@ pub mod invoice;
 mod jobs;
 pub mod organization;
 pub mod own_permissions;
+pub mod people;
 pub(crate) mod permission_audit;
 pub(crate) mod permission_editor;
 #[cfg(feature = "server")]
