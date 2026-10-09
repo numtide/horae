@@ -4819,6 +4819,66 @@ passed; application tests are compiling. Its source remains untouched while
 validation runs. Next: collect #258's required workflow and submit through the
 protected queue when green; collect #261 native completion before publication.
 
+### #258 merged; successors prepared, publication unavailable
+
+Required workflow37963545570 and protected merge-group37963780042 both passed.
+#258 merged at2026-10-09 17:06:44 UTC as
+5e3b241f1550176a5aa792aab85c9729777ec5a8, parent888240f6. GitHub's actual commit
+tree is e23dc812f89f667f6a19e7ba78fadc8ea4b8bb54, exactly the accepted source
+tree. There are22 remaining functional PRs. #212 remains OPEN/draft atdb3935db.
+
+Prepared #259 on this actual merge with rebase.updateRefs disabled and backup
+refs/backup/pr259-before-person-commands-merge-20261009 preservingbb0c1240.
+Local headb3a182cbb310feb5b50f2b348842c76cf0ace788, tree
+cf31a07b9dc078a88a06f26d3151f32b11977a88; full-tree comparison is empty. GitHub
+already retargeted it to master and its previous checks are terminal. The first
+explicit-URL fetch inherited pruning and removed origin/master before failing
+to update it; a --no-prune fetch restored that tracking ref to5e3b241f. Future
+explicit-URL fetches must pass --no-prune. No branch or worktree content was lost.
+
+The exact-lease #259 push was NOT executed: the approval reviewer reported a
+usage limit and could not review it. Do not bypass the approval mechanism or
+assume that the remote90105351 changed. No new remote delivery is active.
+
+Collected #261 session46887: exit0 on22334b1f, tree84b5fcf9. Formatting582 files
+unchanged, strict core/server Clippy, live SQLx cache validation,189 core,
+1174 server and201 auxiliary tests passed; zero failures,11 inherited ignored,
+server189.98s. Its registered HTTP authorization test passed. No local build
+remains active. Do not represent this as remote both-Linux acceptance.
+
+Next after approval service recovery: revalidate current master/remote heads,
+publish #259 with exact lease90105351 and its prepared body; reconcile #261 onto
+current master without losing its owned reader patch, then publish as the second
+delivery and collect fresh remote gates. Local PR bodies in .scratch contain
+the updated hashes/evidence. This journal update remains uncommitted pending
+the same approval recovery; no speculative delivery or new feature was started.
+
+### Approval recovery and two resumed deliveries
+
+The next normal escalated read succeeded; verified remote #25990105351,
+#2617ac67a9d and master5e3b241f before writing. Published #259b3a182cb with the
+exact old-head lease and updated its existing PR body. Nix595 and GitHub
+37975649246 are live on that head; formatting already passed. No new PR.
+
+Backed up #26122334b1f in
+refs/backup/pr261-before-person-commands-merge-20261009 and rebased only its
+reader commit onto actual master5e3b241f. New headdce0b134b8c0429cbe884d5a06efd6405b27674a,
+treed834d554a6aa0ba1434cb65669d647187e825244. Resolved the HTTP call-site
+conflict by preserving delegated_time::check and time_reports::check. All four
+added Rust source/test files and all19 original SQLx descriptors remain
+byte-identical. Two descriptors are now inherited from #258, so the owned diff
+is27 files,1484 additions/one deletion. No assertions or reader behavior changed.
+Published with exact lease7ac67a9d and updated its existing body. Nix596 and
+GitHub37975763858 are live; prior local22334b1f validation is not exact-current-
+tree remote acceptance. Full both-Linux validation is required.
+
+Both PRs remain draft. Exactly two remote deliveries are active, no local
+build remains live, and neither branch may be replaced during its current Nix
+run. Next: collect595/596 and the required GitHub workflows, investigate any
+terminal failures within the existing scope, then use the protected merge
+queue and verify the actual integrated tree. Earlier approval interruption
+is resolved; commit this accumulated journal record without publishing #218.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
