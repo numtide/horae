@@ -5,6 +5,7 @@ use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
 use super::*;
 
 mod authorization;
+mod scoped_time;
 
 fn params() -> ExportParams {
     ExportParams {
@@ -14,6 +15,7 @@ fn params() -> ExportParams {
         project_id: None,
         user_id: None,
         tag_id: None,
+        ..ExportParams::default()
     }
 }
 

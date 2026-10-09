@@ -1,0 +1,159 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT policy,role AS \"role?: OrgRole\",active,catalog_version,grants,is_administrator,\n                  permission_source,built_in_profile,template_id,applied_template_revision,revision,\n                  id,user_id,project_id,spent_date AS \"spent_date?: NaiveDate\",project_name,task_name,user_name,\n                  minutes,rounded_minutes,billable,notes\n           FROM fetch_csv_export_rows($1) AS source(policy integer,role org_role,active boolean,\n             catalog_version integer,grants text[],is_administrator boolean,permission_source text,\n             built_in_profile text,template_id uuid,applied_template_revision bigint,revision bigint,\n             id uuid,user_id uuid,project_id uuid,spent_date date,project_name text,task_name text,user_name text,\n             minutes integer,rounded_minutes integer,billable boolean,notes text,export_bytes bigint)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "policy",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "role?: OrgRole",
+        "type_info": {
+          "Custom": {
+            "name": "org_role",
+            "kind": {
+              "Enum": [
+                "admin",
+                "manager",
+                "member"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "catalog_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "grants",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_administrator",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "permission_source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "built_in_profile",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "template_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "applied_template_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 14,
+        "name": "spent_date?: NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 15,
+        "name": "project_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "task_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "user_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 19,
+        "name": "rounded_minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 20,
+        "name": "billable",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 21,
+        "name": "notes",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "00cefabd94029f7b88bb42599c9d4edcffdb61975d476a40553fe39ffbc558ca"
+}
