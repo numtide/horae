@@ -2522,6 +2522,16 @@ require fresh acceptance: native validation15705 is live, rooted at
 remain unchanged. No new remote build or PR was requested. Next: collect the
 existing #228 remote/native gates and #231 local checks before publishing.
 
+Final #228 native validation60625 completed successfully on f465f7a0:
+deployment kzf7pn1s06qbkgfkrv81j0irfjslyk8m passed66.65s, OIDC
+1k4yzwdhjv65niaz16m0r0dzl1n91qjh passed20.02s, udev regression
+0d7lr30487jcw7ki75rjqbn07ms3i33h passed86.36s, and treefmt passed. The udev
+log confirms new and modified rule properties were both detected. These cover
+the final patched guests, replacing the earlier pre-correction VM evidence.
+Nixbot530 now has every native check accepted; four ARM browser/VM checks
+remain live. #231 native validation15705 is still live. Next: finish remote
+acceptance and protected delivery of #228; do not restart live jobs.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
