@@ -3824,6 +3824,23 @@ acceptance, not final ARM or protected merge acceptance; remote #245 remainsa698
 Next: publish the prepared #245 once an active remote-build slot is free, keeping
 it draft on #244, and collect #246's retry before any downstream master rebase.
 
+#246 merged through the protected queue at12:02:16 UTC as5b7a1bc410d60789813a5300b7b79d72526e07d1,
+parentb50ec27e, treefeacc02892601e608d0f433534ccd4b14868914a: exactly the accepted
+delivery tree. GitHub37920533055 attempt2 passed Flake Check in46s without source
+changes; queue37927311410 passed both required gates. The first runner-loss
+attempt remains recorded; passing the retry does not establish its root cause.
+
+Reconciled #243's four commits onto that actual master squash with updateRefs
+disabled. Newhead9349c3a141149816b828b017c955668425badc4c keeps the complete
+bd7d2d2f tree; diff against7f51e98c is empty. Preserved backup
+refs/backup/pr243-before-preflight-squash-20261009, retargeted master before the
+exact-lease push, marked ready and armed protected auto-merge. Read-back confirms
+head/base/request; source run37927540504 is queued and Nixbot reuses accepted561
+for the identical tree. #244 Nixbot563 remains live. #245 local acceptance is
+complete but its prepared head is not yet published. Next: collect #243's source
+and queue gates, verify its actual squash, then reconcile #244 without changing
+its accepted tree. Do not merge either downstream PR into an intermediate branch.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
