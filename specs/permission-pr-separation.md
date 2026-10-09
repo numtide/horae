@@ -4673,6 +4673,29 @@ no PR was merged during this verified wait. Next action remains exact-head
 protected submission of #256 only after588 succeeds, followed by squash
 conservation and #257 prerequisite reconciliation.
 
+Nixbot588 finished SUCCEEDED at16:29:30 UTC on ac636945, tree253dc0963b2a522cf1c381308e33b3a19cc2676a.
+Fresh x86 server tests passed1155/zero failures/11 ignored in1186.79s; auxiliary
+suites also completed. Compared all18 skipped_local attributes with586: each
+derivation is identical, and both-Linux browser/clippy/SQLx/package/deployment
+and OIDC gates had succeeded there. Only the pre-existing local-only checks
+were also skipped in586. Thus prior586's native failure is replaced by fresh
+both-Linux native success, not mistaken for an accepted old build.
+
+GitHub read-back confirms all required checks SUCCESS, CLEAN, master base and
+the expected ac636945 head. The prior review audit found no threads/objections.
+Watcher29831 exited successfully. Sending that exact accepted head to the
+protected queue with ready/auto-squash; do not treat submission as completed
+integration. Next: verify queue result and actual merge tree before reconciling
+#257. No protection bypass or branch deletion is authorized by this step.
+
+#256 queue submission10669 succeeded. EntryMQE_lQDOTRPZ888AAAABHDP0bc4AA_LZzgMvmgE
+is position1, QUEUED; PR is OPEN/non-draft on the accepted ac636945 head.
+Merge-group run37959744078 is live on2165320f2ebc396730be7954cbb5732d3f2be5a9,
+based onbbdfb8f7. Updated the PR body to reflect acceptance and queue submission.
+#257/Nixbot589 still has its x86 native check live; keep its published head
+unchanged. Next: collect the merge-group result and verify actual merge/tree,
+then reconcile the next dependent against that actual squash.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
