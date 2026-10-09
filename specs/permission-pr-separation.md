@@ -3781,6 +3781,18 @@ now-inherited cache descriptors differ. Keep that worktree frozen. Next collect
 the same two jobs; source success should admit #246 automatically, after which
 watch its new merge-group run and reconcile #243 to the verified squash.
 
+#24521679 completed the current client/server package in361s and SQLx in107s.
+Package outputgqjpz0hqh7wzk5chahp793lrz32rzij1; package derivation
+cib33cs05n99j3vqr0prf2k8w5is4q2w, SQLxy6j3b4sbakpwkil8nz84w38cgxm9mhac,
+browserldzfx6wgxfdjmp19zywydmjxryhy7dis, testskgqx92fp1pd3lkwhn7rh7nj1pbrp7gvc,
+format2jaqvvxy8rff7cqd6yj1w1n5j554a0rs. The browser suite is live and passing
+shared layout/navigation/project flows; native tests remain pending in the
+same build. Prepared local description .scratch/pr245-current-delivery.md
+records this partial acceptance, not a fresh browser pass. #244's fixture fix
+still requires that completed browser result. #24645517 remains live around52
+minutes; protected auto-merge remains armed, not a completed merge. No additional
+remote publication or build has been started. Retain these same handles.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
