@@ -3567,6 +3567,15 @@ live. Next verify publication, identify fresh both-Linux and GitHub jobs for
 b5f1942c, then merge only after exact combined-tree and protected checks pass.
 No claim that the historical shared CSV failure was repaired. #212 untouched.
 
+#246 publication93970 completed successfully. Remote headb5f1942c is verified
+OPEN/draft on master; no merge requested. Fresh GitHub37920533055 and Nixbot559
+are live, with Nix evaluation passed. Retain those jobs rather than rerunning.
+Native21576 and final formatter59540 are terminal successful. No local build or
+pending rebase remains. The next dependency-ready command delivery is #243;
+#244 is also ready for bounded preparation but neither has been modified in
+this iteration. Ledger commits remain local pending its scoped publication;
+remote #218 is still5e75e8ac, an ancestor of the178 accumulated local commits.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
