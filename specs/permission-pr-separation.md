@@ -2623,6 +2623,28 @@ tests m75adhk2. #238 remains unpublished; #235 and #212 remain unchanged.
 Next: collect and verify #231's protected merge, reconcile #232's ancestry
 without interrupting535, and continue the already prepared sequence.
 
+#231 merged at07:17:30 UTC as2b441a9291ee63cb2fa8e59b10d4fceff56d00ba.
+Protected merge-group37898041964 passed Format51s and Flake Check54s; the
+actual integrated a746b82d tree exactly matches both-Linux Nixbot531. #212
+remains OPEN/draft at db3935db. Root worktree unchanged.
+
+Prepared #23231f7061c74d52bd9fe2f455d4fe6a2141f49d966 locally on that actual
+merge, preserving ce812ded in refs/backup/pr232-before-csv-merge-20261009.
+Range-diff and full-tree comparison preserve its owned commit and accepted
+5d7aa453 tree. Remote remains ce812ded, now automatically targeting master,
+while Nixbot535 runs. Prepared #238451d5b70b3752a4270429df9db6a8f807d9804ae
+on31f7061c, preserving c5402afa in refs/backup/pr238-before-csv-merge-20261009;
+its two commits and complete b41bf687 tree are unchanged.
+
+To use the second remote slot without showing an unrelated diff, published
+the already validated #238 c5402afa on the currently published #232 ce812ded,
+not its unpublished ancestry-only451d5b70 preparation. Exact e17ed8dd lease
+and explicit c5402afa source ref succeeded; #238 is draft and now targets
+fix/financial-snapshot-authority. No new PR or source change. #232 and #238
+are the two active remote deliveries. #235 remains at local7f89ce45 and
+remotee1e27f38; its CI correction is still to prepare. Next: finish535 before
+publishing #232's ancestry-only update, and follow #238's existing new build.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2727,22 +2749,20 @@ Deliveries #221, #223, #222 and #225 are also merged with both-Linux acceptance.
 transport regression; it is removed from the queue with auto-merge disabled.
 #227 and #228 are merged with exact-tree and protected-queue acceptance.
 #228 integrated as cea013c9/tree9e6a1625 after both-Linux Nixbot530, source
-GitHub37893663978 and merge-group37896516881 passed. CSV delivery #231 is
-published at216440b5, now targeting master, with1,250 native tests/SQLx and
-format passing. Nixbot531 remains live. Local07d30fc9 reconciles onto the
-actual #228 squash while preserving the exact a746b82d tree and both commits;
-publish it only after the existing build finishes. Historical529 failed ARM
-VM startup on the older a34a1348 tree. The earlier independent
-head dcf68d2e passed GitHub and both-Linux Nixbot526. Neither result proves
-the shared transport issue repaired.
-#232 is locally stacked at75695511 on #231, with1,264 combined native tests,
-SQLx and format passing; its earlier independent tree passed1,243 tests. It is not
-published yet. #238 is locally stacked on #232 at30cb18af with1,277 native
-tests, SQLx and format passing. Its earlier independent c6efb30a passed1,250
-native tests. Both preparations remain unpublished.
+GitHub37893663978 and merge-group37896516881 passed. #231 is also merged:
+2b441a92/treea746b82d after both-Linux Nixbot531, source GitHub37897897267
+and protected merge-group37898041964 passed. This does not establish a fix
+for the historical intermittent CSV transport failure in #226.
+#232 is published atce812ded/tree5d7aa453, automatically targeting master,
+with1,264 native tests, SQLx and format accepted. Nixbot535 is live. Local
+31f7061c reconciles onto the actual #231 merge with the identical whole tree;
+publish it only after535 finishes. #238 is published atc5402afa/treeb41bf687,
+stacked on the currently published #232, with1,277 native tests, SQLx and
+format accepted. Nixbot537 is evaluating. Local451d5b70 follows31f7061c
+with the identical whole tree. These are the two active remote deliveries.
 #235 is locally reviewed and stacked on #238 at7f89ce45, with1,286 combined
-native tests, SQLx and format passing; it remains unpublished. #238/#235
-still use the earlier a34a1348 base. Reconcile downstream ancestry
+native tests, SQLx and format passing; it remains unpublished. #235
+still uses the earlier a34a1348 base. Reconcile downstream ancestry
 with the accepted integrated base before publishing; do not attribute their
 historical tests to a future tree. #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
