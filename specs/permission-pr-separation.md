@@ -4505,6 +4505,22 @@ Watch46732 polls585 every55seconds and prints changes only. Nix586 is live on
 Next: collect585 terminal, publish prepared #25774c76c0f with exact lease5900462a,
 then keep #256 first in protected delivery order. No new remote front or PR.
 
+Completed local #259 prerequisite reconciliation without publishing or changing
+its implementation. Backup `refs/backup/pr259-before-current-delivery-20261009`
+preserves remote `901053518982ca3ecbc87530f5b5d387d7b80913`. New local head
+`bd3a6a60775de97b81b7cf0a9ff5affbd0250792`, tree
+`34ec39041b69e0068154156845e150c4fefa4df7`, rests on corrected #258 `d25c08dd`.
+The owned diff remains 31 files, 2,445 additions and 382 deletions. Per-file
+stable patch IDs match the original for every owned file except HTTP suite
+registration; range-diff confirms that exception is surrounding registration
+context, with the same own-submission module and invocation retained. Both
+follow-up commits compare equal. `git diff --check` passes. This proves patch
+conservation, not build or UI acceptance. The historical calendar drag finding
+remains open; finish its bounded review and regression correction before delivery.
+No local build is running. #256 Nixbot586 and #257 Nixbot585 remain live; the
+latter's only pending attribute is x86 browser, whose log continues advancing.
+Do not replace its published head before that execution becomes terminal.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
