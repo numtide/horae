@@ -2625,10 +2625,14 @@ Deliveries #221, #223, #222 and #225 are also merged with both-Linux acceptance.
 #226 passed its source-head gates, but its queue build524 exposed an ARM CSV
 transport regression; it is removed from the queue with auto-merge disabled.
 #227 is merged with exact combined-tree and protected-queue acceptance. #228
-is published at9ea69fa2 on its actual merge, with1,247 native tests accepted
-and fresh SQLx/format passing; remote528 failed ARM browser/OIDC. CSV delivery #231
-is now stacked on #228 at a34a1348 with1,250 combined native tests/SQLx passing;
-Nixbot529 failed ARM deployment/OIDC on its exact239d1051 tree. The earlier independent
+is published at f465f7a0 on its actual merge, with browser synchronization and
+test-only systemd corrections. Native Rust/browser/SQLx acceptance and the
+extended TCG regression passed; final native VM checks and remote530 are live.
+The earlier remote528 failed ARM browser/OIDC. CSV delivery #231 remains
+published at a34a1348, with1,250 native tests/SQLx passing on that old tree;
+Nixbot529 failed ARM deployment/OIDC on its exact239d1051 tree. Local216440b5
+now inherits f465f7a0, with fresh native tests/SQLx validation15705 in progress.
+Both owned commits are unchanged; the new head is not published. The earlier independent
 head dcf68d2e passed GitHub and both-Linux Nixbot526. Neither result proves
 the shared transport issue repaired.
 #232 is locally stacked at45c923a3 on #231, with1,264 combined native tests,
@@ -2637,11 +2641,12 @@ published yet. #238 is locally stacked on #232 at30cb18af with1,277 native
 tests, SQLx and format passing. Its earlier independent c6efb30a passed1,250
 native tests. Both preparations remain unpublished.
 #235 is locally reviewed and stacked on #238 at7f89ce45, with1,286 combined
-native tests, SQLx and format passing; it remains unpublished. #228's original
-build528 now has an ARM browser readiness failure and stays out of the queue
-while local browser repair e6e258be completes full validation. Its controlled
-red/green reproduction passed; the VM readiness defect remains unresolved.
-No current repair is published.
+native tests, SQLx and format passing; it remains unpublished. These three
+local downstream heads still use the earlier a34a1348 base. Reconcile them
+with the accepted integrated base before publishing; do not attribute their
+historical tests to a future tree. #228 stays out of the queue until its
+current remote acceptance finishes; the published VM correction has passed
+controlled local regressions, but ARM acceptance is not yet established.
 The failed #226 combination remains held; independent deliveries may advance
 only on exact current-tree acceptance, without claiming that failure repaired.
 Full current CI remains required. These preparation
