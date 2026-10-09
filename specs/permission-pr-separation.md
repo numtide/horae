@@ -4246,6 +4246,35 @@ No completed merge claimed. #255 Nix577 now has only ARM deployment live;
 Next: collect #254 source/queue gates and verify actual squash tree/parent,
 then reconcile #255 only after full acceptance. Keep at most two remote deliveries.
 
+Verified #254 merged at13:50:59 UTC through queue37939633724. Actual squash
+0d3b0ef0dbb12756f999eabc34a0f87e60c7264e has parent e41250e1 and expected tree
+f02ad4eeb20f8751623a43cd293726f3e37f95bc. No source changes in reconciliation.
+
+#255 Nix577 completed both-Linux acceptance at13:54:14 UTC on0355dee4 and
+treed995c9610d8f282e460227dc6feda5d3bd406c87. Automatic base retarget triggered
+Nix579, which failed before evaluation because old squash ancestry conflicted
+with master. Backed up at refs/backup/pr255-before-picker-squash-20261009,
+rebased the single commit onto actual0d3b0ef0, verified identical whole tree,
+and exact-lease published6e0fa568d1fce0751c60dfa5ced5955ec03c5391. Nixbot reused
+577 acceptance on the new head. Marked ready; protected auto-merge enabled
+13:56:37. GitHub source37940439122 live; no merge claimed yet.
+
+#256 backed up at refs/backup/pr256-before-reader-reconciliation-20261009,
+rebased onto6e0fa568 preserving validated tree4568e053, then exact-lease published
+ee648e08ed6f06ea578e49f8d784c374579f0ce2 on the existing PR, temporarily targeting
+feat/scoped-time-reader. No merge into that temporary branch. Nix581 is live;
+review-thread query found no threads. This is the second remote delivery, not
+a new PR. Wait for both-Linux acceptance before final master reconciliation.
+
+#257 fresh validation93005 completed successfully on8211bb20 / tree66830de5:
+189core+1161server+201auxiliary=1551 passed, zero failures,11existing ignored;
+server212.08s. Full SQLx and formatting578unchanged passed. Outputs
+ihfz0vrx9fg40x3vlfy4qimaay0m1bs3 tests andm8by7dw0y891vrxfdzspb107a1wss68s SQLx.
+Branch remains local-only pending a remote delivery slot. Next: collect #255
+source/queue gates and actual squash, retain #256 live head until CI completes,
+then publish prepared #257 as slots permit. #212 remains untouched; journal
+updates remain local on the existing #218 branch until explicitly published.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
