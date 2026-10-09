@@ -5232,6 +5232,32 @@ validation and unpublished status. Disk21 GiB during the single local build;
 no additional build or cleanup started. Next: collect these same handles and
 publish #264 only after its local gate completes.19 functional PRs remain.
 
+### #263 both-Linux acceptance complete; #264 full local gate passed
+
+Nix602 succeeded at2026-10-09 20:10:46 UTC on224b8204, exact
+tree9625fd9df43cf0d0577794f6c672b6f947748fd1. All16 build/test attributes
+succeeded on both Linux architectures, six local-only skipped. Each passed
+189 core,1233 server and201 auxiliary tests, zero failures and11 inherited
+ignored; server209.65s x86,238.78s ARM. Browser, package, Clippy, SQLx, formatting,
+deployment and OIDC passed. Watch84250 exited0. Published acceptance in #263's
+existing body. Required GitHub37983147107 remains live, watched by21542; no
+restart or merge bypass. Reviews/threads remain empty.
+
+#264 local2612 completed exit0 on83f1fddc, treef2b56548: formatting601 unchanged,
+strict Clippy, live SQLx,189 core,1248 server and201 auxiliary tests passed,
+zero failures and11 inherited ignored; server296.79s. All10 scoped CSV tests,
+five parser tests and registered HTTP authorization fixture passed. No source
+edits during the build; no local build remains active. Disk21 GiB last checked.
+
+Confirmed clean #264 and unchanged remote74b98399, empty reviews/threads.
+Retargeted the existing PR to feat/scoped-time-xlsx. Retarget-only Nix603 on
+old74b98399 failed immediately with merge conflict and null tree at20:15:13;
+confirmed terminal before requesting exact74b98399-lease publication. Prepared
+body.scratch/pr264-current-delivery.md records complete local evidence while
+keeping both-Linux and protected GitHub acceptance pending. Next: confirm push,
+publish that body, collect the fresh Nix build, and integrate #263 only after
+its still-live GitHub gate passes.19 functional PRs remain; no new PRs.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
