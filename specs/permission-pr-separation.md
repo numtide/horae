@@ -4905,6 +4905,29 @@ Both active deliveries still have no terminal failure; monitor session2279
 polls only595/596 at45-second intervals and prints state changes. Required
 GitHub37975649246/37975763858 remain live. No third remote delivery was started.
 
+### Local grouped-reader validation while two remote builds finish
+
+Advanced the reviewed #262 locally to use the wait productively, without
+publishing a third delivery. Backup
+refs/backup/pr262-before-current-report-reader-20261009 preserves3cd060ba.
+Rebased its single owned commit onto #261dce0b134 with rebase.updateRefs
+disabled and no conflicts. Local head1e725e53b7ab80a57547f06eec2852e95f36f232,
+treef53be649339a6d51c2782e17b49e945fa968d212. Range-diff changes only ownership
+of one identical SQLx descriptor now inherited from #258/#261. All reader/DTO/
+database/HTTP files and all10 original descriptors remain byte-identical.
+
+Started local session44480: formatting followed by native tests, SQLx and Clippy,
+eight cores, max-jobs1, disposable Nix PostgreSQL only. Disk had34GiB free. Do
+not edit or rebase this worktree while the command runs. Prepared unpublished
+body.scratch/pr262-current-delivery.md identifies the local head and limitations.
+
+Remote #259595 and #261596 remain live without failures. Completed x86 server
+results:1195 passed for595 in166.26s;1187 passed for596 in186.18s; both zero
+failures and11 inherited ignored. Monitor2279 remains the only Nix poller for
+these two deliveries. Next: collect their remaining ARM/browser/deployment and
+GitHub gates, integrate the first accepted delivery through the protected queue,
+then reconcile the remaining tree only after its current build terminates.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
