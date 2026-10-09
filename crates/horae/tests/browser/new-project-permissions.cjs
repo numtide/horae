@@ -170,7 +170,12 @@ const name = 'Permission fixture project';
       if (scenario.progress) await expect(detailRegion).toContainText(name);
       else await expect(detailRegion.getByRole('alert')).toContainText('Could not load project details');
       if (!scenario.private) await expect(detailRegion).not.toContainText(privateNote);
-      await visit('/projects/new');
+      // Navigation may finish before hydration issues the permission request.
+      const [optionsResponse] = await Promise.all([
+        page.waitForResponse(response => /^\/api\/project_creation_options\d+$/.test(new URL(response.url()).pathname)),
+        visit('/projects/new'),
+      ]);
+      assert.equal(optionsResponse.status(), scenario.rates ? 200 : 403, scenario.label);
       if (scenario.rates) {
         await expect(screen).toBeVisible();
         await expect(screen.getByLabel('Notes', { exact: true })).toHaveCount(scenario.private ? 1 : 0);

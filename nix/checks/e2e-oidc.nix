@@ -10,6 +10,7 @@ pkgs.testers.nixosTest {
   name = "horae-e2e-oidc";
   nodes.server = { config, lib, ... }: {
     imports = [ flake.nixosModules.horae ];
+    systemd.package = import ../test-systemd.nix { inherit pkgs; };
     # Keep guest executable reads off 9p when the builder falls back to TCG.
     virtualisation.useNixStoreImage = true;
     # Preserve the writable overlay needed by register-nix-paths.service.

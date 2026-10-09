@@ -11,7 +11,7 @@ pub(super) async fn save(
     role: OrgRole,
 ) -> Result<(), ServerFnError> {
     let org_currency = sqlx::query_scalar!(
-        "SELECT default_currency FROM organizations WHERE id=$1 FOR SHARE",
+        "SELECT default_currency FROM organizations WHERE id=$1",
         org_id
     )
     .fetch_one(&mut **tx)
