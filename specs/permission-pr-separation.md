@@ -6434,6 +6434,28 @@ reviews were present in the immediately preceding audit. Next: collect this
 required run, revalidate readiness, and submit #269 to the protected queue.
 Local #270 session42631 remains running; do not rebase its worktree meanwhile.
 
+### Project editor merged through the protected queue — 2026-10-09
+
+Required PR run38003426285 passed on #269 `8ed14b59` (Flake Check50s,
+Format45s). Fresh readiness checks confirmed master base, clean/mergeable
+state, successful current-head Nixbot checks and no review blockers. Marked
+the existing PR ready and submitted the exact head to the protected queue
+at23:16:34 UTC, position1; no bypass or branch deletion.
+
+Protected merge-group run38003623154 passed (Flake Check46s, Format50s).
+The first post-check read still showed OPEN, so no merge was claimed then.
+Subsequent authoritative read confirms MERGED at23:18:13 UTC as
+`21452bdd41402f73dd010867b3b340e8ce03010f`. Fetched master and verified the
+complete tree equals accepted `0079046cb28ac04c9552a5d7a22ea41fc79ba822`.
+Twelve functional PRs remain; #212 is still the reference, not a merge target.
+
+Local #270 session42631 continues browser checks, including 200% text and
+keyboard-only creation; full native acceptance is still pending. Keep its
+worktree frozen. After it finishes, reconcile its owned commits from188750d8
+onto actual #269 merge21452bdd, verify exact-tree preservation, and deliver
+the existing PR with the correct base before pushing. Prepared #271–#273
+remain local and unaccepted; start only one heavy gate after #270 completes.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
