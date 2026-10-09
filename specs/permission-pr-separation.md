@@ -2728,6 +2728,26 @@ continues without interruption. #235 is now the only active remote delivery.
 Next: collect539 before publishing7726c85f, revalidate reviews/current-head
 GitHub gates and use the protected queue. #226 remains held, not retried.
 
+Prepared #241 locally on actual master b60ed44f after revalidating the current
+repository and remote state. New head b4edd434a58b8656a7c412d5f235f2845628b379,
+tree51da9d21187116b80bef9a869ba8d22494218cec; backup
+refs/backup/pr241-before-current-delivery-20261009 retains52df7c01. Rebase is
+conflict-free; the source commit and all four owned Rust files are unchanged.
+Only SQLx descriptor0842ccee is now inherited from master. Owned scope remains
+T171–T173: 14 files,602 additions,22 deletions, no new UI/policy/schema.
+
+Reviewed the interactive writers, trusted actor routing, lock order, cancellation,
+service/submission boundaries and existing regression matrix against the
+time-writer-activity contract. The organization-gated tests use the shared
+access-change helper, not the complete user-administration command; this is not
+cross-feature T042 acceptance. Formatting passed515 files with zero changes.
+Native tests, SQLx and treefmt are running in session83821 with disposable
+PostgreSQL and GC roots under .scratch/pr241-current-delivery-checks. No current
+test success or remote publication is claimed yet. #235 remains the only remote
+delivery: watcher74994 confirms539 live, now only ARM browser/deployment/OIDC
+checks remain. GitHub confirms masterb60ed44f and no review threads on #235.
+Next: collect existing539/83821; publish only their accepted prepared heads.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
