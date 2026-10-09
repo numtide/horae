@@ -5312,6 +5312,18 @@ starting. Do not edit this worktree while validation runs. #265 is not published
 or claimed accepted yet. Next: collect this local gate and current #264Nix604;
 publish at most two simultaneous remote deliveries with current evidence.
 
+### Current validation handles after #263 merge
+
+Local #265 full gate is session15065, running on unchanged be7b7749. Formatting
+completed successfully (the chained Nix build started); strict Clippy is now
+building, core phase finished. Clippy derivation8ivd4pv629bqz3kb98cc0blbbnq956z2.
+No source edits after build start. Nix604 for #264 has left the external queue
+and is evaluating/building: five attributes building, one pending and three
+local-only skipped in the partial evaluation snapshot. Keep observing the same
+build; its attribute inventory is not yet final. Previous turn made progress
+through the verified #263 merge and local #265 reconciliation; current wait is
+verified on live session15065 and Nix604, not a blocker.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
