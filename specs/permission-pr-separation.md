@@ -5011,6 +5011,40 @@ Current remote deliveries: #259cee459de/Nix598/GitHub37978973703 and
 these current gates, do not replace either head during its live Nix build,
 and integrate #259 before its grouped-reader successor. #212 stays untouched.
 
+### #263 reviewed and prepared locally on the current delivery stack
+
+Reviewed the two owned commits of #263 at130d166f against the ordinary
+time-report contract: session-derived tenant/actor, strict policy/grants,
+own/managed/all union before filters and sizing, one-statement size/payload,
+captured original person/project release scope, cancellation and bounded
+render admission. Read the complete12-test authorization module and HTTP
+assertions, including the explicit rollback/deferred-pool-cleanup regression.
+No critical/high finding in this delivery. Shared URL transport, grouped
+downloads and Reports UI remain later deliveries; policy activation is excluded.
+
+Confirmed old Nix464 terminal before touching the clean worktree. Saved
+refs/backup/pr263-before-current-report-stack-20261009 at130d166f and rebased
+only8e714fae..130d166f onto #262423a36ea. Inspected the reused resolution in
+limits.rs: it retains current authorize_project_rows and the added time module.
+Both original commits remain; the rollback patch is equal in range-diff.
+The only ownership change is one SQLx descriptor already inherited. All11
+original added SQLx descriptors and the complete time authorization module and
+tests are byte-identical; other differences are inherited merged changes and
+#262's grouped HTTP registration.
+
+Local headcf8be2c4ea0478ad90ba54d81a20cd67fc98f1b3,
+tree9625fd9df43cf0d0577794f6c672b6f947748fd1. Formatting597 files unchanged.
+Session2031 is running tests, live SQLx and strict Clippy with8 cores and one
+build job, using disposable Nix PostgreSQL only. Disk had32 GiB available.
+Do not edit/rebase this worktree until that session is terminal. Remote #263
+remains unchanged at130d166f; do not publish a third active delivery.
+
+#259Nix598 has13 succeeded attributes, with only ARM browser/deployment/OIDC
+still building; required GitHub37978973703 remains live. #262Nix600 has10
+succeeded and6 building. Neither source has been replaced. Next: collect
+these exact gates, integrate #259 when fully accepted, then reconcile #262
+without changing its accepted tree. Preserve #212 and the21-PR remaining scope.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
