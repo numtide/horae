@@ -4405,6 +4405,30 @@ browser/deployment/OIDC ARM and x86 gates remain live/pending. GitHub source
 37943359692 still runs. #257585 is building. Watch12123 checks584 every55seconds
 and emits changes only. Next remains full acceptance and protected #256 merge.
 
+GitHub source run37943359692 terminated with a distinct native regression:
+streamed_cancelled_authorization_reclaims_its_single_connection timed out in
+closed_backend (1154 passed/1 failed/11 ignored,331.83s). No automatic retry.
+The helper's five-second observer deadline races the export's five-second
+statement timeout and SQLx0.8.6's five-second close-on-drop deadline. Verified
+the pinned dependency and its upstream pool/connection.rs implementation.
+Prepared a four-line test-only correction in #256's existing worktree: observe
+backend disappearance for ten seconds, with the reason documented. Keep the
+artificial writer lock held, require confirmed task cancellation and backend
+disappearance, and retain the single-connection export reuse assertion. No
+runtime timeout, SQL query, assertion, or authorization behavior changed.
+Fresh local Nix native/SQLx/format validation18581 is running; do not edit this
+worktree while it builds. Published #256f0d61e24 and #2575900462a are unchanged;
+584/585 remain live, so do not publish over them or claim merge readiness.
+Next: collect18581 and terminal584, commit/publish the validated correction
+with an exact lease, then propagate through the existing #257/#258 branches.
+
+Read-only #259 review advanced through Timesheet source lines1–1210, its
+data/people/tracking/refresh helpers, submission changes and submission tests.
+Verified session/subject/policy guards, keyed view remounts and retained cell
+drafts during refresh. This is partial review, not UI or feature acceptance;
+remaining Timesheet code, browser tests and shared design references still
+need review. Branch90105351 remains untouched and no new PR was opened.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
