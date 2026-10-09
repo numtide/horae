@@ -1,7 +1,7 @@
 // Only the browser runner's disposable PostgreSQL fixture may enable policy 1.
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const { execFileSync } = require('node:child_process');
-const { mkdirSync } = require('node:fs');
+const { readFileSync, mkdirSync } = require('node:fs');
 const { join } = require('node:path');
 const assert = require('node:assert/strict');
 const base = process.env.HORAE_TEST_URL;
@@ -11,11 +11,10 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id, org_id FROM users WHERE email='admin@example.com' AND active AND org_role='admin') u"));
-assert.match(actor.id, /^[0-9a-f-]{36}$/);
-assert.match(actor.org_id, /^[0-9a-f-]{36}$/);
-assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
-assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
+// Implicit Dioxus endpoints carry a build-specific hash.
+const serverStrings = readFileSync(process.env.HORAE_TEST_SERVER).toString('latin1');
+const identityEndpoints = [...new Set(serverStrings.match(/\/api\/get_me\d+/g))];
+assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identity endpoint');
 const stateId = '01960000-0000-7000-8000-000000000801';
 const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expense_write_own']";
 
@@ -24,6 +23,7 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   let releaseRead;
+  let actor, fixtureStarted = false;
   page.on('pageerror', error => errors.push(error.stack || error.message));
   const section = page.getByRole('region', { name: 'Your permissions', exact: true });
   const refresh = section.getByRole('button', { name: 'Refresh permissions', exact: true });
@@ -31,6 +31,15 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
+    // Earlier suites may leave another administrator selected by dev login.
+    const identity = await page.context().request.post(`${base}${identityEndpoints[0]}`, { data: {} });
+    assert.equal(identity.status(), 200, await identity.text());
+    actor = await identity.json();
+    for (const id of [actor.id, actor.org_id]) assert.match(id, /^[0-9a-f-]{36}$/);
+    assert.equal(actor.org_role, 'admin');
+    assert.equal(sql(`SELECT active FROM users WHERE id='${actor.id}' AND org_id='${actor.org_id}'`), 't');
+    assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
+    assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
     await page.goto(`${base}/settings`);
     await expect(section).toContainText('Detailed permissions are not enabled');
     await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
@@ -40,6 +49,7 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
       INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
       VALUES ('${stateId}', '${actor.org_id}', '${actor.id}', 1, ${floor} || ARRAY['invoice_read_managed'], false, 'individual');
       UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'; COMMIT;`);
+    fixtureStarted = true;
     await refresh.focus();
     await page.keyboard.press('Shift+Tab');
     await page.keyboard.press('Tab');
@@ -104,7 +114,7 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
   } finally {
     releaseRead?.();
     await browser.close();
-    sql(`BEGIN;
+    if (fixtureStarted) sql(`BEGIN;
       UPDATE users SET active=true WHERE id='${actor.id}';
       UPDATE organizations SET permission_policy_version=0 WHERE id='${actor.org_id}';
       DELETE FROM person_permission_states WHERE id='${stateId}' AND org_id='${actor.org_id}'; COMMIT;`);
