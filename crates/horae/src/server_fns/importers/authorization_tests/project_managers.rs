@@ -174,6 +174,20 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         api.json("save_project_managers", keep, &cookie).await,
         json!({"project_id":ids.project_id,"access_revision":1,"changed":false})
     );
+    let request_id: Uuid = serde_json::from_value(command["request_id"].clone()).unwrap();
+    let receipt_id=sqlx::query_scalar!("SELECT id FROM permission_change_receipts WHERE org_id=$1 AND actor_user_id=$2 AND request_id=$3",ids.org_id,ids.user_id,request_id).fetch_one(pool).await.unwrap();
+    for (name, body) in [
+        ("get_permission_audit", json!({"receipt_id":receipt_id})),
+        (
+            "list_permission_audit",
+            json!({"after":null,"expected_requester":requester}),
+        ),
+    ] {
+        assert_eq!(
+            api.call(name, body, Some(&cookie), false).await.status(),
+            StatusCode::FORBIDDEN
+        );
+    }
     grants(
         pool,
         ids.org_id,

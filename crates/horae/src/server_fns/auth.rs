@@ -31,6 +31,70 @@ pub async fn get_me() -> Result<crate::models::user::CurrentUser, ServerFnError>
     })
 }
 
+/// Read one permission-change record under the session's current Administrator authority.
+/// Missing and foreign receipt IDs are indistinguishable; snapshots confer no authority.
+#[server]
+pub async fn get_permission_audit(
+    receipt_id: uuid::Uuid,
+) -> Result<Option<crate::models::permission_audit::AuditEntry>, ServerFnError> {
+    let user = require_user().await.map_err(|error| match error {
+        error @ ServerFnError::ServerError {
+            code: UNAUTHORIZED, ..
+        } => error,
+        error => {
+            tracing::error!(%error, "Unable to authenticate permission history request");
+            server_err("Permission history is unavailable")
+        }
+    })?;
+    let state = crate::state::global_state().await;
+    super::permissions::audit::read(&state.db, user.org_id, user.id, receipt_id)
+        .await
+        .map_err(|error| match error {
+            super::permissions::audit::AuditReadError::Forbidden => {
+                forbidden("Current administrator authority is required")
+            }
+            error => {
+                tracing::error!(%error, "Unable to load permission history");
+                server_err("Permission history is unavailable")
+            }
+        })
+}
+
+/// Browse bounded permission history under current explicit Administrator authority.
+#[server]
+pub async fn list_permission_audit(
+    after: Option<crate::models::permission_audit::AuditCursor>,
+    expected_requester: Option<crate::models::permission_editor::PermissionRequester>,
+) -> Result<crate::models::permission_audit::AuditPage, ServerFnError> {
+    let user = require_user().await.map_err(|error| match error {
+        error @ ServerFnError::ServerError {
+            code: UNAUTHORIZED, ..
+        } => error,
+        error => {
+            tracing::error!(%error, "Unable to authenticate permission history request");
+            server_err("Permission history is unavailable")
+        }
+    })?;
+    let state = crate::state::global_state().await;
+    super::permissions::audit::page(
+        &state.db,
+        user.org_id,
+        user.id,
+        after.as_ref(),
+        expected_requester,
+    )
+    .await
+    .map_err(|error| match error {
+        super::permissions::audit::AuditReadError::Forbidden => {
+            forbidden("Current administrator authority is required")
+        }
+        error => {
+            tracing::error!(%error,"Unable to load permission history");
+            server_err("Permission history is unavailable")
+        }
+    })
+}
+
 /// Explain the session person's scoped permissions, or None before activation.
 /// This display snapshot cannot authorize later requests or select another user.
 #[server]
