@@ -3841,6 +3841,25 @@ complete but its prepared head is not yet published. Next: collect #243's source
 and queue gates, verify its actual squash, then reconcile #244 without changing
 its accepted tree. Do not merge either downstream PR into an intermediate branch.
 
+#243 merged at12:06:48 UTC through the protected queue asbf144b7ffe5568e15c9e0e7c97c3c83c769cb697,
+parent5b7a1bc4, treebd7d2d2f5caea3fe6d3bdaec5fcd48321628b0bd, exactly the accepted
+delivery. Source37927540504 and queue37927790494 passed both required gates.
+
+Nixbot563 for #244 has a new concrete x86_64 test failure: immediate CSV rejection
+across two Tokio threads, attempt88 of expected403, returned indeterminate_submission.
+The newly retained error identifies reqwest SendRequest / hyper IncompleteMessage;
+1,082 server tests passed, one failed,11 ignored (128.68s). ARM tests passed;
+remaining VM/browser work was live when collected. Do not retry or merge #244 on
+its earlier local acceptance. Keep #245 unpublished while investigating this
+shared failure. Current CLI creates one Transport per command and sends CSV once;
+the regression reuses one Transport for256 submissions per status. Connection
+reuse/early-close races are a hypothesis, not yet proven as this failure's cause.
+Started isolated traced reproduction19150, derivation3kgqr9pgs3mkvz4dvc354pkc55cn6psl,
+from unchanged #244 via .scratch/csv-rejection-connection-diagnostic.nix. It keeps
+all assertions and preserves its terminal trace; no production/worktree source
+was edited. Next: inspect its evidence and resolve the failing gate before
+publishing further downstream deliveries. #212 remains untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
