@@ -6385,6 +6385,36 @@ mandatory. Collect session42631 before changing or publishing #270; only then
 start the already-prepared #271 heavy gate. #271/#272 remain local preparations,
 not accepted or published deliveries.
 
+### Task-reader dependency preparation — 2026-10-09
+
+Prepared existing #273 locally while #270's sole heavy gate continues. Verified
+the old remote/local head `a68c1b5b`, terminal historical Nix456, and a clean
+worktree. Saved `refs/backup/pr273-before-current-task-reader-stack-20261009`,
+then rebased the two owned commits onto prepared #272 `c2ffc3a4` with
+`rebase.updateRefs=false`. New head: `e05048bfc23ba974d344b9b16c0e12d542cc7388`;
+tree: `b796b190cf8d6e3ef60c478ebcc160cab8d0eb9c`.
+
+Only the shared HTTP and browser registration lists conflicted. Retained
+every inherited case and registered the original task-reader fixture once.
+Sixteen of nineteen original owned paths are byte-identical, including all
+runtime readers, added test modules, five added SQLx descriptors and the
+obsolete descriptor deletion. Besides the two registries, shared CSS differs
+only by the inherited Timesheet drag-offset rule; the owned three-line
+sidebar popover/resize fix is unchanged. Range-diff confirms registry-context
+changes only and an identical descriptor-removal commit. Nix formatting
+session7701 exited zero, 648 files unchanged; whitespace passed. No source
+behavior or assertions were weakened. Full current-tree verification and
+sidebar interaction acceptance remain pending; no push or heavy build.
+Prepared description: `.scratch/pr273-current-delivery.md`.
+
+Nix615 still has fifteen successes and one live ARM deployment test, with no
+reported failure. Its attribute15528687 started at22:56:18 UTC and has no
+available log bytes yet; do not infer a timeout or restart it. Observer97081
+has terminated, so future observations must use the build API, not that dead
+handle. Local #270 session42631 remains live and continues passing browser
+scenarios. Next actions remain #269 terminal acceptance and missing required
+CI trigger, followed by #270 completion and the prepared #271 gate.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
