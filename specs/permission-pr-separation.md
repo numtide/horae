@@ -6288,6 +6288,30 @@ Collect27049430, complete its runtime/visual acceptance before publishing, and
 run271's full gate only when the sole local build slot is free. No new PR,
 real-data mutation, policy activation, journal push or change to212.
 
+### Project-reader visual capture prepared while existing gates run
+
+The previous turn was progress:271 was prepared and270's corrected strict
+Clippy passed. This iteration confirmed the same live handles, without retries:
+269Nix615/watch97081 advanced to11 passed/5 building/6 local-only skipped, no
+failed attribute;27049430 completed its WASM client and continues the server
+package. No full-package or remaining-gate acceptance is claimed yet.
+
+Prepared .scratch/pr270-capture copies of the existing disposable browser runner
+and project-read-permissions fixture. Screenshot hooks cover overview, detail
+and revoked access at1440-dark and390-light; all original assertions remain.
+The overview capture waits for progress loading to finish. Node/bash syntax
+passed. The committed worktree is unchanged and frozen. Resolved the existing
+package output without another build as
+/nix/store/f3864ski1ll4ch573v45arhg8qavkkf4-horae-0.1.0.
+Captures have not run: use that package and the already resolved Playwright
+environment after the full browser phase, with a separate disposable database
+and artifacts under .scratch/pr270-visual-e70c06b9. No real data or mail transport.
+
+Next preserve269's head until615 terminates, then trigger its missing required
+GitHub CI with tree-preserving metadata refresh and exact lease. Collect270's
+remaining gates and bounded captures;271 is prepared but unpublished and has
+no heavy build. No new PR, source change, activation or212 modification.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
