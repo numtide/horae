@@ -3168,6 +3168,18 @@ is not publication acceptance. No source edits or third remote delivery.
 Next: verify #237's actual merge/tree; collect49164 and continue #249's bounded
 test review while #247550 runs. Preserve #212 and the unresolved #226 hold.
 
+Verified #237 MERGED at2026-10-09T09:20:57Z as
+811941343153b54c9c80e5e31443d206a96a4ddd, parentaa8e9ef9. Its actual tree is
+6c66f37ffd2be09125831f556235e625560bbbf3, exactly the reviewed/native/Nixbot547
+tree. Protected merge-group37910555123 passed Flake Check54s and Format39s;
+watcher41987 exited successfully. Remote master equals81194134. #212 remains
+OPEN/draft atdb3935db364f2a8aa193f0e938ce40ecc01a2f92. #247 automatically
+retargeted to master with head5950fdb1 unchanged. Keep its active Nixbot550
+untouched; reconcile onto the actual #237 squash only after550 is terminal.
+Local #24949164 remains live in SQLx preparation on673d95a2, with no source
+edits. Next: collect550/49164, complete #249's test review and deliver #247
+through its own master-targeted checks/queue. No new PR or feature was added.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -3296,10 +3308,13 @@ before evaluation. #23666ff076b is published on master82c11cda with the identica
 ada47e05 tree and merged asaa8e9ef9 after GitHub37909003313 and protected
 merge-group37909249946 passed. #237 is published atfcf1250f/tree6c66f37f on actual
 masteraa8e9ef9 after native tests (1,315), SQLx, format, bounded review and
-both-Linux Nixbot547 passed. Source workflow37910361697 is live; protected
-queue acceptance remains required. #247 is published on #237 as5950fdb1/tree535ae5a7;
+both-Linux Nixbot547 passed. Source37910361697 and protected merge-group37910555123
+passed; #237 merged as81194134/tree6c66f37f. #247 is published as5950fdb1/tree535ae5a7;
 native40270 passed1,336 tests, SQLx and format. Its bounded T104–T109 review
-found no critical/high issue; Nixbot550 is live. These are the two remote deliveries.
+found no critical/high issue; Nixbot550 is live, the sole active remote delivery.
+It auto-retargeted to master after #237 merged; reconcile ancestry after550 ends.
+#249 is prepared locally as673d95a2/tree18266223, native49164 live and test review
+pending; its remote remainsc990d11e. No third remote build has been requested.
 #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
