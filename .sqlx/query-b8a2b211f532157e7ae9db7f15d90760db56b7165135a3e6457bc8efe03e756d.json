@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE permission_change_receipts ADD CONSTRAINT test_reject_profile_audit CHECK (false)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "b8a2b211f532157e7ae9db7f15d90760db56b7165135a3e6457bc8efe03e756d"
+}
