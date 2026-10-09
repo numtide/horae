@@ -3522,6 +3522,22 @@ Source stable patch ID73e590396047ecddd066982ed54d40b0787cdcb0 matches the
 former delivery. Prepared its replacement description in root
 `.scratch/pr246-current-delivery.md`, not yet published. No real DB touched.
 
+Protected run37919726153 passed (Flake Check58s, Format50s), watcher24865 exited
+zero. #234 merged at10:48:38 UTC asb50ec27e46c9a304df9db620fe7c8f6f949cf534,
+parentff3fde10, tree43fb4002d5ea2c7d214820544eea3ca35be6483b. The actual
+master ref and exact accepted-tree equality are verified. This completes its
+internal command delivery, not policy activation or Harvest parity.
+
+#246 native21576 is still live, now compiling the server test target; core189
+passed and SQLx/format already passed. No source file was edited during the
+check. Next collect21576; reconcile its owned patches onto actual masterb50ec27e
+only after the local process terminates, preserving its backup, reader and tests.
+The final combined tree then needs current both-Linux/master-targeted/protected
+checks; old local-base results must not be represented as exact combined-tree
+acceptance. Publish existing #246 with an exact786af946 lease, not a new PR.
+#243/#244 are also now dependency-ready, but keep at most two remote deliveries
+active. Both #234 watchers are terminal; no queue watcher remains live.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -3661,8 +3677,10 @@ critical/high issue. Nixbot551 passed. Published ancestry-only92e56565 on
 actualmaster34ef9f81 with identical18266223 tree; source37913664711 and protected
 merge-group37913931083 passed. #249 merged as6d19a88f/tree18266223.
 #226 merged asff3fde10/tree92b3e1fc after current both-Linux Nixbot553,
-source37916121654 and protected merge-group37918902378 passed. #234 is being
-reconciled onto this actual squash without changing its accepted tree43fb4002.
+source37916121654 and protected merge-group37918902378 passed. #234 merged
+asb50ec27e/tree43fb4002 after Nixbot555, source37919410433 and protected
+merge-group37919726153 passed. #246 is reviewed and validating locally before
+publication on the actual integrated master.
 #228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The historical524 failure is not claimed repaired. Deliveries require exact
