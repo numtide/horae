@@ -4980,6 +4980,37 @@ This is delivery ordering, not a new product dependency. Rebase/conservation,
 base retargeting and fresh combined-tree Nix checks are required before that
 publication. No third delivery or new PR has been opened.
 
+### #262 local gate passed and published on the ordered delivery stack
+
+Collected session44480 exit0 on1e725e53: formatting590 files unchanged,
+strict Clippy, live SQLx cache validation,189 core,1200 server and201 auxiliary
+tests passed; zero failures,11 inherited ignored, server263.83s. All13 grouped
+regressions and registered HTTP authorization assertions passed. The worktree
+was not edited/rebased during validation. Review threads/reviews remain empty.
+
+After terminal completion, backed up1e725e53 in
+refs/backup/pr262-before-timesheet-ui-stack-20261009 and rebased only its owned
+grouped-reader commit onto #259cee459de. No conflicts; range-diff reports an
+equal patch. Current head423a36eac98e5dce38b7a7e0f9361194cf375297,
+tree12250f9e83726b1922a74a44b62fbc5a08370a1c. DTO, reader, database/HTTP tests
+and all10 original SQLx descriptors are unchanged. Nine descriptors remain
+owned additions; one is inherited. The full current tree additionally includes
+#259's UI, so old local acceptance is not complete current-tree acceptance.
+
+Retargeted existing #262 to feat/timesheet-selected-person-ui. Retarget-only
+Nix599 on old3cd060ba terminated immediately with a base merge conflict and
+no tree; after confirming that terminal state, published423a36ea with exact
+lease3cd060ba and updated the existing PR body. Nix600 is evaluating that
+combined tree. It remains draft; after #259 merges, reconcile ancestry without
+changing this tree, ensure master base and required GitHub checks, and use the
+protected queue. This delivery ordering adds no product dependency or new PR.
+
+Current remote deliveries: #259cee459de/Nix598/GitHub37978973703 and
+#262423a36ea/Nix600. No local build remains live. Nix598 watcher95799 runs at
+45-second intervals; earlier2279 and local44480 are terminal. Next: collect
+these current gates, do not replace either head during its live Nix build,
+and integrate #259 before its grouped-reader successor. #212 stays untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
