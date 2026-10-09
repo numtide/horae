@@ -18,6 +18,9 @@ mod project_people_tests;
 #[path = "subjects.rs"]
 mod subjects_tests;
 
+#[path = "time_entries.rs"]
+mod time_entries_tests;
+
 async fn save_state(
     pool: &PgPool,
     org: Uuid,
