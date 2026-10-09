@@ -5521,6 +5521,29 @@ Next: collect Nix604/watch65000, publish prepared2649c44 with exact83 lease,
 collect fresh gates plus Nix605, and keep native266session17446 running without
 source edits. At most two remote deliveries remain active;18 functional PRs.
 
+### Current remote/native watchers and corrected publication body
+
+Verified Nix605 evaluates the exact published #26569cbd68c/treeab956f71 with no
+failures; changes-only watcher26435 now observes it every45 seconds. #264604
+still runs only x86 tests, with logs advancing through time-entry cases; watcher
+65000 remains live. Do not replace remote83 until604 is terminal.
+
+#266 local17446 passed strict core/server Clippy (server2m18s) and now runs live
+SQLx. Clippyvff73mg54s6yg76ika1dnafr63d8gf22;
+SQLxgd0v7x7r7lljcvv4c16y0rdzw2mswb2z. Worktree1fa434d4 stays frozen.
+Prepared.scratch/pr264-corrected-delivery.md for the next exact83-lease push of
+9c44db39, separating unchanged application/native evidence from whole-tree
+browser acceptance and required fresh remote checks. Not published yet.
+
+Nix evaluation confirms corrected264's native derivations differ despite a
+fixture-only source delta: tests0p2h087y6wkyygk9mh80vnys8y68kkm6,
+Clippy0r8md2c560yja2g3cqg44gbrbg1bb34q,
+SQLxk2nk7czslnhd6qhal2x5r1zzw16xbk75. Do not label old derivation results as
+exact corrected-tree acceptance; remote CI must run its applicable gates.
+Next: collect current604/605/17446; publish prepared264 immediately after604
+terminal confirmation. This iteration is a verified wait plus publication
+preparation;18 functional PRs remain, no new PRs or #212 changes.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
