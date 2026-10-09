@@ -3246,6 +3246,15 @@ only its ARM browser/deployment/OIDC attributes were still building at the
 last observation. Next: collect37912724705 and submit #247 to the protected
 queue after it passes; preserve #249's running build until terminal.
 
+Workflow37912724705 passed on #24704cb9137: Flake Check58s, Format43s;
+watcher46755 exited0. Marked the existing PR ready and submitted it with exact
+head matching to the protected queue. Entry MQE_lQDOTRPZ888AAAABG_ycRc4AA_LZzgMuAqE
+is first, QUEUED. Submission39535 exited0. The first merge-group listing still
+returned #237's completed37910555123, not a #247 run; do not attribute that
+historical run to this delivery. Next: identify #247's actual queue workflow
+and verify its final merge/tree. #249551 now has only ARM e2e building; its
+new change-only watcher68585 is live. No code or assertion changes.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
