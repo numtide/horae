@@ -165,6 +165,55 @@ function resetEntries() {
         } finally { await page.unroute(pattern); }
       });
     }
+    // No current tracking choices must not disable legacy historical edits.
+    // Hide unrelated seed choices without changing their projects or assignments.
+    const trackingPattern = '**/api/load_timesheet_tracking*';
+    await page.route(trackingPattern, async route => {
+      const response = await route.fetch();
+      assert.equal(response.status(), 200);
+      await route.fulfill({ response, json: [] });
+    });
+    sql(`UPDATE projects SET active=false WHERE id='${id(2)}'`);
+    try {
+      for (const kind of ['move', 'resize', 'reorder']) {
+        await check(`historical ${kind} works without current tracking choices`, async () => {
+          resetEntries();
+          await open('calendar');
+          await expect(page.getByRole('button', { name: 'Add entry', exact: true })).toBeDisabled();
+          const column = kind === 'reorder' ? 2 : 0;
+          const event = page.locator('.ts-cal-col').nth(column).locator('.ts-cal-event').filter({ hasText: projectName });
+          await expect(event).not.toHaveClass(/locked/);
+          await event.scrollIntoViewIfNeeded();
+          const source = kind === 'resize' ? event.locator('.ts-cal-resize') : event;
+          const box = await source.boundingBox();
+          assert.ok(box);
+          const x = box.x + box.width / 2;
+          const y = box.y + (kind === 'resize' ? box.height / 2 : 12);
+          await page.mouse.move(x, y);
+          await page.mouse.down();
+          if (kind === 'reorder') {
+            const target = await page.locator('.ts-cal-col').nth(3).boundingBox();
+            await page.mouse.move(target.x + target.width / 2, y + 30, { steps: 5 });
+          } else {
+            await page.mouse.move(x, y + 65, { steps: 5 });
+          }
+          await page.mouse.up();
+          if (kind === 'reorder') {
+            await expect.poll(() => sql(`SELECT spent_date FROM time_entries WHERE id='${id(6)}'`)).toBe('2027-10-07');
+          } else {
+            const field = kind === 'resize' ? 'minutes' : 'start_minute';
+            await expect.poll(() => Number(sql(`SELECT ${field} FROM time_entries WHERE id='${id(4)}'`))).toBeGreaterThan(kind === 'resize' ? 60 : 540);
+          }
+          await expect(page.getByRole('alert')).toHaveCount(0);
+          await expect(page.getByRole('dialog')).toHaveCount(0);
+          await expect(page.getByRole('button', { name: 'Add entry', exact: true })).toBeDisabled();
+        });
+        await page.keyboard.press('Escape');
+      }
+    } finally {
+      await page.unroute(trackingPattern);
+      sql(`UPDATE projects SET active=true WHERE id='${id(2)}'`);
+    }
     await check('day-view timer failure is visible', async () => {
       await open('day');
       await page.route(pattern, route => {

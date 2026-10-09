@@ -1774,7 +1774,7 @@ fn render_calendar_view(
                             onmousemove: {
                                 let occ = occupied[i].clone();
                                 move |e: MouseEvent| {
-                                    if !can_create { return; }
+                                    if busy || (!can_create && cal_drag.read().is_none()) { return; }
                                     let m = cal_y_to_min(e.element_coordinates().y);
                                     if cal_drag.read().is_some() {
                                         cal_drag.with_mut(|d| {
