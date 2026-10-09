@@ -3228,6 +3228,24 @@ and551; once550 is terminal and successful, reconcile #247 fromed4f2f21 onto
 actualmaster81194134, verify identical535ae5a7 tree, then publish and run its
 master-targeted source and protected merge-group gates.
 
+Nixbot550 completed successfully at09:38 UTC on #2475950fdb1/tree535ae5a7.
+Observed the existing ARM logs advancing through browser, OIDC and deployed
+import/restart recovery checks before terminal success; watcher97723 exited0.
+No restart or test weakening. Fetched actualmaster81194134 and confirmed its
+tree equals the revieweded4f2f21 base. Preserved5950fdb1 under
+refs/backup/pr247-before-requester-merge-20261009, then rebased the two owned
+commits with updateRefs disabled. New head04cb9137d0252ab8c96ee828fd16e65c27ddb8fa,
+tree535ae5a74c2970aeaa0a02fc795c55d75f37bcbb unchanged; both commits identical
+in range-diff. Published with exact5950fdb1 lease; process76696 exited0.
+Updated the existing PR description with actual master and Nixbot acceptance.
+
+GitHub read-back confirms04cb9137 and reuses550 successfully for both Nixbot
+checks. No review threads are open. Master-targeted workflow37912724705 is
+live on that exact head. #249551 continues unchanged on673d95a2/tree18266223;
+only its ARM browser/deployment/OIDC attributes were still building at the
+last observation. Next: collect37912724705 and submit #247 to the protected
+queue after it passes; preserve #249's running build until terminal.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -3359,8 +3377,9 @@ masteraa8e9ef9 after native tests (1,315), SQLx, format, bounded review and
 both-Linux Nixbot547 passed. Source37910361697 and protected merge-group37910555123
 passed; #237 merged as81194134/tree6c66f37f. #247 is published as5950fdb1/tree535ae5a7;
 native40270 passed1,336 tests, SQLx and format. Its bounded T104–T109 review
-found no critical/high issue; Nixbot550 is live, the sole active remote delivery.
-It auto-retargeted to master after #237 merged; reconcile ancestry after550 ends.
+found no critical/high issue; Nixbot550 passed. Published ancestry-only04cb9137
+on actualmaster81194134, with identical535ae5a7 tree. GitHub37912724705 is live;
+protected queue acceptance remains required.
 #249 is published as673d95a2/tree18266223; native49164 passed1,352 tests, SQLx
 and format, and bounded review found no critical/high issue. Nixbot551 is live.
 #247550 and #249551 are the two remote deliveries; no local build is running.
