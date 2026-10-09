@@ -5711,6 +5711,37 @@ at3 passed/10 building/3 pending, no failures. No local build remains active.
 Next: collect required264 GitHub, then fresh reviews/head and protected queue;
 after the actual264 merge reconcile265 with complete-tree conservation.
 
+### #268 local ancestry preparation while required264 CI remains live
+
+Required264 workflow37990586429/watch23637 remains in_progress in Flake Check;
+no terminal failure or reason to restart it. Nix607 is already succeeded.
+#266609/watch5166 progressed to10 passed/6 building, no failures. No third
+remote delivery was published.
+
+Prepared existing #268 locally to avoid repeating this work later. Original
+head956c2147a3467a04aabedd51d1429c5791603302 has three owned commits over
+33390c07, not one. Clean worktree, backed up under
+`refs/backup/pr268-before-current-filter-stack-20261009`. Rebased all three onto
+locally verified #267f11bb3b3, yielding
+`d3cdf5790447595bf27aded49b2c2eae04096329`, tree
+`3130cd439d40a13c75bd16eb847be9ed551c9b06`. The only conflict was the browser
+runner suite list. Retained every inherited suite in order and prepended
+reports-permissions as the original delivery intended. No assertion, fixture,
+component, UI behavior or shared style was removed or changed.
+
+Range-diff differs only in the inherited suite-list context; both follow-up
+commits are equal. All eight non-runner owned files (icons, DTO, page, scoped
+modules, browser fixture and Rust component fixture) match original956c2147
+byte-for-byte. Shell syntax and whitespace checks passed. This is conservation
+evidence, not a new adversarial/UI acceptance claim.
+
+Started local gate86184 on d3cdf579: formatting, native tests, live SQLx, strict
+Clippy and full browser check, one job/eight cores, disposable Nix PostgreSQL.
+30GiB free before launch. Freeze this worktree until86184 terminates. Remote268
+remains956c2147, untouched. Next: prioritize264's required check and protected
+queue; collect609 and86184. A fresh source/UI review of268 remains required
+before its remote delivery. No new PR, policy activation or #212 change.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
