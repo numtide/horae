@@ -1,0 +1,118 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT policy,active,catalog_version,grants,is_administrator,\n                  permission_source,built_in_profile,template_id,applied_template_revision,revision,\n                  group_id,name,user_id,project_id,rounded_minutes,billable_minutes,last_context\n           FROM fetch_csv_export_rows($1) AS source(policy integer,active boolean,\n             catalog_version integer,grants text[],is_administrator boolean,permission_source text,\n             built_in_profile text,template_id uuid,applied_template_revision bigint,revision bigint,\n             group_id uuid,name text,user_id uuid,project_id uuid,rounded_minutes bigint,\n             billable_minutes bigint,last_context boolean,export_bytes bigint)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "policy",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "catalog_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "grants",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_administrator",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "permission_source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "built_in_profile",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "template_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "applied_template_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "group_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 11,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 14,
+        "name": "rounded_minutes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 15,
+        "name": "billable_minutes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 16,
+        "name": "last_context",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "6ca8d28323cc0210ea127a7e103a30bed1e2e48ff3c5348af0d7470414b5f4d4"
+}

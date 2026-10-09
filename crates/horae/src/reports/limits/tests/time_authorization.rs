@@ -4,6 +4,8 @@ use crate::server_fns::test_seed::wait_for_blocked;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use std::time::Duration;
 
+mod grouped;
+
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn denied_time_export_releases_authority_before_pool_cleanup(pool: PgPool) {
