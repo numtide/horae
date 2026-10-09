@@ -5989,6 +5989,31 @@ Next prioritize265 required/master acceptance and protected queue; collect610
 and51569, then publish prepared268 when a remote slot frees. No new PR,
 additional heavy build, real-data mutation, policy activation or #212 change.
 
+### Report-access delivery merged; grouped exports on master
+
+Required26537997847638 passed (watch69620 exit0, Flake56s/Format39s).
+Nixbot attached accepted605 to the identical current tree. Fresh exacthead,
+all checks green, no reviews/unresolved threads. Marked ready and queued with
+exact6a4b599e protection; protected37998051079 passed (watch47395 exit0,
+Flake45s/Format43s). GitHub confirms265 MERGED at2026-10-09T22:15:04Z as
+f48d674e43f951306fe0ab0af349ae4f1a10a625. Fetched master without pruning and
+verified whole-tree equalityab956f71.16 functional deliveries remain.
+
+Backed up2661fa434d4 at refs/backup/pr266-before-access-merge-20261009.
+Rebased its single owned commit fromactualparent69cbd68c ontoactualmerge
+f48d674e. Newhead36bfa7bf9b8bf1d158c255d1bdc50875508e261d, unchanged
+treea00a696899296e01f2c8d2449389d1cfdcfee428; equal range-diff and exact-tree
+Nix609 acceptance retained. GitHub's automatic base change first generated
+terminal null-tree Nix612 on old1fa; confirmed terminal before exact1fa-lease
+publication. Push and265/266 description updates79697 exited0. Nixbot609
+success is attached to new36bfa; required GitHub37998325895 is live on master.
+
+Nix610/watch22380 remains15 passed/1 building, no failed attribute. Local
+26951569 continues SQLx compilation; rustc was observed actively consuming
+CPU, not restarted. Worktree remains frozen. Next prioritize266 required and
+protected gates, collect610/51569, and publish prepared268 only when the next
+remote slot frees. No new PR, real-data change, policy activation or #212 edit.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
