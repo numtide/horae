@@ -5120,6 +5120,28 @@ before exact-lease publication, collect required GitHub acceptance and queue.
 worktree until terminal completion. Its full acceptance and publication remain
 pending. No new PR, source edit, policy activation or real-data mutation.
 
+### #262 fully accepted by Nix and reconciled onto actual master
+
+Nix600 succeeded at2026-10-09 19:44:37 UTC on423a36ea, tree12250f9e.
+All16 attributes passed on both Linux architectures, with six local-only
+skips; browser, deployment and OIDC completed. Watch21618 exited0. Both
+architectures passed189 core,1221 server and201 auxiliary tests, zero failures,
+11 inherited ignored; x86 server197.03s and ARM214.20s.
+
+Only after that terminal result, backed up423a36ea in
+refs/backup/pr262-before-timesheet-ui-merge-20261009 and rebased its owned commit
+onto actualmaster03dc0bbb. No conflicts; range-diff equal and full-tree diff
+empty. New head80291e42d12364cf2efaf3caecc16f6df6288e94 retains
+tree12250f9e83726b1922a74a44b62fbc5a08370a1c. Published with exact423a36ea
+lease; session72196 exited0. Updated the existing PR body. GitHub confirms
+master base and reuses passing Nix600; required workflow37982513538 is running.
+Reviews and threads remain empty. Next: collect this workflow and queue #262
+only when green, then verify its actual merge and tree.
+
+#263 local2031 remains running, with all12 time-authorization regressions and
+the registered HTTP authorization test already passing. Full-suite completion
+is still pending; no source edits, publication or acceptance claim yet.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
