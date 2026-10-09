@@ -5324,6 +5324,24 @@ build; its attribute inventory is not yet final. Previous turn made progress
 through the verified #263 merge and local #265 reconciliation; current wait is
 verified on live session15065 and Nix604, not a blocker.
 
+### #265 strict Clippy passed; both existing validations remain live
+
+Session15065 completed strict core/server Clippy (server2m34s) and entered its
+install phase; the chained SQLx/native tests still need acceptance. Worktree
+be7b7749 remains clean and frozen. Verified the owned patch changes no SQLx
+cache, manifests, lockfile or migrations. Prepared the existing PR's updated
+body locally at.scratch/pr265-current-delivery.md, explicitly marking pending
+gates; no publication yet. GitHub still has original a31f8e59 on #264's branch,
+without reviews. Earlier source review is recorded above, not repeated here.
+
+Nix604 has completed evaluation and is building: latest snapshot two succeeded,
+eight building, six pending, six local-only skipped, no failures. Changes-only
+watcher65000 observes this same build every45 seconds. #264 was automatically
+retargeted to master after #263 merged; its head remains83f1fddc. Do not rebase
+or push it during this live build. Next: collect local15065 and remote65000;
+publish #265 only after full local success, and reconcile #264 only after604
+is terminal.18 functional PRs remain. These are verified waits, not blockers.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
