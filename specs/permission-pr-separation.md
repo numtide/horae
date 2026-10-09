@@ -3646,6 +3646,16 @@ ARM OIDC has passed. No local build/publication remains live. Next collect
 these same checks, queue #246 only after full acceptance, then reconcile #243
 to the verified actual squash without changing its tree. No new PR or #212 edit.
 
+#246 Nixbot559 completed successfully on exact b5f1942c/treefeacc028, including
+both-Linux browser/deployment/OIDC. Proposed GitHub merge7d2db9f3 has the same
+tree, masterb50ec27e parent and no review threads. Source37920533055 remains
+live (Format36s passed, Flake Check active); retain the draft/queue hold until
+that required check accepts. Updated its public description with final-tree
+acceptance, distinct from the older1,378-test native base. #243 Nixbot561
+continues unchanged; watcher42630 remains active until both builds terminate.
+Previous turn was progress (#243 published); this interval is a verified wait
+that also established final Nix acceptance for #246. No builds were restarted.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
