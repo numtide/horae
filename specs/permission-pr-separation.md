@@ -3343,6 +3343,29 @@ Next: inspect the terminal result and trace before selecting a transport fix or
 further causal experiment; do not count successful artifact construction as
 passing assertions or clear the historical ARM failure without evidence.
 
+Diagnostic82262 completed successfully: both unchanged tests passed (1,024
+requests), exit-status file0, on the injected1ms read schedule. Artifact
+`/nix/store/kcs0b5w1lc2cih7wflfh9i3l3xw1mq9c-horae-csv-rejection-delayed-read-0.1.0`
+retains33,891 trace lines; no EPIPE, ECONNRESET, ETIMEDOUT or ECONNABORTED.
+Inspected requests received401 before producing body bytes, so this particular
+slow-read schedule does not establish the historical524 cause. It is not a
+runtime repair or a merge gate, and no repeated experiment is scheduled.
+
+#226 current-base acceptance35617 completed exit0 on unchanged0bacb3b1/tree92b3e1fc:
+189 core,999 server and183 auxiliary tests passed (1,371 total, zero failures;
+11 pre-existing manual cases ignored). All19 template cases and both immediate
+CSV rejection schedules passed; server156.19s. Full SQLx preparation56s and
+formatting533 files/zero changes also passed. Native derivation
+a6afq5fn8ir4352q37lxdxpyfy162zy3, SQLx pdwbn5psk3pdqqgi6bgd84zk07hhj04m,
+format z2qdzm3bvpcbqk57a1xqkskcwb1jwa8h. Outputs are rooted at
+`.worktrees/permission-template-commands/.scratch/pr226-current-delivery-checks`.
+Source/schema stable patch IDcc04933ff377a498d983882aef365c3209bc3247 is unchanged.
+Fresh current-base CI will validate the actual composition and, if ARM fails
+again, now retains the underlying transport cause. This is not a blind retry
+of524 or a claim that prior successful runs repaired it. Keep draft/auto-merge
+off pending evidence. Public delivery description is prepared in
+`.scratch/pr226-current-delivery.md`; publication must be verified separately.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
