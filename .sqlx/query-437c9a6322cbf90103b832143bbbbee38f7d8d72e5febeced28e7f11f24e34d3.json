@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE harvest_connection_generations ADD CONSTRAINT reject_connection_change CHECK (connection_revision <= 1) NOT VALID",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "437c9a6322cbf90103b832143bbbbee38f7d8d72e5febeced28e7f11f24e34d3"
+}

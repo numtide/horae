@@ -462,7 +462,7 @@ async fn oauth_callback(
     match complete_connect(&session, code, &attempt).await {
         Ok(()) => Redirect::to(dest_ok).into_response(),
         Err(e) => {
-            if let Some(response) = connection_conflict_response(&e) {
+            if let Some(response) = connection_policy_response(&e) {
                 return response;
             }
             tracing::error!("Harvest connect failed: {e}");
@@ -472,8 +472,17 @@ async fn oauth_callback(
 }
 
 /// Only known, secret-free policy errors may be returned to the browser.
-fn connection_conflict_response(error: &anyhow::Error) -> Option<axum::response::Response> {
+fn connection_policy_response(error: &anyhow::Error) -> Option<axum::response::Response> {
     use axum::response::IntoResponse;
+    if let Some(credentials::ConnectionError::Unauthorized) = error.downcast_ref() {
+        return Some(
+            (
+                axum::http::StatusCode::FORBIDDEN,
+                credentials::ConnectionError::Unauthorized.to_string(),
+            )
+                .into_response(),
+        );
+    }
     let message = if let Some(policy) = error.downcast_ref::<credentials::ConnectionError>() {
         policy.to_string()
     } else if let Some(policy) = error.downcast_ref::<account_switch::ChangeError>() {
@@ -555,13 +564,10 @@ async fn complete_connect(
     })
     .await??;
 
-    // The external exchange may outlive an administrator's permissions.
-    let still_admin = sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND org_id = $2 AND active AND org_role = 'admin') AS "allowed!""#, attempt.user_id, attempt.org_id)
-        .fetch_one(&state.db).await?;
-    anyhow::ensure!(still_admin, "admin access required to connect Harvest");
     credentials::store_for_attempt(
         &state.db,
         user.org_id,
+        attempt.user_id,
         &cfg.encryption_key_hex,
         &account_id,
         &tokens.access_token,
@@ -585,15 +591,30 @@ mod oauth_callback_tests {
             anyhow::Error::from(credentials::ConnectionError::UnidentifiedProvenance),
             anyhow::Error::from(ApiImportError::Busy),
         ] {
-            let response = connection_conflict_response(&error).unwrap();
+            let response = connection_policy_response(&error).unwrap();
             assert_eq!(response.status(), axum::http::StatusCode::CONFLICT);
             let body = axum::body::to_bytes(response.into_body(), 1024)
                 .await
                 .unwrap();
             assert_eq!(body.as_ref(), error.to_string().as_bytes());
         }
-        assert!(
-            connection_conflict_response(&anyhow::anyhow!("secret upstream payload")).is_none()
+        assert!(connection_policy_response(&anyhow::anyhow!("secret upstream payload")).is_none());
+    }
+
+    #[tokio::test]
+    async fn revoked_callback_authority_returns_only_a_safe_forbidden_message() {
+        let error = anyhow::Error::from(credentials::ConnectionError::Unauthorized)
+            .context("private callback context must not be returned");
+        let response = connection_policy_response(&error).unwrap();
+        assert_eq!(response.status(), axum::http::StatusCode::FORBIDDEN);
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        assert_eq!(
+            body.as_ref(),
+            credentials::ConnectionError::Unauthorized
+                .to_string()
+                .as_bytes()
         );
     }
 

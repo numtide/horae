@@ -513,10 +513,11 @@ async fn disconnect_and_reconnect_preserves_imported_records_and_exact_identity(
         .await
         .unwrap();
     assert_eq!(first.summary.time_entries.created, 1);
-    credentials::disconnect(&pool, org).await.unwrap();
+    credentials::disconnect(&pool, org, org).await.unwrap();
     assert!(
         credentials::store(
             &pool,
+            org,
             org,
             KEY,
             "other-account",
@@ -530,6 +531,7 @@ async fn disconnect_and_reconnect_preserves_imported_records_and_exact_identity(
     );
     credentials::store(
         &pool,
+        org,
         org,
         KEY,
         "test-account",
@@ -603,8 +605,13 @@ async fn setup(pool: &PgPool) -> Uuid {
     .execute(pool)
     .await
     .unwrap();
+    sqlx::query!(
+        "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $1, 'known@example.com', 'Sync User', 'admin')",
+        org,
+    ).execute(pool).await.unwrap();
     credentials::store(
         pool,
+        org,
         org,
         KEY,
         "test-account",
@@ -615,7 +622,6 @@ async fn setup(pool: &PgPool) -> Uuid {
     )
     .await
     .unwrap();
-    add_user(pool, org, "known@example.com").await;
     org
 }
 

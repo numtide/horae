@@ -908,10 +908,16 @@ async fn edited_entry_still_matched_by_provenance(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn watermark_advances_only_on_commit(pool: PgPool) {
     let org = seed_org(&pool).await;
+    let admin = seed_user(&pool, org, "admin@example.com").await;
+    sqlx::query!("UPDATE users SET org_role = 'admin' WHERE id = $1", admin)
+        .execute(&pool)
+        .await
+        .unwrap();
     // Seed a credentials row so watermark advance has somewhere to write.
     super::credentials::store(
         &pool,
         org,
+        admin,
         &"11".repeat(32),
         "acct-1",
         "access",
