@@ -3068,6 +3068,21 @@ remote481/historical tests do not certify this new combined tree. Next: collect
 #236545/#237547 and finish #247's local review/validation without publishing a
 third concurrent remote delivery.
 
+Nixbot545 completed successfully on #236a437337b/treeada47e05; watcher68541
+exited0. Fresh read-back confirms master82c11cda, unchanged remotea437337b,
+no review threads and clean local66ff076b with the identical tree. Published
+the ancestry-only66ff076b using exacta437337b lease and refreshed the PR body;
+publication12900 exited0. Keep draft until current-head GitHub acceptance, then
+use the protected queue. #237547 is still active, not restarted.
+
+#247 native process40270 is live on5950fdb1/tree535ae5a7, rooted under
+.scratch/pr247-current-delivery-checks. Formatting526 files/zero changes and
+189 core tests passed; server tests are compiling. SQLx derivation
+1q5g49k6fy1pishrrayv625palpd08x2, tests a0mw2h3xmz2yn480x2s8fvfvl8b6nv91,
+treefmt wcw54afbb9h6svzrqpvma2lmxq58djqp. No current bounded review or complete
+native acceptance yet. Next: collect #236 GitHub checks and #237547/40270;
+do not publish #247 before bounded review or as a third remote delivery.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
