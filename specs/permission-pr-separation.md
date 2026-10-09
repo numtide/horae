@@ -2867,6 +2867,18 @@ fixture remain unchanged; that historical ARM transport failure stays held.
 Next: collect47004 and new #241/#233 CI identifiers; use protected queues only
 after exact-tree acceptance and actual-master ancestry reconciliation.
 
+Publication47004 completed successfully. Read-back confirms #233 OPEN/draft
+atfe88a965,base fix/time-write-activity. Nixbot542 failed before evaluation:
+the push event still targeted the old integration/invoice-authority-prerequisites
+base and reported a merge conflict, without a tree or attributes. The subsequent
+base-change event automatically started543 on the correct base; its API confirms
+building fe88a965/treeb5f3f055 with no build error. GitHub rollups briefly retained
+542's failure, so consult543 directly rather than retrying. No source change or
+manual retry was used. #241's combined325e4fc5/treecca1729a is building in541
+and GitHub37904465910. These are the two active remote deliveries; no local
+test is live. Next: monitor541/543 and current GitHub checks, then deliver #241
+through the protected queue before reconciling #233 ancestry onto its actual merge.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
@@ -2986,9 +2998,13 @@ active remote delivery at that observation. #241 has since been published at
 b4edd434/tree51da9d21 on masterb60ed44f after fresh native tests (1,282 passed),
 SQLx and formatting succeeded. It remains draft pending remote and queue gates;
 #235 has since merged as82e85160/tree d9ae89ad after Nixbot539, source
-37902677508 and protected merge-group37902926064 passed. #241 is now the only
-active remote delivery (540); its local combination with #235 is being validated
-in56742. #228's browser/VM corrections now have
+37902677508 and protected merge-group37902926064 passed. #241 is published at
+325e4fc5/treecca1729a on master82e85160: combined native56742 passed1,291 tests,
+SQLx and format; fresh Nixbot541/GitHub37904465910 are active. #233 is published
+atfe88a965/treeb5f3f055 on #241 after native19877 passed1,295 tests, SQLx and
+format. Its correct-base Nixbot543 is active;542 failed against the obsolete base
+before retargeting, not a source test. #241/#233 are the two remote deliveries.
+#228's browser/VM corrections now have
 both-Linux acceptance and are integrated in master.
 The failed #226 combination remains held; independent deliveries may advance
 only on exact current-tree acceptance, without claiming that failure repaired.
