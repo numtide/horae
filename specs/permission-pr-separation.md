@@ -2908,6 +2908,18 @@ the stale red GitHub check and has no failed attribute. Keep the two-delivery
 limit and do not publish #236 while those deliveries occupy both slots.
 Next: collect67401 and541/543; queue #241 only after its exact-tree remote gates.
 
+Process67401 completed successfully on #236 a437337b/treeada47e05: 189 core,
+938 server and183 auxiliary tests passed (1,310 total,zero failures,11 existing
+manual cases ignored). Server126.23s; SQLx49.78s; formatting520 files/zero changes.
+All nine command-authority tests, nine download stream tests and the registered
+HTTP/CLI authorization suite passed. Rooted outputs under the import-job-authority
+worktree: .scratch/pr236-current-delivery-checks → f7z060zk (tests), -1 → jvh5ss45
+(SQLx), -2 → 6wvjj7rj (treefmt). No local test remains live. Prepared the PR
+description locally; no #236 publication or remote acceptance is claimed.
+#241541 has only ARM browser/deployment/OIDC pending; #233543 remains live.
+Next: finish those existing remote builds, merge #241 through protection, then
+reconcile #233 to its actual merge and publish #236 only when a slot opens.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
