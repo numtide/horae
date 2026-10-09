@@ -4234,6 +4234,18 @@ server144.01s x86 and220.42s ARM, with browser/deployment/OIDC ARM still live.
 Next remains #254 full acceptance, squash-ancestry reconciliation and protected
 master delivery. No new source edits, retries or additional remote fronts.
 
+Nix575 completed successfully at13:46:30 UTC for #25455ebf248 /
+treef02ad4eeb20f8751623a43cd293726f3e37f95bc, including all both-Linux browser,
+deployment and OIDC gates. Backed up at refs/backup/pr254-before-directory-squash-20261009,
+rebased onto actual mastere41250e1 and verified complete-tree equality. Final
+head787b8498d1267ab8f36a9780f1f37f93eecade93. Updated existing body and exact-lease
+published55ebf248→787b8498. Marked ready and enabled protected auto-merge at13:48:11.
+Nixbot reused same-tree acceptance; source GitHub37939462116 is live, watch18091.
+No completed merge claimed. #255 Nix577 now has only ARM deployment live;
+#257 local93005 passed full SQLx/format and is compiling native tests.
+Next: collect #254 source/queue gates and verify actual squash tree/parent,
+then reconcile #255 only after full acceptance. Keep at most two remote deliveries.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
