@@ -2920,6 +2920,25 @@ description locally; no #236 publication or remote acceptance is claimed.
 Next: finish those existing remote builds, merge #241 through protection, then
 reconcile #233 to its actual merge and publish #236 only when a slot opens.
 
+Prepared #237 locally while the two remote deliveries finish: head
+ed4f2f21c45c5171c8b1fea3f758952b0e41cfcf, tree
+6c66f37ffd2be09125831f556235e625560bbbf3, on #236 a437337b. Backup
+refs/backup/pr237-before-current-delivery-20261009 preserves publishedd2ed2226.
+Both source/cache commits are identical in range-diff; the owned patch remains
+22 files,629 additions,75 deletions. Migration0045 and four Rust files are
+byte-identical; the two shared test files inherit only prerequisite changes,
+with unchanged owned patch IDs 3c37f5ad55a30bac84d3cc3f2016a31dd423365a and
+52c8c993b7fe678420a7959e6ec400452b15055f. No new source, migration execution,
+test run or remote publication. A current bounded review and native acceptance
+are still required before delivery; historical evidence is not reused as such.
+
+Nixbot541 and543 now have only ARM deployment pending; browser and OIDC passed
+on both architectures. Watcher91038 observes541 every55s and prints changes
+only. Its last VM log advances through import recovery assertions, not a
+terminal failure. Next: collect541/543 and GitHub37904465910, then submit #241
+through the protected merge queue. #236 remains locally accepted/unpublished;
+#237 remains prepared/unvalidated. Preserve the two-remote-delivery limit.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
