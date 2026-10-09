@@ -2559,6 +2559,18 @@ no new PR or retry was created. #232/#238/#235 and preserved #212 are unchanged.
 Next: collect #228's GitHub/protected queue result, verify the actual integrated
 tree, then reconcile #231 onto master without changing its accepted content.
 
+Prepared #232 locally on corrected #231216440b5 while the two published
+deliveries continue. New head75695511cd820d8d18db4829c5621776d4c7b63e, tree
+5d7aa453e7597169cc5078ef4f1485ce3a68eef7. Backup
+refs/backup/pr232-before-ci-correction-20261009 preserves45c923a3. Range-diff
+shows the owned commit unchanged; the only whole-tree changes are the five
+inherited browser/CI repair files. Format passed512 files, zero changes;
+whitespace validation passed. Fresh native tests, SQLx and treefmt46276 are
+live with rooted outputs under.scratch/pr232-ci-correction-checks. Nothing
+was published for #232, and downstream #238/#235 were not rewritten.
+Next: collect this validation while following existing #228 GitHub watcher22358
+and #231 Nixbot531; do not start a third remote delivery.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
