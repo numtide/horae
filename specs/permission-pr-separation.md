@@ -2841,6 +2841,12 @@ Fresh native tests/SQLx/treefmt run in19877 on fe88a965/treeb5f3f055, rooted und
 existing540/19877, publish locally accepted #241 once540 finishes, then publish
 #233 against that exact base only after its own current native acceptance.
 
+Read-back confirms #233 still OPEN/draft at6b12f302 with no review threads.
+Nix540 now has only ARM deployment pending; watcher23429 polls that exact
+build every55s and emits only changed summaries. Local #23319877 remains
+live after format517 files/zero changes, SQLx and189 core tests passed; server
+tests are compiling. No second remote delivery was started prematurely.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
