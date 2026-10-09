@@ -5616,6 +5616,22 @@ Prepared `.scratch/pr266-current-delivery.md` for the next existing-PR delivery;
 it explicitly distinguishes local acceptance from unpublished/remote evidence
 and must have its ancestry refreshed before publication. No remote writes.
 
+### Fresh merge-readiness and live gate observation
+
+Revalidated #2649c44db39 onmaster4c824d8b: still draft/open, no reviews or
+review threads, protected master unchanged. Required workflow37990586429
+remains live. Nix607 watcher73128 reports8 succeeded/8 building and no failures;
+ARM browser logs progressed beyond the previously failing boundary into project
+form/layout acceptance. This is partial progress, not browser completion.
+
+Nix605 watcher26435 reports13 succeeded/3 building, six local-only skips and no
+failures on exact #26569cbd68c/treeab956f71. Do not replace its head while live.
+Local #26767323 passed strict Clippy (server2m31s) and is running live SQLx,
+derivationpb5k2kgiimcpnxg7qm66ihh8v28hvhwx. No runtime changes, publication or
+merge in this iteration: verified waits on live handles, not a blocker.
+Next action remains collecting these gates, queueing264 only on full acceptance,
+and reconciling265 after its current execution and parent merge finish.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
