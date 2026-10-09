@@ -3576,6 +3576,44 @@ pending rebase remains. The next dependency-ready command delivery is #243;
 this iteration. Ledger commits remain local pending its scoped publication;
 remote #218 is still5e75e8ac, an ancestor of the178 accumulated local commits.
 
+### #243 bounded review and current-base preparation — 2026-10-09
+
+Previous turn: progress (#246 published on final composition). Revalidated its
+Nixbot559/source37920533055 as live; no retry. Existing watcher45517 remains live.
+Prepared only the next existing delivery #243; no new PR or feature scope.
+
+Read Rust/testing/async/Ponytail skills and relevant idiom/error/test references.
+Reviewed full359-line command/reader,71-line session wrapper,99-line DTO,
+all1,547 lines/32 PostgreSQL cases and237-line registered-session exercise.
+Checked contracts/project-management-commands.md and T059–T061/T133–T135/
+T189–T191. No critical/high finding in this bounded delivery. Current canonical
+project-edit authority precedes replay; whole-set replacements preserve retained
+targets, global grants, tracking membership and history. Organization-first
+serialization, activity SHARE locks, project NOWAIT, exact intent/revisions,
+atomic receipts, cancellation and enclosing transaction rollback are retained.
+Policy0 rejects, with no runtime activation or form integration claim. Confirmed
+the two separate audit API denial assertions and receipt lookup remain in #245
+a6982442; no acceptance obligation silently dropped.
+
+Existing clean `.worktrees/project-manager-delegation` rebased with updateRefs
+disabled froma9a3b7b2 onto published #246b5f1942c. Product prerequisites #234/#228
+are merged; #246 is only the delivery sequence base. Backup
+refs/backup/pr243-before-current-delivery-20261009 retains8aab1048. Resolved only
+additive module declarations and session-harness calls, preserving all inherited
+tests. DTO/command/wrapper/all four test-module blobs remain unchanged. Cache
+drops five redundant additions already inherited; lint patches are unchanged.
+
+Local head7f51e98ca9ba185d304b26c1ebe32b035d4e6b47,
+treebd7d2d2f5caea3fe6d3bdaec5fcd48321628b0bd;53 files/3,115 additions/one deletion
+over #246 (12 source paths,41 cache descriptors). Format545 files passed unchanged.
+Native23735 is live on this frozen tree: testspvg3y11mgs69hlgziyvbgj6v3rkagwzi,
+SQLxvqgy0xbhiqmgbiv7nv26zg3j2n0rr6r7, formatrqa0lj40agldig5pdk1nrm817bxcpjg9.
+Do not edit files or restart that check while live. Prepared public description
+at root `.scratch/pr243-current-delivery.md`; remote #243 still8aab1048 on its
+former integration base. Next collect23735, publish with exact old-head lease
+after acceptance, and continue #246's current gates. Final target is master,
+never the temporary #246 branch. #212 remains untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
