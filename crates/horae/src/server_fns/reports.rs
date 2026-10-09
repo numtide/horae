@@ -40,6 +40,39 @@ pub async fn list_visible_time_report_entries(
 
 // ── Reports (M8) ────────────────────────────────────────────────────────────
 
+/// Grouped ordinary time facts, without financial or directory authority.
+#[server]
+pub async fn list_visible_time_report_groups(
+    query: crate::models::time_report::TimeReportGroupQuery,
+) -> Result<crate::models::time_report::TimeReportGroupPage, ServerFnError> {
+    use permissions::time_entries::TimeReadError;
+
+    let user = require_user().await.map_err(|error| match error {
+        error @ ServerFnError::ServerError {
+            code: UNAUTHORIZED, ..
+        } => error,
+        error => {
+            tracing::error!(%error, "Unable to authenticate grouped time-report read");
+            server_err("Time report is unavailable")
+        }
+    })?;
+    let state = crate::state::global_state().await;
+    permissions::time_reports::groups::read(&state.db, user.org_id, user.id, &query)
+        .await
+        .map_err(|error| match error {
+            TimeReadError::Forbidden => {
+                forbidden("Current time-report access or identity has changed")
+            }
+            TimeReadError::InvalidQuery => {
+                err(BAD_REQUEST, "Invalid time-report date range or cursor")
+            }
+            error => {
+                tracing::error!(%error, "Scoped grouped time-report read failed");
+                server_err("Time report is unavailable")
+            }
+        })
+}
+
 /// Grouped time report. Groups by "project", "task", "client", or "person", with
 /// optional client/project/teammate/tag filters. Each group carries billable and cost
 /// amounts (rates via FR-024), partitioned by entity identity and currency.

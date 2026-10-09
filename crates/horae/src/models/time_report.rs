@@ -99,3 +99,71 @@ pub struct TimeReportPage {
     pub next_after: Option<TimeReportCursor>,
     pub totals: TimeReportTotals,
 }
+
+/// Ordinary time dimensions; financial report families have separate authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeReportGrouping {
+    Client,
+    Project,
+    Task,
+    Person,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimeReportGroupCursor {
+    pub group_by: TimeReportGrouping,
+    pub name: String,
+    pub id: Uuid,
+}
+
+#[cfg_attr(
+    not(feature = "server"),
+    expect(
+        dead_code,
+        reason = "Grouped Reports consumer integration is pending in T221."
+    )
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimeReportGroupQuery {
+    pub date_from: NaiveDate,
+    pub date_to: NaiveDate,
+    #[serde(default)]
+    pub active_projects_only: bool,
+    #[serde(default)]
+    pub billability: TimeReportBillability,
+    pub client_ids: Vec<Uuid>,
+    pub project_ids: Vec<Uuid>,
+    pub user_ids: Vec<Uuid>,
+    pub task_ids: Vec<Uuid>,
+    pub tag_ids: Vec<Uuid>,
+    pub group_by: TimeReportGrouping,
+    pub after: Option<TimeReportGroupCursor>,
+    pub expected_requester: Option<PermissionRequester>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimeReportGroup {
+    pub id: Uuid,
+    pub name: String,
+    pub totals: TimeReportTotals,
+}
+
+#[cfg_attr(
+    not(feature = "server"),
+    expect(
+        dead_code,
+        reason = "Grouped Reports consumer integration is pending in T221."
+    )
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimeReportGroupPage {
+    pub requester: PermissionRequester,
+    pub groups: Vec<TimeReportGroup>,
+    pub next_after: Option<TimeReportGroupCursor>,
+    pub totals: TimeReportTotals,
+}

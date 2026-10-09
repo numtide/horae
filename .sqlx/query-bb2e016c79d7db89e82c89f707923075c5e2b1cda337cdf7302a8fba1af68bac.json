@@ -1,0 +1,92 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH scoped AS (\n           SELECT CASE $13::text WHEN 'client' THEN c.id WHEN 'project' THEN p.id\n                    WHEN 'task' THEN t.id WHEN 'person' THEN u.id END AS group_id,\n                  CASE $13::text WHEN 'client' THEN c.name WHEN 'project' THEN p.name\n                    WHEN 'task' THEN t.name WHEN 'person' THEN u.name END AS name,\n                  e.minutes,\n                  effective_minutes(e.minutes,e.rounded_minutes,o.round_minutes,o.round_dir) AS rounded_minutes,\n                  (e.billable AND (e.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable'\n                    AND COALESCE(pt.billable,t.billable_default)))) AS billable\n           FROM time_entries e\n           JOIN organizations o ON o.id=e.org_id\n           JOIN users u ON u.id=e.user_id AND u.org_id=e.org_id\n           JOIN projects p ON p.id=e.project_id AND p.org_id=e.org_id\n           JOIN tasks t ON t.id=e.task_id AND t.org_id=e.org_id\n           JOIN clients c ON c.id=p.client_id AND c.org_id=e.org_id\n           LEFT JOIN project_tasks pt ON pt.project_id=p.id AND pt.task_id=t.id\n           WHERE e.org_id=$1 AND (\n             $5::bool OR ($3::bool AND e.user_id=$2) OR ($4::bool AND (\n               EXISTS (SELECT 1 FROM person_management_assignments m\n                 WHERE m.org_id=e.org_id AND m.manager_id=$2 AND m.managed_user_id=e.user_id)\n               OR EXISTS (SELECT 1 FROM project_management_assignments m\n                 WHERE m.org_id=e.org_id AND m.manager_id=$2 AND m.project_id=e.project_id))))\n             AND e.spent_date BETWEEN $6 AND $7\n             AND (NOT $16::bool OR p.active)\n             AND ($17::bool IS NULL OR $17 = (e.billable AND (e.invoice_id IS NOT NULL\n               OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable,t.billable_default)))))\n             AND (cardinality($8::uuid[])=0 OR p.client_id=ANY($8))\n             AND (cardinality($9::uuid[])=0 OR e.project_id=ANY($9))\n             AND (cardinality($10::uuid[])=0 OR e.user_id=ANY($10))\n             AND (cardinality($11::uuid[])=0 OR e.task_id=ANY($11))\n             AND (cardinality($12::uuid[])=0 OR EXISTS (\n               SELECT 1 FROM project_tag_links l JOIN project_tags tag ON tag.id=l.tag_id AND tag.org_id=l.org_id\n               WHERE l.org_id=e.org_id AND l.project_id=e.project_id AND tag.id=ANY($12)))\n           ), grouped AS (\n             SELECT group_id,name,COUNT(*) AS entry_count,SUM(minutes)::bigint AS total_minutes,\n                    SUM(rounded_minutes)::bigint AS rounded_minutes,\n                    COALESCE(SUM(rounded_minutes) FILTER (WHERE billable),0)::bigint AS billable_minutes\n             FROM scoped GROUP BY group_id,name\n           ), stats AS (\n             SELECT COALESCE(SUM(entry_count),0)::bigint AS entry_count,\n                    COALESCE(SUM(total_minutes),0)::bigint AS total_minutes,\n                    COALESCE(SUM(rounded_minutes),0)::bigint AS rounded_minutes,\n                    COALESCE(SUM(billable_minutes),0)::bigint AS billable_minutes FROM grouped\n           ), page AS (\n             SELECT * FROM grouped\n             WHERE ($14::text IS NULL OR (name COLLATE \"C\",group_id) > ($14 COLLATE \"C\",$15::uuid))\n             ORDER BY name COLLATE \"C\",group_id LIMIT 501\n           )\n           SELECT s.entry_count AS \"entry_count!\",s.total_minutes AS \"total_minutes!\",\n                  s.rounded_minutes AS \"rounded_minutes!\",s.billable_minutes AS \"billable_minutes!\",\n                  p.group_id AS \"id?\",p.name AS \"name?\",p.entry_count AS \"group_entry_count?\",\n                  p.total_minutes AS \"group_total_minutes?\",p.rounded_minutes AS \"group_rounded_minutes?\",\n                  p.billable_minutes AS \"group_billable_minutes?\"\n           FROM stats s LEFT JOIN page p ON true ORDER BY p.name COLLATE \"C\",p.group_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entry_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "total_minutes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "rounded_minutes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "billable_minutes!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "group_entry_count?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "group_total_minutes?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "group_rounded_minutes?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "group_billable_minutes?",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Date",
+        "Date",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "Text",
+        "Text",
+        "Uuid",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "bb2e016c79d7db89e82c89f707923075c5e2b1cda337cdf7302a8fba1af68bac"
+}
