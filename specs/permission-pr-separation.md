@@ -2490,6 +2490,26 @@ loss, not a source change or a retry of a failed test. Next: collect4163's
 real-change assertions, then incorporate the bounded test-only dependency
 correction into existing #228 and validate/publish its exact final tree.
 
+Published #228 at f465f7a014a8ddfef99cbaa59a26020774b9dcad, tree
+9e6a1625accbc5587bb609cdf78218a270487674, using the exact old-head lease.
+The browser response synchronization and test-guest-only systemd correction
+are now included. The latter adds a shared helper, wires it into the two
+existing deployment guests, and adds a udev reload regression: four files,
+45 additions. Production modules, application code and timeouts are unchanged.
+Format checked507 files with zero changes. Rust, browser, Clippy, SQLx and
+package derivations are identical to the accepted e6e258be inputs.
+
+Extended TCG probe4163 completed successfully: derivation33045yf57pagbx3b3n5xjq0av86r514a,
+123.22 seconds, zero false reloads, and both newly created and modified rules
+detected without explicitly requesting reloads. Final native VM/check build60625
+remains live. Nixbot530 and GitHub37893663978 are live on f465f7a0; Nixbot's
+tree matches9e6a1625. Native deployment, OIDC and the new udev regression have
+passed remotely. ARM remains unaccepted. No retry or new PR was started.
+Read-back confirms master3df38af8, no review threads, #228 draft without
+auto-merge/queue entry, and #212 open/draft at its preserved db3935db head.
+Next: collect60625 and the existing remote gates; submit #228 to the protected
+queue only when accepted, then reconcile #231 with the actual integrated base.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
