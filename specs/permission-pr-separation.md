@@ -5475,6 +5475,17 @@ Next: collect local66690 and remote65000 terminal results, then perform the
 recorded ancestry reconciliation and exact-lease publication. This iteration
 is a verified wait with new browser regression evidence;18 PRs remain.
 
+### Remaining checks continue producing results
+
+Verified wait: local66690 remains active atf331ba60. Browser keyboard/accessibility
+branches passed at390/768/1440px and1440px with200% text; native dialogs now pass
+as well. The full runner has not terminated. Nix604's ARM deployment log
+completed its script successfully in935.34s and uploaded its result; x86 native
+logs continue advancing through invoice/permission tests with no failure seen.
+Watch65000 still observes the existing build. No restarts, head replacements,
+source edits, additional local builds or acceptance claims. Next remains collect
+both terminal results, reconcile/publish the corrected existing264 and then265.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
