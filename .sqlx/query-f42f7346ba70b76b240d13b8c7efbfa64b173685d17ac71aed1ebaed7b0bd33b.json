@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id, a.project_id AS subject_id, a.revision, p.name\n         FROM project_management_assignments a\n         JOIN projects p ON p.org_id=a.org_id AND p.id=a.project_id\n         WHERE a.org_id=$1 AND a.id=ANY($2) ORDER BY a.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "subject_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f42f7346ba70b76b240d13b8c7efbfa64b173685d17ac71aed1ebaed7b0bd33b"
+}
