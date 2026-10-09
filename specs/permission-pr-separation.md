@@ -4365,6 +4365,22 @@ passed. Next: collect66864, publish corrected #256 against master with exact
 lease, then publish the prepared #257 after its old CI completes. Keep #258
 unpublished until a slot opens. No source or test weakened, no new PR.
 
+#256 corrected validation66864 completed successfully onf0d61e24 /
+tree0569c9baf6982b16934e0edb717add042f0b3192:189core+1155server+201aux=1545,
+zero failures/11ignored; server203.65s. Explicitly verified the corrected
+legacy_project_lock_returns_busy test passed. FullSQLx and formatting577unchanged
+passed. Outputsqvh0vl3lhapn3bmd9idd0r7g4f1qfqrx tests,
+hrnmgc0x58s71ja09kk9n205byj1pal5 SQLx. Nix581 is now terminal failed with only
+the old ARM test failure; every other attribute passed. Updated #256 body and
+exact-lease published ee648e08→f0d61e24 targeting master. Keep draft pending
+fresh both-Linux validation; no merge or green CI claimed on the new head yet.
+#257582 still has ARMdeployment/x86browser live; retain published8e24f13a until
+that terminal result, then publish prepared5900462a with the inherited correction.
+#25812dbe8a0 remains unpublished, owned implementation validated oneda54b82 and
+only the inherited fixture changed. Disk recovered to26GiB after local builds;
+no cleanup performed. Next: collect fresh #256 CI and #257582, advance only
+accepted existing deliveries through master protection. #212 untouched.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
