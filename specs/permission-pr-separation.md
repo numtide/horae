@@ -3307,6 +3307,42 @@ reproduction; do not repeat the exhausted native loops, declare it repaired
 from unrelated export CI, weaken its status assertions, or blindly rerun524.
 Continue to preserve #212 and use existing isolated branches/PRs only.
 
+### #226 current-base preparation and targeted transport diagnosis — 2026-10-09
+
+The preceding status-only turn added no implementation or delivery progress.
+Revalidated Nixbot524 directly: terminal failed, with only
+`checks.aarch64-linux.tests` failing; its log still provides no underlying
+transport cause for attempt13. #226 remains draft and outside the merge queue.
+
+Backed up its published1cbde180 head at
+`refs/backup/pr226-before-current-delivery-20261009` and rebased the single owned
+commit onto actual master6d19a88f without updating other refs. Local head
+0bacb3b1af566ea0168a8c3193c6ee3c96beef07, tree
+92b3e1fc31934306f646b4dcf293d0ddc3bb1dfe; not published. Range-diff changes only
+three redundant SQLx additions now inherited from master. The template command,
+953-line test module, migration0043 and command DTOs remain byte-identical.
+Owned scope is44 files,2,103 additions/one deletion. Root and #212 untouched.
+
+Reviewed the complete template implementation, shared administration helpers,
+receipt migration, DTOs, tests and `contracts/template-commands.md` against
+T053–T055: authenticated actor IDs are internal inputs; fresh canonical admin
+authority precedes receipt replay; organization/actor/template/person locks,
+revision checks, canonical intent, tenant isolation, 50-profile serialization,
+grant-preserving deletion and atomic audit rollback match the scoped contract.
+No critical/high finding in this subset. It exposes no endpoint or policy
+activation; acceptance of this new composition remains pending.
+
+Started a distinct, bounded diagnostic82262 using the current accepted #249
+tree and scratch-only Nix override `.scratch/csv-rejection-delayed-read.nix`.
+It injects1ms asynchronous file-read latency and records both unchanged immediate
+401/403 test schedules with strace. No fixture draining, status weakening,
+production edit, real account or remote retry. Derivation
+sdalzlg2llbfm4bbq57ics09ng718vvr-horae-csv-rejection-delayed-read;
+test exit status is retained separately from diagnostic artifact construction.
+Next: inspect the terminal result and trace before selecting a transport fix or
+further causal experiment; do not count successful artifact construction as
+passing assertions or clear the historical ARM failure without evidence.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
