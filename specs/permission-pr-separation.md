@@ -4003,6 +4003,34 @@ onto that squash preserving treeac90e7e7, retarget master before exact-lease pus
 and collect its required GitHub/queue gates. Then publish #250 when a delivery
 slot is free. No new PRs, real-data operations or change to #212.
 
+Reviewed #255 against the full time-entry-reads.md contract (OP03,
+FR-006/007/008/010/018):122line reader,77line DTO,31line endpoint,eight database
+cases/576lines and155line real-session exercise. No critical/high finding in
+this bounded reader. Verified own/managed-person/managed-project/all union,
+tenant fences on every contextual parent, archived history, integer time facts
+without invoice/rate/auth metadata, scope before narrowing/date/keyset bounds,
+500/501page behavior, deleted cursors, both revocation lock orders, current
+active actor, strict state, cancellation and sanitized errors. No full Timesheet
+or mutation acceptance claimed. Backed up34a52be6 at
+refs/backup/pr255-before-current-delivery-20261009 and rebased onto #245 9b831d08
+with updateRefs disabled. New local98688ffd6cdbd13f5d31c307c940d36604693484,
+tree9d4e05f2759f53b3c2555bd50f16015ec402dd26. Four complete files and the endpoint
+are unchanged; registration preserves all inherited checks and adds its own once.
+Three original SQLx descriptors already exist in the base; owned29files/1428adds.
+Unpublished and not yet tested; local #254 validation29247 remains live.
+
+#244 GitHub37929467171 attempt1 terminated at12:50:43 UTC after29m24s with
+exit143. Collected failed-step logs, job metadata and check annotations: core189
+passed; tests, Clippy and package builds were compiling concurrently. Last
+build output at12:28:54 reports the WASM client successfully bundled, then only
+the exit143 annotation appears at12:50:40. No test assertion, Rust diagnostic,
+OOM or timeout cause was recorded; do not claim a specific root cause or repair.
+Nixbot566 on this identical commit/tree remains fully accepted on both Linux
+architectures. Requested one failed-job rerun, without source/assertion/check
+changes. Protected auto-merge cannot pass while its required check is red.
+Next: collect attempt2, investigate any actual failure before another retry,
+and verify queue/squash before retargeting #245. No broad unchanged retry loop.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
