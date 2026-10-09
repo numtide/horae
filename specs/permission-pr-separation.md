@@ -3146,6 +3146,28 @@ master-retarget merge conflict on obsoleteed4f2f21, with no evaluated tree.
 Next: collect37910361697, then submit #237 to the protected queue; keep #247550
 running untouched and reconcile its ancestry only after it is terminal.
 
+Source workflow37910361697 passed onfcf1250f: Flake Check50s, Format41s.
+Marked #237 ready and submitted it with exact-head matching to the protected
+queue, without bypass. Entry MQE_lQDOTRPZ888AAAABG9o9fc4AA_LZzgMt70k is first.
+Its actual merge-group workflow37910555123 runs on811941343153b54c9c80e5e31443d206a96a4ddd;
+watcher41987 remains live. This is not yet a merge receipt. #247550 is building
+its exact535ae5a7 tree; do not rewrite its branch while that run is active.
+
+Prepared existing #249 locally in csv-export-authority. Preservedc990d11e as
+refs/backup/pr249-before-current-delivery-20261009, then rebased its two owned
+commits from1b7adcd1 onto published #2475950fdb1 with updateRefs disabled.
+New local head673d95a20b67d913a2f1d8feb4c59a7c6f49344d/tree1826622320668adf47cdf6dc3e370c75f748f4bb;
+remote remainsc990d11e. Source patch IDbbf338b42f35b8f6d6139d59713941f117eb1487
+matches before/after; range-diff differs only in inherited HTTP harness context.
+Owned scope remains55 files,2,475 additions/129 deletions. Started native
+Nix tests/SQLx/treefmt process49164, with530 files formatted and zero changes;
+SQLx is building. Output roots .scratch/pr249-current-delivery-checks.
+Read T110–T113 and csv-exports.md, source cursor/helper, delivery savepoints,
+buffer/backpressure and production wiring. Test review remains pending, so this
+is not publication acceptance. No source edits or third remote delivery.
+Next: verify #237's actual merge/tree; collect49164 and continue #249's bounded
+test review while #247550 runs. Preserve #212 and the unresolved #226 hold.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
