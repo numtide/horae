@@ -16,13 +16,17 @@ This order includes composition dependencies, not only runtime dependencies.
   Full browser20381 passed after the first follow-up; focused91903 passed all
   five suites affected by the latest change. Delayed-read and diagnostic-failure
   reproductions failed before and passed after their scoped fixes.
-  GitHub38028723200 and Nix627 are the current remote runs, with live watchers
-  60957 and18131. Both started at05:47UTC on `a7bc2547`; Nix627 is building,
-  latest ten succeeded/six building/six skipped-local, no failures. GitHub
-  Format passed42s; Flake Check is active. At05:54UTC the complete review-thread
-  query returned no threads and MERGEABLE on exact `a7bc2547`. Marked #273 ready
-  for review (no longer draft), without enabling auto-merge; current-head
-  remote acceptance is still required before queue submission.
+  GitHub38028723200 and Nix627 are the current remote runs. Nix627 completed
+  successfully at06:09:13UTC on exact `a7bc2547`/tree `eef5c698`:16 succeeded,
+  six skipped-local, zero failures; watcher18131 is terminal0. Both Linux
+  architectures accepted the full checks. GitHub Format passed42s; Flake Check
+  and watcher60957 remain active. Marked #273 ready at05:54UTC after verifying
+  no review threads and no conflicts; a fresh complete review query at06:09UTC
+  still found no threads. Protected auto-merge enabled at06:10:15UTC for this
+  exact head; read-back OPEN/BLOCKED proves it is not merged. Required rules
+  retain Flake Check, Format, nixbot/nix-build, nixbot/nix-eval and ALLGREEN
+  squash merge queue. No bypass. Next: collect GitHub acceptance, queue checks
+  and actual merge before reconciling #275.
   Superseded GitHub38025269436 attempt1
   ended at05:16UTC with exit143 after25m27s, without a failing assertion or
   compiler diagnostic. Its log and check annotations do not establish the
