@@ -19,14 +19,19 @@ This order includes composition dependencies, not only runtime dependencies.
   GitHub38028723200 and Nix627 are the current remote runs. Nix627 completed
   successfully at06:09:13UTC on exact `a7bc2547`/tree `eef5c698`:16 succeeded,
   six skipped-local, zero failures; watcher18131 is terminal0. Both Linux
-  architectures accepted the full checks. GitHub Format passed42s; Flake Check
-  and watcher60957 remain active. Marked #273 ready at05:54UTC after verifying
+  architectures accepted the full checks. GitHub Format passed42s and Flake
+  Check passed36m25s at06:24:18UTC; watcher60957 is terminal0. Marked #273 ready
+  at05:54UTC after verifying
   no review threads and no conflicts; a fresh complete review query at06:09UTC
   still found no threads. Protected auto-merge enabled at06:10:15UTC for this
   exact head; read-back OPEN/BLOCKED proves it is not merged. Required rules
   retain Flake Check, Format, nixbot/nix-build, nixbot/nix-eval and ALLGREEN
-  squash merge queue. No bypass. Next: collect GitHub acceptance, queue checks
-  and actual merge before reconciling #275.
+  squash merge queue. No bypass. At06:24UTC #273 entered position1,
+  AWAITING_CHECKS, entry MQE_lQDOTRPZ888AAAABHFDTE84AA_LZzgMyAX4.
+  Queue commit `aadabd4cdff43f634e91b6cb788c0d6d0cdbc4ad` has the exact
+  accepted `eef5c698` tree and actual master272 as parent. Merge-group run
+  38030837138/watch17808 is active. Next: collect its acceptance and actual merge before
+  reconciling #275; queue submission is not completion.
   Superseded GitHub38025269436 attempt1
   ended at05:16UTC with exit143 after25m27s, without a failing assertion or
   compiler diagnostic. Its log and check annotations do not establish the
