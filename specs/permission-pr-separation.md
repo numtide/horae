@@ -21,7 +21,8 @@ This order includes composition dependencies, not only runtime dependencies.
   reports-permissions.cjs:421, with the report still loading after five seconds.
   Nix624 is terminal:14 passed,2 failed,6 skipped. No further retry was sent.
   New-head GitHub38020202145 and Nix625 are active; Format passed. No retry of
-  the obsolete GitHub run is needed. Full browser run20381 remains active.
+  the obsolete GitHub run is needed. Full browser run20381 passed all31 suites
+  against the accepted binary and the new fixtures; new-head Nix is pending.
 - #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
   all31 browser suites, SQLx, Clippy and the server/WASM package.
 - #276: local gate54165 passed on `f9ea1443`/tree `56e6a80b`:1906 native
@@ -35,6 +36,8 @@ This order includes composition dependencies, not only runtime dependencies.
   rendered review inspected ten captures without a blocking regression.
 - #279: local gate32157 is running on `75066620`/tree `8ad6aae0`.
   Its isolated worktree remains frozen until the gate ends.
+  First batched visual review found mobile task-name columns breaking words;
+  resolve the bounded layout finding before publishing, after the gate ends.
 - Remaining functional branches are prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
   published. Exact refs, recovery copies and gate receipts appear below.
@@ -7382,6 +7385,42 @@ with their exact source scope rather than claiming unchanged complete trees.
 Next: collect20381 and #279 gate32157, take the prepared single batched catalog
 capture round, and inspect new-head CI before any queue submission. #212 is
 untouched; no additional PRs or features were created.
+
+### Browser acceptance and catalog visual finding — 2026-10-10
+
+Full non-injected browser run20381 exited0: all31 original suites passed with
+the new assertion configuration, against the accepted b02726b3 runtime.
+#273's published body now records that result. New-head remote CI remains
+mandatory and is not replaced by this scoped baseline-runtime check.
+
+Catalog capture93748 exited0 against #279's exact package
+`/nix/store/p35vyxz4ggh28fmjgmi62lhz6jakc2fw-horae-0.1.0/bin/horae`.
+Reused the browser environment with only HORAE_TEST_SERVER and evidence output
+overridden; no additional package build. The unchanged task-catalog fixture
+used a disposable database and retained creation, validation, exact-rate,
+hidden-rate preservation, archive/restore, revocation and keyboard assertions.
+
+Viewed all six images in `.scratch/pr279-visual-75066620/`: catalog, creation
+validation and editor at1440px dark and390px light. Dialog contents fit and
+retain the pinned tokens; the list scrolls inside its container. However the
+mobile task-name column is compressed to roughly40px, splitting ordinary words
+including Development and Design into fragments. P2 responsive readability
+finding: preserve a useful task-name column width with scoped existing
+utilities, without changing shared table CSS. No complete visual acceptance
+is claimed. Full-page dialog screenshots include scroll offsets and are not
+evidence of viewport clipping by themselves. Physical touch and comprehensive
+accessibility/performance remain untested.
+
+Impeccable context and source detector were already run once for this session/
+surface; do not repeat them. This is the first batched rendered round; at most
+one confirmation round remains after a single bounded fix batch. No UI edit
+has been made while gate32157 is active. Read the craft floor and applicable
+Rust/testing guidance before that edit after the gate terminates.
+
+Next: collect #279 gate32157, fix the observed mobile column in the existing
+branch, confirm once and preserve its runtime acceptance scope. Track #273
+GitHub38020202145/Nix625; keep its head frozen during checks. #280 remains
+prepared at1d94bc85 without source changes, and #281 is still unvalidated.
 
 ## Objective and limits
 
