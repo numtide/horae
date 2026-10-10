@@ -315,11 +315,24 @@ The integration order includes composition dependencies, not only runtime depend
 - #281: full local gate38688 passed on `f4e6c831`/tree `e5813d93`:2006 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM package. Current
   local gate accepted; protected remote gates remain before any merge.
-  Next: reconcile only this branch onto actual280 176ff152, preserve its owned
-  change and inherited CI/browser fixes, and verify its master base before
-  publishing. Clean headf4e6c831 and fetched actual master verified; no rebase
-  yet. Do not repeat accepted native gates when exact runtime preservation is
-  proven. This is read-only API work, with no new visual gate.
+  Reconciled only this branch onto actual280 176ff152, preserving recovery ref
+  `refs/backup/pr281-before-actual-task-activity-merge-20261010`. Owned range-diff
+  is equal. New head `8f90e53efa2e27bcfac3a605faa1a1413c9455fe`, tree
+  `699abbc70828b7066059042b6edeeec7a7373dc4`. Whole-tree delta fromf4e6c831 is
+  exactly eight inherited CI/browser paths,20 additions/10 deletions. Runtime,
+  UI assets, migrations, SQLx, dependencies and contracts remain byte-identical
+  to baseline; inherited paths match actual master. Format63785 passed675 files
+  unchanged; whitespace passed. Focused5120 passed all seven affected browser
+  suites against exact baseline package `vw25nwcf2wf7g45dcslvvq7qag7ypyg8`, with
+  a disposable database. No additional source correction or repeated full
+  native gate. This is read-only API work, with no new visual gate. Master base
+  verified before exact786b4493-lease push11599, which passed. Complete review
+  query on8f90e53e found no threads and MERGEABLE. Marked ready and enabled
+  protected auto-merge at11:49:39UTC (94706 passed), exact head guarded, no
+  bypass. Read-back OPEN/non-draft/BLOCKED with autoMergeRequest is not merged.
+  GitHub38049745722 and Nix642 are live, watched by1298 and64616 respectively.
+  Next: collect those existing checks and protected queue acceptance, verify
+  actual merge, then finish and publish the existing #218 documentation.
 - The remaining functional branch is prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
   published. Exact refs, recovery copies and gate receipts appear below.
