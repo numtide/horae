@@ -228,10 +228,13 @@ This order includes composition dependencies, not only runtime dependencies.
   Complete review query on efe5a243 found no threads, with master base and
   MERGEABLE. Marked ready and enabled protected auto-merge at09:28:48UTC
   (54293 passed), exact head guarded, no bypass. Read-back is OPEN/non-draft/
-  BLOCKED with autoMergeRequest, not merged. GitHub38041471808/watch29101
-  and Nix638/watch93169 are active. Nix confirms exactefe5a243/tree29631f78,
-  with builds running and no failures. Continue these handles and require all
-  current-head and protected merge-group gates before moving to279.
+  BLOCKED with autoMergeRequest, not merged. Nix638 completed successfully
+  at09:50:53UTC on exactefe5a243/tree29631f78:16 checks passed on both Linux
+  architectures, six skipped-local, zero failures or retries; watcher93169
+  exited0. Fresh complete review query returned no threads. GitHub38041471808/
+  watch29101 remains active: Format passed38s, Flake Check is executing.
+  Continue29101 and require current GitHub plus protected merge-group gates
+  before moving to279.
 - #279: baseline gate32157 passed on `75066620`/tree `8ad6aae0`:2000 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM build. The mobile
   word-wrapping regression failed on the baseline; fix770b7a91/treeead3875f
