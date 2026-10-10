@@ -2,8 +2,9 @@
 
 ## Delivery checkpoint — 2026-10-10
 
-Latest verified merge: #280, commit `176ff152e5b7fe8800a9eeda8b40e79570703981`.
-One functional delivery remains: #281, followed by this documentation delivery.
+Latest verified merge: #281, commit `81b7c5cf9cdc4a6f765bc4381af7dcb5183a237d`.
+No functional deliveries remain in this block. This documentation delivery (#218)
+still needs publication, current-head CI and protected merge acceptance.
 The integration order includes composition dependencies, not only runtime dependencies.
 
 - #272: merged after local, both-Linux Nix621, required GitHub and protected
@@ -312,9 +313,9 @@ The integration order includes composition dependencies, not only runtime depend
   Flake Check53s and Format47s; watcher71875 exited0. GitHub confirms MERGED
   at11:43:34UTC, and the master API/fetch prove the exact accepted commit/tree.
   No additional source corrections, build retries or new PRs were required.
-- #281: full local gate38688 passed on `f4e6c831`/tree `e5813d93`:2006 native
+- #281: merged at12:37:42UTC. Full local gate38688 passed on `f4e6c831`/tree `e5813d93`:2006 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM package. Current
-  local gate accepted; protected remote gates remain before any merge.
+  local gate accepted before the protected remote checks recorded below.
   Reconciled only this branch onto actual280 176ff152, preserving recovery ref
   `refs/backup/pr281-before-actual-task-activity-merge-20261010`. Owned range-diff
   is equal. New head `8f90e53efa2e27bcfac3a605faa1a1413c9455fe`, tree
@@ -333,13 +334,22 @@ The integration order includes composition dependencies, not only runtime depend
   Nix642 completed successfully at12:09:07UTC on exact8f90e53e/tree699abbc7:
   all16 executed checks passed on both Linux architectures, six skipped-local,
   zero failures or retries; watcher64616 exited0. A fresh complete review
-  query found no threads. GitHub38049745722 remains live, watched by1298;
-  Format passed41s and Flake Check is still running. Next: collect that
-  existing run and protected queue acceptance, verify actual merge, then
-  finish and publish the existing #218 documentation.
-- The remaining functional branch is prepared locally, not accepted or merged.
-  #218 carries this delivery ledger; its newer local checkpoints are not yet
-  published. Exact refs, recovery copies and gate receipts appear below.
+  query found no threads. GitHub38049745722 passed Format41s and Flake
+  Check46m25s at12:35:35UTC; watcher1298 exited0. All four required current-head
+  checks report SUCCESS; another complete review query found no threads.
+  Protected queue entry MQE_lQDOTRPZ888AAAABHK-Ffs4AA_LZzgMyhfQ was first,
+  with commit `81b7c5cf9cdc4a6f765bc4381af7dcb5183a237d`, exact accepted
+  tree699abbc7 and parent actual280. Merge-group38052569929 passed Flake
+  Check46s and Format48s; watcher14322 exited0. GitHub confirms MERGED at
+  12:37:42UTC; master API and fetch confirm the exact commit/tree. No extra
+  source corrections, retries, bypasses or new PRs were needed.
+- All functional deliveries in this block are merged. #218 carries this
+  delivery ledger; its newer local checkpoints are not yet published.
+  Next: reconcile the existing documentation branch with actual master281,
+  verify its documentation-only scope and retained inventory, publish it and
+  collect current-head CI and protected queue acceptance. Exact refs, recovery
+  copies and gate receipts appear below. Full application parity and policy
+  activation are not claimed complete by this delivery block.
 
 #212 remains open as the unchanged reference. #208 and #91 are outside this
 delivery block. No new features, PRs or policy activation are authorized here.
