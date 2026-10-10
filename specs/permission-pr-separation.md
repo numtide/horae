@@ -21,11 +21,21 @@ This order includes composition dependencies, not only runtime dependencies.
   compiler diagnostic. Its log and check annotations do not establish the
   termination cause; resource exhaustion is not proven. Exactly one failed-job
   retry was requested and attempt2/job114139976533 started at05:18:11UTC on
-  unchanged `801fcaa4`. Watchers62788 and17951 are live; old59508 is terminal.
-  Format remains passed; Flake Check attempt2 is running. Nix626 left the
-  evaluator queue at05:23:24UTC and is building. At05:24UTC it reports two
-  succeeded, eight building, six pending and six skipped-local attributes,
-  without failures. Its earlier queue positions were not stopped executions.
+  unchanged `801fcaa4`. It also ended with exit143 at05:27:23UTC, during
+  overlapping package, test, Clippy and SQLx compilation, without an assertion
+  failure. Watchers59508 and62788 are terminal. No third attempt was requested.
+  Nix626/watch17951 remains live: it left the evaluator queue at05:23:24UTC.
+  Latest read reports ten succeeded, five building, one pending and six
+  skipped-local attributes, without failures.
+  Local-only follow-up `a7bc2547`/tree `eef5c698` bounds the GitHub command to
+  `nix flake check -L --max-jobs 1 --cores 2`, matching the accepted local
+  scheduling budget. Only ci.yml changes (two additions/one deletion); no
+  check or assertion is removed. Actionlint, format98274 (648 unchanged),
+  whitespace and no-build flake evaluation17666 passed. This is a scheduling
+  mitigation awaiting remote validation, not proof of an OOM cause. The pinned
+  Hestia main/post scripts and run annotations yielded no cause attribution.
+  Keep remote `801fcaa4` frozen until Nix626 terminates, then publish the scoped
+  follow-up and collect fresh current-head checks before protected merge.
   Protected current-head and merge-group acceptance remain.
   Previous Nix625 ended11 passed/5 failed/6 skipped; GitHub38020202145 attempt1
   lost its runner and attempt2 obscured an original browser error with a failed
