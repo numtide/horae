@@ -20,7 +20,10 @@ This order includes composition dependencies, not only runtime dependencies.
   1200-second compile timeout. The isolated browser retry failed in
   reports-permissions.cjs:421, with the report still loading after five seconds.
   Nix624 is terminal:14 passed,2 failed,6 skipped. No further retry was sent.
-  New-head GitHub38020202145 and Nix625 are active; Format passed. No retry of
+  New-head GitHub38020202145 attempt2 and Nix625 are active; Format passed.
+  Attempt1 lost its hosted runner; exactly one failed-job retry was submitted.
+  Nix625 has four terminal attribute failures and browser still active.
+  No retry of
   the obsolete GitHub run is needed. Full browser run20381 passed all31 suites
   against the accepted binary and the new fixtures; new-head Nix is pending.
 - #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
@@ -44,8 +47,8 @@ This order includes composition dependencies, not only runtime dependencies.
   editor browser44955 and its two inspected desktop/mobile captures passed
   without a blocking finding. Clean head/tree verified after completion.
 - #281: full local gate38688 is running on `f4e6c831`/tree `e5813d93`.
-  Clippy, the server/WASM package and SQLx passed; browser is running and
-  native tests remain pending. Keep this worktree frozen until completion.
+  Clippy, the server/WASM package, SQLx,34 browser suites and191 core tests
+  passed. Native server tests remain pending. Keep this worktree frozen until completion.
   Protected remote gates remain.
 - Remaining functional branches are prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
@@ -7609,6 +7612,27 @@ Next: collect38688; collect75103's terminal state and use the authenticated
 build page to retry failed attributes one at a time, at most once each. Keep
 the runtime branches unchanged during checks. No PR is ready to merge merely
 because its local gates passed; preserve #212 as the unchanged reference.
+
+### Browser accepted locally; hosted-runner disconnection retried — 2026-10-10
+
+#28138688 passed all34 browser suites and191 core tests, then started server
+test compilation. Clippy, SQLx and the package were already accepted. No source
+changes, extra local gate or policy activation occurred.
+
+GitHub38020202145 attempt1 is terminal failure, completed04:24:35UTC after
+1h04m15s. Watcher6129 exited1. Job114119303680 has no available job log;
+its check annotation explicitly says the hosted runner lost communication
+with the server. The Flake check step is left in_progress and cleanup pending
+in the terminal job metadata. This is not an assertion or compiler diagnostic;
+the annotation lists possible resource/network causes but establishes none.
+
+Sent exactly one `gh run rerun --failed` for this run. Read-back confirms
+attempt2 active on unchanged187ab2ef, Flake Check running and the original
+Format success retained. Do not submit another GitHub retry on silence.
+Watcher57169 follows attempt2 at60-second intervals;6129 is complete.
+Nix625 is independent and still has an active browser check; no Nix625 retry
+has been submitted. Collect its existing watcher75103 before retrying any
+failed attribute. Keep #212 unchanged and the functional heads frozen.
 
 ## Objective and limits
 
