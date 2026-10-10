@@ -109,7 +109,7 @@ pub fn TaskCatalog() -> Element {
                             } }
                             tbody { for task in &page.tasks {
                                 tr { key: "{task.id}",
-                                    td { class: "wrap-anywhere", "{task.name}" }
+                                    td { "{task.name}" }
                                     td { if task.billable_default { "Yes" } else { "No" } }
                                     if page.can_read_rates { td { class: "font-mono text-sm whitespace-nowrap", {rate_label(task.default_rate_cents, task.default_rate_currency.as_deref())} } }
                                     td { if task.active { "Active" } else { "Archived" } }

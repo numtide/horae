@@ -50,6 +50,13 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await page.evaluate(theme => document.documentElement.setAttribute('data-theme', theme), width === 1440 ? 'dark' : 'light');
+      const wordLines = await row.locator('td').first().evaluate(cell => {
+        const range = document.createRange();
+        range.setStart(cell.firstChild, 0);
+        range.setEnd(cell.firstChild, 'Catalog'.length);
+        return range.getClientRects().length;
+      });
+      assert.equal(wordLines, 1, `Task names must not split individual words at ${width}px`);
       await page.getByRole('button', { name: 'New task', exact: true }).click();
       const creation = page.getByRole('dialog', { name: 'New task', exact: true });
       await expect(creation.getByLabel('Task name', { exact: true })).toBeFocused();
