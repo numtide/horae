@@ -7,13 +7,16 @@ Ten functional deliveries remain, in the prepared integration order:
 #272 → #273 → #275 → #276 → #277 → #278 → #260 → #279 → #280 → #281.
 This order includes composition dependencies, not only runtime dependencies.
 
-- #272: local acceptance complete; Nix621 is building. GitHub38009232715
-  attempt1 terminated with exit143 without an identified cause. Independent
-  x86 native/browser acceptance is pending before a bounded failed-job retry.
+- #272: local acceptance complete; Nix621 is building. Its ARM SQLx check hit
+  a1200-second builder timeout; one scoped restart request was acknowledged,
+  not yet observed running. GitHub38009232715 attempt1 terminated with exit143
+  without an identified cause; its bounded retry still awaits x86 acceptance.
 - #273: local acceptance complete on `c6e78447`/tree `b796b190`:1869 native
   tests passed,31 browser suites and bounded visual review passed. Remote
   publication waits for #272's actual merge and an equal-tree reconciliation.
-- #275: local gate76491 is running on `b036e673`/tree `bf856e8e`; Clippy passed.
+- #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
+  all31 browser suites, SQLx, Clippy and the server/WASM package.
+- #276: local gate54165 is running on `f9ea1443`/tree `56e6a80b`.
   Its isolated worktree remains frozen until the gate ends.
 - Remaining functional branches are prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
@@ -6963,6 +6966,49 @@ resolved from the actual build page; no guessed retry or cancellation was made.
 Next: collect x86 acceptance before the bounded GitHub retry, then complete
 all required gates and protected merge. Start #276's sole local gate only after
 #275 finishes; preserve the already accepted #273 tree and visual evidence.
+
+### Task writes accepted; ARM SQLx retry requested — 2026-10-10
+
+#275 gate76491 exited zero on unchangedb036e673/treebf856e8e. All31 browser
+suites, strict Clippy, live SQLx, server/WASM package and native tests passed.
+Totals:191 core,1437 server and264 auxiliary,1892 passed, zero failed,
+11 inherited ignored; four filtered subprocess reruns excluded. Server test
+compilation3m38s; main suite237.94s. Its worktree is clean. This is local
+acceptance only; publication follows #273's verified delivery.
+
+Verified clean #276 atf9ea1443/tree56e6a80b and39GiB free, then started54165
+for the same four gates with cores8/max-jobs1/no-link. It is the sole heavy
+local build. Migration0048 will run only in disposable test databases.
+Freeze scoped-task-lifecycle until terminal; prepared descriptions updated.
+
+#272 Nix621 ARM SQLx failed at01:11:06.626127UTC on workerelastic-arm-384804be.
+The full raw log ends with an explicit1200-second farm timeout during cargo
+sqlx prepare compilation, not a query mismatch or compiler diagnostic. Its
+exact derivation is kplmqv0752vsq4m8pbnw4wrg3nv9j1gh. Other ARM compilation
+checks subsequently passed; only deployment and two x86 checks remained live.
+
+Reused the existing authenticated Chrome client7643 and its dedicated Nixbot
+tab. Inspected the exact per-attribute restart form; no token/cookie extraction
+or unrelated tab changes. Sent exactly one POST to the SQLx ARM restart path:
+303 back to its log, final200. Read-back still shows the old failed attribute,
+so no retry execution or acceptance is claimed yet. Do not resend the request.
+
+Public Nixbot revision2474092c426a5656dc9493fa57558171acca2615 explains this:
+[service._restart](https://github.com/Mic92/nixbot/blob/2474092c426a5656dc9493fa57558171acca2615/nixbot/nixbot/service.py)
+enqueues one rerun for the selected attribute;
+[restart_dispatch.rerun](https://github.com/Mic92/nixbot/blob/2474092c426a5656dc9493fa57558171acca2615/nixbot/nixbot/restart_dispatch.py)
+waits for the active run to release the build before resetting it. This is a
+source-supported explanation, not proof of the deployed revision or pending
+queue row. Verify a new started_at/status before calling the retry active.
+Retain watcher54972; if it exits at the original failure boundary, inspect
+build621 before deciding whether a new read-only watcher is needed. Never
+replace the head or duplicate the restart while this request is unresolved.
+
+Latest watcher reports13 successes, one failed attribute and two active checks.
+GitHub's single failed-job retry remains unsent pending full x86 acceptance.
+Next: collect those results, verify the requested ARM retry, then follow the
+existing protected merge sequence. No timeout/assertion/source workaround,
+new PR, policy activation or real-data mutation was introduced.
 
 ## Objective and limits
 
