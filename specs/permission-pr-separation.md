@@ -25,7 +25,9 @@ This order includes composition dependencies, not only runtime dependencies.
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
 - #277: local gate40914 passed on `c04a6166`/tree `2fb3728d`:1911 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
-- #278: local gate1753 is running on `7e9ad332`/tree `9834e623`.
+- #278: local gate1753 passed on `7e9ad332`/tree `9834e623`:1914 native
+  tests,31 browser suites, SQLx, Clippy and the server/WASM package.
+- #260: local gate89507 is running on `9762f776`/tree `6878cf56`.
   Its isolated worktree remains frozen until the gate ends.
 - Remaining functional branches are prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
@@ -7198,6 +7200,27 @@ yet; preserve the one batched review plus at most one confirmation-round limit.
 native retry and queued browser retry remain unchanged; watcher23010 is live.
 Next: collect those executions and start #260's heavy gate only after #278's
 terminal success. No second heavy build, remote head replacement or new PR.
+
+### Atomic creation accepted; People editor gate started — 2026-10-10
+
+#278 gate1753 exited zero on clean7e9ad332/tree9834e623. Native totals:191 core,
+1459 server,264 auxiliary,1914 passed, zero failed,11 inherited ignored; four
+filtered subprocess reruns excluded. Server compilation4m23s; main221.44s;
+native build phase8m24s. All31 browser suites, SQLx, strict Clippy and the
+server/WASM package passed. This is local acceptance, not publication or merge.
+
+Verified clean #260 at9762f776/tree6878cf56 and44GiB available. Started89507
+for tests, SQLx, strict Clippy and browser with cores8/max-jobs1/no-link. It is
+the only heavy local gate; freeze people-permission-editor-ui. The bounded
+capture plan uses the exact resulting package and existing isolated runner.
+
+#273's native retry remains authoritatively building at the same started_at,
+not stopped. Its raw log records6m45s preparing cached artifacts and progress
+through core dependency compilation. Public build metadata/navigation did not
+provide worker resource metrics; do not assert CPU/memory/load as the cause.
+The browser-only retry was acknowledged and remains queued; no further restart
+was sent. Next: collect these existing runs, finish #260's local and rendered
+acceptance, and resume #273's protected delivery only with required green gates.
 
 ## Objective and limits
 
