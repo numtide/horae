@@ -149,9 +149,27 @@ This order includes composition dependencies, not only runtime dependencies.
   and only after the predecessor actually merges. No successor was mutated.
 - #277: local gate40914 passed on `c04a6166`/tree `2fb3728d`:1911 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
-  Next delivery: reconcile only this branch onto actual276 da8c19d8, preserving
-  its owned patch and inherited CI/browser fixes, including the login-response
-  fixture correction. Retarget master before publishing. No rebase yet.
+  Reconciled only this branch onto actual276 da8c19d8; recovery ref
+  `refs/backup/pr277-before-actual-task-lifecycle-merge-20261010` retainsc04a6166.
+  Head `d67014795481cbd459f1bdcd6d4eed6c46351589`, tree
+  `26d685bd987c3ead7d03187c19ed21ecb615b214`. Owned range-diff is equal;
+  complete-tree delta is eight inherited CI/browser files (20 additions,
+  ten deletions), including the login-response fixture correction. Runtime,
+  migrations, SQLx, dependencies and contracts are byte-identical to baseline;
+  inherited paths exactly match master. Focused72856 passed all seven affected
+  browser suites against exact baseline binary `jxahis25lmd7y280274yp0gp3gfigm0v`
+  and a disposable database. Format30673 passed658 files unchanged. No additional
+  fix or fresh full native gate. GitHub automatically retargeted277 to master
+  when276 merged; verified before publishing, no redundant base edit. Complete
+  review query found no threads. Exactbe3f3513-lease push48106 passed; current
+  GitHub head and clean worktree reverified. Full review query on d6701479
+  returned no threads, with master base and MERGEABLE. Marked ready and enabled
+  protected auto-merge at07:56:55UTC (43524 passed), exact head guarded, no
+  bypass. Read-back is OPEN/non-draft/BLOCKED with autoMergeRequest present,
+  not merged. GitHub38036137491/watch10219 and Nix634/watch76292 are active.
+  Nix metadata confirms exactd6701479/tree26d685bd, evaluation passed and
+  builds started with no failures. Continue these handles and require all
+  current-head checks plus protected merge-group acceptance before moving278.
 - #278: local gate1753 passed on `7e9ad332`/tree `9834e623`:1914 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
 - #260: local gate89507 passed on `9762f776`/tree `6878cf56`:1987 native
