@@ -7222,6 +7222,28 @@ The browser-only retry was acknowledged and remains queued; no further restart
 was sent. Next: collect these existing runs, finish #260's local and rendered
 acceptance, and resume #273's protected delivery only with required green gates.
 
+### Task catalog reconciled; exact People capture environment resolved — 2026-10-10
+
+#279's clean worktree retainedda30c583 at
+refs/backup/pr279-before-current-people-editor-head-20261010. Rebased its one
+owned commit onto current #2609762f776 with rebase.updateRefs=false. New head
+75066620e85ecc44446d144ecba88503302bd3c0 has equal range-diff and unchanged
+tree8ad6aae0a9a8e37465a72f9ea594b2226b36bca8. No source edit, push or gate.
+#260's active worktree remains untouched.
+
+Resolved #260's evaluated browser derivation without building anything else.
+Its exact server is /nix/store/960m4y805hhcwrfb145sxv87lp5k1dyd-horae-0.1.0/bin/horae;
+Playwright modulei6xnc927g8yrwq0fws8wbmjvj4y36fq5, browsers2br1n8v0cx3zlqs4bik69d5fm2qm0z3m,
+font configyd0dxiqr0r8hcmfb7grlr3zdb968xjdr-fonts.conf. After its browser gate,
+reuse run-design-checks.sh permission-editor-recovery with this environment and
+HORAE_BROWSER_ARTIFACTS under .scratch/pr260-visual-9762f776. Capture remains
+pending; no rendered acceptance is inferred from these paths.
+
+#273 Nix624 native retry remains live and browser retry remains queued;
+#260 local89507 remains the sole heavy gate. Next: collect existing results,
+perform the bounded People capture when the exact package/browser gate is ready,
+and start #279's heavy gate only after #260's terminal local success.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
