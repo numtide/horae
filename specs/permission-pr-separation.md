@@ -9,14 +9,17 @@ This order includes composition dependencies, not only runtime dependencies.
 
 - #272: merged after local, both-Linux Nix621, required GitHub and protected
   merge-group acceptance. Its actual merge tree equals the accepted tree.
-- #273: published follow-up `801fcaa4`/tree `2eb15150`. Baseline `b02726b3`
+- #273: published follow-up `a7bc2547`/tree `eef5c698`. Baseline `b02726b3`
   acceptance remains1869 native tests,31 browser suites and bounded visual
   review. The two CI-only follow-ups change assertion budgets in three fixtures
   and failure diagnostics in four, not application code or expected values.
   Full browser20381 passed after the first follow-up; focused91903 passed all
   five suites affected by the latest change. Delayed-read and diagnostic-failure
   reproductions failed before and passed after their scoped fixes.
-  GitHub38025269436 and Nix626 are the current remote runs. GitHub attempt1
+  GitHub38028723200 and Nix627 are the current remote runs, with live watchers
+  60957 and18131. Both started at05:47UTC on `a7bc2547`; Nix627 is building,
+  initially two succeeded/eight building/six pending/six skipped-local.
+  Superseded GitHub38025269436 attempt1
   ended at05:16UTC with exit143 after25m27s, without a failing assertion or
   compiler diagnostic. Its log and check annotations do not establish the
   termination cause; resource exhaustion is not proven. Exactly one failed-job
@@ -24,18 +27,20 @@ This order includes composition dependencies, not only runtime dependencies.
   unchanged `801fcaa4`. It also ended with exit143 at05:27:23UTC, during
   overlapping package, test, Clippy and SQLx compilation, without an assertion
   failure. Watchers59508 and62788 are terminal. No third attempt was requested.
-  Nix626/watch17951 remains live: it left the evaluator queue at05:23:24UTC.
-  Latest read reports ten succeeded, five building, one pending and six
-  skipped-local attributes, without failures.
-  Local-only follow-up `a7bc2547`/tree `eef5c698` bounds the GitHub command to
+  Nix626/watch17951 completed successfully at05:46:56UTC: all16 executed
+  checks passed on `801fcaa4`/tree `2eb15150`, six skipped-local, no failures.
+  This includes x86/ARM native, browser, Clippy, SQLx, packages and VM checks.
+  Follow-up `a7bc2547`/tree `eef5c698` bounds the GitHub command to
   `nix flake check -L --max-jobs 1 --cores 2`, matching the accepted local
   scheduling budget. Only ci.yml changes (two additions/one deletion); no
   check or assertion is removed. Actionlint, format98274 (648 unchanged),
   whitespace and no-build flake evaluation17666 passed. This is a scheduling
   mitigation awaiting remote validation, not proof of an OOM cause. The pinned
   Hestia main/post scripts and run annotations yielded no cause attribution.
-  Keep remote `801fcaa4` frozen until Nix626 terminates, then publish the scoped
-  follow-up and collect fresh current-head checks before protected merge.
+  Published only after Nix626 terminated, with exact old-head lease; push87482
+  exited0. Remote master is still actual272 `a2102fa6`. The body now records
+  all scoped checks and limitations. Collect current-head acceptance before
+  protected merge; #275 must inherit all three CI follow-ups after that merge.
   Protected current-head and merge-group acceptance remain.
   Previous Nix625 ended11 passed/5 failed/6 skipped; GitHub38020202145 attempt1
   lost its runner and attempt2 obscured an original browser error with a failed
