@@ -7537,6 +7537,13 @@ and the global-catalog restriction explains why its control is disabled.
 No shared CSS, source, fixture or dependency was changed. This bounded review
 does not claim physical-touch, full WCAG or measured performance acceptance.
 
+Later Nix625 observation:9 succeeded,5 building,2 failed,6 skipped. The new
+failure is checks.x86_64-linux.sqlx-prepare; its raw log ends during compilation
+with `error: timed out after 1200 seconds`, not a SQL/cache mismatch diagnostic.
+No retry was sent while other attributes remain active. Separately, #280's
+local SQLx check completed successfully in1m47 and its full browser phase is
+running. That local result does not substitute for #273 current-head CI.
+
 Next: collect7959; when it terminates successfully, start #281's sole heavy
 local gate. Continue current-head #273 checks and retry only the evidenced
 transport failure after the build becomes idle. Keep #212 unchanged and all
