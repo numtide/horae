@@ -330,9 +330,13 @@ The integration order includes composition dependencies, not only runtime depend
   query on8f90e53e found no threads and MERGEABLE. Marked ready and enabled
   protected auto-merge at11:49:39UTC (94706 passed), exact head guarded, no
   bypass. Read-back OPEN/non-draft/BLOCKED with autoMergeRequest is not merged.
-  GitHub38049745722 and Nix642 are live, watched by1298 and64616 respectively.
-  Next: collect those existing checks and protected queue acceptance, verify
-  actual merge, then finish and publish the existing #218 documentation.
+  Nix642 completed successfully at12:09:07UTC on exact8f90e53e/tree699abbc7:
+  all16 executed checks passed on both Linux architectures, six skipped-local,
+  zero failures or retries; watcher64616 exited0. A fresh complete review
+  query found no threads. GitHub38049745722 remains live, watched by1298;
+  Format passed41s and Flake Check is still running. Next: collect that
+  existing run and protected queue acceptance, verify actual merge, then
+  finish and publish the existing #218 documentation.
 - The remaining functional branch is prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
   published. Exact refs, recovery copies and gate receipts appear below.
