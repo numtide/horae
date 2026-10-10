@@ -46,10 +46,9 @@ This order includes composition dependencies, not only runtime dependencies.
   tests,34 browser suites, SQLx, Clippy and the server/WASM package. Focused
   editor browser44955 and its two inspected desktop/mobile captures passed
   without a blocking finding. Clean head/tree verified after completion.
-- #281: full local gate38688 is running on `f4e6c831`/tree `e5813d93`.
-  Clippy, the server/WASM package, SQLx,34 browser suites and191 core tests
-  passed. Native server tests remain pending. Keep this worktree frozen until completion.
-  Protected remote gates remain.
+- #281: full local gate38688 passed on `f4e6c831`/tree `e5813d93`:2006 native
+  tests,34 browser suites, SQLx, Clippy and the server/WASM package. Current
+  local gate accepted; protected remote gates remain before any merge.
 - Remaining functional branches are prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
   published. Exact refs, recovery copies and gate receipts appear below.
@@ -7633,6 +7632,29 @@ Watcher57169 follows attempt2 at60-second intervals;6129 is complete.
 Nix625 is independent and still has an active browser check; no Nix625 retry
 has been submitted. Collect its existing watcher75103 before retrying any
 failed attribute. Keep #212 unchanged and the functional heads frozen.
+
+### Final prepared client-reader gate accepted — 2026-10-10
+
+38688 exited0 on #281f4e6c831/treee5813d93. Accepted191 core,1481 server and
+334 auxiliary tests:2006 total, zero failed,11 ignored. Four filtered
+subprocess invocations are not counted twice. Native compilation4m09, main
+server tests225.25s, native phase8m15. All34 browser suites, SQLx, Clippy and
+server/WASM package passed. The source was unchanged during the full gate;
+this backend-only delivery needs no additional rendered review. No heavy local
+gate remains running; preserve these receipts rather than rerunning them.
+
+All nine functional deliveries now have the recorded local baseline gates
+and applicable scoped follow-up checks. This does not prove their final
+published heads ready to merge. #273187ab2ef remains the only published head
+under current remote verification; downstream prepared heads remain local.
+Nix625 watcher75103 is still live; no retry625 yet. GitHub attempt2 watcher
+57169 remains the continuation point after the evidenced runner disconnect.
+
+Next: collect terminal remote results, retry Nix625's failed attributes one
+at a time, and merge #273 only after its exact head satisfies the protected
+checks. Then reconcile and publish the immediate successor, reusing proven
+unchanged scopes without claiming stale whole-tree acceptance. No new PR,
+feature, policy activation or change to #212 is authorized by this checkpoint.
 
 ## Objective and limits
 
