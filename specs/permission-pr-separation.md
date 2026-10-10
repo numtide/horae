@@ -18,7 +18,11 @@ This order includes composition dependencies, not only runtime dependencies.
   reproductions failed before and passed after their scoped fixes.
   GitHub38028723200 and Nix627 are the current remote runs, with live watchers
   60957 and18131. Both started at05:47UTC on `a7bc2547`; Nix627 is building,
-  initially two succeeded/eight building/six pending/six skipped-local.
+  latest ten succeeded/six building/six skipped-local, no failures. GitHub
+  Format passed42s; Flake Check is active. At05:54UTC the complete review-thread
+  query returned no threads and MERGEABLE on exact `a7bc2547`. Marked #273 ready
+  for review (no longer draft), without enabling auto-merge; current-head
+  remote acceptance is still required before queue submission.
   Superseded GitHub38025269436 attempt1
   ended at05:16UTC with exit143 after25m27s, without a failing assertion or
   compiler diagnostic. Its log and check annotations do not establish the
