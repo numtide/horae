@@ -16,7 +16,8 @@ This order includes composition dependencies, not only runtime dependencies.
   GitHub38013878619 attempt1 terminated with exit143; no cause is established.
   Nix624 x86 native hit a1200-second compile timeout and its browser check
   timed out waiting for101 rows. Other checks remain active. A single isolated
-  native retry was acknowledged through Chrome; execution is pending.
+  native retry started at02:16:35.259018UTC after x86 OIDC passed.
+  One isolated browser retry was acknowledged; execution is pending.
   Browser acceptance and the bounded GitHub retry remain pending.
 - #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
   all31 browser suites, SQLx, Clippy and the server/WASM package.
@@ -7155,6 +7156,26 @@ CSS or fixture edits, push or second heavy local build. Full current-tree
 runtime and bounded rendered acceptance remain pending for this UI delivery.
 Next: collect #273's queued native retry and #278's terminal local result;
 start #260's gate only after #278 finishes successfully.
+
+### Native retry active; browser-only retry requested — 2026-10-10
+
+#273 x86 OIDC passed at02:16:08.607278UTC. The native retry is now proven
+active by a new started_at02:16:35.259018UTC and building status on the same
+zrgy54d8awmzdvqh0vff17106n5pvgwz derivation. Fourteen Nix624 checks are passed;
+only native and browser acceptance remain. Watcher23010 remains live.
+
+After the native request was consumed and its execution confirmed, inspected
+Chrome7643's exact browser-only POST form and sent one same-origin request to
+/repos/github/numtide/horae/builds/624/attrs/checks.x86_64-linux.browser/restart.
+The response returned200 after redirect. Do not resend. The queued browser repetition keeps
+the original101-row assertion and5000ms bound, source, derivation and head
+unchanged; local and ARM success justify this bounded reproducibility check,
+not a claim that the failure's cause is proven. No whole-build or GitHub retry.
+
+#278 local1753 passed Clippy and server/WASM package and is validating SQLx.
+Its worktree remains frozen. Next: collect both actual retry results;
+request the one failed-job-only GitHub retry
+only after independent x86 acceptance. Preserve14 completed Nix checks.
 
 ## Objective and limits
 
