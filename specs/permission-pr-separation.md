@@ -2,9 +2,9 @@
 
 ## Delivery checkpoint — 2026-10-10
 
-Latest verified merge: #260, commit `b114011ca23781af04e928fabf517f159314da59`.
-Three functional deliveries remain, in the prepared integration order:
-#279 → #280 → #281.
+Latest verified merge: #279, commit `2ae5581580039059651638ac7cdd007621bdfc59`.
+Two functional deliveries remain, in the prepared integration order:
+#280 → #281.
 This order includes composition dependencies, not only runtime dependencies.
 
 - #272: merged after local, both-Linux Nix621, required GitHub and protected
@@ -241,7 +241,7 @@ This order includes composition dependencies, not only runtime dependencies.
   Check54s; watcher64620 exited0. GitHub confirms MERGED at10:05:47UTC;
   master API confirms the exact commit/tree. No retries, bypasses, additional
   fixes or new PRs were needed for this delivery.
-- #279: baseline gate32157 passed on `75066620`/tree `8ad6aae0`:2000 native
+- #279: merged at10:53:23UTC. Baseline gate32157 passed on `75066620`/tree `8ad6aae0`:2000 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM build. The mobile
   word-wrapping regression failed on the baseline; fix770b7a91/treeead3875f
   passed the package build and final six-capture catalog check2448. Clippy
@@ -265,15 +265,25 @@ This order includes composition dependencies, not only runtime dependencies.
   Nix640 completed successfully at10:34:06UTC on exact3768a109/tree074af6f2:
   all16 executed checks passed on both Linux architectures, six skipped-local,
   zero failures or retries; watcher26585 exited0. A fresh complete review
-  query found no threads. GitHub38044210197 remains live, watched by3964;
-  Format passed47s and Flake Check is still running.
+  query found no threads. GitHub38044210197 passed Format47s and Flake
+  Check36m36s at10:51:05UTC; watcher3964 exited0. All four required current-head
+  checks report SUCCESS, and another complete review query found no threads.
   Required Flake Check, Format, nixbot/nix-build, nixbot/nix-eval and the
-  ALLGREEN/SQUASH queue remain enforced. Next: collect the existing GitHub run and
-  protected queue acceptance, verify actual merge, then reconcile only #280.
+  ALLGREEN/SQUASH queue remain enforced. Protected queue entry
+  MQE_lQDOTRPZ888AAAABHKZias4AA_LZzgMyY0g was first, with commit
+  `2ae5581580039059651638ac7cdd007621bdfc59`, exact accepted tree074af6f2
+  and parent actual260. Merge-group38046399860 passed Flake Check57s and
+  Format47s; watcher84371 exited0. GitHub confirms MERGED at10:53:23UTC;
+  master API confirms the exact commit/tree. No extra source corrections,
+  retries, bypasses or new PRs were required for this delivery.
 - #280: full local gate7959 passed on `9dcc222b`/tree `dd723294`:2000 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM package. Focused
   editor browser44955 and its two inspected desktop/mobile captures passed
   without a blocking finding. Clean head/tree verified after completion.
+  Next delivery: reconcile only this branch onto actual279 2ae55815, preserve
+  its owned change and inherited CI/browser fixes, verify its master base
+  before publishing. Do not repeat accepted native/visual gates when exact
+  runtime/UI preservation is proven.
 - #281: full local gate38688 passed on `f4e6c831`/tree `e5813d93`:2006 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM package. Current
   local gate accepted; protected remote gates remain before any merge.
