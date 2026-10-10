@@ -15,10 +15,11 @@ This order includes composition dependencies, not only runtime dependencies.
   Current-head remote checks and protected merge-group acceptance are pending.
   GitHub38013878619 attempt1 terminated with exit143; no cause is established.
   Nix624 x86 native hit a1200-second compile timeout and its browser check
-  timed out waiting for101 rows. Other checks remain active. A single isolated
-  Native retry ended with another1200-second compile timeout at02:53:35.161136UTC.
-  The one isolated browser retry started at02:54:52.925052UTC and remains active.
-  Browser acceptance and the bounded GitHub retry remain pending.
+  timed out waiting for101 rows. The isolated native retry ended with another
+  1200-second compile timeout. The isolated browser retry failed in
+  reports-permissions.cjs:421, with the report still loading after five seconds.
+  Nix624 is terminal:14 passed,2 failed,6 skipped. No further retry was sent.
+  Remote acceptance and the bounded GitHub retry remain pending.
 - #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
   all31 browser suites, SQLx, Clippy and the server/WASM package.
 - #276: local gate54165 passed on `f9ea1443`/tree `56e6a80b`:1906 native
@@ -27,7 +28,10 @@ This order includes composition dependencies, not only runtime dependencies.
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
 - #278: local gate1753 passed on `7e9ad332`/tree `9834e623`:1914 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
-- #260: local gate89507 is running on `9762f776`/tree `6878cf56`.
+- #260: local gate89507 passed on `9762f776`/tree `6878cf56`:1987 native
+  tests,33 browser suites, SQLx, Clippy and the server/WASM package. Bounded
+  rendered review inspected ten captures without a blocking regression.
+- #279: local gate32157 is running on `75066620`/tree `8ad6aae0`.
   Its isolated worktree remains frozen until the gate ends.
 - Remaining functional branches are prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
@@ -7286,6 +7290,41 @@ Keep23010 and current headb02726b3. GitHub retry remains unsent; local and ARM
 success do not replace required x86 acceptance. Next: collect that browser
 result, finish #260 locally, and investigate the repeated native timeout
 without weakening checks or bypassing protected delivery.
+
+### People acceptance and second x86 browser failure — 2026-10-10
+
+Collected gate89507 with exit0:191 core +1473 server +323 auxiliary tests
+passed,1987 total; zero failed and11 inherited ignored. Four filtered
+subprocess reruns are excluded. All33 browser suites, SQLx, Clippy and the
+server/WASM build passed. The native build phase took8m09; the main test run
+took221.83s. Existing ten-capture visual acceptance remains bounded as recorded
+above. No new UI edits or additional capture round.
+
+Started the sole heavy local gate32157 for #279 at75066620/tree8ad6aae0 after
+confirming a clean worktree and44GiB free. It builds native tests, SQLx,
+Clippy and browser checks with eight cores and one job. Freeze that worktree.
+
+Nix624 is terminal failed:14 success,2 failure,6 skipped. The sole browser
+retry failed at reports-permissions.cjs:421, after clearing the active-only
+filter: the accessibility snapshot shows "Loading detailed report…", absent
+totals and a disabled refresh button. This differs from the first failure in
+project-bulk-actions.cjs. Both assertions use Playwright's five-second default;
+the report fixture's page.setDefaultTimeout(15000) does not configure expect.
+This evidence identifies the observed loading state, not its underlying cause.
+No third native run, second browser retry or GitHub retry has been requested.
+
+Previously downloaded Nixbot executor/config sources set max_silent_time to
+1200s and total build timeout to three hours. The deployed revision/settings
+are unverified. The [Nix option reference](https://nix.dev/manual/nix/2.24/command-ref/opt-common)
+distinguishes time without stdout/stderr from total builder runtime; do not
+describe1200s as a confirmed total-run limit. Authenticated navigation exposes
+no worker/metrics links. Requested builder CPU/memory/I/O evidence from the
+user without pausing independent local validation. No infrastructure settings
+or assertion budgets have been changed.
+
+Next: reproduce delayed report/overview reads in the disposable browser
+harness, then choose a bounded correction if supported; collect #279 and
+prepare #280. Current-head remote acceptance still blocks #273's merge.
 
 ## Objective and limits
 
