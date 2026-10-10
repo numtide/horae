@@ -44,7 +44,8 @@ This order includes composition dependencies, not only runtime dependencies.
   editor browser44955 and its two inspected desktop/mobile captures passed
   without a blocking finding. Clean head/tree verified after completion.
 - #281: full local gate38688 is running on `f4e6c831`/tree `e5813d93`.
-  Keep this worktree frozen until completion. Protected remote gates remain.
+  Clippy and the server/WASM package passed; SQLx is running. Keep this
+  worktree frozen until completion. Protected remote gates remain.
 - Remaining functional branches are prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
   published. Exact refs, recovery copies and gate receipts appear below.
@@ -7581,6 +7582,24 @@ No retry625 has been submitted. After it becomes idle, retry the evidenced
 failed attributes individually at most once each; do not overlap heavy compiles
 or substitute local results for current-head protected checks. #212 remains
 the unchanged reference. Next: collect38688 and act on terminal Nix625.
+
+### Final client-reader gate progressing; remote browser still live — 2026-10-10
+
+38688 remains live. Clippy completed in2m28 and the package build phase in3m02;
+SQLx started. The exact #281 head/tree remain frozen, with native and browser
+acceptance still pending. No rerun or source edit was made.
+
+Nix625 watcher75103 polls this build every60 seconds, printing changed states
+only and exiting on terminal status. Latest state:11 succeeded,4 failed,
+6 skipped, only x86 browser building. Its raw log has advanced through the
+permission-role fixtures; continued output is evidence of progress, not a
+stopped job. GitHub watcher6129 for38020202145 remains active. Chrome7643
+remains available on build625; no pending tool request and no retry POST sent.
+
+Next: collect38688; collect75103's terminal state and use the authenticated
+build page to retry failed attributes one at a time, at most once each. Keep
+the runtime branches unchanged during checks. No PR is ready to merge merely
+because its local gates passed; preserve #212 as the unchanged reference.
 
 ## Objective and limits
 
