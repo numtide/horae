@@ -2,6 +2,8 @@ use super::*;
 use crate::models::{permission_editor::PermissionRequester, time_report::TimeReportQuery};
 use uuid::Uuid;
 
+mod projects;
+
 #[test]
 fn billability_filter_defaults_and_serializes_without_ambiguous_booleans() {
     use crate::models::time_report::TimeReportBillability;

@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) AS \"count!\",\n             COUNT(*) FILTER (WHERE p.id=ANY($4) AND ($5 OR $8 OR ($9 AND management.id IS NOT NULL))) AS \"financial!\"\n           FROM projects p JOIN clients c ON c.id=p.client_id AND c.org_id=p.org_id\n           LEFT JOIN project_read_access a ON a.org_id=p.org_id AND a.project_id=p.id AND a.user_id=$2\n           LEFT JOIN project_management_assignments management ON management.org_id=p.org_id\n             AND management.project_id=p.id AND management.manager_id=$2\n           LEFT JOIN assignments member ON member.project_id=p.id AND member.user_id=$2\n           LEFT JOIN project_settings settings ON settings.org_id=p.org_id AND settings.project_id=p.id\n           WHERE p.org_id=$1 AND p.id=ANY($3) AND CASE WHEN $5 THEN COALESCE(a.can_view_progress,false)\n             ELSE $6 OR ($7 AND management.id IS NOT NULL)\n               OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility,'project_members')='project_members') END",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "financial!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray",
+        "UuidArray",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "73e28b09391ffa7a3a2e13a7a0f1fd8aab7d67fcc9563f7e25b14eb959e20485"
+}

@@ -190,6 +190,7 @@ pub(super) async fn projects(
     viewer_id: Uuid,
     params: ProjectsExportParams,
 ) -> Result<Response, StatusCode> {
+    params.authorize_requester(org_id, viewer_id)?;
     response(
         &EXPORTS,
         DOWNLOAD_TIMEOUT,
@@ -231,7 +232,7 @@ pub(super) async fn projects(
                         ])
                         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
                     output
-                        .record(&sender, &mut tx, &authority, Some(row.id))
+                        .project_record(&sender, &mut tx, &authority, &row)
                         .await?;
                 }
             }

@@ -90,7 +90,7 @@ pub(super) async fn deliver(
             .reserve()
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        authority.check(connection, &[], &[]).await?;
+        authority.check(connection, &[], &[], &[]).await?;
         permit.send(
             writer
                 .into_inner()

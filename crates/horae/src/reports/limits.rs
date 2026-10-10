@@ -206,6 +206,7 @@ mod tests {
 
     mod authorization;
     mod project_authorization;
+    mod project_canonical;
     mod time_authorization;
 
     async fn entries(
