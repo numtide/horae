@@ -280,10 +280,24 @@ This order includes composition dependencies, not only runtime dependencies.
   tests,34 browser suites, SQLx, Clippy and the server/WASM package. Focused
   editor browser44955 and its two inspected desktop/mobile captures passed
   without a blocking finding. Clean head/tree verified after completion.
-  Next delivery: reconcile only this branch onto actual279 2ae55815, preserve
-  its owned change and inherited CI/browser fixes, verify its master base
-  before publishing. Do not repeat accepted native/visual gates when exact
-  runtime/UI preservation is proven.
+  Reconciled only this branch onto actual279 2ae55815, preserving recovery ref
+  `refs/backup/pr280-before-actual-catalog-merge-20261010`. Owned range-diff is
+  equal. New head `3798df930c74aedcaf6a8fec8b616a0c5b9dd270`, tree
+  `0585a521de72a4fe00a39b7e26bdcd9463569208`. Whole-tree delta from9dcc222b
+  is exactly eight inherited CI/browser paths,20 additions/10 deletions.
+  Runtime, UI assets, migrations, SQLx, dependencies and contracts remain
+  byte-identical to baseline; inherited paths match actual master. Format97897
+  passed672 files unchanged; whitespace passed. Focused57727 passed all seven
+  affected browser suites against exact accepted baseline package
+  `k3bqkfx8qk2d8z6h7f5nmy5df64qswcj`, using a disposable database. No additional
+  source fix or repeated full native/visual gate. Verified master base before
+  exactb452b602-lease push86685, which passed. Complete review query on3798df93
+  found no threads and MERGEABLE. Marked ready and enabled protected auto-merge
+  at10:58:17UTC (3513 passed), exact head guarded, no bypass. Read-back is
+  OPEN/non-draft/BLOCKED with autoMergeRequest, not merged. GitHub38046726113
+  and Nix641 are live, watched by86949 and61427 respectively. Next: collect
+  those existing checks and protected queue acceptance, verify actual merge,
+  then reconcile only #281. No change to #212 or other prepared branches.
 - #281: full local gate38688 passed on `f4e6c831`/tree `e5813d93`:2006 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM package. Current
   local gate accepted; protected remote gates remain before any merge.
