@@ -7139,6 +7139,23 @@ No browser retry or GitHub retry has been sent. Next: collect the native
 retry's actual execution; then resolve browser acceptance
 without replacing the head during active remote work. Keep #212 unchanged.
 
+### People editor reconciled while existing gates run — 2026-10-10
+
+#273 Nix624 remains on the original head/tree with13 checks passed, two failed
+and only x86 OIDC still active. Its bounded live log shows VM startup advancing.
+The already-acknowledged native retry has not reset its started_at yet; do not
+resend or overlap a second per-attribute request. #278 local1753 remains live.
+
+Prepared only the next isolated worktree #260: retained6f1db836 at
+refs/backup/pr260-before-current-atomic-task-head-20261010 and rebased its
+single owned commit onto current #2787e9ad332 with rebase.updateRefs=false.
+New head9762f776e6ab7dfb9ac51777b02922d68e010be0 has equal range-diff and
+unchanged complete tree6878cf56094ac4fe1aa413f1116208ca23e1fe72. No source,
+CSS or fixture edits, push or second heavy local build. Full current-tree
+runtime and bounded rendered acceptance remain pending for this UI delivery.
+Next: collect #273's queued native retry and #278's terminal local result;
+start #260's gate only after #278 finishes successfully.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
