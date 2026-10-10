@@ -1,5 +1,29 @@
 # Permission PR separation
 
+## Delivery checkpoint — 2026-10-10
+
+Latest verified merge: #271, commit `3737051400d6b82411a053a1697bc1346b4cbf86`.
+Ten functional deliveries remain, in the prepared integration order:
+#272 → #273 → #275 → #276 → #277 → #278 → #260 → #279 → #280 → #281.
+This order includes composition dependencies, not only runtime dependencies.
+
+- #272: local acceptance complete; Nix621 is building. GitHub38009232715
+  attempt1 terminated with exit143 without an identified cause. Independent
+  x86 native/browser acceptance is pending before a bounded failed-job retry.
+- #273: local acceptance complete on `c6e78447`/tree `b796b190`:1869 native
+  tests passed,31 browser suites and bounded visual review passed. Remote
+  publication waits for #272's actual merge and an equal-tree reconciliation.
+- #275: local gate76491 is running on `b036e673`/tree `bf856e8e`; Clippy passed.
+  Its isolated worktree remains frozen until the gate ends.
+- Remaining functional branches are prepared locally, not accepted or merged.
+  #218 carries this delivery ledger; its newer local checkpoints are not yet
+  published. Exact refs, recovery copies and gate receipts appear below.
+
+#212 remains open as the unchanged reference. #208 and #91 are outside this
+delivery block. No new features, PRs or policy activation are authorized here.
+Later dated entries supersede this checkpoint; historical results do not
+substitute for current-head CI or protected merge-group acceptance.
+
 ## Active delivery phase — 2026-10-08
 
 The current goal supersedes the earlier no-merge phase: reduce open PRs by
