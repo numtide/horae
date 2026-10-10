@@ -6782,6 +6782,39 @@ Next: collect full #272 acceptance, reconcile onto actual37370514 with complete
 tree proof, retarget/publish existing #272 and continue its protected gates.
 No new PRs, features, policy activation or real-data changes.
 
+### Project API accepted locally and published — 2026-10-10
+
+#272 local39626 exited zero onf6c4e4ab/tree01a071df. Full browser, strict Clippy,
+server/WASM package, live SQLx and native tests passed. Native totals:191 core,
+1396 server,262 auxiliary,1849 passed, zero failed,11 inherited ignored; four
+filtered subprocess reruns excluded. Server compilation3m32s, main suite214.64s.
+The worktree remained frozen until the gate terminated.
+
+Recorded `refs/backup/pr272-before-export-merge-20261010` and rebased both
+commits onto actual #271 merge37370514. Both range-diff entries and full tree
+remain equal. New head `dfed58261621183f528bdcec8e1cbb8016f4544f`. GitHub had
+automatically retargeted #272 to master after #270 merged. Nix618 on old160a5477
+was verified terminal: merge conflict, null tree,23:56:29.682556UTC. No active
+head was replaced. Exact160a5477 lease push succeeded (61647 exit0); read-back
+confirmed the current head/base and the updated existing PR description.
+
+Required GitHub38009232715 is live (watch80615); Nix621 is live on exact
+dfed5826/tree01a071df (change-only watcher54972). No unresolved review threads
+or recorded reviews; final fresh checks and protected queue remain mandatory.
+
+Reconciled #273 onto publisheddfed5826 after backing up e05048bf at
+`refs/backup/pr273-before-published-project-api-stack-20261010`. New local head
+`c6e78447d60b18056b873566c459bfb22101d9ca`, unchanged tree
+`b796b190cf8d6e3ef60c478ebcc160cab8d0eb9c`; both range-diff entries equal.
+40GiB free. Local65333 is now the sole heavy gate (tests, SQLx, Clippy, full
+browser); freeze scoped-task-reads until terminal. Its unchanged three-line
+CSS fix has original real-mouse popover/resize assertions and inherited mobile
+breakpoint coverage; bounded rendered confirmation remains pending.
+
+Next: collect #272 remote acceptance and queue if green; collect #273 local
+gate and its bounded UI evidence. Ten functional PRs remain. #212 remains
+untouched; no new PR, feature, policy activation or real-data work.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
