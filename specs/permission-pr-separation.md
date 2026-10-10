@@ -6871,6 +6871,27 @@ The #273 worktree remained untouched and local65333 remains the sole heavy
 build. Next: complete #273 validation/captures before starting #275's gate;
 continue #272's existing remote watchers toward the protected merge queue.
 
+### Task reader rendered confirmation — 2026-10-10
+
+#273 local65333 completed all31 browser suites and191 core tests successfully;
+server tests are compiling in the same live gate. Once the browser runner had
+finished, ran the prepared scratch capture against its exact already-built
+server while native compilation continued, without modifying the frozen
+worktree or starting another heavy build. Run67226 exited zero using a separate
+disposable database and the pinned Chromium environment; original assertions
+and additional click/keyboard/overflow checks passed.
+
+Inspected all four files under `.scratch/pr273-visual-c6e78447/`: timer and
+account popovers at1440px/dark and390px/light. Text, form actions and account
+menu remain visible within each viewport; no document overflow or new clipping
+was observed in these states. Original real-mouse resizing and mobile navigation
+fixtures also passed. This is bounded Chromium emulation, not physical touch
+testing, full accessibility/performance certification or new design parity.
+No UI source change or second visual round was needed. Updated the prepared
+#273 description; native acceptance and all remote/queue gates remain pending.
+Nix621 has advanced from queued/evaluating to building on unchangeddfed5826;
+retain its existing watcher and GitHub run rather than submitting duplicates.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
