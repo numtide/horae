@@ -2,10 +2,9 @@
 
 ## Delivery checkpoint — 2026-10-10
 
-Latest verified merge: #279, commit `2ae5581580039059651638ac7cdd007621bdfc59`.
-Two functional deliveries remain, in the prepared integration order:
-#280 → #281.
-This order includes composition dependencies, not only runtime dependencies.
+Latest verified merge: #280, commit `176ff152e5b7fe8800a9eeda8b40e79570703981`.
+One functional delivery remains: #281, followed by this documentation delivery.
+The integration order includes composition dependencies, not only runtime dependencies.
 
 - #272: merged after local, both-Linux Nix621, required GitHub and protected
   merge-group acceptance. Its actual merge tree equals the accepted tree.
@@ -276,7 +275,7 @@ This order includes composition dependencies, not only runtime dependencies.
   Format47s; watcher84371 exited0. GitHub confirms MERGED at10:53:23UTC;
   master API confirms the exact commit/tree. No extra source corrections,
   retries, bypasses or new PRs were required for this delivery.
-- #280: full local gate7959 passed on `9dcc222b`/tree `dd723294`:2000 native
+- #280: merged at11:43:34UTC. Full local gate7959 passed on `9dcc222b`/tree `dd723294`:2000 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM package. Focused
   editor browser44955 and its two inspected desktop/mobile captures passed
   without a blocking finding. Clean head/tree verified after completion.
@@ -298,14 +297,30 @@ This order includes composition dependencies, not only runtime dependencies.
   successfully at11:16:43UTC on exact3798df93/tree0585a521: all16 executed
   checks passed on both Linux architectures, six skipped-local, zero failures
   or retries; watcher61427 exited0. A fresh complete review query found no
-  threads. GitHub38046726113 remains live, watched by86949; Format passed46s
-  and Flake Check is still running. Next: collect that existing run and
-  protected queue acceptance, verify actual merge, then reconcile only #281.
-  No change to #212 or other prepared branches.
+  threads. GitHub38046726113 passed Format46s and Flake Check40m4s at11:37:57UTC;
+  watcher86949 exited0. All four required checks report SUCCESS, and another
+  complete review query found no threads. GitHub initially retained the
+  auto-merge request without exposing a queue entry despite CLEAN/MERGEABLE
+  status. Rules and unchanged master were reverified. Repeating the guarded
+  protected merge request94518 left the same request enabled. A subsequent
+  explicit enqueue mutation with expectedHeadOid (no jump) returned "already
+  in the queue"; no bypass or additional CI build was requested. Direct queue
+  lookup then confirmed entry MQE_lQDOTRPZ888AAAABHKetBM4AA_LZzgMyc4w first,
+  AWAITING_CHECKS, commit `176ff152e5b7fe8800a9eeda8b40e79570703981` with exact
+  accepted tree0585a521 and parent actual279. No cause for the temporary
+  inconsistent queue readback is established. Merge-group38049342096 passed
+  Flake Check53s and Format47s; watcher71875 exited0. GitHub confirms MERGED
+  at11:43:34UTC, and the master API/fetch prove the exact accepted commit/tree.
+  No additional source corrections, build retries or new PRs were required.
 - #281: full local gate38688 passed on `f4e6c831`/tree `e5813d93`:2006 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM package. Current
   local gate accepted; protected remote gates remain before any merge.
-- Remaining functional branches are prepared locally, not accepted or merged.
+  Next: reconcile only this branch onto actual280 176ff152, preserve its owned
+  change and inherited CI/browser fixes, and verify its master base before
+  publishing. Clean headf4e6c831 and fetched actual master verified; no rebase
+  yet. Do not repeat accepted native gates when exact runtime preservation is
+  proven. This is read-only API work, with no new visual gate.
+- The remaining functional branch is prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
   published. Exact refs, recovery copies and gate receipts appear below.
 
