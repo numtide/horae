@@ -9,9 +9,10 @@ This order includes composition dependencies, not only runtime dependencies.
 
 - #272: merged after local, both-Linux Nix621, required GitHub and protected
   merge-group acceptance. Its actual merge tree equals the accepted tree.
-- #273: published at `b02726b3`/tree `b796b190`, reconciled onto actual #272
-  with both owned commits and the complete accepted tree unchanged. Local
-  acceptance:1869 native tests,31 browser suites and bounded visual review.
+- #273: published follow-up `187ab2ef`/tree `c4cf61a1`, adding only explicit
+  15-second assertion budgets to two browser fixtures. Baseline `b02726b3`
+  retained both original commits after reconciliation onto actual #272. Local
+  baseline acceptance:1869 native tests,31 browser suites and bounded visual review.
   Current-head remote checks and protected merge-group acceptance are pending.
   GitHub38013878619 attempt1 terminated with exit143; no cause is established.
   Nix624 x86 native hit a1200-second compile timeout and its browser check
@@ -19,7 +20,8 @@ This order includes composition dependencies, not only runtime dependencies.
   1200-second compile timeout. The isolated browser retry failed in
   reports-permissions.cjs:421, with the report still loading after five seconds.
   Nix624 is terminal:14 passed,2 failed,6 skipped. No further retry was sent.
-  Remote acceptance and the bounded GitHub retry remain pending.
+  New-head GitHub38020202145 and Nix625 are active; Format passed. No retry of
+  the obsolete GitHub run is needed. Full browser run20381 remains active.
 - #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
   all31 browser suites, SQLx, Clippy and the server/WASM package.
 - #276: local gate54165 passed on `f9ea1443`/tree `56e6a80b`:1906 native
@@ -7356,6 +7358,30 @@ runtime acceptance yet. #279 gate32157 remains active and its tree frozen.
 Next: collect run20381, publish the scoped correction only after acceptance,
 and track new-head remote CI. Then collect #279 and validate #280/#281 without
 starting additional work. Native Nixbot compilation remains unresolved.
+
+### Publish the verified two-fixture correction — 2026-10-10
+
+Published187ab2ef/treec4cf61a1 on existing #273 with an exact lease against
+b02726b3. Read-back confirms OPEN/draft and the expected head. Its body now
+distinguishes baseline native/Nix acceptance from the new test-only follow-up.
+GitHub38020202145 is active with Format passed; Nix625 is evaluating. GitHub
+watcher6129 checks the existing run every60 seconds. No manual retry or merge.
+
+Published after the two affected full fixtures passed the delayed-response
+check and formatting passed, while complete non-injected browser run20381
+continues. This starts independent remote validation sooner; neither gate is
+claimed complete. All production Rust, assets, dependency/SQLx files and Nix
+settings are unchanged from the accepted baseline. The assertion budget is
+bounded and every expected value/authorization check remains intact.
+
+Downstream branches must inherit this test-only correction when reconciled
+onto the actual #273 merge, not via mass rebases during active local gates.
+Current-head remote checks remain mandatory; retain baseline native receipts
+with their exact source scope rather than claiming unchanged complete trees.
+
+Next: collect20381 and #279 gate32157, take the prepared single batched catalog
+capture round, and inspect new-head CI before any queue submission. #212 is
+untouched; no additional PRs or features were created.
 
 ## Objective and limits
 
