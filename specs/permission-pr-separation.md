@@ -6815,6 +6815,33 @@ Next: collect #272 remote acceptance and queue if green; collect #273 local
 gate and its bounded UI evidence. Ten functional PRs remain. #212 remains
 untouched; no new PR, feature, policy activation or real-data work.
 
+### Task reader browser evidence preparation — 2026-10-10
+
+Revalidated the live handles: #272 GitHub38009232715/watch80615 and Nix621/
+watch54972 remain active ondfed5826. Nix621 is pending with no attributes yet;
+this is not a terminal failure or authorization to replace its head.
+#273 local65333 remains active on unchangedc6e78447. The server/WASM package
+passed (2m50s); live SQLx passed (1m56s), retaining the inherited unused-query
+warning. Its browser gate has passed the task-reader fixture: archived timer
+labels, rate-free tracking identities, valid start/stop, popover clicks and
+restoration of actual sidebar mouse resizing. Remaining suites/native tests
+are still pending; no full acceptance is claimed.
+
+Prepared an additive capture copy in `.scratch/pr273-capture/`, without edits
+to the frozen worktree or original assertions. Node syntax check passed.
+After local65333 finishes, use its exact built server at
+`/nix/store/hg2flyrklliqbpydbsdnanksq2wgq6r6-horae-0.1.0/bin/horae`
+with the existing disposable-database runner for desktop-dark/mobile-light
+timer/account captures. No capture has been taken or visually accepted yet.
+
+Impeccable's bounded detector reported three inherited findings: the toast's
+tokenized left border and two Instrument Sans references. The border is
+unchanged from the parent; DESIGN.md explicitly fixes that font. None belongs
+to the three-line pointer-events patch. Preserve the established design;
+this is not a clean whole-app accessibility/performance audit. Next: collect
+the existing gates, inspect the bounded captures, and queue #272 only after
+fresh required checks and reviews pass. No new deliveries or real-data work.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
