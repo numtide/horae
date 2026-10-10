@@ -7037,6 +7037,21 @@ Its worktree remains frozen. #275 retains its accepted local tree until the
 actual #273 merge. Next: collect #273's current-head remote gates and #276's
 terminal local result; no new deliveries or changes to reference #212.
 
+### Task reader remote gates and task-link reconciliation — 2026-10-10
+
+#273 current-head GitHub38013878619 and Nix624 are live onb02726b3/treeb796b190.
+Format passed in47s; Flake Check and Nix acceptance remain pending. Existing
+read-only watchers31194/23010 inspect those runs at45-second intervals.
+No retry or replacement build was requested.
+
+While #276's native gate54165 remained live, prepared only #277's independent
+worktree: recovery ref refs/backup/pr277-before-current-task-lifecycle-head-20261010
+retains5a51e190. Rebased its single owned commit onto current #276 f9ea1443
+with rebase.updateRefs=false. New headc04a61668cec1b606934b4233854d25032434f79
+has equal range-diff and unchanged tree2fb3728de122edf68b8dfc1ecfbd1e677acdbcc0.
+No source edit, push or second heavy gate; #276 remains untouched. Start
+#277's full local validation only after54165 ends successfully.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
