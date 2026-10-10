@@ -14,12 +14,17 @@ This order includes composition dependencies, not only runtime dependencies.
   acceptance:1869 native tests,31 browser suites and bounded visual review.
   Current-head remote checks and protected merge-group acceptance are pending.
   GitHub38013878619 attempt1 terminated with exit143; no cause is established.
-  A bounded failed-job retry awaits independent x86 acceptance in Nix624.
+  Nix624 x86 native hit a1200-second compile timeout and its browser check
+  timed out waiting for101 rows. Other checks remain active. A single isolated
+  native retry was acknowledged through Chrome; execution is pending.
+  Browser acceptance and the bounded GitHub retry remain pending.
 - #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
   all31 browser suites, SQLx, Clippy and the server/WASM package.
 - #276: local gate54165 passed on `f9ea1443`/tree `56e6a80b`:1906 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
-- #277: local gate40914 is running on `c04a6166`/tree `2fb3728d`.
+- #277: local gate40914 passed on `c04a6166`/tree `2fb3728d`:1911 native
+  tests,31 browser suites, SQLx, Clippy and the server/WASM package.
+- #278: local gate1753 is running on `7e9ad332`/tree `9834e623`.
   Its isolated worktree remains frozen until the gate ends.
 - Remaining functional branches are prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
@@ -7104,6 +7109,35 @@ the head or retry all jobs. Once independent x86 acceptance is complete,
 revalidate head/base and request at most one failed-job-only GitHub retry.
 #277 local40914 passed SQLx and is now running browser fixtures; no failures
 observed, but full acceptance remains pending.
+
+### Task links accepted; x86 failures isolated — 2026-10-10
+
+#277 gate40914 exited zero on clean c04a6166/tree2fb3728d. Native totals:
+191 core,1456 server,264 auxiliary,1911 passed, zero failed,11 inherited
+ignored; four filtered subprocess reruns excluded. Server compilation3m57s,
+main suite235.49s, native build phase8m13s. All31 browser suites, strict
+Clippy, server/WASM package and live SQLx passed. SQLx build phase1m42s
+retained the inherited potentially-unused-query warning. Verified clean
+#278 at7e9ad332/tree9834e623 and45GiB free, then started sole local gate1753
+with the same four checks, cores8/max-jobs1/no-link. Freeze atomic-task-creation.
+
+#273 Nix624 x86 native failed at02:06:31.017778UTC on unchanged derivation
+zrgy54d8awmzdvqh0vff17106n5pvgwz. The raw log ends with explicit1200-second
+timeout while compiling server tests, without compiler/test diagnostics.
+The browser failed at02:08:40.836421UTC on unchanged derivation
+n63byxqmjzlqcb5jqrj7d9pjw65vhm9l. project-bulk-actions.cjs visit expected101
+rows and observed0 within5000ms after the archive/reactivate cases passed.
+The exact fixture is unchanged from master; local and ARM browser acceptance
+passed. Slow-query warnings are present, but do not prove the failure's cause.
+Do not weaken the assertion, change timeouts or call this a proven app defect.
+
+Reused authenticated Chrome7643 and inspected the exact POST form for only
+checks.x86_64-linux.tests. Sent one isolated restart request via same-origin
+fetch; the response returned200 after redirect. Do not resend. Other Nix624 checks are
+still active, and a queued retry waits for the build to release its run.
+No browser retry or GitHub retry has been sent. Next: collect the native
+retry's actual execution; then resolve browser acceptance
+without replacing the head during active remote work. Keep #212 unchanged.
 
 ## Objective and limits
 
