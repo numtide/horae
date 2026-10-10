@@ -6842,6 +6842,23 @@ this is not a clean whole-app accessibility/performance audit. Next: collect
 the existing gates, inspect the bounded captures, and queue #272 only after
 fresh required checks and reviews pass. No new deliveries or real-data work.
 
+### Bounded task-reader review — 2026-10-10
+
+Reviewed the current #273 production diff, all three server-function entry
+points, the shared ReadAccess transaction, the complete twelve task-reader
+tests, eight compatibility-route tests and registered-session fixture against
+the task-permissions read contract. Canonical catalog authority remains
+separate from historical/member tracking identities; project labels require
+linked workflow scope and tenant-consistent parents. Global rates require
+all-rate read and are never projected by tracking. Compatibility count/page
+uses one materialized visible set, including exhausted pages. Strict policy,
+current actor and organization fences precede payload construction; failures
+propagate rather than silently selecting legacy authority. No new high/critical
+finding was identified in this bounded self-review. This is not independent
+review or acceptance of later task writes, policy activation or full parity.
+No source/test/CI edits were made. Local65333 and the #272 remote watchers
+remain live; finish those gates and the prepared captures before publication.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
