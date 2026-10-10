@@ -16,8 +16,8 @@ This order includes composition dependencies, not only runtime dependencies.
   GitHub38013878619 attempt1 terminated with exit143; no cause is established.
   Nix624 x86 native hit a1200-second compile timeout and its browser check
   timed out waiting for101 rows. Other checks remain active. A single isolated
-  native retry started at02:16:35.259018UTC after x86 OIDC passed.
-  One isolated browser retry was acknowledged; execution is pending.
+  Native retry ended with another1200-second compile timeout at02:53:35.161136UTC.
+  The one isolated browser retry started at02:54:52.925052UTC and remains active.
   Browser acceptance and the bounded GitHub retry remain pending.
 - #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
   all31 browser suites, SQLx, Clippy and the server/WASM package.
@@ -7259,6 +7259,33 @@ browser/native gates and the bounded capture inspection are still pending.
 compilation. No new diagnostic or terminal result; browser retry remains queued.
 Keep watchers23010/89507 and both current heads unchanged. Next: collect the
 existing results and run the exact-package People capture after its browser gate.
+
+### People rendered confirmation; native retry timed out again — 2026-10-10
+
+#260 local89507 completed all33 browser suites and is compiling native tests.
+Ran the existing permission-editor-recovery fixture through the evaluated Nix
+browser environment against exact server960m4y805hhcwrfb145sxv87lp5k1dyd.
+Capture14099 exited zero, with all existing assertions retained and a separate
+disposable socket database; outbound mail unset. Inspected all ten images in
+.scratch/pr260-visual-9762f776: People, editor, subject picker, recovery and
+history at1440px dark /390px light. Shared tokens, visible focus and modal
+boundaries remain consistent in these states. No blocking visual regression
+observed; no UI/CSS edit or second round. Mobile tables scroll within their
+containers and the editor scrolls vertically. Long wrapped permission labels
+and dense historical details are usability/polish limitations, not certified
+full accessibility/performance or design parity. Physical touch was not tested.
+Native and protected remote acceptance remain pending.
+
+#273's sole native retry ended failed at02:53:35.161136UTC. The unchanged
+zrgy54d8awmzdvqh0vff17106n5pvgwz raw log again ends with explicit1200-second
+timeout during server test compilation, with no compiler/test diagnostic.
+Do not submit a third native retry without new evidence. The separately
+acknowledged browser retry started at02:54:52.925052UTC on unchanged
+n63byxqmjzlqcb5jqrj7d9pjw65vhm9l. It remains active;14 other checks passed.
+Keep23010 and current headb02726b3. GitHub retry remains unsent; local and ARM
+success do not replace required x86 acceptance. Next: collect that browser
+result, finish #260 locally, and investigate the repeated native timeout
+without weakening checks or bypassing protected delivery.
 
 ## Objective and limits
 
