@@ -6696,6 +6696,40 @@ collect full terminal acceptance, rebase its two commits onto actual40883344
 with tree-equality proof, retarget the existing PR and publish via exact lease.
 No new PR, feature, policy activation or real-data change.
 
+### Project export accepted locally and published — 2026-10-10
+
+#271 session40820 exited zero onb8ae4fdd/treebd863cc7. Full browser, strict
+Clippy, package and live SQLx passed. Native totals:191 core,1386 server and262
+auxiliary tests,1839 passed, zero failed,11 inherited ignored; four filtered
+subprocess reruns excluded. Server compilation4m45s; main suite213.98s. Retained
+the potentially-unused-query warning without deleting descriptors on inference.
+
+Saved `refs/backup/pr271-before-reader-merge-20261010` and rebased both commits
+onto actual #270 merge40883344. Both range-diff entries equal, complete tree
+unchanged. New head `2b59bda15a1efbd70e3f5e0784de211d943255fa`. Retargeted existing
+#271 to master first. Nix619 on obsolete3a018714 terminated with a merge conflict
+and null tree at00:00:12.914198UTC; no active build was replaced. Exact3a018714
+lease push succeeded (49209 exit0), and remote head/base were verified.
+Updated the existing PR body with actual acceptance and remaining gates.
+
+Required GitHub run38007155368 is live (watch56782). Nix620 is live on exact
+2b59bda1/treebd863cc7 (change-only watcher55102). #271 stays draft pending those
+results and protected queue acceptance. Historical failures are not current
+acceptance, and no source workaround was made for #270's terminated attempt.
+
+Prepared #272 onto published2b59bda1 after recording
+`refs/backup/pr272-before-published-export-stack-20261010`. New local head
+`f6c4e4ab3e96cfcb74180a71867b6f3a4d778d8b`, tree
+`01a071df70b32cd5a4ce03007b8a8e9297c76d76`; both range-diff entries and full tree
+remain equal.38GiB free. Session39626 is the sole heavy local gate (tests,
+SQLx, Clippy, full browser); freeze scoped-harvest-projects while it runs.
+No publication of #272 yet. Prepared descendants retain their recorded parent
+compositions and need reconciliation only before their own verification.
+
+Next: collect #271 exact-head remote checks and queue it if accepted; collect
+#272 local39626 without edits/restarts. Eleven functional PRs remain, with #212
+untouched as reference. No new PRs, features, policy activation or real-data work.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
