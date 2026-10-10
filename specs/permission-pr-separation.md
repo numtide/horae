@@ -246,11 +246,26 @@ This order includes composition dependencies, not only runtime dependencies.
   word-wrapping regression failed on the baseline; fix770b7a91/treeead3875f
   passed the package build and final six-capture catalog check2448. Clippy
   passed in80174 after the earlier interruption; no local correction pending.
-  Next delivery: reconcile only this branch onto actual260 b114011c, preserving
-  both owned commits and the inherited CI/browser fixes. Retarget its old
-  integration base to master before publishing. Worktree is clean at770b7a91;
-  actual master was fetched, but no rebase yet. Do not repeat the two completed
-  visual rounds when exact runtime/UI preservation is proven.
+  Reconciled only this branch onto actual260 b114011c, preserving recovery ref
+  `refs/backup/pr279-before-actual-people-editor-merge-20261010`. Both owned
+  commits have equal range-diffs. New head
+  `3768a109103c3d4d0d40fee7f0cfb84fc9eed719`, tree
+  `074af6f220c962d7f79d347493d85abbbc467355`. Whole-tree delta from770b7a91
+  is exactly eight inherited CI/browser paths,20 additions/10 deletions.
+  Runtime, UI assets, migrations, SQLx, dependencies and contracts are
+  byte-identical to baseline; inherited paths match actual master. Format55690
+  passed672 files unchanged; whitespace passed. Focused57223 passed all seven
+  affected browser suites against exact accepted follow-up package
+  `h61h8m8qaigv8bcc2y23bj37bh7dhg5q`, using a disposable database. No additional
+  source fix or repeated full native/visual gate. Retargeted the old integration
+  base to master before exact67e4fd6e-lease push98657, which passed. Full review
+  query on3768a109 found no threads and MERGEABLE. Marked ready and enabled
+  protected auto-merge at10:15:07UTC (47688 passed); exact head guarded, no
+  bypass. Read-back OPEN/non-draft/BLOCKED with autoMergeRequest is not merged.
+  GitHub38044210197 and Nix640 are live, watched by3964 and26585 respectively.
+  Required Flake Check, Format, nixbot/nix-build, nixbot/nix-eval and the
+  ALLGREEN/SQUASH queue remain enforced. Next: collect those existing runs and
+  protected queue acceptance, verify actual merge, then reconcile only #280.
 - #280: full local gate7959 passed on `9dcc222b`/tree `dd723294`:2000 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM package. Focused
   editor browser44955 and its two inspected desktop/mobile captures passed
