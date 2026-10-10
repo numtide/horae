@@ -8,6 +8,7 @@ use crate::server_fns;
 #[derive(Clone, Copy, PartialEq)]
 enum Section {
     People,
+    Tasks,
     Audit,
     Importers,
 }
@@ -15,6 +16,7 @@ enum Section {
 #[derive(Clone, Copy, PartialEq)]
 struct WorkspaceAccess {
     people: bool,
+    tasks: bool,
     audit: bool,
     importers: bool,
 }
@@ -23,6 +25,7 @@ impl WorkspaceAccess {
     fn allows(self, section: Section) -> bool {
         match section {
             Section::People => self.people,
+            Section::Tasks => self.tasks,
             Section::Audit => self.audit,
             Section::Importers => self.importers,
         }
@@ -34,13 +37,14 @@ impl WorkspaceAccess {
 /// so the main rail stays put and this owns only the content panel (per the
 /// design's admin settings shell). Each section has its own access boundary.
 ///
-/// Only sections with a real destination are listed — People (user management)
+/// Only sections with a real destination are listed — People, Tasks,
 /// Importers (Harvest), and the permission audit log. Other sections are deferred
 /// until they have a backend.
 #[component]
 pub fn AdminShell() -> Element {
     let section = match use_route::<Route>() {
         Route::AdminUsers {} => Section::People,
+        Route::TaskCatalog {} => Section::Tasks,
         Route::PermissionAudit {} => Section::Audit,
         _ => Section::Importers,
     };
@@ -60,6 +64,7 @@ pub fn AdminShell() -> Element {
             if section == Section::Importers && own.is_err() {
                 return Ok(WorkspaceAccess {
                     people: false,
+                    tasks: false,
                     audit: false,
                     importers: legacy_admin,
                 });
@@ -69,11 +74,13 @@ pub fn AdminShell() -> Element {
                 Some(own) => WorkspaceAccess {
                     people: own.grants.contains(&Permission::PeopleReadAll)
                         || own.grants.contains(&Permission::PeopleReadManaged),
+                    tasks: own.grants.contains(&Permission::TaskReadAll),
                     audit: own.is_administrator,
                     importers: legacy_admin,
                 },
                 None => WorkspaceAccess {
                     people: legacy_admin,
+                    tasks: false,
                     audit: false,
                     importers: legacy_admin,
                 },
@@ -159,9 +166,12 @@ fn AdminWorkspace(access: WorkspaceAccess) -> Element {
                         }
                     }
 
-                    if access.people {
+                    if access.people || access.tasks {
                         div { class: "adm-group-label", "Workspace" }
-                        nav { class: "flex flex-col gap-1 mb-5", AdmLink { to: Route::AdminUsers {}, label: "People" } }
+                        nav { class: "flex flex-col gap-1 mb-5",
+                            if access.people { AdmLink { to: Route::AdminUsers {}, label: "People" } }
+                            if access.tasks { AdmLink { to: Route::TaskCatalog {}, label: "Tasks" } }
+                        }
                     }
 
                     if access.importers || access.audit {
