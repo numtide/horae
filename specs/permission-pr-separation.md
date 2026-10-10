@@ -36,8 +36,9 @@ This order includes composition dependencies, not only runtime dependencies.
   rendered review inspected ten captures without a blocking regression.
 - #279: baseline gate32157 passed on `75066620`/tree `8ad6aae0`:2000 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM build. The mobile
-  word-wrapping regression failed on the baseline; its one-line UI correction
-  is in local follow-up gate83675. Worktree frozen; final visual check pending.
+  word-wrapping regression failed on the baseline; fix770b7a91/treeead3875f
+  passed the package build and final six-capture catalog check2448. Clippy was
+  interrupted before completion; only Clippy is running again in80174.
 - Remaining functional branches are prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
   published. Exact refs, recovery copies and gate receipts appear below.
@@ -7446,6 +7447,40 @@ current-head remote acceptance is still pending. #273's new CI remains active.
 
 Next: collect83675, confirm the targeted fix, commit it in existing #279,
 then propagate its parent through #280/#281 and run their remaining gates.
+
+### Catalog visual fix confirmed; project-task parent prepared — 2026-10-10
+
+Committed770b7a91/treeead3875f on existing #279: one removed cell utility and
+seven browser-regression lines, two files only. Package build succeeded in
+83675. Exact binary:
+`/nix/store/h61h8m8qaigv8bcc2y23bj37bh7dhg5q-horae-0.1.0/bin/horae`.
+Capture2448 exited0 with the complete catalog fixture and new regression.
+Viewed all six final screenshots in `.scratch/pr279-visual-confirmed/`:
+ordinary names now wrap between words, not inside them; the table remains
+contained and its Edit controls reachable, while creation/error/editor dialogs
+and desktop presentation are preserved. No new blocking rendered finding.
+The P2 issue is resolved. Both permitted batched visual rounds are consumed;
+do not start another polish/capture loop. Physical touch and comprehensive
+accessibility/performance certification remain outside this bounded evidence.
+
+83675 subsequently exited1 with "interrupted by the user" during Clippy.
+The log ended at server checking, no compiler/lint diagnostic; no Nix client
+remained live. Cause of interruption unknown. Restarted only the identical
+Clippy derivation in80174, not the package or browser checks. Formatting17222
+passed672 files unchanged. No source changes after the tested patch;770b7a91
+only records that exact tree.
+
+Rebased #280 onto770b7a91, producing9dcc222b/treedd723294. Its sole owned commit
+is range-diff equal. Complete-tree difference versus1d94bc85 consists exactly
+of #279's two-file follow-up. Recovery:
+refs/backup/pr280-before-catalog-layout-fix-20261010. No remote push or new PR.
+
+#273 remains on187ab2ef with GitHub38020202145 and Nix625 active; latest Nix
+snapshot:6 passed,7 building,3 pending,6 skipped,none failed. No restart or
+merge is authorized by an in-progress result. #212 stays untouched.
+
+Next: collect80174, start #280's sole heavy full gate, and prepare #281 only
+without touching an active-gate tree. Continue following existing #273 CI.
 
 ## Objective and limits
 
