@@ -1,5 +1,7 @@
 // The full suite mutates only the runner's disposable database on port 8093.
-const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
+const { chromium, expect: baseExpect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
+// Assertions also wait for the real overview read used to build each fixture.
+const expect = baseExpect.configure({ timeout: 15000 });
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const base = process.env.HORAE_TEST_URL;

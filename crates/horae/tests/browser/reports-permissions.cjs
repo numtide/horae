@@ -1,5 +1,7 @@
 // Real report reads and downloads, exclusively in the runner's disposable DB.
-const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
+const { chromium, expect: baseExpect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
+// Page action timeouts do not cover assertions waiting for server-backed views.
+const expect = baseExpect.configure({ timeout: 15000 });
 const { execFileSync } = require('node:child_process');
 const { mkdirSync } = require('node:fs');
 const { join } = require('node:path');
