@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT xmin::text AS version,default_rate_cents,default_rate_currency FROM tasks WHERE id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "default_rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "default_rate_currency",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      true
+    ]
+  },
+  "hash": "3488c0f4f43911266b1f9488a0d66f5f5cb0a83c5e08ad0e3765ee7e6461784a"
+}

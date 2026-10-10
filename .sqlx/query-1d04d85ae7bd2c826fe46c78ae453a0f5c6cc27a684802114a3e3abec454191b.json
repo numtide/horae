@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id AS project_id,p.name AS project_name,t.id AS task_id,t.name AS task_name,\n                  (p.project_type <> 'non_billable' AND pt.billable) AS \"billable!\"\n           FROM users u JOIN projects p ON p.org_id=u.org_id\n           JOIN clients c ON c.id=p.client_id AND c.org_id=u.org_id\n           JOIN project_tasks pt ON pt.project_id=p.id\n           JOIN tasks t ON t.id=pt.task_id AND t.org_id=u.org_id\n           WHERE u.org_id=$1 AND u.id=$2 AND u.active AND p.active AND c.active AND t.active\n             AND ($5 OR pt.active)\n             AND ($3 OR p.id=ANY($4))\n             AND (($5 AND u.org_role='admin') OR EXISTS (\n                 SELECT 1 FROM assignments a WHERE a.user_id=u.id AND a.project_id=p.id))\n             AND NOT EXISTS (SELECT 1 FROM project_task_settings s\n                 WHERE s.org_id=u.org_id AND s.project_id=p.id AND s.task_id=t.id AND s.restricted\n                 AND NOT EXISTS (SELECT 1 FROM project_task_members m\n                     WHERE m.org_id=u.org_id AND m.project_id=p.id AND m.task_id=t.id AND m.user_id=u.id))\n             AND ($6::uuid IS NULL OR p.id=$6) AND ($7::uuid IS NULL OR t.id=$7)\n           ORDER BY p.name,p.id,t.name,t.id FOR SHARE OF p,c,pt,t",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "task_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "task_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "billable!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "UuidArray",
+        "Bool",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "1d04d85ae7bd2c826fe46c78ae453a0f5c6cc27a684802114a3e3abec454191b"
+}

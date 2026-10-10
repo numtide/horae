@@ -424,6 +424,7 @@ fn ProjectEditor(
         let request = pending_edit
             .write()
             .get_or_insert_with(|| ProjectEditRequest {
+                task_activity: Vec::new(),
                 id: Uuid::now_v7(),
                 project_id: project.id,
                 expected_revision: project.revision,

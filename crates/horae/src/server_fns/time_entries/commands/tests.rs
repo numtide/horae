@@ -7,6 +7,55 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 mod guards;
 mod revocation;
 
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn archived_project_task_excludes_choices_and_new_time_without_changing_global_task(
+    pool: PgPool,
+) {
+    let fixture = fixture(&pool).await;
+    sqlx::query!(
+        "UPDATE project_tasks SET active=false WHERE project_id=$1 AND task_id=$2",
+        fixture.ids.project_id,
+        fixture.ids.task_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        tracking(
+            &pool,
+            fixture.ids.org_id,
+            fixture.ids.user_id,
+            &fixture.context
+        )
+        .await
+        .unwrap()
+        .is_empty()
+    );
+    for command in [
+        TimesheetCommand::Create {
+            entry: fixture.input(),
+        },
+        TimesheetCommand::StartTimer {
+            project_id: fixture.ids.project_id,
+            task_id: fixture.ids.task_id,
+            notes: None,
+        },
+    ] {
+        let error = fixture.execute(&pool, command).await.unwrap_err();
+        assert!(
+            matches!(error, ServerFnError::ServerError { code: CONFLICT, .. }),
+            "{error:?}"
+        );
+    }
+    assert!(
+        sqlx::query_scalar!("SELECT active FROM tasks WHERE id=$1", fixture.ids.task_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+    );
+}
+
 struct Fixture {
     ids: SeedIds,
     context: TimesheetWriteContext,

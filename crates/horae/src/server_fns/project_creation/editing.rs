@@ -13,6 +13,7 @@ pub(super) mod catalog;
 mod projection;
 mod protected;
 mod save;
+mod task_activity;
 
 fn apply_manager_flags(
     form: &mut ProjectForm,
@@ -272,7 +273,7 @@ async fn load_project_form(
     // Resolve assigned identities, including archived records, independently
     // of the active catalog's search and pagination. They are not new choices.
     let tasks = sqlx::query!(
-        "SELECT t.id, t.name, t.active, t.billable_default, t.default_rate_cents, t.default_rate_currency
+        "SELECT t.id, t.name, t.active, pt.active AS link_active, t.billable_default, t.default_rate_cents, t.default_rate_currency
          FROM tasks t JOIN project_tasks pt ON pt.task_id = t.id
          WHERE pt.project_id = $1 AND t.org_id = $2 ORDER BY t.id",
         project_id, org_id,
@@ -280,6 +281,11 @@ async fn load_project_form(
     let inactive_task_ids = tasks
         .iter()
         .filter(|task| !task.active)
+        .map(|task| task.id)
+        .collect();
+    let archived_task_ids = tasks
+        .iter()
+        .filter(|task| !task.link_active)
         .map(|task| task.id)
         .collect();
     let tasks = tasks
@@ -327,6 +333,7 @@ async fn load_project_form(
         client,
         selection: CreationSelection { tasks, people },
         inactive_task_ids,
+        archived_task_ids,
         inactive_user_ids,
         access: None,
     })

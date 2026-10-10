@@ -31,8 +31,6 @@ use chrono::Utc;
 #[cfg(test)]
 use horae_core::importers::harvest::types::SourceKind;
 use horae_core::importers::harvest::types::{EntityType, ImportMode, SourceRow, SyncScope};
-#[cfg(test)]
-use sqlx::Acquire;
 use sqlx::{Connection, PgPool};
 use uuid::Uuid;
 
@@ -43,6 +41,17 @@ use resolve::{OrgDefaults, RunCache};
 
 use crate::config::HarvestConfig;
 use crate::jobs::JobLease;
+
+async fn begin_import_transaction(
+    connection: &mut sqlx::PgConnection,
+    org_id: Uuid,
+) -> anyhow::Result<sqlx::Transaction<'_, sqlx::Postgres>> {
+    let mut tx = connection.begin().await?;
+    // Access-changing commands lock project parents before task links. Join
+    // their gate before the importer acquires any of those resource locks.
+    crate::db::lock_organization(&mut tx, org_id, crate::db::OrganizationLock::Shared).await?;
+    Ok(tx)
+}
 
 pub(crate) fn job_report(report: &ImportReport) -> anyhow::Result<(serde_json::Value, i64)> {
     let processed = report.summary.clients.processed()
@@ -98,7 +107,7 @@ pub async fn run_import<S: RowSource>(
     };
     let mut connection = lock_import(pool, org_id).await?;
     let result = async {
-        let mut tx = connection.begin().await?;
+        let mut tx = begin_import_transaction(&mut connection, org_id).await?;
         let mut report = ImportReport::new(source, mode);
         apply_rows(&mut tx, &mut RunCache::default(), &mut report, org, src).await?;
         match mode {

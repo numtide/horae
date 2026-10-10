@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_tasks SET active=$3 WHERE project_id=$1 AND task_id=$2 AND active IS DISTINCT FROM $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2a61723eb1e7c4b62c664e952f6a38f9bd5891865636dd809bace4a8dbb99802"
+}

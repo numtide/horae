@@ -35,6 +35,9 @@ impl RequiredWrites {
 }
 
 pub(super) fn validate_intent(request: &ProjectEditRequest) -> Result<(), ServerFnError> {
+    if request.task_activity.len() > request.form.tasks.len() {
+        return Err(err(BAD_REQUEST, "Too many task activity changes"));
+    }
     if request.unchanged.len() > 1505 {
         return Err(err(BAD_REQUEST, "Too many preserved project fields"));
     }
