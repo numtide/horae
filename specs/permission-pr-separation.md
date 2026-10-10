@@ -17,7 +17,10 @@ This order includes composition dependencies, not only runtime dependencies.
   five suites affected by the latest change. Delayed-read and diagnostic-failure
   reproductions failed before and passed after their scoped fixes.
   GitHub38025269436 and Nix626 are the current remote runs. Watchers59508 and
-  17951 are live. Protected current-head and merge-group acceptance remain.
+  17951 are live. Format passed in43s; Flake Check is running and Nix626 pending.
+  The Nix API reports evaluation queue position11 behind llm-agents.nix7182,
+  with no error and no start timestamp; this is queued work, not a stopped job.
+  Protected current-head and merge-group acceptance remain.
   Previous Nix625 ended11 passed/5 failed/6 skipped; GitHub38020202145 attempt1
   lost its runner and attempt2 obscured an original browser error with a failed
   diagnostic snapshot. No retry of those superseded runs remains scheduled.
