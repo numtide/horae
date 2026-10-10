@@ -6943,6 +6943,27 @@ scoped-task-writes until terminal. Prepared descriptions updated locally.
 Next: collect #272 remote acceptance/retry and protected merge, reconcile and
 publish #273 with tree equality, and retain #275's running validation.
 
+### Lifecycle dependency prepared; live checks retained — 2026-10-10
+
+#275 gate76491 passed strict Clippy (2m09s), server/WASM package (3m08s),
+live SQLx (1m40s), all31 browser suites and191 core tests. Server tests are
+compiling; this is not full gate acceptance. The worktree remains frozen.
+
+Verified clean #276 at318f7bb4 and equal old/current #275 trees. Backed up
+`refs/backup/pr276-before-current-task-write-head-20261010`, then rebased with
+updateRefs disabled onto b036e673. New local head
+`f9ea14434075acd2ecd4c7a720c37e24cd108390`; owned range-diff is equal and the
+complete tree remains `56e6a80be0b6383dd0077e1b8f7f0216683f2bc9`.
+No migration, build, push or remote retarget was performed for #276.
+
+#272 Nix621 remains live with11 successes and five active checks. Its raw x86
+native/browser logs show passing cases advancing, not a stalled or terminal
+job, despite longer elapsed time than local validation. Log endpoints were
+resolved from the actual build page; no guessed retry or cancellation was made.
+Next: collect x86 acceptance before the bounded GitHub retry, then complete
+all required gates and protected merge. Start #276's sole local gate only after
+#275 finishes; preserve the already accepted #273 tree and visual evidence.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
