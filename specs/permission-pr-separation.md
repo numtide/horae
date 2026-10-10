@@ -2,9 +2,9 @@
 
 ## Delivery checkpoint — 2026-10-10
 
-Latest verified merge: #275, commit `6b5691c1b33e4162a0fb01a308dbf793ddffdabf`.
-Seven functional deliveries remain, in the prepared integration order:
-#276 → #277 → #278 → #260 → #279 → #280 → #281.
+Latest verified merge: #276, commit `da8c19d84cf89ccf7a31b547cbc08e73ed0840ec`.
+Six functional deliveries remain, in the prepared integration order:
+#277 → #278 → #260 → #279 → #280 → #281.
 This order includes composition dependencies, not only runtime dependencies.
 
 - #272: merged after local, both-Linux Nix621, required GitHub and protected
@@ -92,7 +92,7 @@ This order includes composition dependencies, not only runtime dependencies.
   medium;3 rustls-webpki high;2/1 rustls-webpki low. Cargo.lock and Cargo.toml
   are byte-identical to actual master; these are inherited, not introduced by
   #275. No dependency upgrade, new PR or exploitability claim was made here.
-- #276: local gate54165 passed on `f9ea1443`/tree `56e6a80b`:1906 native
+- #276: merged at07:50:39UTC. Local gate54165 passed on `f9ea1443`/tree `56e6a80b`:1906 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
   Reconciled onto actual275 `6b5691c1`, preserving recovery ref
   `refs/backup/pr276-before-actual-task-write-merge-20261010`. Owned range-diff
@@ -131,11 +131,16 @@ This order includes composition dependencies, not only runtime dependencies.
   bypass. Full review-thread query returned none, with master base and
   MERGEABLE/non-draft state. Read-back is OPEN/BLOCKED with autoMergeRequest
   present, not merged. GitHub38034406552 passed: Format35s, Flake Check20m29s;
-  watcher67045 exited0. Nix631/watch35694 remains live on exact8f1c131f:
-  15 succeeded, only checks.aarch64-linux.e2e building, six skipped-local,
-  zero failures at last observation. ARM native tests and browser have passed.
-  The remaining VM log is polling the recovery fixture's advisory-lock waiter;
-  no failure or retry is recorded. Continue35694; do not restart the live run.
+  watcher67045 exited0. Nix631 completed successfully at07:48:47UTC on exact
+  8f1c131f:16 passed, six skipped-local, zero failures; watcher35694 exited0.
+  Both Linux architectures passed, including native, browser and e2e VM tests.
+  No retry was needed; the ARM recovery VM completed its lock-wait phase.
+  All four required current-head checks report SUCCESS. Protected queue entry
+  MQE_lQDOTRPZ888AAAABHKDPS84AA_LZzgMyIIk used commit
+  `da8c19d84cf89ccf7a31b547cbc08e73ed0840ec`, whose tree equals accepted
+  8f1c131f and parent is actual275. Merge-group38035734442 passed Flake Check
+  1m15s and Format46s; watcher85505 exited0. GitHub confirms MERGED at
+  07:50:39UTC with that exact commit; master API confirms the accepted tree.
   Read-only successor preflight confirms old bases:277 and280 target
   feat/scoped-task-lifecycle;278 targets feat/scoped-task-links;260 targets
   integration/permission-readers-editor-check;279 targets
@@ -144,6 +149,9 @@ This order includes composition dependencies, not only runtime dependencies.
   and only after the predecessor actually merges. No successor was mutated.
 - #277: local gate40914 passed on `c04a6166`/tree `2fb3728d`:1911 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
+  Next delivery: reconcile only this branch onto actual276 da8c19d8, preserving
+  its owned patch and inherited CI/browser fixes, including the login-response
+  fixture correction. Retarget master before publishing. No rebase yet.
 - #278: local gate1753 passed on `7e9ad332`/tree `9834e623`:1914 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
 - #260: local gate89507 passed on `9762f776`/tree `6878cf56`:1987 native
