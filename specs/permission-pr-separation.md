@@ -6892,6 +6892,33 @@ No UI source change or second visual round was needed. Updated the prepared
 Nix621 has advanced from queued/evaluating to building on unchangeddfed5826;
 retain its existing watcher and GitHub run rather than submitting duplicates.
 
+### Task reads accepted locally; task-write gate started — 2026-10-10
+
+#273 gate65333 exited zero on unchangedc6e78447/treeb796b190. Full31-suite
+browser, strict Clippy, live SQLx, server/WASM package and native tests passed.
+Native totals:191 core,1416 server and262 auxiliary,1869 passed, zero failed,
+11 inherited ignored. Excluded four filtered subprocess reruns from the total.
+Server compilation3m58s; main suite208.67s. The previously recorded four
+inspected captures remain valid for this exact tree. Worktree is clean.
+Publication remains pending actual #272 acceptance/merge; do not confuse the
+obsolete remotea68c1b5b/Nix456 with this local acceptance. Fresh remote read
+confirms that old run is terminal and the PR still targets its parent branch.
+
+#272 GitHub38009232715 attempt1 terminated with exit143 at00:46:55.8319417UTC
+(watch80615 exit1). Full failed-log error scan and tail show termination during
+compilation, not a reported compiler/test failure or its cause. Nix621 remains
+live on exactdfed5826. Its x86 Clippy/package/SQLx/format and both deployment
+checks have passed; x86 native/browser are still running. Wait for independent
+x86 acceptance before one unchanged-head failed-job-only retry. No source,
+assertion, timeout or infrastructure setting was altered.
+
+After65333 terminated, verified clean #275 atb036e673/treebf856e8e and39GiB
+free. Started local76491 for tests, SQLx, strict Clippy and all browser suites
+with cores8/max-jobs1/no-link. This is the sole heavy local gate; freeze
+scoped-task-writes until terminal. Prepared descriptions updated locally.
+Next: collect #272 remote acceptance/retry and protected merge, reconcile and
+publish #273 with tree equality, and retain #275's running validation.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
