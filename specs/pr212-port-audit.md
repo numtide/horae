@@ -2,7 +2,8 @@
 
 ## Current checkpoint — 2026-10-10
 
-Status: in progress. This records a new source-to-master audit after the original
+Status: source port accounting complete; recovery PRs prepared, not merged.
+This records a new source-to-master audit after the original
 57 functional extractions merged. It is not permission-policy activation or
 full Harvest parity acceptance. No merges are authorized in this phase.
 
@@ -17,6 +18,8 @@ full Harvest parity acceptance. No merges are authorized in this phase.
   feature-completion percentage.
 - GitHub inventory and Git ancestry identify 72 merged PRs since the source base,
   including all 57 functional extractions, specifications, Clients and shared CI.
+  All 72 commits in `9301112c..5336fbb1` map to this inventory; none is omitted.
+  The original source range contains 145 commits, accounted for by its net diff.
   63 published-head trees match their merge trees exactly. For the other nine,
   `git merge-tree --write-tree <head> <merge>^` reconstructs the exact merge tree
   without conflicts: #210, #211, #214, #222, #225, #227, #239, #242 and #286.
@@ -34,14 +37,15 @@ full Harvest parity acceptance. No merges are authorized in this phase.
    restore #212's `CurrentUser` and
    `UserListItem` in `tests/scoped_reports_ui.rs`. The extracted test doubles
    used internal `User`, unlike the real endpoints. Two-line test-only change;
-   native Nix tests are running after successful compilation and 191 passing
-   core tests. Formatting passes. No runtime payload or endpoint change.
+   native Nix tests pass: 191 core, 1,481 server and 334 auxiliary tests (2,006
+   total), zero failures, 11 existing ignored measurements. All 20 Reports
+   component tests pass. Formatting passes. No runtime payload or endpoint change.
 1. Preserve the original [constitution proposal](015-scoped-permissions/constitution-proposal.md)
    for separate review. The original 1.1.0 text was only retained on #212;
    copying it as a clearly labelled proposal does not amend the authoritative
    1.0.0 constitution or approve migration.
 
-## Reconciliation reviewed so far
+## Reconciliation
 
 - All original SQLx descriptor paths agree with the preserved unpublished
   snapshot. The three old client descriptors were replaced by #281's three
@@ -86,17 +90,25 @@ full Harvest parity acceptance. No merges are authorized in this phase.
   reconciliation. `.specify/feature.json` is a workflow cursor for feature 016,
   not feature 015 implementation; it must not be reset as part of a port.
 
-## Remaining verification
+## Verification and delivery boundary
 
 - Difference accounting covers all 66 paths. Read-only checks confirm the moved
   directory body and invoice-redaction loop are identical, all 22 original HTTP
   check calls remain among the current 25, and all 27 original browser suites
   remain among the current 34. All 238 source task IDs and checkbox states are
   preserved by #287. The archived proposal matches the original source bytes.
-- Observe the live native test run for #288 and update its validation evidence.
-- Review and publish this audit/proposal delivery after those checks. Do not claim
-  all content ported until every difference is either recovered or justified.
-- Only then assess unfinished original requirements. The original open tasks,
+- The #288 native check completed successfully with disposable PostgreSQL and
+  the committed offline SQLx cache. Derivation:
+  `/nix/store/fzd2llwanww15mjdiv53018hg8mw0pfn-horae-tests-0.1.0.drv`.
+  The tested source file matches published `d9682d7c` byte for byte. This is not
+  a new browser/VM acceptance claim; remote CI and human review remain pre-merge
+  gates, and no auto-merge is enabled.
+- This audit and the preserved proposal are delivered in
+  [#289](https://github.com/numtide/horae/pull/289). All 66 differences have an
+  explicit disposition; the confirmed missing content is carried by #287–#289.
+  The three PRs are independent over master `5336fbb1`; they touch disjoint files.
+  No additional already-written runtime feature was found missing from master.
+- Next, assess unfinished original requirements. The original open tasks,
   canonical Clients writes, approvals/locks, financial report families and policy
   cutover are not implemented merely because their existing increments are ported.
 
@@ -164,7 +176,7 @@ later accepted behavior instead of copying old files over it.
 | `crates/horae/tests/browser/task-read-permissions.cjs` | Observe identity request before navigation; bounded diagnostics |
 | `crates/horae/tests/browser/timesheet-errors.cjs` | Historical Calendar move/resize/reorder without creation choices |
 | `crates/horae/tests/detail_navigation.rs` | Additional Clients routes/fixtures; original tests retained |
-| `crates/horae/tests/scoped_reports_ui.rs` | Gap: restore original minimal identity types; native check running |
+| `crates/horae/tests/scoped_reports_ui.rs` | Original minimal identity types restored by #288; native check passes |
 | `specs/011-new-project-screen/spec.md` | Expense budget extension (#214), not permission replacement |
 | `specs/015-scoped-permissions/contracts/dependent-spec-reconciliation.md` | Recovered unpublished client requirements/history in #287 |
 | `specs/015-scoped-permissions/contracts/operation-matrix.md` | Recovered unpublished client requirements/history in #287 |
