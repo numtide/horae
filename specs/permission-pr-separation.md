@@ -39,10 +39,12 @@ This order includes composition dependencies, not only runtime dependencies.
   word-wrapping regression failed on the baseline; fix770b7a91/treeead3875f
   passed the package build and final six-capture catalog check2448. Clippy
   passed in80174 after the earlier interruption; no local correction pending.
-- #280: full local gate7959 is running on `9dcc222b`/tree `dd723294`.
-  Clippy and the server/WASM package passed. Focused editor browser44955 and
-  its two inspected desktop/mobile captures passed without a blocking finding.
-  Worktree frozen until completion. #281 is prepared at `f4e6c831`, unvalidated.
+- #280: full local gate7959 passed on `9dcc222b`/tree `dd723294`:2000 native
+  tests,34 browser suites, SQLx, Clippy and the server/WASM package. Focused
+  editor browser44955 and its two inspected desktop/mobile captures passed
+  without a blocking finding. Clean head/tree verified after completion.
+- #281: full local gate38688 is running on `f4e6c831`/tree `e5813d93`.
+  Keep this worktree frozen until completion. Protected remote gates remain.
 - Remaining functional branches are prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
   published. Exact refs, recovery copies and gate receipts appear below.
@@ -7556,6 +7558,29 @@ Next: collect7959; when it terminates successfully, start #281's sole heavy
 local gate. Continue current-head #273 checks and retry only the evidenced
 transport failure after the build becomes idle. Keep #212 unchanged and all
 unpublished functional heads local until predecessor integration is confirmed.
+
+### Task activity full gate accepted; final client-reader gate started — 2026-10-10
+
+7959 exited0 at unchanged #2809dcc222b/treedd723294. Accepted191 core tests,
+1475 server tests and334 auxiliary tests:2000 total, zero failed,11 ignored.
+The four filtered subprocess runs are excluded from the total. Native server
+compilation took3m43, main server execution227.80s, native phase7m51. All34
+browser suites, SQLx, Clippy and the server/WASM package passed. Existing
+focused browser44955 and the two inspected captures complete the bounded
+local rendered review; no UI edits or further polishing are needed.
+
+Started38688 as the only heavy local gate for #281, clean atf4e6c831/tree
+e5813d93, with42GiB free: native tests, SQLx, Clippy and browser, eight cores
+and one job. Do not modify that worktree until the process terminates.
+No functional branch was published, merged, reset or deleted in this step.
+
+#273 current head187ab2ef has no unresolved review threads (all pages checked).
+GitHub38020202145 remains active. Nix625 has11 succeeded,4 failed,6 skipped;
+only x86 browser remains active and its raw log shows continuing PASS results.
+No retry625 has been submitted. After it becomes idle, retry the evidenced
+failed attributes individually at most once each; do not overlap heavy compiles
+or substitute local results for current-head protected checks. #212 remains
+the unchanged reference. Next: collect38688 and act on terminal Nix625.
 
 ## Objective and limits
 
