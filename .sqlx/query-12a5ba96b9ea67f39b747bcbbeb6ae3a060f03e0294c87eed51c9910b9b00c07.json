@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH visible AS MATERIALIZED (\n             SELECT p.id,p.name,p.code,p.project_type::text project_type,p.active,\n                    p.budget_kind::text budget_kind,\n                    CASE WHEN $9 OR $12 OR ($13 AND management.id IS NOT NULL)\n                      THEN p.budget_amount_cents END budget_amount_cents,\n                    CASE WHEN $9 OR p.budget_kind='hours' THEN p.budget_minutes END budget_minutes,\n                    p.starts_on,p.ends_on,p.created_at,p.client_id,c.name client_name\n             FROM projects p JOIN clients c ON c.id=p.client_id AND c.org_id=p.org_id\n             LEFT JOIN project_read_access legacy ON legacy.org_id=p.org_id\n               AND legacy.project_id=p.id AND legacy.user_id=$2\n             LEFT JOIN project_management_assignments management ON management.org_id=p.org_id\n               AND management.project_id=p.id AND management.manager_id=$2\n             LEFT JOIN assignments member ON member.project_id=p.id AND member.user_id=$2\n             LEFT JOIN project_settings settings ON settings.org_id=p.org_id AND settings.project_id=p.id\n             WHERE p.org_id=$1 AND (CASE WHEN $9 THEN COALESCE(legacy.can_view_progress,false)\n               ELSE $10 OR ($11 AND management.id IS NOT NULL)\n                 OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility,'project_members')='project_members') END)\n               AND ($3::boolean IS NULL OR p.active=$3)\n               AND ($4::uuid IS NULL OR p.client_id=$4)\n               AND ($5::timestamptz IS NULL OR p.created_at >= $5)\n               AND ($6::uuid IS NULL OR p.id=$6)\n           ), totals AS (SELECT COUNT(*) total FROM visible), page AS (\n             SELECT * FROM visible ORDER BY name,id LIMIT $7 OFFSET $8\n           )\n           SELECT totals.total AS \"total!\",p.id AS \"id?\",p.name AS \"name?\",p.code,\n                  p.project_type AS \"project_type?\",p.active AS \"active?\",p.budget_kind AS \"budget_kind?\",\n                  p.budget_amount_cents,p.budget_minutes,p.starts_on AS \"starts_on?: chrono::NaiveDate\",\n                  p.ends_on AS \"ends_on?: chrono::NaiveDate\",p.created_at AS \"created_at?: chrono::DateTime<chrono::Utc>\",\n                  p.client_id AS \"client_id?\",p.client_name AS \"client_name?\"\n           FROM totals LEFT JOIN page p ON true ORDER BY p.name,p.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "project_type?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "active?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "budget_kind?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "budget_amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "budget_minutes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "starts_on?: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 10,
+        "name": "ends_on?: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at?: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "client_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "client_name?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Uuid",
+        "Timestamptz",
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      true,
+      null,
+      false,
+      null,
+      null,
+      null,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "12a5ba96b9ea67f39b747bcbbeb6ae3a060f03e0294c87eed51c9910b9b00c07"
+}
