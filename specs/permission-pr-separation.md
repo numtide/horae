@@ -124,6 +124,16 @@ This order includes composition dependencies, not only runtime dependencies.
   check links the already-running631 build. No code changes or repeated local
   gates. Require current-head CI and protected queue acceptance; do not retry
   obsolete630 or move to277 before actual merge.
+  Protected auto-merge enabled at07:32:28UTC (31388 passed) on exactca0a5e78,
+  before CI completion so no later manual enablement delays the accepted
+  delivery. Fresh rules verification requires Flake Check, Format,
+  nixbot/nix-build and nixbot/nix-eval plus the ALLGREEN/SQUASH queue; no
+  bypass. Full review-thread query returned none, with master base and
+  MERGEABLE/non-draft state. Read-back is OPEN/BLOCKED with autoMergeRequest
+  present, not merged. GitHub38034406552/watch67045 remains live: Format
+  passed35s, Flake Check is executing. Nix631/watch35694 remains live on
+  exact8f1c131f:11 succeeded, five building, six skipped-local, zero failures
+  at last observation. Continue these handles; do not restart live runs.
 - #277: local gate40914 passed on `c04a6166`/tree `2fb3728d`:1911 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
 - #278: local gate1753 passed on `7e9ad332`/tree `9834e623`:1914 native
