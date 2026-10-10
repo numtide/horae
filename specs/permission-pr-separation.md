@@ -73,11 +73,16 @@ This order includes composition dependencies, not only runtime dependencies.
   disposable database. Format12722 passed652 files unchanged; whitespace passed.
   No fresh full native gate is claimed or needed for unchanged runtime sources.
   Push42053 used the exact remote83b5495c lease and exited0; head and clean tree
-  reverified. Body updated. GitHub38031296941/watch10082 and Nix629/watch24213
-  started at06:32UTC and are active. Freeze this head until their results;
-  protected current-head and merge-group acceptance remain before merge.
+  reverified. Body updated. GitHub38031296941/watch10082 started at06:32UTC
+  and remains active; Format passed47s. Nix629 completed successfully at
+  06:51:20UTC on exact9de51399/tree77d1c241:16 passed, six skipped-local,
+  zero failed, both Linux architectures. Watch24213 is terminal0. A fresh
+  complete review-thread query found no threads on this head. Protected
+  auto-merge enabled at06:52:46UTC, read-back OPEN/BLOCKED; not merged yet.
+  Freeze this head while GitHub and the protected merge-group gates remain.
   Complete review-thread query returned no threads and MERGEABLE on9de51399.
-  Marked #275 ready at06:34UTC; verified OPEN/non-draft, auto-merge still null.
+  Marked #275 ready at06:34UTC; its initial read-back was OPEN/non-draft with
+  auto-merge null, before the accepted Nix run and subsequent request above.
   The push surfaced four existing Cargo.lock alerts: Dependabot4 rustls
   medium;3 rustls-webpki high;2/1 rustls-webpki low. Cargo.lock and Cargo.toml
   are byte-identical to actual master; these are inherited, not introduced by
