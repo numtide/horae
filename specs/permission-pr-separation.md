@@ -7326,6 +7326,37 @@ Next: reproduce delayed report/overview reads in the disposable browser
 harness, then choose a bounded correction if supported; collect #279 and
 prepare #280. Current-head remote acceptance still blocks #273's merge.
 
+### Bounded browser assertion correction — 2026-10-10
+
+Reproduced both Nix624 browser failures without changing the application:
+`.scratch/browser-readiness-repro.cjs` injects a six-second delay after a valid
+report read, or while constructing the101-row overview fixture. Original
+report run16233 and bulk run81914 exited1 at the same five-second assertions
+as CI. Report control99596 passed with a15-second assertion budget.
+
+Committed187ab2ef on existing #273 changes only two fixture headers: configure
+expect with a15-second timeout. No assertions, data, production code, Nix
+settings, retries or dependencies changed. Both full fixtures passed with
+fault injection against the accepted binary in run7575. Formatting checked648
+files unchanged. Full31-suite non-injected browser run20381 is active against
+that same binary and the updated test files. This is not a full Nix gate on
+the new tree and does not establish why the x86 builder is slow.
+
+An initial diagnostic invocation67198 unexpectedly requested a package rebuild
+because the source filter includes browser fixtures. Stopped only that client
+with SIGINT after identifying its exact PID; kept #279 gate32157 untouched.
+The successful reproduction reused the original browser environment derivation
+and accepted runtime. No second heavy local gate remains.
+
+Reconciled #280 metadata onto current #279 at75066620. New local head1d94bc85
+retains treef55930e3 exactly, with an equal single-commit range-diff. Recovery
+ref:refs/backup/pr280-before-current-catalog-head-20261010. No remote push or
+runtime acceptance yet. #279 gate32157 remains active and its tree frozen.
+
+Next: collect run20381, publish the scoped correction only after acceptance,
+and track new-head remote CI. Then collect #279 and validate #280/#281 without
+starting additional work. Native Nixbot compilation remains unresolved.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
