@@ -7,6 +7,7 @@ use std::sync::Arc;
 use tower::ServiceExt;
 use tower_sessions::{MemoryStore, Session};
 
+mod client_permissions;
 mod project_permissions;
 mod task_permissions;
 

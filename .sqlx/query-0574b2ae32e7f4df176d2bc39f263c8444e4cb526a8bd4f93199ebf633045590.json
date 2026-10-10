@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH visible AS MATERIALIZED (\n             SELECT id,name,active,address,currency,created_at FROM clients\n             WHERE org_id=$1 AND $5\n               AND ($2::bool IS NULL OR active=$2)\n               AND ($3::timestamptz IS NULL OR created_at >= $3)\n               AND ($4::uuid IS NULL OR id=$4)\n           ), totals AS (SELECT COUNT(*) total FROM visible), page AS (\n             SELECT * FROM visible ORDER BY name,id LIMIT $6 OFFSET $7\n           )\n           SELECT totals.total AS \"total!\",c.id AS \"id?\",c.name AS \"name?\",\n                  c.active AS \"active?\",c.address,c.currency AS \"currency?\",\n                  c.created_at AS \"created_at?: chrono::DateTime<chrono::Utc>\"\n           FROM totals LEFT JOIN page c ON true ORDER BY c.name,c.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "active?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "currency?",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at?: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Timestamptz",
+        "Uuid",
+        "Bool",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "0574b2ae32e7f4df176d2bc39f263c8444e4cb526a8bd4f93199ebf633045590"
+}
