@@ -212,10 +212,26 @@ This order includes composition dependencies, not only runtime dependencies.
 - #260: local gate89507 passed on `9762f776`/tree `6878cf56`:1987 native
   tests,33 browser suites, SQLx, Clippy and the server/WASM package. Bounded
   rendered review inspected ten captures without a blocking regression.
-  Next delivery: reconcile only this branch onto actual278 9b2ef230, preserving
-  its owned patch and inherited CI/browser fixes. Verify and retarget the
-  master base before publishing. No rebase yet; the accepted visual review
-  need not be repeated when runtime preservation is established.
+  Reconciled only this branch onto actual278 9b2ef230; recovery ref
+  `refs/backup/pr260-before-actual-atomic-task-merge-20261010` retains9762f776.
+  Head `efe5a2433c50cff4ff7022f7ad4503d9219e97f6`, tree
+  `29631f78053134a812cde380c1aa64a8c2083e23`. Owned range-diff remains equal;
+  complete-tree delta is eight inherited CI/browser files,20 additions/ten
+  deletions. Runtime, UI assets, migrations, SQLx, dependencies and contracts
+  are byte-identical to baseline; inherited paths match master. Focused33157
+  passed all seven affected browser suites against exact baseline binary
+  `960m4y805hhcwrfb145sxv87lp5k1dyd` and a disposable database. Format77558
+  passed667 files unchanged; whitespace passed. No additional source fix or
+  repeated full native/visual gate. Complete review query found no threads.
+  Retargeted the old integration base to master before exact3dba1db6-lease
+  push7239, which passed. Published head and clean worktree reverified.
+  Complete review query on efe5a243 found no threads, with master base and
+  MERGEABLE. Marked ready and enabled protected auto-merge at09:28:48UTC
+  (54293 passed), exact head guarded, no bypass. Read-back is OPEN/non-draft/
+  BLOCKED with autoMergeRequest, not merged. GitHub38041471808/watch29101
+  and Nix638/watch93169 are active. Nix confirms exactefe5a243/tree29631f78,
+  with builds running and no failures. Continue these handles and require all
+  current-head and protected merge-group gates before moving to279.
 - #279: baseline gate32157 passed on `75066620`/tree `8ad6aae0`:2000 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM build. The mobile
   word-wrapping regression failed on the baseline; fix770b7a91/treeead3875f
