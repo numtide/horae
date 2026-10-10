@@ -6753,6 +6753,35 @@ composition or a claim of full-feature parity. No code or frozen worktree was
 changed for this check. #271 Nix620/GitHub38007155368 and #272 local39626 remain
 live; retain their existing watchers and exact heads.
 
+### Project exports merged — 2026-10-10
+
+#271 GitHub run38007155368 attempt1 ended with exit143 at00:12:57UTC. Failure
+log and annotations report termination without a compiler/test failure or its
+cause. All exact-head x86_64 Nix620 gates had independently passed. Retried only
+the failed job on unchanged2b59bda1; attempt2 passed (Flake Check61s, Format37s),
+watch80160 exit0. No assertion, source or CI configuration was changed.
+
+Nix620 passed at2026-10-10T00:18:56.858787Z on exact2b59bda1/treebd863cc7:
+16 succeeded,6 skipped-local, both Linux architectures. Watch55102 exited zero.
+Fresh exact-head checks and review inspection found no unresolved threads.
+Marked ready and submitted to the protected queue at00:20:10UTC, position1.
+Merge-group run38008620027 passed (Flake Check58s, Format40s), watch99100 exit0.
+GitHub confirmed MERGED at2026-10-10T00:21:44Z, commit
+`3737051400d6b82411a053a1697bc1346b4cbf86`. Fetched origin/master and proved its
+complete tree equals the accepted `bd863cc7b9ff2aa7789ef0b447c269351be5b7f8`.
+
+Fresh open-PR inventory leaves ten functional deliveries:260,272,273,275,276,
+277,278,279,280,281. Documentation218 remains unpublished;212 remains OPEN/draft
+atdb3935db, unchanged.208 and91 remain outside this delivery block.
+
+#272 local39626 remains live/frozen atf6c4e4ab. Strict Clippy passed (3m57s),
+server/WASM package passed (3m09s), live SQLx passed (1m57s, retained unused-query
+warning), full browser passed through permission history,191 core tests passed.
+Server tests are compiling. Do not rebase until the process is terminal.
+Next: collect full #272 acceptance, reconcile onto actual37370514 with complete
+tree proof, retarget/publish existing #272 and continue its protected gates.
+No new PRs, features, policy activation or real-data changes.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
