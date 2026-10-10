@@ -262,9 +262,13 @@ This order includes composition dependencies, not only runtime dependencies.
   query on3768a109 found no threads and MERGEABLE. Marked ready and enabled
   protected auto-merge at10:15:07UTC (47688 passed); exact head guarded, no
   bypass. Read-back OPEN/non-draft/BLOCKED with autoMergeRequest is not merged.
-  GitHub38044210197 and Nix640 are live, watched by3964 and26585 respectively.
+  Nix640 completed successfully at10:34:06UTC on exact3768a109/tree074af6f2:
+  all16 executed checks passed on both Linux architectures, six skipped-local,
+  zero failures or retries; watcher26585 exited0. A fresh complete review
+  query found no threads. GitHub38044210197 remains live, watched by3964;
+  Format passed47s and Flake Check is still running.
   Required Flake Check, Format, nixbot/nix-build, nixbot/nix-eval and the
-  ALLGREEN/SQUASH queue remain enforced. Next: collect those existing runs and
+  ALLGREEN/SQUASH queue remain enforced. Next: collect the existing GitHub run and
   protected queue acceptance, verify actual merge, then reconcile only #280.
 - #280: full local gate7959 passed on `9dcc222b`/tree `dd723294`:2000 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM package. Focused
