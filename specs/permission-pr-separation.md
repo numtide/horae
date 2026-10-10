@@ -37,8 +37,10 @@ This order includes composition dependencies, not only runtime dependencies.
 - #279: baseline gate32157 passed on `75066620`/tree `8ad6aae0`:2000 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM build. The mobile
   word-wrapping regression failed on the baseline; fix770b7a91/treeead3875f
-  passed the package build and final six-capture catalog check2448. Clippy was
-  interrupted before completion; only Clippy is running again in80174.
+  passed the package build and final six-capture catalog check2448. Clippy
+  passed in80174 after the earlier interruption; no local correction pending.
+- #280: full local gate7959 is running on `9dcc222b`/tree `dd723294`.
+  Worktree frozen until completion. #281 is prepared at `f4e6c831`, unvalidated.
 - Remaining functional branches are prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
   published. Exact refs, recovery copies and gate receipts appear below.
@@ -7481,6 +7483,30 @@ merge is authorized by an in-progress result. #212 stays untouched.
 
 Next: collect80174, start #280's sole heavy full gate, and prepare #281 only
 without touching an active-gate tree. Continue following existing #273 CI.
+
+### Catalog follow-up accepted; task activity full gate started — 2026-10-10
+
+80174 exited0: exact follow-up Clippy passed (server2m06; build phase2m12).
+#279 is clean at770b7a91/treeead3875f. Baseline full-gate and follow-up scoped
+package/Clippy/browser/visual receipts are distinguished above. No additional
+local correction or visual pass remains. Its remote branch is unchanged and
+current-head protected checks are still mandatory before merge.
+
+Rebased #281 from74440f72 onto prepared #2809dcc222b, obtainingf4e6c831/tree
+e5813d93. The owned commit is range-diff equal; its complete tree differs only
+by the two inherited catalog layout/test files. Backup:
+refs/backup/pr281-before-current-task-activity-head-20261010. No remote push.
+
+Started7959 as the sole heavy local gate for #280 at9dcc222b/treedd723294:
+native tests, SQLx, Clippy and browser; eight cores,one job. Worktree clean and
+43GiB available beforehand. Keep it frozen. #281 remains next for full testing.
+The docs branch and prepared PR bodies record current heads and acceptance
+scope; #218 remote, #212 reference and real application data remain untouched.
+
+Next: collect #2807959, inspect its existing archive/restore UI evidence in a
+bounded round, run #281's full gate, and keep watching #273 current-head CI.
+Do not rebase or push #273 while its checks run; do not merge on local-only
+acceptance. No new feature or PR has been created.
 
 ## Objective and limits
 
