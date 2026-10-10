@@ -6859,6 +6859,18 @@ review or acceptance of later task writes, policy activation or full parity.
 No source/test/CI edits were made. Local65333 and the #272 remote watchers
 remain live; finish those gates and the prepared captures before publication.
 
+### Next task-write gate prepared — 2026-10-10
+
+Verified clean #275 at8d4f4fb5 and byte-identical old/new #273 parent trees.
+Saved `refs/backup/pr275-before-current-task-reader-head-20261010`, then rebased
+with updateRefs disabled onto currentc6e78447. New local head
+`b036e67395cfc2f52308c025154db1ff65e3603e`; owned commit range-diff is equal and
+complete tree remains `bf856e8ebeec347d36e377f9b91c2f6c421992bd`.
+Updated its prepared description only; no push, remote retarget or new gate.
+The #273 worktree remained untouched and local65333 remains the sole heavy
+build. Next: complete #273 validation/captures before starting #275's gate;
+continue #272's existing remote watchers toward the protected merge queue.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
