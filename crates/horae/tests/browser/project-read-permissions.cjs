@@ -134,7 +134,8 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     assert.deepEqual(errors, []);
     console.log('PASS: inactive-account and changed-policy responses clear retained detail; retry recovers only the original binding');
   } catch (error) {
-    console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot() });
+    console.error(error);
+    console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot({ timeout: 3000 }).catch(failure => failure.message) });
     throw error;
   } finally {
     await browser.close();

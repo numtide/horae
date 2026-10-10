@@ -323,7 +323,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     assert.deepEqual(mutations, []);
     assert.deepEqual(errors, []);
   } catch (error) {
-    console.error({ url: page.url(), errors, mutations, page: await page.locator('body').ariaSnapshot() });
+    console.error(error);
+    console.error({ url: page.url(), errors, mutations, page: await page.locator('body').ariaSnapshot({ timeout: 3000 }).catch(failure => failure.message) });
     throw error;
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

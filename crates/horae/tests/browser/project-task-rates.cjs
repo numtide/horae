@@ -280,7 +280,8 @@ assert.ok(task.default_rate_cents > 0);
     assert.deepEqual(errors, []);
     console.log('PASS: New Project task rates and editor capabilities preserve configured/legacy modes, source currencies, unknown/zero recovery, scoped budgets and keyboard recovery across three widths');
   } catch (error) {
-    console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot() });
+    console.error(error);
+    console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot({ timeout: 3000 }).catch(failure => failure.message) });
     throw error;
   } finally {
     await browser.close();
