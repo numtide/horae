@@ -8,7 +8,7 @@ use crate::components::modal::Modal;
 use crate::models::project_creation::{
     CreationOptions, CreationSearch, EditableProject, ProjectDraft, ProjectEditRequest,
     ProjectEditorContext, ProjectFieldAccess, ProjectFormField, ProjectManagerSelection,
-    ProtectedProjectField, TaskSource,
+    ProjectTaskActivity, ProtectedProjectField, TaskSource,
 };
 use crate::models::project_managers::ProjectManagers;
 use crate::route::Route;
@@ -272,6 +272,47 @@ fn ProjectEditor(
         )
     });
     let options = use_signal(|| options);
+    let archived_tasks = use_signal(|| {
+        existing
+            .peek()
+            .as_ref()
+            .filter(|project| project.access.is_some())
+            .map(|project| {
+                project
+                    .archived_task_ids
+                    .iter()
+                    .copied()
+                    .collect::<std::collections::HashSet<_>>()
+            })
+            .unwrap_or_default()
+    });
+    let task_activity = use_memo(move || {
+        let archived = archived_tasks.read();
+        existing
+            .read()
+            .as_ref()
+            .filter(|project| project.access.is_some())
+            .map(|project| {
+                project
+                    .form
+                    .tasks
+                    .iter()
+                    .filter_map(|task| {
+                        let TaskSource::Existing { task_id } = task.source else {
+                            return None;
+                        };
+                        let is_archived = archived.contains(&task_id);
+                        (is_archived != project.archived_task_ids.contains(&task_id)).then_some(
+                            ProjectTaskActivity {
+                                task_id,
+                                active: !is_archived,
+                            },
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    });
     let managers = use_signal(|| {
         existing
             .peek()
@@ -295,6 +336,7 @@ fn ProjectEditor(
     let dirty = use_memo(move || {
         if let Some(project) = existing.read().as_ref() {
             project.form != *form.read()
+                || !task_activity.read().is_empty()
                 || !edited.read().is_empty()
                 || manager_selection_changed(
                     project.access.as_ref().map(|access| &access.managers),
@@ -424,7 +466,7 @@ fn ProjectEditor(
         let request = pending_edit
             .write()
             .get_or_insert_with(|| ProjectEditRequest {
-                task_activity: Vec::new(),
+                task_activity: task_activity.peek().clone(),
                 id: Uuid::now_v7(),
                 project_id: project.id,
                 expected_revision: project.revision,
@@ -596,7 +638,12 @@ fn ProjectEditor(
                         Basics { form, options, editing, editor_context, notes_access, on_edit, invalid_field: invalid_field(), error_message: error() }
                         Visibility { form, legacy: existing.read().as_ref().is_some_and(|project| !project.configured) }
                         Billing { form, options, billable_access, on_edit, invalid_field: invalid_field(), error_message: error() }
-                        Tasks { form, options, editor_context, billable_access, on_edit, inactive_ids: existing.read().as_ref().map(|project| project.inactive_task_ids.clone()).unwrap_or_default(), invalid_field: invalid_field(), error_message: error() }
+                        Tasks {
+                            form, options, editor_context, billable_access, on_edit, archived_ids: archived_tasks,
+                            retained_ids: existing.read().as_ref().filter(|project| project.access.is_some()).map(|project| project.form.tasks.iter().map(|task| task.id).collect()).unwrap_or_default(),
+                            inactive_ids: existing.read().as_ref().map(|project| project.inactive_task_ids.clone()).unwrap_or_default(),
+                            invalid_field: invalid_field(), error_message: error(),
+                        }
                         Team {
                             form, managers, options, editor_context, billable_access, cost_access, on_edit,
                             busy: catalog_busy,
