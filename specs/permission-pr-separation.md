@@ -180,9 +180,27 @@ This order includes composition dependencies, not only runtime dependencies.
   retries, bypasses, additional fixes or new PRs were needed for this delivery.
 - #278: local gate1753 passed on `7e9ad332`/tree `9834e623`:1914 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
-  Next delivery: reconcile only this branch onto actual277 909b8a7f, preserving
-  its two owned commits and the inherited CI/browser fixes. Verify the master
-  base before publishing. No rebase yet.
+  Reconciled only this branch onto actual277 909b8a7f; recovery ref
+  `refs/backup/pr278-before-actual-task-link-merge-20261010` retains7e9ad332.
+  Head `1c5fae0cafcc6f37462e62a7c311db1b79b6d8b6`, tree
+  `b7c7e06e4e465501297eec1a6c1a775f52d43404`. Both owned range-diff entries
+  are equal (579f841e/1c5fae0c). Complete-tree delta is eight inherited
+  CI/browser files,20 additions/ten deletions; runtime, migrations, SQLx,
+  dependencies and contracts are byte-identical to baseline. Inherited paths
+  exactly match master. Focused67380 passed all seven affected browser suites
+  against exact baseline binary `4vbdiyplf7839rv8w5kicyfzwdlvhzkf`, using a
+  disposable database. Format82826 passed658 files unchanged; whitespace passed.
+  No additional fix or repeated full native gate. GitHub had automatically
+  retargeted278 to master; verified before publishing. Complete review query
+  found no threads. Exactcdcefa91-lease push64970 passed; published head and
+  clean worktree reverified. Complete review query on1c5fae0c found no threads,
+  with master base and MERGEABLE. Marked ready and enabled protected auto-merge
+  at08:41:32UTC (89185 passed), using an exact-head guard and no bypass.
+  Read-back is OPEN/non-draft/BLOCKED with autoMergeRequest, not merged.
+  GitHub38038703733/watch59056 and Nix636/watch11070 are active. Nix confirms
+  exact1c5fae0c/treeb7c7e06e; evaluation passed, builds running without failures.
+  Continue these handles; require current remote checks and protected merge
+  group acceptance before moving to260.
 - #260: local gate89507 passed on `9762f776`/tree `6878cf56`:1987 native
   tests,33 browser suites, SQLx, Clippy and the server/WASM package. Bounded
   rendered review inspected ten captures without a blocking regression.
