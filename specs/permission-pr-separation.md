@@ -2,9 +2,9 @@
 
 ## Delivery checkpoint — 2026-10-10
 
-Latest verified merge: #276, commit `da8c19d84cf89ccf7a31b547cbc08e73ed0840ec`.
-Six functional deliveries remain, in the prepared integration order:
-#277 → #278 → #260 → #279 → #280 → #281.
+Latest verified merge: #277, commit `909b8a7f252ba37af6687dd48a97a6438214f0c5`.
+Five functional deliveries remain, in the prepared integration order:
+#278 → #260 → #279 → #280 → #281.
 This order includes composition dependencies, not only runtime dependencies.
 
 - #272: merged after local, both-Linux Nix621, required GitHub and protected
@@ -147,7 +147,7 @@ This order includes composition dependencies, not only runtime dependencies.
   integration/task-catalog-prerequisites;281 already targets master. Retarget
   each immediate successor to master before publishing its reconciled head,
   and only after the predecessor actually merges. No successor was mutated.
-- #277: local gate40914 passed on `c04a6166`/tree `2fb3728d`:1911 native
+- #277: merged at08:35:51UTC. Local gate40914 passed on `c04a6166`/tree `2fb3728d`:1911 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
   Reconciled only this branch onto actual276 da8c19d8; recovery ref
   `refs/backup/pr277-before-actual-task-lifecycle-merge-20261010` retainsc04a6166.
@@ -169,11 +169,20 @@ This order includes composition dependencies, not only runtime dependencies.
   not merged. Nix634 completed successfully at08:18:54UTC on exactd6701479/
   tree26d685bd:16 checks passed on both Linux architectures, six skipped-local,
   zero failures or retries; watcher76292 exited0. ARM recovery VM completed
-  its script in826.98s. GitHub38036137491/watch10219 remains active: Format
-  passed47s, Flake Check is still executing. Continue10219 and require all
-  current-head checks plus protected merge-group acceptance before moving278.
+  its script in826.98s. GitHub38036137491 passed Format47s and Flake Check
+  37m34s at08:33:48UTC; watcher10219 exited0. Fresh complete review query
+  returned no threads. All four current-head required checks are SUCCESS.
+  Protected queue entry MQE_lQDOTRPZ888AAAABHKKGwM4AA_LZzgMyMG4 was first,
+  with commit `909b8a7f252ba37af6687dd48a97a6438214f0c5`, exact accepted
+  tree26d685bd and parent actual276. Merge-group38038352728 passed Flake
+  Check55s and Format44s; watcher76172 exited0. GitHub confirms MERGED at
+  08:35:51UTC; master API confirms the exact commit and accepted tree. No
+  retries, bypasses, additional fixes or new PRs were needed for this delivery.
 - #278: local gate1753 passed on `7e9ad332`/tree `9834e623`:1914 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
+  Next delivery: reconcile only this branch onto actual277 909b8a7f, preserving
+  its two owned commits and the inherited CI/browser fixes. Verify the master
+  base before publishing. No rebase yet.
 - #260: local gate89507 passed on `9762f776`/tree `6878cf56`:1987 native
   tests,33 browser suites, SQLx, Clippy and the server/WASM package. Bounded
   rendered review inspected ten captures without a blocking regression.
