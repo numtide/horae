@@ -15,7 +15,9 @@ This order includes composition dependencies, not only runtime dependencies.
   Current-head remote checks and protected merge-group acceptance are pending.
 - #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
   all31 browser suites, SQLx, Clippy and the server/WASM package.
-- #276: local gate54165 is running on `f9ea1443`/tree `56e6a80b`.
+- #276: local gate54165 passed on `f9ea1443`/tree `56e6a80b`:1906 native
+  tests,31 browser suites, SQLx, Clippy and the server/WASM package.
+- #277: local gate40914 is running on `c04a6166`/tree `2fb3728d`.
   Its isolated worktree remains frozen until the gate ends.
 - Remaining functional branches are prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
@@ -7051,6 +7053,23 @@ with rebase.updateRefs=false. New headc04a61668cec1b606934b4233854d25032434f79
 has equal range-diff and unchanged tree2fb3728de122edf68b8dfc1ecfbd1e677acdbcc0.
 No source edit, push or second heavy gate; #276 remains untouched. Start
 #277's full local validation only after54165 ends successfully.
+
+### Task lifecycle accepted; task-link gate started — 2026-10-10
+
+#276 gate54165 exited zero onf9ea1443/tree56e6a80b. All31 browser suites,
+strict Clippy, live SQLx, server/WASM package and native tests passed. Native
+totals:191 core,1451 server and264 auxiliary,1906 passed, zero failed,
+11 inherited ignored; four filtered subprocess reruns excluded. Server test
+compilation4m38s; main suite213.69s; native build phase8m33s. SQLx build phase
+1m42s retained the inherited potentially-unused-query warning. Migration0048
+ran only in disposable databases; no real-data migration or policy activation.
+
+Verified clean #277 atc04a6166/tree2fb3728d and47GiB available. Started40914
+for tests, SQLx, strict Clippy and browser with cores8/max-jobs1/no-link. It is
+the only heavy local gate; freeze scoped-task-links until terminal. #273's
+existing remote checks remain live, with no replacement head or retry.
+Next: collect #273 remote acceptance and #277's local result; publish #275
+only after the actual #273 merge and complete-tree reconciliation.
 
 ## Objective and limits
 
