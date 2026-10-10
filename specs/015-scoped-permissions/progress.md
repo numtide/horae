@@ -1,10 +1,128 @@
 # Scoped permissions investigation progress
 
-**Historical record**: Entries below are preserved from PR #212 at `db3935d`.
+**Historical record**: Entries below are preserved from PR #212 at `db3935d`
+and its unpublished snapshot `d364270a`. The client-reader checks described as
+running below are historical, not live: the reader subsequently merged in #281.
 Their process handles, branch names, results and next actions refer to that
 original work, not live processes or instructions for the current separation.
 Do not append separation progress here: the single current record is the
 separation ledger in PR #218. Historical passes do not certify extracted heads.
+
+## 2026-10-06 — Corrected client reader verification
+
+- Previous goal turn made progress: reproduced the authorization failures and
+  implemented the reader, then fixed its SQLx date parameter override.
+
+- Revalidated `90945`: terminal exit 101, solely the recorded E0308 compilation
+  error. Started the corrected batched verification as `76298`; it uses a new
+  disposable database and no competing verifier. Do not change Rust while this
+  stable snapshot is being checked.
+
+- Used Spec Kit Clarify for the remaining client-default-rate ownership question
+  explicitly excluded from FR-034. Asked one non-blocking question recommending
+  global billable-rate Read/Write plus the corresponding Client permission;
+  managed-project rates would not authorize the global default. No answer yet,
+  no spec answer recorded and no new rate policy implemented. Continue independent
+  API verification without repeating this question.
+
+- Reference research reconfirms that Harvest documents person/task defaults and
+  project rates, not a global client-default rate; the client guide also requires
+  archiving projects before the client. The separate 012 full spec still records
+  its design/Harvest lifecycle conflict. Do not silently treat its MVP's preserved
+  legacy semantics as final canonical acceptance or modify that other worktree.
+
+- The user answered “Sí” to the client-default-rate question. Integrated that
+  answer into today's clarification, FR-035 and two US3 acceptance scenarios,
+  then reconciled the client contract, T238 and dependent-spec register. One
+  question asked/answered; no second question is pending. Re-evaluated the
+  requirements checklist: still 12/16, no checkbox changes or regressions;
+  complete operation predicates and full acceptance coverage remain unresolved.
+  No runtime rate-policy change is included in the currently compiling snapshot.
+
+- The user also answered “A” to the explicit 012 archive/restore conflict:
+  Harvest behavior, projects archived first, no cascading project writes and
+  client-only restore. Added FR-036 and its concurrency/preservation acceptance,
+  reconciled the operation/client/dependent-spec contracts and T238 without
+  editing another worktree. Two questions asked/answered; none pending. The
+  requirements checklist remains 12/16 with no marker changes. Actual workflow,
+  concurrency and lifecycle implementation is still required; policy zero and
+  reviewed activation stay distinct.
+
+- `76298` compiled the corrected test binary and passed 235 Harvest/import tests
+  (8 existing ignored), including all six new client API tests, plus all 13
+  existing client mutation tests. SQLx preparation and offline Clippy remain
+  live. Added the exact requirement/test map to `quickstart.md`; T237 stays open
+  until the remaining verification and scoped review finish.
+
+Next: observe `76298`, inspect SQLx and regression results, finish local review and
+publish only after verification. Client-default-rate and archive decisions are
+resolved; ordinary client workflow/UI and write integration remain T238.
+
+## 2026-10-06 — Client compatibility boundary reproduction
+
+- The preceding user-facing duration explanation was no implementation progress.
+  Revalidated `db3935d`, the existing scoped-permissions worktree and the separate
+  Clients MVP head `5a459c4`; retained the unpublished publication receipt below.
+
+- Spec Kit prerequisites passed. Seven local readiness checklists remain 7/7;
+  full requirements remain 12/16 under the existing authorization for verified
+  increments. No extension hooks exist. Reused current Rust/testing/async and
+  minimal-change guidance; no new dependency, branch or policy activation.
+
+- Reconciled current API and shared UI callers. Wrote the OP17/34 reader contract
+  and T237/T238 without declaring the broader Clients workflow delivered. The
+  official client API's legacy write prerequisite does not supersede the approved
+  read-only operation matrix; the same limitation is already recorded for tasks.
+
+- Added actual-session API regressions for read-only grants, unrelated grants,
+  tenant/filter/count behavior, invalid state and revocation after a lock wait.
+  RED verifier `17768` is compiling against its own temporary PostgreSQL; no
+  production change has been made yet. Initial sandbox Nix cache denial was
+  resolved by the approved escalation, not by changing permissions or caches.
+
+- `17768` exited 101 after 7m44s compilation: two baseline cases passed; three
+  failures reproduced unauthorized rows/counts, missing authority fencing and
+  acceptance of an unknown policy. These were behavioral failures, not broken
+  test setup or compilation errors.
+
+- Both registered client API routes now reuse the existing current-policy/
+  active-actor transaction and `ClientReadAll`, independent of legacy roles.
+  Count/page share one SQL statement; existing fields/filters and legacy behavior
+  are retained. Added deactivation-after-session-lookup coverage as well.
+
+- Stable-change verifier `90945` is live: Harvest regressions, existing client
+  mutation regressions, complete SQLx preparation and offline all-target server
+  Clippy in one disposable database. Rust formatting ran before compilation.
+  No UI/shared DTO/CSS/schema/dependency was changed; no browser rebuild is
+  needed for this backend-only boundary. Full-feature browser/Nix gates remain.
+
+- Read-only local Spec Kit analysis maps T237 to FR-006/007/008/010/018 and
+  SC-002/003: seven covered obligations, no new ambiguity, duplication or
+  constitution conflict in this contract. T238 is explicitly not an executable
+  acceptance claim until its workflow/field prerequisites are reconciled.
+
+- `90945` reported SQLx E0308 for `updated_since`: with both date libraries in
+  the dependency graph, the parameter requires the existing explicit
+  `Option<DateTime<Utc>>` override. Restored that override. The compiler from the
+  failed snapshot was still live on the latest poll; do not launch a competing
+  verifier or mistake it for validation of this correction. No GREEN, SQLx
+  preparation or lint completion is claimed. T237 remains unchecked.
+
+Next: observe `90945` to terminal, then rerun its same batched command for the
+corrected source. Inspect the cache diff and finish scoped review/formatting
+before publication. Ordinary Clients UI, workflow pickers, writes,
+lifecycle/default rates and full activation stay open.
+
+## 2026-10-06 — Billability published
+
+- Final format/CI/diff check `37979` passed. Unsigned commit `db3935d` was
+  published to `origin/feat/scoped-permissions` by `36947` (exit 0), updating
+  existing draft #212 without merging. No verification process remains live.
+- Next: refine the already inventoried OP17/18/34 client enforcement contract
+  against current shared consumers and reference evidence, then reproduce and
+  fix its actual canonical authorization gaps. T203, full matrix/lock inventory,
+  approvals, migration and activation acceptance remain open; the goal is not
+  complete. This publication receipt will travel with the next progress update.
 
 ## 2026-10-06 — Billability final verification
 

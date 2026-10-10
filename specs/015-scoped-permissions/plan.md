@@ -21,6 +21,7 @@ This is an incremental plan. The independent record-scope foundation is executab
 - Pure scope evaluation has no I/O or persistence. Later persistence uses PostgreSQL, organization foreign keys and UUID v7 primary keys.
 - Foundation validation: exhaustive unit tests, core regression suite, Clippy and Nix formatting.
 - Runtime validation: SQLx integration tests, cross-surface authorization tests and browser comparisons with Harvest using disposable fixtures.
+- Client integration follows `contracts/client-permissions.md`: current catalog authority, separate workflow identities, FR-035 global default-rate grants and FR-036 non-cascading lifecycle. The compatibility-reader increment does not complete the UI, writes or activation.
 - Ordinary grouped reports reuse current time-read authority and one SQL snapshot for scoped group pages and full-period totals. Validate all four typed dimensions against detail totals and identity-based groups before wiring the UI/exports; financial-family sources remain separate prerequisites in `contracts/time-reports.md`.
 - Scope evaluation borrows assignments and allocates nothing. No new performance SLA is invented.
 
