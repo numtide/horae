@@ -9,23 +9,19 @@ This order includes composition dependencies, not only runtime dependencies.
 
 - #272: merged after local, both-Linux Nix621, required GitHub and protected
   merge-group acceptance. Its actual merge tree equals the accepted tree.
-- #273: published follow-up `187ab2ef`/tree `c4cf61a1`, adding only explicit
-  15-second assertion budgets to two browser fixtures. Baseline `b02726b3`
-  retained both original commits after reconciliation onto actual #272. Local
-  baseline acceptance:1869 native tests,31 browser suites and bounded visual review.
-  Current-head remote checks and protected merge-group acceptance are pending.
-  GitHub38013878619 attempt1 terminated with exit143; no cause is established.
-  Nix624 x86 native hit a1200-second compile timeout and its browser check
-  timed out waiting for101 rows. The isolated native retry ended with another
-  1200-second compile timeout. The isolated browser retry failed in
-  reports-permissions.cjs:421, with the report still loading after five seconds.
-  Nix624 is terminal:14 passed,2 failed,6 skipped. No further retry was sent.
-  New-head GitHub38020202145 attempt2 and Nix625 are active; Format passed.
-  Attempt1 lost its hosted runner; exactly one failed-job retry was submitted.
-  Nix625 has four terminal attribute failures and browser still active.
-  No retry of
-  the obsolete GitHub run is needed. Full browser run20381 passed all31 suites
-  against the accepted binary and the new fixtures; new-head Nix is pending.
+- #273: published follow-up `801fcaa4`/tree `2eb15150`. Baseline `b02726b3`
+  acceptance remains1869 native tests,31 browser suites and bounded visual
+  review. The two CI-only follow-ups change assertion budgets in three fixtures
+  and failure diagnostics in four, not application code or expected values.
+  Full browser20381 passed after the first follow-up; focused91903 passed all
+  five suites affected by the latest change. Delayed-read and diagnostic-failure
+  reproductions failed before and passed after their scoped fixes.
+  GitHub38025269436 and Nix626 are the current remote runs. Watchers59508 and
+  17951 are live. Protected current-head and merge-group acceptance remain.
+  Previous Nix625 ended11 passed/5 failed/6 skipped; GitHub38020202145 attempt1
+  lost its runner and attempt2 obscured an original browser error with a failed
+  diagnostic snapshot. No retry of those superseded runs remains scheduled.
+  Earlier Nix624/old-head evidence and retry limits remain recorded below.
 - #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
   all31 browser suites, SQLx, Clippy and the server/WASM package.
 - #276: local gate54165 passed on `f9ea1443`/tree `56e6a80b`:1906 native
@@ -7655,6 +7651,52 @@ at a time, and merge #273 only after its exact head satisfies the protected
 checks. Then reconcile and publish the immediate successor, reusing proven
 unchanged scopes without claiming stale whole-tree acceptance. No new PR,
 feature, policy activation or change to #212 is authorized by this checkpoint.
+
+### Client-loading reproduction and failure-diagnostic follow-up published — 2026-10-10
+
+Nix625 is terminal:11 succeeded,5 failed,6 skipped. Watcher75103 exited0 after
+observing terminal status (not build success). In addition to three x86
+compilation timeouts and ARM artifact transport, its browser failed at
+clients.cjs's final USD detail reload:5000ms expired while the snapshot showed
+Loading client. GitHub38020202145 attempt2 also failed; watcher57169 exited1.
+Its log reports a30000ms ariaSnapshot timeout in project-task-rates.cjs's catch
+handler, obscuring the original exception. Empty worker queries taking seconds
+are visible, but CPU/memory/I/O causation is not established by those logs.
+
+Reproduced the exact client assertion in disposable run15645 (exit1), holding
+a successful real get_client_details response unchanged for6000ms. Added the
+same bounded15-second assertion configuration already used by two fixtures;
+run80563 passed the full client fixture with the identical delay. The fault
+injection lives only in .scratch/clients-readiness-repro.cjs and is not shipped.
+
+Four catch handlers used the same unguarded ariaSnapshot call. Reused the
+existing invoice-preparation pattern: log the original exception first, bound
+the optional snapshot to3000ms, catch its failure and rethrow the original.
+.scratch/check-browser-diagnostics.cjs reproduced the masking on the baseline
+and passed all four handlers afterward with both available and failed snapshots.
+This fixes diagnostic loss; the original GitHub project-task-rates error is
+still unknown and is not claimed solved. No assertion or expected value changed.
+
+Focused run91903 exited0 for task-read-permissions, project-read-permissions,
+projects-design, project-task-rates and clients, using the accepted runtime
+binary and a fresh disposable database. Formatting25953 passed648 files
+unchanged. Follow-up801fcaa4/tree2eb15150 is five test files,11 additions and
+5 deletions; no runtime, CSS, schema, SQLx, dependency or workflow changes.
+The existing diagnostic pattern was reused without a new helper or test
+framework. No new rendered review or native rebuild was necessary for
+these fixture-only changes; baseline and scoped evidence are kept distinct.
+
+Verified remote #273 still187ab2ef/master and master stilla2102fa6, then pushed
+801fcaa4 with an exact187ab2ef lease (61647 exit0, fast-forward). Updated its
+body with current evidence and limitations. Read-back confirms the exact head,
+new GitHub38025269436 and Nix626. Watchers59508/17951 follow those jobs only.
+No retry of625 was submitted: the now-verified fixture correction supersedes
+the earlier plan to retry its failures. No third attempt of38020202145 was sent.
+
+Next: collect these current-head results. Keep #273 frozen while they run;
+do not mass-rebase or rerun the accepted downstream local gates. Once #273 is
+accepted and actually merged, reconcile the immediate successor, including
+both test-only follow-ups. #212 remains unchanged; no new PR or feature.
 
 ## Objective and limits
 
