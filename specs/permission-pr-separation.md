@@ -40,6 +40,8 @@ This order includes composition dependencies, not only runtime dependencies.
   passed the package build and final six-capture catalog check2448. Clippy
   passed in80174 after the earlier interruption; no local correction pending.
 - #280: full local gate7959 is running on `9dcc222b`/tree `dd723294`.
+  Clippy and the server/WASM package passed. Focused editor browser44955 and
+  its two inspected desktop/mobile captures passed without a blocking finding.
   Worktree frozen until completion. #281 is prepared at `f4e6c831`, unvalidated.
 - Remaining functional branches are prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
@@ -7507,6 +7509,38 @@ Next: collect #2807959, inspect its existing archive/restore UI evidence in a
 bounded round, run #281's full gate, and keep watching #273 current-head CI.
 Do not rebase or push #273 while its checks run; do not merge on local-only
 acceptance. No new feature or PR has been created.
+
+### Task activity rendered acceptance; ARM transport failure — 2026-10-10
+
+The previous status turn was a verified wait:7959 and GitHub38020202145 were
+confirmed live. Current continuation confirms they remain active. #273 stays
+open/draft at187ab2ef; no merge or source change was made during its checks.
+
+Nix625 checks.aarch64-linux.e2e failed before running the VM test. Its test
+driver passed lint/type checks, but gRPC FetchNars could not copy its output
+from the build farm (handshaker shutdown), ending with unexpectedly invalid
+outputs. This is transport evidence, not an application assertion failure.
+The overall build is still running:7 succeeded,5 building,1 failed,3 pending,
+6 skipped. No retry has been sent. Wait for the overall terminal result before
+one isolated retry of this attribute; do not restart unrelated active checks.
+
+#2807959 has accepted Clippy and the exact server/WASM package
+/nix/store/k3bqkfx8qk2d8z6h7f5nmy5df64qswcj-horae-0.1.0. Focused run44955
+used the existing browser environment and this exact binary, with a fresh
+disposable database. The complete editor fixture passed, including keyboard
+archive/restore, dirty-state undo, cancellation, running-timer rejection,
+preservation of hidden configuration, unchanged retry identity and revocation.
+Both existing fixture captures were inspected under
+.scratch/pr280-visual-9dcc222b (1440px dark and390px light). No blocking layout
+finding: labels and archive origins are readable, Restore remains reachable,
+and the global-catalog restriction explains why its control is disabled.
+No shared CSS, source, fixture or dependency was changed. This bounded review
+does not claim physical-touch, full WCAG or measured performance acceptance.
+
+Next: collect7959; when it terminates successfully, start #281's sole heavy
+local gate. Continue current-head #273 checks and retry only the evidenced
+transport failure after the build becomes idle. Keep #212 unchanged and all
+unpublished functional heads local until predecessor integration is confirmed.
 
 ## Objective and limits
 
