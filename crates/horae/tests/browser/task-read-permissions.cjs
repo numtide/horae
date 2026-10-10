@@ -58,10 +58,9 @@ assert.equal(sql(`SELECT count(*) FROM time_entries WHERE user_id='${actor.id}' 
         VALUES ('${id(9)}','${org}','${actor.id}',1,${array(floor)},false,'individual');
       UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
     await page.goto(`${base}/auth/login`);
+    const response = identities();
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
-    const response = identities();
-    await page.reload();
     const rows = await (await response).json();
     assert.ok(rows.some(row => row.id === historical));
     assert.ok(rows.some(row => row.id === enabled));
