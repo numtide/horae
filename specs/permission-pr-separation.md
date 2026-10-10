@@ -7177,6 +7177,28 @@ Its worktree remains frozen. Next: collect both actual retry results;
 request the one failed-job-only GitHub retry
 only after independent x86 acceptance. Preserve14 completed Nix checks.
 
+### People editor rendered-review preparation — 2026-10-10
+
+Read the visual audit guidance and DESIGN.md for the pending #260 review.
+The session's context load and bounded detector already ran; neither was
+repeated. No UI edit or polish pass. The existing permission-editor-recovery
+fixture already captures People, editor, subject picker, request recovery and
+history at1440px dark and390px light through HORAE_BROWSER_ARTIFACTS. It also
+checks dialog/document overflow, keyboard focus, real requester-bound writes
+and recovery. Reuse those ten captures rather than add a duplicate harness.
+
+Inspected the existing runner: it unsets outbound mail configuration, creates
+an isolated /tmp/horae-browser.* socket database, refuses an occupied8093 port,
+and starts only the explicitly supplied built server. Capture can run after
+#260's browser gate using that exact built package, with artifacts under
+.scratch/pr260-visual-9762f776. No capture or rendered acceptance is claimed
+yet; preserve the one batched review plus at most one confirmation-round limit.
+
+#278 local1753 passed SQLx and is advancing through browser fixtures. #273's
+native retry and queued browser retry remain unchanged; watcher23010 is live.
+Next: collect those executions and start #260's heavy gate only after #278's
+terminal success. No second heavy build, remote head replacement or new PR.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
