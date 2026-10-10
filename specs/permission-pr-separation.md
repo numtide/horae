@@ -34,10 +34,10 @@ This order includes composition dependencies, not only runtime dependencies.
 - #260: local gate89507 passed on `9762f776`/tree `6878cf56`:1987 native
   tests,33 browser suites, SQLx, Clippy and the server/WASM package. Bounded
   rendered review inspected ten captures without a blocking regression.
-- #279: local gate32157 is running on `75066620`/tree `8ad6aae0`.
-  Its isolated worktree remains frozen until the gate ends.
-  First batched visual review found mobile task-name columns breaking words;
-  resolve the bounded layout finding before publishing, after the gate ends.
+- #279: baseline gate32157 passed on `75066620`/tree `8ad6aae0`:2000 native
+  tests,34 browser suites, SQLx, Clippy and the server/WASM build. The mobile
+  word-wrapping regression failed on the baseline; its one-line UI correction
+  is in local follow-up gate83675. Worktree frozen; final visual check pending.
 - Remaining functional branches are prepared locally, not accepted or merged.
   #218 carries this delivery ledger; its newer local checkpoints are not yet
   published. Exact refs, recovery copies and gate receipts appear below.
@@ -7421,6 +7421,31 @@ Next: collect #279 gate32157, fix the observed mobile column in the existing
 branch, confirm once and preserve its runtime acceptance scope. Track #273
 GitHub38020202145/Nix625; keep its head frozen during checks. #280 remains
 prepared at1d94bc85 without source changes, and #281 is still unvalidated.
+
+### Catalog baseline accepted; bounded layout correction — 2026-10-10
+
+Collected32157 exit0:191 core +1475 server +334 auxiliary tests =2000 passed,
+zero failed and11 inherited ignored. Four filtered subprocess reruns excluded.
+Server test compilation4m51, main suite221.46s, native build phase8m53. All34
+browser suites, SQLx, Clippy and the server/WASM package passed at75066620.
+
+After the gate terminated, added one browser regression: each viewport checks
+that the first word of the task name occupies one line box. Run93557 against
+the baseline binary failed exactly at390px (2 !=1), matching the screenshot.
+Read the applicable Rust/testing chapters and Impeccable craft floor before
+removing only wrap-anywhere from the task-name cell. No CSS, generated utility,
+editor, permission or server change. Native table min-content sizing preserves
+words, while the existing table-container owns horizontal scrolling.
+
+Follow-up83675 is the sole heavy local job: package + Clippy, eight cores,
+one job. Freeze #279 until it ends. Formatting17222 is running. Confirm with
+the existing full task-catalog fixture and one final batched screenshot round
+against the new exact binary; do not run another exploratory visual cycle.
+Baseline native/SQLx receipts remain labelled with their source tree; required
+current-head remote acceptance is still pending. #273's new CI remains active.
+
+Next: collect83675, confirm the targeted fix, commit it in existing #279,
+then propagate its parent through #280/#281 and run their remaining gates.
 
 ## Objective and limits
 
