@@ -7544,6 +7544,14 @@ No retry was sent while other attributes remain active. Separately, #280's
 local SQLx check completed successfully in1m47 and its full browser phase is
 running. That local result does not substitute for #273 current-head CI.
 
+Nix625 subsequently also failed x86 Clippy and native tests. Both raw tails
+end during server compilation with the same1200-second timeout; no lint or
+test assertion failure is reported. Current snapshot:9 succeeded,3 building,
+4 failed,6 skipped. Wait for terminal status, then retry failed attributes
+individually, at most once each, rather than overlapping the heavy compiles.
+No retry has yet been submitted for625. Underlying worker resource metrics
+remain unavailable, so resource contention is not an established diagnosis.
+
 Next: collect7959; when it terminates successfully, start #281's sole heavy
 local gate. Continue current-head #273 checks and retry only the evidenced
 transport failure after the build becomes idle. Keep #212 unchanged and all
