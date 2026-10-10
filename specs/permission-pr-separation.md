@@ -76,6 +76,8 @@ This order includes composition dependencies, not only runtime dependencies.
   reverified. Body updated. GitHub38031296941/watch10082 and Nix629/watch24213
   started at06:32UTC and are active. Freeze this head until their results;
   protected current-head and merge-group acceptance remain before merge.
+  Complete review-thread query returned no threads and MERGEABLE on9de51399.
+  Marked #275 ready at06:34UTC; verified OPEN/non-draft, auto-merge still null.
   The push surfaced four existing Cargo.lock alerts: Dependabot4 rustls
   medium;3 rustls-webpki high;2/1 rustls-webpki low. Cargo.lock and Cargo.toml
   are byte-identical to actual master; these are inherited, not introduced by
