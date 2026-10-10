@@ -61,9 +61,25 @@ This order includes composition dependencies, not only runtime dependencies.
   Earlier Nix624/old-head evidence and retry limits remain recorded below.
 - #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
   all31 browser suites, SQLx, Clippy and the server/WASM package.
-  Its worktree is clean; parent remains old273 `c6e78447`. Remote is still
-  OPEN/draft at `83b5495c`, base master. Actual merged273 is fetched, but no
-  rebase or push of #275 has happened yet. Preserve a backup before updating.
+  Reconciled only this branch onto actual273 `aadabd4c`, preserving backup
+  `refs/backup/pr275-before-actual-task-reader-merge-20261010`. New head
+  `9de51399c3526e78e4310d6cacac0ad6313b5322`, tree
+  `77d1c2419ea607a51735f44c1270783551040d4e`. Owned range-diff is equal; the
+  whole-tree delta from the accepted baseline is exactly eight inherited
+  CI/browser files. Application/core, SQLx, migrations, dependencies and
+  contracts are byte-identical to baseline; all inherited paths match master.
+  Focused48885 passed all seven inherited browser fixtures against the exact
+  accepted baseline server `djvcm47a7d52h1aivwxi548g99rsbcij`, using a separate
+  disposable database. Format12722 passed652 files unchanged; whitespace passed.
+  No fresh full native gate is claimed or needed for unchanged runtime sources.
+  Push42053 used the exact remote83b5495c lease and exited0; head and clean tree
+  reverified. Body updated. GitHub38031296941/watch10082 and Nix629/watch24213
+  started at06:32UTC and are active. Freeze this head until their results;
+  protected current-head and merge-group acceptance remain before merge.
+  The push surfaced four existing Cargo.lock alerts: Dependabot4 rustls
+  medium;3 rustls-webpki high;2/1 rustls-webpki low. Cargo.lock and Cargo.toml
+  are byte-identical to actual master; these are inherited, not introduced by
+  #275. No dependency upgrade, new PR or exploitability claim was made here.
 - #276: local gate54165 passed on `f9ea1443`/tree `56e6a80b`:1906 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
 - #277: local gate40914 passed on `c04a6166`/tree `2fb3728d`:1911 native
