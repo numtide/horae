@@ -1,11 +1,53 @@
 # Permission verification
 
 **Historical verification**: This document preserves requirements, commands and
-recorded results from PR #212 at `db3935d`. Referenced code and browser fixtures
+recorded results from PR #212 at `db3935d` and its unpublished snapshot
+`d364270a`. The client-reader verification recorded as in progress below is
+historical; #281 subsequently delivered that reader with its own acceptance.
+Referenced code and browser fixtures
 may not yet be present on master. Results prove only their recorded source
 revisions, not this documentation branch or any extracted PR. Consult the
 separation ledger in PR #218 for current exact-head verification and prerequisites;
 do not run historical next actions against real data.
+
+## Client compatibility authority (T237, verification in progress)
+
+The registered client list and direct-ID routes use current `ClientReadAll`,
+not a legacy role or a related project/invoice/rate grant. Count and page share
+one source statement under the existing organization/active-actor fence.
+Policy zero retains its current behavior; no organization is activated here.
+
+Run in the Nix shell against disposable PostgreSQL:
+
+```sh
+cargo test -p horae --features server --locked --bin horae harvest::pagination_tests::client_permissions::
+cargo test -p horae --features server --locked --bin horae harvest::
+cargo test -p horae --features server --locked --bin horae server_fns::clients::
+```
+
+All six new tests exercise actual registered routes with authenticated sessions:
+
+| Requirement | Test in `harvest/pagination_tests/client_permissions.rs` |
+| --- | --- |
+| Read-only grants independent of legacy management; no added financial fields | `client_api_allows_read_only_grants_without_legacy_management` |
+| No client identity/count through unrelated grants or old Administrator role | `client_api_does_not_inherit_legacy_role_or_related_workflow_authority` |
+| Activity/date filtering, exhausted-page count and foreign/unknown direct IDs | `client_api_preserves_filters_counts_and_foreign_id_denial` |
+| Unknown policy, missing/malformed stored grants and inactive session denial | `client_api_rejects_unavailable_policy_and_inactive_sessions` |
+| Revocation after an actual organization-authority lock wait | `client_api_observes_revocation_after_waiting_for_current_authority` |
+| Deactivation between session lookup and guarded payload materialization | `client_api_rechecks_activity_after_session_authentication` |
+
+RED `17768` reproduced three authorization failures; the corrected snapshot in
+`76298` passes 235 Harvest/import tests (8 existing ignored) and all 13 existing
+client mutation tests. SQLx preparation and strict offline all-target Clippy are
+still running; T237 is not yet closed. No UI, shared DTO, CSS, schema or dependency
+changed. This backend-only increment does not require a new browser build and
+does not claim full-feature browser/Nix acceptance.
+
+The two user-confirmed product decisions are recorded in FR-035/036: global
+client-default rates require corresponding global-rate and Client authority;
+client archive needs projects archived first and restore never restores projects.
+Those writes and actual UI/workflow integration remain T238, not evidence supplied
+by these compatibility-reader tests.
 
 ## Report billability filtering (T235–T236)
 

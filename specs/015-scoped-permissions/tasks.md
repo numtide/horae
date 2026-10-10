@@ -13,6 +13,16 @@ Status: executable foundation tasks; later phases are required work packages to 
 
 ## Phase 1: Setup
 
+Client integration follows `contracts/client-permissions.md`:
+
+T237/T238 are recovered from the unpublished #212 snapshot `d364270a`.
+Their original markers are preserved: #281 subsequently delivered T237's
+compatibility reader, while T238's ordinary canonical client integration remains
+unfinished. Neither marker nor the legacy Clients MVP certifies policy cutover.
+
+- [ ] T237 Reproduce and enforce canonical client compatibility list/count/direct-ID access using the existing current-authority transaction. Verify read-only grants independent of legacy roles, tenant isolation, activity/date filters, pagination, strict policy and revocation through registered sessions; preserve policy-zero behavior (OP17/34, FR-006/008/010/018).
+- [ ] T238 Integrate the ordinary Clients reader, UI and standalone/inline writes after reconciling workflow-only selectors. Enforce FR-035's approved global client-default-rate Read/Write authority independently of ordinary client fields and managed-project rates, including protected unchanged, absent/zero, explicit clear and revocation cases. Enforce FR-036 archive prerequisites and client-only restoration, including concurrent project creation/reactivation and non-disclosing denials. Use bound requester identities and current transaction authority; verify actual consumers and preserve independently authorized project/invoice workflows. Do not close OP18 or activate policy using T237 alone.
+
 Task catalog integration follows `contracts/task-permissions.md`:
 
 - [x] T227 Reproduce canonical task catalog denial/overexposure, independent global-rate scope and tracking-history preservation through existing production readers (OP14, FR-006/007/008/010/018/021).

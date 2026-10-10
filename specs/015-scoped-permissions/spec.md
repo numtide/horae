@@ -8,6 +8,8 @@
 
 **Extraction context**: This specification is preserved from PR #212 at
 `db3935db364f2a8aa193f0e938ce40ecc01a2f92`. It describes the permission target,
+including the two approved client decisions preserved in its unpublished snapshot
+`d364270a6c7684457734dff66ff54f54e1066f83` and extracted client contract (#281),
 not functionality already merged into master. The separation changes no product
 decisions and does not activate policy. Constitution 1.0.0 remains authoritative;
 the 1.1.0 proposal is retained in the original branch for separate review.
@@ -93,6 +95,11 @@ confirmed contracts; local tests alone cannot settle contradictory reference fac
 
 - Q: What controls existing-project monetary budgets, fixed fees and invoice defaults? → A: A. Require project access plus the corresponding scoped billable-rate Read/Write permission. Hour-only budgets keep ordinary project authority and costs remain independent. This approved Horae choice becomes FR-034; creation-time scope and client-default rates are not decided by it.
 
+### Session 2026-10-06
+
+- Q: What controls Horae's global client-default billable rate? → A: Yes. Reading requires organization-wide billable-rate read plus client read; changing it requires organization-wide billable-rate write plus client write. Managing a related project, even with managed-project rate permission, does not authorize this global default. This is an approved Horae rule; no equivalent client-default-rate contract was established in Harvest's documentation.
+- Q: Should client archive/restore cascade to projects as proposed in the handoff, or follow Harvest's separate lifecycle? → A: A. Follow Harvest: all projects must already be archived before archiving the client; restoring the client restores no projects. Client permission never implicitly authorizes project lifecycle writes. This resolves the lifecycle choice left open in feature 012 FR-016.
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Assign a role that matches a person's responsibilities (Priority: P1)
@@ -175,6 +182,9 @@ A person sees consistent access in the application, reports, downloads and conne
 1. **Given** revoked authority, **When** queued work executes or a generated result is downloaded, **Then** it cannot use the earlier permission snapshot to bypass revocation.
 1. **Given** approved/invoiced time or restricted tasks, **When** an otherwise authorized edit is attempted, **Then** existing state and integrity rules still apply; general edit permission does not unlock records.
 1. **Given** an expense receipt or report outside the caller's current scope, **When** its download is requested directly or after revocation, **Then** neither its contents nor identifying metadata are disclosed. General time-management authority does not imply expense-category administration or privileged locked-expense correction.
+1. **Given** client access without organization-wide billable-rate read, **When** the client or an inline client workflow is loaded, **Then** the global client-default rate is withheld; related project management does not disclose it. Client read plus global rate read permits reading, not changing, that default.
+1. **Given** a proposed client-default-rate change, including explicit removal or zero, **When** it is saved, **Then** current client-write and global billable-rate-write authority are both required. Ordinary client edits preserve a withheld unchanged default, and revocation before commit prevents unauthorized financial changes.
+1. **Given** an authorized client editor and a client with any active project, **When** client archive is requested, **Then** the client remains active and no project is changed. Once all projects are archived, an otherwise valid client archive changes only the client; restoring it leaves every project archived. Concurrent project creation/reactivation and revoked client authority cannot bypass these checks.
 
 ### User Story 4 - Understand and maintain permission assignments (Priority: P2)
 
@@ -299,6 +309,10 @@ An administrator can review how existing roles and project assignments translate
 - **FR-033**: The terminal timer-stop recovery exception after loss of tracking eligibility MUST remain limited to the timer owner. A delegated editor MUST retain current write scope over the entry and the selected owner's tracking eligibility; restoring eligibility does not waive organization, activity, task or independent business-state constraints. Neither read nor approval access grants timer-stop authority. The owner-only exception MUST NOT permit creation, restart, reassignment or other edits. Test loss and restoration of eligibility with separate actor/owner identities and both revocation lock orders.
 
 - **FR-034**: For an existing project's monetary budgets, fixed-fee schedules and invoice defaults, require the corresponding billable-rate Read/Write grant in that project's scope in addition to ordinary project access. Invoice defaults include payment terms, purchase order, taxes and discounts. Hour-only budgets remain governed by project access, and cost rates remain independently governed by FR-022. Withheld fields MUST remain absent from disclosed values and ordinary edits MUST preserve them without client echoes. Explicit changes and indirect resets/removals MUST require current write authority. This is the user's confirmed option A on 2026-10-05, not an observed Harvest enforcement rule; it does not decide initial project-manager selection, create-time managed financial scope or client-default-rate ownership.
+
+- **FR-035**: Horae's global client-default billable rate MUST require client-read authority plus organization-wide billable-rate read to disclose, and client-write authority plus organization-wide billable-rate write to create, replace or clear. Managed-person/project rate authority, project management and report grants MUST NOT substitute for these global-rate permissions. Apply the same rule to standalone and inline client workflows, keep missing and zero rates distinct, and preserve protected unchanged values during ordinary edits. Recheck current authority at commit and preserve saved project overrides and historical financial records. This is the user's confirmed rule on 2026-10-06, not a claim of verified Harvest client-default-rate behavior.
+
+- **FR-036**: Client archive/restore MUST follow the user-confirmed Harvest lifecycle: archiving requires all linked projects already archived; restoration changes only the client. Require current client-write authority and independent organization/activity/state constraints, without inferring project-write permission or performing cascading project mutations. Recheck project activity and authority inside the committing transaction against concurrent creation/reactivation. Preserve projects, time, invoices and import history, and do not disclose inaccessible project identities or counts in denials. This resolves feature 012 FR-016's handoff/Harvest conflict; its bulk controls, contacts and other domain delivery remain separate work.
 
 ### Proposed Built-in Boundaries
 
