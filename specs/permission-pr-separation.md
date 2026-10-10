@@ -7,6 +7,35 @@ No functional deliveries remain in this block. This documentation delivery (#218
 still needs publication, current-head CI and protected merge acceptance.
 The integration order includes composition dependencies, not only runtime dependencies.
 
+### Final delivery audit
+
+- GitHub confirms all 57 unique code deliveries in the dependency index are
+  MERGED, each with a merge commit and timestamp. The index remains acyclic.
+  All 57 merge commits, specification delivery #248 and shared-CI deliveries
+  #282/#286 are ancestors of actual master281. #283–#285 and #217 are closed
+  after their replacement deliveries, as recorded below.
+- #218 was rebased onto the actual #281 merge from shared-CI base `ed286e6b`.
+  Recovery ref `refs/backup/pr218-before-final-master-reconciliation-20261010`
+  preserves `5a89f164` and the original 588 documentation checkpoints. Immediately
+  after the rebase the complete ledger was byte-identical. Its only difference
+  from current master is this document: no runtime, schema, SQLx, UI, CI or
+  feature-contract change. This final audit clarifies status, not product scope.
+- The four preservation refs retain their recorded objects. All four backup
+  file hashes match the recovery table; `git bundle verify` passes. The original
+  #212 tracked worktree equals its saved snapshot, and `tar --compare` verifies
+  all six preserved untracked files. #212 remains OPEN/draft at `db3935db` with
+  its original 18 dirty paths untouched.
+- All 30 unfinished source task IDs remain classified as retained work, not
+  silently marked complete. Full-feature acceptance, ordinary Clients
+  permission integration, remaining approval/lock/report behavior, policy
+  activation and Harvest parity are not completed by this delivery block.
+- #208 and #91 remain outside this block. #218 still requires its own
+  current-head checks and protected merge acceptance; merged functional PRs
+  do not substitute for that final gate. The PR body will carry its final
+  exact-head and merge receipt without adding another implementation change.
+
+### Functional delivery receipts
+
 - #272: merged after local, both-Linux Nix621, required GitHub and protected
   merge-group acceptance. Its actual merge tree equals the accepted tree.
 - #273: merged at06:26:07UTC; accepted head `a7bc2547`/tree `eef5c698`. Baseline `b02726b3`
@@ -4787,8 +4816,7 @@ need review. Branch90105351 remains untouched and no new PR was opened.
 
 #259's source review now reaches Timesheet line1970 and includes the complete
 timesheet-permissions browser scenario, route/CSS/Nix deltas and shared
-navigation script/test. Ran `nix develop --command node --test
-crates/horae/tests/browser/editor-navigation.cjs` on unchanged90105351:
+navigation script/test. Ran `nix develop --command node --test crates/horae/tests/browser/editor-navigation.cjs` on unchanged90105351:
 10 passed,0 failed (105.51ms). This covers navigation guards for Timesheet,
 Clients, Invoices, Projects, scroll-state preservation and the legacy opt-in;
 it does not certify live browser behavior or the remaining UI review.
@@ -6403,7 +6431,7 @@ its entire treea00a6968 equals accepted36bfa7bf.15 functional deliveries remain.
 
 Backed up267f11bb3b3 at refs/backup/pr267-before-grouped-export-merge-20261009.
 Rebased its single owned commit fromactualoldparent1fa434d4 ontoactualmerge
-29242324. Newhead0e85eb68015bf90a45b73f6131de2cfb186f0b01 and complete
+29242324\. Newhead0e85eb68015bf90a45b73f6131de2cfb186f0b01 and complete
 tree944c37bfb2e5d9c3745a20ec950f3472dd80b4a0; equal range-diff and whole-tree
 equality retain Nix610 acceptance. GitHub had automatically retargeted267 to
 master. Confirmed existing checks terminal before exactf11 lease publication.
@@ -6707,8 +6735,7 @@ remains building. The GitHub check rollup still shows an obsolete failure;
 do not treat it as the authoritative outcome of this live build or as merge
 acceptance. Do not replace the head while the build is running.
 
-Collected local #270 session49430: it terminated with `interrupted by the
-user`, not a failing assertion. SQLx and Clippy completed, but neither the
+Collected local #270 session49430: it terminated with `interrupted by the user`, not a failing assertion. SQLx and Clippy completed, but neither the
 partial browser output nor that exit establishes full acceptance. Reissued
 the same four Nix check targets on unchanged, clean `e70c06b9` in session42631.
 Nix reused the completed outputs and requested only the browser and native
@@ -7323,7 +7350,7 @@ or unrelated tab changes. Sent exactly one POST to the SQLx ARM restart path:
 so no retry execution or acceptance is claimed yet. Do not resend the request.
 
 Public Nixbot revision2474092c426a5656dc9493fa57558171acca2615 explains this:
-[service._restart](https://github.com/Mic92/nixbot/blob/2474092c426a5656dc9493fa57558171acca2615/nixbot/nixbot/service.py)
+[service.\_restart](https://github.com/Mic92/nixbot/blob/2474092c426a5656dc9493fa57558171acca2615/nixbot/nixbot/service.py)
 enqueues one rerun for the selected attribute;
 [restart_dispatch.rerun](https://github.com/Mic92/nixbot/blob/2474092c426a5656dc9493fa57558171acca2615/nixbot/nixbot/restart_dispatch.py)
 waits for the active run to release the build before resetting it. This is a
@@ -7508,7 +7535,7 @@ checks dialog/document overflow, keyboard focus, real requester-bound writes
 and recovery. Reuse those ten captures rather than add a duplicate harness.
 
 Inspected the existing runner: it unsets outbound mail configuration, creates
-an isolated /tmp/horae-browser.* socket database, refuses an occupied8093 port,
+an isolated /tmp/horae-browser.\* socket database, refuses an occupied8093 port,
 and starts only the explicitly supplied built server. Capture can run after
 #260's browser gate using that exact built package, with artifacts under
 .scratch/pr260-visual-9762f776. No capture or rendered acceptance is claimed
@@ -7760,7 +7787,7 @@ then propagate its parent through #280/#281 and run their remaining gates.
 
 Committed770b7a91/treeead3875f on existing #279: one removed cell utility and
 seven browser-regression lines, two files only. Package build succeeded in
-83675. Exact binary:
+83675\. Exact binary:
 `/nix/store/h61h8m8qaigv8bcc2y23bj37bh7dhg5q-horae-0.1.0/bin/horae`.
 Capture2448 exited0 with the complete catalog fixture and new regression.
 Viewed all six final screenshots in `.scratch/pr279-visual-confirmed/`:
@@ -8000,7 +8027,7 @@ do not mass-rebase or rerun the accepted downstream local gates. Once #273 is
 accepted and actually merged, reconcile the immediate successor, including
 both test-only follow-ups. #212 remains unchanged; no new PR or feature.
 
-## Objective and limits
+## Original extraction objective and limits (historical)
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
 all original changes. This is not implementation of the remaining permission
@@ -8009,6 +8036,11 @@ activate canonical policy, alter real data, or modify #208.
 
 This is the single separation ledger. Existing feature contracts remain the
 source of product requirements; do not restart or duplicate them.
+
+The no-merge/no-close limits in this original extraction checkpoint were
+superseded by the authorized delivery phase above. #217 was subsequently
+closed after #220 preserved its repair; #212 remains open and unchanged.
+No product implementation beyond the existing deliveries is implied.
 
 ## Pre-merge handoff — 2026-10-08 (historical)
 
@@ -8084,7 +8116,7 @@ original dirty worktree still matches its tracked snapshot and six-file backup
 archive. All 30 unchecked source tasks have exactly one retained-work
 classification; no checkbox was changed to claim feature completion.
 
-## Current delivery order
+## Delivery dependency index and historical receipts
 
 This index names the actual delivery PRs rather than their temporary integration
 branches. Each row requires its listed predecessors and their dependencies;
@@ -8092,6 +8124,12 @@ independent rows need not wait for unrelated features. Retain completed rows for
 traceability; this is a dependency index, not a list of exclusively open PRs.
 The active delivery phase above records current heads, gates and merge receipts.
 Historical tables below do not certify a newer published head.
+
+Final status on 2026-10-10: all 57 code deliveries in the table below are merged.
+The following narrative retains intermediate delivery observations, not an
+open-work list. The final audit and dated merge receipts above supersede its
+references to published, validating or pending heads. Only #218 remains to be
+delivered within this block.
 
 The shared-CI prerequisites are integrated: #282 and the consolidated #286
 merged; #283–#285 were closed with their content preserved. Functional
@@ -8244,7 +8282,8 @@ features, policy cutover and broad acceptance tasks.
 
 ## Preservation and recovery
 
-Private local backup directory:
+Private local backup directory, relative to the repository's original root
+checkout (not this documentation worktree):
 `.scratch/pr212-split-backup-20261006.BwoORH/`.
 
 | Reference | Preserved object |
@@ -8278,11 +8317,13 @@ original worktree.
 
 ### Original unpublished work: extraction and retained follow-up
 
-All 18 original paths below remain preserved and unchanged. Eleven are now
-extracted in draft [#281](https://github.com/numtide/horae/pull/281),
-`feat/scoped-harvest-clients` at `cd8d1db7`: the six cache paths, four Rust paths
+All 18 original paths below remain preserved and unchanged. Eleven were
+extracted through [#281](https://github.com/numtide/horae/pull/281), now merged
+as `81b7c5cf9cdc4a6f765bc4381af7dcb5183a237d` from accepted head `8f90e53e`:
+the six cache paths, four Rust paths
 and `contracts/client-permissions.md`, plus the original shared-test visibility
-hunk. Publication91690 succeeded after the transient GitHub errors. The other seven
+hunk. Initial publication91690 at `cd8d1db7` is historical; current-head and
+protected merge acceptance are recorded above. The other seven
 specification paths remain retained with unfinished client-workflow follow-up:
 dependent reconciliation, operation matrix, plan, spec, tasks, progress and
 quickstart. Their approved FR-035/036 decisions are also preserved in the
