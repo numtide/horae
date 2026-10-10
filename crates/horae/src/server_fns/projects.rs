@@ -48,6 +48,9 @@ mod task_edit_tests;
 #[cfg(all(test, feature = "server"))]
 mod task_activity_tests;
 
+#[cfg(all(test, feature = "server"))]
+mod task_link_tests;
+
 // ── Projects ─────────────────────────────────────────────────────────────────
 
 #[server]
@@ -1307,22 +1310,24 @@ async fn lock_task(
 
 /// Enable an org-level task on a project so it becomes loggable there. The
 /// project-task link inherits the task's default billable flag; idempotent.
-/// Both the project and the task must belong to the manager's organization.
+/// Current project editing authority is independent of global task management.
 #[server]
 pub async fn link_project_task(
     project_id: String,
     task_id: String,
     rate: Option<ProjectTaskRate>,
+    expected_requester: PermissionRequester,
 ) -> Result<(), ServerFnError> {
-    let manager = require_manager().await?;
+    let actor = require_user().await?;
+    project_requester(&actor, Some(expected_requester))?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
 
     link_project_task_record(
         &state.db,
-        manager.org_id,
-        manager.id,
+        actor.org_id,
+        actor.id,
         project_id,
         task_id,
         rate.as_ref(),
@@ -1340,13 +1345,63 @@ async fn link_project_task_record(
     rate: Option<&ProjectTaskRate>,
 ) -> Result<(), ServerFnError> {
     let mut tx = db.begin().await.map_err(server_err)?;
-    project_creation::lock_creation_actor(
+    permissions::configure_administration(&mut tx)
+        .await
+        .map_err(server_err)?;
+    let (_, permissions) = project_creation::editing::lock_editor_actor(
         &mut tx,
         actor_id,
         org_id,
+        project_id,
         OrganizationLock::AccessChange,
     )
     .await?;
+    if let Some(permissions) = permissions.filter(|_| rate.is_some()) {
+        use horae_core::permissions::{
+            Actor, ManagementAssignments,
+            rates::{BillableRateOwner, BillableRateResource, RateAction, billable_rate_access},
+        };
+        let designated = sqlx::query_scalar!(
+            "SELECT EXISTS(SELECT 1 FROM project_management_assignments
+             WHERE org_id=$1 AND project_id=$2 AND manager_id=$3)",
+            org_id,
+            project_id,
+            actor_id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(server_err)?
+            == Some(true);
+        // Explicit rate intent is authorized even when the association already
+        // exists. Resource-wide editing does not imply managed financial scope.
+        if !billable_rate_access(
+            &permissions.grants,
+            RateAction::Write,
+            &Actor {
+                id: actor_id,
+                org_id,
+                active: true,
+            },
+            &BillableRateResource {
+                org_id,
+                owner: BillableRateOwner::Project(project_id),
+            },
+            &ManagementAssignments {
+                actor_id,
+                org_id,
+                people: &[],
+                projects: if designated {
+                    std::slice::from_ref(&project_id)
+                } else {
+                    &[]
+                },
+            },
+        ) {
+            return Err(forbidden(
+                "Current project rate editing authority is required",
+            ));
+        }
+    }
     enable_project_task(&mut tx, org_id, project_id, task_id, rate).await?;
     tx.commit().await.map_err(server_err)?;
     Ok(())
@@ -1373,7 +1428,7 @@ async fn enable_project_task(
         r#"SELECT CASE WHEN o.permission_policy_version=1 AND p.project_type='non_billable'
                       THEN false ELSE t.billable_default END AS "billable_default!",
                 p.currency, t.default_rate_currency,
-                (ps.project_id IS NOT NULL) AS "configured!",
+                (ps.project_id IS NOT NULL OR o.permission_policy_version=1) AS "require_rate_currency!",
                 (p.project_type <> 'non_billable' AND (ps.project_id IS NULL
                   OR (p.project_type = 'time_and_materials' AND ps.rate_mode = 'task'))) AS "uses_task_rates!",
                 EXISTS(SELECT 1 FROM project_tasks pt
@@ -1426,7 +1481,7 @@ async fn enable_project_task(
                 .ok_or_else(|| conflict("Enter an explicit rate in the project currency"))?,
         )
     } else {
-        if task.configured
+        if task.require_rate_currency
             && task.default_rate_cents.is_some()
             && !task
                 .default_rate_currency
