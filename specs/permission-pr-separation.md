@@ -13,6 +13,8 @@ This order includes composition dependencies, not only runtime dependencies.
   with both owned commits and the complete accepted tree unchanged. Local
   acceptance:1869 native tests,31 browser suites and bounded visual review.
   Current-head remote checks and protected merge-group acceptance are pending.
+  GitHub38013878619 attempt1 terminated with exit143; no cause is established.
+  A bounded failed-job retry awaits independent x86 acceptance in Nix624.
 - #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
   all31 browser suites, SQLx, Clippy and the server/WASM package.
 - #276: local gate54165 passed on `f9ea1443`/tree `56e6a80b`:1906 native
@@ -7085,6 +7087,23 @@ New head7e9ad332278b82a856a8e21c0594bde1e5e6c2e7 has two equal range-diff
 entries and unchanged complete tree9834e6231f0149aded521ebbfe18c1b114b205c2.
 No source edits, push or second local build. Next: collect the existing
 #273/#277 gates; run #278's local gate only after #277 terminates successfully.
+
+### Task reader GitHub termination inspected — 2026-10-10
+
+GitHub38013878619 attempt1 ended Flake Check with exit143 at01:52:38.7077587UTC
+after15m23s. Watcher31194 is terminal. Inspected the full failed log with an
+error/failure/termination/OOM/timeout scan and its final32 lines: the only
+failure diagnostic is the exit143 termination. The preceding log records
+native test compilation and successful client bundling, not a failing test
+or compiler diagnostic. No OOM or infrastructure cause is established.
+
+Nix624 remains live on the unchangedb02726b3/treeb796b190. Its ARM native,
+SQLx, Clippy, package and formatting checks already passed; x86 native,
+Clippy, browser and VM checks still run. Keep watcher23010. Do not change
+the head or retry all jobs. Once independent x86 acceptance is complete,
+revalidate head/base and request at most one failed-job-only GitHub retry.
+#277 local40914 passed SQLx and is now running browser fixtures; no failures
+observed, but full acceptance remains pending.
 
 ## Objective and limits
 
