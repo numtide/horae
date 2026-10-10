@@ -650,6 +650,13 @@ mod project {
 mod task {
     use super::*;
 
+    fn rate_edit(amount: Option<i64>) -> TaskRateEdit {
+        amount.map_or(TaskRateEdit::Clear {}, |amount_cents| TaskRateEdit::Set {
+            amount_cents,
+            currency: "EUR".into(),
+        })
+    }
+
     #[sqlx::test(migrations = "./migrations")]
     async fn rate_edits_set_currency_without_relabelling_renames_or_noops(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
@@ -661,15 +668,23 @@ mod task {
         .await
         .unwrap();
         for (name, rate, currency) in [
-            ("Renamed", Some(8000), None),
-            ("Renamed", Some(8000), None),
-            ("Renamed", Some(0), Some("EUR")),
-            ("Again", Some(0), Some("EUR")),
-            ("Again", None, None),
+            ("Renamed", TaskRateEdit::Preserve {}, None),
+            ("Renamed", TaskRateEdit::Preserve {}, None),
+            ("Renamed", rate_edit(Some(0)), Some("EUR")),
+            ("Again", TaskRateEdit::Preserve {}, Some("EUR")),
+            ("Again", TaskRateEdit::Clear {}, None),
         ] {
-            update_task_record(&pool, ids.org_id, ids.task_id, name, true, rate)
-                .await
-                .unwrap();
+            update_task_record(
+                &pool,
+                ids.org_id,
+                ids.user_id,
+                ids.task_id,
+                name,
+                true,
+                &rate,
+            )
+            .await
+            .unwrap();
             let stored = sqlx::query_scalar!(
                 "SELECT default_rate_currency FROM tasks WHERE id = $1",
                 ids.task_id
@@ -697,28 +712,51 @@ mod task {
             expected.name = name.into();
             expected.billable_default = billable;
             expected.default_rate_cents = rate;
-            let (updated, changed) =
-                update_task_record(&pool, ids.org_id, ids.task_id, name, billable, rate)
-                    .await
-                    .unwrap();
-            assert_eq!((changed, updated), (true, expected.clone()));
+            let (updated, changed) = update_task_record(
+                &pool,
+                ids.org_id,
+                ids.user_id,
+                ids.task_id,
+                name,
+                billable,
+                &rate_edit(rate),
+            )
+            .await
+            .unwrap();
+            assert_eq!((changed.is_some(), updated), (true, expected.clone()));
             let before = version(&pool, ids.task_id).await;
-            let (repeated, changed) =
-                update_task_record(&pool, ids.org_id, ids.task_id, name, billable, rate)
-                    .await
-                    .unwrap();
+            let (repeated, changed) = update_task_record(
+                &pool,
+                ids.org_id,
+                ids.user_id,
+                ids.task_id,
+                name,
+                billable,
+                &rate_edit(rate),
+            )
+            .await
+            .unwrap();
             let after = version(&pool, ids.task_id).await;
             assert_eq!(
-                (changed, repeated, after),
+                (changed.is_some(), repeated, after),
                 (false, expected.clone(), before)
             );
         }
     }
 
     async fn edit(pool: &PgPool, ids: &SeedIds, name: &str) -> (Task, bool) {
-        update_task_record(pool, ids.org_id, ids.task_id, name, true, None)
-            .await
-            .unwrap()
+        let (task, event) = update_task_record(
+            pool,
+            ids.org_id,
+            ids.user_id,
+            ids.task_id,
+            name,
+            true,
+            &TaskRateEdit::Preserve {},
+        )
+        .await
+        .unwrap();
+        (task, event.is_some())
     }
 
     async fn version(pool: &PgPool, id: uuid::Uuid) -> Option<String> {
@@ -841,9 +879,22 @@ mod task {
             (ids.org_id, uuid::Uuid::now_v7()),
             (other.org_id, ids.task_id),
         ] {
-            let error = update_task_record(&pool, org_id, id, "Dev", true, None)
-                .await
-                .unwrap_err();
+            let actor_id = if org_id == ids.org_id {
+                ids.user_id
+            } else {
+                other.user_id
+            };
+            let error = update_task_record(
+                &pool,
+                org_id,
+                actor_id,
+                id,
+                "Dev",
+                true,
+                &TaskRateEdit::Preserve {},
+            )
+            .await
+            .unwrap_err();
             assert!(matches!(
                 error,
                 ServerFnError::ServerError {
@@ -909,9 +960,17 @@ mod task {
                         .await
                         .map(|_| ())
                 } else {
-                    update_task_record(&run_pool, ids.org_id, ids.task_id, "Dev", true, None)
-                        .await
-                        .map(|_| ())
+                    update_task_record(
+                        &run_pool,
+                        ids.org_id,
+                        ids.user_id,
+                        ids.task_id,
+                        "Dev",
+                        true,
+                        &TaskRateEdit::Preserve {},
+                    )
+                    .await
+                    .map(|_| ())
                 }
             });
             wait_for_blocked(&pool, blocker).await;

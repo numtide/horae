@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tasks\n            SET name = $3, billable_default = $4,\n                default_rate_cents = CASE WHEN $5 THEN default_rate_cents ELSE $6 END,\n                default_rate_currency = CASE WHEN $5 THEN default_rate_currency ELSE $7 END\n          WHERE id = $1 AND org_id = $2\n            AND (name, billable_default, default_rate_cents, default_rate_currency)\n                IS DISTINCT FROM ($3, $4,\n                    CASE WHEN $5 THEN default_rate_cents ELSE $6 END,\n                    CASE WHEN $5 THEN default_rate_currency ELSE $7 END)\n         RETURNING id, org_id, name, billable_default, default_rate_cents, active",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "billable_default",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "default_rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "active",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool",
+        "Bool",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "6da24b1dbad5f2a56a0ded60505e6ebea329964e07d93074549c99bc801e2ba4"
+}
