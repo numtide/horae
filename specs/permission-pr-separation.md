@@ -6730,6 +6730,29 @@ Next: collect #271 exact-head remote checks and queue it if accepted; collect
 #272 local39626 without edits/restarts. Eleven functional PRs remain, with #212
 untouched as reference. No new PRs, features, policy activation or real-data work.
 
+### Final prepared composition conservation — 2026-10-10
+
+Compared complete prepared tree74440f72 (ending at #281) with the previously
+verified cross-extraction composition8fc3a44e. Only21 paths differ; all other
+paths are unchanged. Eighteen of those21 exactly match current merged master
+40883344, carrying already integrated transport, permission concurrency,
+Timesheet, fixture and CI corrections. The remaining three are:
+
+- `reports/streaming/database_tests/authorization.rs`: only the documented
+  backend-close wait correction from5s to10s, inherited from the already merged
+  report fix, with assertions unchanged; the larger #271 file also preserves
+  its original export regression content.
+- `importers/authorization_tests.rs`: registration order only relative to the
+  old full composition. All25 original HTTP matrices remain registered once.
+- `tests/browser/run-design-checks.sh`: suite order only. All34 original suites
+  remain registered once. Compared parsed sets, not just counts; no missing or
+  additional names in either registry.
+
+This is whole-tree conservation evidence, not acceptance of the untested final
+composition or a claim of full-feature parity. No code or frozen worktree was
+changed for this check. #271 Nix620/GitHub38007155368 and #272 local39626 remain
+live; retain their existing watchers and exact heads.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
