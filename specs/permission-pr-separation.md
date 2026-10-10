@@ -7244,6 +7244,22 @@ pending; no rendered acceptance is inferred from these paths.
 perform the bounded People capture when the exact package/browser gate is ready,
 and start #279's heavy gate only after #260's terminal local success.
 
+### People recovery browser cases passed; full gate continues — 2026-10-10
+
+#260 local89507 passed strict Clippy, server/WASM package and SQLx (server
+check1m40s), then entered its full33-suite browser runner. In Chromium
+148.0.7778.96, permission-editor-recovery passed canonical People scoping,
+changed-session rejection, lost-response exact replay, account-isolated
+recovery, deleted-profile receipts, real paged history and storage refusal /
+self-demotion cleanup without a second mutation. These are executable results
+for the preserved UI fixture, not full local or rendered acceptance. Remaining
+browser/native gates and the bounded capture inspection are still pending.
+
+#273 native retry remains building and its latest raw log is server test
+compilation. No new diagnostic or terminal result; browser retry remains queued.
+Keep watchers23010/89507 and both current heads unchanged. Next: collect the
+existing results and run the exact-package People capture after its browser gate.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
