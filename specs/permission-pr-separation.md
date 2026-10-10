@@ -2,18 +2,17 @@
 
 ## Delivery checkpoint — 2026-10-10
 
-Latest verified merge: #271, commit `3737051400d6b82411a053a1697bc1346b4cbf86`.
-Ten functional deliveries remain, in the prepared integration order:
-#272 → #273 → #275 → #276 → #277 → #278 → #260 → #279 → #280 → #281.
+Latest verified merge: #272, commit `a2102fa6182c8aa76cff8581a656ecae4cb0e264`.
+Nine functional deliveries remain, in the prepared integration order:
+#273 → #275 → #276 → #277 → #278 → #260 → #279 → #280 → #281.
 This order includes composition dependencies, not only runtime dependencies.
 
-- #272: local acceptance complete; Nix621 is building. Its ARM SQLx check hit
-  a1200-second builder timeout; one scoped restart request was acknowledged,
-  not yet observed running. GitHub38009232715 attempt1 terminated with exit143
-  without an identified cause; its bounded retry still awaits x86 acceptance.
-- #273: local acceptance complete on `c6e78447`/tree `b796b190`:1869 native
-  tests passed,31 browser suites and bounded visual review passed. Remote
-  publication waits for #272's actual merge and an equal-tree reconciliation.
+- #272: merged after local, both-Linux Nix621, required GitHub and protected
+  merge-group acceptance. Its actual merge tree equals the accepted tree.
+- #273: published at `b02726b3`/tree `b796b190`, reconciled onto actual #272
+  with both owned commits and the complete accepted tree unchanged. Local
+  acceptance:1869 native tests,31 browser suites and bounded visual review.
+  Current-head remote checks and protected merge-group acceptance are pending.
 - #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
   all31 browser suites, SQLx, Clippy and the server/WASM package.
 - #276: local gate54165 is running on `f9ea1443`/tree `56e6a80b`.
@@ -7009,6 +7008,34 @@ GitHub's single failed-job retry remains unsent pending full x86 acceptance.
 Next: collect those results, verify the requested ARM retry, then follow the
 existing protected merge sequence. No timeout/assertion/source workaround,
 new PR, policy activation or real-data mutation was introduced.
+
+### Project API merged; task readers published — 2026-10-10
+
+#272 Nix621 finished successfully at01:28:31.648342UTC:16 executable checks
+passed across both Linux architectures, six skipped-local attributes. The
+single requested ARM SQLx retry started at01:24:45.896857UTC and passed with
+a2m25s build phase on the unchanged derivation. No source, assertion or timeout
+change was needed. After independent x86 acceptance, only GitHub's failed job
+was rerun: run38009232715 attempt2 passed Flake56s and Format47s.
+
+Fresh review inspection found no unresolved threads. Protected merge-group
+38013459599 passed Flake56s and Format42s. #272 actually merged at01:32:04UTC
+as a2102fa6182c8aa76cff8581a656ecae4cb0e264. Fetched master and verified full
+tree equality with accepted dfed5826/tree01a071df. Updated the PR receipt.
+
+#273 auto-retargeted to master; old-head Nix622 terminated with a merge
+conflict and null tree at01:32:09.701172UTC. Backed up c6e78447 at
+refs/backup/pr273-before-project-api-merge-20261010 and reconciled onto actual
+a2102fa6. Both range-diff entries are equal and the full tree remains
+b796b190cf8d6e3ef60c478ebcc160cab8d0eb9c. Published b02726b357501d79e67bf4de70c11dd2fc4d2251
+with an exact lease against a68c1b5b. Existing local1869-test,31-browser and
+bounded visual acceptance applies to this identical tree; new-head remote
+checks and protected merge-group acceptance remain required.
+
+#276 gate54165 remains live, now in native tests after the browser gate.
+Its worktree remains frozen. #275 retains its accepted local tree until the
+actual #273 merge. Next: collect #273's current-head remote gates and #276's
+terminal local result; no new deliveries or changes to reference #212.
 
 ## Objective and limits
 
