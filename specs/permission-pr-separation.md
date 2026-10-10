@@ -2,14 +2,14 @@
 
 ## Delivery checkpoint — 2026-10-10
 
-Latest verified merge: #272, commit `a2102fa6182c8aa76cff8581a656ecae4cb0e264`.
-Nine functional deliveries remain, in the prepared integration order:
-#273 → #275 → #276 → #277 → #278 → #260 → #279 → #280 → #281.
+Latest verified merge: #273, commit `aadabd4cdff43f634e91b6cb788c0d6d0cdbc4ad`.
+Eight functional deliveries remain, in the prepared integration order:
+#275 → #276 → #277 → #278 → #260 → #279 → #280 → #281.
 This order includes composition dependencies, not only runtime dependencies.
 
 - #272: merged after local, both-Linux Nix621, required GitHub and protected
   merge-group acceptance. Its actual merge tree equals the accepted tree.
-- #273: published follow-up `a7bc2547`/tree `eef5c698`. Baseline `b02726b3`
+- #273: merged at06:26:07UTC; accepted head `a7bc2547`/tree `eef5c698`. Baseline `b02726b3`
   acceptance remains1869 native tests,31 browser suites and bounded visual
   review. The two CI-only follow-ups change assertion budgets in three fixtures
   and failure diagnostics in four, not application code or expected values.
@@ -24,14 +24,15 @@ This order includes composition dependencies, not only runtime dependencies.
   at05:54UTC after verifying
   no review threads and no conflicts; a fresh complete review query at06:09UTC
   still found no threads. Protected auto-merge enabled at06:10:15UTC for this
-  exact head; read-back OPEN/BLOCKED proves it is not merged. Required rules
+  exact head; the initial read-back was OPEN/BLOCKED. Required rules
   retain Flake Check, Format, nixbot/nix-build, nixbot/nix-eval and ALLGREEN
   squash merge queue. No bypass. At06:24UTC #273 entered position1,
   AWAITING_CHECKS, entry MQE_lQDOTRPZ888AAAABHFDTE84AA_LZzgMyAX4.
   Queue commit `aadabd4cdff43f634e91b6cb788c0d6d0cdbc4ad` has the exact
   accepted `eef5c698` tree and actual master272 as parent. Merge-group run
-  38030837138/watch17808 is active. Next: collect its acceptance and actual merge before
-  reconciling #275; queue submission is not completion.
+  38030837138 passed Format47s and Flake Check59s; watcher17808 is terminal0.
+  GitHub confirms MERGED at06:26:07UTC with that queue commit. Fetch65882
+  confirms actual master and its tree match the accepted commit/tree exactly.
   Superseded GitHub38025269436 attempt1
   ended at05:16UTC with exit143 after25m27s, without a failing assertion or
   compiler diagnostic. Its log and check annotations do not establish the
@@ -48,19 +49,21 @@ This order includes composition dependencies, not only runtime dependencies.
   scheduling budget. Only ci.yml changes (two additions/one deletion); no
   check or assertion is removed. Actionlint, format98274 (648 unchanged),
   whitespace and no-build flake evaluation17666 passed. This is a scheduling
-  mitigation awaiting remote validation, not proof of an OOM cause. The pinned
+  mitigation now accepted remotely, not proof of an OOM cause. The pinned
   Hestia main/post scripts and run annotations yielded no cause attribution.
   Published only after Nix626 terminated, with exact old-head lease; push87482
-  exited0. Remote master is still actual272 `a2102fa6`. The body now records
-  all scoped checks and limitations. Collect current-head acceptance before
-  protected merge; #275 must inherit all three CI follow-ups after that merge.
-  Protected current-head and merge-group acceptance remain.
+  exited0. The body records all scoped checks and limitations. All current-head
+  and protected merge-group gates are now complete. Next: reconcile only #275
+  onto actual273, inheriting all three CI follow-ups. No mass rebase.
   Previous Nix625 ended11 passed/5 failed/6 skipped; GitHub38020202145 attempt1
   lost its runner and attempt2 obscured an original browser error with a failed
   diagnostic snapshot. No retry of those superseded runs remains scheduled.
   Earlier Nix624/old-head evidence and retry limits remain recorded below.
 - #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
   all31 browser suites, SQLx, Clippy and the server/WASM package.
+  Its worktree is clean; parent remains old273 `c6e78447`. Remote is still
+  OPEN/draft at `83b5495c`, base master. Actual merged273 is fetched, but no
+  rebase or push of #275 has happened yet. Preserve a backup before updating.
 - #276: local gate54165 passed on `f9ea1443`/tree `56e6a80b`:1906 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
 - #277: local gate40914 passed on `c04a6166`/tree `2fb3728d`:1911 native
