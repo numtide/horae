@@ -115,10 +115,15 @@ This order includes composition dependencies, not only runtime dependencies.
   with no review threads, and ready for review (47406). Nix631 is evaluating
   the correct master merge with exact tree8f1c131f; watcher35694 is live.
   GitHub has no run yet: ci.yml filters master and uses the default PR event
-  types, excluding base edits and ready-for-review. After631 terminates,
-  republish the same tree with a refreshed follow-up commit to emit synchronize
-  on the correct base, then require current-head CI and protected queue
-  acceptance. Do not retry obsolete630 or move to277 before actual merge.
+  types, excluding base edits and ready-for-review. To avoid serializing an
+  independent workflow behind Nix, refreshed only the follow-up commit and
+  published with exactdc4bb617 lease (push28034 passed). Current head is
+  `ca0a5e78777c43f2074a093980fe5fd5c11252d9`, with the exact same8f1c131f
+  tree; recovery ref `refs/backup/pr276-before-master-ci-trigger-20261010`
+  retainsdc4bb617. GitHub38034406552 is running onca0a5e78, and Nix's new-head
+  check links the already-running631 build. No code changes or repeated local
+  gates. Require current-head CI and protected queue acceptance; do not retry
+  obsolete630 or move to277 before actual merge.
 - #277: local gate40914 passed on `c04a6166`/tree `2fb3728d`:1911 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
 - #278: local gate1753 passed on `7e9ad332`/tree `9834e623`:1914 native
