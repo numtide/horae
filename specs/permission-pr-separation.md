@@ -2,9 +2,9 @@
 
 ## Delivery checkpoint — 2026-10-10
 
-Latest verified merge: #273, commit `aadabd4cdff43f634e91b6cb788c0d6d0cdbc4ad`.
-Eight functional deliveries remain, in the prepared integration order:
-#275 → #276 → #277 → #278 → #260 → #279 → #280 → #281.
+Latest verified merge: #275, commit `6b5691c1b33e4162a0fb01a308dbf793ddffdabf`.
+Seven functional deliveries remain, in the prepared integration order:
+#276 → #277 → #278 → #260 → #279 → #280 → #281.
 This order includes composition dependencies, not only runtime dependencies.
 
 - #272: merged after local, both-Linux Nix621, required GitHub and protected
@@ -53,13 +53,13 @@ This order includes composition dependencies, not only runtime dependencies.
   Hestia main/post scripts and run annotations yielded no cause attribution.
   Published only after Nix626 terminated, with exact old-head lease; push87482
   exited0. The body records all scoped checks and limitations. All current-head
-  and protected merge-group gates are now complete. Next: reconcile only #275
-  onto actual273, inheriting all three CI follow-ups. No mass rebase.
+  and protected merge-group gates are complete. #275 subsequently inherited
+  all three CI follow-ups through its actual273 reconciliation. No mass rebase.
   Previous Nix625 ended11 passed/5 failed/6 skipped; GitHub38020202145 attempt1
   lost its runner and attempt2 obscured an original browser error with a failed
   diagnostic snapshot. No retry of those superseded runs remains scheduled.
   Earlier Nix624/old-head evidence and retry limits remain recorded below.
-- #275: local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
+- #275: merged at07:10:01UTC. Local gate76491 passed on `b036e673`/tree `bf856e8e`:1892 native tests,
   all31 browser suites, SQLx, Clippy and the server/WASM package.
   Reconciled only this branch onto actual273 `aadabd4c`, preserving backup
   `refs/backup/pr275-before-actual-task-reader-merge-20261010`. New head
@@ -73,13 +73,18 @@ This order includes composition dependencies, not only runtime dependencies.
   disposable database. Format12722 passed652 files unchanged; whitespace passed.
   No fresh full native gate is claimed or needed for unchanged runtime sources.
   Push42053 used the exact remote83b5495c lease and exited0; head and clean tree
-  reverified. Body updated. GitHub38031296941/watch10082 started at06:32UTC
-  and remains active; Format passed47s. Nix629 completed successfully at
+  reverified. Body updated. GitHub38031296941 passed Flake Check35m19s and
+  Format47s; watcher10082 is terminal0. Nix629 completed successfully at
   06:51:20UTC on exact9de51399/tree77d1c241:16 passed, six skipped-local,
   zero failed, both Linux architectures. Watch24213 is terminal0. A fresh
   complete review-thread query found no threads on this head. Protected
-  auto-merge enabled at06:52:46UTC, read-back OPEN/BLOCKED; not merged yet.
-  Freeze this head while GitHub and the protected merge-group gates remain.
+  auto-merge enabled at06:52:46UTC, initially read back OPEN/BLOCKED.
+  All current-head gates are accepted. At07:08UTC #275 is first in the
+  protected queue, entry MQE_lQDOTRPZ888AAAABHJoTzc4AA_LZzgMyEYY, initially
+  QUEUED with no headCommit yet. Merge-group38033404803 subsequently passed
+  Format40s and Flake Check54s on `6b5691c1b33e4162a0fb01a308dbf793ddffdabf`.
+  GitHub confirms MERGED at07:10:01UTC; API and fetch42133 prove actual master
+  has the accepted tree `77d1c2419ea607a51735f44c1270783551040d4e`.
   Complete review-thread query returned no threads and MERGEABLE on9de51399.
   Marked #275 ready at06:34UTC; its initial read-back was OPEN/non-draft with
   auto-merge null, before the accepted Nix run and subsequent request above.
@@ -89,6 +94,9 @@ This order includes composition dependencies, not only runtime dependencies.
   #275. No dependency upgrade, new PR or exploitability claim was made here.
 - #276: local gate54165 passed on `f9ea1443`/tree `56e6a80b`:1906 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
+  Worktree is clean atf9ea1443, parent remains old275 b036e673. Actual275 is
+  fetched, but no rebase or push has happened yet. Next: backup and reconcile
+  only #276 onto6b5691c1, preserving its owned patch and inherited CI fixes.
 - #277: local gate40914 passed on `c04a6166`/tree `2fb3728d`:1911 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
 - #278: local gate1753 passed on `7e9ad332`/tree `9834e623`:1914 native
