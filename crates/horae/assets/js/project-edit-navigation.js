@@ -20,14 +20,16 @@
     const invoice = document.querySelector('[data-editor-kind="invoice"]');
     const client = document.querySelector('[data-editor-kind="client"]');
     const timesheet = document.querySelector('[data-editor-kind="timesheet"]');
+    const permissions = document.querySelector('[data-editor-kind="permissions"]');
     if (state() === 'pending') {
       alert(client ? 'A client save is pending. Wait for it to finish before leaving.'
+        : permissions ? 'A permission request is unresolved. Wait for it to finish, or retry the same request before leaving.'
         : invoice ? 'An invoice request is unresolved. Wait for it to finish, or recover the request before leaving.'
         : timesheet ? 'A timesheet change is still saving. Wait for it to finish before leaving.'
         : 'A project save is unresolved. Wait for it to finish, or retry the request before leaving.');
       return false;
     }
-    return state() !== 'dirty' || confirm(client ? 'Discard unsaved client changes?' : invoice ? 'Discard unsaved invoice changes?' : timesheet ? 'Discard unsaved timesheet changes?' : 'Discard unsaved project changes?');
+    return state() !== 'dirty' || confirm(client ? 'Discard unsaved client changes?' : permissions ? 'Discard unsaved permission changes?' : invoice ? 'Discard unsaved invoice changes?' : timesheet ? 'Discard unsaved timesheet changes?' : 'Discard unsaved project changes?');
   };
 
   history.pushState = (data, title, url) => {

@@ -43,7 +43,7 @@ function setup(kind, state, legacy = false) {
   };
 }
 
-for (const [kind, noun] of [['client', 'client'], ['invoice', 'invoice'], ['project', 'project'], ['timesheet', 'timesheet']]) {
+for (const [kind, noun] of [['permissions', 'permission'], ['client', 'client'], ['invoice', 'invoice'], ['project', 'project'], ['timesheet', 'timesheet']]) {
   test(`${kind}: pending navigation preserves history until the request is resolved`, () => {
     const ui = setup(kind, 'pending');
     ui.history.pushState([5, 6], '', '/away');
@@ -78,14 +78,16 @@ for (const [kind, noun] of [['client', 'client'], ['invoice', 'invoice'], ['proj
   });
 }
 
-test('scroll-only replacements preserve Dioxus coordinates without prompting', () => {
-  const ui = setup('timesheet', 'pending');
-  ui.history.replaceState([77, 88], '');
-  assert.equal(ui.history.state[0], 77);
-  assert.equal(ui.history.state[1], 88);
-  assert.equal(ui.history.state[2].horaePosition, 0);
-  assert.equal(ui.alerts.length, 0);
-});
+for (const kind of ['permissions', 'timesheet']) {
+  test(`${kind}: scroll-only replacements preserve Dioxus coordinates without prompting`, () => {
+    const ui = setup(kind, 'pending');
+    ui.history.replaceState([77, 88], '');
+    assert.equal(ui.history.state[0], 77);
+    assert.equal(ui.history.state[1], 88);
+    assert.equal(ui.history.state[2].horaePosition, 0);
+    assert.equal(ui.alerts.length, 0);
+  });
+}
 
 test('the legacy project opt-in and explicit release keep working', () => {
   const ui = setup('project', 'pending', true);
