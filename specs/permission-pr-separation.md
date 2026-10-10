@@ -94,9 +94,31 @@ This order includes composition dependencies, not only runtime dependencies.
   #275. No dependency upgrade, new PR or exploitability claim was made here.
 - #276: local gate54165 passed on `f9ea1443`/tree `56e6a80b`:1906 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
-  Worktree is clean atf9ea1443, parent remains old275 b036e673. Actual275 is
-  fetched, but no rebase or push has happened yet. Next: backup and reconcile
-  only #276 onto6b5691c1, preserving its owned patch and inherited CI fixes.
+  Reconciled onto actual275 `6b5691c1`, preserving recovery ref
+  `refs/backup/pr276-before-actual-task-write-merge-20261010`. Owned range-diff
+  is equal at2ef2d3c6/tree781a7ed2; only eight inherited CI/browser paths differ
+  from baseline. Runtime, migrations, SQLx, dependencies and contracts remain
+  unchanged. Focused run73925 exposed a test race: the post-login reload
+  invalidated a tracking-task response before its body was read, producing
+  `Network.getResponseBody: No resource with given identifier found`.
+  Follow-up `dc4bb6178a604addd898f830b8f67dbff390a103`, tree
+  `8f1c131ff755815d842c90cf9fc0fc83c59e4523`, moves the response observer
+  before the login click and removes the redundant reload (one insertion,
+  two deletions). No assertion or application source changes. Focused41429
+  passed all seven affected browser suites against exact baseline binary
+  `q6089wjfrd1w58ddihks6wca080g2ws3` and a disposable database. Format83197
+  passed656 files unchanged; whitespace passed. No fresh full native run is
+  claimed. Exact-lease push19176 passed; GitHub confirmsdc4bb617. Nix630
+  failed before evaluation because the PR still targeted the old integration
+  branch `integration/task-lifecycle-prerequisites`, not actual master. No
+  tests ran in630. Retargeted the existing PR to master; it is now MERGEABLE,
+  with no review threads, and ready for review (47406). Nix631 is evaluating
+  the correct master merge with exact tree8f1c131f; watcher35694 is live.
+  GitHub has no run yet: ci.yml filters master and uses the default PR event
+  types, excluding base edits and ready-for-review. After631 terminates,
+  republish the same tree with a refreshed follow-up commit to emit synchronize
+  on the correct base, then require current-head CI and protected queue
+  acceptance. Do not retry obsolete630 or move to277 before actual merge.
 - #277: local gate40914 passed on `c04a6166`/tree `2fb3728d`:1911 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
 - #278: local gate1753 passed on `7e9ad332`/tree `9834e623`:1914 native
