@@ -294,10 +294,14 @@ This order includes composition dependencies, not only runtime dependencies.
   exactb452b602-lease push86685, which passed. Complete review query on3798df93
   found no threads and MERGEABLE. Marked ready and enabled protected auto-merge
   at10:58:17UTC (3513 passed), exact head guarded, no bypass. Read-back is
-  OPEN/non-draft/BLOCKED with autoMergeRequest, not merged. GitHub38046726113
-  and Nix641 are live, watched by86949 and61427 respectively. Next: collect
-  those existing checks and protected queue acceptance, verify actual merge,
-  then reconcile only #281. No change to #212 or other prepared branches.
+  OPEN/non-draft/BLOCKED with autoMergeRequest, not merged. Nix641 completed
+  successfully at11:16:43UTC on exact3798df93/tree0585a521: all16 executed
+  checks passed on both Linux architectures, six skipped-local, zero failures
+  or retries; watcher61427 exited0. A fresh complete review query found no
+  threads. GitHub38046726113 remains live, watched by86949; Format passed46s
+  and Flake Check is still running. Next: collect that existing run and
+  protected queue acceptance, verify actual merge, then reconcile only #281.
+  No change to #212 or other prepared branches.
 - #281: full local gate38688 passed on `f4e6c831`/tree `e5813d93`:2006 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM package. Current
   local gate accepted; protected remote gates remain before any merge.
