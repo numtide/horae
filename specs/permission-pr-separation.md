@@ -2,9 +2,9 @@
 
 ## Delivery checkpoint — 2026-10-10
 
-Latest verified merge: #277, commit `909b8a7f252ba37af6687dd48a97a6438214f0c5`.
-Five functional deliveries remain, in the prepared integration order:
-#278 → #260 → #279 → #280 → #281.
+Latest verified merge: #278, commit `9b2ef230391cc978a89d34753bc618a5cda1efcc`.
+Four functional deliveries remain, in the prepared integration order:
+#260 → #279 → #280 → #281.
 This order includes composition dependencies, not only runtime dependencies.
 
 - #272: merged after local, both-Linux Nix621, required GitHub and protected
@@ -178,7 +178,7 @@ This order includes composition dependencies, not only runtime dependencies.
   Check55s and Format44s; watcher76172 exited0. GitHub confirms MERGED at
   08:35:51UTC; master API confirms the exact commit and accepted tree. No
   retries, bypasses, additional fixes or new PRs were needed for this delivery.
-- #278: local gate1753 passed on `7e9ad332`/tree `9834e623`:1914 native
+- #278: merged at09:22:12UTC. Local gate1753 passed on `7e9ad332`/tree `9834e623`:1914 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
   Reconciled only this branch onto actual277 909b8a7f; recovery ref
   `refs/backup/pr278-before-actual-task-link-merge-20261010` retains7e9ad332.
@@ -200,12 +200,22 @@ This order includes composition dependencies, not only runtime dependencies.
   Nix636 completed successfully at09:04:49UTC on exact1c5fae0c/treeb7c7e06e:
   16 checks passed on both Linux architectures, six skipped-local, zero
   failures or retries; watcher11070 exited0. A fresh complete review query
-  returned no threads. GitHub38038703733/watch59056 remains active: Format
-  passed47s, Flake Check is executing. Continue59056 and require current
-  GitHub plus protected merge-group acceptance before moving to260.
+  returned no threads. GitHub38038703733 passed Format47s and Flake Check
+  39m31s at09:20:07UTC; watcher59056 exited0. All four required current-head
+  checks report SUCCESS. Fresh complete review query still found no threads.
+  Protected queue entry MQE_lQDOTRPZ888AAAABHKRG9c4AA_LZzgMyQVc was first,
+  with commit `9b2ef230391cc978a89d34753bc618a5cda1efcc`, exact accepted
+  treeb7c7e06e and parent actual277. Merge-group38041070682 passed Flake
+  Check53s and Format37s. GitHub confirms MERGED at09:22:12UTC; master API
+  confirms that exact commit/tree. No retries, bypasses, additional fixes or
+  new PRs were needed for this delivery.
 - #260: local gate89507 passed on `9762f776`/tree `6878cf56`:1987 native
   tests,33 browser suites, SQLx, Clippy and the server/WASM package. Bounded
   rendered review inspected ten captures without a blocking regression.
+  Next delivery: reconcile only this branch onto actual278 9b2ef230, preserving
+  its owned patch and inherited CI/browser fixes. Verify and retarget the
+  master base before publishing. No rebase yet; the accepted visual review
+  need not be repeated when runtime preservation is established.
 - #279: baseline gate32157 passed on `75066620`/tree `8ad6aae0`:2000 native
   tests,34 browser suites, SQLx, Clippy and the server/WASM build. The mobile
   word-wrapping regression failed on the baseline; fix770b7a91/treeead3875f
