@@ -16,10 +16,15 @@ This order includes composition dependencies, not only runtime dependencies.
   Full browser20381 passed after the first follow-up; focused91903 passed all
   five suites affected by the latest change. Delayed-read and diagnostic-failure
   reproductions failed before and passed after their scoped fixes.
-  GitHub38025269436 and Nix626 are the current remote runs. Watchers59508 and
-  17951 are live. Format passed in43s; Flake Check is running and Nix626 pending.
-  At05:10UTC, the Nix API reports queue position7 behind llm-agents.nix7186
-  (advanced from11 through9 and8),
+  GitHub38025269436 and Nix626 are the current remote runs. GitHub attempt1
+  ended at05:16UTC with exit143 after25m27s, without a failing assertion or
+  compiler diagnostic. Its log and check annotations do not establish the
+  termination cause; resource exhaustion is not proven. Exactly one failed-job
+  retry was requested and attempt2/job114139976533 started at05:18:11UTC on
+  unchanged `801fcaa4`. Watchers62788 and17951 are live; old59508 is terminal.
+  Format remains passed; Flake Check attempt2 is running and Nix626 pending.
+  At05:16UTC, the Nix API reports queue position5 behind llm-agents.nix7188
+  (advanced from11 through9,8,7 and6),
   with no error and no start timestamp; this is queued work, not a stopped job.
   Protected current-head and merge-group acceptance remain.
   Previous Nix625 ended11 passed/5 failed/6 skipped; GitHub38020202145 attempt1
