@@ -197,10 +197,12 @@ This order includes composition dependencies, not only runtime dependencies.
   with master base and MERGEABLE. Marked ready and enabled protected auto-merge
   at08:41:32UTC (89185 passed), using an exact-head guard and no bypass.
   Read-back is OPEN/non-draft/BLOCKED with autoMergeRequest, not merged.
-  GitHub38038703733/watch59056 and Nix636/watch11070 are active. Nix confirms
-  exact1c5fae0c/treeb7c7e06e; evaluation passed, builds running without failures.
-  Continue these handles; require current remote checks and protected merge
-  group acceptance before moving to260.
+  Nix636 completed successfully at09:04:49UTC on exact1c5fae0c/treeb7c7e06e:
+  16 checks passed on both Linux architectures, six skipped-local, zero
+  failures or retries; watcher11070 exited0. A fresh complete review query
+  returned no threads. GitHub38038703733/watch59056 remains active: Format
+  passed47s, Flake Check is executing. Continue59056 and require current
+  GitHub plus protected merge-group acceptance before moving to260.
 - #260: local gate89507 passed on `9762f776`/tree `6878cf56`:1987 native
   tests,33 browser suites, SQLx, Clippy and the server/WASM package. Bounded
   rendered review inspected ten captures without a blocking regression.
