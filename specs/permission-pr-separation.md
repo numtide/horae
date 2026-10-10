@@ -7071,6 +7071,21 @@ existing remote checks remain live, with no replacement head or retry.
 Next: collect #273 remote acceptance and #277's local result; publish #275
 only after the actual #273 merge and complete-tree reconciliation.
 
+### Atomic task creation reconciled without source changes — 2026-10-10
+
+#273 remains draft atb02726b3/master with no reviews or review threads;
+pagination confirms no additional threads. Current-head GitHub38013878619
+and Nix624 remain live. This is not merge acceptance or a reason to retry.
+#277 local gate40914 remains live and its worktree is untouched.
+
+Prepared only the next independent worktree #278, retaining9854769a at
+refs/backup/pr278-before-current-task-link-head-20261010. Rebased its two
+owned commits onto current #277 c04a6166 with rebase.updateRefs=false.
+New head7e9ad332278b82a856a8e21c0594bde1e5e6c2e7 has two equal range-diff
+entries and unchanged complete tree9834e6231f0149aded521ebbfe18c1b114b205c2.
+No source edits, push or second local build. Next: collect the existing
+#273/#277 gates; run #278's local gate only after #277 terminates successfully.
+
 ## Objective and limits
 
 Split the existing work in #212 and #217 into reviewable deliveries, preserving
