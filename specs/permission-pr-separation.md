@@ -130,10 +130,18 @@ This order includes composition dependencies, not only runtime dependencies.
   nixbot/nix-build and nixbot/nix-eval plus the ALLGREEN/SQUASH queue; no
   bypass. Full review-thread query returned none, with master base and
   MERGEABLE/non-draft state. Read-back is OPEN/BLOCKED with autoMergeRequest
-  present, not merged. GitHub38034406552/watch67045 remains live: Format
-  passed35s, Flake Check is executing. Nix631/watch35694 remains live on
-  exact8f1c131f:11 succeeded, five building, six skipped-local, zero failures
-  at last observation. Continue these handles; do not restart live runs.
+  present, not merged. GitHub38034406552 passed: Format35s, Flake Check20m29s;
+  watcher67045 exited0. Nix631/watch35694 remains live on exact8f1c131f:
+  15 succeeded, only checks.aarch64-linux.e2e building, six skipped-local,
+  zero failures at last observation. ARM native tests and browser have passed.
+  The remaining VM log is polling the recovery fixture's advisory-lock waiter;
+  no failure or retry is recorded. Continue35694; do not restart the live run.
+  Read-only successor preflight confirms old bases:277 and280 target
+  feat/scoped-task-lifecycle;278 targets feat/scoped-task-links;260 targets
+  integration/permission-readers-editor-check;279 targets
+  integration/task-catalog-prerequisites;281 already targets master. Retarget
+  each immediate successor to master before publishing its reconciled head,
+  and only after the predecessor actually merges. No successor was mutated.
 - #277: local gate40914 passed on `c04a6166`/tree `2fb3728d`:1911 native
   tests,31 browser suites, SQLx, Clippy and the server/WASM package.
 - #278: local gate1753 passed on `7e9ad332`/tree `9834e623`:1914 native
