@@ -115,7 +115,8 @@ assert.equal(sql(`SELECT count(*) FROM time_entries WHERE user_id='${actor.id}' 
     console.log('PASS: catalog/rate grants never enable unlinked or archived tasks for a new timer; valid start/stop persists');
     console.log('PASS: rail popovers accept clicks and release the resize handle after closing');
   } catch (error) {
-    console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot() });
+    console.error(error);
+    console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot({ timeout: 3000 }).catch(failure => failure.message) });
     throw error;
   } finally {
     await browser.close();

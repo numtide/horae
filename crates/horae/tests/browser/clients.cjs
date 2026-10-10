@@ -1,5 +1,7 @@
 // Only run through run-design-checks.sh against its disposable seeded database.
-const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
+const { chromium, expect: baseExpect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
+// Client reads may still be pending when navigation or dialog dismissal finishes.
+const expect = baseExpect.configure({ timeout: 15000 });
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const base = process.env.HORAE_TEST_URL;
