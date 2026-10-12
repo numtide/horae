@@ -25,6 +25,16 @@ fn ClientDetailContent(id: Uuid) -> Element {
         super::bind(binding, (view.requester, view.canonical_permissions))?;
         Ok::<_, ServerFnError>(view)
     });
+    let mut refocus_edit = use_signal(|| false);
+    use_effect(move || {
+        if details.state()() != UseResourceState::Ready {
+            return;
+        }
+        // One-shot: a failed, denied or rebound reload consumes it without focusing.
+        if refocus_edit.take() && matches!(&*details.peek(), Some(Ok(view)) if view.can_manage) {
+            super::restore_opener_focus("client-edit", "client-back");
+        }
+    });
     let ready = details.state()() == UseResourceState::Ready;
     let data = details.read();
     // Legacy-only until client writes and invoices use canonical permissions;
@@ -62,7 +72,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
                                 Link { to: Route::NewProjectForClient { client: id.to_string() }, class: "btn btn-secondary", "New project" }
                                 Link { to: Route::NewInvoiceForClient { client: id.to_string() }, class: "btn btn-primary", "New invoice" }
                             }
-                            button { r#type: "button", class: "btn btn-secondary", onclick: move |_| show_editor.set(true), "Edit client" }
+                            button { id: "client-edit", r#type: "button", class: "btn btn-secondary", onclick: move |_| show_editor.set(true), "Edit client" }
                         }
                     }
                 }
@@ -105,7 +115,11 @@ fn ClientDetailContent(id: Uuid) -> Element {
             }
             super::form::ClientEditor { open: show_editor() && can_manage, client_id: Some(id), focus_fallback: "client-back",
                 on_dismiss: move |_| show_editor.set(false),
-                on_saved: move |_| { show_editor.set(false); details.restart(); },
+                on_saved: move |_| {
+                    refocus_edit.set(true);
+                    show_editor.set(false);
+                    details.restart();
+                },
             }
         }
     }

@@ -36,6 +36,22 @@ fn bind(mut binding: Signal<Option<Binding>>, current: Binding) -> Result<(), Se
     Ok(())
 }
 
+/// A save reloads the page, unmounting the editor's opener before the dialog
+/// can return focus to it. Focus the rebuilt opener, unless the user has
+/// already moved focus beyond the dialog's fallback during the reload.
+fn restore_opener_focus(opener: &str, fallback: &str) {
+    let opener = serde_json::json!(opener);
+    let fallback = serde_json::json!(fallback);
+    document::eval(&format!(
+        "requestAnimationFrame(() => {{
+            const active = document.activeElement;
+            if (!active || active === document.body || active.id === {fallback}) {{
+                document.getElementById({opener})?.focus();
+            }}
+        }});"
+    ));
+}
+
 #[component]
 pub fn ClientList() -> Element {
     // Management view: include inactive clients so managers can reactivate them.
@@ -47,6 +63,8 @@ pub fn ClientList() -> Element {
     // `Some(id)` while editing an existing client, `None` while creating.
     let mut editing_id = use_signal(|| None::<Uuid>);
     let action_error = use_signal(|| None::<String>);
+    // The opener to refocus after a save's reload; see `restore_opener_focus`.
+    let mut refocus = use_signal(|| None::<String>);
 
     let binding = use_signal(|| None::<Binding>);
     let mut clients = use_resource(move || async move {
@@ -62,6 +80,17 @@ pub fn ClientList() -> Element {
         Ok::<_, ServerFnError>(overview)
     });
     let me = use_resource(|| async move { server_fns::get_me().await });
+    use_effect(move || {
+        if clients.state()() != UseResourceState::Ready {
+            return;
+        }
+        // One-shot: a failed, denied or rebound reload consumes it without focusing.
+        if let Some(opener) = refocus.take() {
+            if matches!(&*clients.peek(), Some(Ok(overview)) if overview.can_manage) {
+                restore_opener_focus(&opener, "clients-heading");
+            }
+        }
+    });
 
     let ready = clients.state()() == UseResourceState::Ready;
     let data = clients.read();
@@ -166,7 +195,14 @@ pub fn ClientList() -> Element {
 
             form::ClientEditor { open: show_form() && is_manager, client_id: editing_id(), focus_fallback: "clients-heading",
                 on_dismiss: move |_| reset_form(),
-                on_saved: move |_| { reset_form(); clients.restart(); },
+                on_saved: move |_| {
+                    refocus.set(Some(match *editing_id.peek() {
+                        Some(id) => format!("client-edit-{id}"),
+                        None => "clients-new".to_owned(),
+                    }));
+                    reset_form();
+                    clients.restart();
+                },
             }
 
             if let Some(message) = action_error() {
