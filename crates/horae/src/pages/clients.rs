@@ -53,7 +53,7 @@ pub fn ClientList() -> Element {
         // An editor opened under the previous authority must not survive a refresh.
         editing_id.set(None);
         show_form.set(false);
-        let expected = binding.peek().map(|(requester, _)| requester);
+        let expected = binding.peek().as_ref().map(|(requester, _)| *requester);
         let overview = server_fns::client_overview(expected).await?;
         bind(
             binding,

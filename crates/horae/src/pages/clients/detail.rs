@@ -20,7 +20,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
     let mut details = use_resource(move || async move {
         // An editor opened under the previous authority must not survive a refresh.
         show_editor.set(false);
-        let expected = binding.peek().map(|(requester, _)| requester);
+        let expected = binding.peek().as_ref().map(|(requester, _)| *requester);
         let view = server_fns::client_detail_view(id.to_string(), expected).await?;
         super::bind(binding, (view.requester, view.canonical_permissions))?;
         Ok::<_, ServerFnError>(view)
