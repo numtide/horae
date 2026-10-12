@@ -52,6 +52,13 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await page.getByRole('searchbox', { name: 'Search clients by name' }).fill(name);
     const link = page.getByRole('link', { name, exact: true });
     await expect(link).toHaveCount(1);
+    const rowEdit = page.getByRole('row').filter({ has: link }).getByRole('button', { name: 'Edit', exact: true });
+    await rowEdit.click();
+    await expect(field('Tax ID (optional)')).toHaveValue('TEST-VAT');
+    await field('Tax ID (optional)').fill('TEST-VAT-2');
+    await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(rowEdit).toBeFocused();
     const detailPath = await link.getAttribute('href');
     assert.match(detailPath, /^\/clients\/[0-9a-f-]+$/);
     await page.reload();
@@ -76,6 +83,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await dialog.getByRole('button', { name: 'Use this rate in USD', exact: true }).click();
     await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(dialog).toBeHidden();
+    await expect(edit).toBeFocused();
     await expect(page.getByRole('region', { name: 'Billing', exact: true })).toContainText('USD 0.00 / h');
     await page.reload();
     await expect(page.getByRole('region', { name: 'Billing', exact: true })).toContainText('USD 0.00 / h');
