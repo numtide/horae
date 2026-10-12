@@ -37,7 +37,11 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     }
 
     let page = api
-        .json("client_overview", json!({"expected_requester": null}), &cookie)
+        .json(
+            "client_overview",
+            json!({"expected_requester": null}),
+            &cookie,
+        )
         .await;
     let requester = json!({"org_id": ids.org_id, "user_id": ids.user_id});
     assert_eq!(page["requester"], requester);
@@ -78,9 +82,14 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(withheld["can_read"], false);
     assert_eq!(withheld["clients"], json!([]));
     assert_eq!(
-        api.call("client_detail_view", unbound_detail, Some(&restricted_cookie), false)
-            .await
-            .status(),
+        api.call(
+            "client_detail_view",
+            unbound_detail,
+            Some(&restricted_cookie),
+            false
+        )
+        .await
+        .status(),
         StatusCode::NOT_FOUND
     );
 }
