@@ -38,7 +38,11 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
   const loadList = async () => {
     const response = page.waitForResponse(r => r.url().includes('/api/client_overview'));
     await page.goto(`${base}/clients`);
-    return (await response).json();
+    return success(await response);
+  };
+  const success = async response => {
+    assert.equal(response.status(), 200, `${response.url()}: ${await response.text()}`);
+    return response.json();
   };
   const loadDetail = async client => {
     const response = page.waitForResponse(r => r.url().includes('/api/client_detail_view'));
@@ -140,7 +144,7 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
     await expect(page.getByRole('link', { name: 'Import', exact: true })).toHaveCount(0);
     await capture('read-only-list');
     for (const client of [unset, zero]) {
-      const view = await (await loadDetail(client)).json();
+      const view = await success(await loadDetail(client));
       assert.deepEqual([view.canonical_permissions, view.can_manage, Object.hasOwn(view.details, 'billing')], [true, false, false]);
       await expect(billing).toBeVisible();
       await expect(billing).not.toContainText('Default rate');
@@ -151,13 +155,13 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
     console.log('PASS: ClientReadAll reads the catalog without client management or default rates');
 
     setGrants([...catalog, 'project_read_managed', 'billable_rate_read_managed']);
-    const managed = await (await loadDetail(unset)).json();
+    const managed = await success(await loadDetail(unset));
     assert.equal(Object.hasOwn(managed.details, 'billing'), false);
     await expect(billing).not.toContainText('Default rate');
 
-    setGrants([...catalog, 'billable_rate_read_all']);
+    setGrants([...catalog, 'billable_rate_read_managed', 'billable_rate_read_all']);
     for (const [client, rate, text] of [[unset, null, 'Not set'], [zero, 0, 'EUR 0.00 / h']]) {
-      const view = await (await loadDetail(client)).json();
+      const view = await success(await loadDetail(client));
       assert.deepEqual(view.details.billing, { default_rate_cents: rate });
       await expect(billing.locator('dt:text-is("Default rate") + dd')).toHaveText(text);
       await expect(page.getByRole('button', { name: 'Edit client', exact: true })).toHaveCount(0);
@@ -165,7 +169,8 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
     await capture('global-rate-detail');
     console.log('PASS: only global billable-rate read reveals the client default, keeping unset distinct from zero');
 
-    setGrants([...floor, 'project_read_all', 'invoice_read_all', 'billable_rate_read_all', 'report_profitability_read']);
+    setGrants([...floor, 'project_read_managed', 'project_read_all', 'invoice_read_managed', 'invoice_read_all',
+      'billable_rate_read_managed', 'billable_rate_read_all', 'report_profitability_read']);
     overview = await loadList();
     assert.deepEqual([overview.can_read, overview.can_manage, overview.clients], [false, false, []]);
     await expect(page.getByRole('heading', { name: 'Client access is unavailable', exact: true })).toBeVisible();
