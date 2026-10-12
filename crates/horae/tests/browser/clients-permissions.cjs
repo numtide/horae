@@ -38,7 +38,7 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
   const loadList = async () => {
     const response = page.waitForResponse(r => r.url().includes('/api/client_overview'));
     await page.goto(`${base}/clients`);
-    return success(await response);
+    return response;
   };
   const success = async response => {
     assert.equal(response.status(), 200, `${response.url()}: ${await response.text()}`);
@@ -133,7 +133,7 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
 
     // Policy one: catalog reads without management, even for a legacy Administrator.
     setPolicy(1);
-    let overview = await loadList();
+    let overview = await success(await loadList());
     assert.deepEqual([overview.canonical_permissions, overview.can_read, overview.can_manage], [true, true, false]);
     assert.ok([unset, zero].every(client => overview.clients.some(row => row.client.id === client)));
     await expect(page.getByRole('link', { name: 'Permission zero client', exact: true })).toBeVisible();
@@ -171,7 +171,7 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
 
     setGrants([...floor, 'project_read_managed', 'project_read_all', 'invoice_read_managed', 'invoice_read_all',
       'billable_rate_read_managed', 'billable_rate_read_all', 'report_profitability_read']);
-    overview = await loadList();
+    overview = await success(await loadList());
     assert.deepEqual([overview.can_read, overview.can_manage, overview.clients], [false, false, []]);
     await expect(page.getByRole('heading', { name: 'Client access is unavailable', exact: true })).toBeVisible();
     await expect(page.getByText('No clients yet', { exact: true })).toHaveCount(0);
@@ -186,7 +186,7 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
 
     setGrants(catalog);
     setPolicy(2);
-    await loadList();
+    assert.equal((await loadList()).status(), 403);
     await expect(page.getByRole('alert')).toContainText('Could not load clients');
     await expect(page.getByRole('link', { name: 'Permission zero client', exact: true })).toHaveCount(0);
     assert.deepEqual(errors, []);
