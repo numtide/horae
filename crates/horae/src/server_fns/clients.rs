@@ -5,9 +5,10 @@ use super::*;
 use crate::models::client::ClientBilling;
 #[cfg(feature = "server")]
 use crate::models::client::ClientRateChange;
+#[cfg(feature = "server")]
+use crate::models::client::ClientSummary;
 use crate::models::client::{
     ClientDetailView, ClientDetails, ClientOverview, ClientProfile, ClientProfileEdit,
-    ClientSummary,
 };
 use crate::models::permission_editor::PermissionRequester;
 
