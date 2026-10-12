@@ -25,6 +25,7 @@ use super::*;
 
 mod approval_labels;
 mod cli;
+mod client_page;
 #[path = "../time_entries/commands/tests/http.rs"]
 mod delegated_time;
 mod exports;
@@ -391,6 +392,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     project_people::check(&pool, &api).await;
     project_reads::check(&pool, &api).await;
     task_reads::check(&pool, &api).await;
+    client_page::check(&pool, &api).await;
     task_writes::check(&pool, &api).await;
     task_edits::check(&pool, &api).await;
     task_activity::check(&pool, &api).await;

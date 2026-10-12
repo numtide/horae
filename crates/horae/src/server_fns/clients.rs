@@ -5,7 +5,11 @@ use super::*;
 use crate::models::client::ClientBilling;
 #[cfg(feature = "server")]
 use crate::models::client::ClientRateChange;
-use crate::models::client::{ClientDetails, ClientProfile, ClientProfileEdit, ClientSummary};
+use crate::models::client::{
+    ClientDetailView, ClientDetails, ClientOverview, ClientProfile, ClientProfileEdit,
+    ClientSummary,
+};
+use crate::models::permission_editor::PermissionRequester;
 
 #[server]
 pub async fn create_client_profile(
@@ -226,18 +230,71 @@ async fn client_details_for_viewer<'e>(
     viewer_id: uuid::Uuid,
     client_id: uuid::Uuid,
 ) -> Result<ClientDetails, ServerFnError> {
+    client_details_in_scope(db, org_id, viewer_id, client_id, ClientReadScope::LEGACY).await
+}
+
+/// Current grants for the canonical Clients readers; `legacy` keeps policy zero.
+#[cfg(feature = "server")]
+#[derive(Clone, Copy)]
+struct ClientReadScope {
+    legacy: bool,
+    catalog: bool,
+    rates: bool,
+    projects_all: bool,
+    projects_managed: bool,
+}
+
+#[cfg(feature = "server")]
+impl ClientReadScope {
+    const LEGACY: Self = Self {
+        legacy: true,
+        catalog: false,
+        rates: false,
+        projects_all: false,
+        projects_managed: false,
+    };
+
+    fn current(access: &ProjectReadAccess<'_>) -> Self {
+        use horae_core::permissions::catalog::Permission;
+        Self {
+            legacy: access.legacy(),
+            catalog: access.has(Permission::ClientReadAll),
+            // FR-035: the client default is a global rate; managed grants never apply.
+            rates: access.has(Permission::BillableRateReadAll),
+            projects_all: access.has(Permission::ProjectReadAll),
+            projects_managed: access.has(Permission::ProjectReadManaged),
+        }
+    }
+
+    fn can_read(self) -> bool {
+        self.legacy || self.catalog
+    }
+}
+
+#[cfg(feature = "server")]
+async fn client_details_in_scope<'e>(
+    db: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+    client_id: uuid::Uuid,
+    scope: ClientReadScope,
+) -> Result<ClientDetails, ServerFnError> {
     let row = sqlx::query!(
         r#"SELECT c.id, c.org_id, c.name, c.currency, c.address, c.tax_id, c.active,
                   c.created_at as "created_at: chrono::DateTime<chrono::Utc>",
-                  u.org_role IN ('admin', 'manager') as "can_view_billing!",
-                  CASE WHEN u.org_role IN ('admin', 'manager')
+                  (CASE WHEN $4 THEN u.org_role IN ('admin', 'manager') ELSE $5 AND $6 END)
+                    as "can_view_billing!",
+                  CASE WHEN (CASE WHEN $4 THEN u.org_role IN ('admin', 'manager') ELSE $5 AND $6 END)
                        THEN c.default_rate_cents END as default_rate_cents
            FROM clients c
            JOIN users u ON u.org_id = c.org_id AND u.id = $2 AND u.active
-           WHERE c.org_id = $1 AND c.id = $3"#,
+           WHERE c.org_id = $1 AND c.id = $3 AND ($4 OR $5)"#,
         org_id,
         viewer_id,
         client_id,
+        scope.legacy,
+        scope.catalog,
+        scope.rates,
     )
     .fetch_optional(db)
     .await
@@ -300,6 +357,20 @@ async fn client_summaries_for_viewer(
     org_id: uuid::Uuid,
     user_id: uuid::Uuid,
 ) -> Result<Vec<ClientSummary>, ServerFnError> {
+    client_summaries_in_scope(db, org_id, user_id, ClientReadScope::LEGACY).await
+}
+
+/// Policy one counts the projects `list_projects` would show the same viewer.
+#[cfg(feature = "server")]
+async fn client_summaries_in_scope<'e>(
+    db: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
+    org_id: uuid::Uuid,
+    user_id: uuid::Uuid,
+    scope: ClientReadScope,
+) -> Result<Vec<ClientSummary>, ServerFnError> {
+    if !scope.can_read() {
+        return Ok(Vec::new());
+    }
     let rows = sqlx::query!(
         r#"SELECT c.id, c.org_id, c.name, c.currency, c.address, c.tax_id, c.active,
                   c.created_at as "created_at: chrono::DateTime<chrono::Utc>",
@@ -310,16 +381,28 @@ async fn client_summaries_for_viewer(
            FROM clients c
            JOIN users u ON u.org_id = c.org_id AND u.id = $2 AND u.active
            LEFT JOIN projects p ON p.client_id = c.id AND p.org_id = c.org_id
-             AND EXISTS (
+             AND CASE WHEN $3 THEN EXISTS (
                SELECT 1 FROM project_read_access a
                WHERE a.project_id = p.id AND a.org_id = c.org_id
                  AND a.user_id = u.id AND a.can_view_progress
-             )
+             ) ELSE $4 OR ($5 AND EXISTS (
+               SELECT 1 FROM project_management_assignments m
+               WHERE m.org_id = p.org_id AND m.project_id = p.id AND m.manager_id = u.id
+             )) OR (EXISTS (
+               SELECT 1 FROM assignments member
+               WHERE member.project_id = p.id AND member.user_id = u.id
+             ) AND COALESCE((
+               SELECT s.report_visibility FROM project_settings s
+               WHERE s.project_id = p.id AND s.org_id = p.org_id
+             ), 'project_members') = 'project_members') END
            WHERE c.org_id = $1
            GROUP BY c.id
            ORDER BY c.name, c.id"#,
         org_id,
         user_id,
+        scope.legacy,
+        scope.projects_all,
+        scope.projects_managed,
     )
     .fetch_all(db)
     .await
@@ -343,6 +426,120 @@ async fn client_summaries_for_viewer(
             project_currencies: row.project_currencies,
         })
         .collect())
+}
+
+/// The canonical Clients page. Workflow pickers keep their legacy readers.
+#[server]
+pub async fn client_overview(
+    expected_requester: Option<PermissionRequester>,
+) -> Result<ClientOverview, ServerFnError> {
+    let viewer = require_user().await?;
+    let state = crate::state::global_state().await;
+    client_overview_for(&state.db, viewer.org_id, viewer.id, expected_requester).await
+}
+
+#[server]
+pub async fn client_detail_view(
+    client_id: String,
+    expected_requester: Option<PermissionRequester>,
+) -> Result<ClientDetailView, ServerFnError> {
+    let viewer = require_user().await?;
+    let client_id = client_id
+        .parse()
+        .map_err(|_| err(BAD_REQUEST, "Invalid client ID"))?;
+    let state = crate::state::global_state().await;
+    client_detail_view_for(
+        &state.db,
+        viewer.org_id,
+        viewer.id,
+        client_id,
+        expected_requester,
+    )
+    .await
+}
+
+#[cfg(feature = "server")]
+fn client_requester(
+    org_id: uuid::Uuid,
+    user_id: uuid::Uuid,
+    expected_requester: Option<PermissionRequester>,
+) -> Result<PermissionRequester, ServerFnError> {
+    let requester = PermissionRequester { org_id, user_id };
+    if expected_requester.is_some_and(|expected| expected != requester) {
+        return Err(forbidden("Client requester has changed"));
+    }
+    Ok(requester)
+}
+
+/// The client writes still check only the legacy role. Until they use current
+/// grants, policy one offers no client mutations rather than role-derived ones.
+#[cfg(feature = "server")]
+async fn offers_legacy_client_writes(
+    access: &mut ProjectReadAccess<'_>,
+    org_id: uuid::Uuid,
+    user_id: uuid::Uuid,
+) -> Result<bool, ServerFnError> {
+    if !access.legacy() {
+        return Ok(false);
+    }
+    let role = sqlx::query_scalar!(
+        r#"SELECT org_role as "org_role: OrgRole" FROM users WHERE org_id=$1 AND id=$2"#,
+        org_id,
+        user_id,
+    )
+    .fetch_one(&mut *access.tx)
+    .await
+    .map_err(server_err)?;
+    Ok(role.is_manager_or_above())
+}
+
+#[cfg(feature = "server")]
+async fn client_overview_for(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+    expected_requester: Option<PermissionRequester>,
+) -> Result<ClientOverview, ServerFnError> {
+    let requester = client_requester(org_id, viewer_id, expected_requester)?;
+    let mut access = ProjectReadAccess::begin(db, org_id, viewer_id)
+        .await?
+        .ok_or_else(|| forbidden("Current client access is required"))?;
+    let scope = ClientReadScope::current(&access);
+    let can_manage = offers_legacy_client_writes(&mut access, org_id, viewer_id).await?;
+    let clients = client_summaries_in_scope(&mut *access.tx, org_id, viewer_id, scope).await?;
+    access.tx.commit().await.map_err(server_err)?;
+    Ok(ClientOverview {
+        requester,
+        canonical_permissions: !scope.legacy,
+        can_read: scope.can_read(),
+        can_manage,
+        clients,
+    })
+}
+
+#[cfg(feature = "server")]
+async fn client_detail_view_for(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+    client_id: uuid::Uuid,
+    expected_requester: Option<PermissionRequester>,
+) -> Result<ClientDetailView, ServerFnError> {
+    let requester = client_requester(org_id, viewer_id, expected_requester)?;
+    let mut access = ProjectReadAccess::begin(db, org_id, viewer_id)
+        .await?
+        .ok_or_else(|| not_found("Client not found"))?;
+    let scope = ClientReadScope::current(&access);
+    let details =
+        client_details_in_scope(&mut *access.tx, org_id, viewer_id, client_id, scope).await?;
+    let can_manage = offers_legacy_client_writes(&mut access, org_id, viewer_id).await?;
+    access.tx.commit().await.map_err(server_err)?;
+    Ok(ClientDetailView {
+        requester,
+        canonical_permissions: !scope.legacy,
+        can_manage,
+        details,
+    })
 }
 
 /// Explicit client creation from the project form, including its default rate.
@@ -605,5 +802,7 @@ async fn lock_client(
     .ok_or_else(|| not_found("Client not found"))
 }
 
+#[cfg(all(test, feature = "server"))]
+mod page_tests;
 #[cfg(all(test, feature = "server"))]
 mod tests;

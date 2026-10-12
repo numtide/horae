@@ -83,3 +83,39 @@ project creation/reactivation and current client authority under the existing
 organization-first gate; preserve history and independent state constraints.
 Policy-zero compatibility and the reviewed activation delta remain explicit:
 the existing legacy operation changes only the client without this prerequisite.
+
+## Clients page read slice (partial T238)
+
+Scope: OP17 for the canonical Clients list and detail pages only; FR-006/008/
+010/018 and FR-035's read half. This is **not** catalog-wide enforcement and is
+not sufficient for policy activation. T238 and OP17/18 remain open.
+
+- `client_overview(expected_requester)` returns `ClientOverview` and
+  `client_detail_view(client_id, expected_requester)` returns
+  `ClientDetailView`. Both carry the bound `PermissionRequester`; a mismatched
+  expected requester fails with forbidden. Each holds `ProjectReadAccess`
+  through materialization.
+- Policy zero keeps the legacy catalog, project-progress counts and
+  administrator/manager billing. Policy one requires `ClientReadAll`; without
+  it the overview reports `can_read: false` (withheld, not an empty catalog)
+  and direct IDs are not found. Counts use the `list_projects` reader. The
+  default rate requires `BillableRateReadAll` as well; managed rate grants never
+  apply. Unknown policy and missing/malformed state are forbidden; inactive or
+  foreign actors fail closed.
+- `can_manage` is the legacy manager role under policy zero and always false
+  under policy one. This is temporary UI state while the client writes still
+  check only the legacy role, not a product rule. Invoice controls must not be
+  inferred from billing visibility.
+
+Registered legacy readers left unchanged, which still expose catalog fields or
+rates under policy one without `ClientReadAll`:
+
+| Server function | Exposure under policy one | Consumers |
+| --- | --- | --- |
+| `list_clients` | All organization clients with address and tax ID, for any active user | Legacy Reports filter, invoice list and invoice detail |
+| `get_client_details` | Address and tax ID for any active user; default rate for the legacy administrator/manager role | `ProjectsForClient` context, client editor |
+| `list_client_summaries` | Full catalog with legacy progress counts | Clients page until it adopts `client_overview` |
+| `list_client_invoices` | Gated by the legacy manager role, not invoice or client grants | Client detail invoices |
+
+Each needs a scoped workflow-identity replacement (OP17/21/25) before
+activation.

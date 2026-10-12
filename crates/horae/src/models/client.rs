@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::permission_editor::PermissionRequester;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct Client {
@@ -29,6 +31,27 @@ pub struct ClientDetails {
     pub client: Client,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub billing: Option<ClientBilling>,
+}
+
+/// Clients page rows bound to one authenticated requester and policy mode.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ClientOverview {
+    pub requester: PermissionRequester,
+    pub canonical_permissions: bool,
+    /// False means the catalog is withheld, distinct from an empty catalog.
+    pub can_read: bool,
+    /// Display affordance for the legacy client writes; every write rechecks.
+    pub can_manage: bool,
+    pub clients: Vec<ClientSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ClientDetailView {
+    pub requester: PermissionRequester,
+    pub canonical_permissions: bool,
+    /// Display affordance for the legacy client writes; every write rechecks.
+    pub can_manage: bool,
+    pub details: ClientDetails,
 }
 
 /// An absent section means restricted access; an absent rate means not set.
