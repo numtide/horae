@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE clients SET address=$2, tax_id=$3, default_rate_cents=12345 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "89b7e2f75c2a6b9fa115713d4c6f5547aa7b8cecca91bb22c51066effe76b7bf"
+}
