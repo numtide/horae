@@ -87,7 +87,7 @@ const name = 'Access scope client';
     for (const patch of [{ default_rate: '-1' }, { profile: { ...createPayload.profile, currency: 'XYZ' } }]) {
       assert.equal((await post('create_client_profile', { ...createPayload, ...patch })).status(), 400);
     }
-    const reads = [['get_client_details', { client_id: client }], ['list_client_summaries', {}], ['list_client_invoices', { client_id: client }]];
+    const reads = [['get_client_details', { client_id: client }], ['client_overview', null], ['client_detail_view', null], ['list_client_invoices', { client_id: client }]];
     for (const scenario of [
       { role: 'admin', assignment: 'freelancer', count: 2, billing: true },
       { role: 'manager', assignment: 'freelancer', count: 2, billing: true },
@@ -102,7 +102,10 @@ const name = 'Access scope client';
       const row = page.getByRole('row').filter({ has: page.getByRole('link', { name, exact: true }) });
       await expect(row.getByLabel(`${scenario.count} active of ${scenario.count} visible projects`)).toBeVisible();
       await expect(page.getByRole('button', { name: 'New client', exact: true })).toHaveCount(scenario.billing ? 1 : 0);
-      const summaries = await json('list_client_summaries', {});
+      const overview = await json('client_overview', null);
+      assert.deepEqual([overview.canonical_permissions, overview.can_read, overview.can_manage], [false, true, scenario.billing]);
+      assert.deepEqual(overview.requester, { org_id: actor.org_id, user_id: actor.id });
+      const summaries = overview.clients;
       assert.equal(summaries.some(item => item.client.id === foreignClient), false);
       const summary = summaries.find(item => item.client.id === client);
       assert.equal(summary.total_projects, scenario.count);
@@ -115,6 +118,9 @@ const name = 'Access scope client';
       await expect(page.getByRole('link', { name: 'Access hidden project', exact: true })).toHaveCount(scenario.count === 2 ? 1 : 0);
       await expect(page.getByRole('button', { name: 'Edit client', exact: true })).toHaveCount(scenario.billing ? 1 : 0);
       await expect(page.getByRole('link', { name: 'New invoice', exact: true })).toHaveCount(scenario.billing ? 1 : 0);
+      const view = await json('client_detail_view', null);
+      assert.deepEqual([view.canonical_permissions, view.can_manage, view.details.client.id], [false, scenario.billing, client]);
+      assert.equal(Object.hasOwn(view.details, 'billing'), scenario.billing);
       const detail = await json('get_client_details', { client_id: client });
       assert.equal(Object.hasOwn(detail, 'billing'), scenario.billing);
       const projectRows = await json('list_projects', { client_id: client, include_inactive: true });

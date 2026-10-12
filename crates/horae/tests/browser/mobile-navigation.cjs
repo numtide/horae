@@ -16,7 +16,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
-    const ready = page.waitForResponse(r => r.url().includes('/api/list_client_summaries') && r.status() === 200);
+    const ready = page.waitForResponse(r => r.url().includes('/api/client_overview') && r.status() === 200);
     await page.goto(`${base}/clients`);
     await (await ready).finished();
     const sidebar = page.locator('.app-sidebar');

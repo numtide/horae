@@ -19,7 +19,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
   page.on('pageerror', error => pageErrors.push(error.message));
   const cases = [
     {
-      name: 'client activation', path: '/clients', resource: 'list_client_summaries',
+      name: 'client activation', path: '/clients', resource: 'client_overview',
       endpoint: 'set_client_active', form: 'New client',
       formEndpoint: 'create_client_profile', submit: 'Create client',
       action: async () => page.getByRole('button', { name: 'Deactivate', exact: true }).first().click(),

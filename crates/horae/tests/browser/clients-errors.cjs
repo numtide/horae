@@ -23,13 +23,13 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await page.waitForURL(`${base}/`);
     let release;
     const gate = new Promise(resolve => { release = resolve; });
-    await page.route('**/api/list_client_summaries*', async route => { await gate; await route.abort('failed'); });
+    await page.route('**/api/client_overview*', async route => { await gate; await route.abort('failed'); });
     await page.goto(`${base}/clients`);
     await expect(page.getByRole('status')).toContainText('Loading clients');
     await expect(page.getByText('No clients yet', { exact: true })).toHaveCount(0);
     release();
     await expect(page.getByRole('alert')).toContainText('Could not load clients');
-    await page.unroute('**/api/list_client_summaries*');
+    await page.unroute('**/api/client_overview*');
     await page.getByRole('button', { name: 'Retry clients', exact: true }).click();
     await expect(page.getByRole('link', { name: 'Acme Corp', exact: true })).toBeVisible();
     const search = page.getByRole('searchbox', { name: 'Search clients by name' });
@@ -66,14 +66,24 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(page.locator('#client-currency-menu-trigger')).toContainText('All currencies');
     await expect(page.getByRole('link', { name: 'State filter inactive', exact: true })).toBeVisible();
     // Explicitly injected empty payload checks presentation, not database emptiness.
-    await page.route('**/api/list_client_summaries*', route => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+    const overview = async patch => page.route('**/api/client_overview*', async route => {
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...(await response.json()), clients: [], ...patch } });
+    });
+    await overview({});
     await page.reload();
     await expect(page.getByRole('heading', { name: 'No clients yet', exact: true })).toBeVisible();
-    await page.unroute('**/api/list_client_summaries*');
-    console.log('PASS: clients loading/error/retry and distinct empty/no-match states');
+    await page.unroute('**/api/client_overview*');
+    await overview({ can_read: false, can_manage: false });
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Client access is unavailable', exact: true })).toBeVisible();
+    await expect(page.getByText('No clients yet', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'New client', exact: true })).toHaveCount(0);
+    await page.unroute('**/api/client_overview*');
+    console.log('PASS: clients loading/error/retry and distinct empty/denied/no-match states');
 
     for (const scenario of [
-      { endpoint: 'get_client_details', retry: 'Retry client', message: 'Could not load this client' },
+      { endpoint: 'client_detail_view', retry: 'Retry client', message: 'Could not load this client' },
       { endpoint: 'list_projects', retry: 'Retry projects', message: 'Could not load projects' },
       { endpoint: 'list_project_spend', retry: 'Retry totals', message: 'Could not load project totals' },
       { endpoint: 'list_client_invoices', retry: 'Retry invoices', message: 'Could not load invoices' },
@@ -82,7 +92,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       await page.route(pattern, route => route.abort('failed'));
       await page.goto(`${base}/clients/${client}`);
       await expect(page.getByRole('alert')).toContainText(scenario.message);
-      if (scenario.endpoint !== 'get_client_details') {
+      if (scenario.endpoint !== 'client_detail_view') {
         await expect(page.getByRole('heading', { name: 'Acme Corp', exact: true })).toBeVisible();
         await expect(page.getByRole('region', { name: 'Billing', exact: true })).toBeVisible();
       }
