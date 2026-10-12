@@ -819,10 +819,6 @@ fn is_admin(me: &Resource<Result<user::CurrentUser, ServerFnError>>) -> bool {
     matches!(&*me.read(), Some(Ok(user)) if user.is_admin())
 }
 
-fn is_manager(me: &Resource<Result<user::CurrentUser, ServerFnError>>) -> bool {
-    matches!(&*me.read(), Some(Ok(user)) if user.is_manager_or_above())
-}
-
 fn loaded<T>(
     state: &Option<Result<T, ServerFnError>>,
     render: impl FnOnce(&T) -> Element,
