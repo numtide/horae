@@ -172,7 +172,10 @@ async fn list_loading_and_errors_never_claim_empty_or_denied() {
 
 #[tokio::test]
 async fn pending_refresh_withholds_previous_manager_controls_and_editor() {
-    let probe = list(Probe::default());
+    let probe = list(Probe {
+        allow_client_activity: true,
+        ..Probe::default()
+    });
     let id = Uuid::from_u128(1);
     let mut dom = mount(&probe);
     click(&mut dom, &format!("client-edit-{id}"));
@@ -210,7 +213,10 @@ async fn pending_refresh_withholds_previous_manager_controls_and_editor() {
 #[tokio::test]
 async fn list_refresh_rejects_changed_account_organization_or_policy() {
     for change in ["user", "organization", "policy"] {
-        let probe = list(Probe::default());
+        let probe = list(Probe {
+            allow_client_activity: true,
+            ..Probe::default()
+        });
         let id = Uuid::from_u128(1);
         let mut dom = mount(&probe);
         let (send, receive) = oneshot::channel();

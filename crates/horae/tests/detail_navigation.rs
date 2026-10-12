@@ -90,6 +90,9 @@ type ProjectSpendResponse = Result<Vec<server_fns::ProjectSpend>, ServerFnError>
 struct Probe {
     member: bool,
     canonical: bool,
+    /// Opt-in for tests that refresh Clients through a status change; every
+    /// other navigation mutation stays fail-fast.
+    allow_client_activity: bool,
     client_overview_requests: Rc<RefCell<Vec<Option<permission_editor::PermissionRequester>>>>,
     client_overview_response: DeferredResponse<client::ClientOverview>,
     client_view_requests: Rc<RefCell<Vec<Option<permission_editor::PermissionRequester>>>>,
@@ -831,13 +834,17 @@ fn loaded<T>(
     }
 }
 
-// Mirrors the production helper; endpoint doubles decide whether a mutation is allowed.
+// Mirrors the production helper only for tests that opt into client activity.
 fn run_action<O: 'static, T: 'static>(
     future: impl std::future::Future<Output = Result<O, ServerFnError>> + 'static,
     mut resource: Resource<T>,
     mut error: Signal<Option<String>>,
     on_ok: impl FnOnce() + 'static,
 ) {
+    assert!(
+        consume_context::<Probe>().allow_client_activity,
+        "navigation must not trigger a mutation"
+    );
     spawn(async move {
         match future.await {
             Ok(_) => {
@@ -970,6 +977,10 @@ mod server_fns {
     pub async fn set_client_active(id: String, active: bool) -> Result<Client, ServerFnError> {
         let id = Uuid::parse_str(&id).unwrap();
         let probe = consume_context::<Probe>();
+        assert!(
+            probe.allow_client_activity,
+            "navigation must not change client status"
+        );
         assert!(
             !probe.member && !probe.canonical,
             "only legacy managers may change client status"
