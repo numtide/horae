@@ -5,6 +5,7 @@ use crate::components::avatar::Avatar;
 use crate::components::icons::NavIcon;
 use crate::components::logo::HoraeMark;
 use crate::components::timer_widget::TimerWidget;
+use crate::models::own_permissions::OwnPermissions;
 use crate::pages::timesheet::{Anchor, CalSpan, ViewMode};
 use crate::route::Route;
 use crate::server_fns;
@@ -14,6 +15,8 @@ use crate::server_fns;
 /// `AppLayout` so the shell can narrow the content area in step with the rail.
 #[component]
 pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Element {
+    let own = use_resource(server_fns::get_my_permissions);
+    let clients = own.state()() == UseResourceState::Ready && shows_clients(own.read().as_ref());
     rsx! {
         aside { id: "app-navigation", class: "app-sidebar", aria_label: "Navigation",
             div { class: "sidebar-brand",
@@ -38,7 +41,9 @@ pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Elemen
 
             div { class: "sidebar-section", "Organize" }
             div { class: "sidebar-group",
-                SideLink { to: Route::ClientList {}, icon: "clients", label: "Clients", on_navigate }
+                if clients {
+                    SideLink { to: Route::ClientList {}, icon: "clients", label: "Clients", on_navigate }
+                }
                 SideLink { to: Route::ProjectList {}, icon: "projects", label: "Projects", on_navigate }
                 SideLink { to: Route::InvoiceList {}, icon: "invoices", label: "Invoices", on_navigate }
             }
@@ -51,7 +56,7 @@ pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Elemen
 
             div { class: "sidebar-spacer" }
 
-            SidebarUser { on_navigate }
+            SidebarUser { own, on_navigate }
         }
     }
 }
@@ -77,9 +82,11 @@ fn SideLink(to: Route, icon: String, label: String, on_navigate: EventHandler<()
 /// (settings, an admin section for admins, and sign out). Falls back to a
 /// placeholder until `get_me` resolves (or when not authenticated).
 #[component]
-fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
+fn SidebarUser(
+    mut own: Resource<Result<Option<OwnPermissions>, ServerFnError>>,
+    on_navigate: EventHandler<()>,
+) -> Element {
     let me = use_resource(|| async move { server_fns::get_me().await });
-    let mut own = use_resource(server_fns::get_my_permissions);
     let mut open = use_signal(|| false);
 
     let user = me.read();
@@ -195,6 +202,18 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
     }
 }
 
+/// Policy zero keeps Clients for everyone; failed or unknown permission state hides it.
+fn shows_clients(own: Option<&Result<Option<OwnPermissions>, ServerFnError>>) -> bool {
+    match own {
+        Some(Ok(None)) => true,
+        Some(Ok(Some(access))) => {
+            access.catalog_version == PERMISSION_CATALOG_VERSION
+                && access.grants.contains(&Permission::ClientReadAll)
+        }
+        _ => false,
+    }
+}
+
 /// Capitalize the first character (roles are stored lower-case: "admin" → "Admin").
 fn capitalize(s: &str) -> String {
     let mut chars = s.chars();
@@ -211,4 +230,47 @@ fn initials(name: &str) -> String {
         .take(2)
         .collect::<String>()
         .to_uppercase()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn canonical(grants: Vec<Permission>, catalog_version: u32) -> OwnPermissions {
+        OwnPermissions {
+            catalog_version,
+            grants,
+            is_administrator: false,
+            access_revision: 1,
+            person_revision: 1,
+            managed_person_ids: Vec::new(),
+            managed_project_ids: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn clients_link_follows_client_read_and_fails_closed() {
+        let shows = |own: Result<Option<OwnPermissions>, ServerFnError>| shows_clients(Some(&own));
+        assert!(!shows_clients(None), "loading");
+        assert!(shows(Ok(None)), "policy zero");
+        assert!(!shows(Err(ServerFnError::new("unavailable"))));
+        assert!(shows(Ok(Some(canonical(
+            vec![Permission::ClientReadAll],
+            PERMISSION_CATALOG_VERSION
+        )))));
+        assert!(!shows(Ok(Some(canonical(
+            vec![Permission::ClientReadAll],
+            PERMISSION_CATALOG_VERSION + 1
+        )))));
+        let unrelated = vec![
+            Permission::ProjectReadAll,
+            Permission::InvoiceReadAll,
+            Permission::BillableRateReadAll,
+            Permission::ReportProfitabilityRead,
+        ];
+        assert!(!shows(Ok(Some(canonical(
+            unrelated,
+            PERMISSION_CATALOG_VERSION
+        )))));
+    }
 }
