@@ -114,8 +114,8 @@ rates under policy one without `ClientReadAll`:
 | --- | --- | --- |
 | `list_clients` | All organization clients with address and tax ID, for any active user | Legacy Reports filter, invoice list and invoice detail |
 | `get_client_details` | Address and tax ID for any active user; default rate for the legacy administrator/manager role | `ProjectsForClient` context, client editor |
-| `list_client_summaries` | Full catalog with legacy progress counts | Clients page until it adopts `client_overview` |
 | `list_client_invoices` | Gated by the legacy manager role, not invoice or client grants | Client detail invoices |
 
 Each needs a scoped workflow-identity replacement (OP17/21/25) before
-activation.
+activation. The former `list_client_summaries` endpoint is removed; the Clients
+page reads `client_overview`.

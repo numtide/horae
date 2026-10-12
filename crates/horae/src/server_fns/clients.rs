@@ -343,15 +343,8 @@ async fn client_invoices_for_viewer(
     Ok(invoices)
 }
 
-/// Project counts and currency filters use the same progress access as Projects.
-#[server]
-pub async fn list_client_summaries() -> Result<Vec<ClientSummary>, ServerFnError> {
-    let user = require_user().await?;
-    let state = crate::state::global_state().await;
-    client_summaries_for_viewer(&state.db, user.org_id, user.id).await
-}
-
-#[cfg(feature = "server")]
+/// Policy-zero summaries, kept for parity tests of the canonical overview.
+#[cfg(all(test, feature = "server"))]
 async fn client_summaries_for_viewer(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,

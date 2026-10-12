@@ -392,11 +392,4 @@ async fn legacy_workflow_readers_are_unchanged_under_policy_one(pool: PgPool) {
         .unwrap();
     assert_eq!(legacy.client.tax_id.as_deref(), Some(TAX_ID));
     assert!(legacy.billing.is_some());
-    assert_eq!(
-        client_summaries_for_viewer(&pool, ids.org_id, ids.user_id)
-            .await
-            .unwrap()
-            .len(),
-        1
-    );
 }
