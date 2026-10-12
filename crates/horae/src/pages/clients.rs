@@ -85,10 +85,10 @@ pub fn ClientList() -> Element {
             return;
         }
         // One-shot: a failed, denied or rebound reload consumes it without focusing.
-        if let Some(opener) = refocus.take() {
-            if matches!(&*clients.peek(), Some(Ok(overview)) if overview.can_manage) {
-                restore_opener_focus(&opener, "clients-heading");
-            }
+        if let Some(opener) = refocus.take()
+            && matches!(&*clients.peek(), Some(Ok(overview)) if overview.can_manage)
+        {
+            restore_opener_focus(&opener, "clients-heading");
         }
     });
 
