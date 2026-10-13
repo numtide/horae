@@ -41,7 +41,18 @@ It does not specify what a monthly day 29–31 does in shorter months, DST gap/f
 resolution, or overdue execution after downtime. The Q&A does not resolve those
 cases either. Keep T043 open; neither another product's scheduler nor an older
 deadline-only preferences article supplies Harvest evidence for these rules.
-No authenticated browser observation or account change was made.
+No authenticated browser observation or account change was made during that
+2026-10-04 check.
+
+Read-only reference refresh, 2026-10-13: both public Help Center JSON articles
+still report the same update timestamps and leave those calendar/execution
+boundaries unspecified. An authenticated owner session's Preferences editor
+still disables automatic locking and submission without a configured deadline.
+The editor was exited with Cancel, without changing fields or saving. This
+confirms the account limitation, not enforcement of the newer independent
+calendars, behavior for a restricted actor, or an approved change to FR-023.
+Monthly missing-date, daylight-saving and downtime behavior remain unresolved;
+do not infer their expected results from this observation.
 
 These are implementation safeguards from FR-006/007/010/013/017/019, not claims
 about Harvest's internal design:
