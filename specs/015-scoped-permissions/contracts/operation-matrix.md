@@ -41,10 +41,11 @@ scope union must not duplicate rows, counts, money or minutes.
 
 ## Existing server-function entry points
 
-Symbols below are relative to `crates/horae/src/server_fns/`. All public async
-functions in those modules, excluding test fixtures, are assigned a row. A row
-groups only functions sharing the same policy concern; lifecycle differences are
-called out instead of treating a family name as blanket authorization.
+Symbols below are relative to `crates/horae/src/server_fns/`. The original
+inventory is supplemented by the current-source reconciliation below. It maps
+registered server functions, not every public internal helper. A row groups only
+functions sharing the same policy concern; lifecycle differences are called out
+instead of treating a family name as blanket authorization.
 
 | ID | Module and public functions | Target capability / independent boundary | Evidence and acceptance still needed |
 | --- | --- | --- | --- |
@@ -117,7 +118,96 @@ OP47 and OP48 below are newly inventoried target surfaces, not current endpoints
 | OP47 | Person-management relationship administration | User-approved FR-027 restricts add/remove/replace to active same-org Administrators, not PeopleWriteAll, People Admin, Executive Manager or custom ordinary grants. This includes changes to one's own managed-person set; restricted-user Harvest enforcement remains unverified. FR-028 requires at least one existing compatible managed-person grant for the receiving manager before new relationships are added; no dormant additions, inferred grants or people-directory prerequisite. Evaluate proposed scope and current eligibility at commit, including new edges in a replacement. Separate reading one's effective scope, relationship writes and global grants. Legacy API full-set replacement and `people_manager` side effects cannot silently redefine Horae grants. FR-029 retains existing relationships while any compatible grant remains, otherwise requires preview and confirmation for atomic permission/removal/revision/audit changes. Preserve incoming relationships, independent project scope and history; cancel/stale/revoked/failing commands write nothing. Restoring grants does not restore assignments. FR-031 rejects responsible-person equals managed-person links in add/replace requests, including mixed batches, without affecting independent own/all access. Actor equals responsible-person is not itself invalid; self-approval remains separate. T012/T013 cover complete-set authorization, organization isolation, revision/revocation, audit and preservation of history; existing project delegation FR-026 does not settle this operation. |
 | OP48 | Project duplication and permanent deletion, including bulk delete | Separate domain obligations under full web parity, not feature 010's delivered archive/reactivate increment. The lifecycle guide distinguishes retained archived records from destructive removal; invoices survive deletion while losing project links. Duplication requires source projection and separately authorized creation/fields, not project read/write alone. Exact custom grants, dependent financial/expense/retainer effects and domain acceptance remain open. T006/T009/T014/T015 must bind owning-domain requirements and transactional tests before implementation; no data deletion is authorized by this inventory. |
 
-## Current client-path reconciliation (2026-10-06)
+## Server-function inventory reconciliation (2026-10-13)
+
+Read-only inspection at `b675d960` found 104 `#[server]` function definitions
+under `crates/horae/src/server_fns/`. Sixteen were absent by name from the
+original matrix. The following maps those definitions to existing operations;
+it introduces no new capability or permission decision. The root
+`server_fns.rs` contains re-exports and two textual mentions of the attribute,
+not additional registered definitions.
+
+| Current module / symbols | Owning operation | Contract and remaining boundary |
+| --- | --- | --- |
+| `clients`: `client_overview`, `client_detail_view` | OP17 | [Clients page read slice](client-permissions.md#clients-page-read-slice-partial-t238) is present in this baseline. Catalog read and global default-rate read are distinct; this does not replace workflow readers or authorize client writes. |
+| `clients`: `get_client_details` | OP17/OP12 | Legacy detail projection remains consumed by the client editor and client-project context. Its replacement must distinguish catalog detail from independently authorized workflow identities. |
+| `clients`: `list_client_invoices` | OP21/OP17 | Client detail invoice delivery remains a legacy-manager path; client read or rate visibility alone cannot settle whole-invoice authority. |
+| `clients`: `create_client_profile`, `update_client_profile` | OP18/OP39 | Existing profile writers use legacy-manager authority. Reconcile them with standalone/inline client writes, explicit protected-field intent and FR-035; they are not permission-profile administration. |
+| `project_creation`: `project_people`, `project_editor_catalog` | OP12/OP16/OP39 | [People discovery](project-people-picker.md) and [form permissions](project-form-permissions.md) distinguish authorized form context, minimal candidate identity, team effects and protected financial fields. Neither reader confers directory administration or authority for every finalization effect. |
+| `projects`: `get_project_overview`; `projects/detail_view`: `get_project_detail_view` | OP08/OP09 | [Project read contract](project-read-permissions.md) owns current-requester-bound project projections. Ordinary visibility, progress, rates, costs, private notes and invoice metadata retain separate boundaries. |
+| `projects/task_catalog`: `load_task_catalog` | OP14/OP39 | [Task contract](task-permissions.md) owns the bounded management catalog and independent global-rate projection, not time-tracking picker authority or all task writes. |
+| `reports`: `get_time_report_access`, `list_visible_time_report_entries`, `list_visible_time_report_groups` | OP25 | [Time-report contract](time-reports.md) owns bound access discovery, detailed/grouped rows, filters and exact totals. These ordinary-time sources do not implement financial report families. |
+| `time_entries`: `load_timesheet_tracking` | OP02/OP03 | [Timesheet integration](timesheet-integration.md) owns subject-bound tracking candidates. Candidate discovery is separate from directory access and must not grant an otherwise forbidden time mutation. |
+| `time_entries`: `apply_timesheet_command` | OP04 | The same Timesheet contract owns person-bound commands, current authority, tracking constraints, independent locks and FR-033 owner-only terminal recovery. This does not settle flexible approval coverage or company scheduling. |
+
+All 104 definition names now occur in this matrix. Seven additional import
+functions use explicit `#[dioxus_fullstack::post(...)]` routes rather than
+`#[server]`; those names are already assigned to OP28/29 and their paths are
+enumerated below. The two attribute forms therefore cover 111 function
+definitions, not 104 total application HTTP routes. This is a symbol-inventory
+check only: it does not prove allowed/denied predicates, role matrices, underlying
+helper safety, client use, test execution or alternate-route completeness.
+The route inventory below is likewise not an enforcement verdict; T006 remains
+open. Reconcile stale behavior descriptions against each linked contract and
+current implementation before treating any historical row as a delivery receipt.
+
+## Explicit HTTP and service-path reconciliation (2026-10-13)
+
+Source registration at `b675d960`: `main.rs`, `auth.rs`, `harvest/mod.rs`,
+`importers/harvest.rs` and `server_fns/importers.rs`. Paths below are exact;
+`{id}`, `{job_id}` and `{mode}` are route parameters. Dioxus-generated server
+function routes and static/SSR handling remain separate from these explicit
+registrations. Development and OIDC login branches are mutually exclusive.
+
+| Method / registered path | Handler or owner | Matrix operation |
+| --- | --- | --- |
+| GET `/health` | Constant status response in `main.rs` | OP45 |
+| GET `/api/reports/export/csv`, `/api/reports/export/xlsx` | `reports::export_csv`, `reports::export_xlsx` | OP31/OP25 |
+| GET `/api/reports/time/grouped/csv`, `/api/reports/time/grouped/xlsx` | `reports::export_time_groups_csv`, `reports::export_time_groups_xlsx` (re-exported from `reports/groups.rs`) | OP31/OP25 |
+| GET `/api/projects/export/csv`, `/api/projects/export/xlsx` | `reports::export_projects_csv`, `reports::export_projects_xlsx` | OP32/OP08/OP09 |
+| GET `/api/invoices/{id}/export/csv`, `/api/invoices/{id}/export/xlsx`, `/api/invoices/{id}/export/pdf` | The three invoice export handlers in `reports.rs` | OP33/OP21 |
+| GET `/api/import/harvest/jobs/{job_id}/errors` | `jobs::report::download` | OP35/OP29 |
+| GET `/auth/harvest/callback` | `importers::harvest::oauth_callback` | OP35/OP28 |
+| GET `/auth/login`; POST `/auth/logout` | `auth::router`: branch-specific login page and `dev::logout_post` | OP44 |
+| POST `/auth/dev-login` | `auth::dev::dev_login_post`, registered only with development login enabled | OP44 |
+| GET `/auth/oidc/start`, `/auth/callback` | `auth::oidc::{start,callback}`, registered only without development login | OP44 |
+| GET `/harvest/v2/users/me`, `/harvest/v2/users` | `harvest::{users_me,list_users}` | OP34/OP01/OP19 |
+| GET `/harvest/v2/time_entries`, `/harvest/v2/time_entries/{id}` | `harvest::{list_time_entries,get_time_entry}` | OP34/OP03 |
+| GET `/harvest/v2/projects`, `/harvest/v2/projects/{id}` | `harvest::{list_projects,get_project}` | OP34/OP08/OP09 |
+| GET `/harvest/v2/clients`, `/harvest/v2/clients/{id}` | `harvest::{list_clients,get_client}` | OP34/OP17 |
+| GET `/harvest/v2/tasks`, `/harvest/v2/tasks/{id}` | `harvest::{list_tasks,get_task}` | OP34/OP14 |
+| POST `/api/import/harvest/connection` | `harvest_connection_status` | OP28/OP35 |
+| POST `/api/import/harvest/start`, `/api/import/harvest/csv-job/{mode}` | `start_harvest_api_import`, `start_harvest_csv_import` | OP29/OP35 |
+| POST `/api/import/harvest/status`, `/api/import/harvest/history` | `get_harvest_import_job`, `list_harvest_import_jobs` | OP29/OP35 |
+| POST `/api/import/harvest/cancel`, `/api/import/harvest/retry` | `cancel_harvest_import_job`, `retry_harvest_import_job` | OP29/OP35 |
+
+POST is the actual transport even for the connection/status/history reads. It
+does not turn them into permission-changing operations. Conversely, the login
+redirect middleware deliberately excludes `/api/`, `/harvest/`, `/auth/` and
+health from its page-navigation redirect; each data handler still needs its
+own authorization. Absence of a redirect is not anonymous data access.
+
+Non-HTTP execution entry points also remain in scope:
+
+- OP36: local `Init`, `Migrate`, `Seed` and `User` commands in `main.rs`;
+  `Import`/`Jobs` instead dispatch to the remote session transport before loading
+  deployment configuration. No local CLI or migration was run for this audit.
+- OP37: startup spawns `scheduler::spawn`, `jobs::spawn`,
+  `jobs::outbox::spawn` and `notifications::spawn`. The scheduler checks long
+  timers and budgets; it is not the proposed company-lock scheduler.
+- OP30/37: plugin event dispatch, host capabilities and the separate validated
+  read-only plugin database are service boundaries, not per-viewer grants.
+  Returning a generated widget still requires its own consumer contract.
+
+The [current-access reconciliation](current-access.md#current-source-reconciliation-2026-10-13)
+distinguishes delivered authority machinery from pending canonical predicates.
+Future verification must exercise these actual routes and service entry points,
+not only call the corresponding internal helper. T014/T015/T020 and the owning
+contracts retain the payload, state, scope, revocation and preservation gates.
+
+## Client-path baseline and current reconciliation
+
+### Original inventory (2026-10-06)
 
 Read-only inspection of `8c1bf9b` plus the in-flight billability change identifies
 an existing-route enforcement gap, not additional report parity:
@@ -147,6 +237,24 @@ FR-035/036 resolve global default-rate ownership and the non-cascading client
 lifecycle; their transaction and consumer implementation remains required.
 Preserve policy-zero behavior explicitly and never resolve missing canonical
 authorization with a legacy-role fallback. See [client contract](client-permissions.md).
+
+### Current source (2026-10-13)
+
+At `b675d960`, Clients list/detail use `client_overview` and
+`client_detail_view`, delivered by PR #290. The earlier statement that the Clients
+list consumes `list_clients` no longer describes that page. Remaining consumers
+are:
+
+- `list_clients`: legacy Reports and invoice list/detail.
+- `get_client_details`: the client-project context and client editor.
+- `list_client_invoices`: the client-detail invoice section.
+
+The [client contract](client-permissions.md#clients-page-read-slice-partial-t238)
+records the canonical read slice and remaining registered legacy readers.
+Do not repeat the delivered page work or treat its completion as enforcement of
+all client paths. Workflow identities, invoice authority and standalone/inline
+client mutations still require reconciliation under T238. No test was executed
+as part of this source inventory, and no new policy was activated.
 
 ## Completion rule
 
