@@ -8868,3 +8868,60 @@ revision triggers. Person-management additions still await the existing
 active-responsible-person clarification, which is not answered by this repair.
 Full authenticated enforcement, approvals, UI, migration and acceptance remain
 required. The goal remains active, not complete or blocked.
+
+## 2026-10-13 — Global readiness before client workflow integration
+
+Current source baseline: `b675d960`. The user explicitly requires resolving the
+global specification checklist before starting the new client-workflow reader
+increment. Earlier permissions to execute independent increments do not waive
+this instruction. Documentation is isolated on `docs/permission-readiness`;
+implementation remains deferred. Reference PR #212 is not the delivery branch.
+
+- Spec Kit analysis found source-inventory drift: 16 of the 104 registered
+  server-function definitions were not named in the operation matrix. The
+  matrix now maps them to existing operations and contracts, without inventing
+  grants or claiming their authorization is verified. A repeat name-inventory
+  check reports 104 definitions and zero unnamed symbols. This excludes
+  alternate HTTP routes, workers, operators and implementation acceptance.
+- Client documentation now distinguishes PR #290's delivered list/detail
+  readers from the remaining legacy report, invoice and project/editor readers.
+  Client writes, workflow identities and whole-invoice predicates remain open.
+- Harvest owner Preferences were inspected through the browser and exited with
+  Cancel; no settings or data were changed. This account still requires a
+  deadline for the automatic lock/submission controls. Both public lock articles
+  were re-read through the Help Center API; they retain the newer independent
+  schedule description and do not settle month-end, DST or downtime cases.
+- One clarification is awaiting the user: whether a monthly occurrence whose
+  selected day is absent should use the month's last day or skip the month.
+  Neither result is recorded as approved or observed Harvest behavior.
+
+### Success-criterion coverage audit
+
+The table identifies verification ownership and remaining specification gaps,
+not passing runtime outcomes. T020 is the final integration gate, not a
+substitute for precise cases in the owning tasks.
+
+| Criterion | Verification ownership | Remaining readiness condition |
+| --- | --- | --- |
+| SC-001: six-profile allow/deny matrix | T006, T010, T014, T020; operation matrix and reference profiles | Close unresolved operation predicates and bind each allowed/denied case to its concrete test and delivery paths. Naming every server function does not satisfy this. |
+| SC-002: no unauthorized payloads | T012, T014, T020; resource, financial and export contracts | Define mixed-invoice, receipt, financial-report and operational-history projections before negative-payload expectations can be complete. |
+| SC-003: current authority and last administrator | T010, T012, T014, T042, T020; permission state and command contracts | Reconcile the complete cross-command resource/trigger/FK order and remaining approval/expense writers; earlier command-specific race tests are not global coverage. |
+| SC-004: preserved-data transition | T007, T019, T020; migration and preflight contracts | Approve concrete access mappings, historical approval conversion, unknown-requester handling and recovery outcomes; diagnostic counts alone are not migration acceptance. |
+| SC-005: consistent accessible Settings/Workspace | T018, T020; own-permission/editor contracts and dependent-spec register | Bind both actual surfaces to effective-access explanations and the full viewport/theme/keyboard matrix. Separate tested editor increments from full page delivery. |
+| SC-006: cross-surface regressions | T014, T015, T019, T020; current-access and operation inventories | Reconcile alternate routes, imports, authentication, workers and plugins with the current baseline and concrete preservation cases. |
+| SC-007: parity, governance and migration resolved | T006–T009, T020; reference evidence, migration and dependent specs | Open product predicates, unapproved mappings and the unadopted constitution amendment remain blockers; document-only inventory fixes do not close them. |
+| SC-008: partial approval and locks | T012, T013, T043–T046, T020; approval coverage/visibility and company locks | Resolve empty/future-project coverage, interior withdrawal state, custom self-approval/withdrawal, empty submission and scheduling boundaries before selecting final storage and expected outcomes. |
+| SC-009: custom-profile lifecycle | T016, T017, T020; profile application, templates and permission editor | Verify full lifecycle and unaffected-assignee scenarios against the delivered command/consumer set; do not infer template rename/update/propagation from an unverified reference hypothesis. |
+
+Checklist remains 12/16. The coverage table exposes work still needed; it does
+not make the incomplete acceptance-coverage item pass. No task marker, runtime
+permission, database, schema, dependency or CSS changed. Contract formatting
+passed through `nix fmt` and the diff whitespace check passed; no runtime tests
+were run for this documentary inventory.
+
+Next: incorporate the pending clarification when answered; continue independent
+alternate-route inventory and FR-to-concrete-case reconciliation. Resolve the
+remaining product and migration contracts, refine their plan/tasks, then repeat
+the global analysis and adversarial review before reconsidering implementation.
+Do not repeatedly probe the same account controls or rerun runtime suites for
+unchanged code. No policy activation, real-data migration or merge is authorized.
