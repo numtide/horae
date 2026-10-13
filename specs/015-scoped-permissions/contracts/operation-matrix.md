@@ -140,12 +140,70 @@ not additional registered definitions.
 | `time_entries`: `load_timesheet_tracking` | OP02/OP03 | [Timesheet integration](timesheet-integration.md) owns subject-bound tracking candidates. Candidate discovery is separate from directory access and must not grant an otherwise forbidden time mutation. |
 | `time_entries`: `apply_timesheet_command` | OP04 | The same Timesheet contract owns person-bound commands, current authority, tracking constraints, independent locks and FR-033 owner-only terminal recovery. This does not settle flexible approval coverage or company scheduling. |
 
-All 104 definition names now occur in this matrix. This is a symbol-inventory
+All 104 definition names now occur in this matrix. Seven additional import
+functions use explicit `#[dioxus_fullstack::post(...)]` routes rather than
+`#[server]`; those names are already assigned to OP28/29 and their paths are
+enumerated below. The two attribute forms therefore cover 111 function
+definitions, not 104 total application HTTP routes. This is a symbol-inventory
 check only: it does not prove allowed/denied predicates, role matrices, underlying
 helper safety, client use, test execution or alternate-route completeness.
-OP31–OP45 still require their own route/worker/operator inventory; T006 remains
+The route inventory below is likewise not an enforcement verdict; T006 remains
 open. Reconcile stale behavior descriptions against each linked contract and
 current implementation before treating any historical row as a delivery receipt.
+
+## Explicit HTTP and service-path reconciliation (2026-10-13)
+
+Source registration at `b675d960`: `main.rs`, `auth.rs`, `harvest/mod.rs`,
+`importers/harvest.rs` and `server_fns/importers.rs`. Paths below are exact;
+`{id}`, `{job_id}` and `{mode}` are route parameters. Dioxus-generated server
+function routes and static/SSR handling remain separate from these explicit
+registrations. Development and OIDC login branches are mutually exclusive.
+
+| Method / registered path | Handler or owner | Matrix operation |
+| --- | --- | --- |
+| GET `/health` | Constant status response in `main.rs` | OP45 |
+| GET `/api/reports/export/csv`, `/api/reports/export/xlsx` | `reports::export_csv`, `reports::export_xlsx` | OP31/OP25 |
+| GET `/api/reports/time/grouped/csv`, `/api/reports/time/grouped/xlsx` | `reports::export_time_groups_csv`, `reports::export_time_groups_xlsx` (re-exported from `reports/groups.rs`) | OP31/OP25 |
+| GET `/api/projects/export/csv`, `/api/projects/export/xlsx` | `reports::export_projects_csv`, `reports::export_projects_xlsx` | OP32/OP08/OP09 |
+| GET `/api/invoices/{id}/export/csv`, `/api/invoices/{id}/export/xlsx`, `/api/invoices/{id}/export/pdf` | The three invoice export handlers in `reports.rs` | OP33/OP21 |
+| GET `/api/import/harvest/jobs/{job_id}/errors` | `jobs::report::download` | OP35/OP29 |
+| GET `/auth/harvest/callback` | `importers::harvest::oauth_callback` | OP35/OP28 |
+| GET `/auth/login`; POST `/auth/logout` | `auth::router`: branch-specific login page and `dev::logout_post` | OP44 |
+| POST `/auth/dev-login` | `auth::dev::dev_login_post`, registered only with development login enabled | OP44 |
+| GET `/auth/oidc/start`, `/auth/callback` | `auth::oidc::{start,callback}`, registered only without development login | OP44 |
+| GET `/harvest/v2/users/me`, `/harvest/v2/users` | `harvest::{users_me,list_users}` | OP34/OP01/OP19 |
+| GET `/harvest/v2/time_entries`, `/harvest/v2/time_entries/{id}` | `harvest::{list_time_entries,get_time_entry}` | OP34/OP03 |
+| GET `/harvest/v2/projects`, `/harvest/v2/projects/{id}` | `harvest::{list_projects,get_project}` | OP34/OP08/OP09 |
+| GET `/harvest/v2/clients`, `/harvest/v2/clients/{id}` | `harvest::{list_clients,get_client}` | OP34/OP17 |
+| GET `/harvest/v2/tasks`, `/harvest/v2/tasks/{id}` | `harvest::{list_tasks,get_task}` | OP34/OP14 |
+| POST `/api/import/harvest/connection` | `harvest_connection_status` | OP28/OP35 |
+| POST `/api/import/harvest/start`, `/api/import/harvest/csv-job/{mode}` | `start_harvest_api_import`, `start_harvest_csv_import` | OP29/OP35 |
+| POST `/api/import/harvest/status`, `/api/import/harvest/history` | `get_harvest_import_job`, `list_harvest_import_jobs` | OP29/OP35 |
+| POST `/api/import/harvest/cancel`, `/api/import/harvest/retry` | `cancel_harvest_import_job`, `retry_harvest_import_job` | OP29/OP35 |
+
+POST is the actual transport even for the connection/status/history reads. It
+does not turn them into permission-changing operations. Conversely, the login
+redirect middleware deliberately excludes `/api/`, `/harvest/`, `/auth/` and
+health from its page-navigation redirect; each data handler still needs its
+own authorization. Absence of a redirect is not anonymous data access.
+
+Non-HTTP execution entry points also remain in scope:
+
+- OP36: local `Init`, `Migrate`, `Seed` and `User` commands in `main.rs`;
+  `Import`/`Jobs` instead dispatch to the remote session transport before loading
+  deployment configuration. No local CLI or migration was run for this audit.
+- OP37: startup spawns `scheduler::spawn`, `jobs::spawn`,
+  `jobs::outbox::spawn` and `notifications::spawn`. The scheduler checks long
+  timers and budgets; it is not the proposed company-lock scheduler.
+- OP30/37: plugin event dispatch, host capabilities and the separate validated
+  read-only plugin database are service boundaries, not per-viewer grants.
+  Returning a generated widget still requires its own consumer contract.
+
+The [current-access reconciliation](current-access.md#current-source-reconciliation-2026-10-13)
+distinguishes delivered authority machinery from pending canonical predicates.
+Future verification must exercise these actual routes and service entry points,
+not only call the corresponding internal helper. T014/T015/T020 and the owning
+contracts retain the payload, state, scope, revocation and preservation gates.
 
 ## Client-path baseline and current reconciliation
 

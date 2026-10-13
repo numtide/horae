@@ -8925,3 +8925,31 @@ remaining product and migration contracts, refine their plan/tasks, then repeat
 the global analysis and adversarial review before reconsidering implementation.
 Do not repeatedly probe the same account controls or rerun runtime suites for
 unchanged code. No policy activation, real-data migration or merge is authorized.
+
+### Alternate delivery inventory
+
+- Reconciled all 34 distinct explicit HTTP paths registered across `main.rs`,
+  authentication, Harvest compatibility/callback and import server functions.
+  This includes mutually exclusive authentication branches, not 34 routes
+  necessarily active together. Each path now has a matrix owner; the repeated
+  source-to-document path check reports no missing path.
+- The import functions use seven explicit `dioxus_fullstack::post` attributes.
+  Together with the 104 `server` definitions, these give 111 function definitions
+  across those two forms. The earlier 104 count was not total HTTP coverage.
+  Grouped CSV/XLSX exports are included independently from detailed exports.
+- Updated the historical access inventory instead of treating its September
+  claims as the current application: narrow session identity, canonical client
+  readers, captured export authority and original import requester storage are
+  already present. Invoice canonical scope, worker requester reauthorization,
+  custom budget recipients and widget consumer authority remain distinct gates.
+- Traced startup timer/budget, import, outbox and mail workers; remote session
+  commands remain separate from local operator commands. No worker, real-data
+  query, import, mail delivery or operator mutation was executed for this review.
+
+The import worker finding is contract reconciliation, not a new privilege rule:
+FR-007/010 already require current authority, and T086–T088 explicitly delivered
+provenance only. `ClaimedJob` and `execute` still use the lease-oriented context;
+historical unknown requesters cannot be assigned an identity by assumption.
+Preserve these unresolved cases in T006/T007/T014/T015/T042 and the migration
+contract. No implementation is authorized before the user's global-readiness
+gate. Checklist and task markers remain unchanged.
