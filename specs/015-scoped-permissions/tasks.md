@@ -389,6 +389,13 @@ inspected at `b7e730c` and additional delivery surfaces. Its C/U cells still nee
 resolved predicates and executable allowed/denied cases; coverage alone does not
 complete T006.
 
+For person-assignment eligibility, T006 must resolve
+[PM01–PM08](contracts/person-management-validation.md#harvest-eligibility-discriminators--2026-10-20)
+before correcting the affected FR-028/029 oracle or handing it to T012/T013.
+Distinguish documented outcomes from unexecuted reference probes; historical
+T050–T052 results do not close AP-01. This adds no implementation task or
+authorization to mutate the connected Harvest account.
+
 - [ ] T007 Inventory role checks across `crates/horae/src/` and legacy core transitions; document migration grant/revocation differences and obtain review in `specs/015-scoped-permissions/contracts/migration.md` (FR-014/017).
 - [ ] T008 Amend the three-role constraint through `.specify/memory/constitution.md` governance and reconcile dependent specs; finalize persistence/revocation design in `specs/015-scoped-permissions/data-model.md`.
 

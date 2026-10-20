@@ -73,6 +73,49 @@ This is a local test oracle for approved Horae decisions, not evidence of Harves
 server enforcement or atomic database commits. Transactional mixed-batch denial,
 revocation and audit rollback remain T012/T013 acceptance obligations.
 
+## Harvest eligibility discriminators — 2026-10-20
+
+These T006 reference cases challenge the historical oracle above; they are not
+a replacement predicate, executed tests or authorization to change FR-028/029.
+Use separate actor, responsible-person and managed-person identities. Start
+with active same-account people and no assignments, so inactivity, self-links
+and existing relationships cannot explain the eligibility result.
+
+The [current permissions guide](https://support.getharvest.com/hc/en-us/articles/44171549176077-Permissions)
+documents a manager-level prerequisite and the Member-plus-people-grants
+counterexample. Its Project Manager example supplies a positive reference case,
+not proof that every permission in that built-in profile is mandatory.
+The [Users API](https://help.getharvest.com/api-v2/users-api/users/users/#custom-profiles)
+separates the returned profile name from underlying access roles; direct-grant
+updates preserve those roles. The teammate API's Manager requirement does not
+enumerate all six new profiles. These documents do not supply a complete
+new-model eligibility algorithm.
+
+| Case | Reference setup / observation to distinguish | Expected reference result and remaining limit |
+| --- | --- | --- |
+| PM01 | Member with only the Member floor | Not assignable under the documented manager-level prerequisite; no live attempt performed |
+| PM02 | Member plus managed people-read, then plus managed people-write and its prerequisites | Still not assignable according to the permissions guide; contradicts the historical FR-028 oracle even though those grants can consume a person scope |
+| PM03 | Unmodified Project Manager, without adding people-directory or people-write grants | Assignable according to the guide's positive example; successful saved assignment and resulting scoped access remain untested |
+| PM04 | Custom profile retaining exactly PM03's grants, then unrelated label changes | The guide supports a custom role based on Project Manager, but does not define every customization boundary; a name alone must not be treated as evidence of eligibility |
+| PM05 | Independently remove each non-floor grant from PM03, recording dependency-driven removals and resulting classification | Eligibility threshold unresolved; isolate one change at a time instead of assuming the entire built-in set is necessary or any one managed grant is sufficient |
+| PM06 | Unmodified People Admin, Accounting and Executive Manager, tested separately | Eligibility unresolved for each profile; organization-wide access is not proof that an explicit relationship is accepted, rejected or needed |
+| PM07 | Existing relationship followed by a change to PM01 or PM02; inspect assignments after reload and after restoring permissions | New-model removal, confirmation and restoration behavior unresolved; legacy Member-downgrade documentation does not establish the complete FR-029 threshold |
+| PM08 | Compare equivalent effective-grant sets reached through different supported profile/direct-edit paths | Whether assignment eligibility depends on additional stored state is unresolved; record returned access role and profile separately, without assuming the web and API normalize identically |
+
+For each authorized reference probe, record actual effective grants before and
+after, current access-role/profile metadata where available, the visible result,
+and relationships after reload. A visible control, empty list or generic denial
+alone does not establish the receiving person's eligibility. Do not infer grants
+from a profile label or from assignment success. Compare the web and API as
+separate surfaces; this plan does not authorize authenticated API writes,
+invitation, seat purchase or mutation of existing company users.
+
+Local acceptance for T012/T013 must additionally vary writer authority,
+organization, activity, revisions, revocation and rollback after the receiving
+predicate is resolved. Preserve the existing self-link and no-implicit-grant
+requirements. T050–T052 remain historical results until their affected oracle
+is explicitly corrected and rerun; no task or readiness check is closed here.
+
 ## Remaining runtime activity question — 2026-10-04
 
 The next connected writer can reuse the existing management table, organization

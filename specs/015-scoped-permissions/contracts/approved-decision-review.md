@@ -131,6 +131,15 @@ This observation supplies no counterfactual result for custom profiles or an
 Administrator's direct assignment request. Do not repeat owner navigation as
 a substitute for those missing cases.
 
+The [PM01–PM08 discriminator matrix](person-management-validation.md#harvest-eligibility-discriminators--2026-10-20)
+now separates documented negative/positive cases from the unresolved
+customization, other-profile and retention outcomes. The Users API also documents
+direct-permission updates leaving access roles unchanged. This makes separate
+recording of grants, access role and profile necessary when comparing supported
+edit paths; it does not prove which fact the web assignment server authorizes.
+T006 owns this reference verification. No probe or historical test is marked
+passed by defining these cases.
+
 ## AP-02 — Custom-role API and web lifecycle conflict (high)
 
 The [Custom Roles API][custom-roles], discovered through the current Users API,
