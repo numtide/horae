@@ -65,6 +65,41 @@ boolean and an Undo action cannot decide how overlapping approval intervals
 are stored or split. Keep those transaction discriminators open. The artifact
 was inspected as text without executing its downloaded code locally.
 
+### Owner single-day lifecycle — browser verification, 2026-10-20
+
+The user authorized a disposable probe in the connected owner account, without
+switching accounts. One stopped, non-recurring time entry was created on
+2026-11-02 in an existing test project. The week initially had no time; Expenses
+showed no work in that period. Approval-page totals independently confirmed zero
+expenses. Only the new entry and its day's submission/approval were changed.
+
+| Action | Persisted observation |
+| --- | --- |
+| Submit the day containing six minutes | That day becomes pending; the other six days remain unsubmitted. |
+| Edit six to seven minutes while pending | The saved entry and a freshly loaded pending Approvals row show seven minutes, without resubmission. |
+| Approve the owner's row for that single day | Reloaded Day view marks it approved and shows an approval lock in place of the ordinary entry controls. |
+| Withdraw the owner's row from Approvals, with the same single-day range | Reloaded Day view returns to pending/submitted, not unsubmitted, with editing controls restored. |
+| Edit seven to eight minutes after withdrawal | The saved entry remains submitted; a fresh pending Approvals row shows eight minutes and offers approval, before any resubmission. |
+| Resubmit that day through its confirmation | Submission succeeds, retains the eight minutes and stays pending; no duplicate time entry appears. |
+| Delete only the disposable entry during cleanup | Reloaded Day view and week total return to zero. The day retains its submitted marker despite having no time entries. |
+
+For this case, withdrawal preserves submission, and editing does not require
+resubmission to appear in pending review. Deleting the last entry does not erase
+the submitted-day fact. These are observed reference outcomes for AC03/AC04,
+not passing Horae tests or proof of a particular Harvest storage schema.
+
+Raw snapshots and the fixture/cleanup ledger remain outside Git under the root
+checkout's `.scratch/playwright-windows/output/approval-*-20261020.yml` and
+`.scratch/harvest-reference-20261020/approval-lifecycle.md`; they contain account
+identity. The test entry was permanently deleted. Its empty submitted-day marker
+remains; no unsubmit action was exposed in the inspected Day controls. No manual
+email/reminder, invoice, expense, account-setting or other-person action was used.
+
+This probe does not settle interior/overlapping withdrawal, Day/Week withdrawal,
+mixed projects or expenses, invoice locks, non-owner/custom-grant enforcement,
+or initially empty submission eligibility. Existing migration/history questions
+also remain separate. Do not generalize owner success into a role matrix.
+
 ## Facts that must not share one state field
 
 The following are Horae design requirements derived from FR-009/019/024, not a
@@ -150,7 +185,8 @@ Horae product decision rather than guessed expected outputs:
   or creation-time project snapshot is chosen by this document.
 - Withdraw a strict interior range from overlapping approvals: inspect remaining
   coverage, pending/unsubmitted status, resubmission and historical attribution.
-  The ability to unlock does not decide which submission records survive.
+  The single-day owner case above preserves submission; it does not resolve
+  interval splitting or which records survive overlapping withdrawals.
 - Verify server enforcement of own approval and withdrawal for arbitrary custom
   grants against the shipped-client gate above, plus the withdrawal visibility
   and mixed-selection predicates. FR-024 answers approval visibility only.
