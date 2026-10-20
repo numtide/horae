@@ -96,6 +96,12 @@ policy activation, live migration or merge is authorized by this ordering.
 
 ### Increment readiness versus activation
 
+The 2026-10-20 [approved-decision review](contracts/approved-decision-review.md)
+reopens person-assignment parity readiness: AP-01 contradicts one accepted
+FR-028 outcome and affects FR-029. Historical T050–T052 completion below remains
+evidence for the previous Horae oracle, not a closed Harvest eligibility contract.
+Resolve the counterexample before reusing that predicate in new runtime work.
+
 The 2026-10-03 user authorization repairs planning dependencies without reducing
 parity. A confirmed increment needs its own closed contract, requirement-to-test
 mapping, dependency review and adversarial review. It does not require already

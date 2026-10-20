@@ -55,6 +55,12 @@ existing parity mandate; it is not another user decision or proven server behavi
 FR-031 rejects person-management self-relationships by user decision. T006 remains
 open; no acceptance scenario is marked passed from owner-visible controls.
 
+The [2026-10-20 revalidation](contracts/approved-decision-review.md) covers the
+approved decisions as reference claims, not exemptions from parity review.
+AP-01 identifies a documented counterexample to FR-028 and its dependent
+FR-029 eligibility threshold. Their accepted text is retained pending explicit
+correction; it must not be treated as a verified Harvest predicate.
+
 ### Implementation continuation — 2026-10-02
 
 The user requested implementing permissions after deciding not to purchase a

@@ -4,6 +4,13 @@ Status: implemented and unit-tested under T050–T052, not runtime authorization
 complete US2. It refines user-approved FR-028/029/031 using the existing catalog.
 FR-027 remains the independent Administrator-only writer boundary.
 
+Parity review, 2026-10-20: [AP-01](approved-decision-review.md#ap-01--person-assignment-eligibility-high)
+identifies a documented counterexample to the compatible-grant mapping below.
+The existing test results validate the approved Horae rule, not Harvest parity.
+The mapping is retained pending correction, but is no longer a closed parity
+contract for new runtime consumers. In particular, Member plus managed people
+read/write must not be assumed assignable in Harvest.
+
 ## Inputs and boundary
 
 Use the existing validated `PermissionSelection`, responsible person's UUID and

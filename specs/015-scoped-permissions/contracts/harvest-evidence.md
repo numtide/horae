@@ -7,6 +7,13 @@ records fresh browser outcomes, the current 50-grant catalog/public editor,
 documentation conflicts and company-cutoff evidence. It revalidates the owner
 and seat restrictions below without establishing non-owner enforcement.
 
+The [2026-10-20 approved-decision review](approved-decision-review.md) inventories
+all 21 accepted clarification entries without treating approval as reference
+proof. AP-01 identifies a current documented counterexample to FR-028's
+person-assignment eligibility and its dependent FR-029 removal threshold.
+Fresh owner-editor configuration and shipped classification code corroborate
+the specific Member-based case, not the complete server predicate.
+
 ## Current account observations
 
 The connected account exposes the new six-profile editor: Member, Project Manager, People Admin, Accounting, Executive Manager and Administrator. The only person is its owner; the editor disables every profile and save action, explicitly explaining that owner permissions cannot change. There is no individual-permission checkbox panel for this immutable Administrator view.
