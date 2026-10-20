@@ -106,6 +106,11 @@ The non-activating storage contract separates saved provenance from computed
 classification; FR-032 settles creation-name equivalence. The permission guide, rechecked on 2026-10-03,
 describes saving adjustments as a new role or for one person, not in-place
 template update/rename or propagation. Absence from that guide is not proof of
-absence from Harvest. Track those hypotheses for new evidence; they are not
-mandatory blockers for the evidenced lifecycle and must not be implemented by
-guess. This increment does not mark T006–T009 complete or claim runtime tests.
+absence from Harvest. The 2026-10-20
+[API revalidation](approved-decision-review.md#ap-02--custom-role-api-and-web-lifecycle-conflict-high)
+now supplies explicit API update/rename/propagation documentation and conflicts
+with web deletion/authority guidance. They are no longer evidence-free hypotheses;
+their web exposure and effects on individually adjusted assignees still require
+reconciliation. Do not infer an unobserved web action or silently expand this
+person-application increment. This increment does not mark T006–T009 complete or
+claim runtime tests.

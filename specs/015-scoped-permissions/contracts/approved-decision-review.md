@@ -27,10 +27,10 @@ Status meanings:
 | Retain project designation with read access; confirmed removal on read loss, FR-025 | Partial: [Users API][users] documents removal on loss of project access | Exact read-only threshold, confirmation and saved relationship effects |
 | Deny combined approval if any selected time/expense is unreadable, FR-024 | Partial: [flexible approval][approval] combines time and expenses | Arbitrary custom grants, whole-selection denial and hidden expense cases |
 | New-model cost read/write grants and built-in defaults, FR-022 | Documented: [permissions guide][permissions]; retained editor catalog | Older [person-profile guide][profiles] still says Administrator-only; restricted-user enforcement not established |
-| Deleting a template preserves assignee permissions, FR-015 | Documented: [permissions guide][permissions] | Existing editor fallback warning conflicts; actual deletion persistence untested |
+| Deleting a template preserves assignee permissions, FR-015 | Conflicting documentation: web [permissions guide][permissions] versus [Custom Roles API][custom-roles] | AP-02 below; web persistence untested, no deletion authorized |
 | Financial report permission permits its defined financial fields without ordinary rate grants, FR-008 | Partial: [reference profiles](reference-profiles.md) records report grants without rate prerequisite edges | Server projections, exports and unrelated source-rate denial |
 | Person-default versus project-owned billable-rate scope, FR-021 | Partial/conflicting: [rate evidence](rate-scope-evidence.md) | New-model field-by-field enforcement; managed labels differ between guide and editor |
-| Trimmed, case-insensitive custom-profile creation uniqueness, FR-032 | Partial: [permissions guide][permissions] requires uniqueness; [Users API][users] normalizes lookup | Creation collision semantics are not established by lookup behavior |
+| Trimmed, case-insensitive custom-profile creation uniqueness, FR-032 | API-documented case-insensitive creation/update uniqueness: [Custom Roles API][custom-roles]; retained editor trims names | Actual web persistence and exact Unicode equivalence remain untested; no longer only lookup evidence |
 | Reject person-management self-links, FR-031 | Unverified | Explicit self-link acceptance/denial; do not confuse with self-approval |
 | Confirmed relationship removal on loss of last compatible grant, FR-029 | Unverified; depends on AP-01 | Correct eligibility threshold and persistence/confirmation behavior |
 | Owner-only terminal stop after tracking-eligibility loss, FR-033 | Partial: [timer guide][timers] allows ordinary delegated stopping | The exceptional lost-eligibility case, not ordinary stopping |
@@ -122,11 +122,54 @@ contract as parity-ready or enable it through the deferred client-reader work.
 No runtime code, historical task results, migration mappings or approved product
 rules are changed by this evidence register.
 
+Follow-up: the current [teammates API][teammates] requires a Manager subject but
+does not map that term to all six profiles. The owner-visible Assigned people
+page provides an informational message instead of an assignment form, explaining
+that Administrator access already covers everyone. Snapshot:
+`.scratch/playwright-windows/output/page-2026-10-20T09-51-11-092Z.yml`.
+This observation supplies no counterfactual result for custom profiles or an
+Administrator's direct assignment request. Do not repeat owner navigation as
+a substitute for those missing cases.
+
+## AP-02 — Custom-role API and web lifecycle conflict (high)
+
+The [Custom Roles API][custom-roles], discovered through the current Users API,
+now documents create, update and delete operations. This supersedes the older
+claim that no custom-profile mutation API exists; it does not add a Horae API
+mutation surface or authorize calls against the connected account.
+
+Its documented deletion resets assignees to Member and clears direct grants,
+contradicting the web guide's preservation promise and Horae's approved C01.
+It documents update propagation to assignees, while rename preserves permissions.
+It also describes authorization through all-user management, unlike the web
+guide's Administrator-only template administration.
+
+These are surface-specific reference conflicts, not proof that the web UI uses
+the same behavior. Preserve the approved rule until corrected explicitly; do not
+silently downgrade users or broaden template-write authority. Revisit FR-011/015,
+T006 and the template command/editor contracts before claiming lifecycle parity.
+Existing create/delete tests alone do not verify these reference differences.
+
+Creation and update names are explicitly case-insensitive in this API contract.
+FR-032's choice now has documentary support beyond lookup normalization. Exact
+Unicode behavior and web persistence remain unverified.
+
+Retained public HTML in the primary checkout:
+`.scratch/harvest-reference-20261020/custom-roles.html`, SHA-256
+`c6f1d6d865d939570d4f2dafea1e166a36c85bb383a47060164b33ce09d63405`.
+The [permission catalog API][permission-api] describes account-visible claims,
+not manager eligibility. Neither API was invoked; only public documentation was
+read. The catalog copy is retained beside it as `permissions.html`, SHA-256
+`0f1583d5a459819f025501ff03261111042a6fd7f1c2a593ff017ea73e0855e2`.
+
 [approval]: https://support.getharvest.com/hc/en-us/articles/39974542812429-Flexible-timesheet-approval
 [assignments]: https://support.getharvest.com/hc/en-us/articles/4422314817677-Making-people-assignments-for-Managers
 [clients]: https://support.getharvest.com/hc/en-us/articles/360048181312-Create-and-edit-clients-and-client-contacts
+[custom-roles]: https://help.getharvest.com/api-v2/roles-api/roles/custom-roles/
+[permission-api]: https://help.getharvest.com/api-v2/roles-api/roles/permissions/
 [permissions]: https://support.getharvest.com/hc/en-us/articles/44171549176077-Permissions
 [profiles]: https://support.getharvest.com/hc/en-us/articles/360048687291-Person-profiles
+[teammates]: https://help.getharvest.com/api-v2/users-api/users/teammates/
 [timers]: https://support.getharvest.com/hc/en-us/articles/360048687651-Why-can-t-I-invoice-approve-or-archive-items-when-a-timer-is-running
 [timesheet]: https://support.getharvest.com/hc/en-us/articles/360048687591-How-to-view-edit-and-submit-another-person-s-timesheet
 [unlocking]: https://support.getharvest.com/hc/en-us/articles/4408222060301-Unlocking-time-and-expenses-if-the-project-task-or-person-is-archived
