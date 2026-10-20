@@ -33,6 +33,38 @@ All sources were read on 2026-10-04. No interactive browser/MCP tool was loaded.
 An empty owner approval list from an earlier session cannot resolve lifecycle or
 restricted-actor behavior.
 
+### Shipped approval controls — 2026-10-20
+
+An authenticated, read-only visit to `/approvals` identified
+[`approvals-KWHMATMH.js`](https://cache.harvestapp.com/static/approvals-KWHMATMH.js):
+1,126,269 bytes, SHA-256
+`69bcda32acd63890fdbf85e805cc717039be118e93176ad67e7b95c1d68b1f1d`.
+Direct static inspection establishes the following client predicates; no approve,
+withdraw, submit or reminder command was invoked.
+
+| Observation | Exact UTF-8 byte range, zero-based/end-exclusive |
+| --- | --- |
+| `rc` tests whether the current actor's `permissions_claims` contains `timers:approve:all`; it does not compare a profile label. | `[431792, 432291)` |
+| Own-work control helpers permit the self-action gate when manager self-approval is enabled **or** `rc()` is true. Both approval and withdrawal controls use that gate. | `[1032886, 1036935)` |
+| Row controls pass the actual self/mixed-row facts, the setting and `rc()` into those helpers. | `[1080291, 1080742)` |
+| The Withdraw button additionally requires the separate `canWithdrawApproval` state; passing the self-action gate alone is not withdrawal authority. | `[1083420, 1083611)` |
+| A successful row withdrawal toggles a local row marker; it does not assign an explicit submitted/unsubmitted state. | `[1078053, 1078236)` |
+
+For UI parity, test own-work approval and withdrawal with the setting off/on
+and the organization-wide approval claim absent/present, while keeping ordinary
+operation authority separate. The own-work gate itself is true when either is
+present and false when both are absent. Grouped mixed-owner controls also carry
+explicit own-work-exclusion explanations; inspect their final selection contract
+before translating that presentation into an atomic Horae command.
+
+This narrows the custom-profile question: the shipped control checks a claim,
+not a hard-coded Administrator name. It does **not** prove the server's claim
+issuance, restricted-user enforcement, withdrawal visibility, mixed-selection
+effects, or post-withdrawal submission persistence. In particular, a local
+boolean and an Undo action cannot decide how overlapping approval intervals
+are stored or split. Keep those transaction discriminators open. The artifact
+was inspected as text without executing its downloaded code locally.
+
 ## Facts that must not share one state field
 
 The following are Horae design requirements derived from FR-009/019/024, not a
@@ -119,8 +151,9 @@ Horae product decision rather than guessed expected outputs:
 - Withdraw a strict interior range from overlapping approvals: inspect remaining
   coverage, pending/unsubmitted status, resubmission and historical attribution.
   The ability to unlock does not decide which submission records survive.
-- Verify own approval and withdrawal for arbitrary custom grants, plus the
-  withdrawal visibility predicate. FR-024 answers approval visibility only.
+- Verify server enforcement of own approval and withdrawal for arbitrary custom
+  grants against the shipped-client gate above, plus the withdrawal visibility
+  and mixed-selection predicates. FR-024 answers approval visibility only.
 - Submit an entirely empty interval and edit/move/add within a submitted one;
   verify submission eligibility and any review confirmation before finalizing
   the submission command. Preserve invoice/rounding facts independently.
