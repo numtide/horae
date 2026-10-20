@@ -51,8 +51,44 @@ still disables automatic locking and submission without a configured deadline.
 The editor was exited with Cancel, without changing fields or saving. This
 confirms the account limitation, not enforcement of the newer independent
 calendars, behavior for a restricted actor, or an approved change to FR-023.
-Monthly missing-date, daylight-saving and downtime behavior remain unresolved;
-do not infer their expected results from this observation.
+That observation alone leaves monthly missing-date, daylight-saving and downtime
+behavior unresolved. The following shipped-client evidence subsequently resolves
+the monthly product rule without claiming server execution.
+
+### Monthly boundary evidence — 2026-10-20
+
+The authenticated Preferences editor loads
+[`preferences-I5UQWPUO.js`](https://cache.harvestapp.com/static/company/preferences-I5UQWPUO.js).
+The downloaded artifact is 1,223,819 bytes with SHA-256
+`3a4bdec9357cec5d3bc84be57ceee819b26332ed61339a313b8fd69f7f8e4748`.
+Its monthly preview contains an explicit user-facing explanation that schedules
+for days absent from a month run on that month's last day. Its next-monthly-run
+helper independently clamps the requested day to that month's length.
+
+Reproducible locations in those exact bytes (zero-based, end-exclusive):
+
+- Monthly next-run helper `o9`: UTF-8 bytes `[1192678, 1192879)`.
+- Monthly preview branch calling that helper and emitting the explanation:
+  UTF-8 bytes `[1195430, 1195950)`.
+
+These are static shipped-client observations, not a completed runtime trace or
+server-scheduler test. The ordinary editor still presents the deadline-dependent
+controls; no feature flag was changed, hidden component activated, field edited,
+or preference saved. The complete static analyzer reached its 45-second limit;
+its retained partial evidence is
+`ev_b0b64643f707e33de17160cbca4adbee099b9b34c2184641e9ead87bf9db5205`.
+The source locations above were inspected directly, not inferred from that
+incomplete graph. Raw downloaded code and the partial evidence export remain
+local investigation artifacts, not application dependencies.
+
+Under the confirmed Harvest-parity requirement, a monthly schedule MUST retain
+its configured day and use the last available day in a shorter month, rather
+than skip the month. A clamped February occurrence MUST NOT change a configured
+31 into 28 or 29 for subsequent months. The cutoff remains the end of the month
+preceding the occurrence, as documented above. This supersedes the unanswered
+last-day-versus-skip question with reference evidence; it is not a fabricated
+user answer. DST gap/fold and missed-run recovery remain unresolved. A client
+date-library implementation does not establish the server's timezone policy.
 
 These are implementation safeguards from FR-006/007/010/013/017/019, not claims
 about Harvest's internal design:
@@ -69,8 +105,9 @@ about Harvest's internal design:
   a human actor for system execution.
 - Persist effective organization timezone and week-start inputs. Compute the
   displayed next run and applied cutoff through one shared calculation, with
-  an injected clock for tests. Resolve month-end and daylight-saving behavior
-  before implementation; the public guides do not define those algorithms.
+  an injected clock for tests. Use the monthly clamping contract above; resolve
+  daylight-saving and missed-run behavior before implementation. Shipped preview
+  code does not establish those server algorithms.
 - Serialize manual changes, due execution, module changes and entry mutations.
   A worker rechecks current enabled/configuration state, not stale admission
   state. Duplicate execution/retry cannot double-add minutes or submissions.
@@ -127,6 +164,22 @@ Use disposable fixtures and production helpers with an injected clock.
 | Concurrent changes | Disable/revise configuration while a run waits; no stale job applies the old rule |
 | Calendar boundaries | Test company-local dates, week start, month end and daylight-saving behavior against the finalized algorithm |
 
+Monthly acceptance examples for T043 use company timezone UTC and a scheduled
+time of 12:00, with the clock before that month's occurrence. They specify
+Horae's expected results from the reference rule, not completed Harvest tests:
+
+| Configured day | Occurrence month | Expected occurrence | Inclusive cutoff |
+| --- | --- | --- | --- |
+| 29, 30 or 31 | February 2027 | 2027-02-28 12:00 | 2027-01-31 |
+| 29, 30 or 31 | February 2028 | 2028-02-29 12:00 | 2028-01-31 |
+| 31 | April 2027 | 2027-04-30 12:00 | 2027-03-31 |
+| 31, unchanged after February's occurrence | March 2027 | 2027-03-31 12:00 | 2027-02-28 |
+| 28 | February 2028 | 2028-02-28 12:00 | 2028-01-31 |
+
+For each case, preview and execution must agree and retries preserve the
+nondecreasing cutoff and single-effect invariants above. The concrete runtime
+tests are still pending; these examples do not close the other T043 cases.
+
 No runtime or browser acceptance has passed for this new contract. Date-boundary
-algorithms and the ordinary/privileged correction matrix still require explicit
+algorithms outside the monthly cases and the ordinary/privileged correction matrix still require explicit
 implementation cases; C06's custom combined-approval authority remains separate.
