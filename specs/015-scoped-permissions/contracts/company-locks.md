@@ -87,8 +87,31 @@ than skip the month. A clamped February occurrence MUST NOT change a configured
 31 into 28 or 29 for subsequent months. The cutoff remains the end of the month
 preceding the occurrence, as documented above. This supersedes the unanswered
 last-day-versus-skip question with reference evidence; it is not a fabricated
-user answer. DST gap/fold and missed-run recovery remain unresolved. A client
+user answer. The DST gap rule is resolved separately below; DST fold and
+missed-run recovery remain unresolved. A client
 date-library implementation does not establish the server's timezone policy.
+
+### Daylight-saving gap decision — 2026-10-20
+
+The user selected execution at the first valid instant after a daylight-saving
+gap. Resolve the occurrence in the configured organization timezone: if the
+chosen local date/time does not exist, use the transition's first valid instant,
+not the same minute shifted by the gap's duration. Preserve the configured time
+for subsequent occurrences and do not silently skip the occurrence.
+
+Acceptance example for T043: a daily 02:30 schedule in `Europe/Madrid` runs at
+2027-03-28 03:00 CEST (01:00 UTC), not 03:30, because 02:30 does not exist that
+day. Its next day's occurrence is 2027-03-29 02:30 CEST (00:30 UTC).
+Preview and worker must agree. Inject the clock and use the same timezone rules
+in both; a different viewer timezone must not change the organization schedule.
+Other cutoff and independent-protection rules still apply.
+
+This is an explicit Horae decision, not Harvest enforcement evidence. Searches
+of the public Help Center for auto-lock/daylight and the exact phrase
+"daylight saving", plus the lock overview, Q&A and account-preferences guide,
+did not establish a scheduler rule. The absence is limited to those sources.
+Repeated local times during the autumn transition and delayed execution after
+an outage remain separate unresolved cases.
 
 These are implementation safeguards from FR-006/007/010/013/017/019, not claims
 about Harvest's internal design:
@@ -105,8 +128,8 @@ about Harvest's internal design:
   a human actor for system execution.
 - Persist effective organization timezone and week-start inputs. Compute the
   displayed next run and applied cutoff through one shared calculation, with
-  an injected clock for tests. Use the monthly clamping contract above; resolve
-  daylight-saving and missed-run behavior before implementation. Shipped preview
+  an injected clock for tests. Use monthly clamping and the approved DST gap
+  contract above; resolve DST folds and missed-run behavior before implementation. Shipped preview
   code does not establish those server algorithms.
 - Serialize manual changes, due execution, module changes and entry mutations.
   A worker rechecks current enabled/configuration state, not stale admission
