@@ -972,6 +972,12 @@ job requesters versus tenant-safe artifacts. Compare identities and values, not
 just counts. Fixtures must use isolated databases; preflight is read-only and no
 data repair, role mapping or runtime activation is authorized by these cases.
 
+The [M08 execution/control cases J01–J07](contracts/migration.md#m08-execution-versus-control-authority--2026-10-20)
+separate original-requester provenance, current retry/download authority and
+worker execution. T007/T019 own transition acceptance; T014/T015 own enforcement.
+Historical T086–T088 provenance tests and synthetic job completion do not satisfy
+these actual-worker cases. Unknown-requester and retry policy remain unapproved.
+
 ## Phase 9: Acceptance
 
 ### Canonical People integration

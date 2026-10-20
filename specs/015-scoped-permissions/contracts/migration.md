@@ -117,6 +117,52 @@ inputs at activation; a report from an earlier snapshot is not permission to
 commit. Anomalies block the affected organization transition without silently
 deleting, reparenting, resetting revisions or normalizing financial values.
 
+### M08 execution versus control authority — 2026-10-20
+
+Read-only source review at `109402b921939a8043eeb3eed29718561c693936`
+distinguishes three existing boundaries:
+
+- `server_fns/importers/commands::{start_api,start_csv}` records the authorized
+  session actor on insertion. `cancel` and `retry` authorize the current session actor
+  through `jobs::access::begin_admin_access`; they do not replace the original
+  requester. `jobs::retry_in` retains API account-generation and CSV-upload checks.
+- `jobs::{claim,execute}` carries job, organization, payload and claim token, not
+  requester authority. `JobLease` checks claim/lease/cancellation and account
+  generation. The import transaction's organization gate orders writes but does
+  not itself authorize the original requester. These safeguards must remain;
+  they do not complete FR-007/010 worker reauthorization.
+- `jobs::report::{download_response,download_body}` checks the current downloader
+  during preparation and bounded page/tail release. Download authority is not
+  worker execution authority or permission to rewrite historical attribution.
+
+The existing requester test
+`duplicates_and_job_lifecycle_never_replace_or_invent_the_original_requester`
+deliberately revokes the original actor, retries as another Administrator and
+completes a synthetic work future. It verifies unchanged provenance under the
+legacy lifecycle, not actual API/CSV execution under the new policy. Neither
+that test nor the count-only preflight is a worker authorization acceptance test.
+This review inspected source only; no tests or migrations were executed.
+
+T007/T019 must cover the following M08 cases; T014/T015 own the corresponding
+worker and delivery enforcement. These refine FR-007/010/014/017, not a selected
+historical-job recovery policy:
+
+| Case | Required check before accepting cutover |
+| --- | --- |
+| J01 — Admission versus execution | Enqueue while authorized, then revoke before claim. A valid lease must not permit protected execution under revoked authority. Exercise actual API/CSV adapters, not a synthetic completion. |
+| J02 — Bounded progress | Revoke between durable batches in Commit and DryRun modes. If revocation wins the next authorization boundary, no further protected effects or new result publication occur; already committed batches and their attribution remain exact. If a batch wins first, revocation orders after that bounded transaction. No gate is held across source/network waits. |
+| J03 — Different retry actor | Let Administrator B retry work originally requested by A. Preserve A or historical NULL; B's control permission alone cannot establish execution authority. Resolve retry/restoration policy explicitly rather than silently transferring ownership or treating the retry as a new attributed job. |
+| J04 — Unknown historical requester | Cover both import kinds in queued, running, failed, cancelled and succeeded states. Preserve stored facts and artifacts subject to existing retention. Activation remains blocked until the reviewed policy defines pending execution and later retry; do not infer a trusted service actor or fill NULL with the current owner. |
+| J05 — Independent delivery | Compare an authorized current downloader with a revoked downloader, including retained reports whose original requester is unknown or revoked. Apply the reviewed current-download rule independently; a permitted download neither reauthorizes execution nor changes provenance. |
+| J06 — Existing execution fences | Combine otherwise valid requester authority with a changed Harvest account generation, expired claim token, cancellation and a missing CSV upload. New authorization must not revive an old attempt, bypass source checks or recreate purged artifacts. |
+| J07 — Deployment and activation race | A waiting or running legacy worker must not cross cutover and commit using old admission alone. Verify the deployment fence and both transaction orders using actual workers; setting the organization policy bit or checking a clean preflight once is insufficient. |
+
+Reuse the existing queue, requester column, authorization transaction, source
+adapters and report-release boundaries. No new queue, inferred actor, automatic
+historical repair or destructive fixture against the user's installation is
+authorized. Exact unknown-requester recovery and retry outcomes remain review
+inputs, not implemented decisions.
+
 ## Reviewable preview
 
 Before any policy activation, produce a same-organization, administrator-only
