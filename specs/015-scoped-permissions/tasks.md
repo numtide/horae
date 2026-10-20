@@ -972,11 +972,19 @@ job requesters versus tenant-safe artifacts. Compare identities and values, not
 just counts. Fixtures must use isolated databases; preflight is read-only and no
 data repair, role mapping or runtime activation is authorized by these cases.
 
+The [M07 history cases H01–H03](contracts/migration.md#m07-recoverable-history-and-invoice-transitions--2026-10-20)
+cover deleted/replaced approval records, ambiguous invoiced entry states and
+voided invoices with surviving approvals. T007/T019 must distinguish preserved
+facts from unavailable history; T013 owns target coverage. Clean diagnostic
+counts and best-effort plugin events do not establish a lossless mapping.
+
 The [M08 execution/control cases J01–J07](contracts/migration.md#m08-execution-versus-control-authority--2026-10-20)
 separate original-requester provenance, current retry/download authority and
 worker execution. T007/T019 own transition acceptance; T014/T015 own enforcement.
 Historical T086–T088 provenance tests and synthetic job completion do not satisfy
-these actual-worker cases. Unknown-requester and retry policy remain unapproved.
+these actual-worker cases. This block is explicitly pending/deferred as of
+2026-10-20; unknown-requester, retry and deployment-transition policy remain
+unapproved. Continue independent readiness work without clearing this gate.
 
 ## Phase 9: Acceptance
 

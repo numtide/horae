@@ -117,7 +117,53 @@ inputs at activation; a report from an earlier snapshot is not permission to
 commit. Anomalies block the affected organization transition without silently
 deleting, reparenting, resetting revisions or normalizing financial values.
 
+### M07 recoverable history and invoice transitions — 2026-10-20
+
+Source review at `109402b921939a8043eeb3eed29718561c693936` identifies
+limits beyond missing actor/time fields. These are code paths, not findings
+from the installation or newly executed tests:
+
+- `approvals::reopen_period` deletes the approval row; a later submission can
+  create a new ID for the same week. `submit_user_week` refreshes `submitted_at`
+  on an existing non-approved row. The table is not an append-only history.
+- `approve_ids` and `reject_submission` emit plugin events after committing and
+  separately reading current period totals. `submission_payload` has no acting
+  approver, approval timestamp or affected entry/project set. Plugin `dispatch`
+  is best-effort, not a transactional history store. These paths do not insert
+  into `audit_log`; the table's existence does not guarantee recoverable history.
+- `invoices::generate_invoice_with_request` changes both open and approved time
+  to invoiced. `transition_invoice` on Void clears the invoice link, sets that
+  time to open and clears its frozen rounding, without changing `approvals`.
+  Thus an approved period can coexist with open time after invoice voiding.
+  `permissions::preflight::read` does not compare those rows; complete approval
+  attribution can yield zero diagnostic counts despite an unresolved mapping.
+
+Harvest's [unlocking guide](https://support.getharvest.com/hc/en-us/articles/360048687491-Unlocking-time-and-expenses),
+rechecked 2026-10-20, requires removing both approval and invoicing protection
+when both apply. Its [flexible approval guide](https://support.getharvest.com/hc/en-us/articles/39974542812429-Flexible-timesheet-approval)
+also distinguishes withdrawal from other locks. This supports independent
+target locks, not a rule for reconstructing Horae's historical coverage.
+
+T007/T019 must preserve these source distinctions under FR-014/017/019 and
+Constitution I; T013 owns the separately reviewed target coverage:
+
+| Case | Required migration check |
+| --- | --- |
+| H01 — Reopen and resubmit | Compare a surviving approved row, its deleted-on-reopen state and a later submission for the same week. Preserve surviving IDs, timestamps and values; do not invent deleted events, a continuous approval ID or an actor from plugin totals/current assignments. Disclose unavailable history rather than claim a complete reconstructed timeline. |
+| H02 — Invoiced source ambiguity | Invoice initially open and initially approved time. Current `invoiced` state alone cannot identify which was approved. Preserve invoice links, line snapshots, frozen minutes and surviving approval evidence; do not infer approval from being billed or replay plugin events during conversion. |
+| H03 — Void with surviving approval | Approve, invoice, then void. Record the surviving approved row alongside open time, cleared entry rounding and retained void invoice lines. Zero count-only findings must not clear the coverage gate. Require an explicit reviewed mapping; neither silently reopen the approval nor relock/reprice the time to make the sources agree. |
+
+Use disposable fixtures for future execution. The existing
+`own_organization_can_reopen_without_unlocking_invoiced_entries` test checks
+legacy deletion and an invoiced state, not these complete invoice lifecycles
+or a migration. No new history table, backfill or repair policy is selected.
+
 ### M08 execution versus control authority — 2026-10-20
+
+Status: pending, explicitly deferred on 2026-10-20. Resume when historical
+unknown-requester recovery, retry authority and the deployment fence have a
+reviewed contract. J01–J07 remain required; this deferral neither approves a
+default nor clears the activation gate. Independent readiness work can continue.
 
 Read-only source review at `109402b921939a8043eeb3eed29718561c693936`
 distinguishes three existing boundaries:
