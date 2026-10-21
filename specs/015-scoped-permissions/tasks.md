@@ -820,7 +820,12 @@ after reload and unchanged other assignees. No profile-ID shortcut may discard
 explicit edits or normalize stored grants. FR-032 and `permission-storage.md`
 now close the storage-specific name/provenance gate. T178 supplies T016/T017's
 50-template limit and concurrent-creation acceptance via authenticated commands.
-In-place template update/rename is not an evidenced mandatory lifecycle operation.
+Public API update/rename/propagation are documented; their web exposure and
+assignee effects remain unresolved under AP-02. T006 owns CR01–CR04 in
+`contracts/approved-decision-review.md` before T016/T017/T018 can claim complete
+lifecycle parity. Neither absence from the owner editor nor the existing
+create/delete tests may silently exclude those operations. This does not add
+an API mutation surface or authorize unverified web operations.
 
 - [x] T178 [US4] Exercise the 50-template boundary through registered session routes in `server_fns/importers/authorization_tests/permission_editor.rs`: two distinct Administrators waiting at the same organization gate, one accepted creation, stale and current-revision overflow denial, exact replay and unchanged state/receipt count. Refresh SQLx and verify the real HTTP matrix (FR-004/010/013/018/032); this does not close full profile application or policy activation.
 

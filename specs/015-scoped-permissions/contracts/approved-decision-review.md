@@ -171,6 +171,61 @@ not manager eligibility. Neither API was invoked; only public documentation was
 read. The catalog copy is retained beside it as `permissions.html`, SHA-256
 `0f1583d5a459819f025501ff03261111042a6fd7f1c2a593ff017ea73e0855e2`.
 
+### Web transport boundary and remaining discriminators — 2026-10-21
+
+The current owner Permissions page loads
+[`permissions-PRZHGZUX.js`](https://cache.harvestapp.com/static/people/permissions-PRZHGZUX.js),
+1,030,905 bytes, SHA-256
+`cd0a87ce7cf99a8da3795a126d59448b97d4249adcd6a5d8002ece3a40ecee88`.
+Bounded inert-source inspection identifies these handlers, not executed requests:
+
+| UTF-8 bytes, zero-based/end-exclusive | Observed client responsibility |
+| --- | --- |
+| `[1003561, 1003675)` | Reads template data and create/permission-loss-preview URLs from a DOM data island. |
+| `[1013267, 1013927)` (`ki`) | Posts a trimmed name and draft grant IDs to the injected create URL; success adds a local template and closes the creation dialog. |
+| `[1013927, 1014790)` (`pa`) | Fetches affected users below that injected URL before deletion; failure copy warns of possible Member downgrade. |
+| `[1014790, 1015239)` (`Ei`) | Deletes the selected ID below the injected URL and reloads on success; it does not itself establish resulting assignee grants. |
+
+The fresh owner view remains immutable and does not contain that custom-role
+data island. No control was enabled or form submitted. Consequently, neither
+the concrete template URL nor equivalence to the public `/v2/custom_roles`
+transport is established here. Absence from this owner view is not absence from
+an eligible person's editor. The inspected create/delete handlers also do not
+prove that no other web screen supports rename/update.
+
+The web preservation promise and public API reset/propagation descriptions
+remain in the documentation checked today. Direct public HTML retrieval was
+needed after the web reader failed; it is retained as
+`.scratch/harvest-rea-20261021/custom-roles.html`, SHA-256
+`db7d84e8f6b3296f26ef5ecd30b99cf5461e8b2b22710ab88e966fcde9aeeaa0`.
+No authenticated API request was made. Static evidence cannot decide which
+server outcome applies to the web, or reverse C01's approved preservation rule.
+
+T006 must resolve the following **reference discriminators**, not treat them as
+passing tests or authorization to create accounts, buy seats or change profiles:
+
+| ID | Required reference fixture / observation | Contract affected |
+| --- | --- | --- |
+| CR01 | Delete a disposable template from an editable non-owner web context; compare exact effective grants and management relationships before/after for unchanged and individually adjusted assignees, plus an unrelated control. Record explicit template association separately from a best-fit label. | FR-015/C01 deletion, FR-017 preservation; T016/T017 |
+| CR02 | Determine whether an eligible web context exposes template rename. If it does, distinguish rename from creating a replacement and compare assignee identity/grants after reload. An absent owner control does not settle this. | FR-015 lifecycle; T006 before adding or excluding a web operation |
+| CR03 | If web in-place grant update exists, distinguish it from save-as-new or a person-only save; compare unchanged, extra-grant and removed-grant assignees and an unrelated control. Public API propagation does not specify all adjusted-person outcomes. | FR-004/015, profile application; T016/T017/T018 |
+| CR04 | Separately verify web template authority for a non-admin with all-user management versus an Administrator; no permission-label or owner-success inference. | FR-011/015 versus API authorization; T006/T016 |
+
+These cases require a suitable authorized disposable context; the immutable
+single-owner page cannot provide it. Retain that limitation rather than sending
+guessed mutations or repeatedly inspecting the same owner form. The existing
+create/delete implementation and ten person-application cases remain useful
+local evidence, not complete custom-role lifecycle parity.
+
+REA parsed the new asset without executing it; retained parent evidence is
+`ev_50e42203e6fcb6df2d59d8042dda638e033e293628ca2eafd5d9d99fa6d7513c`.
+Semantic coverage is partial at the selected 1,000-node/200-unknown limits;
+the bounded findings above come from direct source inspection. The complete
+retained records and artifact remain outside Git under
+`.scratch/harvest-rea-20261021/permissions-evidence-bundle.json` and
+`.scratch/harvest-rea-20261021/permissions/`. The owner snapshot is
+`.scratch/playwright-windows/output/custom-role-owner-20261021.yml`.
+
 [approval]: https://support.getharvest.com/hc/en-us/articles/39974542812429-Flexible-timesheet-approval
 [assignments]: https://support.getharvest.com/hc/en-us/articles/4422314817677-Making-people-assignments-for-Managers
 [clients]: https://support.getharvest.com/hc/en-us/articles/360048181312-Create-and-edit-clients-and-client-contacts
