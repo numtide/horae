@@ -157,9 +157,10 @@ with two minutes total and no resubmission action.
 **Conflicting presentation after the successful move:** fresh Day views now
 labelled all seven dates submitted and exposed Tuesday's Track time controls.
 Yet a fresh Approved list filtered to Tuesday still offered the owner's
-zero-hours row and Withdraw. This does not prove Tuesday's approval was erased,
-that a server write there would succeed, or that moving an entry intentionally
-submits the whole week. No Tuesday write was attempted. Record this discrepancy
+zero-hours row and Withdraw. These display observations alone do not prove that
+Tuesday's approval was erased, that a server write there would succeed, or that
+moving an entry intentionally submits the whole week. No Tuesday write was
+attempted in this first probe. Record this discrepancy
 under FR-020; do not adopt either surface as a complete coverage oracle or turn
 the observed expansion into a Horae requirement.
 
@@ -175,6 +176,38 @@ IDs and snapshots remain under the root checkout's
 This resolves the initial owner eligibility and move checks in AC08 only. The
 later display/coverage conflict, project-filter promotion, restricted actors,
 expenses, independent locks and overlapping history remain unresolved.
+
+#### Effective destination write follow-up — 2026-10-21
+
+A fresh empty November 23–29 week reproduced the two-day submission/approval,
+one stopped two-minute Wednesday entry, Monday-only withdrawal and successful
+Wednesday → Monday move. The update returned HTTP 200; fresh visits verified
+the same entry on Monday only. All seven submitted markers and Tuesday's Track
+time controls reappeared, while the fresh Approved Tuesday list retained the
+zero-hours row with Withdraw.
+
+The same entry was then moved Monday → Tuesday through the ordinary editor,
+without withdrawing Tuesday or resubmitting. That update also returned HTTP 200.
+Fresh visits found the same two-minute entry on Tuesday, absent Monday, with
+Start/Edit controls. Separate fresh Tuesday Approvals views showed zero hours
+in Approved and two minutes in Pending Approval. Thus the discrepancy is not
+only a glyph: this exact owner sequence permits a persisted destination write.
+It does not automatically approve the moved time. No request was sent outside
+the UI, and no disabled control was overridden.
+
+The flexible guide, re-read that day, still specifies approved-date locking and
+scoped withdrawal. **U-AC08 remains a high-priority contract conflict**, now
+between that documented rule and observed writes, not merely unknown server
+enforcement. Do not infer an intentional exception, storage model or root cause.
+The Horae rule is awaiting explicit clarification: preserve Tuesday's coverage
+until scoped withdrawal, or defer this case for reference clarification. Neither
+choice has been accepted; FR-019/020 and the implementation gate remain unchanged.
+
+Cleanup withdrew only Tuesday's remaining approval and permanently deleted the
+fixture. Fresh totals were zero and the settled Approved November 23–29 list
+contained no data; all seven submitted display markers remained. Private evidence:
+`.scratch/harvest-reference-20261021/lock-discriminator.md` and
+`.scratch/playwright-windows/output/lock-discriminator-*-20261021.yml`.
 
 ## Facts that must not share one state field
 
@@ -269,11 +302,11 @@ Horae product decision rather than guessed expected outputs:
 - Verify server enforcement of own approval and withdrawal for arbitrary custom
   grants against the shipped-client gate above, plus the withdrawal visibility
   and mixed-selection predicates. FR-024 answers approval visibility only.
-- Reconcile the empty-interval probe's Day/Approvals conflict after movement:
-  distinguish actual submitted/approved coverage from display aggregation before
-  specifying subsequent-date outcomes. AC08 settles the initial empty-owner
-  eligibility and destination-move checks only, not all add/move/expense cases
-  or confirmation rules. Preserve invoice/rounding facts independently.
+- Resolve U-AC08's documented-lock versus observed-write conflict before choosing
+  the subsequent-date rule. The follow-up proves the owner move persists; it
+  does not establish an intentional exception or an approved Horae deviation.
+  AC08 still does not settle all add/move/expense cases or confirmation rules.
+  Preserve invoice/rounding facts independently.
 
 ## Expense dependency and execution gate
 
