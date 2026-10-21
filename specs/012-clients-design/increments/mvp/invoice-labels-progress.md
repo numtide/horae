@@ -93,3 +93,25 @@ tab was closed. Disposable evidence remains on disk; no existing data was delete
 Next: finish the corrected full server and browser runs. Publish one draft PR to
 start Nixbot in parallel, then mark ready only after local and required
 published-head checks pass (`nixbot/nix-eval`, `nixbot/nix-build`). No merge.
+
+Draft published: [PR #296](https://github.com/numtide/horae/pull/296),
+commit `681d9459`. The default complete Nix browser suite passed, including
+`invoice-client-labels`, on the tested release package. Only the test fixture
+changed afterward; production code and browser scenarios are unchanged.
+Second-pass Clippy/SQLx/format checks passed; full server execution is in progress.
+SSH agent diagnostics stalled, so the owned push was cancelled and the same
+branch was published through authenticated HTTPS without changing Git settings.
+
+Final local server run passed: core 191; server unit 1494 passed, 11 pre-existing
+manual tests ignored; all 15 integration binaries passed. This includes the
+invoice-label regression, the rendered no-catalog detail test and the existing
+actor/tenant/revocation matrix. Nix check outputs:
+
+- tests: `g382cy9rr6h26bvidzpinx9mqzqzww52-horae-tests-0.1.0`
+- clippy: `fmsqqp6x1akq5iw7g7iayyl72d42lrk4-horae-clippy-0.1.0`
+- SQLx: `2y8n9x2rvsp6mn5gzhylycl4mzayafl3-horae-sqlx-prepare-0.1.0`
+- browser: `dd2iswk0kxcgikm3qgw972cfsfpci1rl-horae-browser-checks`
+
+T029 is complete. T030 remains open: PR #296 exists, but its required Nixbot
+checks have not appeared yet. Investigate the CI trigger; do not infer a pass
+from the absence of checks or replace CI evidence with local results.
