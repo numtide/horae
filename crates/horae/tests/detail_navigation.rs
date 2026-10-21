@@ -70,7 +70,7 @@ mod models {
     };
 }
 
-type InvoiceResponse = Result<invoice::InvoiceWithLines, ServerFnError>;
+type InvoiceResponse = Result<invoice::InvoiceDetailView, ServerFnError>;
 type AssignmentResponse = Result<Vec<assignment::Assignment>, ServerFnError>;
 type ProjectDetailsResponse = Result<project::ProjectDetails, ServerFnError>;
 type DeferredResponse<T> = Rc<RefCell<Option<oneshot::Receiver<Result<T, ServerFnError>>>>>;
@@ -533,6 +533,17 @@ async fn empty_project_list_links_to_the_importer_route() {
 }
 
 #[tokio::test]
+async fn invoice_detail_uses_authorized_name_without_reading_the_client_catalog() {
+    let probe = Probe::default();
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+
+    assert!(dioxus::ssr::render(&dom).contains("Historical client"));
+    assert_eq!(*probe.client_catalog_reads.borrow(), 0);
+}
+
+#[tokio::test]
 async fn invoice_detail_shows_saved_adjustments_and_payment_metadata() {
     let probe = Probe::default();
     let (send, receive) = oneshot::channel();
@@ -857,7 +868,7 @@ mod server_fns {
     use super::*;
     use assignment::Assignment;
     use client::Client;
-    use invoice::{Invoice, InvoiceWithLines};
+    use invoice::{Invoice, InvoiceDetailView, InvoiceListItem, InvoiceWithLines};
     use project::Project;
     use task::Task;
     use user::CurrentUser;
@@ -1220,7 +1231,7 @@ mod server_fns {
     ) -> Result<Vec<Project>, ServerFnError> {
         panic!("unexpected mutation");
     }
-    pub async fn get_invoice(id: String) -> Result<InvoiceWithLines, ServerFnError> {
+    pub async fn get_invoice(id: String) -> Result<InvoiceDetailView, ServerFnError> {
         let id = Uuid::parse_str(&id).unwrap();
         let probe = consume_context::<Probe>();
         probe.requests.borrow_mut().push(id);
@@ -1228,7 +1239,7 @@ mod server_fns {
         if let Some(response) = response {
             return response.await.expect("controlled response was dropped");
         }
-        Ok(InvoiceWithLines {
+        Ok(InvoiceDetailView {
             invoice: Invoice {
                 id,
                 org_id: Uuid::nil(),
@@ -1253,6 +1264,7 @@ mod server_fns {
                 created_at: chrono::DateTime::UNIX_EPOCH,
             },
             lines: Vec::new(),
+            client_name: "Historical client".into(),
         })
     }
 
@@ -1261,7 +1273,9 @@ mod server_fns {
         Ok(Vec::new())
     }
 
-    pub async fn list_invoices(_status: Option<String>) -> Result<Vec<Invoice>, ServerFnError> {
+    pub async fn list_invoices(
+        _status: Option<String>,
+    ) -> Result<Vec<InvoiceListItem>, ServerFnError> {
         Ok(Vec::new())
     }
 

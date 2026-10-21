@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use dioxus::prelude::*;
 use horae_core::money::format_cents_plain;
 use horae_core::types::InvoiceStatus;
@@ -45,13 +43,6 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
     let storage = use_context::<recovery::RecoveryStorage>();
     let invoices = use_resource(|| async move { server_fns::list_invoices(None).await });
     let mut clients = use_resource(|| async move { server_fns::list_clients(false).await });
-
-    let client_names: HashMap<Uuid, String> = clients
-        .read()
-        .as_ref()
-        .and_then(|r| r.as_ref().ok())
-        .map(|cs| cs.iter().map(|c| (c.id, c.name.clone())).collect())
-        .unwrap_or_default();
 
     // Client picker options: the placeholder, then every active client.
     let client_opts: Vec<(String, String)> =
@@ -137,16 +128,14 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                                     }
                                 }
                                 tbody {
-                                    for invoice in list.iter() {
+                                    for item in list.iter() {
                                         {
-                                            let inv = invoice.clone();
+                                            let inv = item.invoice.clone();
                                             rsx! {
                                                 tr { key: "{inv.id}",
                                                     td { class: "text-mono", "{inv.number}" }
                                                     td {
-                                                        {client_names.get(&inv.client_id)
-                                                            .cloned()
-                                                            .unwrap_or_else(|| inv.client_id.to_string())}
+                                                        "{item.client_name}"
                                                     }
                                                     td {
                                                         span { class: invoice_badge_class(inv.status), "{inv.status}" }
@@ -189,20 +178,9 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
     let storage = use_context::<recovery::RecoveryStorage>();
     let mut invoice_data =
         use_resource(move || async move { server_fns::get_invoice(id.to_string()).await });
-    let clients = use_resource(|| async move { server_fns::list_clients(false).await });
     let mut error = use_signal(|| None::<String>);
     let editing = use_signal(|| false);
     let mut busy = use_signal(|| false);
-
-    let client_name = |cid: Uuid| -> String {
-        clients
-            .read()
-            .as_ref()
-            .and_then(|r| r.as_ref().ok())
-            .and_then(|cs| cs.iter().find(|c| c.id == cid))
-            .map(|c| c.name.clone())
-            .unwrap_or_else(|| cid.to_string())
-    };
 
     // One button per status transition; the four share everything but the
     // target status, label, and emphasis.
@@ -237,7 +215,7 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
             {loaded(&*invoice_data.read(), |data| {
                 let inv = data.invoice.clone();
                 let lines = data.lines.clone();
-                let cname = client_name(inv.client_id);
+                let cname = &data.client_name;
 
                 rsx! {
                     div { class: "page-header",

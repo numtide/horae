@@ -31,9 +31,13 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             }
             "list_invoices" => {
                 assert_eq!(expected.as_array().unwrap().len(), 1);
-                assert_eq!(expected[0]["number"], "PRIVATE-HTTP");
+                assert_eq!(expected[0]["invoice"]["number"], "PRIVATE-HTTP");
+                assert_eq!(expected[0]["client_name"], "Acme");
             }
-            _ => assert_eq!(expected["invoice"]["number"], "PRIVATE-HTTP"),
+            _ => {
+                assert_eq!(expected["invoice"]["number"], "PRIVATE-HTTP");
+                assert_eq!(expected["client_name"], "Acme");
+            }
         }
         let response = api
             .call(name, body.clone(), Some(&foreign_cookie), false)

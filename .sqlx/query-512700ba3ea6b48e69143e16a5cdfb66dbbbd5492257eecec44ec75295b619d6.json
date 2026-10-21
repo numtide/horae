@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE clients SET active=$2, name=$3, address='Private address', tax_id='Private tax' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "512700ba3ea6b48e69143e16a5cdfb66dbbbd5492257eecec44ec75295b619d6"
+}

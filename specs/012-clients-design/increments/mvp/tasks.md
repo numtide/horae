@@ -79,3 +79,19 @@ run independently; US2 payload and visual checks can run independently after its
 read contracts exist; US3 core tests and disposable DB tests are independent;
 US4 route tests and browser capture preparation are independent. Shared-file
 edits remain sequential. All stories must pass, not just the first checkpoint.
+
+## Follow-up: US4 invoice client identity
+
+Only this regression is reopened; T001–T025 describe the previous delivery.
+No full feature 012 or global permission readiness is implied by this follow-up.
+
+- [x] T026 [US4] Reproduce active/inactive invoice labels and active-only creation choices in crates/horae/tests/browser/invoice-client-labels.cjs; register in tests/browser/run-design-checks.sh (MVP-007, MVP-011).
+- [x] T027 [US4] Add multi-client name projection tests in crates/horae/src/server_fns/invoices/client_label_tests.rs; extend existing HTTP coverage in server_fns/importers/authorization_tests/legacy_readers.rs and retain snapshot/reader_tests.rs negative-access checks (MVP-003, MVP-011).
+- [x] T028 [US4] Return minimal names with authorized list/detail reads in crates/horae/src/models/invoice.rs and server_fns/invoices.rs; consume them in pages/invoices.rs and preserve navigation tests (MVP-003, MVP-007).
+- [ ] T029 [US4] Run browser/server/web/cache/format checks and two independent reviews; record results in specs/012-clients-design/increments/mvp/invoice-labels-progress.md (MVP-011, MVP-012).
+- [ ] T030 Publish one unsigned scoped PR with passing required checks; record evidence in specs/012-clients-design/increments/mvp/invoice-labels-progress.md (MVP-012).
+
+Order: T026/T027 → T028 → T029 → T030. Browser and server test authoring can be
+parallel, but shared implementation edits and disposable database use are serial.
+A draft PR may start CI during T029; T030 stays open until both local validation
+and the required published-head checks pass.
