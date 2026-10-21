@@ -2,7 +2,8 @@
 
 Status: implementation-boundary review, 2026-10-04, against `3f45b7c`.
 Owns the remaining T006/T009 approval work before T012/T013. This is not a
-closed schema contract, browser observation or permission to activate policy.
+closed schema contract or permission to activate policy. Dated browser probes
+below supplement that initial source review without proving Horae behavior.
 Read with [combined visibility](approval-visibility.md) and
 [serialization](permission-state.md).
 
@@ -29,7 +30,7 @@ description cannot override the flexible guide's scoped withdrawal permissions.
 must be evaluated separately: withdrawing approval does not remove invoice,
 archive or company protection.
 
-All sources were read on 2026-10-04. No interactive browser/MCP tool was loaded.
+At the initial 2026-10-04 review, these sources were read without browser access.
 An empty owner approval list from an earlier session cannot resolve lifecycle or
 restricted-actor behavior.
 
@@ -99,6 +100,38 @@ This probe does not settle interior/overlapping withdrawal, Day/Week withdrawal,
 mixed projects or expenses, invoice locks, non-owner/custom-grant enforcement,
 or initially empty submission eligibility. Existing migration/history questions
 also remain separate. Do not generalize owner success into a role matrix.
+
+### Owner interior-date withdrawal — browser verification, 2026-10-21
+
+A second authorized probe used an initially empty week and three stopped,
+non-recurring entries in the same existing test project: Monday six minutes,
+Tuesday seven and Wednesday eight. The custom submission picker explicitly
+selected November 9–11; its Submit date range action submitted those three days
+directly. Thursday–Sunday remained unsubmitted. The pending approval row showed
+21 minutes and zero expenses before approving only the owner's row for that range.
+
+| Action | Persisted observation |
+| --- | --- |
+| Approve November 9–11 once | Fresh Day visits show all three date markers approved and each entry's ordinary controls replaced by an approval lock. |
+| Withdraw only November 10 from the owner's Approved row in Approvals | Fresh visits retain Monday and Wednesday approvals and their entry locks. Tuesday retains submission, becomes pending and regains Start/Edit. Values remain six, seven and eight minutes. |
+| Edit Tuesday from seven to nine minutes without resubmitting | The saved week totals 23 minutes. Fresh Approvals views for the same three-day range show nine minutes in Pending Approval and 14 minutes in Approved, with zero expenses in each. |
+| Withdraw the remaining approval within November 9–11, then delete only the three fixture entries | Fresh visits to all three days contain no entries and show a zero week total. The final week display retains an empty submitted marker on Wednesday; Monday and Tuesday show none. |
+
+The aggregate Pending approval text also appeared while viewing the still-locked
+outer days. Use per-date markers, per-entry locks and scoped approval results to
+distinguish the portions; do not interpret that banner as every entry's state.
+The exact entries and selected range were checked before each mutation. Cleanup
+permanently removed the fixtures, not the pre-existing project or expense; the
+remaining empty-day marker means this is not exact initial-state restoration.
+The cleanup observations do not identify which operation removed the other
+submission markers or establish a universal empty-range rule.
+
+This resolves the single-interval owner case in AC07, not overlapping approval
+actions, historical attribution, project-filter coverage, non-owner authority,
+independent locks or Day/Week withdrawal. No physical range-splitting schema is
+inferred. Private fixture IDs and evidence remain outside Git in the root
+checkout's `.scratch/harvest-reference-20261021/interior-withdrawal.md` and
+`.scratch/playwright-windows/output/interior-*-20261021.yml`.
 
 ## Facts that must not share one state field
 
@@ -175,6 +208,7 @@ These refine T012/T013; they are not passing tests:
 | AC04 | Edit submitted, unapproved work; approver sees current values and totals, including changed rounding inputs. | Submission guide, FR-019 and Constitution I |
 | AC05 | Hidden selected expense, new expense racing approval, and revoked read/approval/assignment in both race orders. All effects or none; no private denial detail. | FR-024; real feature 016 records required |
 | AC06 | Approve A then independently B; partial/complete display and historical actors remain truthful; retry/cancel cannot duplicate or erase history. | FR-009/010, SC-008 |
+| AC07 | For one owner/project and no expenses, submit and approve Monday–Wednesday (6/7/8 minutes), withdraw Tuesday through Approvals, then edit it to nine without resubmission. Outer entries remain approved/locked; Tuesday remains submitted/editable. The range has nine pending plus 14 approved minutes, equal to the 23-minute week total. | Observed single-interval owner probe, 2026-10-21; FR-009/019/020, SC-008 subset |
 
 Open discriminators, to resolve with suitable reference fixtures or an explicit
 Horae product decision rather than guessed expected outputs:
@@ -185,8 +219,9 @@ Horae product decision rather than guessed expected outputs:
   or creation-time project snapshot is chosen by this document.
 - Withdraw a strict interior range from overlapping approvals: inspect remaining
   coverage, pending/unsubmitted status, resubmission and historical attribution.
-  The single-day owner case above preserves submission; it does not resolve
-  interval splitting or which records survive overlapping withdrawals.
+  The single-day and single-interval owner cases above preserve submission at
+  withdrawal and leave outer entry locks intact. They do not establish history
+  or which records survive overlapping withdrawals.
 - Verify server enforcement of own approval and withdrawal for arbitrary custom
   grants against the shipped-client gate above, plus the withdrawal visibility
   and mixed-selection predicates. FR-024 answers approval visibility only.
