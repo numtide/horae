@@ -133,6 +133,49 @@ inferred. Private fixture IDs and evidence remain outside Git in the root
 checkout's `.scratch/harvest-reference-20261021/interior-withdrawal.md` and
 `.scratch/playwright-windows/output/interior-*-20261021.yml`.
 
+### Initially empty interval — browser verification, 2026-10-21
+
+An authorized owner probe began with November 16–22 empty and unsubmitted, with
+no expenses in that period. The custom picker selected only November 16–17.
+Submit date range succeeded without a second confirmation; both dates became
+submitted while the other five remained unsubmitted. The fresh pending Approvals
+row had zero hours/expenses, a `No time tracked in this period.` warning and an
+enabled Approve action. Approval succeeded. Fresh Day views of both selected
+dates showed approval and omitted Track time/copy controls; Wednesday retained
+those controls. Thus empty submission eligibility and initial empty-date coverage
+are observed, not inferred from deleting a previously populated submission.
+
+One stopped two-minute entry was then created on unsubmitted Wednesday in the
+existing test project. Moving it to approved Monday via Edit → Change date
+closed the editor but logged HTTP 409 for that entry's update. Fresh visits
+confirmed the entry remained on Wednesday and Monday stayed empty. No visible
+validation message was captured. After withdrawing only Monday through its
+Approved row, Monday regained editing and Tuesday still displayed approval.
+Repeating the move then persisted the same entry on Monday, absent Wednesday,
+with two minutes total and no resubmission action.
+
+**Conflicting presentation after the successful move:** fresh Day views now
+labelled all seven dates submitted and exposed Tuesday's Track time controls.
+Yet a fresh Approved list filtered to Tuesday still offered the owner's
+zero-hours row and Withdraw. This does not prove Tuesday's approval was erased,
+that a server write there would succeed, or that moving an entry intentionally
+submits the whole week. No Tuesday write was attempted. Record this discrepancy
+under FR-020; do not adopt either surface as a complete coverage oracle or turn
+the observed expansion into a Horae requirement.
+
+Cleanup withdrew Tuesday through that scoped Approved row and permanently deleted
+only the identified fixture. Fresh Day totals returned to zero; the settled
+Approved list for November 16–22 contained no approval data. All seven submitted
+display markers remained, so this is not exact initial-state restoration. No
+existing project, expense, other person's work or setting was changed. Private
+IDs and snapshots remain under the root checkout's
+`.scratch/harvest-reference-20261021/empty-submission.md` and
+`.scratch/playwright-windows/output/empty-*-20261021.yml`.
+
+This resolves the initial owner eligibility and move checks in AC08 only. The
+later display/coverage conflict, project-filter promotion, restricted actors,
+expenses, independent locks and overlapping history remain unresolved.
+
 ## Facts that must not share one state field
 
 The following are Horae design requirements derived from FR-009/019/024, not a
@@ -209,6 +252,7 @@ These refine T012/T013; they are not passing tests:
 | AC05 | Hidden selected expense, new expense racing approval, and revoked read/approval/assignment in both race orders. All effects or none; no private denial detail. | FR-024; real feature 016 records required |
 | AC06 | Approve A then independently B; partial/complete display and historical actors remain truthful; retry/cancel cannot duplicate or erase history. | FR-009/010, SC-008 |
 | AC07 | For one owner/project and no expenses, submit and approve Monday–Wednesday (6/7/8 minutes), withdraw Tuesday through Approvals, then edit it to nine without resubmission. Outer entries remain approved/locked; Tuesday remains submitted/editable. The range has nine pending plus 14 approved minutes, equal to the 23-minute week total. | Observed single-interval owner probe, 2026-10-21; FR-009/019/020, SC-008 subset |
+| AC08 | With no time/expenses, submit only Monday–Tuesday and approve the owner's zero-hours row. Initially both empty dates are covered and Wednesday remains editable. A two-minute entry created Wednesday cannot move into approved Monday; after scoped Monday withdrawal, the same move persists without resubmission. Do not assert later Tuesday coverage or whole-week submission from the conflicting display described above. | Observed empty-interval owner probe, 2026-10-21; FR-019/020, SC-008 subset |
 
 Open discriminators, to resolve with suitable reference fixtures or an explicit
 Horae product decision rather than guessed expected outputs:
@@ -225,9 +269,11 @@ Horae product decision rather than guessed expected outputs:
 - Verify server enforcement of own approval and withdrawal for arbitrary custom
   grants against the shipped-client gate above, plus the withdrawal visibility
   and mixed-selection predicates. FR-024 answers approval visibility only.
-- Submit an entirely empty interval and edit/move/add within a submitted one;
-  verify submission eligibility and any review confirmation before finalizing
-  the submission command. Preserve invoice/rounding facts independently.
+- Reconcile the empty-interval probe's Day/Approvals conflict after movement:
+  distinguish actual submitted/approved coverage from display aggregation before
+  specifying subsequent-date outcomes. AC08 settles the initial empty-owner
+  eligibility and destination-move checks only, not all add/move/expense cases
+  or confirmation rules. Preserve invoice/rounding facts independently.
 
 ## Expense dependency and execution gate
 
