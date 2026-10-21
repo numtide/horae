@@ -373,12 +373,15 @@ review described under T035/T036; no database work is unlocked by these pure tes
 - [x] T034 Adversarially review the proposal against current writers, record findings/gates in `specs/015-scoped-permissions/research.md` and `progress.md`, and refine dependent tests without marking T006–T009 complete.
 - [ ] T042 Complete the cross-command resource hierarchy and trigger/FK lock inventory in `specs/015-scoped-permissions/contracts/permission-state.md` from the finalized operation matrix before closing T009 or executing T039/T040.
 
-Partial T042 evidence now identifies the current writer orders, parent-writing
+Partial T042 evidence records baseline writer orders, parent-writing
 triggers/cascades, READ ONLY incompatibility and network waits in inline imports.
 The follow-up source inventory covers credential/identity/job-maintenance paths
 and identifies the legacy-report converter's job-to-organization FK inversion.
-Validate the corrected candidate hierarchy and maintenance exceptions; do not
-mark it complete from source inspection alone.
+Read these findings with the contract's dated reconciliations: T068–T070 already
+established the project-family prefix and T192–T194 the invoice-writer prefix,
+rechecked at `109402b9` on 2026-10-21. Do not reopen those completed increments
+from the historical inventory. Validate the remaining candidate hierarchy and
+maintenance exceptions; do not mark T042 complete from source inspection alone.
 
 Inventory evidence is in `contracts/current-access.md`; browser limitations and unresolved reference cases are in `contracts/harvest-evidence.md`. Neither T006 nor T007 is complete until the remaining verification/migration review is done.
 
