@@ -120,10 +120,16 @@ collects the work.
   before capture.
 - The long client and tag selects open natively (`:open` true) with zero page
   overflow.
-- Still pending:
-  - visual proof that the popups show the full names;
-  - the stabilized desktop comparison against the base (identity except the
-    approved select height exception).
+- The stabilized desktop comparison passes in both themes at 1440px:
+  - once screenshots had settled fonts and transitions, the only differences from
+    the base were the four filter select heights (42px → 44px);
+  - every measured panel and control width, padding, border, background, colour
+    and font matches the base.
+- Still pending: visual proof that the long-name popups show the full names.
+  `:open`, the full selected text and zero overflow are verified natively, but a
+  screenshot closes the popup. Direct CDP is unavailable and OS policy blocks
+  Windows screen capture. A one-time manual confirmation has been requested. The
+  requirement is unchanged.
 
 **Reviews:**
 
@@ -132,7 +138,7 @@ collects the work.
 
 **Still open:**
 
-- T018 (the remaining native checks);
+- T018 (visual proof that the long-name popups show the full names);
 - T020 (exact-head remote CI and `nix flake check`).
 
 ## Dependencies
