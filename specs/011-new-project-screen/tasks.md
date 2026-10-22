@@ -199,6 +199,10 @@ Dependency order: T061 → T062/T063 → T064 → T065 → T066/T067 → T068. T
 
 ## Dependencies and execution
 
+The bounded [editor reflow tasks](editor-reflow/tasks.md) track the subsequent
+US6/US7 accessibility correction. Completed historical tasks do not certify that
+increment; its R001–R006 gates must be satisfied independently.
+
 Setup → Foundation → US1 → US2 → US3 → US4 → US5 → US6 → Final. Each story has independent fixtures but end-to-end UI completion depends on prior persistence. US1 may call the provisional draft finalization path established in Foundation; US2 adds recovery/concurrency behavior. No intermediate slice is the final feature.
 
 T041 uses additive migration 0037 rather than rewriting already-applied 0031; optional time/fee sources remain in T022's migration. Do not rewrite a migration after it has shipped. T023 depends on T022; T026 depends on T022 and precedes T042. T034 uses additive feature migration 0034 instead of rewriting historical 0019 or the already-applied 0030. T045 is independent documentation and can run beside implementation. Tasks touching the same file run sequentially.

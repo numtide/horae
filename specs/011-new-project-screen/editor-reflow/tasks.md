@@ -18,16 +18,12 @@ certify this new regression. No backend or product decision is being reopened.
 
 - [ ] R003 [US6] Apply minimal wrapping/shrink constraints in
   `crates/horae/src/pages/new_project.rs` and its affected section modules;
-  use `assets/css/horae.css` only for necessary scoped structural rules.
-  Written, not accepted: awaiting the coordinator's green run and
-  regression checks (see `plan.md`). Run 41504 on `4c552c1b` was still red:
-  the task "None" shortcut overflowed at 390px with 200% text, and `#np-code`
-  overflowed at 320px. Run 2237 on `420457fc` was red at 320px with 200% text
-  (it stopped before 390). Creation run 18262 was red at 1440px with 200% text for
-  Milestones. The third correction (gutter, full-row overrides, footer capped
-  at a quarter of the editor, milestone container, Add everyone, horizontal dialog
-  padding) and its checks are written but have not been run. The short-phone
-  document-flow rule was withdrawn.
+  use `assets/css/horae.css` only for necessary scoped structural rules and
+  generate the opt-in panel utility through `crates/horae/build.rs` into
+  `assets/css/horae-utils.css`.
+  Written through `3f954e5a`, not accepted: awaiting green actual-package
+  regression checks. Measured causes and prior failures are summarized in
+  `plan.md`; shared defaults and the persistent-actions contract are unchanged.
 - [ ] R004 [US7] Verify configured/legacy Edit, creation conditional panels,
   discard/reload focus and unchanged saved/draft state with the existing browser
   suites; record evidence in this directory's `plan.md`.

@@ -125,6 +125,10 @@ The application is not in production. Use one clean balance model, not a paralle
 
 ## Agent Context and Hooks
 
+The bounded [editor reflow plan](editor-reflow/plan.md) extends US6/US7 for
+enlarged text, narrow/short viewports and persistent-action accessibility. Its
+acceptance remains separate from historical feature completion.
+
 Checked-in Spec Kit provides setup/prerequisite scripts but no `update-agent-context.sh`; record context here rather than claim an absent script ran. No `.specify/extensions.yml` exists, so no hooks apply.
 
 ## Complexity Tracking
