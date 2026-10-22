@@ -78,6 +78,65 @@ const before = sql(`SELECT json_build_array(
       await expect(editor.getByLabel('Project name', { exact: true })).toHaveValue(name);
       console.log(`PASS: shared editor prefills, cancels, saves the same project and survives reload at ${width}px`);
     }
+    // Focus scrolls an inner scroller to reveal its control, so geometry must be
+    // read against the unscrolled scrollport, not only the viewport.
+    const overflow = container => container.evaluate(node => {
+      const box = node.getBoundingClientRect(), left = box.left + node.clientLeft, right = left + node.clientWidth;
+      const outside = [...node.querySelectorAll('button, input:not([type="hidden"]), select, textarea, a[href], label, .form-group')]
+        .filter(item => item.getClientRects().length && getComputedStyle(item).visibility !== 'hidden')
+        .map(item => [item, item.getBoundingClientRect()])
+        .filter(([, rect]) => rect.width > 1 && rect.height > 1
+          && (rect.left + node.scrollLeft < left - 1 || rect.right + node.scrollLeft > right + 1))
+        .slice(0, 8)
+        .map(([item, rect]) => `${item.tagName.toLowerCase()}${item.id ? `#${item.id}` : ''} ${item.getAttribute('aria-label') || item.textContent.trim().slice(0, 24)}: ${Math.round(rect.left + node.scrollLeft - left)}..${Math.round(rect.right + node.scrollLeft - left)}`);
+      return node.scrollWidth <= node.clientWidth + 1 && !outside.length ? ''
+        : `scroll ${node.scrollWidth} > client ${node.clientWidth}; outside: ${JSON.stringify(outside)}`;
+    });
+    for (const width of [390, 768]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`${base}/projects/${project.id}/edit`);
+      const reflow = page.locator('.np-page');
+      const startsOn = sql(`SELECT coalesce(starts_on::text, '') FROM projects WHERE id = '${project.id}'`);
+      await expect(reflow.getByLabel('Project name', { exact: true })).toHaveValue(project.name);
+      // User text enlargement, applied only to the test document, not app styles.
+      await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+      for (const selector of ['input[id^="np-task-rate-"]', 'input[id^="np-person-rate-"]', 'input[id^="np-cost-rate-"]'])
+        await expect(reflow.locator(selector).first()).toBeVisible();
+      await reflow.locator('#np-start').click();
+      const calendar = page.getByRole('dialog', { name: 'Choose Start date', exact: true });
+      await calendar.getByRole('button', { name: 'Today', exact: true }).click();
+      await expect(calendar).toBeHidden();
+      await expect(reflow.getByRole('button', { name: 'Clear Start date', exact: true })).toBeVisible();
+      // Ensure a dirty editor even if the saved planning date already is today.
+      await reflow.getByLabel('Project name', { exact: true }).fill('Unsaved reflow check');
+      // Collect both surfaces so one red run reports every reflow defect.
+      const problems = [];
+      const form = await overflow(reflow.locator('.np-scroll'));
+      if (form) problems.push(`form: ${form}`);
+
+      const cancel = reflow.locator('.np-footer').getByRole('button', { name: 'Cancel', exact: true });
+      await cancel.focus();
+      await page.keyboard.press('Enter');
+      const confirmation = page.getByRole('dialog', { name: 'Discard changes?', exact: true });
+      await expect(confirmation).toBeVisible();
+      const dialog = await overflow(confirmation.locator('.modal'));
+      if (dialog) problems.push(`discard dialog: ${dialog}`);
+      await confirmation.getByRole('button', { name: 'Keep editing', exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await expect(confirmation).toBeHidden();
+      await expect(cancel).toBeFocused();
+      await expect(reflow.getByRole('button', { name: 'Clear Start date', exact: true })).toBeVisible();
+      await cancel.focus();
+      await page.keyboard.press('Enter');
+      await confirmation.getByRole('button', { name: 'Discard changes', exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await expect(page).not.toHaveURL(atEditor(project.id));
+      await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+      assert.equal(sql(`SELECT coalesce(starts_on::text, '') FROM projects WHERE id = '${project.id}'`), startsOn, 'Discarding leaves the saved planning date unchanged');
+      assert.equal(sql(`SELECT name FROM projects WHERE id = '${project.id}'`), project.name, 'Discarding leaves the saved name unchanged');
+      assert.deepEqual(problems, [], `Legacy editor at ${width}px and 200% text must reflow without inner overflow`);
+      console.log(`PASS: legacy editor rows, planning date and discard actions reflow at ${width}px and 200% text`);
+    }
     assert.equal(sql(`SELECT json_build_array(
       (SELECT count(*) FROM projects),
       (SELECT count(*) FROM project_drafts),

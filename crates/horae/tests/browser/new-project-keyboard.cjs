@@ -44,6 +44,20 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(panel).toBeHidden();
     await expect(trigger).toBeFocused();
   };
+  // Focus scrolls an inner scroller to reveal its control, so geometry must be
+  // read against the unscrolled scrollport, not only the viewport.
+  const overflow = container => container.evaluate(node => {
+    const box = node.getBoundingClientRect(), left = box.left + node.clientLeft, right = left + node.clientWidth;
+    const outside = [...node.querySelectorAll('button, input:not([type="hidden"]), select, textarea, a[href], label, .form-group')]
+      .filter(item => item.getClientRects().length && getComputedStyle(item).visibility !== 'hidden')
+      .map(item => [item, item.getBoundingClientRect()])
+      .filter(([, rect]) => rect.width > 1 && rect.height > 1
+        && (rect.left + node.scrollLeft < left - 1 || rect.right + node.scrollLeft > right + 1))
+      .slice(0, 8)
+      .map(([item, rect]) => `${item.tagName.toLowerCase()}${item.id ? `#${item.id}` : ''} ${item.getAttribute('aria-label') || item.textContent.trim().slice(0, 24)}: ${Math.round(rect.left + node.scrollLeft - left)}..${Math.round(rect.right + node.scrollLeft - left)}`);
+    return node.scrollWidth <= node.clientWidth + 1 && !outside.length ? ''
+      : `scroll ${node.scrollWidth} > client ${node.clientWidth}; outside: ${JSON.stringify(outside)}`;
+  });
   const audit = async (root, label, form = true) => {
     if (form) { await saved(); await readsFinished(); }
     const count = await root.evaluate(node => {
@@ -98,6 +112,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(root.locator('[data-keyboard-audit="0"]')).toBeFocused();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, `${label}: no document overflow`);
     assert.equal(await root.evaluate(node => node.scrollWidth <= node.clientWidth + 1), true, `${label}: no surface overflow`);
+    assert.equal(await overflow(root.locator(form ? '.np-scroll' : '.modal')), '', `${label}: controls fit the scrollport`);
     console.log(`PASS: ${label}`);
   };
   try {
@@ -115,11 +130,15 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await activate(screen.getByRole('button', { name: 'Add a second tax', exact: true }));
     await screen.locator('#np-second-tax-name').fill('Additional tax');
     await screen.locator('#np-second-tax').fill('2');
+    // A set planning date also shows its clear control beside the field.
+    await activate(screen.locator('#np-start'));
+    await activate(page.getByRole('dialog', { name: 'Choose Start date', exact: true }).getByRole('button', { name: 'Today', exact: true }));
+    await expect(screen.getByRole('button', { name: 'Clear Start date', exact: true })).toBeVisible();
     const hourly = [
       ['Person', 'No budget'], ['Task', 'Hours per task'], ['Project', 'Total project hours'],
       ['Person', 'Hours per person'], ['Task', 'Fees per task'], ['Project', 'Total project fees'],
     ];
-    for (const [width, scale] of [[390, 1], [768, 1], [1440, 1], [1440, 2]]) {
+    for (const [width, scale] of [[390, 1], [768, 1], [1440, 1], [1440, 2], [390, 2], [768, 2]]) {
       await page.setViewportSize({ width, height: 900 });
       // User text enlargement, applied only to the test document, not app styles.
       await page.evaluate(scale => { document.documentElement.style.fontSize = `${scale * 100}%`; }, scale);
@@ -188,6 +207,26 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       await expect(trigger).toBeFocused();
       if (name === 'Who can track to this task?') await expect(trigger).toContainText('Restricted (1)');
     }
+    // Audit only: repeating the access changes above would toggle its selection.
+    for (const width of [390, 768]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+      for (const [trigger, name] of [
+        [screen.getByRole('button', { name: '+ New client', exact: true }), 'New client'],
+        [screen.getByRole('button', { name: /^Access for Development:/ }), 'Who can track to this task?'],
+        [screen.getByRole('button', { name: 'Discard draft', exact: true }), 'Discard this draft?'],
+      ]) {
+        await activate(trigger);
+        const dialog = page.getByRole('dialog', { name, exact: true });
+        await expect(dialog).toBeVisible();
+        await audit(dialog, `${name} at ${width}px and 200% text`, false);
+        await page.keyboard.press('Escape');
+        await expect(dialog).toBeHidden();
+        await expect(trigger).toBeFocused();
+      }
+    }
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.setViewportSize({ width: 390, height: 900 });
     await activate(screen.getByRole('button', { name: '+ New client', exact: true }));
     const newClient = page.getByRole('dialog', { name: 'New client', exact: true });
     await newClient.getByLabel('Client name', { exact: true }).focus();
