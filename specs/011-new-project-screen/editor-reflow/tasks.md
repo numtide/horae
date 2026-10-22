@@ -26,7 +26,9 @@ certify this new regression. No backend or product decision is being reopened.
   `plan.md`; shared defaults and the persistent-actions contract are unchanged.
   Run 82103 on `68421ac9` passed; a native UX finding (two-line busy label cut
   off at 320x568/200%) led to a shorter "Saving…" button label and blocked-save
-  geometry checks, still pending.
+  geometry checks. Full run 60066 on `e356e723` then failed only because an
+  earlier suite makes ACME-01 a configured Fixed Fee project. The Edit reflow
+  checks now use a test-owned legacy fixture; still pending.
 - [ ] R004 [US7] Verify configured/legacy Edit, creation conditional panels,
   discard/reload focus and unchanged saved/draft state with the existing browser
   suites; record evidence in this directory's `plan.md`.

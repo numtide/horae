@@ -18,6 +18,29 @@ const project = JSON.parse(sql(`SELECT row_to_json(p) FROM (
   WHERE o.name = 'Demo Org' AND p.code = 'ACME-01'
 ) p`));
 assert.match(project.id, /^[0-9a-f-]{36}$/);
+// The enlarged-text reflow checks need a legacy hourly project with linked tasks
+// and a person, whatever earlier suites in a full run did to ACME-01. This
+// test-owned fixture is removed by its exact IDs at the end.
+const legacy = {
+  id: '019f4e00-0000-7000-8000-000000000001',
+  assignment: '019f4e00-0000-7000-8000-000000000002',
+  name: 'Reflow legacy hourly project',
+};
+sql(`BEGIN;
+  INSERT INTO projects (id, org_id, client_id, code, name, project_type, currency)
+    SELECT '${legacy.id}', org_id, client_id, 'REFLOW-LEGACY', '${legacy.name}', 'time_and_materials', currency
+    FROM projects WHERE id = '${project.id}';
+  INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
+    SELECT '${legacy.id}', id, true, 12000 FROM tasks
+    WHERE org_id = (SELECT org_id FROM projects WHERE id = '${legacy.id}') AND active ORDER BY name LIMIT 2;
+  INSERT INTO assignments (id, project_id, user_id, role, rate_cents)
+    SELECT '${legacy.assignment}', '${legacy.id}', id, 'lead', 12000 FROM users WHERE email = 'admin@example.com';
+  COMMIT;`);
+assert.equal(sql(`SELECT json_build_array(
+  (SELECT count(*) FROM project_tasks WHERE project_id = '${legacy.id}'),
+  (SELECT count(*) FROM assignments WHERE project_id = '${legacy.id}'),
+  (SELECT count(*) FROM project_settings WHERE project_id = '${legacy.id}')
+)`), '[2, 1, 0]', 'The reflow fixture is a legacy project with two tasks and one person');
 const before = sql(`SELECT json_build_array(
   (SELECT count(*) FROM projects),
   (SELECT count(*) FROM project_drafts),
@@ -164,10 +187,10 @@ const before = sql(`SELECT json_build_array(
     for (const [width, height, scale] of [[320, 900, 2], [390, 900, 2], [768, 900, 2], [320, 568, 2], [390, 568, 2], [844, 390, 2], [390, 568, 1], [390, 320, 1], [320, 568, 1]]) {
       const size = `${width}x${height} at ${scale * 100}% text`;
       await page.setViewportSize({ width, height });
-      await page.goto(`${base}/projects/${project.id}/edit`);
+      await page.goto(`${base}/projects/${legacy.id}/edit`);
       const reflow = page.locator('.np-page');
-      const startsOn = sql(`SELECT coalesce(starts_on::text, '') FROM projects WHERE id = '${project.id}'`);
-      await expect(reflow.getByLabel('Project name', { exact: true })).toHaveValue(project.name);
+      const startsOn = sql(`SELECT coalesce(starts_on::text, '') FROM projects WHERE id = '${legacy.id}'`);
+      await expect(reflow.getByLabel('Project name', { exact: true })).toHaveValue(legacy.name);
       // User text enlargement, applied only to the test document, not app styles.
       await page.evaluate(scale => { document.documentElement.style.fontSize = `${scale * 100}%`; }, scale);
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -248,17 +271,17 @@ const before = sql(`SELECT json_build_array(
       await page.keyboard.press('Enter');
       await confirmation.getByRole('button', { name: 'Discard changes', exact: true }).focus();
       await page.keyboard.press('Enter');
-      await expect(page).not.toHaveURL(atEditor(project.id));
+      await expect(page).not.toHaveURL(atEditor(legacy.id));
       await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
-      assert.equal(sql(`SELECT coalesce(starts_on::text, '') FROM projects WHERE id = '${project.id}'`), startsOn, 'Discarding leaves the saved planning date unchanged');
-      assert.equal(sql(`SELECT name FROM projects WHERE id = '${project.id}'`), project.name, 'Discarding leaves the saved name unchanged');
+      assert.equal(sql(`SELECT coalesce(starts_on::text, '') FROM projects WHERE id = '${legacy.id}'`), startsOn, 'Discarding leaves the saved planning date unchanged');
+      assert.equal(sql(`SELECT name FROM projects WHERE id = '${legacy.id}'`), legacy.name, 'Discarding leaves the saved name unchanged');
       console.log(`DONE: legacy editor rows, planning date, footer and discard actions measured at ${size}`);
     }
     // At normal text a long name truncates beside the avatar instead of wrapping
     // below it. The rename is a temporary fixture and is always restored.
     const member = JSON.parse(sql(`SELECT row_to_json(m) FROM (
       SELECT u.id, u.name FROM assignments a JOIN users u ON u.id = a.user_id
-      WHERE a.project_id = '${project.id}' ORDER BY (u.org_role = 'admin'), u.name LIMIT 1
+      WHERE a.project_id = '${legacy.id}' ORDER BY (u.org_role = 'admin'), u.name LIMIT 1
     ) m`));
     // Long enough to truncate even in the wide desktop identity column.
     const longName = 'Maximiliana Wilhelmina Konstantinopoulou-Ravensworth of Northumberland and the Western Isles of Strathclyde';
@@ -266,7 +289,7 @@ const before = sql(`SELECT json_build_array(
     try {
       for (const width of [390, 1440]) {
         await page.setViewportSize({ width, height: 900 });
-        await page.goto(`${base}/projects/${project.id}/edit`);
+        await page.goto(`${base}/projects/${legacy.id}/edit`);
         const longLabel = page.locator('.np-assignment-row').locator(`[title="${longName}"]`);
         await expect(longLabel).toBeVisible();
         const layout = await longLabel.evaluate(item => {
@@ -283,7 +306,7 @@ const before = sql(`SELECT json_build_array(
     // An ordinary short laptop at normal text keeps the 16px footer padding; only
     // a short editor compacts it.
     await page.setViewportSize({ width: 1366, height: 650 });
-    await page.goto(`${base}/projects/${project.id}/edit`);
+    await page.goto(`${base}/projects/${legacy.id}/edit`);
     await expect(page.locator('#np-save')).toBeVisible();
     const laptop = await page.locator('.np-footer').evaluate(footer => {
       const style = getComputedStyle(footer);
@@ -498,5 +521,12 @@ const before = sql(`SELECT json_build_array(
     assert.equal(draftWrites, draftWritesAfterCreate);
     console.log('PASS: concurrent edits reject a stale save, retain local input and require confirmation before reloading');
     assert.deepEqual(errors, []);
-  } finally { await browser.close(); }
+  } finally {
+    await browser.close();
+    sql(`BEGIN;
+      DELETE FROM assignments WHERE id = '${legacy.assignment}';
+      DELETE FROM project_tasks WHERE project_id = '${legacy.id}';
+      DELETE FROM projects WHERE id = '${legacy.id}';
+      COMMIT;`);
+  }
 })().catch(error => { console.error(error); process.exitCode = 1; });

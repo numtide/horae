@@ -141,10 +141,27 @@ then confirmed a remaining defect in native Chrome at 320x568 with 200% text:
 the busy label "Saving changes…" wrapped to two lines and the footer cut off the
 button's bottom. Correction, pending the actual-package run and not accepted:
 the footer button says "Saving…" while busy in both New and Edit; the header
-status keeps its full wording. New measures the disabled action inside the
+status reports save progress in its own words (for example "Saving draft…" in
+New, "Saving changes…" in Edit). New measures the disabled action inside the
 footer while its finalize outcome is unresolved. Edit holds the intercepted save open
 before its unchanged lost-acknowledgement flow. Both measure at 320x568 with 200%
 text after `document.fonts.ready`, then restore viewport and text size.
+
+Full exact run 60066 on `e356e723` failed after all 126 creation branches and
+flows passed. `project-edit.cjs` could not find a task-rate input in the
+enlarged-text Edit matrix. Earlier in the full runner, `invoice-preparation.cjs`
+turns ACME-01 into a configured Fixed Fee project (a `project_settings` row, with
+person rates and a single 125.00 fee), so it no longer shows the legacy task and
+person rate inputs. The standalone focused run uses the seed's legacy ACME-01
+and passes. Native acceptance on `e356e723` passed, including the New and Edit
+busy labels, the reload confirmation and the full team identity. Correction to
+the test fixture only, pending the full run: the enlarged-text matrix, long-name
+and 1366x650 checks use a test-owned legacy hourly project (no
+`project_settings` row, two active tasks with rates, Admin User as lead). It is
+created and checked before the history snapshot and removed by its exact IDs
+after the suite. ACME-01 keeps the original save, cancel, history, configured
+and conflict checks. The invoice-preparation suite and the shared seed
+settings are unchanged.
 
 Known limits:
 
@@ -157,6 +174,43 @@ Known limits:
   Cancel, Discard draft and the status text then scroll within the footer.
   Focusing them scrolls them into view, and Save is checked whole at rest, but
   not every action is visible at once.
+- Names retain intentional truncation and their full accessible labels/title;
+  this does not make the full name visible on touch screens. Role words may
+  break internally at 320px with 200% text.
+- Native milestone date/amount fields scroll or clip their internal text at
+  320–390px with 200% text. Width checks establish that controls fit, not that
+  every value is simultaneously visible. The second-tax removal control keeps
+  the specific accessible name `Remove second tax` when it wraps.
+- The unchanged shared calendar fits and its Today action is reachable at
+  320px/200%, but day numbers and headings overlap. The shared sidebar also has
+  enlarged-text overflow. These remain open cross-screen acceptance work, not
+  fixes or accessibility claims delivered by this editor increment.
+- Creation's existing header says `Saving draft…` during finalization; the short
+  footer label does not correct that status wording. No save handler changes.
+
+### Native acceptance
+
+Windows Chrome with loaded Instrument Sans, emulated viewport sizes and root
+text enlargement (not physical devices or native browser zoom):
+
+- `68421ac9`: thirty Edit cases in both themes, including 320/390/768/1181/1440px,
+  normal and enlarged text, short portrait/landscape and ordinary laptop heights.
+  Forty creation/dialog/popover checks covered type cards, New client, access,
+  Discard, calendar and selector; six further cases covered milestone rows and
+  second tax at 1440/390/320px with 200% text. No form-width overflow remained.
+- `e356e723`: unchanged CSS, with the final short pending label. Actual held
+  New and Edit saves fit at 320x568/200% in both themes: 84.33px action height
+  inside a 105px footer. Releasing each request completed the real local save.
+  Four additional team captures showed the avatar, truncated name and full role.
+- Six Reload confirmation cases used an actual conflicting save from a second
+  disposable tab: 320/200%, 390/100% and 1440/100%, both themes. Keyboard Keep
+  editing retained local input and restored trigger focus; confirmed Reload
+  restored the other tab's persisted value. The extra tab was closed.
+
+Two independent reviews found no remaining blocking production defect after
+the pending-label correction. The visual reviewer accepted the final captures
+with the limits above. Full automation is still a delivery gate: the fixture
+failure in run 60066 is not a passing result. No real Harvest data was changed.
 
 ## Validation and delivery
 
@@ -192,8 +246,8 @@ never real Harvest mutations or persistent-database migrations.
 
 The branch originally started at editor-return `cfa85271` and was rebased onto
 `8b3eda6b` after [PR #299](https://github.com/numtide/horae/pull/299) merged.
-The `7555b08c` run failed as recorded above; its footer correction awaits a new
-actual-package run.
+The subsequent actual-package results and remaining full-suite fixture gate are
+recorded above.
 Limit work to two implementation increments and one heavy build at a time; the
 coordinator owns browser/DB/build resources.
 
