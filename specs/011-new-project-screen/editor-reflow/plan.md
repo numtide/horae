@@ -29,13 +29,21 @@ The corrected layout keeps normal preferred widths and allows reflow:
   the shared FormGroup has no caller class. The calendar itself is unchanged.
 - **Assignments:** wrapping task/person rate and budget groups, the Billable
   All/None shortcuts and person identity. At viewport widths up to 480px,
-  overrides use the full assignment row. Names retain their title/truncation;
-  role text must not collapse to zero width. Add everyone can wrap its icon.
+  overrides use the full assignment row. Above 1180px the identity column has a
+  `--space-24` floor and the controls `minmax(0, auto)`, so controls wrap instead
+  of taking the identity's width. The identity text (`flex-1` with the opt-in
+  generated `basis-project-identity` utility, `flex-basis: var(--space-24)`)
+  prefers 6rem beside the avatar. At normal text long names therefore truncate beside it;
+  with less room they wrap below it. Only role text may break inside a word
+  (`wrap-anywhere`). Names keep their title and truncation; role text must not
+  collapse to zero width. Add everyone can wrap its icon.
 - **Billing and taxes:** shrinkable Currency, Billable rates and Project fee
   fieldsets; wrapping amount groups and fee-mode items; capped second-tax group.
   Fieldset defaults previously imposed min-content widths on the whole section.
-- **Milestones:** an inline-size container uses the existing stacked layout
-  below 30rem. The viewport-only breakpoint missed enlarged desktop text.
+- **Milestones and project types:** inline-size containers (`np-milestones`,
+  `np-types`) apply below 30rem. Milestones use the existing stacked layout, and
+  each type card spans the full row. The viewport-only breakpoints missed
+  enlarged text just above 1180px and on desktop.
 - **Dialogs:** discard, reload, New client and task-access callers use wrapping
   actions and existing `px-3 sm:px-6` utilities. Horizontal padding changes only
   below 640px; vertical/desktop padding and shared Modal defaults stay unchanged.
@@ -45,16 +53,21 @@ The corrected layout keeps normal preferred widths and allows reflow:
   panel padding remains 20px and gaps 16px. The form gutter is similarly capped
   only below 480px. No shared token or utility default changes.
 - **Persistent actions:** retain the fixed editor shell and pinned footer.
-  The footer has a 25% maximum height and uses its existing vertical scrolling,
-  leaving at least 75% of the editor for fields. A 50% diagnostic cap left too
-  little room for enlarged radio cards; a document-scrolling alternative was
-  rejected because it contradicted the persistent-actions contract.
+  The footer is normally capped at 25% of the editor and scrolls vertically
+  beyond that. On viewports 700px tall or less, at any width, its vertical
+  padding becomes `--space-1` and its cap becomes
+  `max(25%, form-control height + 2 × --space-1)`, so one row of actions, Save
+  included, stays whole at rest. That floor can exceed a quarter on very short
+  editors, so the fields keep the remainder, not always 75%. Tall viewports keep
+  the 16px padding and the plain 25% cap. A 50% diagnostic cap left too little
+  room for enlarged radio cards; a document-scrolling alternative was rejected
+  because it contradicted the persistent-actions contract.
 
-At 100% text, the intended changes are full-width narrow-screen overrides and
-a scrollable footer only when its actions exceed a quarter of the editor.
-At 390x568 the normal 105px footer fits; at 390x320 it remains pinned but must
-scroll. Existing short-screen/navigation checks remain mandatory. These changes
-are not permission to alter unrelated screens.
+At 100% text, the intended changes are full-width narrow-screen overrides,
+truncation of long names beside the avatar, and a footer that scrolls only when
+its actions exceed its cap. Short viewports also get the tighter footer padding at
+normal text. Existing short-screen/navigation checks remain mandatory. These
+changes are not permission to alter unrelated screens.
 
 ## Regression evidence
 
@@ -80,6 +93,21 @@ artifact verification. At 320x568/200%, the 25% cap left 288.5px for the form an
 96.2px for actions; an enabled Save/Cancel and the whole 272px radio card were
 visible on focus. Final browser checks must use the built artifact without
 diagnostic CSS overrides.
+
+Pending evidence for the next correction: the actual-package run 64599 of
+`3f954e5a` found "Project member" at zero width in four 1440/200% person branches.
+The four-column grid's `auto` controls column took the identity's space. Native
+DOM-only probes with a valid `--space-24` floor measured 40/192/532/64 columns and
+a 100/100 role at 1440/200%. With the 6rem text basis the text wrapped below the
+avatar at 390/200%, and the short-height footer kept Save whole at rest in all
+eight cases (320x568/200%: 281px form for a 273px radio card; 390x320/100%:
+61px footer and 184px form). At 320/200% the role word still needs its in-word
+break. The 1181/200% form overflow (984 against 907) came from the three
+project-type cards: each was 90px wide, with content of 241/192/216px. With the
+`np-types` container query in a native probe, the form measured 907/907 and the
+cards 322px at 1181/200%, and 517px at 1440/200%. At 100% text they were
+unchanged: 196px at 1181 and 271px at 1440. The creation matrix now includes
+1181px at 100% and 200% text. None of this is acceptance.
 
 ## Validation and delivery
 

@@ -161,7 +161,7 @@ const before = sql(`SELECT json_build_array(
     // Geometry is collected across sizes so one overflow cannot hide another.
     // 390x568 at 100% text guards the normal-size pinned layout.
     const problems = [];
-    for (const [width, height, scale] of [[320, 900, 2], [390, 900, 2], [768, 900, 2], [320, 568, 2], [390, 568, 2], [844, 390, 2], [390, 568, 1]]) {
+    for (const [width, height, scale] of [[320, 900, 2], [390, 900, 2], [768, 900, 2], [320, 568, 2], [390, 568, 2], [844, 390, 2], [390, 568, 1], [390, 320, 1], [320, 568, 1]]) {
       const size = `${width}x${height} at ${scale * 100}% text`;
       await page.setViewportSize({ width, height });
       await page.goto(`${base}/projects/${project.id}/edit`);
@@ -170,6 +170,7 @@ const before = sql(`SELECT json_build_array(
       await expect(reflow.getByLabel('Project name', { exact: true })).toHaveValue(project.name);
       // User text enlargement, applied only to the test document, not app styles.
       await page.evaluate(scale => { document.documentElement.style.fontSize = `${scale * 100}%`; }, scale);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       for (const selector of ['input[id^="np-task-rate-"]', 'input[id^="np-person-rate-"]', 'input[id^="np-cost-rate-"]'])
         await expect(reflow.locator(selector).first()).toBeVisible();
       const start = reflow.locator('#np-start');
@@ -196,6 +197,18 @@ const before = sql(`SELECT json_build_array(
       const form = await overflow(reflow.locator('.np-scroll'));
       if (form) problems.push(`${size} form: ${form}`);
       if (!await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)) problems.push(`${size}: document overflow`);
+      const footerFit = await overflow(reflow.locator('.np-footer'));
+      if (footerFit) problems.push(`${size} footer: ${footerFit}`);
+      // At rest, before any focus scrolls it, Save is whole inside the footer.
+      const rest = await reflow.locator('.np-footer').evaluate(footer => {
+        footer.scrollTop = 0;
+        const save = [...footer.querySelectorAll('button')].find(button => button.textContent.trim() === 'Save changes');
+        const box = save.getBoundingClientRect(), port = footer.getBoundingClientRect();
+        const top = Math.max(port.top + footer.clientTop, 0), bottom = Math.min(port.top + footer.clientTop + footer.clientHeight, innerHeight);
+        return box.top >= top - 1 && box.bottom <= bottom + 1 && box.left >= -1 && box.right <= innerWidth + 1 ? ''
+          : `Save at rest ${Math.round(box.top)}..${Math.round(box.bottom)} outside ${Math.round(top)}..${Math.round(bottom)}`;
+      });
+      if (rest) problems.push(`${size}: ${rest}`);
       for (const action of await reflow.locator('.np-footer').getByRole('button').all()) {
         await action.focus();
         const fit = await onScreen();
@@ -240,6 +253,29 @@ const before = sql(`SELECT json_build_array(
       assert.equal(sql(`SELECT coalesce(starts_on::text, '') FROM projects WHERE id = '${project.id}'`), startsOn, 'Discarding leaves the saved planning date unchanged');
       assert.equal(sql(`SELECT name FROM projects WHERE id = '${project.id}'`), project.name, 'Discarding leaves the saved name unchanged');
       console.log(`DONE: legacy editor rows, planning date, footer and discard actions measured at ${size}`);
+    }
+    // At normal text a long name truncates beside the avatar instead of wrapping
+    // below it. The rename is a temporary fixture and is always restored.
+    const member = JSON.parse(sql(`SELECT row_to_json(m) FROM (
+      SELECT u.id, u.name FROM assignments a JOIN users u ON u.id = a.user_id
+      WHERE a.project_id = '${project.id}' ORDER BY (u.org_role = 'admin'), u.name LIMIT 1
+    ) m`));
+    const longName = 'Maximiliana Wilhelmina Konstantinopoulou-Ravensworth of Northumberland';
+    sql(`UPDATE users SET name = $$${longName}$$ WHERE id = '${member.id}'`);
+    try {
+      await page.setViewportSize({ width: 390, height: 900 });
+      await page.goto(`${base}/projects/${project.id}/edit`);
+      const longLabel = page.locator('.np-assignment-row').locator(`[title="${longName}"]`);
+      await expect(longLabel).toBeVisible();
+      const layout = await longLabel.evaluate(item => {
+        const avatar = item.closest('.np-assignment-row').querySelector('.avatar').getBoundingClientRect();
+        const text = item.getBoundingClientRect();
+        return { sameRow: text.top < avatar.bottom && text.bottom > avatar.top && text.left >= avatar.right - 1,
+          ellipsis: getComputedStyle(item).textOverflow === 'ellipsis' && item.scrollWidth > item.clientWidth };
+      });
+      if (!layout.sameRow || !layout.ellipsis) problems.push(`390x900 at 100% text long name: ${JSON.stringify(layout)}`);
+    } finally {
+      sql(`UPDATE users SET name = $$${member.name}$$ WHERE id = '${member.id}'`);
     }
     // The following cases were written for the desktop viewport the first loop left behind.
     await page.setViewportSize({ width: 1440, height: 900 });

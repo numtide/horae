@@ -138,9 +138,9 @@ pub(super) fn Team(
                     }
                     div { class: "flex flex-wrap items-center gap-4 min-w-0",
                         Avatar { initials: first_initial(&person.name), size: "project" }
-                        div { class: "min-w-0",
+                        div { class: "flex-1 basis-project-identity min-w-0",
                             div { class: "text-sm text-strong truncate", title: "{person.name}", "{person.name}" }
-                            div { class: "text-xs text-subtle", "Not on the tracking team" }
+                            div { class: "text-xs text-subtle wrap-anywhere", "Not on the tracking team" }
                             if !person.active { div { class: "text-xs text-subtle", "Inactive" } }
                         }
                     }
@@ -264,10 +264,10 @@ fn MemberRow(
             Checkbox { id: "np-person-manager-{id}", checked: member.manager, compact: true, disabled: !manager_editable, label: "{name} manages this project", onclick: move |_| on_toggle_manager.call(id) }
             div { class: "flex flex-wrap items-center gap-4 min-w-0",
                 Avatar { initials: first_initial(&name), size: "project" }
-                div { class: "min-w-0",
+                div { class: "flex-1 basis-project-identity min-w-0",
                     div { class: "text-sm text-strong truncate", title: "{name}", "{name}" }
                     if inactive { div { class: "text-xs text-subtle", "Inactive · tracking settings read only" } }
-                    div { class: "text-xs text-subtle", if member.manager { "Project manager" } else { "Project member" } }
+                    div { class: "text-xs text-subtle wrap-anywhere", if member.manager { "Project manager" } else { "Project member" } }
                 }
             }
             fieldset { class: "np-row-controls flex flex-wrap items-center gap-4 min-w-0 border-0 p-0 m-0", aria_label: "Tracking settings for {name}", disabled: inactive,

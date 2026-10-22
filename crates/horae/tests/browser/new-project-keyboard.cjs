@@ -119,12 +119,25 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       : `${Math.round(rect.left)}..${Math.round(rect.right)} x ${Math.round(rect.top)}..${Math.round(rect.bottom)} in ${innerWidth}x${innerHeight}`;
   }).then(problem => { if (problem) geometryProblems.push(`${label}: ${problem}`); });
   // Keyboard-only date choice, also checking that the calendar and Today fit the viewport.
+  // menu.js closes open menus on resize; let a queued resize and its layout run
+  // before the next interaction.
+  const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const pickToday = async label => {
     const trigger = screen.locator('#np-start');
     await activate(trigger);
     const calendar = page.getByRole('dialog', { name: 'Choose Start date', exact: true });
     await expect(calendar).toBeVisible();
-    await expect.poll(() => calendar.evaluate(node => node.contains(document.activeElement))).toBe(true);
+    try {
+      await expect.poll(() => calendar.evaluate(node => node.contains(document.activeElement))).toBe(true);
+    } catch (error) {
+      console.error(`${label}: calendar focus not contained`, await page.evaluate(() => {
+        const menu = document.getElementById('np-start-calendar'), trigger = document.getElementById('np-start');
+        const active = document.activeElement;
+        return { active: `${active?.tagName.toLowerCase()}${active?.id ? `#${active.id}` : ''} ${active?.getAttribute('aria-label') || active?.textContent.trim().slice(0, 24)}`,
+          open: menu?.matches(':popover-open'), expanded: trigger?.getAttribute('aria-expanded') };
+      }));
+      throw error;
+    }
     await fitsViewport(calendar, `${label} calendar`);
     const scrolls = await calendar.evaluate(node => node.scrollHeight <= node.clientHeight + 1 || ['auto', 'scroll'].includes(getComputedStyle(node).overflowY));
     if (!scrolls) geometryProblems.push(`${label} calendar: taller than its panel without scrolling`);
@@ -200,6 +213,8 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     if (!await root.evaluate(node => node.scrollWidth <= node.clientWidth + 1)) geometryProblems.push(`${label}: surface overflow`);
     const fit = await overflow(root.locator(form ? '.np-scroll' : '.modal'));
     if (fit) geometryProblems.push(`${label}: ${fit}`);
+    const footerFit = form ? await overflow(root.locator('.np-footer')) : '';
+    if (footerFit) geometryProblems.push(`${label} footer: ${footerFit}`);
     console.log(`AUDITED: ${label}`);
   };
   try {
@@ -221,10 +236,11 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       ['Person', 'No budget'], ['Task', 'Hours per task'], ['Project', 'Total project hours'],
       ['Person', 'Hours per person'], ['Task', 'Fees per task'], ['Project', 'Total project fees'],
     ];
-    for (const [width, scale] of [[390, 1], [768, 1], [1440, 1], [1440, 2], [390, 2], [768, 2], [320, 2]]) {
+    for (const [width, scale] of [[390, 1], [768, 1], [1181, 1], [1440, 1], [1440, 2], [1181, 2], [390, 2], [768, 2], [320, 2]]) {
       await page.setViewportSize({ width, height: 900 });
       // User text enlargement, applied only to the test document, not app styles.
       await page.evaluate(scale => { document.documentElement.style.fontSize = `${scale * 100}%`; }, scale);
+      await settle();
       // 100% cases keep the original empty dates; every enlarged case has a date
       // set, so its clear control is measured, and opens the calendar once.
       if (scale === 2) {
@@ -320,10 +336,21 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     // control, and each focused control shows inside its own visible scrollport
     // (the form above the footer, or the footer's own area). 390x568 at 100% text
     // guards the normal-size layout.
-    for (const [width, height, scale] of [[320, 568, 2], [390, 568, 2], [844, 390, 2], [390, 568, 1]]) {
+    for (const [width, height, scale] of [[320, 568, 2], [390, 568, 2], [844, 390, 2], [390, 568, 1], [390, 320, 1], [320, 568, 1]]) {
       const size = `${width}x${height} at ${scale * 100}% text`;
       await page.setViewportSize({ width, height });
       await page.evaluate(scale => { document.documentElement.style.fontSize = `${scale * 100}%`; }, scale);
+      await settle();
+      // At rest, before any focus scrolls it, Save is whole inside the footer.
+      const rest = await screen.locator('.np-footer').evaluate(footer => {
+        footer.scrollTop = 0;
+        const save = [...footer.querySelectorAll('button')].find(button => button.textContent.trim() === 'Save project');
+        const box = save.getBoundingClientRect(), port = footer.getBoundingClientRect();
+        const top = Math.max(port.top + footer.clientTop, 0), bottom = Math.min(port.top + footer.clientTop + footer.clientHeight, innerHeight);
+        return box.top >= top - 1 && box.bottom <= bottom + 1 && box.left >= -1 && box.right <= innerWidth + 1 ? ''
+          : `Save at rest ${Math.round(box.top)}..${Math.round(box.bottom)} outside ${Math.round(top)}..${Math.round(bottom)}`;
+      });
+      if (rest) geometryProblems.push(`${size}: ${rest}`);
       await audit(screen, size);
       for (const control of [
         screen.getByLabel('Project name', { exact: true }),
