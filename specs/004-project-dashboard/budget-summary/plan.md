@@ -1,6 +1,13 @@
 # Implementation plan: project budget remaining tile
 
-**Branch**: `feat/project-budget-summary` | **Date**: 2026-10-22 | **Base**: `0243a386`
+**Branch**: `feat/project-budget-summary` | **Date**: 2026-10-22 | **Base**: `8ae8458e`
+(prepared on `0243a386` and rebased after #302)
+
+**Delivery scope of this branch:** foundation and server only. It ships exact
+`format_hours2`, the core headline, a REPEATABLE READ detail snapshot, the
+access-gate MVCC fence, and the `ProjectDetailView.budget` projection with
+overflow containment. It ships no Budget remaining UI, no percentage and no
+disclosure. The tile, O1 and O2 remain later work.
 **Spec**: [spec.md](spec.md) | **Research**: [research.md](research.md) |
 **Data model**: [data-model.md](data-model.md) |
 **Contract**: [contracts/budget-summary.md](contracts/budget-summary.md) |
@@ -33,7 +40,7 @@ existing 5 s statement limit applies.
 | II Domain purity | Pass. `headline` lives in `horae-core` and reuses `allocated_totals`. |
 | III Single datastore | Pass. No schema change; org-scoped joins are unchanged. |
 | IV Server functions | Pass. Read stays in the existing typed server function; no client fetch. |
-| V Builds/format | Pending until the coordinated build: `.sqlx` regen, offline tests, clippy native/WASM, `nix fmt`. |
+| V Builds/format | Local builds, offline checks, lint and formatting pass. Required remote CI on the final head remains pending. |
 
 READ WRITE mode exists only to take authority locks, as in
 `crates/horae/src/server_fns/snapshot.rs`; no business row is written. No
@@ -147,8 +154,8 @@ All cases, commands and resource rules are in [quickstart.md](quickstart.md).
 
 ## Implementation record
 
-Local and uncommitted, awaiting coordinator review. This covers foundation and
-server only; it is not delivery of the tile or of 004.
+Foundation and server work is implemented, reviewed and locally verified.
+Required remote CI remains pending; this is not delivery of the tile or of 004.
 
 **Resources.** A disposable PostgreSQL 17 created with `mktemp`, `initdb` and
 `pg_ctl`, listening on a free non-default TCP port, with all migrations
@@ -183,9 +190,68 @@ No `.data`, ports 8080/8093/8094 or existing preview were used.
 | `cargo clippy -p horae --features web --target wasm32-unknown-unknown -- -D warnings` | exit 0 |
 | `nix fmt`, then `nix fmt -- --ci` | 10 files reformatted (rustfmt and mdformat only; SQL literals unchanged), then 0 changed |
 
-The tests and clippy ran on the source before that formatting pass. The
-post-rebase checks rerun on the formatted source. No browser suite has run,
-and none exists yet for this tile.
+The tests and clippy above ran on the source before that formatting pass and
+on the old base.
+
+**After the rebase onto `8ae8458e`** (commits `c3b3b41b`, `c02c1862`,
+`0d041745`; CI profile; `SQLX_OFFLINE=true` with the disposable database):
+
+| Command | Result |
+|---------|--------|
+| `cargo test -p horae-core` | exit 0; 201 passed |
+| `cargo test -p horae --features server --bin horae -- server_fns::projects::canonical_read_tests pages::reports reports:: server_fns::reports` | exit 0; 248 passed, 2 ignored |
+| `cargo test -p horae --features server --test detail_navigation --test scoped_reports_ui` | exit 0; 72 and 23 passed |
+| core, server (`--all-targets`) and WASM clippy, as above | exit 0 each |
+| `nix fmt -- --ci` | exit 0 |
+| `nix build .#default` | exit 0; `/nix/store/ykf5kgyyymx5cvhk0rw1gf0d7knnpa5c-horae-0.1.0` (the source filter excludes `.md`, so this is exactly `0d041745`) |
+
+The full database suite was not rerun on the new base; required CI runs it on
+the exact final head.
+
+**Browser regression on that package.** The repository runner
+`crates/horae/tests/browser/run-design-checks.sh` was run unchanged, with
+nixpkgs Playwright, Node and PostgreSQL as `nix/checks/browser.nix` uses them.
+It runs inside an unprivileged private network namespace
+(`unshare -rn`, loopback only, nested to a non-root uid). Its fixed port 8093
+is therefore private and cannot reach host services; the runner creates and
+destroys its own database. The environment was minimal: no mail, OIDC,
+integration or database credentials.
+
+| Suites | Result |
+|--------|--------|
+| `project-detail-header project-edit editor-navigation new-project new-project-navigation new-project-permissions project-read-permissions project-editor-permissions reports-currency-totals` | exit 1. All suites but the last passed. `reports-currency-totals` failed its fixture precondition at line 262 (a member cost already existed), because it documents that it must run first after a fresh seed and here it ran last. |
+| the same nine, `reports-currency-totals` first | exit 0; 64 `PASS` lines; node:test 13 passed, 0 failed |
+
+`reports-currency-totals` also prints an informational overflow note for the
+Reports filter form at 320px with 32px text (+36px). That page is not
+changed by this branch; compare it with the base build.
+
+The first, misordered run (exit 1) is kept as failed evidence of a
+suite-ordering error, not a product failure. The accepted browser result is
+the ordered run, with all nine suites passing, against package
+`/nix/store/ykf5kgyyymx5cvhk0rw1gf0d7knnpa5c-horae-0.1.0` built from production
+head `0d041745`.
+
+**Native smoke (coordinator).** The same package served from a separate
+disposable preview. The single-page app received the real
+`ProjectDetailView.budget` data transfer object:
+
+- Acme: hours, `exact` 12000/780/11220 minutes, lifetime;
+- TechStart: USD minor units, `exact` 1500000/147500/1352500, lifetime.
+
+The existing detail page was inspected at 1440px and 390px. It renders no
+budget tile, as intended for this foundation-only branch.
+
+**Pending before and after publication:**
+
+- required remote CI on the exact final head (including the full database
+  suite on the new base);
+- the Budget remaining tile UI, browser suite and accessibility checks
+  (T011, T012, T014, T015, T017), after UI-pattern review;
+- O1, exact-half percentage rounding, which is user-deferred and still
+  unverified in Harvest; no percentage is implemented;
+- O2, the allowance and spent disclosure (a proposal; the expense split
+  depends on feature 016).
 
 **Post-begin statement audit (T016).** After `begin_snapshot`,
 `detail_view::fetch` runs:

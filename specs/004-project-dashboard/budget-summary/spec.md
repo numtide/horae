@@ -1,9 +1,17 @@
 # Feature specification: project budget remaining tile
 
-**Branch**: `feat/project-budget-summary` | **Created**: 2026-10-22 | **Base**: `0243a386`
-**Status**: Foundation and server work implemented locally and awaiting
-review (see [plan.md](plan.md#implementation-record)). No UI yet; O1 is open;
-not delivered.
+**Branch**: `feat/project-budget-summary` | **Created**: 2026-10-22 | **Base**: `8ae8458e`
+**Status**: This branch delivers foundation and server only at head
+`0d041745`. Local gates, nine ordered browser suites and a native smoke pass
+on package `/nix/store/ykf5kgyyymx5cvhk0rw1gf0d7knnpa5c-horae-0.1.0` (see
+[plan.md](plan.md#implementation-record)). Still pending:
+
+- required remote CI on the final head;
+- the tile UI;
+- its percentage (O1, user-deferred);
+- the disclosure (O2).
+
+The feature is not complete.
 
 Input: deliver the Project Detail "Budget remaining" tile from the approved
 handoff (`design/project/app/11_Project Detail.dc.html`, stat tiles), backed by
