@@ -8,18 +8,19 @@ certify this new regression. No backend or product decision is being reopened.
 
 - [x] R001 Confirm measured causes and source mapping in `plan.md`; preserve the
   isolated branch/worktree and existing guards.
-- [ ] R002 [US6] Add failing inner-scroll, control and dialog geometry/keyboard
+- [x] R002 [US6] Add failing inner-scroll, control and dialog geometry/keyboard
   assertions in `crates/horae/tests/browser/new-project-keyboard.cjs` and/or
   `project-edit.cjs`. Use their disposable fixtures and preserve all old cases.
-  Assertions are written (390/768 at 200% for the creation matrix, its dialogs and
-  legacy Edit with a set date and discard actions). Still open until the red
-  run has been observed.
+  Red observed on `cfa85271` (`c402bc6b`, session 72386): form 556/390 and
+  discard dialog 454/324 at 390px with 200% text; see `plan.md`.
 
 ## Implementation
 
 - [ ] R003 [US6] Apply minimal wrapping/shrink constraints in
   `crates/horae/src/pages/new_project.rs` and its affected section modules;
   use `assets/css/horae.css` only for necessary scoped structural rules.
+  Written, not accepted: awaiting the coordinator's green run and
+  regression checks (see `plan.md`).
 - [ ] R004 [US7] Verify configured/legacy Edit, creation conditional panels,
   discard/reload focus and unchanged saved/draft state with the existing browser
   suites; record evidence in this directory's `plan.md`.

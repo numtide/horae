@@ -176,7 +176,7 @@ pub(super) fn Basics(
             }
         }
         FormRow { label: "Dates", hint: "Optional · planning only",
-            div { class: "flex flex-wrap items-center gap-3",
+            div { class: "np-dates flex flex-wrap items-center gap-3",
                 FormGroup { label: "Start date", id: "np-start",
                     DateField { id: "np-start", error_id: error_id(ProjectFormField::StartsOn), label: "Start date", placeholder: "Starts on", value: form.read().starts_on.clone(), onchange: move |value| form.write().starts_on = value }
                 }
@@ -374,7 +374,7 @@ fn NewClientDialog(
                         Input { id: "np-new-client-rate", value: rate(), disabled: busy(), oninput: move |event: FormEvent| rate.set(event.value()) }
                     }
                     p { class: "text-sm text-subtle", "Creates a client immediately, even if you later discard this project draft." }
-                    div { class: "modal-actions",
+                    div { class: "modal-actions flex-wrap",
                         button { class: "btn btn-primary", r#type: "submit", disabled: busy() || name.read().trim().is_empty(), if busy() { "Creating…" } else { "Create client" } }
                         button { class: "btn btn-secondary", r#type: "button", disabled: busy(), onclick: move |_| on_dismiss.call(()), "Cancel" }
                     }

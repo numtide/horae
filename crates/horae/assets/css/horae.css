@@ -828,6 +828,8 @@ h1, h2, h3, h4, h5, h6 {
 .np-tags .chip { max-width: 100%; }
 .np-tags .chip-input-field { min-width: min(100%, var(--width-tag-entry)); }
 .np-date-field.form-input { width: var(--width-planning-date); }
+/* A planning-date group may narrow below the field's preferred width at enlarged text. */
+.np-dates > .form-group { min-width: 0; }
 /* Only the planning-date wrapper opts into top-layer calendar positioning. */
 .np-date-popover { background: transparent; }
 .np-date-popover .dp { max-width: 100%; }

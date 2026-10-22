@@ -52,6 +52,35 @@ The existing 200% audit ran only at 1440px and measured `.np-page` and the dialo
 element. Focus scrolls the inner `.np-scroll`/`.modal` scroller, which hid this
 overflow. R002 checks those scrollports directly.
 
+## Observed red (R002)
+
+Tests committed in `c402bc6b`. A focused `project-edit` run against the cached
+`cfa85271` server (session 72386, derivation `7li4ymlilpygvk9j115x07wcayfg59w6`)
+exited 1. At 390px with 200% text, the form scroll width was 556 against a client
+width of 390. The date group with a set date spans 40..474; its clear control
+spans 408..474. The discard dialog's scroll width was 454 against a client width
+of 324, with Keep editing at 272..454. The earlier normal-text Save/reload cases
+at 390/768/1440 passed.
+
+## Written correction (R003, not yet accepted)
+
+- `new_project/date_field.rs`: the date wrapper wraps (`flex-wrap`), so a set date's
+  clear control moves below the field. The button keeps its 180px preferred width
+  but is capped at its group (`max-w-full`).
+- `new_project/basics.rs` + `horae.css`: the dates row is marked `np-dates`;
+  `.np-dates > .form-group { min-width: 0; }` lets each group shrink to the line.
+  `FormGroup` takes no class, so this one scoped structural rule is necessary.
+- `new_project/tasks.rs`, `team.rs`: task rate/budget and person bill/cost/budget
+  labels add `flex-wrap min-w-0 max-w-full`. The label then narrows to its cell,
+  the `w-30 max-w-full` input caps at the label, and the prefix and suffix wrap.
+- `new_project.rs` (discard, reload), `basics.rs` (New client), `tasks.rs` (task
+  access): `modal-actions flex-wrap`, as `projects.rs` already does. The shared
+  `.modal-actions` default is unchanged.
+
+At 100% text every affected row already fits, so preferred widths and layout are
+unchanged. No text sizes, overflow clipping, truncation, tokens, utilities or
+shared component defaults were changed.
+
 ## Implementation and validation
 
 1. Extend the existing isolated browser checks with a failing enlarged-text

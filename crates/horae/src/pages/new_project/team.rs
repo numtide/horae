@@ -272,7 +272,7 @@ fn MemberRow(
             }
             fieldset { class: "np-row-controls flex flex-wrap items-center gap-4 min-w-0 border-0 p-0 m-0", aria_label: "Tracking settings for {name}", disabled: inactive,
                 if billable_access != ProjectFieldAccess::Withheld && ((form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Person) || form.read().rate_mode == RateMode::Legacy) {
-                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-person-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::PersonRate(id)),
+                    label { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full text-xs text-subtle", r#for: "np-person-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::PersonRate(id)),
                         "bill"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-rate-{id}", disabled: billable_access != ProjectFieldAccess::Editable, label: "Billable rate for {name} ({billing_currency}/h)", value: member.billable_rate,
                             error_id: (invalid_field == Some(ProjectFormField::PersonRate(id))).then(|| format!("np-person-error-{id}")),
@@ -283,7 +283,7 @@ fn MemberRow(
                     }
                 }
                 if cost_access != ProjectFieldAccess::Withheld {
-                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-cost-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::CostRate(id)),
+                    label { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full text-xs text-subtle", r#for: "np-cost-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::CostRate(id)),
                         "cost"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-cost-rate-{id}", disabled: cost_access != ProjectFieldAccess::Editable, label: "Cost rate for {name} ({org_currency}/h)", value: member.cost_rate,
                             error_id: (invalid_field == Some(ProjectFormField::CostRate(id))).then(|| format!("np-person-error-{id}")),
@@ -294,7 +294,7 @@ fn MemberRow(
                     }
                 }
                 if form.read().budget_mode == BudgetMode::HoursPerPerson {
-                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-person-budget-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::Budget),
+                    label { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full text-xs text-subtle", r#for: "np-person-budget-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::Budget),
                         "budget"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-budget-{id}", label: "Budget hours for {name}", value: member.budget,
                             error_id: (invalid_field == Some(ProjectFormField::PersonBudget(id))).then(|| format!("np-person-error-{id}")),

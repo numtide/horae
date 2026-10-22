@@ -733,7 +733,7 @@ fn ProjectEditor(
             div { class: "modal-body",
                 h2 { id: "np-discard-title", class: "modal-title", if editing { "Discard changes?" } else { "Discard this draft?" } }
                 p { if editing { "Your unsaved changes will be lost. The saved project will not be changed." } else { "The draft will be removed. Clients you created will remain available." } }
-                div { class: "modal-actions",
+                div { class: "modal-actions flex-wrap",
                     button {
                         class: "btn btn-danger",
                         onclick: move |_| {
@@ -758,7 +758,7 @@ fn ProjectEditor(
             div { class: "modal-body",
                 h2 { id: "np-reload-title", class: "modal-title", "Reload project?" }
                 p { "Your local edits will be discarded and replaced with the current saved project." }
-                div { class: "modal-actions",
+                div { class: "modal-actions flex-wrap",
                     button { class: "btn btn-danger", onclick: move |_| on_reload.call(()), "Reload project" }
                     button { class: "btn btn-secondary", onclick: move |_| reload_open.set(false), "Keep editing" }
                 }
