@@ -3,6 +3,8 @@ const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwrigh
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const base = process.env.HORAE_TEST_URL;
+// The list editor URL; the router may end it with an empty query delimiter.
+const atEditor = id => url => [`${base}/projects/${id}/edit`, `${base}/projects/${id}/edit?`].includes(url.href);
 const target = new URL(base);
 const database = new URL(process.env.DATABASE_URL);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
@@ -44,7 +46,7 @@ const before = sql(`SELECT json_build_array(
       const row = page.locator('.proj-row').filter({ has: page.locator(`a[href="/projects/${project.id}"]`) });
       await row.getByRole('button', { name: /^Actions/ }).click();
       await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
-      await expect(page).toHaveURL(`${base}/projects/${project.id}/edit`);
+      await expect(page).toHaveURL(atEditor(project.id));
       const editor = page.locator('.np-page');
       await expect(editor.getByRole('heading', { name: 'Edit project', exact: true })).toBeVisible();
       await expect(page.locator('#proj-name')).toHaveCount(0);
@@ -59,7 +61,7 @@ const before = sql(`SELECT json_build_array(
       const confirmation = page.getByRole('dialog');
       await expect(confirmation).toBeVisible();
       await confirmation.getByRole('button', { name: 'Discard changes', exact: true }).click();
-      await expect(page).not.toHaveURL(`${base}/projects/${project.id}/edit`);
+      await expect(page).not.toHaveURL(atEditor(project.id));
       assert.equal(sql(`SELECT name FROM projects WHERE id = '${project.id}'`), project.name);
 
       await page.goto(`${base}/projects/${project.id}/edit`);
@@ -156,7 +158,7 @@ const before = sql(`SELECT json_build_array(
       const navigation = action();
       await (await dialog).dismiss();
       await navigation;
-      await expect(page).toHaveURL(`${base}/projects/${configuredId}/edit`);
+      await expect(page).toHaveURL(atEditor(configuredId));
       await expect(editor.locator('#np-name')).toHaveValue('Keep this unsaved edit');
     };
     await dismiss(() => page.locator('a.nav-item[href="/clients"]').click());
@@ -201,7 +203,7 @@ const before = sql(`SELECT json_build_array(
     assert.equal(pendingDialog.type(), 'alert');
     await pendingDialog.accept();
     await sidebarClick;
-    await expect(page).toHaveURL(`${base}/projects/${configuredId}/edit`);
+    await expect(page).toHaveURL(atEditor(configuredId));
     await page.unroute('**/api/save_project_editor*');
     await page.route('**/api/save_project_editor*', route => {
       requests.push(route.request().postData());

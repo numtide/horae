@@ -24,6 +24,8 @@ mod catalog;
 mod date_field;
 #[path = "new_project/draft.rs"]
 mod draft;
+#[path = "new_project/edit_return.rs"]
+mod edit_return;
 #[path = "new_project/invoice_defaults.rs"]
 mod invoice_defaults;
 #[path = "new_project/protected.rs"]
@@ -37,6 +39,7 @@ mod team;
 use basics::Basics;
 use billing::Billing;
 use draft::DraftState;
+pub use edit_return::EditReturn;
 use invoice_defaults::InvoiceDefaults;
 use tasks::Tasks;
 use team::{Team, Visibility};
@@ -130,18 +133,37 @@ pub fn NewProject(#[props(default)] client_context: Option<String>) -> Element {
     }
 }
 
+/// Where leaving the editor for project `id` goes: its detail only when the URL
+/// named this same project, otherwise the Projects list.
+pub fn edit_return_route(id: Uuid, return_to: EditReturn) -> Route {
+    if return_to.returns_to(id) {
+        Route::ProjectDetail { id }
+    } else {
+        Route::ProjectList {}
+    }
+}
+
+fn back_label(exit: &Route) -> &'static str {
+    if matches!(exit, Route::ProjectDetail { .. }) {
+        "Back to project"
+    } else {
+        "Back to Projects"
+    }
+}
+
 #[component]
-pub fn EditProject(id: Uuid) -> Element {
+pub fn EditProject(id: Uuid, return_to: EditReturn) -> Element {
+    let exit = edit_return_route(id, return_to);
     // Keyed fragments remount resources and local state when the route changes.
     rsx! {
         for project_id in [id] {
-            ProjectEditLoader { key: "{project_id}", id: project_id }
+            ProjectEditLoader { key: "{project_id}", id: project_id, exit: exit.clone() }
         }
     }
 }
 
 #[component]
-fn ProjectEditLoader(id: Uuid) -> Element {
+fn ProjectEditLoader(id: Uuid, exit: Route) -> Element {
     let mut generation = use_signal(Uuid::now_v7);
     let mut unavailable = use_signal(|| false);
     let mut initial = use_resource(use_reactive!(|id| async move {
@@ -189,7 +211,7 @@ fn ProjectEditLoader(id: Uuid) -> Element {
                 p { "If a save was in progress, check the saved project after reloading." }
             }
             button { id: "np-editor-reload", class: "btn btn-secondary", onclick: move |_| reload.call(()), "Reload project" }
-            Link { to: Route::ProjectList {}, class: "btn btn-ghost", "Back to Projects" }
+            Link { to: exit.clone(), class: "btn btn-ghost", {back_label(&exit)} }
         };
     }
     if initial.state()() != UseResourceState::Ready {
@@ -203,7 +225,7 @@ fn ProjectEditLoader(id: Uuid) -> Element {
                     key: "{key}",
                     options: options.clone(), draft: None, existing: Some(project.clone()),
                     generation: generation(), on_unavailable: invalidate,
-                    on_reload: reload,
+                    on_reload: reload, exit: exit.clone(),
                 }
             }
         }
@@ -211,7 +233,7 @@ fn ProjectEditLoader(id: Uuid) -> Element {
             h1 { class: "text-4xl font-semibold text-strong", "Edit project" }
             div { class: "alert alert-danger", role: "alert", "Could not load project: {error}" }
             button { class: "btn btn-secondary", onclick: move |_| reload.call(()), "Retry" }
-            Link { to: Route::ProjectList {}, class: "btn btn-ghost", "Back to Projects" }
+            Link { to: exit.clone(), class: "btn btn-ghost", {back_label(&exit)} }
         },
         Some(Ok(_)) | None => rsx! { p { role: "status", "Loading project…" } },
     }
@@ -254,6 +276,9 @@ fn ProjectEditor(
     on_reload: EventHandler<()>,
     #[props(default)] generation: Uuid,
     #[props(default)] on_unavailable: EventHandler<Uuid>,
+    /// Where an edit is left without saving; creation always leaves to Projects.
+    #[props(default = Route::ProjectList {})]
+    exit: Route,
 ) -> Element {
     let invalidated = use_signal(|| false);
     use_context_provider(|| session::Boundary {
@@ -346,12 +371,13 @@ fn ProjectEditor(
             state.read().is_dirty(&form.read())
         }
     });
+    let leave_to = exit.clone();
     let request_intent = use_callback(move |action| {
         if editing && action == Intent::Leave {
             if dirty() {
                 discard_open.set(true);
             } else {
-                navigator.push(Route::ProjectList {});
+                navigator.push(leave_to.clone());
             }
             return;
         }
@@ -566,6 +592,7 @@ fn ProjectEditor(
             (ProjectFieldAccess::Editable, private, private)
         });
 
+    let discard_to = exit.clone();
     rsx! {
         div { class: "np-page flex flex-col h-full",
             "data-project-edit-state": if locked || unresolved_request || (!editing && (busy() || dirty)) { "pending" } else if dirty { "dirty" } else { "clean" },
@@ -577,7 +604,7 @@ fn ProjectEditor(
                         disabled: locked || unresolved_request,
                         onclick: move |_| request_intent.call(Intent::Leave),
                         span { class: "inline-flex", aria_hidden: "true", NavIcon { name: "arrow-left", class: "size-4" } }
-                        "Back to Projects"
+                        {back_label(&exit)}
                     }
                     header { class: "flex flex-wrap items-end gap-4 mt-5 pb-6 border-b border-light",
                         div {
@@ -712,7 +739,7 @@ fn ProjectEditor(
                         onclick: move |_| {
                             discard_open.set(false);
                             if editing {
-                                spawn(leave_project_editor(navigator, Route::ProjectList {}));
+                                spawn(leave_project_editor(navigator, discard_to.clone()));
                             } else { request_intent.call(Intent::Discard); }
                         },
                         if editing { "Discard changes" } else { "Discard draft" }

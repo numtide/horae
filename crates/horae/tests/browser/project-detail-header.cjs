@@ -82,13 +82,109 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await expect(header).toContainText('EUR');
     await expect(header).not.toContainText('Archived');
     await expect(page.getByRole('link', { name: 'Back to Projects', exact: true })).toHaveAttribute('href', '/projects');
-    await expect(page.getByRole('link', { name: 'Edit project', exact: true })).toHaveAttribute('href', `/projects/${project}/edit`);
     await expect(header).toContainText('Header private note');
     await expect(header).toContainText('header-tag');
     await expect(header).toContainText('01 Sep 2026');
     await expect(page.getByRole('region', { name: 'Project tasks', exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Project team', exact: true })).toBeVisible();
     console.log('PASS: header shows the real client link, code/name, type, currency and saved information');
+
+    // Editing from the detail returns there; only this project's own detail path is honoured.
+    const editLink = page.getByRole('link', { name: 'Edit project', exact: true });
+    const editUrl = `${base}/projects/${project}/edit?return_to=/projects/${project}`;
+    const editorClean = page.locator('[data-project-edit-state="clean"]');
+    // Check the hydrated editor's Back label, optionally again after a reload of the
+    // same address, then that Cancel really leaves for the expected destination.
+    const cancelTo = async (url, destination, reload = false) => {
+      const label = destination === `${base}/projects` ? 'Back to Projects' : 'Back to project';
+      const ready = async () => {
+        await expect(page.getByRole('heading', { level: 1, name: 'Edit project', exact: true })).toBeVisible();
+        await expect(editorClean).toHaveCount(1);
+        await expect(page.locator('.np-page').getByRole('button', { name: label, exact: true })).toBeVisible();
+      };
+      await page.goto(url, { waitUntil: 'networkidle' });
+      await ready();
+      if (reload) {
+        await page.reload({ waitUntil: 'networkidle' });
+        await ready();
+      }
+      await page.locator('#np-cancel').click();
+      await expect(page).toHaveURL(destination);
+    };
+    await cancelTo(editUrl, `${base}/projects/${project}`);
+    await expect(title).toBeVisible();
+    await expect(editLink).toHaveAttribute('href', `/projects/${project}/edit?return_to=/projects/${project}`);
+    for (const exit of ['Cancel', 'Back']) {
+      await editLink.click();
+      await expect(page).toHaveURL(editUrl);
+      if (exit === 'Cancel') await page.reload();
+      await expect(editorClean).toHaveCount(1);
+      if (exit === 'Cancel') {
+        await page.locator('#np-cancel').click();
+      } else {
+        await expect(page.getByRole('button', { name: 'Back to Projects', exact: true })).toHaveCount(0);
+        await page.getByRole('button', { name: 'Back to project', exact: true }).click();
+      }
+      await expect(page).toHaveURL(`${base}/projects/${project}`);
+      await expect(title).toBeVisible();
+    }
+
+    // Dirty edits keep their guards: staying keeps the draft, browser Back asks first, Discard returns here.
+    const editorName = page.locator('.np-page #np-name');
+    const discardDialog = page.locator('#np-discard-dialog');
+    const savedName = () => sql(`SELECT name FROM projects WHERE id='${project}'`);
+    await editLink.click();
+    await expect(editorName).toHaveValue('Header project');
+    await editorName.fill('Unsaved header name');
+    await page.locator('#np-cancel').click();
+    await expect(discardDialog).toBeVisible();
+    await discardDialog.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(discardDialog).toBeHidden();
+    await expect(page).toHaveURL(editUrl);
+    await expect(editorName).toHaveValue('Unsaved header name');
+    const guard = page.waitForEvent('dialog', { timeout: 5000 });
+    const historyBack = page.evaluate(() => history.back());
+    await (await guard).dismiss();
+    await historyBack;
+    await expect(page).toHaveURL(editUrl);
+    await expect(editorName).toHaveValue('Unsaved header name');
+    await page.getByRole('button', { name: 'Back to project', exact: true }).click();
+    await discardDialog.getByRole('button', { name: 'Discard changes', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/projects/${project}`);
+    await expect(title).toBeVisible();
+    assert.equal(savedName(), 'Header project', 'Discarding saves nothing');
+
+    // Save stays explicit and lands on the saved project's detail, through a reload.
+    for (const [from, name] of [['Header project', 'Saved header name'], ['Saved header name', 'Header project']]) {
+      await editLink.click();
+      await expect(editorName).toHaveValue(from);
+      await editorName.fill(name);
+      await page.locator('.np-page').getByRole('button', { name: 'Save changes', exact: true }).click();
+      await expect(page).toHaveURL(`${base}/projects/${project}`);
+      await expect(page.getByRole('heading', { level: 1, name: `[HDR-1] ${name}`, exact: true })).toBeVisible();
+      assert.equal(savedName(), name);
+      await page.reload();
+      await expect(page.getByRole('heading', { level: 1, name: `[HDR-1] ${name}`, exact: true })).toBeVisible();
+    }
+    for (const forged of [`/projects/${uncoded}`, `//example.com/projects/${project}`, `https://example.com/projects/${project}`,
+      `/projects/${project}/edit`, `/projects/${project}%3Fx=1`, 'javascript:alert(1)']) {
+      await cancelTo(`${base}/projects/${project}/edit?return_to=${forged}`, `${base}/projects`);
+    }
+    // One standard URL decoding yields this project. A second encoding, an encoded
+    // separator or any extra or repeated parameter fails closed. The browser keeps
+    // the typed address, so a reload must reach the same label and exit again.
+    await cancelTo(`${base}/projects/${project}/edit?return_to=%2Fprojects%2F${project}`, `${base}/projects/${project}`, true);
+    const doubleEncoded = `return_to=%252Fprojects%252F${project}`;
+    for (const query of [doubleEncoded, `return_to=%25252Fprojects%25252F${project}`,
+      `return_to=/projects/${project}%26x=1`, `return_to=/projects/${project}&x=1`,
+      `return_to=/projects/${project}&return_to=/projects/${project}`, `x=1&return_to=/projects/${project}`]) {
+      await cancelTo(`${base}/projects/${project}/edit?${query}`, `${base}/projects`, query === doubleEncoded);
+    }
+    await cancelTo(`${base}/projects/${project}/edit`, `${base}/projects`);
+    assert.equal(savedName(), 'Header project', 'Leaving a clean editor saves nothing');
+    await page.goto(`${base}/projects/${project}`);
+    await expect(title).toBeVisible();
+    console.log('PASS: detail-origin Cancel, Back and Discard return to this project; dirty guards and Save are unchanged; forged and plain edit URLs return to Projects');
 
     const titleColors = {};
     for (const theme of ['dark', 'light']) {
@@ -182,7 +278,7 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await expect(page).toHaveURL(`${base}/projects`);
     await page.goto(`${base}/projects/${project}`);
     await page.getByRole('link', { name: 'Edit project', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects/${project}/edit`);
+    await expect(page).toHaveURL(editUrl);
     await page.goBack();
     await expect(title).toBeVisible();
     await header.getByRole('link', { name: 'Header client', exact: true }).click();

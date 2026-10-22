@@ -119,7 +119,7 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
       const last = page.locator('.proj-row').last();
       await last.getByRole('button', { name: 'Actions' }).click();
       await last.getByRole('menu').getByRole('menuitem', { name: 'Edit', exact: true }).click();
-      await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}\/edit$/);
+      await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}\/edit\??$/);
       await expect(page.locator('.np-page').getByRole('heading', { name: 'Edit project', exact: true })).toBeVisible();
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, 'Shared editor fits a 320px viewport');
       await page.locator('.np-footer').getByRole('button', { name: 'Cancel', exact: true }).click();

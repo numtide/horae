@@ -3,6 +3,8 @@ const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwrigh
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const base = process.env.HORAE_TEST_URL;
+// The list editor URL; the router may end it with an empty query delimiter.
+const atEditor = id => url => [`${base}/projects/${id}/edit`, `${base}/projects/${id}/edit?`].includes(url.href);
 const target = new URL(base);
 const database = new URL(process.env.DATABASE_URL);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
@@ -76,7 +78,7 @@ assert.ok(task.default_rate_cents > 0);
     const row = page.locator('.proj-row').filter({ has: page.locator(`a[href="/projects/${id}"]`) });
     await row.getByRole('button', { name: 'Actions' }).click();
     await row.getByRole('menuitem', { name: 'Edit', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects/${id}/edit`);
+    await expect(page).toHaveURL(atEditor(id));
   };
   const openEditor = async id => {
     await readsFinished();

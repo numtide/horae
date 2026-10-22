@@ -18,6 +18,8 @@ use crate::pages::{
     tasks::TaskCatalog,
     timesheet::{Anchor, CalSpan, Timesheet, ViewMode},
 };
+// Route constructors outside the editor name the typed query through this module.
+pub use crate::pages::new_project::EditReturn;
 
 #[component]
 fn NotFound(route: Vec<String>) -> Element {
@@ -67,8 +69,10 @@ pub enum Route {
     NewProject {},
     #[route("/projects/new/client/:client")]
     NewProjectForClient { client: String },
-    #[route("/projects/:id/edit")]
-    EditProject { id: Uuid },
+    // The whole query is the typed `EditReturn`, so only its canonical form survives
+    // a reparse; only the project detail sets it.
+    #[route("/projects/:id/edit?:..return_to")]
+    EditProject { id: Uuid, return_to: EditReturn },
     #[route("/projects/:id")]
     ProjectDetail { id: Uuid },
     #[route("/approvals")]
@@ -125,6 +129,7 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pages::new_project::edit_return_route;
 
     #[test]
     fn timesheet_routes_preserve_selected_person_in_every_view() {
@@ -211,12 +216,195 @@ mod tests {
         let id = Uuid::now_v7();
         let path = format!("/projects/{id}/edit");
         let route: Route = path.parse().unwrap();
-        assert!(matches!(route, Route::EditProject { id: parsed } if parsed == id));
-        assert_eq!(route.to_string(), path);
+        assert!(
+            matches!(&route, Route::EditProject { id: parsed, return_to } if *parsed == id && *return_to == EditReturn::default())
+        );
+        // Serializing the route does append an empty query delimiter.
+        assert_eq!(route.to_string(), format!("{path}?"));
+        assert!(route.to_string().parse::<Route>().unwrap() == route);
         assert!(matches_navigation(&Route::ProjectList {}, &route));
         assert!(!matches_navigation(&Route::ClientList {}, &route));
         assert!(
             matches!(format!("/projects/{id}").parse::<Route>().unwrap(), Route::ProjectDetail { id: parsed } if parsed == id)
         );
+    }
+
+    /// The editor's exit for a parsed edit URL and the route's serialized URL,
+    /// asserting the URL kept its project and that repeated serialize/parse round
+    /// trips change neither the route, its exit nor the serialized URL.
+    fn edit_exit(url: &str, id: Uuid) -> (Route, String) {
+        let exit_of = |route: &Route| match route {
+            Route::EditProject {
+                id: parsed,
+                return_to,
+            } => {
+                assert_eq!(*parsed, id, "{url}");
+                edit_return_route(id, *return_to)
+            }
+            _ => panic!("{url} is not the project editor"),
+        };
+        let mut route = url.parse::<Route>().unwrap();
+        let exit = exit_of(&route);
+        let canonical = route.to_string();
+        for round in 1..=3 {
+            let reparsed: Route = route.to_string().parse().unwrap();
+            assert!(
+                reparsed == route,
+                "{url}: route changed after round trip {round}"
+            );
+            assert!(
+                exit_of(&reparsed) == exit,
+                "{url}: exit changed after round trip {round}"
+            );
+            assert_eq!(reparsed.to_string(), canonical, "{url}: round trip {round}");
+            route = reparsed;
+        }
+        (exit, canonical)
+    }
+
+    /// No target, or one that is not lexically the canonical query: the route
+    /// serializes to the bare editor URL, and the editor exits to Projects.
+    fn assert_bare_list_exit(url: &str, id: Uuid) {
+        let written = format!("/projects/{id}/edit?");
+        assert!(
+            edit_exit(url, id) == (Route::ProjectList {}, written),
+            "{url}"
+        );
+    }
+
+    #[test]
+    fn detail_origin_edit_round_trips_and_returns_to_the_same_project() {
+        let id = Uuid::now_v7();
+        let route = Route::EditProject {
+            id,
+            return_to: EditReturn::detail(id),
+        };
+        let url = route.to_string();
+        assert_eq!(url, format!("/projects/{id}/edit?return_to=/projects/{id}"));
+        assert_eq!(
+            url,
+            format!(
+                "/projects/{id}/edit?return_to={}",
+                Route::ProjectDetail { id }
+            )
+        );
+        assert!(url.parse::<Route>().unwrap() == route);
+        assert!(edit_exit(&url, id) == (Route::ProjectDetail { id }, url.clone()));
+        assert!(matches_navigation(&Route::ProjectList {}, &route));
+        // The router decodes the query once, so a standard encoding is the same path.
+        let encoded = format!("/projects/{id}/edit?return_to=%2Fprojects%2F{id}");
+        assert!(edit_exit(&encoded, id) == (Route::ProjectDetail { id }, url));
+    }
+
+    #[test]
+    fn list_origin_and_plain_edit_urls_keep_returning_to_projects() {
+        let id = Uuid::now_v7();
+        let list_origin = Route::EditProject {
+            id,
+            return_to: EditReturn::default(),
+        }
+        .to_string();
+        for url in [format!("/projects/{id}/edit"), list_origin] {
+            assert_bare_list_exit(&url, id);
+        }
+    }
+
+    #[test]
+    fn foreign_unsafe_or_extended_return_targets_fall_back_to_projects() {
+        let id = Uuid::now_v7();
+        let other = Uuid::now_v7();
+        // Another project's canonical target is a valid query, so it is kept as
+        // typed and serialized unchanged, but it never leaves this editor for
+        // that project.
+        let foreign = format!("/projects/{id}/edit?return_to=/projects/{other}");
+        assert!(
+            matches!(foreign.parse::<Route>().unwrap(), Route::EditProject { return_to, .. }
+                if return_to == EditReturn::detail(other))
+        );
+        assert!(edit_exit(&foreign, id) == (Route::ProjectList {}, foreign.clone()));
+        // Everything else is not lexically the canonical query and is dropped.
+        let upper = id.to_string().to_uppercase();
+        let simple = id.simple().to_string();
+        let braced = id.braced().to_string();
+        let urn = id.urn().to_string();
+        for target in [
+            String::new(),
+            format!("/projects/{upper}"),
+            format!("/projects/{simple}"),
+            format!("/projects/{braced}"),
+            format!("/projects/{urn}"),
+            format!("projects/{id}"),
+            format!("/projects/{id}/"),
+            format!("/projects/{id}/edit"),
+            format!("/projects/{id}%3Ftab=team"),
+            format!("/projects/{id}%23team"),
+            format!("/projects/{id}%20"),
+            format!("%20/projects/{id}"),
+            format!("/projects/{id}=x"),
+            format!("/projects//{id}"),
+            format!("//evil.example/projects/{id}"),
+            format!("https://evil.example/projects/{id}"),
+            format!("%2F%2Fevil.example%2Fprojects%2F{id}"),
+            // Decoded once only: a double encoding is not this project's path.
+            format!("%252Fprojects%252F{id}"),
+            "javascript:alert(1)".into(),
+            "/projects/not-a-project".into(),
+            format!("/clients/{id}"),
+            "/projects".into(),
+        ] {
+            let url = format!("/projects/{id}/edit?return_to={target}");
+            assert_bare_list_exit(&url, id);
+        }
+    }
+
+    #[test]
+    fn extra_encoded_targets_stay_invalid_after_the_router_rewrites_the_url() {
+        let id = Uuid::now_v7();
+        // After one decode these are not the exact path, so they must never
+        // become it, however often the route is serialized and reparsed.
+        for target in [
+            format!("%252Fprojects%252F{id}"),
+            format!("%25252Fprojects%25252F{id}"),
+            format!("%2Fprojects%252F{id}"),
+            format!("/projects%252F{id}"),
+            format!("%252Fprojects/{id}"),
+            format!("/projects/{id}%2520"),
+            format!("/projects/{id}%26x=1"),
+            format!("/projects/{id}%26return_to=/projects/{id}"),
+            format!("/projects/{id}%2526x=1"),
+        ] {
+            let url = format!("/projects/{id}/edit?return_to={target}");
+            assert_bare_list_exit(&url, id);
+        }
+    }
+
+    #[test]
+    fn extra_or_repeated_query_parameters_fail_closed() {
+        let id = Uuid::now_v7();
+        let other = Uuid::now_v7();
+        for query in [
+            format!("return_to=/projects/{id}&x=1"),
+            format!("x=1&return_to=/projects/{id}"),
+            format!("return_to=/projects/{id}&return_to=/projects/{id}"),
+            format!("return_to=/projects/{other}&return_to=/projects/{id}"),
+            format!("return_to=/projects/{id}&"),
+            format!("&return_to=/projects/{id}"),
+            format!("Return_to=/projects/{id}"),
+        ] {
+            let url = format!("/projects/{id}/edit?{query}");
+            assert_bare_list_exit(&url, id);
+        }
+    }
+
+    #[test]
+    fn return_target_never_selects_a_different_project() {
+        let id = Uuid::now_v7();
+        let other = Uuid::now_v7();
+        let target =
+            EditReturn::from(format!("return_to={}", Route::ProjectDetail { id: other }).as_str());
+        assert!(target == EditReturn::detail(other));
+        assert!(edit_return_route(id, target) == Route::ProjectList {});
+        assert!(edit_return_route(other, target) == Route::ProjectDetail { id: other });
+        assert!(edit_return_route(id, EditReturn::default()) == Route::ProjectList {});
     }
 }
