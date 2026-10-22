@@ -232,6 +232,23 @@ async fn late_fee_access_denial_hides_loaded_detail_and_retry_keeps_original_ide
     }
 }
 
+/// Rendered menu item labels, so closed-dialog copy cannot satisfy an action check.
+fn menu_items(html: &str) -> Vec<String> {
+    html.split("role=\"menuitem\"")
+        .skip(1)
+        .filter_map(|item| {
+            let (_, rest) = item.split_once('>')?;
+            let (label, _) = rest.split_once("</button>")?;
+            let mut label = label.to_string();
+            while let Some(start) = label.find("<!--") {
+                let end = start + label[start..].find("-->")? + 3;
+                label.replace_range(start..end, "");
+            }
+            Some(label.trim().to_string())
+        })
+        .collect()
+}
+
 /// The only policy that offers status changes: `set_project_active` checks the legacy role.
 fn legacy_probe() -> Probe {
     let probe = probe();
@@ -259,10 +276,10 @@ async fn header_shows_real_identity_and_only_the_offered_actions() {
         format!("href=\"/clients/{}\"", Uuid::from_u128(50)),
         format!("href=\"/projects/{project}/edit\""),
         "project-detail-actions-trigger".into(),
-        "Archive".into(),
     ] {
         assert!(html.contains(&expected), "missing {expected}: {html}");
     }
+    assert_eq!(menu_items(&html), ["Archive"], "{html}");
     for hidden in ["Reactivate", "Archived"] {
         assert!(!html.contains(hidden), "{hidden}: {html}");
     }
@@ -276,6 +293,7 @@ async fn header_shows_real_identity_and_only_the_offered_actions() {
         "{html}"
     );
     assert!(!html.contains("project-detail-actions"), "{html}");
+    assert!(menu_items(&html).is_empty(), "{html}");
 
     let restricted = legacy_probe();
     {
@@ -300,10 +318,10 @@ async fn header_shows_real_identity_and_only_the_offered_actions() {
         "href=\"/clients/".to_string(),
         format!("href=\"/projects/{project}/edit\""),
         "project-detail-actions-trigger".into(),
-        "Reactivate".into(),
     ] {
         assert!(!html.contains(&hidden), "{hidden}: {html}");
     }
+    assert!(menu_items(&html).is_empty(), "{html}");
     assert!(html.contains("href=\"/projects\""), "{html}");
 }
 
@@ -321,7 +339,6 @@ async fn archived_project_offers_reactivation_and_keeps_saved_information() {
     let html = dioxus::ssr::render(&mount(&legacy));
     for expected in [
         "Archived",
-        "Reactivate",
         "Project information",
         "retained-tag",
         "Retained private note",
@@ -329,6 +346,7 @@ async fn archived_project_offers_reactivation_and_keeps_saved_information() {
     ] {
         assert!(html.contains(expected), "missing {expected}: {html}");
     }
+    assert_eq!(menu_items(&html), ["Reactivate"], "{html}");
 }
 
 #[tokio::test]

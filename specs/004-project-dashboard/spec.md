@@ -1,5 +1,10 @@
 # Feature Specification: Project Detail Dashboard
 
+**Current bounded delivery**: [Header and lifecycle increment](header-increment.md)
+reconciles the approved later dashboard requirements with the current code.
+The original package below remains historical; its deferrals do not reduce the
+current UI-parity goal. Completion of the header does not complete the dashboard.
+
 **Feature Branch**: `feat/project-dashboard`
 
 **Created**: 2026-09-01

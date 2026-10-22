@@ -1127,7 +1127,15 @@ fn ProjectDetailContent(id: Uuid) -> Element {
     let mut status_saved = use_signal(|| None::<&'static str>);
     let mut refocus_actions = use_signal(|| false);
     use_effect(move || {
-        if details.state()() == UseResourceState::Ready && refocus_actions.take() {
+        if details.state()() != UseResourceState::Ready {
+            return;
+        }
+        // A reload that loses access must not leave the previous success beside it.
+        let loaded = matches!(&*details.read(), Some(Ok(_)));
+        if !loaded {
+            status_saved.set(None);
+        }
+        if refocus_actions.take() && loaded {
             restore_actions_focus();
         }
     });
@@ -1194,13 +1202,14 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                             }
                             if view.can_change_status {
                                 Menu { id: "project-detail-actions", label: "Actions", align_right: true,
-                                    trigger_class: "text-sm py-2 px-4", disabled: status_busy(),
+                                    trigger_class: "text-sm py-3 px-4", disabled: status_busy(),
                                     MenuItem {
                                         disabled: status_busy(),
                                         onclick: {
                                             let next = !view.active;
                                             move |_| {
                                                 status_failed.set(false);
+                                                status_saved.set(None);
                                                 status_change.set(Some(next));
                                             }
                                         },
@@ -1228,7 +1237,10 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                             key: "{key}",
                             project_id: id,
                             requester: view.requester,
-                            on_access_change: move |_| access_lost.set(true),
+                            on_access_change: move |_| {
+                                status_saved.set(None);
+                                access_lost.set(true);
+                            },
                         }
                     }
                 }
@@ -1285,6 +1297,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                                             // balances do; Retry reloads under the bound requester.
                                             Err(ServerFnError::ServerError { code: 401 | 403, .. }) => {
                                                 status_change.set(None);
+                                                status_saved.set(None);
                                                 access_lost.set(true);
                                             }
                                             Err(_) => status_failed.set(true),

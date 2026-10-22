@@ -36,6 +36,16 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await page.locator('#project-detail-actions').getByRole('menuitem', { name: item, exact: true }).click();
     await expect(dialog).toBeVisible();
   };
+  // Compare rectangles from one coordinate space, so CSS zoom cannot hide overflow.
+  const overflowing = () => page.evaluate(() => {
+    const root = document.documentElement, frame = root.getBoundingClientRect();
+    const controls = [document.querySelector('h1'), ...['project-detail-back', 'project-detail-edit', 'project-detail-actions-trigger']
+      .map(id => document.getElementById(id))].filter(Boolean);
+    const outside = controls.filter(el => { const r = el.getBoundingClientRect(); return r.left < frame.left - 1 || r.right > frame.right + 1; })
+      .map(el => el.id || el.tagName);
+    if (root.scrollWidth > root.clientWidth + 1) outside.push('document');
+    return outside;
+  });
   // Each denied attempt is observed through its own response, not an earlier alert.
   const confirmDenied = async label => {
     const response = page.waitForResponse(r => new URL(r.url()).pathname.startsWith('/api/set_project_active'));
@@ -45,6 +55,8 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await expect(page.getByRole('alert')).toContainText('Project details are unavailable');
     await expect(header).toHaveCount(0);
     await expect(trigger).toHaveCount(0);
+    await expect(page.locator('.toast')).toHaveCount(0);
+    await expect(page.locator('#project-detail-back')).toBeFocused();
   };
   const retry = async () => {
     await page.locator('#project-detail-retry').click();
@@ -80,18 +92,21 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
 
     const titleColors = {};
     for (const theme of ['dark', 'light']) {
-      for (const [width, height, zoom] of [[320, 900, 1], [390, 844, 1], [768, 900, 1], [1440, 900, 1], [1440, 360, 1], [768, 900, 2]]) {
-        const label = `${theme}/${width}x${height}/${zoom}`;
+      // CSS zoom scales the whole page; a 200% root font size enlarges text only.
+      for (const [width, height, zoom, fontSize] of [[320, 900, 1, ''], [390, 844, 1, ''], [768, 900, 1, ''], [1440, 900, 1, ''],
+        [1440, 360, 1, ''], [768, 900, 2, ''], [320, 900, 1, '200%'], [390, 844, 1, '200%']]) {
+        const label = `${theme}/${width}x${height}/zoom ${zoom}/text ${fontSize || '100%'}`;
         await page.setViewportSize({ width, height });
-        await page.evaluate(({ theme, zoom }) => {
+        await page.evaluate(({ theme, zoom, fontSize }) => {
           document.documentElement.dataset.theme = theme;
           document.documentElement.style.zoom = String(zoom);
-        }, { theme, zoom });
+          document.documentElement.style.fontSize = fontSize;
+        }, { theme, zoom, fontSize });
         for (const control of [title, page.getByRole('link', { name: 'Edit project', exact: true }), trigger]) {
           await control.scrollIntoViewIfNeeded();
           await expect(control).toBeVisible();
         }
-        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, `${label}: page overflow`);
+        assert.deepEqual(await overflowing(), [], `${label}: overflow`);
         assert.equal(await header.evaluate(el => el.scrollWidth <= el.clientWidth + 1), true, `${label}: header overflow`);
         if (width === 1440 && height === 900) titleColors[theme] = await title.evaluate(el => getComputedStyle(el).color);
         await open('Archive');
@@ -104,11 +119,14 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
       }
     }
     assert.notEqual(titleColors.dark, titleColors.light, 'The title follows the theme tokens');
-    await page.evaluate(() => { document.documentElement.style.zoom = ''; document.documentElement.dataset.theme = 'dark'; });
+    await page.evaluate(() => {
+      Object.assign(document.documentElement.style, { zoom: '', fontSize: '' });
+      document.documentElement.dataset.theme = 'dark';
+    });
     await page.setViewportSize({ width: 1440, height: 900 });
     assert.equal(active(), 't');
     assert.equal(statusRequests.length, 0);
-    console.log('PASS: header and confirmation fit at 320–1440px, a short viewport and 200% zoom in both themes');
+    console.log('PASS: header and confirmation fit at 320–1440px, a short viewport, 200% zoom and 200% text in both themes');
 
     await page.locator('#project-detail-back').focus();
     for (let step = 0; step < 8 && await page.evaluate(() => document.activeElement?.id) !== 'project-detail-actions-trigger'; step++) {
@@ -130,7 +148,16 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await expect(trigger).toBeFocused();
     assert.equal(active(), 't');
     assert.equal(statusRequests.length, 0);
-    console.log('PASS: keyboard reaches Actions, cancel and Escape leave the project unchanged and return focus');
+    const information = header.locator('details');
+    await expect(header.getByText('header-tag', { exact: true })).toBeHidden();
+    await page.keyboard.press('Tab');
+    await expect(information.locator('summary')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(information).toHaveJSProperty('open', true);
+    for (const saved of ['01 Sep 2026', 'header-tag', 'Header private note']) {
+      await expect(information.getByText(saved)).toBeVisible();
+    }
+    console.log('PASS: keyboard reaches Actions and Project information; cancel and Escape leave the project unchanged and return focus');
 
     await page.goto(`${base}/projects/${uncoded}`);
     await expect(page.getByRole('heading', { level: 1, name: 'Uncoded header project', exact: true })).toBeVisible();
@@ -181,6 +208,10 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await expect(trigger).toBeFocused();
     assert.equal(active(), 'f');
     assert.deepEqual(statusRequests.at(-1).expected_requester, { org_id: org, user_id: actor.id });
+    // A new action replaces the previous result rather than showing beside it.
+    await open('Reactivate');
+    await expect(page.locator('.toast')).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.reload();
     await expect(title).toBeVisible();
     await expect(header).toContainText('Archived');
@@ -223,16 +254,23 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
       sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'`);
       sql(`DELETE FROM assignments WHERE id='${id(7)}'`);
     }
+    await page.setViewportSize({ width: 320, height: 700 });
     await page.locator('#project-detail-refresh').click();
-    await expect(trigger).toBeVisible();
+    await expect(header.getByText('Archived', { exact: true })).toBeVisible();
+    await trigger.scrollIntoViewIfNeeded();
     await open('Reactivate');
+    await expect(dialog.getByRole('button', { name: 'Reactivate project', exact: true })).toBeInViewport();
     const reactivated = page.waitForResponse(r => new URL(r.url()).pathname.startsWith('/api/set_project_active'));
     await dialog.getByRole('button', { name: 'Reactivate project', exact: true }).click();
     assert.equal((await reactivated).status(), 200);
     await expect(dialog).toBeHidden();
-    await expect(page.getByRole('status').filter({ hasText: 'Project reactivated.' })).toBeVisible();
+    const toast = page.getByRole('status').filter({ hasText: 'Project reactivated.' });
+    await expect(toast).toBeInViewport();
     await expect(header).not.toContainText('Archived');
+    await expect(trigger).toBeFocused();
+    assert.deepEqual(await overflowing(), [], '320px reactivation overflow');
     assert.equal(active(), 't');
+    await page.setViewportSize({ width: 1440, height: 900 });
     assert.deepEqual(errors, []);
     console.log('PASS: changed requester, policy and role fail closed and hide the project; Retry recovers the bound view; reactivation persists');
   } catch (error) {

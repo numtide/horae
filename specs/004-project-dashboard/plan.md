@@ -1,5 +1,10 @@
 # Implementation Plan: Project Detail Dashboard
 
+**Current bounded plan**: [Header and lifecycle increment](header-increment.md#plan)
+supersedes this historical plan only for the identity header and status actions.
+It uses the current detail projection and existing authorized mutation endpoints;
+it neither regenerates the dashboard package nor activates canonical permissions.
+
 **Branch**: `feat/project-dashboard` | **Date**: 2026-09-01 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `specs/004-project-dashboard/spec.md`
