@@ -1,5 +1,9 @@
 # Tasks: Project Detail Dashboard
 
+**Current bounded tasks**: [H001–H010 and follow-on work](header-increment.md#tasks)
+track the header delivery. The unchecked historical tasks below are not evidence
+of current runtime state and are not automatically completed by that increment.
+
 **Input**: Design documents from `specs/004-project-dashboard/`
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/server-fns.md, quickstart.md

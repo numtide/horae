@@ -3,11 +3,13 @@ use std::collections::{BTreeSet, HashMap};
 use uuid::Uuid;
 
 use super::{loaded, run_action};
+use crate::components::badge::Badge;
 use crate::components::combobox::{ComboOption, Combobox};
 use crate::components::controls::Checkbox;
 use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::Modal;
+use crate::components::toast::{Toast, ToastContainer};
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::ProjectOverview;
 use crate::models::{Project, ProjectBudgetOverview, ProjectDetails, ProjectTagLink};
@@ -1118,6 +1120,26 @@ fn ProjectDetailContent(id: Uuid) -> Element {
         generation.set(Uuid::now_v7());
         Ok(view)
     });
+    // The requested status; the dialog is open while it is set.
+    let mut status_change = use_signal(|| None::<bool>);
+    let mut status_busy = use_signal(|| false);
+    let mut status_failed = use_signal(|| false);
+    let mut status_saved = use_signal(|| None::<&'static str>);
+    let mut refocus_actions = use_signal(|| false);
+    use_effect(move || {
+        if details.state()() != UseResourceState::Ready {
+            return;
+        }
+        // A reload that loses access must not leave the previous success beside it.
+        let loaded = !access_lost() && matches!(&*details.read(), Some(Ok(_)));
+        if !loaded {
+            status_saved.set(None);
+            restore_detail_focus("project-detail-back");
+        }
+        if refocus_actions.take() && loaded {
+            restore_detail_focus("project-detail-actions-trigger");
+        }
+    });
     let ready = details.state()() == UseResourceState::Ready;
     let view = if ready && !access_lost() {
         details
@@ -1128,26 +1150,76 @@ fn ProjectDetailContent(id: Uuid) -> Element {
     } else {
         None
     };
+    let can_change_status = view.as_ref().is_some_and(|view| view.can_change_status);
+    let reactivate = status_change() == Some(true);
 
     rsx! {
         div {
-            div { class: "page-header",
-                h1 { class: "page-title", "Project" }
-                if let Some(view) = view.as_ref() {
-                    div { class: "page-actions",
-                        button { id: "project-detail-refresh", r#type: "button", class: "btn btn-secondary btn-sm",
-                            onclick: move |_| details.restart(), "Refresh details"
-                        }
-                        if view.can_edit {
-                            Link { class: "btn btn-primary", to: Route::EditProject { id }, "Edit project" }
-                        }
-                    }
-                }
+            Link {
+                id: "project-detail-back",
+                to: Route::ProjectList {},
+                class: "btn btn-ghost text-sm text-muted font-normal border-0 px-2.5 py-1.5 -ml-2.5",
+                span { class: "inline-flex", aria_hidden: "true", NavIcon { name: "arrow-left", class: "size-4" } }
+                "Back to Projects"
             }
             if !ready {
-                p { role: "status", "Loading project details…" }
+                p { class: "mt-5", role: "status", "Loading project details…" }
             } else if let Some(view) = view {
-                section { class: "card p-5 wrap-anywhere", aria_label: "Project details",
+                section { class: "mt-5 pb-6 border-b border-light wrap-anywhere", aria_label: "Project details",
+                    header { class: "flex flex-wrap items-end gap-4",
+                        div { class: "flex-1 min-w-0",
+                            if view.can_open_client {
+                                Link { to: Route::ClientDetail { id: view.client_id }, class: "text-sm font-semibold",
+                                    "{view.project.client_name}"
+                                }
+                            } else {
+                                span { class: "text-sm font-semibold text-muted", "{view.project.client_name}" }
+                            }
+                            div { class: "flex flex-wrap items-center gap-3 mt-2",
+                                h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight wrap-anywhere",
+                                    if let Some(code) = view.project.code.as_deref().filter(|code| !code.is_empty()) {
+                                        "[{code}] "
+                                    }
+                                    "{view.project.name}"
+                                }
+                                span { class: "text-xs text-secondary rounded-full border bg-tertiary px-2 py-1 whitespace-nowrap",
+                                    "{view.project_type.label()}"
+                                }
+                                span { class: "font-mono text-xs text-secondary rounded-full border bg-tertiary px-2 py-1",
+                                    "{view.project.currency}"
+                                }
+                                if !view.active { Badge { variant: "neutral", "Archived" } }
+                            }
+                        }
+                        div { class: "flex flex-wrap items-center gap-3",
+                            button { id: "project-detail-refresh", r#type: "button", class: "btn btn-ghost btn-sm",
+                                onclick: move |_| details.restart(), "Refresh details"
+                            }
+                            if view.can_edit {
+                                Link { id: "project-detail-edit", class: "btn btn-secondary", to: Route::EditProject { id },
+                                    span { class: "inline-flex", aria_hidden: "true", NavIcon { name: "pencil", class: "size-4" } }
+                                    "Edit project"
+                                }
+                            }
+                            if view.can_change_status {
+                                Menu { id: "project-detail-actions", label: "Actions", align_right: true,
+                                    trigger_class: "text-sm py-3 px-4", disabled: status_busy(),
+                                    MenuItem {
+                                        disabled: status_busy(),
+                                        onclick: {
+                                            let next = !view.active;
+                                            move |_| {
+                                                status_failed.set(false);
+                                                status_saved.set(None);
+                                                status_change.set(Some(next));
+                                            }
+                                        },
+                                        if view.active { "Archive" } else { "Reactivate" }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     SavedProjectDetails { project: view.project }
                 }
                 section { class: "card mt-6 p-5 wrap-anywhere", aria_label: "Project tasks",
@@ -1166,20 +1238,108 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                             key: "{key}",
                             project_id: id,
                             requester: view.requester,
-                            on_access_change: move |_| access_lost.set(true),
+                            on_access_change: move |_| {
+                                status_saved.set(None);
+                                access_lost.set(true);
+                            },
                         }
                     }
                 }
             } else {
-                p { class: "text-danger", role: "alert",
+                p { class: "text-danger mt-5", role: "alert",
                     "Project details are unavailable. Your session or access may have changed."
                 }
                 button { id: "project-detail-retry", r#type: "button", class: "btn btn-secondary btn-sm",
                     onclick: move |_| details.restart(), "Retry details"
                 }
             }
+
+            Modal {
+                id: "project-status-dialog", labelledby: "project-status-title",
+                focus_fallback: "project-detail-back",
+                open: status_change().is_some() && can_change_status, busy: status_busy(),
+                on_dismiss: move |_| status_change.set(None),
+                if can_change_status {
+                    h2 { id: "project-status-title", class: "modal-title m-0",
+                        if reactivate { "Reactivate this project?" } else { "Archive this project?" }
+                    }
+                    div { class: "modal-body px-3 sm:px-6 wrap-anywhere",
+                        p { class: "text-sm text-secondary",
+                            if reactivate {
+                                "Only project status changes. Existing time entries, invoices and budgets are kept."
+                            } else {
+                                "Time already tracked stays in reports and invoices. Nobody can log new time until it is reactivated."
+                            }
+                        }
+                        if status_failed() {
+                            p { class: "alert alert-danger", role: "alert",
+                                "Could not update project status. You can retry safely, or cancel and refresh."
+                            }
+                        }
+                        div { class: "modal-actions flex-wrap",
+                            button {
+                                id: "project-status-confirm", r#type: "button", class: "btn btn-primary",
+                                disabled: status_busy(),
+                                onclick: move |_| {
+                                    let (Some(active), Some((requester, _))) = (status_change(), *binding.peek()) else { return; };
+                                    if status_busy() { return; }
+                                    status_busy.set(true);
+                                    status_failed.set(false);
+                                    spawn(async move {
+                                        match server_fns::set_project_active(id.to_string(), active, Some(requester)).await {
+                                            Ok(_) => {
+                                                status_saved.set(Some(if active { "Project reactivated." } else { "Project archived." }));
+                                                status_change.set(None);
+                                                refocus_actions.set(true);
+                                                // Show the persisted state under current authority.
+                                                details.restart();
+                                            }
+                                            // Denied authority hides the loaded project, as the fee
+                                            // balances do; Retry reloads under the bound requester.
+                                            Err(ServerFnError::ServerError { code: 401 | 403, .. }) => {
+                                                status_change.set(None);
+                                                status_saved.set(None);
+                                                access_lost.set(true);
+                                            }
+                                            Err(_) => status_failed.set(true),
+                                        }
+                                        status_busy.set(false);
+                                    });
+                                },
+                                if status_busy() { "Updating project…" }
+                                else if reactivate { "Reactivate project" }
+                                else { "Archive project" }
+                            }
+                            button { r#type: "button", class: "btn btn-secondary", disabled: status_busy(),
+                                onclick: move |_| status_change.set(None), "Cancel"
+                            }
+                        }
+                    }
+                }
+            }
+            ToastContainer {
+                if let Some(message) = status_saved() {
+                    Toast { message: "{message}", variant: "success", icon: "✓", dismissible: true,
+                        ondismiss: move |_| status_saved.set(None),
+                    }
+                }
+            }
         }
     }
+}
+
+/// A reload unmounts its opener. Recover focus on the rebuilt action or Back
+/// after an error, without overriding deliberate navigation during the reload.
+fn restore_detail_focus(target: &'static str) {
+    let target = serde_json::json!(target);
+    document::eval(&format!(
+        "requestAnimationFrame(() => {{
+            const active = document.activeElement;
+            if (!active || active === document.body || active.id === 'project-detail-back') {{
+                document.getElementById({target})?.focus();
+            }}
+        }});",
+    ));
 }
 
 fn matching_tag_projects(links: &[ProjectTagLink], selected: Option<Uuid>) -> BTreeSet<Uuid> {
@@ -1193,27 +1353,26 @@ fn matching_tag_projects(links: &[ProjectTagLink], selected: Option<Uuid>) -> BT
 #[component]
 fn SavedProjectDetails(project: ProjectDetails) -> Element {
     rsx! {
-        h2 { class: "text-xl m-0 mb-4", "{project.name}" }
-        dl { class: "grid sm:grid-cols-2 gap-4 m-0",
-            div { dt { class: "text-sm text-subtle", "Client" } dd { class: "m-0", "{project.client_name}" } }
-            div { dt { class: "text-sm text-subtle", "Code" } dd { class: "m-0 font-mono", "{project.code.as_deref().unwrap_or(\"—\")}" } }
-            div { dt { class: "text-sm text-subtle", "Currency" } dd { class: "m-0", "{project.currency}" } }
-            div { dt { class: "text-sm text-subtle", "Planning dates" }
-                dd { class: "m-0",
-                    "{project.starts_on.map(|date| date.format(\"%d %b %Y\").to_string()).unwrap_or_else(|| \"No start date\".into())} — "
-                    "{project.ends_on.map(|date| date.format(\"%d %b %Y\").to_string()).unwrap_or_else(|| \"No end date\".into())}"
+        details { class: "mt-4 text-sm",
+            summary { class: "cursor-pointer text-muted", "Project information" }
+            dl { class: "grid sm:grid-cols-2 gap-4 m-0 mt-4",
+                div { dt { class: "text-sm text-subtle", "Planning dates" }
+                    dd { class: "m-0",
+                        "{project.starts_on.map(|date| date.format(\"%d %b %Y\").to_string()).unwrap_or_else(|| \"No start date\".into())} — "
+                        "{project.ends_on.map(|date| date.format(\"%d %b %Y\").to_string()).unwrap_or_else(|| \"No end date\".into())}"
+                    }
                 }
             }
-        }
-        div { class: "mt-4",
-            h3 { class: "text-sm text-subtle m-0 mb-2", "Tags" }
-            if project.tags.is_empty() { p { class: "text-sm m-0", "No tags" } }
-            else { div { class: "flex flex-wrap gap-2", for tag in project.tags { span { class: "chip", "{tag}" } } } }
-        }
-        if let Some(notes) = project.admin_notes.filter(|notes| !notes.is_empty()) {
             div { class: "mt-4",
-                h3 { class: "text-sm text-subtle m-0 mb-2", "Administrator notes" }
-                for line in notes.lines() { p { class: "text-sm m-0", "{line}" } }
+                h3 { class: "text-sm text-subtle m-0 mb-2", "Tags" }
+                if project.tags.is_empty() { p { class: "text-sm m-0", "No tags" } }
+                else { div { class: "flex flex-wrap gap-2", for tag in project.tags { span { class: "chip", "{tag}" } } } }
+            }
+            if let Some(notes) = project.admin_notes.filter(|notes| !notes.is_empty()) {
+                div { class: "mt-4",
+                    h3 { class: "text-sm text-subtle m-0 mb-2", "Administrator notes" }
+                    for line in notes.lines() { p { class: "text-sm m-0", "{line}" } }
+                }
             }
         }
     }

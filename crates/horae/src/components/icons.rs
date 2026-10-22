@@ -14,6 +14,9 @@ pub fn NavIcon(name: String, #[props(default)] class: String) -> Element {
         "chevron-down" => rsx! {
             path { d: "M4 6 L8 10 L12 6" }
         },
+        "pencil" => rsx! {
+            path { d: "M10.5 3 L13 5.5 L5.5 13 H3 V10.5 Z M9 4.5 L11.5 7" }
+        },
         "info" => rsx! {
             circle { cx: "8", cy: "8", r: "6" }
             path { d: "M8 7 V11 M8 4.5 V4.6" }

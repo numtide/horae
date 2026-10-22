@@ -290,6 +290,151 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
       await expect(page).toHaveURL(/\/week\/2027-10-11/);
       await expect(calendar).toHaveCount(0);
     });
+    // CSS zoom on the root (the suites' 200% emulation), not browser Ctrl+ zoom:
+    // rectangles are visual pixels while the popover's own lengths are zoomed.
+    await check('menus, selects and calendars stay anchored inside the viewport under CSS zoom', async () => {
+      await visit('/projects', 'get_project_overview');
+      const script = await page.locator('script[src]').evaluateAll(scripts => scripts.find(script => /\/menu[^/]*\.js$/.test(script.src)).src);
+      const items = count => Array.from({ length: count }, (_, i) => `<button role="menuitem">Item ${i + 1}</button>`).join('');
+      for (const zoom of [1, 2]) {
+        for (const [kind, data, content] of [
+          ['menu', '', items(3)],
+          ['select', 'data-select="true"', '<input aria-label="Search"><button role="option">Choice</button>'],
+          ['calendar', 'data-calendar="true"', '<button class="dp-day picked">Selected day</button><button class="dp-day">Other day</button>'],
+        ]) {
+          for (const [align, height] of [['left', 600], ['right', 600], ['right', 260]]) {
+            const label = `${kind}/${align}/${height}px/zoom ${zoom}`;
+            const probe = await browser.newPage({ viewport: { width: 768, height } });
+            try {
+              // The app stylesheet is not loaded here, so mirror its reset and the
+              // .menu/.menu-popover rules that affect placement (horae.css).
+              // The trigger is wider than the popover's 180px minimum, as select fields are.
+              await probe.setContent(`<html style="zoom:${zoom}"><head><style>
+                *, *::before, *::after { box-sizing: border-box; }
+                body { margin: 0; }
+                .row { display: flex; justify-content: ${align === 'right' ? 'flex-end' : 'flex-start'}; padding: 24px 16px; }
+                #panel-trigger { width: 200px; }
+                .menu-popover {
+                  position: fixed; inset: auto; margin: 0; padding: 4px; border: 1px solid;
+                  width: max-content; min-width: min(180px, calc(100vw - 16px));
+                  max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); overflow-y: auto;
+                }
+                .menu-popover [role="menuitem"] { display: block; width: 100%; padding: 8px 12px; text-align: left; }
+                </style></head><body>
+                <div class="row"><button id="panel-trigger" popovertarget="panel" aria-haspopup="menu" aria-expanded="false">Open</button></div>
+                <div id="panel" class="menu-popover${align === 'right' ? ' menu-popover-right' : ''}" popover="auto" ${data}>${kind === 'menu' && height < 600 ? items(14) : content}</div>
+                </body></html>`);
+              await probe.addScriptTag({ url: script });
+              await probe.locator('#panel-trigger').click();
+              await expect(probe.locator('#panel')).toBeVisible();
+              // menu.js focuses after the native toggle event; wait for that before any keys.
+              const initial = { menu: '[role="menuitem"]', select: 'input', calendar: '.dp-day.picked' }[kind];
+              await expect(probe.locator(`#panel ${initial}`).first()).toBeFocused();
+              const g = await probe.evaluate(() => {
+                const panel = document.getElementById('panel');
+                const a = document.getElementById('panel-trigger').getBoundingClientRect(), p = panel.getBoundingClientRect();
+                return { a: a.toJSON(), p: p.toJSON(), innerWidth, innerHeight, zoom: panel.currentCSSZoom };
+              });
+              const where = `${label}: ${JSON.stringify(g)}`;
+              if (g.zoom !== undefined) assert.equal(g.zoom, zoom, where);
+              assert.ok(g.p.left >= 7 && g.p.top >= 7 && g.p.right <= g.innerWidth - 7 && g.p.bottom <= g.innerHeight - 7, `inside ${where}`);
+              assert.ok(Math.abs(g.p.top - (g.a.bottom + 4)) <= 1 || Math.abs(g.p.bottom - (g.a.top - 4)) <= 1, `adjacent ${where}`);
+              if (kind === 'select') assert.ok(Math.abs(g.p.width - g.a.width) <= 1 && Math.abs(g.p.left - g.a.left) <= 1, `select width ${where}`);
+              else if (align === 'right') assert.ok(Math.abs(g.p.right - g.a.right) <= 1, `right edge ${where}`);
+              else assert.ok(Math.abs(g.p.left - g.a.left) <= 1, `left edge ${where}`);
+              if (kind === 'menu' && height < 600) {
+                // Keyboard scrolling inside a clipped, zoomed menu keeps the focused item visible.
+                assert.ok(await probe.locator('#panel').evaluate(el => el.scrollHeight > el.clientHeight), `long menu is clipped ${label}`);
+                await probe.keyboard.press('End');
+                const last = probe.getByRole('menuitem', { name: 'Item 14', exact: true });
+                await expect(last).toBeFocused();
+                assert.ok(await last.evaluate(el => { const b = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)); }), `End reveals last ${label}`);
+                const endScroll = await probe.locator('#panel').evaluate(el => el.scrollTop);
+                assert.ok(endScroll > 0, `End scrolls the menu ${label}`);
+                await probe.keyboard.press('Home');
+                assert.ok(await probe.locator('#panel').evaluate(el => el.scrollTop) < endScroll, `Home scrolls back ${label}`);
+                assert.ok(await probe.getByRole('menuitem', { name: 'Item 1', exact: true }).evaluate(el => { const b = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)); }), `Home reveals first ${label}`);
+              }
+            } finally { await probe.close(); }
+          }
+        }
+      }
+
+      // Real app menus: project rows and the scope filter, then the shared component menu by keyboard.
+      await page.setViewportSize({ width: 768, height: 900 });
+      try {
+        for (const zoom of [1, 2]) {
+          await visit('/projects', 'get_project_overview');
+          await page.evaluate(zoom => { document.documentElement.style.zoom = String(zoom); }, zoom);
+          await expect(page.locator('.proj-row').first()).toBeVisible();
+          for (const row of [page.locator('.proj-row').first(), page.locator('.proj-row').last()]) {
+            const trigger = row.getByRole('button', { name: 'Actions' });
+            await trigger.scrollIntoViewIfNeeded();
+            await trigger.click();
+            const menu = row.getByRole('menu');
+            const geometry = await visibleItems(menu);
+            assert.ok(geometry.inside && geometry.items.every(item => item.hit), JSON.stringify({ zoom, geometry }));
+            assert.ok(await menu.evaluate(el => Math.abs(document.getElementById(el.getAttribute('aria-labelledby')).getBoundingClientRect().right - el.getBoundingClientRect().right) <= 1), `row actions stay right-anchored at zoom ${zoom}`);
+            await menu.getByRole('menuitem', { name: 'Edit', exact: true }).hover();
+            await page.keyboard.press('Escape');
+            await expect(menu).toBeHidden();
+            await expect(trigger).toBeFocused();
+          }
+          const scope = page.getByRole('button', { name: /^Active projects/ });
+          await scope.scrollIntoViewIfNeeded();
+          await scope.click();
+          const scopeGeometry = await visibleItems(page.getByRole('menu'));
+          assert.ok(scopeGeometry.inside && scopeGeometry.items.every(item => item.hit), JSON.stringify({ zoom, scopeGeometry }));
+          await page.keyboard.press('Escape');
+          await expect(page.getByRole('menu')).toBeHidden();
+          await expect(scope).toBeFocused();
+
+          await page.setViewportSize({ width: 1280, height: 800 });
+          await visit('/components', 'get_me');
+          await page.evaluate(zoom => { document.documentElement.style.zoom = String(zoom); }, zoom);
+          const trigger = page.getByRole('button', { name: /^Actions/ });
+          await trigger.scrollIntoViewIfNeeded();
+          await trigger.focus();
+          await page.keyboard.press('Enter');
+          const menu = page.getByRole('menu');
+          await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toBeFocused();
+          const geometry = await visibleItems(menu);
+          assert.ok(geometry.inside, JSON.stringify({ zoom, geometry }));
+          // A zoomed menu may scroll internally: every enabled item becomes visible
+          // as the keyboard reaches it, rather than all rows at once.
+          const hit = item => item.evaluate(el => { const b = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)); });
+          for (const name of ['Edit', 'Pin', 'Archive', 'Delete']) {
+            const item = menu.getByRole('menuitem', { name, exact: true });
+            if (name !== 'Edit') await page.keyboard.press('ArrowDown');
+            await expect(item).toBeFocused();
+            assert.ok(await hit(item), `keyboard reveals ${name} at zoom ${zoom}`);
+          }
+          await page.keyboard.press('Home');
+          await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toBeFocused();
+          // The final, disabled row is reachable by scrolling inside the menu with the pointer.
+          const unavailable = menu.getByRole('menuitem', { name: 'Unavailable', exact: true });
+          const scrollable = await menu.evaluate(el => el.scrollHeight > el.clientHeight);
+          if (zoom === 2) assert.ok(scrollable, 'The zoomed gallery menu scrolls internally');
+          if (scrollable) {
+            const box = await menu.boundingBox();
+            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+            await page.mouse.wheel(0, 400);
+            await expect.poll(() => hit(unavailable), { message: `pointer scroll reveals Unavailable at zoom ${zoom}` }).toBe(true);
+            await expect(menu).toBeVisible();
+          } else {
+            assert.ok(await hit(unavailable), `Unavailable visible at zoom ${zoom}`);
+          }
+          await page.keyboard.press('End');
+          await expect(menu.getByRole('menuitem', { name: 'Delete', exact: true })).toBeFocused();
+          await page.keyboard.press('Escape');
+          await expect(menu).toBeHidden();
+          await expect(trigger).toBeFocused();
+          await page.setViewportSize({ width: 768, height: 900 });
+        }
+      } finally {
+        await page.evaluate(() => { document.documentElement.style.zoom = ''; }).catch(() => {});
+      }
+    });
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

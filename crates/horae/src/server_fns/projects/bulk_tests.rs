@@ -74,7 +74,7 @@ async fn bulk_preserves_invoiced_history_assignments_and_spend(pool: PgPool) {
     .unwrap();
     let history = billing_snapshot(&pool).await;
     for active in [false, true] {
-        set_projects_active_records(&pool, ids.org_id, &[ids.project_id], active)
+        set_projects_active_records(&pool, ids.org_id, ids.user_id, &[ids.project_id], active)
             .await
             .unwrap();
         assert_eq!(billing_snapshot(&pool).await, history);
@@ -96,10 +96,10 @@ async fn bulk_accepts_one_hundred_projects_and_mixed_status_noops(pool: PgPool) 
         targets.push(extra_project(&pool, &ids).await);
     }
     targets.sort_unstable();
-    set_project_active_record(&pool, ids.org_id, ids.project_id, false)
+    set_project_active_record(&pool, ids.org_id, ids.user_id, ids.project_id, false)
         .await
         .unwrap();
-    let changed = set_projects_active_records(&pool, ids.org_id, &targets, false)
+    let changed = set_projects_active_records(&pool, ids.org_id, ids.user_id, &targets, false)
         .await
         .unwrap();
     assert_eq!(changed.len(), 100);
@@ -147,7 +147,7 @@ async fn bulk_status_preserves_details_history_and_noop_versions(pool: PgPool) {
         (false, crate::plugin::event::ActiveTransition::Deactivated),
         (true, crate::plugin::event::ActiveTransition::Reactivated),
     ] {
-        let changed = set_projects_active_records(&pool, ids.org_id, &targets, active)
+        let changed = set_projects_active_records(&pool, ids.org_id, ids.user_id, &targets, active)
             .await
             .unwrap();
         assert_eq!(changed.len(), 2);
@@ -160,9 +160,10 @@ async fn bulk_status_preserves_details_history_and_noop_versions(pool: PgPool) {
             .fetch_all(&pool)
             .await
             .unwrap();
-        let repeated = set_projects_active_records(&pool, ids.org_id, &targets, active)
-            .await
-            .unwrap();
+        let repeated =
+            set_projects_active_records(&pool, ids.org_id, ids.user_id, &targets, active)
+                .await
+                .unwrap();
         assert!(repeated.iter().all(|(_, t)| t.is_none()));
         assert_eq!(
             sqlx::query_scalar!("SELECT xmin::text FROM projects ORDER BY id")
@@ -197,7 +198,7 @@ async fn bulk_missing_or_foreign_project_rolls_back_earlier_changes(pool: PgPool
         let targets =
             parse_bulk_project_ids(&[ids.project_id.to_string(), last.to_string()]).unwrap();
         assert_eq!(targets[0], ids.project_id);
-        let error = set_projects_active_records(&pool, ids.org_id, &targets, false)
+        let error = set_projects_active_records(&pool, ids.org_id, ids.user_id, &targets, false)
             .await
             .unwrap_err();
         assert!(matches!(
@@ -228,9 +229,15 @@ async fn bulk_database_failure_rolls_back_earlier_changes(pool: PgPool) {
         .unwrap();
     let before = snapshot(&pool, ids.org_id).await;
     assert!(
-        set_projects_active_records(&pool, ids.org_id, &[ids.project_id, other], false)
-            .await
-            .is_err()
+        set_projects_active_records(
+            &pool,
+            ids.org_id,
+            ids.user_id,
+            &[ids.project_id, other],
+            false
+        )
+        .await
+        .is_err()
     );
     assert_eq!(snapshot(&pool, ids.org_id).await, before);
 }
@@ -258,9 +265,9 @@ async fn bulk_reversed_overlapping_batches_finish_without_deadlock(pool: PgPool)
     let mut tasks = tokio::task::JoinSet::new();
     for order in [forward, reverse] {
         let db = pool.clone();
-        tasks.spawn(
-            async move { set_projects_active_records(&db, ids.org_id, &order, false).await },
-        );
+        tasks.spawn(async move {
+            set_projects_active_records(&db, ids.org_id, ids.user_id, &order, false).await
+        });
     }
     crate::server_fns::test_seed::wait_for_blocked(&pool, pid).await;
     blocker.commit().await.unwrap();
@@ -285,5 +292,134 @@ async fn bulk_reversed_overlapping_batches_finish_without_deadlock(pool: PgPool)
             .await
             .unwrap(),
         "Concurrent edit"
+    );
+}
+
+async fn status_writes(
+    pool: &PgPool,
+    ids: &SeedIds,
+    actor: Uuid,
+) -> [Result<(), ServerFnError>; 2] {
+    [
+        set_project_active_record(pool, ids.org_id, actor, ids.project_id, false)
+            .await
+            .map(|_| ()),
+        set_projects_active_records(pool, ids.org_id, actor, &[ids.project_id], false)
+            .await
+            .map(|_| ()),
+    ]
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn status_writes_recheck_current_actor_role_and_policy(pool: PgPool) {
+    for change in [
+        "member",
+        "inactive",
+        "policy one",
+        "unknown policy",
+        "foreign actor",
+    ] {
+        let ids = seed(&pool, OrgRole::Manager).await;
+        let foreign = seed(&pool, OrgRole::Admin).await;
+        let mut actor = ids.user_id;
+        match change {
+            "member" => {
+                sqlx::query!(
+                    "UPDATE users SET org_role = 'member' WHERE id = $1",
+                    ids.user_id
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+            "inactive" => {
+                sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+            }
+            "policy one" | "unknown policy" => {
+                sqlx::query!(
+                    "UPDATE organizations SET permission_policy_version = $2 WHERE id = $1",
+                    ids.org_id,
+                    if change == "policy one" { 1 } else { 2 },
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+            _ => actor = foreign.user_id,
+        }
+        let before = snapshot(&pool, ids.org_id).await;
+        for result in status_writes(&pool, &ids, actor).await {
+            assert!(
+                matches!(
+                    result,
+                    Err(ServerFnError::ServerError {
+                        code: FORBIDDEN,
+                        ..
+                    })
+                ),
+                "{change}: {result:?}"
+            );
+        }
+        assert_eq!(snapshot(&pool, ids.org_id).await, before, "{change}");
+        // Another organization's current authority is unaffected.
+        for result in status_writes(&pool, &foreign, foreign.user_id).await {
+            result.unwrap();
+        }
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn status_write_waits_for_a_policy_change_and_then_fails_closed(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let (org_id, user_id, project_id) = (ids.org_id, ids.user_id, ids.project_id);
+    let mut change = pool.begin().await.unwrap();
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *change)
+        .await
+        .unwrap()
+        .unwrap();
+    lock_organization(&mut change, org_id, OrganizationLock::AccessChange)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE organizations SET permission_policy_version = $2 WHERE id = $1",
+        org_id,
+        1,
+    )
+    .execute(&mut *change)
+    .await
+    .unwrap();
+    let run_pool = pool.clone();
+    let write = tokio::spawn(async move {
+        set_project_active_record(&run_pool, org_id, user_id, project_id, false)
+            .await
+            .map(|_| ())
+    });
+    crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+    change.commit().await.unwrap();
+    let result = tokio::time::timeout(std::time::Duration::from_secs(5), write)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        matches!(
+            result,
+            Err(ServerFnError::ServerError {
+                code: FORBIDDEN,
+                ..
+            })
+        ),
+        "{result:?}"
+    );
+    let active = sqlx::query_scalar!("SELECT active FROM projects WHERE id = $1", project_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(
+        active,
+        "A policy change committed while waiting must prevent the write"
     );
 }

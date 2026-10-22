@@ -354,6 +354,10 @@ const RESPONSIVE: &[(&str, &str)] = &[
     ("flex-row", "flex-direction: row"),
     ("flex-col", "flex-direction: column"),
     (
+        "px-6",
+        "padding-left: var(--space-6); padding-right: var(--space-6)",
+    ),
+    (
         "grid-cols-2",
         "grid-template-columns: repeat(2, minmax(0, 1fr))",
     ),

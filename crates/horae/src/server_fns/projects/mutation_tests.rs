@@ -293,9 +293,10 @@ mod project {
     #[sqlx::test(migrations = "./migrations")]
     async fn inactive_project_edits_preserve_identity_and_reject_implicit_migrations(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
-        let (mut expected, _) = set_project_active_record(&pool, ids.org_id, ids.project_id, false)
-            .await
-            .unwrap();
+        let (mut expected, _) =
+            set_project_active_record(&pool, ids.org_id, ids.user_id, ids.project_id, false)
+                .await
+                .unwrap();
         let mut edit = request(&pool, &ids).await;
         edit.form.name = "Renamed".into();
         expected.name = "Renamed".into();
@@ -430,7 +431,7 @@ mod project {
         let ids = seed(&pool, OrgRole::Admin).await;
         let before = version(&pool, ids.project_id).await;
         let (returned, transition) =
-            set_project_active_record(&pool, ids.org_id, ids.project_id, true)
+            set_project_active_record(&pool, ids.org_id, ids.user_id, ids.project_id, true)
                 .await
                 .unwrap();
         let after = version(&pool, ids.project_id).await;
@@ -510,7 +511,8 @@ mod project {
         let run_pool = pool.clone();
         let mut run = tokio::task::JoinSet::new();
         run.spawn(async move {
-            set_project_active_record(&run_pool, ids.org_id, ids.project_id, active).await
+            set_project_active_record(&run_pool, ids.org_id, ids.user_id, ids.project_id, active)
+                .await
         });
         wait_for_blocked(pool, blocker).await;
         first.commit().await.unwrap();
@@ -563,7 +565,7 @@ mod project {
                     ..
                 }
             ));
-            let error = set_project_active_record(&pool, org_id, id, true)
+            let error = set_project_active_record(&pool, org_id, actor, id, true)
                 .await
                 .unwrap_err();
             assert!(matches!(
@@ -587,13 +589,13 @@ mod project {
         ] {
             expected.active = active;
             let (updated, actual) =
-                set_project_active_record(&pool, ids.org_id, ids.project_id, active)
+                set_project_active_record(&pool, ids.org_id, ids.user_id, ids.project_id, active)
                     .await
                     .unwrap();
             assert_eq!((actual, updated), (Some(transition), expected.clone()));
             let before = version(&pool, ids.project_id).await;
             let (updated, actual) =
-                set_project_active_record(&pool, ids.org_id, ids.project_id, active)
+                set_project_active_record(&pool, ids.org_id, ids.user_id, ids.project_id, active)
                     .await
                     .unwrap();
             let after = version(&pool, ids.project_id).await;
@@ -620,9 +622,15 @@ mod project {
             let mut run = tokio::task::JoinSet::new();
             run.spawn(async move {
                 if activation {
-                    set_project_active_record(&run_pool, ids.org_id, ids.project_id, true)
-                        .await
-                        .map(|_| ())
+                    set_project_active_record(
+                        &run_pool,
+                        ids.org_id,
+                        ids.user_id,
+                        ids.project_id,
+                        true,
+                    )
+                    .await
+                    .map(|_| ())
                 } else {
                     save_editable_project(&run_pool, ids.user_id, ids.org_id, &pending, false)
                         .await

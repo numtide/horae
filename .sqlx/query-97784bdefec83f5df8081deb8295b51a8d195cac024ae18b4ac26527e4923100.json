@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.org_role as \"org_role: OrgRole\",\n            p.client_id, p.project_type as \"project_type: ProjectType\", p.active,\n            EXISTS(SELECT 1 FROM project_management_assignments management\n                WHERE management.org_id=u.org_id AND management.project_id=$3\n                    AND management.manager_id=u.id) AS \"managed!\"\n        FROM users u JOIN projects p ON p.org_id=u.org_id AND p.id=$3\n        WHERE u.org_id=$1 AND u.id=$2 AND u.active",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "org_role: OrgRole",
+        "type_info": {
+          "Custom": {
+            "name": "org_role",
+            "kind": {
+              "Enum": [
+                "admin",
+                "manager",
+                "member"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "client_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "project_type: ProjectType",
+        "type_info": {
+          "Custom": {
+            "name": "project_type",
+            "kind": {
+              "Enum": [
+                "time_and_materials",
+                "fixed_fee",
+                "non_billable",
+                "retainer"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "managed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "97784bdefec83f5df8081deb8295b51a8d195cac024ae18b4ac26527e4923100"
+}
