@@ -115,7 +115,7 @@ pub(super) fn Team(
         .collect();
     rsx! {
         section { class: "bg-secondary border rounded-xl mt-4", aria_labelledby: "np-team-heading",
-            div { class: "flex flex-wrap items-baseline gap-3 py-4 px-5 border-b",
+            div { class: "flex flex-wrap items-baseline gap-3 py-4 px-project-panel border-b",
                 h2 { id: "np-team-heading", class: "text-xl font-semibold m-0", "Team" }
                 span { class: "text-xs text-subtle", "{form.read().team.len()} people" }
                 span { class: "text-xs text-label ml-auto", "Check = manages this project" }
@@ -129,14 +129,14 @@ pub(super) fn Team(
                 }
             }
             for person in manager_people.read().iter().filter(|person| !form.read().team.iter().any(|member| member.user_id == person.id)).cloned() {
-                div { key: "{person.id}", class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-b border-light min-w-0",
+                div { key: "{person.id}", class: "np-assignment-row grid items-center gap-4 px-project-panel py-3 border-b border-light min-w-0",
                     Checkbox {
                         id: "np-person-manager-{person.id}",
                         checked: managers.read().as_ref().is_some_and(|selection| selection.manager_ids.contains(&person.id)),
                         compact: true, label: "{person.name} manages this project",
                         onclick: move |_| on_toggle_manager.call(person.id),
                     }
-                    div { class: "flex items-center gap-4 min-w-0",
+                    div { class: "flex flex-wrap items-center gap-4 min-w-0",
                         Avatar { initials: first_initial(&person.name), size: "project" }
                         div { class: "min-w-0",
                             div { class: "text-sm text-strong truncate", title: "{person.name}", "{person.name}" }
@@ -146,8 +146,8 @@ pub(super) fn Team(
                     }
                 }
             }
-            if form.read().team.is_empty() { p { class: "text-sm text-subtle px-5", "No teammates selected yet." } }
-            div { class: "px-5 py-3",
+            if form.read().team.is_empty() { p { class: "text-sm text-subtle px-project-panel", "No teammates selected yet." } }
+            div { class: "px-project-panel py-3",
                 p { class: "form-hint mt-0",
                     if form.read().rate_mode == RateMode::Legacy {
                         "Person rates apply after task overrides and before the project and profile rates. Blank costs inherit the profile cost. Rates are not converted between currencies."
@@ -260,9 +260,9 @@ fn MemberRow(
         })
         .unwrap_or_else(|| "project currency".into());
     rsx! {
-        div { class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-0 border-b border-light m-0 min-w-0",
+        div { class: "np-assignment-row grid items-center gap-4 px-project-panel py-3 border-0 border-b border-light m-0 min-w-0",
             Checkbox { id: "np-person-manager-{id}", checked: member.manager, compact: true, disabled: !manager_editable, label: "{name} manages this project", onclick: move |_| on_toggle_manager.call(id) }
-            div { class: "flex items-center gap-4 min-w-0",
+            div { class: "flex flex-wrap items-center gap-4 min-w-0",
                 Avatar { initials: first_initial(&name), size: "project" }
                 div { class: "min-w-0",
                     div { class: "text-sm text-strong truncate", title: "{name}", "{name}" }
@@ -312,7 +312,7 @@ fn MemberRow(
                 }, "×" }
         }
         if matches!(invalid_field, Some(ProjectFormField::Person(row) | ProjectFormField::PersonRate(row) | ProjectFormField::CostRate(row) | ProjectFormField::PersonBudget(row)) if row == id) {
-            p { id: "np-person-error-{id}", class: "text-sm text-danger px-5",
+            p { id: "np-person-error-{id}", class: "text-sm text-danger px-project-panel",
                 "{error_message.as_deref().unwrap_or_default()}"
                 if invalid_field == Some(ProjectFormField::Person(id)) { " Remove this person and select an available teammate below." }
             }

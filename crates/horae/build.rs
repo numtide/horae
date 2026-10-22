@@ -270,6 +270,10 @@ fn spacing_family() -> Family {
         "px-project-form".into(),
         "padding-inline: var(--project-form-gutter)".into(),
     ));
+    rules.push((
+        "px-project-panel".into(),
+        "padding-inline: var(--project-panel-gutter)".into(),
+    ));
     rules.push(("pb-30".into(), "padding-bottom: var(--space-30)".into()));
     for (n, v) in space() {
         rules.push((format!("p-{n}"), format!("padding: {v}")));

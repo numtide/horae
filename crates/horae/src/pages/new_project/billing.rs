@@ -125,7 +125,7 @@ pub(super) fn Billing(
                 p { class: "form-hint", "Current type: {project_type.label()}. This project keeps its existing billing rules; changing to a new billing configuration requires a migration." }
             }
             if let Some(message) = error_for(ProjectFormField::ProjectType) { p { id: "np-billing-field-error", class: "text-sm text-danger", "{message}" } }
-            div { class: "bg-secondary border rounded-xl p-5 mt-3 flex flex-col gap-5",
+            div { class: "bg-secondary border rounded-xl py-5 px-project-panel mt-3 flex flex-col gap-5",
                 if billable_access != ProjectFieldAccess::Withheld {
                 fieldset { class: "border-0 p-0 m-0 min-w-0 flex flex-col gap-5", disabled: billable_access != ProjectFieldAccess::Editable,
                 if legacy {
@@ -325,9 +325,9 @@ fn FeeSchedule(
         div {
             fieldset { class: "border-0 p-0 m-0 min-w-0",
                 legend { class: "text-xs uppercase tracking-eyebrow text-faint mb-2", "Project fee" }
-                div { class: "segmented flex-wrap",
+                div { class: "segmented flex-wrap max-w-full",
                     for (choice, label) in [(FeeMode::Single, "Single fee"), (FeeMode::Milestones, "Milestones"), (FeeMode::Monthly, "Monthly")] {
-                        label { class: if mode == choice { "segmented-item active inline-flex items-center gap-2 cursor-pointer" } else { "segmented-item inline-flex items-center gap-2 cursor-pointer" },
+                        label { class: if mode == choice { "segmented-item active inline-flex flex-wrap items-center gap-2 max-w-full cursor-pointer" } else { "segmented-item inline-flex flex-wrap items-center gap-2 max-w-full cursor-pointer" },
                             input { r#type: "radio", name: "np-fee-mode", checked: mode == choice, onchange: move |_| { on_edit.call(ProtectedProjectField::Fees); form.write().fee_mode = choice; } }
                             "{label}"
                         }

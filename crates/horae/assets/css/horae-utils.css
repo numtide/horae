@@ -39,6 +39,7 @@
 
 /* Spacing (padding / margin / gap) */
 .px-project-form { padding-inline: var(--project-form-gutter); }
+.px-project-panel { padding-inline: var(--project-panel-gutter); }
 .pb-30 { padding-bottom: var(--space-30); }
 .p-0 { padding: 0; }
 .px-0 { padding-left: 0; padding-right: 0; }

@@ -108,6 +108,14 @@ const before = sql(`SELECT json_build_array(
           }
         }
       }
+      // Assignment-row text must keep room for itself: a role squeezed to zero width
+      // can spill without any control moving. Names truncated on purpose are exempt.
+      for (const cell of node.querySelectorAll('.np-assignment-row div, .np-assignment-row span')) {
+        if (outside.length >= 8 || !visible(cell) || cell.closest('.truncate') || cell.children.length
+          || !cell.textContent.trim() || getComputedStyle(cell).display === 'inline') continue;
+        if (cell.clientWidth === 0 || cell.scrollWidth > cell.clientWidth + 1)
+          outside.push(`squeezed ${cell.tagName.toLowerCase()}.${[...cell.classList].join('.')} "${cell.textContent.trim().slice(0, 32)}": content ${cell.scrollWidth} in ${cell.clientWidth}`);
+      }
       // A wider scroll with no control outside comes from text, a legend or a
       // container: name the innermost few so the cause is identified, not guessed.
       if (node.scrollWidth > node.clientWidth + 1 && !outside.length) {

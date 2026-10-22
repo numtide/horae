@@ -808,7 +808,9 @@ h1, h2, h3, h4, h5, h6 {
 /* Opt in only while this editor is mounted; other routes retain document scrolling. */
 .app-shell:has(> .app-content > .np-page) { height: 100dvh; min-height: 0; overflow: hidden; }
 .app-content:has(> .np-page) { padding: 0; }
-.np-page { --project-form-gutter: var(--space-10); }
+/* Panel padding stays 20px at 100% text from 320px up, and stops doubling with
+   enlarged text on narrow screens. */
+.np-page { --project-form-gutter: var(--space-10); --project-panel-gutter: min(var(--space-5), 6.25vw); }
 .np-scroll { scroll-padding-block: var(--space-4); }
 @media (max-width: 1320px) {
   .np-page { --project-form-gutter: var(--space-6); }
@@ -838,6 +840,9 @@ h1, h2, h3, h4, h5, h6 {
 .np-date-popover .dp { max-width: 100%; }
 .np-row { grid-template-columns: var(--width-form-label) minmax(0, 1fr); }
 .np-assignment-row { grid-template-columns: var(--space-5) minmax(0, 1fr) auto var(--space-8); }
+/* 16px at 100% text; at enlarged text on narrow screens no wider than the panel gutter.
+   The page prefix outranks the row's gap utility. */
+.np-page .np-assignment-row { column-gap: min(var(--space-4), var(--project-panel-gutter)); }
 .np-assignment-row .avatar-project { width: var(--size-project-avatar); height: var(--size-project-avatar); }
 .np-milestone-row { grid-template-columns: minmax(0, 1fr) var(--space-40) var(--width-milestone-amount) var(--space-10); }
 @media (max-width: 900px) {
