@@ -103,6 +103,21 @@ write finish with no notice anywhere (the detail then shows the persisted
 status); and a refresh that fails or loses access discards the transient Undo,
 leaving the normal Reactivate action as the recovery path.
 
+After a committed write whose reply is lost, the loaded header may still say
+Archived until the successful retry refreshes it. The error does not assert that
+the write failed. Dismissing a notice retains the shared component's existing
+focus-to-body behavior; this increment does not change all toast consumers.
+The short failure message uses Harvest's "restore" wording while the existing
+menu/success use Reactivate; this bounded copy difference is accepted to keep the
+enlarged failure notice readable, not a new lifecycle state.
+
+Both independent reviewers accepted the corrected `de09905d` source conditionally,
+with no blocking finding. Actual rebuilt evidence is still required. In addition
+to the automated gates, inspect wide-screen action alignment, icon wrapping in
+the enlarged error, pending feedback, and actual keyboard access. Compare the
+unchanged actionless gallery/importer consumers; source compatibility alone is
+not a claim of completed browser verification.
+
 Run focused browser checks before the complete flake checks:
 
 ```sh
