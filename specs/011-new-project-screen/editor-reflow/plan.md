@@ -165,6 +165,11 @@ settings are unchanged.
 
 Known limits:
 
+- The owned legacy fixture requires the runner's fresh disposable database;
+  rerunning this suite in a partially retained database is not supported. The
+  long-name check temporarily renames the disposable administrator and restores
+  it in `finally`, so suites must not run concurrently in that database. A
+  cleanup failure can replace the original diagnostic but still fails the run.
 - The editor's size container and both container queries assume `.np-page` keeps
   a definite height through `h-full` from the fixed shell. A future shell where
   the editor's height depends on its content would collapse under size
@@ -209,8 +214,30 @@ text enlargement (not physical devices or native browser zoom):
 
 Two independent reviews found no remaining blocking production defect after
 the pending-label correction. The visual reviewer accepted the final captures
-with the limits above. Full automation is still a delivery gate: the fixture
-failure in run 60066 is not a passing result. No real Harvest data was changed.
+with the limits above. The technical reviewer accepted the final fixture change
+subject to the complete rerun, now passed below. The earlier fixture failure in
+run 60066 is not counted as a passing result. No real Harvest data was changed.
+
+### Final local verification — 2026-10-22
+
+Frozen source `ba50d044e45b7ddce39972dfdcbc5b2d543d6008`, actual package
+`/nix/store/8knrmffaf7w55mc8bn841pr6mqamqap3-horae-0.1.0`:
+
+- Full browser check passed, including the complete creation/Edit matrices and
+  subsequent clients, permissions, catalog and invoice-label regressions.
+  Derivation: `g90k03f2bp1gzlh3jp4kg4hnmvmhijyd-horae-browser-checks`.
+- Tests passed: 191 core tests, 1,504 app tests (11 existing ignored tests), and
+  all integration/UI test binaries. Derivation:
+  `0hdhbfszh0xa4nb0h73bxr560p7za1pi-horae-tests-0.1.0`.
+- Native Clippy, SQLx cache verification and treefmt passed in the same run.
+- Strict WASM Clippy passed with `-D warnings -W clippy::perf`;
+  derivation `7qr4z6da4wws67z5yzpsbpi8gb5ray09-horae-web-clippy-0.1.0`.
+
+The combined local command exited 0. These are local gates, not a remote CI or
+merge claim. Native evidence above remains applicable: since `e356e723` only
+tests, documentation and one production comment changed. Final delivery metadata
+does not change those executed sources. Required CI must still pass on the exact
+published commit before protected merge.
 
 ## Validation and delivery
 
@@ -233,9 +260,9 @@ failure in run 60066 is not a passing result. No real Harvest data was changed.
 1. Resolve independent technical and visual/UX reviews on the final artifact.
    Publish one bounded PR and merge only with mandatory exact-head CI green.
 
-Status: R001/R002 complete; implementation written, final verification and both
-final review approvals outstanding. A build or an intermediate audit log is not
-acceptance. Update this section with final results and the PR before delivery.
+Status: R001–R005 complete; both independent reviews resolved with the documented
+limits. R006 remains open until publication, exact-head mandatory CI and protected
+merge. No complete-application or shared-calendar acceptance is implied.
 
 ## Constitution and dependencies
 

@@ -16,26 +16,26 @@ certify this new regression. No backend or product decision is being reopened.
 
 ## Implementation
 
-- [ ] R003 [US6] Apply minimal wrapping/shrink constraints in
+- [x] R003 [US6] Apply minimal wrapping/shrink constraints in
   `crates/horae/src/pages/new_project.rs` and its affected section modules;
   use `assets/css/horae.css` only for necessary scoped structural rules and
   generate the opt-in panel utility through `crates/horae/build.rs` into
   `assets/css/horae-utils.css`.
-  Written and corrected after rebased `7555b08c`, not accepted: awaiting green actual-package
-  regression checks. Measured causes and prior failures are summarized in
-  `plan.md`; shared defaults and the persistent-actions contract are unchanged.
+  Implemented and verified on `ba50d044`; measured causes and prior failures are
+  summarized in `plan.md`. Shared defaults and the persistent-actions contract
+  are unchanged.
   Run 82103 on `68421ac9` passed; a native UX finding (two-line busy label cut
   off at 320x568/200%) led to a shorter "Saving…" button label and blocked-save
   geometry checks. Full run 60066 on `e356e723` then failed only because an
   earlier suite makes ACME-01 a configured Fixed Fee project. The Edit reflow
-  checks now use a test-owned legacy fixture; still pending.
-- [ ] R004 [US7] Verify configured/legacy Edit, creation conditional panels,
+  checks now use a test-owned legacy fixture; full run on `ba50d044` passed.
+- [x] R004 [US7] Verify configured/legacy Edit, creation conditional panels,
   discard/reload focus and unchanged saved/draft state with the existing browser
   suites; record evidence in this directory's `plan.md`.
 
 ## Delivery
 
-- [ ] R005 Run full tests/browser/native/WASM/lint/format checks and native
+- [x] R005 Run full tests/browser/native/WASM/lint/format checks and native
   390/768/1440 themes/text verification; record explicit limits in `plan.md`.
 - [ ] R006 Resolve two independent reviews, update the dependent base, publish
   the bounded PR and deliver only with mandatory exact-head CI green; record PR
