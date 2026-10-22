@@ -188,7 +188,7 @@ pub(super) fn Team(
                             }
                         }
                     }
-                    button { id: "np-add-everyone", r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| {
+                    button { id: "np-add-everyone", r#type: "button", class: "btn btn-secondary flex-wrap justify-center max-w-full", disabled: busy(), onclick: move |_| {
                         if busy() { return; }
                         busy.set(true);
                         error.set(None);

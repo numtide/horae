@@ -62,6 +62,11 @@ spans 408..474. The discard dialog's scroll width was 454 against a client width
 of 324, with Keep editing at 272..454. The earlier normal-text Save/reload cases
 at 390/768/1440 passed.
 
+The two baseline widths measure different states. The native figure (543 against
+380\) has no date set and a 10px classic scrollbar. The test-run figure (556
+against 390) is headless with a date set, so the clear control adds width and no
+scrollbar takes space.
+
 ## Written correction (R003, not yet accepted)
 
 - `new_project/date_field.rs`: the date wrapper wraps (`flex-wrap`), so a set date's
@@ -95,9 +100,66 @@ scrollport, so a control spilling into the gutter fails. Only control boxes are
 compared, so text scrolling inside an input is never reported. The Edit suite
 restores the 1440px viewport its later cases used before the enlarged-text loop.
 
-At 100% text every affected row already fits, so preferred widths and layout are
-unchanged. No text sizes, overflow clipping, truncation, tokens, utilities or
-shared component defaults were changed.
+Focused run 2237 on `420457fc` (package `ry3z6fvi42ji8xh5hm5fk98ncvv487f5`) exited
+1 at 320px with 200% text, before reaching 390, so `420457fc` has no 390px/200%
+result. Legacy Edit: form scroll 351 against 320; Add everyone 81..325; the
+Visibility options are 263px wide against a 240px field cell; the task access
+"Everyone" button is 164px wide against a 96px `.np-row-controls`; the discard
+dialog scrolls 277 against 254 with no control outside its padding box (Keep
+editing reaches into the body's padding). Short-height native check on the same
+code: at 390x568 the form area was 66px tall beside a 353px footer, and at
+320x568 it was 0px beside a 388px footer. The pinned shell clipped the form.
+
+Creation run 18262 (after the calendar synchronization in `34948bc0`) exited 1.
+All fourteen branches pass at 390/768/1440 with 100% text, and at 1440 with 200%
+text the six hourly branches, Single fee and No budget pass. The first failure is
+1440/200% Milestones: inner scroll 1386 against 1176, amount at 1002..1282, remove
+at 1306..1386. The 900px viewport rule that stacks milestones does not apply
+there, but the rem-sized columns no longer fit the narrower list.
+
+Native checks on `420457fc` at 320px with 200% text: the set date button (230px)
+wraps its text with no clipping (scroll width 229 equals client 229). The calendar
+panel sits at 8..312 and scrolls vertically (picker 691px tall inside a 484px
+panel), and Today is reachable, so that scrolling is intended.
+
+Third correction, written and not yet accepted:
+
+- `horae.css`, at 480px and below: the editor gutter becomes
+  `min(var(--space-5), 6.25vw)`, still 20px at 100% text from 320px up and no longer
+  doubled by enlarged text. Row overrides (`.np-row-controls`) take the full row
+  under the person or task, so a single-word action such as Everyone keeps its
+  full width.
+- `horae.css`, at 768px wide and 700px tall or less: the editor joins document
+  scrolling (`height: auto` on the shell and `.np-page`), so the fields and then
+  the footer actions scroll in order and stay reachable. This also applies to
+  short phones at 100% text, which then lose the pinned footer; nothing is hidden
+  or reordered. Desktop is unchanged.
+- `horae.css` + `new_project/billing.rs`: the milestone list is an inline-size
+  container (`np-milestones`, the `client-detail` pattern). Below 30rem it uses
+  the existing stacked layout. At 100% text the list is wider than 30rem wherever
+  four columns show; at 200% text it stacks whenever the doubled columns would
+  not fit.
+- `new_project/team.rs`: Add everyone adds `flex-wrap justify-center max-w-full`,
+  so its icon can sit above the label. The space is tight; the button-clipping
+  check reports a shortfall.
+- Discard, reload, New client and task-access dialogs: `modal-body p-4 sm:p-6`,
+  as an existing `projects.rs` dialog does locally. The shared Modal styles
+  are unchanged.
+
+The checks now also measure each region's content box, including dialog bodies,
+report a button whose content is clipped, check that the calendar fits the
+viewport (and scrolls when tall) with Today reachable, and run the actual Tab
+order at 320x568 and 390x568 with name and footer actions fully visible. Both
+suites collect geometry problems and assert them once, after the enlarged-text
+sections in the creation suite and after the data-integrity checks in the Edit
+suite. Keyboard, focus and data assertions stay fatal. Creation cases at 100%
+text keep empty dates again; each 200% case sets a date first.
+
+Preferred control widths remain unchanged. At 100% text, narrow assignment rows
+now use the full row for overrides, and short phones use document scrolling;
+these intentional accessibility changes still need visual verification. No text
+sizes, overflow clipping, truncation, tokens, utilities or shared component
+defaults were changed.
 
 ## Implementation and validation
 

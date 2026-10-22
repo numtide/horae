@@ -346,7 +346,7 @@ fn TaskAccessDialog(
     }));
     rsx! {
         Modal { id: "np-task-access", labelledby: "np-task-access-title", open: task_id.is_some(), on_dismiss,
-            div { class: "modal-body",
+            div { class: "modal-body p-4 sm:p-6",
                 h2 { id: "np-task-access-title", class: "modal-title", "Who can track to this task?" }
                 fieldset { class: "border-0 p-0 m-0 flex flex-col gap-3", aria_label: "Task access",
                     label { class: "flex items-center gap-3",

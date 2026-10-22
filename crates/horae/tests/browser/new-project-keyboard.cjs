@@ -45,29 +45,64 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(trigger).toBeFocused();
   };
   // Focus scrolls an inner scroller to reveal its control, so geometry must be
-  // read against the unscrolled scrollport, not only the viewport. Field cells
-  // and row controls are checked too: a control can spill into the gutter
-  // without growing the scroll width. Only control boxes are compared, so text
-  // scrolling inside an input is never reported.
+  // read against the unscrolled scrollport, not only the viewport. Field cells,
+  // row controls and dialog bodies are checked too, against their content boxes:
+  // a control can spill into a gutter or padding without growing the scroll
+  // width. Inputs are compared only by their boxes, so text scrolling inside a
+  // field is never reported; a button whose own content is clipped is.
   const overflow = container => container.evaluate(node => {
     const visible = item => item.getClientRects().length && getComputedStyle(item).visibility !== 'hidden';
-    const box = node.getBoundingClientRect();
-    const regions = [[node, box.left + node.clientLeft, box.left + node.clientLeft + node.clientWidth, node.scrollLeft],
-      ...[...node.querySelectorAll('.np-row > .min-w-0, .np-row-controls')].filter(visible)
-        .map(cell => { const rect = cell.getBoundingClientRect(); return [cell, rect.left, rect.right, 0]; })];
+    const content = (item, rect) => {
+      const style = getComputedStyle(item), left = rect.left + item.clientLeft + parseFloat(style.paddingLeft);
+      return [left, rect.left + item.clientLeft + item.clientWidth - parseFloat(style.paddingRight)];
+    };
+    const name = item => `${item.tagName.toLowerCase()}${item.id ? `#${item.id}` : ''} ${item.getAttribute('aria-label') || item.textContent.trim().slice(0, 24)}`;
+    const regions = [[node, ...content(node, node.getBoundingClientRect()), node.scrollLeft],
+      ...[...node.querySelectorAll('.np-row > .min-w-0, .np-row-controls, .modal-body')].filter(visible)
+        .map(cell => [cell, ...content(cell, cell.getBoundingClientRect()), 0])];
     const reported = new Set(), outside = [];
     for (const [region, left, right, shift] of regions) {
       for (const item of region.querySelectorAll('button, input:not([type="hidden"]), select, textarea, a[href], label, .form-group')) {
         const rect = item.getBoundingClientRect();
-        if (outside.length >= 8 || reported.has(item) || !visible(item) || rect.width <= 1 || rect.height <= 1
-          || (rect.left + shift >= left - 1 && rect.right + shift <= right + 1)) continue;
-        reported.add(item);
-        outside.push(`${item.tagName.toLowerCase()}${item.id ? `#${item.id}` : ''} ${item.getAttribute('aria-label') || item.textContent.trim().slice(0, 24)}: ${Math.round(rect.left + shift - left)}..${Math.round(rect.right + shift - left)} of ${Math.round(right - left)}${region === node ? '' : ` in .${region.classList[0]}`}`);
+        if (outside.length >= 8 || reported.has(item) || !visible(item) || rect.width <= 1 || rect.height <= 1) continue;
+        if (rect.left + shift < left - 1 || rect.right + shift > right + 1) {
+          reported.add(item);
+          outside.push(`${name(item)}: ${Math.round(rect.left + shift - left)}..${Math.round(rect.right + shift - left)} of ${Math.round(right - left)}${region === node ? '' : ` in .${region.classList[0]}`}`);
+        } else if (item.tagName === 'BUTTON' && !item.matches('.truncate') && item.scrollWidth > item.clientWidth + 1) {
+          reported.add(item);
+          outside.push(`${name(item)}: content ${item.scrollWidth} clipped to ${item.clientWidth}`);
+        }
       }
     }
     return node.scrollWidth <= node.clientWidth + 1 && !outside.length ? ''
       : `scroll ${node.scrollWidth} > client ${node.clientWidth}; outside: ${JSON.stringify(outside)}`;
   });
+  // Geometry is collected rather than thrown, so one overflow cannot hide the
+  // rest of an enlarged-text run; it is asserted once those sections finish.
+  const geometryProblems = [];
+  const fitsViewport = (locator, label) => locator.evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    return rect.left >= -1 && rect.right <= innerWidth + 1 && rect.top >= -1 && rect.bottom <= innerHeight + 1 ? ''
+      : `${Math.round(rect.left)}..${Math.round(rect.right)} x ${Math.round(rect.top)}..${Math.round(rect.bottom)} in ${innerWidth}x${innerHeight}`;
+  }).then(problem => { if (problem) geometryProblems.push(`${label}: ${problem}`); });
+  // Keyboard-only date choice, also checking that the calendar and Today fit the viewport.
+  const pickToday = async label => {
+    const trigger = screen.locator('#np-start');
+    await activate(trigger);
+    const calendar = page.getByRole('dialog', { name: 'Choose Start date', exact: true });
+    await expect(calendar).toBeVisible();
+    await expect.poll(() => calendar.evaluate(node => node.contains(document.activeElement))).toBe(true);
+    await fitsViewport(calendar, `${label} calendar`);
+    const scrolls = await calendar.evaluate(node => node.scrollHeight <= node.clientHeight + 1 || ['auto', 'scroll'].includes(getComputedStyle(node).overflowY));
+    if (!scrolls) geometryProblems.push(`${label} calendar: taller than its panel without scrolling`);
+    const today = calendar.getByRole('button', { name: 'Today', exact: true });
+    await today.focus();
+    await expect(today).toBeFocused();
+    await fitsViewport(today, `${label} calendar Today`);
+    await page.keyboard.press('Enter');
+    await expect(calendar).toBeHidden();
+    await expect(trigger).toBeFocused();
+  };
   const audit = async (root, label, form = true) => {
     if (form) { await saved(); await readsFinished(); }
     const count = await root.evaluate(node => {
@@ -105,7 +140,8 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       const geometry = await current.evaluate(item => {
         const box = item.getBoundingClientRect(), footer = document.querySelector('.np-footer')?.getBoundingClientRect();
         return { top: box.top, bottom: box.bottom, left: box.left, right: box.right,
-          limit: item.closest('.np-footer') ? innerHeight : footer?.top ?? innerHeight,
+          // In document flow the footer may sit below the viewport, so the viewport bounds both.
+          limit: item.closest('.np-footer') ? innerHeight : Math.min(footer?.top ?? innerHeight, innerHeight),
           height: innerHeight, width: innerWidth };
       });
       assert.ok(geometry.top >= -1 && geometry.bottom <= (form ? geometry.limit : geometry.height) + 1,
@@ -120,10 +156,11 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await page.keyboard.press('Tab');
     await page.keyboard.press('Shift+Tab');
     await expect(root.locator('[data-keyboard-audit="0"]')).toBeFocused();
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, `${label}: no document overflow`);
-    assert.equal(await root.evaluate(node => node.scrollWidth <= node.clientWidth + 1), true, `${label}: no surface overflow`);
-    assert.equal(await overflow(root.locator(form ? '.np-scroll' : '.modal')), '', `${label}: controls fit the scrollport`);
-    console.log(`PASS: ${label}`);
+    if (!await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)) geometryProblems.push(`${label}: document overflow`);
+    if (!await root.evaluate(node => node.scrollWidth <= node.clientWidth + 1)) geometryProblems.push(`${label}: surface overflow`);
+    const fit = await overflow(root.locator(form ? '.np-scroll' : '.modal'));
+    if (fit) geometryProblems.push(`${label}: ${fit}`);
+    console.log(`AUDITED: ${label}`);
   };
   try {
     await page.goto(`${base}/auth/login`);
@@ -140,15 +177,6 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await activate(screen.getByRole('button', { name: 'Add a second tax', exact: true }));
     await screen.locator('#np-second-tax-name').fill('Additional tax');
     await screen.locator('#np-second-tax').fill('2');
-    // A set planning date also shows its clear control beside the field.
-    await activate(screen.locator('#np-start'));
-    const startCalendar = page.getByRole('dialog', { name: 'Choose Start date', exact: true });
-    await expect(startCalendar).toBeVisible();
-    await expect.poll(() => startCalendar.evaluate(node => node.contains(document.activeElement))).toBe(true);
-    await activate(startCalendar.getByRole('button', { name: 'Today', exact: true }));
-    await expect(startCalendar).toBeHidden();
-    await expect(screen.locator('#np-start')).toBeFocused();
-    await expect(screen.getByRole('button', { name: 'Clear Start date', exact: true })).toBeVisible();
     const hourly = [
       ['Person', 'No budget'], ['Task', 'Hours per task'], ['Project', 'Total project hours'],
       ['Person', 'Hours per person'], ['Task', 'Fees per task'], ['Project', 'Total project fees'],
@@ -157,6 +185,12 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       await page.setViewportSize({ width, height: 900 });
       // User text enlargement, applied only to the test document, not app styles.
       await page.evaluate(scale => { document.documentElement.style.fontSize = `${scale * 100}%`; }, scale);
+      // 100% cases keep the original empty dates; every enlarged case has a date
+      // set, so its clear control is measured, and opens the calendar once.
+      if (scale === 2) {
+        await pickToday(`${width}/${scale}`);
+        await expect(screen.getByRole('button', { name: 'Clear Start date', exact: true })).toBeVisible();
+      }
       await radio(/^Time & Materials/);
       for (const [rate, budget] of hourly) {
         await radio(new RegExp(`^${rate} hourly rate`));
@@ -231,6 +265,8 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
         [screen.getByRole('button', { name: /^Access for Development:/ }), 'Who can track to this task?'],
         [screen.getByRole('button', { name: 'Discard draft', exact: true }), 'Discard this draft?'],
       ]) {
+        await saved();
+        await readsFinished();
         await activate(trigger);
         const dialog = page.getByRole('dialog', { name, exact: true });
         await expect(dialog).toBeVisible();
@@ -240,8 +276,25 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
         await expect(trigger).toBeFocused();
       }
     }
+    // Short phones: the actual Tab order reaches every control and the footer,
+    // each fully on screen when focused, with nothing hidden behind the footer.
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 568 });
+      await audit(screen, `${width}x568 at 200% text`);
+      for (const control of [
+        screen.getByLabel('Project name', { exact: true }),
+        screen.locator('.np-footer').getByRole('button', { name: 'Save project', exact: true }),
+        screen.locator('.np-footer').getByRole('button', { name: 'Cancel', exact: true }),
+        screen.locator('.np-footer').getByRole('button', { name: 'Discard draft', exact: true }),
+      ]) {
+        await control.focus();
+        await expect(control).toBeFocused();
+        await expect(control).toBeInViewport({ ratio: 1 });
+      }
+    }
     await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
     await page.setViewportSize({ width: 390, height: 900 });
+    assert.deepEqual(geometryProblems, [], 'Enlarged-text matrix, calendar, dialogs and short screens fit their containers');
     await activate(screen.getByRole('button', { name: '+ New client', exact: true }));
     const newClient = page.getByRole('dialog', { name: 'New client', exact: true });
     await newClient.getByLabel('Client name', { exact: true }).focus();
@@ -342,6 +395,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
         console.log(`PASS: keyboard-only ${type} creation at ${width}px took ${Math.round(elapsed)}ms and survives reopening`);
       }
     }
+    assert.deepEqual(geometryProblems, [], 'Later audits fit their containers');
     assert.deepEqual(errors, []);
     console.log('PASS: modal traversal/Escape restores focus and configured email threshold is keyboard reachable without sending mail');
   } finally { await browser.close(); }

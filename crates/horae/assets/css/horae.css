@@ -823,6 +823,12 @@ h1, h2, h3, h4, h5, h6 {
   .app-shell.mobile-open:has(> .app-content > .np-page) { display: block; height: auto; min-height: 100dvh; overflow: visible; }
   .app-shell.mobile-open > .app-content:has(> .np-page) { height: 100dvh; }
 }
+/* Short phones: a pinned footer would leave no room for the form, so the editor
+   joins document scrolling with its actions after the fields. */
+@media (max-width: 768px) and (max-height: 700px) {
+  .app-shell:has(> .app-content > .np-page) { height: auto; min-height: 100dvh; overflow: visible; }
+  .app-content > .np-page { height: auto; }
+}
 .np-code.form-input { width: var(--width-project-code); }
 .np-tags { min-height: var(--height-form-control); }
 .np-tags .chip { max-width: 100%; }
@@ -838,6 +844,13 @@ h1, h2, h3, h4, h5, h6 {
 .np-assignment-row .avatar-project { width: var(--size-project-avatar); height: var(--size-project-avatar); }
 .np-milestone-row { grid-template-columns: minmax(0, 1fr) var(--space-40) var(--width-milestone-amount) var(--space-10); }
 @media (max-width: 900px) {
+  .np-milestone-row { grid-template-columns: minmax(0, 1fr) var(--space-10); }
+  .np-milestone-row > input:first-child, .np-milestone-row > input[type="date"] { grid-column: 1 / -1; }
+}
+/* The same stacked layout when enlarged text leaves the list too narrow for its
+   rem-sized columns; at 100% text the list is wider than this wherever it shows four. */
+.np-milestones { container: np-milestones / inline-size; }
+@container np-milestones (max-width: 30rem) {
   .np-milestone-row { grid-template-columns: minmax(0, 1fr) var(--space-10); }
   .np-milestone-row > input:first-child, .np-milestone-row > input[type="date"] { grid-column: 1 / -1; }
 }
@@ -861,6 +874,12 @@ h1, h2, h3, h4, h5, h6 {
   .np-page .np-types { grid-template-columns: minmax(0, 1fr); }
   .np-page .np-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
   .np-row > .np-label { padding-top: 0; }
+}
+/* Narrow screens: the gutter stops growing with enlarged text (unchanged at 100%
+   from 320px up), and row overrides take the full row beneath the person or task. */
+@media (max-width: 480px) {
+  .np-page { --project-form-gutter: min(var(--space-5), 6.25vw); }
+  .np-row-controls { grid-column: 1 / -1; }
 }
 
 .form-group { margin-bottom: var(--space-4); }

@@ -335,7 +335,7 @@ fn FeeSchedule(
                 }
             }
             if mode == FeeMode::Milestones {
-                div { class: "bg-base border border-light rounded-btn mt-4",
+                div { class: "np-milestones bg-base border border-light rounded-btn mt-4",
                     for milestone in form.read().milestones.clone() {
                         Milestone { key: "{milestone.id}", form, on_edit, id: milestone.id, currency: currency.clone(), invalid_field, error_message: error_message.clone() }
                     }
