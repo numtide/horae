@@ -38,13 +38,16 @@ state; separately revoke authority before Undo and confirm no unauthorized write
 - An already-active project remains active when the same Undo request is retried.
 - A refresh that loses access removes stale feedback and provides recovery focus.
 - A normal Reactivate success does not offer archive as an inverse Undo action.
+- Dismissing while Undo is pending does not cancel that request or suppress its
+  result: a retryable failure must show the error and Undo again.
 - Short/mobile screens and enlarged text keep the action and dismissal reachable.
 
 ## Requirements
 
 - UFR-001: Only a successful archive from this detail view offers Undo for that
   project. Dismissal, subsequent status actions, loss of access or leaving the
-  project removes the opportunity; it is not a persistent history feature.
+  project removes the opportunity, except that a pending request's retryable
+  failure restores its error and retry; it is not a persistent history feature.
 - UFR-002: Undo directly requests the active state under current authority. It
   changes no project content, tracked time, invoices, budget or relationships.
 - UFR-003: While Undo is pending, duplicate status submissions are prevented and
