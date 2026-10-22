@@ -73,6 +73,18 @@ before it fails must still show a visible, retryable failure; the duplicate
 request count waits one render; and at 320px/200% the action toast's message
 must stay at least one word wide, with a semibold (600) Undo as in the handoff.
 
+Focused run 42166 failed on the expectation that Actions regain focus after an
+Undo, not on the application. `.btn:disabled` and `.btn.is-disabled` set
+`pointer-events: none`, so the test's forced clicks on the pending Undo and the
+disabled Actions trigger fell through and focused `main#app-main`; native traces
+confirmed plain keyboard Undo returns focus to Actions, while the forced sequence
+leaves `MAIN` focused. `restore_detail_focus` deliberately overrides only the
+body or Back, so it must not take `#app-main` (the skip-link target). The test
+now keeps the keyboard Undo focus assertion with a keyboard duplicate, and moves
+the forced pointer duplicates to a separate held cycle that asserts one request,
+then that a deliberately focused sidebar Projects link keeps focus after the
+reload. No product change and no retry.
+
 Recovery feedback differs from the handoff by design of the existing flow: the
 prototype's `undoArchive` simply hides the toast, while this view keeps the
 existing "Project reactivated." success notice after an Undo succeeds, exactly as
@@ -132,6 +144,26 @@ local database. Inspect shared actionless toasts. No physical-device claim.
 Two independent reviews, exact published-head required CI and protected merge
 are mandatory. Only one heavy build at once; the editor reflow is the other
 increment. No edits to its worktree, root or reference branches #208/#212.
+
+## Native verification — 2026-10-22
+
+Windows Chrome tested the actual `30023bed` package
+`/nix/store/h21r4aw09lzzjy7gvcgghpvslibfbryd-horae-0.1.0` (production unchanged
+since `de09905d`) against a fresh disposable database, with Instrument Sans
+loaded. Forty-eight archive/pending/error cases covered both themes,
+320/390/768/1440px and 100%/200% root text; the toast and button contents fit in
+all cases, including 320×568. Held real requests were aborted and retried; no
+response was fabricated. At the narrowest enlarged size the icon occupies its
+own line and the disabled progress label wraps, both remaining readable.
+
+Actual Tab traversal reached Undo eleven stops after Actions in the seeded
+detail, at desktop and 320px/200%; this is reachable, not a short keyboard path.
+Keyboard Undo succeeded. Dismiss during a held Undo followed by an aborted
+request restored the visible error and retry, and retry succeeded. Reactivated
+feedback has no inverse action. Three actionless gallery notices retained their
+original classes and 280×46.33px geometry in both themes. Importer comparison,
+the corrected focused check, full automation and final review remain pending.
+These are emulated viewports/root text, not physical devices or native zoom.
 
 ## Constitution check
 

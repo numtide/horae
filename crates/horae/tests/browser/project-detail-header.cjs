@@ -498,8 +498,6 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await expect(trigger).toBeDisabled();
     await expect(dialog).toBeHidden();
     await page.keyboard.press('Enter');
-    await pendingUndo.click({ force: true });
-    await trigger.click({ force: true });
     await expect(dialog).toBeHidden();
     await settle();
     assert.equal(statusRequests.length, sent + 1, 'A pending Undo sends one request');
@@ -519,6 +517,37 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await expect(header).toContainText('Header private note');
     await expect(page.locator('.toast')).toHaveCount(0);
     console.log('PASS: keyboard Undo reactivates once without a second confirmation; pending duplicates are suppressed; the result persists');
+
+    // Disabled buttons take no pointer events, so forced clicks fall through to the page;
+    // they must still send nothing, and a reload must not steal focus the user moved.
+    await archive();
+    let releasePointer;
+    const pointerHeld = new Promise(resolve => { releasePointer = resolve; });
+    await page.route('**/api/set_project_active*', async route => { await pointerHeld; await route.continue(); }, { times: 1 });
+    const sidebarProjects = page.locator('#app-navigation').getByRole('link', { name: 'Projects', exact: true });
+    try {
+      sent = statusRequests.length;
+      const pointerUndo = page.waitForResponse(isStatusWrite);
+      await undo.click();
+      await expect(pendingUndo).toBeDisabled();
+      await pendingUndo.click({ force: true });
+      await trigger.click({ force: true });
+      await expect(dialog).toBeHidden();
+      await settle();
+      assert.equal(statusRequests.length, sent + 1, 'Forced clicks on a pending Undo send nothing more');
+      await sidebarProjects.focus();
+      releasePointer();
+      assert.equal((await pointerUndo).status(), 200);
+    } finally {
+      releasePointer();
+    }
+    await expect(header).not.toContainText('Archived');
+    await expect(undo).toHaveCount(0);
+    await settle();
+    await expect(sidebarProjects).toBeFocused();
+    assert.equal(active(), 't');
+    assert.equal(persisted(), content);
+    console.log('PASS: forced pointer duplicates send one request; the reload keeps deliberately moved focus');
 
     await archive();
     sent = statusRequests.length;
