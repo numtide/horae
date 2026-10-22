@@ -36,7 +36,7 @@ denial cannot write or leave stale details/toasts; project navigation isolates s
 
 ## Cross-cutting delivery
 
-- [ ] T008 Verify keyboard, themes, 320/390/768/1440, enlarged text and shared
+- [x] T008 Verify keyboard, themes, 320/390/768/1440, enlarged text and shared
   actionless notices; record actual artifact evidence and full Nix/WASM/format
   results in `specs/004-project-dashboard/archive-undo/plan.md`.
 - [x] T009 Resolve two independent reviews and Spec Kit analysis; update H101/H102

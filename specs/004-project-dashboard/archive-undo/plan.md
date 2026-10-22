@@ -178,7 +178,33 @@ Focused run 50307 passed every header and Undo scenario using tests `78e1c51c`
 and the existing `h21r4` binary: production was unchanged, so no replacement
 binary is claimed for this test-only revision. Both independent reviews accepted
 the corrected source, split tests and native visuals with the explicit limits.
-Full checks and exact-head CI remain gates before publication/merge.
+The complete combined checks below subsequently passed. Exact published-head CI
+remains mandatory before protected merge.
+
+## Combined acceptance and delivery
+
+The full local run on `a30ffd5d2685437299b54fedd3c630b7c87891f5`, based on
+editor-reflow head `7b9da1db`, passed the five Nix checks above and strict WASM
+Clippy (`-D warnings -W clippy::perf`). The actual combined package was
+`/nix/store/wadaabgmkd5imdqcbmiyxxsrpyn1y3yr-horae-0.1.0`. The browser suite,
+SQLx cache verification, native Clippy and treefmt all passed. Tests passed:
+191 core cases, 1,504 app cases and all integration binaries. The 11 existing
+ignored app tests remain ignored; this increment did not disable any test.
+
+An additional native Chrome confirmation on that combined package covered
+archive, held Undo, aborted response, visible error and keyboard retry in both
+themes at 1440×900/100% and 320×568/200% root text (12 captures). All toast and
+button contents fit; successful reactivation persisted through reload. The
+visual reviewer inspected the combined captures and source delta and found no
+new regression. The previously documented limitations remain applicable.
+
+Publication is stacked on the editor-reflow branch so its diff contains only
+this increment. PR #300's Nixbot build 685 failed the ARM e2e setup while fetching
+a remote store dependency, before that test ran. It must not be bypassed; a
+retry authorization is pending. Neither successful local checks nor a dependent
+PR replace the parent's required CI. After #300 merges, rebase only this
+increment onto its actual squash commit, compare the source tree, and verify
+the final published head before protected merge. Delivery remains open.
 
 ## Constitution check
 
@@ -199,7 +225,7 @@ implemented and verified by the focused checks and native acceptance (optional
 Spec Kit reanalysis covers all eight requirements/outcomes with ten tasks and no
 unmapped task or constitutional conflict. The pending-dismissal exception was
 clarified consistently with the existing retry requirement and test.
-Independent reviews are resolved, conditional on full checks. Delivery remains
-pending. Integrate the independently reviewed editor reflow before the complete
-combined run; after its protected merge, preserve the verified source tree while
+Independent reviews are resolved and the complete local checks passed. Delivery
+remains pending. The combined run includes the independently reviewed editor
+reflow; after its protected merge, preserve the verified source tree while
 rebasing onto the actual master commit. Exact-head required CI is still mandatory.
