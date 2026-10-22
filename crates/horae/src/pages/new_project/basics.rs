@@ -159,7 +159,7 @@ pub(super) fn Basics(
         }
         FormRow { label: "Project code", id: "np-code", hint: "Optional",
             div { class: "flex flex-wrap items-center gap-3",
-                input { id: "np-code", class: "np-code form-input font-mono", value: form.read().code.clone(), placeholder: "Project code",
+                input { id: "np-code", class: "np-code form-input max-w-full font-mono", value: form.read().code.clone(), placeholder: "Project code",
                     aria_invalid: error_id(ProjectFormField::Code).map(|_| "true"),
                     aria_describedby: error_id(ProjectFormField::Code),
                     oninput: move |event| form.write().code = event.value() }

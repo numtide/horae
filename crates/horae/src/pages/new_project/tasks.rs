@@ -118,7 +118,7 @@ pub(super) fn Tasks(
                 h2 { id: "np-tasks-heading", class: "text-xl font-semibold m-0", "Tasks" }
                 span { class: "text-xs text-subtle", "{form.read().tasks.len()} tasks" }
                 if billable_project && billable_access == ProjectFieldAccess::Editable {
-                    div { class: "flex items-center gap-2 ml-auto",
+                    div { class: "flex flex-wrap items-center gap-2 ml-auto",
                         span { class: "text-xs text-label", "Billable" }
                         button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| { for task in &mut form.write().tasks { if !matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id) || archived_ids.read().contains(&task_id)) { task.billable = true; } } }, "All" }
                         button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| { for task in &mut form.write().tasks { if !matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id) || archived_ids.read().contains(&task_id)) { task.billable = false; } } }, "None" }

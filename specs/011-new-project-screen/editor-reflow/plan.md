@@ -77,6 +77,24 @@ at 390/768/1440 passed.
   access): `modal-actions flex-wrap`, as `projects.rs` already does. The shared
   `.modal-actions` default is unchanged.
 
+Focused run 41504 on `4c552c1b` (package `aa6b6c2s5xivchzmj1ysbvvy4nr91n9r`)
+exited 1. Dates and dialogs fit. At 390px with 200% text the form still scrolled
+403 against 390, and the only offender was the task billable shortcut "None" at
+289..403. Native DOM checks at 320px also showed `#np-code` overflowing (right edge
+360 against a 310 client). Follow-up correction, also not yet accepted:
+
+- `new_project/tasks.rs`: the Billable All/None shortcut group adds `flex-wrap`.
+- `new_project/basics.rs`: `#np-code` adds `max-w-full`, capping its 160px
+  preferred width at its field cell.
+
+The checks now also cover 320px at 200% text (legacy Edit loop, creation matrix
+and dialogs) and the reload confirmation at 390px (geometry, keyboard actions,
+focus return, local input kept until an explicit reload). Each field cell
+(`.np-row > .min-w-0`) and each `.np-row-controls` is measured as well as the
+scrollport, so a control spilling into the gutter fails. Only control boxes are
+compared, so text scrolling inside an input is never reported. The Edit suite
+restores the 1440px viewport its later cases used before the enlarged-text loop.
+
 At 100% text every affected row already fits, so preferred widths and layout are
 unchanged. No text sizes, overflow clipping, truncation, tokens, utilities or
 shared component defaults were changed.

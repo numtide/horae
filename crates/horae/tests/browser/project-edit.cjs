@@ -79,20 +79,30 @@ const before = sql(`SELECT json_build_array(
       console.log(`PASS: shared editor prefills, cancels, saves the same project and survives reload at ${width}px`);
     }
     // Focus scrolls an inner scroller to reveal its control, so geometry must be
-    // read against the unscrolled scrollport, not only the viewport.
+    // read against the unscrolled scrollport, not only the viewport. Field cells
+    // and row controls are checked too: a control can spill into the gutter
+    // without growing the scroll width. Only control boxes are compared, so text
+    // scrolling inside an input is never reported.
     const overflow = container => container.evaluate(node => {
-      const box = node.getBoundingClientRect(), left = box.left + node.clientLeft, right = left + node.clientWidth;
-      const outside = [...node.querySelectorAll('button, input:not([type="hidden"]), select, textarea, a[href], label, .form-group')]
-        .filter(item => item.getClientRects().length && getComputedStyle(item).visibility !== 'hidden')
-        .map(item => [item, item.getBoundingClientRect()])
-        .filter(([, rect]) => rect.width > 1 && rect.height > 1
-          && (rect.left + node.scrollLeft < left - 1 || rect.right + node.scrollLeft > right + 1))
-        .slice(0, 8)
-        .map(([item, rect]) => `${item.tagName.toLowerCase()}${item.id ? `#${item.id}` : ''} ${item.getAttribute('aria-label') || item.textContent.trim().slice(0, 24)}: ${Math.round(rect.left + node.scrollLeft - left)}..${Math.round(rect.right + node.scrollLeft - left)}`);
+      const visible = item => item.getClientRects().length && getComputedStyle(item).visibility !== 'hidden';
+      const box = node.getBoundingClientRect();
+      const regions = [[node, box.left + node.clientLeft, box.left + node.clientLeft + node.clientWidth, node.scrollLeft],
+        ...[...node.querySelectorAll('.np-row > .min-w-0, .np-row-controls')].filter(visible)
+          .map(cell => { const rect = cell.getBoundingClientRect(); return [cell, rect.left, rect.right, 0]; })];
+      const reported = new Set(), outside = [];
+      for (const [region, left, right, shift] of regions) {
+        for (const item of region.querySelectorAll('button, input:not([type="hidden"]), select, textarea, a[href], label, .form-group')) {
+          const rect = item.getBoundingClientRect();
+          if (outside.length >= 8 || reported.has(item) || !visible(item) || rect.width <= 1 || rect.height <= 1
+            || (rect.left + shift >= left - 1 && rect.right + shift <= right + 1)) continue;
+          reported.add(item);
+          outside.push(`${item.tagName.toLowerCase()}${item.id ? `#${item.id}` : ''} ${item.getAttribute('aria-label') || item.textContent.trim().slice(0, 24)}: ${Math.round(rect.left + shift - left)}..${Math.round(rect.right + shift - left)} of ${Math.round(right - left)}${region === node ? '' : ` in .${region.classList[0]}`}`);
+        }
+      }
       return node.scrollWidth <= node.clientWidth + 1 && !outside.length ? ''
         : `scroll ${node.scrollWidth} > client ${node.clientWidth}; outside: ${JSON.stringify(outside)}`;
     });
-    for (const width of [390, 768]) {
+    for (const width of [320, 390, 768]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`${base}/projects/${project.id}/edit`);
       const reflow = page.locator('.np-page');
@@ -137,6 +147,8 @@ const before = sql(`SELECT json_build_array(
       assert.deepEqual(problems, [], `Legacy editor at ${width}px and 200% text must reflow without inner overflow`);
       console.log(`PASS: legacy editor rows, planning date and discard actions reflow at ${width}px and 200% text`);
     }
+    // The following cases were written for the desktop viewport the first loop left behind.
+    await page.setViewportSize({ width: 1440, height: 900 });
     assert.equal(sql(`SELECT json_build_array(
       (SELECT count(*) FROM projects),
       (SELECT count(*) FROM project_drafts),
@@ -289,12 +301,27 @@ const before = sql(`SELECT json_build_array(
     await editor.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(editor.getByRole('alert')).toBeVisible();
     await expect(editor.locator('#np-name')).toHaveValue('Local conflicting changes');
-    await editor.getByRole('button', { name: 'Reload project…', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    const reloadTrigger = editor.getByRole('button', { name: 'Reload project…', exact: true });
+    const reloadDialog = page.getByRole('dialog', { name: 'Reload project?', exact: true });
+    await reloadTrigger.focus();
+    await page.keyboard.press('Enter');
+    await expect(reloadDialog).toBeVisible();
+    const reloadOverflow = await overflow(reloadDialog.locator('.modal'));
+    await reloadDialog.getByRole('button', { name: 'Keep editing', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(reloadDialog).toBeHidden();
+    await expect(reloadTrigger).toBeFocused();
     await expect(editor.locator('#np-name')).toHaveValue('Local conflicting changes');
-    await editor.getByRole('button', { name: 'Reload project…', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Reload project', exact: true }).click();
+    await reloadTrigger.focus();
+    await page.keyboard.press('Enter');
+    await reloadDialog.getByRole('button', { name: 'Reload project', exact: true }).focus();
+    await page.keyboard.press('Enter');
     await expect(editor.locator('#np-name')).toHaveValue('Saved from another tab');
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    assert.equal(reloadOverflow, '', 'Reload confirmation actions fit at 390px and 200% text');
     assert.equal(draftWrites, draftWritesAfterCreate);
     console.log('PASS: concurrent edits reject a stale save, retain local input and require confirmation before reloading');
     assert.deepEqual(errors, []);

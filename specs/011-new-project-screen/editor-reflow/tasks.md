@@ -20,7 +20,10 @@ certify this new regression. No backend or product decision is being reopened.
   `crates/horae/src/pages/new_project.rs` and its affected section modules;
   use `assets/css/horae.css` only for necessary scoped structural rules.
   Written, not accepted: awaiting the coordinator's green run and
-  regression checks (see `plan.md`).
+  regression checks (see `plan.md`). Run 41504 on `4c552c1b` was still red:
+  the task "None" shortcut overflowed at 390px with 200% text, and `#np-code`
+  overflowed at 320px. Follow-up fixes and 320px/reload checks are written but
+  have not been run.
 - [ ] R004 [US7] Verify configured/legacy Edit, creation conditional panels,
   discard/reload focus and unchanged saved/draft state with the existing browser
   suites; record evidence in this directory's `plan.md`.

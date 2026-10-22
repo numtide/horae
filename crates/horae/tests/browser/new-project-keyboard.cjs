@@ -45,16 +45,26 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(trigger).toBeFocused();
   };
   // Focus scrolls an inner scroller to reveal its control, so geometry must be
-  // read against the unscrolled scrollport, not only the viewport.
+  // read against the unscrolled scrollport, not only the viewport. Field cells
+  // and row controls are checked too: a control can spill into the gutter
+  // without growing the scroll width. Only control boxes are compared, so text
+  // scrolling inside an input is never reported.
   const overflow = container => container.evaluate(node => {
-    const box = node.getBoundingClientRect(), left = box.left + node.clientLeft, right = left + node.clientWidth;
-    const outside = [...node.querySelectorAll('button, input:not([type="hidden"]), select, textarea, a[href], label, .form-group')]
-      .filter(item => item.getClientRects().length && getComputedStyle(item).visibility !== 'hidden')
-      .map(item => [item, item.getBoundingClientRect()])
-      .filter(([, rect]) => rect.width > 1 && rect.height > 1
-        && (rect.left + node.scrollLeft < left - 1 || rect.right + node.scrollLeft > right + 1))
-      .slice(0, 8)
-      .map(([item, rect]) => `${item.tagName.toLowerCase()}${item.id ? `#${item.id}` : ''} ${item.getAttribute('aria-label') || item.textContent.trim().slice(0, 24)}: ${Math.round(rect.left + node.scrollLeft - left)}..${Math.round(rect.right + node.scrollLeft - left)}`);
+    const visible = item => item.getClientRects().length && getComputedStyle(item).visibility !== 'hidden';
+    const box = node.getBoundingClientRect();
+    const regions = [[node, box.left + node.clientLeft, box.left + node.clientLeft + node.clientWidth, node.scrollLeft],
+      ...[...node.querySelectorAll('.np-row > .min-w-0, .np-row-controls')].filter(visible)
+        .map(cell => { const rect = cell.getBoundingClientRect(); return [cell, rect.left, rect.right, 0]; })];
+    const reported = new Set(), outside = [];
+    for (const [region, left, right, shift] of regions) {
+      for (const item of region.querySelectorAll('button, input:not([type="hidden"]), select, textarea, a[href], label, .form-group')) {
+        const rect = item.getBoundingClientRect();
+        if (outside.length >= 8 || reported.has(item) || !visible(item) || rect.width <= 1 || rect.height <= 1
+          || (rect.left + shift >= left - 1 && rect.right + shift <= right + 1)) continue;
+        reported.add(item);
+        outside.push(`${item.tagName.toLowerCase()}${item.id ? `#${item.id}` : ''} ${item.getAttribute('aria-label') || item.textContent.trim().slice(0, 24)}: ${Math.round(rect.left + shift - left)}..${Math.round(rect.right + shift - left)} of ${Math.round(right - left)}${region === node ? '' : ` in .${region.classList[0]}`}`);
+      }
+    }
     return node.scrollWidth <= node.clientWidth + 1 && !outside.length ? ''
       : `scroll ${node.scrollWidth} > client ${node.clientWidth}; outside: ${JSON.stringify(outside)}`;
   });
@@ -138,7 +148,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       ['Person', 'No budget'], ['Task', 'Hours per task'], ['Project', 'Total project hours'],
       ['Person', 'Hours per person'], ['Task', 'Fees per task'], ['Project', 'Total project fees'],
     ];
-    for (const [width, scale] of [[390, 1], [768, 1], [1440, 1], [1440, 2], [390, 2], [768, 2]]) {
+    for (const [width, scale] of [[390, 1], [768, 1], [1440, 1], [1440, 2], [390, 2], [768, 2], [320, 2]]) {
       await page.setViewportSize({ width, height: 900 });
       // User text enlargement, applied only to the test document, not app styles.
       await page.evaluate(scale => { document.documentElement.style.fontSize = `${scale * 100}%`; }, scale);
@@ -208,7 +218,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       if (name === 'Who can track to this task?') await expect(trigger).toContainText('Restricted (1)');
     }
     // Audit only: repeating the access changes above would toggle its selection.
-    for (const width of [390, 768]) {
+    for (const width of [320, 390, 768]) {
       await page.setViewportSize({ width, height: 900 });
       await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
       for (const [trigger, name] of [
