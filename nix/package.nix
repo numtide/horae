@@ -62,6 +62,8 @@ let
   checkArtifacts = craneLib.buildDepsOnly ((builtins.removeAttrs common [ "src" ]) // {
     inherit dummySrc;
     pname = "horae-checks";
+    # Match the test check's profile so its dependency artifacts stay reusable.
+    CARGO_PROFILE_TEST_DEBUG = "line-tables-only";
     buildPhaseCargoCommand = ''
       cargo check --locked --workspace --features server --all-targets
       cargo test --locked --workspace --features server --no-run

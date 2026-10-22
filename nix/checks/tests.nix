@@ -2,6 +2,8 @@
 perSystem.self.default.overrideAttrs (old: {
   pname = "horae-tests";
   cargoArtifacts = old.passthru.checkArtifacts;
+  # Keep file/line backtraces without the large type/variable debug information.
+  CARGO_PROFILE_TEST_DEBUG = "line-tables-only";
   nativeBuildInputs = old.nativeBuildInputs ++ [
     pkgs.cargo-nextest
     pkgs.postgresql
