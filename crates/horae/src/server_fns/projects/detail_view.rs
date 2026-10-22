@@ -30,10 +30,12 @@ pub(super) async fn fetch(
         .ok_or_else(|| not_found("Project not found"))?;
     let context = sqlx::query!(
         r#"SELECT u.org_role as "org_role: OrgRole",
+            p.client_id, p.project_type as "project_type: ProjectType", p.active,
             EXISTS(SELECT 1 FROM project_management_assignments management
                 WHERE management.org_id=u.org_id AND management.project_id=$3
                     AND management.manager_id=u.id) AS "managed!"
-        FROM users u WHERE u.org_id=$1 AND u.id=$2 AND u.active"#,
+        FROM users u JOIN projects p ON p.org_id=u.org_id AND p.id=$3
+        WHERE u.org_id=$1 AND u.id=$2 AND u.active"#,
         viewer.org_id,
         viewer.id,
         project_id,
@@ -74,12 +76,20 @@ pub(super) async fn fetch(
     .await
     .map_err(server_err)?;
     let canonical_permissions = !access.legacy();
+    // The Clients page's `ClientReadScope::can_read`, applied to this reader.
+    let can_open_client = access.legacy() || access.has(Permission::ClientReadAll);
+    let can_change_status = access.legacy() && context.org_role.is_manager_or_above();
     access.tx.commit().await.map_err(server_err)?;
     Ok(ProjectDetailView {
         requester,
         canonical_permissions,
         project,
+        client_id: context.client_id,
+        project_type: context.project_type,
+        active: context.active,
         can_edit,
+        can_open_client,
+        can_change_status,
         team,
         tasks,
     })

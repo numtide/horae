@@ -20,7 +20,12 @@ fn view() -> project::ProjectDetailView {
             tags: vec![],
             admin_notes: None,
         },
+        client_id: Uuid::from_u128(50),
+        project_type: horae_core::types::ProjectType::FixedFee,
+        active: true,
         can_edit: true,
+        can_open_client: true,
+        can_change_status: false,
         team: vec![project::ProjectDetailIdentity {
             id: Uuid::from_u128(30),
             name: "Visible teammate".into(),
@@ -225,4 +230,123 @@ async fn late_fee_access_denial_hides_loaded_detail_and_retry_keeps_original_ide
         );
         assert!(dioxus::ssr::render(&dom).contains("Visible teammate"));
     }
+}
+
+/// The only policy that offers status changes: `set_project_active` checks the legacy role.
+fn legacy_probe() -> Probe {
+    let probe = probe();
+    {
+        let mut view = probe.detail_view.borrow_mut();
+        let view = view.as_mut().unwrap();
+        view.canonical_permissions = false;
+        view.can_change_status = true;
+    }
+    probe
+}
+
+#[tokio::test]
+async fn header_shows_real_identity_and_only_the_offered_actions() {
+    let project = Uuid::from_u128(1);
+    let legacy = legacy_probe();
+    let dom = mount(&legacy);
+    let html = dioxus::ssr::render(&dom);
+    for expected in [
+        "[PROJECT-1] Visible project".to_string(),
+        "Fixed Fee".into(),
+        "EUR".into(),
+        "Back to Projects".into(),
+        "href=\"/projects\"".into(),
+        format!("href=\"/clients/{}\"", Uuid::from_u128(50)),
+        format!("href=\"/projects/{project}/edit\""),
+        "project-detail-actions-trigger".into(),
+        "Archive".into(),
+    ] {
+        assert!(html.contains(&expected), "missing {expected}: {html}");
+    }
+    for hidden in ["Reactivate", "Archived"] {
+        assert!(!html.contains(hidden), "{hidden}: {html}");
+    }
+
+    // Policy one offers no role-derived status change, even with edit authority.
+    let canonical = probe();
+    let html = dioxus::ssr::render(&mount(&canonical));
+    assert!(
+        html.contains("[PROJECT-1] Visible project")
+            && html.contains(&format!("href=\"/projects/{project}/edit\"")),
+        "{html}"
+    );
+    assert!(!html.contains("project-detail-actions"), "{html}");
+
+    let restricted = legacy_probe();
+    {
+        let mut view = restricted.detail_view.borrow_mut();
+        let view = view.as_mut().unwrap();
+        view.project.code = None;
+        view.active = false;
+        view.can_open_client = false;
+        view.can_change_status = false;
+        view.can_edit = false;
+    }
+    let html = dioxus::ssr::render(&mount(&restricted));
+    assert!(
+        html.contains("Visible project") && !html.contains("[PROJECT-1]"),
+        "{html}"
+    );
+    assert!(
+        html.contains("Visible client") && html.contains("Archived"),
+        "{html}"
+    );
+    for hidden in [
+        "href=\"/clients/".to_string(),
+        format!("href=\"/projects/{project}/edit\""),
+        "project-detail-actions-trigger".into(),
+        "Reactivate".into(),
+    ] {
+        assert!(!html.contains(&hidden), "{hidden}: {html}");
+    }
+    assert!(html.contains("href=\"/projects\""), "{html}");
+}
+
+#[tokio::test]
+async fn archived_project_offers_reactivation_and_keeps_saved_information() {
+    let legacy = legacy_probe();
+    {
+        let mut view = legacy.detail_view.borrow_mut();
+        let view = view.as_mut().unwrap();
+        view.active = false;
+        view.project.tags = vec!["retained-tag".into()];
+        view.project.admin_notes = Some("Retained private note".into());
+        view.project.starts_on = chrono::NaiveDate::from_ymd_opt(2026, 9, 1);
+    }
+    let html = dioxus::ssr::render(&mount(&legacy));
+    for expected in [
+        "Archived",
+        "Reactivate",
+        "Project information",
+        "retained-tag",
+        "Retained private note",
+        "01 Sep 2026",
+    ] {
+        assert!(html.contains(expected), "missing {expected}: {html}");
+    }
+}
+
+#[tokio::test]
+async fn back_navigation_stays_available_while_loading_and_after_denial() {
+    let probe = probe();
+    let (send, receive) = oneshot::channel();
+    *probe.detail_view_response.borrow_mut() = Some(receive);
+    let mut dom = mount(&probe);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Back to Projects") && !html.contains("project-detail-actions"),
+        "{html}"
+    );
+    send.send(Err(ServerFnError::new("denied"))).unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Back to Projects") && !html.contains("project-detail-actions"),
+        "{html}"
+    );
 }

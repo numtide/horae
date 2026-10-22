@@ -31,8 +31,10 @@ pub mod menu;
 pub mod modal;
 #[path = "../src/components/table.rs"]
 pub mod table;
+#[path = "../src/components/toast.rs"]
+pub mod toast;
 mod components {
-    pub use super::{badge, combobox, controls, form, icons, menu, modal, table};
+    pub use super::{badge, combobox, controls, form, icons, menu, modal, table, toast};
 }
 #[path = "../src/models/assignment.rs"]
 mod assignment;
@@ -1187,7 +1189,12 @@ mod server_fns {
             },
             canonical_permissions: false,
             project,
+            client_id: Uuid::nil(),
+            project_type: horae_core::types::ProjectType::TimeAndMaterials,
+            active: true,
             can_edit: true,
+            can_open_client: true,
+            can_change_status: false,
             team,
             tasks,
         })

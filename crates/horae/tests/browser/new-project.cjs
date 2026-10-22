@@ -1163,7 +1163,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(screen.getByRole('button', { name: 'Back to Projects', exact: true })).toBeDisabled();
     await screen.getByRole('button', { name: 'Retry request', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects/${created}`);
-    await expect(page.getByRole('heading', { name: 'Project', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: '[BROWSER-NEW] Recovered latest edit', exact: true })).toBeVisible();
     const basics = page.getByRole('region', { name: 'Project details', exact: true });
     await expect(basics).toContainText('Recovered latest edit');
     await expect(basics).toContainText('BROWSER-NEW');

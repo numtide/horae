@@ -619,7 +619,8 @@ pub async fn set_project_active(
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let (project, transition) =
-        set_project_active_record(&state.db, manager.org_id, project_id, active).await?;
+        set_project_active_record(&state.db, manager.org_id, manager.id, project_id, active)
+            .await?;
     dispatch_project_status(state, manager.org_id, &project, transition);
     Ok(project)
 }
@@ -635,7 +636,8 @@ pub async fn set_projects_active(
     project_requester(&manager, expected_requester)?;
     let ids = parse_bulk_project_ids(&project_ids)?;
     let state = crate::state::global_state().await;
-    let results = set_projects_active_records(&state.db, manager.org_id, &ids, active).await?;
+    let results =
+        set_projects_active_records(&state.db, manager.org_id, manager.id, &ids, active).await?;
     Ok(results
         .into_iter()
         .map(|(project, transition)| {
@@ -695,10 +697,12 @@ fn dispatch_project_status(
 async fn set_projects_active_records(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
     sorted_ids: &[uuid::Uuid],
     active: bool,
 ) -> Result<Vec<(Project, Option<crate::plugin::event::ActiveTransition>)>, ServerFnError> {
     let mut tx = db.begin().await.map_err(server_err)?;
+    authorize_legacy_status_write(&mut tx, org_id, actor_id).await?;
     let mut results = Vec::with_capacity(sorted_ids.len());
     for &id in sorted_ids {
         results.push(set_project_active_in_transaction(&mut tx, org_id, id, active).await?);
@@ -711,13 +715,45 @@ async fn set_projects_active_records(
 async fn set_project_active_record(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
     project_id: uuid::Uuid,
     active: bool,
 ) -> Result<(Project, Option<crate::plugin::event::ActiveTransition>), ServerFnError> {
     let mut tx = db.begin().await.map_err(server_err)?;
+    authorize_legacy_status_write(&mut tx, org_id, actor_id).await?;
     let result = set_project_active_in_transaction(&mut tx, org_id, project_id, active).await?;
     tx.commit().await.map_err(server_err)?;
     Ok(result)
+}
+
+/// Status changes still use the legacy role, which policy one does not grant.
+/// Recheck the account, role and policy under the organization gate, so a change
+/// since the session was read fails closed instead of writing.
+#[cfg(feature = "server")]
+async fn authorize_legacy_status_write(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+) -> Result<(), ServerFnError> {
+    lock_organization(tx, org_id, OrganizationLock::Shared)
+        .await
+        .map_err(server_err)?;
+    let actor = sqlx::query!(
+        r#"SELECT u.org_role AS "role: OrgRole",o.permission_policy_version
+           FROM users u JOIN organizations o ON o.id=u.org_id
+           WHERE u.org_id=$1 AND u.id=$2 AND u.active FOR SHARE OF u"#,
+        org_id,
+        actor_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| forbidden("Manager access required"))?;
+    match actor.permission_policy_version {
+        0 if actor.role.is_manager_or_above() => Ok(()),
+        0 => Err(forbidden("Manager access required")),
+        _ => Err(forbidden("Project status changes are unavailable")),
+    }
 }
 
 #[cfg(feature = "server")]

@@ -139,8 +139,16 @@ pub struct ProjectDetailView {
     pub requester: super::permission_editor::PermissionRequester,
     pub canonical_permissions: bool,
     pub project: ProjectDetails,
+    pub client_id: Uuid,
+    pub project_type: ProjectType,
+    pub active: bool,
     /// Display affordance; the editor independently reloads its current authority.
     pub can_edit: bool,
+    /// Whether the client's own detail page would admit this viewer.
+    pub can_open_client: bool,
+    /// Mirrors `set_project_active`, which still checks only the legacy role,
+    /// so policy one offers no role-derived status change.
+    pub can_change_status: bool,
     pub team: Vec<ProjectDetailIdentity>,
     pub tasks: Vec<ProjectDetailIdentity>,
 }
