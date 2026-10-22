@@ -67,8 +67,9 @@ pub enum Route {
     NewProject {},
     #[route("/projects/new/client/:client")]
     NewProjectForClient { client: String },
-    #[route("/projects/:id/edit")]
-    EditProject { id: Uuid },
+    // Only the project detail sets `return_to`; `new_project::edit_return_route` resolves it.
+    #[route("/projects/:id/edit?:return_to")]
+    EditProject { id: Uuid, return_to: Option<String> },
     #[route("/projects/:id")]
     ProjectDetail { id: Uuid },
     #[route("/approvals")]
@@ -125,6 +126,7 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pages::new_project::edit_return_route;
 
     #[test]
     fn timesheet_routes_preserve_selected_person_in_every_view() {
@@ -211,12 +213,103 @@ mod tests {
         let id = Uuid::now_v7();
         let path = format!("/projects/{id}/edit");
         let route: Route = path.parse().unwrap();
-        assert!(matches!(route, Route::EditProject { id: parsed } if parsed == id));
-        assert_eq!(route.to_string(), path);
+        assert!(
+            matches!(&route, Route::EditProject { id: parsed, return_to: None } if *parsed == id)
+        );
+        // The router may append an empty query delimiter; the route itself must survive.
+        assert!([path.clone(), format!("{path}?")].contains(&route.to_string()));
+        assert!(route.to_string().parse::<Route>().unwrap() == route);
         assert!(matches_navigation(&Route::ProjectList {}, &route));
         assert!(!matches_navigation(&Route::ClientList {}, &route));
         assert!(
             matches!(format!("/projects/{id}").parse::<Route>().unwrap(), Route::ProjectDetail { id: parsed } if parsed == id)
         );
+    }
+
+    /// The editor's exit for a parsed edit URL, asserting the URL kept its project.
+    fn edit_exit(url: &str, id: Uuid) -> Route {
+        match url.parse::<Route>().unwrap() {
+            Route::EditProject {
+                id: parsed,
+                return_to,
+            } => {
+                assert_eq!(parsed, id, "{url}");
+                edit_return_route(id, return_to.as_deref())
+            }
+            _ => panic!("{url} is not the project editor"),
+        }
+    }
+
+    #[test]
+    fn detail_origin_edit_round_trips_and_returns_to_the_same_project() {
+        let id = Uuid::now_v7();
+        let route = Route::EditProject {
+            id,
+            return_to: Some(Route::ProjectDetail { id }.to_string()),
+        };
+        let url = route.to_string();
+        assert_eq!(url, format!("/projects/{id}/edit?return_to=/projects/{id}"));
+        assert!(url.parse::<Route>().unwrap() == route);
+        assert!(edit_exit(&url, id) == Route::ProjectDetail { id });
+        assert!(matches_navigation(&Route::ProjectList {}, &route));
+        // The router decodes the query once, so a standard encoding is the same path.
+        let encoded = format!("/projects/{id}/edit?return_to=%2Fprojects%2F{id}");
+        assert!(edit_exit(&encoded, id) == Route::ProjectDetail { id });
+    }
+
+    #[test]
+    fn list_origin_and_plain_edit_urls_keep_returning_to_projects() {
+        let id = Uuid::now_v7();
+        let list_origin = Route::EditProject {
+            id,
+            return_to: None,
+        }
+        .to_string();
+        for url in [format!("/projects/{id}/edit"), list_origin] {
+            assert!(edit_exit(&url, id) == Route::ProjectList {}, "{url}");
+        }
+    }
+
+    #[test]
+    fn foreign_unsafe_or_extended_return_targets_fall_back_to_projects() {
+        let id = Uuid::now_v7();
+        let other = Uuid::now_v7();
+        let upper = id.to_string().to_uppercase();
+        for target in [
+            String::new(),
+            format!("/projects/{other}"),
+            format!("/projects/{upper}"),
+            format!("projects/{id}"),
+            format!("/projects/{id}/"),
+            format!("/projects/{id}/edit"),
+            format!("/projects/{id}%3Ftab=team"),
+            format!("/projects/{id}%23team"),
+            format!("/projects/{id}%20"),
+            format!("%20/projects/{id}"),
+            format!("/projects/{id}=x"),
+            format!("/projects//{id}"),
+            format!("//evil.example/projects/{id}"),
+            format!("https://evil.example/projects/{id}"),
+            format!("%2F%2Fevil.example%2Fprojects%2F{id}"),
+            // Decoded once only: a double encoding is not this project's path.
+            format!("%252Fprojects%252F{id}"),
+            "javascript:alert(1)".into(),
+            "/projects/not-a-project".into(),
+            format!("/clients/{id}"),
+            "/projects".into(),
+        ] {
+            let url = format!("/projects/{id}/edit?return_to={target}");
+            assert!(edit_exit(&url, id) == Route::ProjectList {}, "{url}");
+        }
+    }
+
+    #[test]
+    fn return_target_never_selects_a_different_project() {
+        let id = Uuid::now_v7();
+        let other = Uuid::now_v7();
+        let target = Route::ProjectDetail { id: other }.to_string();
+        assert!(edit_return_route(id, Some(&target)) == Route::ProjectList {});
+        assert!(edit_return_route(other, Some(&target)) == Route::ProjectDetail { id: other });
+        assert!(edit_return_route(id, None) == Route::ProjectList {});
     }
 }

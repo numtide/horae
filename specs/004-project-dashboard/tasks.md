@@ -4,6 +4,9 @@
 track the header delivery. The unchecked historical tasks below are not evidence
 of current runtime state and are not automatically completed by that increment.
 
+[E001–E006](edit-return-increment.md#tasks) track the separate H101 editor return
+increment; they do not close the remaining dashboard tasks.
+
 **Input**: Design documents from `specs/004-project-dashboard/`
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/server-fns.md, quickstart.md

@@ -169,8 +169,8 @@ mod route {
         NewProject {},
         #[route("/projects/new/client/:client")]
         NewProjectForClient { client: String },
-        #[route("/projects/:id/edit")]
-        EditProject { id: Uuid },
+        #[route("/projects/:id/edit?:return_to")]
+        EditProject { id: Uuid, return_to: Option<String> },
         #[route("/projects/:id")]
         ProjectDetail { id: Uuid },
         #[route("/admin/importers")]
@@ -188,7 +188,8 @@ mod route {
     }
 
     #[component]
-    fn EditProject(id: Uuid) -> Element {
+    fn EditProject(id: Uuid, return_to: Option<String>) -> Element {
+        let _ = return_to;
         rsx! { h1 { "Edit project {id}" } }
     }
 

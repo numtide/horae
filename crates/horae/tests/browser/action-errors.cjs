@@ -64,7 +64,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
           await page.keyboard.press('Escape');
           await expect(page.getByRole('alert')).toBeVisible();
           await scenario.openForm();
-          await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}\/edit$/);
+          await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}\/edit\??$/);
           const editor = page.locator('.np-page');
           const originalName = await editor.locator('#np-name').inputValue();
           const formRejected = page.waitForEvent('requestfailed', r => r.url().includes(`/api/${scenario.formEndpoint}`));

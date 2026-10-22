@@ -90,6 +90,8 @@ struct Probe {
     edit_session_changed: Rc<Cell<bool>>,
     pending_people: Rc<RefCell<Option<tokio::sync::oneshot::Receiver<()>>>>,
     pending_save: Rc<RefCell<Option<tokio::sync::oneshot::Receiver<Uuid>>>>,
+    /// Overrides the editor URL, e.g. to add a `return_to` target.
+    initial_path: Option<String>,
 }
 
 impl Default for Probe {
@@ -125,15 +127,18 @@ impl Default for Probe {
             edit_session_changed: Rc::new(Cell::new(false)),
             pending_people: Rc::new(RefCell::new(None)),
             pending_save: Rc::new(RefCell::new(None)),
+            initial_path: None,
         }
     }
 }
 
 fn app(probe: Probe) -> Element {
-    let initial_path = probe.existing.as_ref().map_or_else(
-        || "/projects/new".to_owned(),
-        |project| format!("/projects/{}/edit", project.id),
-    );
+    let initial_path = probe.initial_path.clone().unwrap_or_else(|| {
+        probe.existing.as_ref().map_or_else(
+            || "/projects/new".to_owned(),
+            |project| format!("/projects/{}/edit", project.id),
+        )
+    });
     use_context_provider(|| probe.clone());
     use_context_provider(|| Rc::new(probe.clone()) as Rc<dyn document::Document>);
     let history = Rc::new(MemoryHistory::with_initial_path(initial_path));
@@ -181,8 +186,8 @@ mod route {
         ProjectList {},
         #[route("/projects/new")]
         NewProject {},
-        #[route("/projects/:id/edit")]
-        EditProject { id: Uuid },
+        #[route("/projects/:id/edit?:return_to")]
+        EditProject { id: Uuid, return_to: Option<String> },
         #[route("/projects/:id")]
         ProjectDetail { id: Uuid },
     }
@@ -193,7 +198,7 @@ mod route {
             if let Some(project) = probe.other_project {
                 Link {
                     id: "test-other-project",
-                    to: Route::EditProject { id: project.id },
+                    to: Route::EditProject { id: project.id, return_to: None },
                     "Open another project"
                 }
             }
@@ -901,6 +906,81 @@ async fn manager_only_edit_is_dirty_and_cancel_requires_confirmation() {
         "Cancel must request opening the native discard dialog"
     );
     assert_eq!(probe.writes.get(), 0);
+}
+
+/// The canonical editor opened from `/projects/<id>/edit?return_to=<target>`.
+fn editor_returning_to(target: impl FnOnce(Uuid) -> String) -> (Probe, Uuid) {
+    let mut probe = canonical_editor();
+    let id = probe.existing.as_ref().unwrap().id;
+    probe.initial_path = Some(format!("/projects/{id}/edit?return_to={}", target(id)));
+    (probe, id)
+}
+
+#[tokio::test]
+async fn detail_origin_clean_cancel_returns_to_the_same_project_without_writing() {
+    let (probe, id) = editor_returning_to(|id| format!("/projects/{id}"));
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("data-project-edit-state=\"clean\""), "{html}");
+    assert!(
+        html.contains("Back to project") && !html.contains("Back to Projects"),
+        "{html}"
+    );
+    click(&mut dom, "np-cancel");
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains(&format!("Project {id}")), "{html}");
+    assert!(!html.contains("Edit project"), "{html}");
+    assert_eq!(probe.writes.get(), 0);
+}
+
+#[tokio::test]
+async fn forged_return_targets_leave_a_clean_editor_for_projects() {
+    let other = Uuid::now_v7();
+    for target in [
+        format!("/projects/{other}"),
+        "//example.com/projects".to_owned(),
+        String::new(),
+    ] {
+        let (probe, id) = editor_returning_to(|_| target.clone());
+        let mut dom = VirtualDom::new_with_props(app, probe.clone());
+        dom.rebuild_in_place();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(
+            html.contains("Back to Projects") && !html.contains("Back to project"),
+            "{target}: {html}"
+        );
+        click(&mut dom, "np-cancel");
+        let html = dioxus::ssr::render(&dom);
+        assert!(html.contains(">Projects</h1>"), "{target}: {html}");
+        assert!(!html.contains(&format!("Project {id}")), "{target}: {html}");
+        assert!(
+            !html.contains(&format!("Project {other}")),
+            "{target}: {html}"
+        );
+        assert_eq!(probe.writes.get(), 0);
+    }
+}
+
+#[tokio::test]
+async fn detail_origin_access_loss_links_back_to_the_same_project() {
+    let (probe, id) = editor_returning_to(|id| format!("/projects/{id}"));
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    input(&mut dom, "np-name", "Unsaved name");
+    click(&mut dom, "np-save");
+    probe.edit_error_code.set(403);
+    click(&mut dom, "np-retry");
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("id=\"np-editor-reload\""), "{html}");
+    assert!(
+        html.contains(&format!("href=\"/projects/{id}\"")) && html.contains("Back to project"),
+        "{html}"
+    );
+    assert!(!html.contains("Back to Projects"), "{html}");
 }
 
 fn control_is_disabled(html: &str, id: &str) -> bool {

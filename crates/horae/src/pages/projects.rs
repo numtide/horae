@@ -941,7 +941,7 @@ fn ProjectListContent(
                                                         MenuItem {
                                                             onclick: {
                                                                 let id = p.id;
-                                                                move |_| { navigator.push(Route::EditProject { id }); }
+                                                                move |_| { navigator.push(Route::EditProject { id, return_to: None }); }
                                                             },
                                                             "Edit"
                                                         }
@@ -1196,7 +1196,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                                 onclick: move |_| details.restart(), "Refresh details"
                             }
                             if view.can_edit {
-                                Link { id: "project-detail-edit", class: "btn btn-secondary", to: Route::EditProject { id },
+                                Link { id: "project-detail-edit", class: "btn btn-secondary", to: Route::EditProject { id, return_to: Some(Route::ProjectDetail { id }.to_string()) },
                                     span { class: "inline-flex", aria_hidden: "true", NavIcon { name: "pencil", class: "size-4" } }
                                     "Edit project"
                                 }
