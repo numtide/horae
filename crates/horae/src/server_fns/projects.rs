@@ -535,18 +535,45 @@ pub(super) async fn fetch_project_spend(
     let Some(mut access) = read_access::ReadAccess::begin(pool, org_id, viewer_id).await? else {
         return Ok(Vec::new());
     };
+    let spend = spend_in_transaction(
+        &mut access.tx,
+        org_id,
+        viewer_id,
+        access.permissions.as_ref(),
+        None,
+        true,
+    )
+    .await
+    .map_err(server_err)?;
+    access.tx.commit().await.map_err(server_err)?;
+    Ok(spend)
+}
+
+/// Tracked totals for every readable project, or only `project_id`, inside the
+/// caller's authority transaction. `permissions` is `None` under policy zero.
+/// Without `include_money` no amount is valued and `spent_cents` is absent.
+#[cfg(feature = "server")]
+pub(super) async fn spend_in_transaction(
+    connection: &mut sqlx::PgConnection,
+    org_id: uuid::Uuid,
+    viewer_id: uuid::Uuid,
+    permissions: Option<&crate::models::permissions::PersonPermissions>,
+    project_id: Option<uuid::Uuid>,
+    include_money: bool,
+) -> Result<Vec<ProjectSpend>, sqlx::Error> {
+    let has = |permission| permissions.is_some_and(|state| state.grants.contains(permission));
     // Grouped in Postgres, not folded here: the overview needs one number per
     // project, and folding in Rust meant fetching one row per time entry to get
     // there. SQL rate resolution preserves legacy precedence for projects
     // without settings. Attached invoice amounts take priority over live rates.
     // The joins cannot multiply rows: project
     // tasks, assignments, and invoice lines each have a unique pair key.
-    let spend = sqlx::query_as!(
+    sqlx::query_as!(
         ProjectSpend,
         r#"WITH visible AS (
              SELECT p.*,
-               CASE WHEN $3 THEN COALESCE(legacy.can_view_progress, false)
-                 ELSE $6 OR ($7 AND management.id IS NOT NULL) END AS can_view_money
+               ($9 AND CASE WHEN $3 THEN COALESCE(legacy.can_view_progress, false)
+                 ELSE $6 OR ($7 AND management.id IS NOT NULL) END) AS can_view_money
              FROM projects p
              JOIN clients parent ON parent.id=p.client_id AND parent.org_id=p.org_id
              LEFT JOIN project_read_access legacy ON legacy.org_id=p.org_id
@@ -555,7 +582,8 @@ pub(super) async fn fetch_project_spend(
                AND management.project_id=p.id AND management.manager_id=$2
              LEFT JOIN assignments member ON member.project_id=p.id AND member.user_id=$2
              LEFT JOIN project_settings settings ON settings.org_id=p.org_id AND settings.project_id=p.id
-             WHERE p.org_id=$1 AND CASE WHEN $3 THEN COALESCE(legacy.can_view_progress, false)
+             WHERE p.org_id=$1 AND ($8::uuid IS NULL OR p.id=$8)
+               AND CASE WHEN $3 THEN COALESCE(legacy.can_view_progress, false)
                ELSE $4 OR ($5 AND management.id IS NOT NULL)
                  OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members')='project_members') END
            ), entries AS (
@@ -592,18 +620,16 @@ pub(super) async fn fetch_project_spend(
            ORDER BY p.id"#,
         org_id,
         viewer_id,
-        access.legacy(),
-        access.has(Permission::ProjectReadAll),
-        access.has(Permission::ProjectReadManaged),
-        access.has(Permission::BillableRateReadAll),
-        access.has(Permission::BillableRateReadManaged),
+        permissions.is_none(),
+        has(Permission::ProjectReadAll),
+        has(Permission::ProjectReadManaged),
+        has(Permission::BillableRateReadAll),
+        has(Permission::BillableRateReadManaged),
+        project_id,
+        include_money,
     )
-    .fetch_all(&mut *access.tx)
+    .fetch_all(connection)
     .await
-    .map_err(server_err)?;
-
-    access.tx.commit().await.map_err(server_err)?;
-    Ok(spend)
 }
 
 /// Activate or deactivate a project. Deactivated projects are hidden from

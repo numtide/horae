@@ -145,22 +145,28 @@ pub(super) async fn configured_progress(
     project_id: Uuid,
     date: NaiveDate,
 ) -> Result<Vec<BudgetProgress>, sqlx::Error> {
-    Ok(
-        fetch_progress(connection, org_id, Some(project_id), None, date, None)
-            .await?
-            .into_iter()
-            .filter(|row| row.kind != horae_core::types::BudgetKind::None)
-            .filter_map(|row| {
-                Some(BudgetProgress {
-                    task_id: row.task_id,
-                    user_id: row.user_id,
-                    period_key: row.period_key,
-                    consumed: row.consumed,
-                    budget: row.budget?,
-                })
-            })
-            .collect(),
+    Ok(fetch_progress(
+        connection,
+        org_id,
+        Some(project_id),
+        None,
+        date,
+        None,
+        false,
     )
+    .await?
+    .into_iter()
+    .filter(|row| row.kind != horae_core::types::BudgetKind::None)
+    .filter_map(|row| {
+        Some(BudgetProgress {
+            task_id: row.task_id,
+            user_id: row.user_id,
+            period_key: row.period_key,
+            consumed: row.consumed,
+            budget: row.budget?,
+        })
+    })
+    .collect())
 }
 
 /// Batch overview projection. Authorization is checked against the current
@@ -183,6 +189,7 @@ pub(super) async fn progress_for_viewer(
         Some(viewer_id),
         date,
         access.permissions.as_ref(),
+        false,
     )
     .await
     .map_err(server_err)?;
@@ -238,6 +245,152 @@ pub(super) async fn progress_for_viewer(
     Ok(overview)
 }
 
+/// Whole-project headline for the detail view, read inside the caller's
+/// snapshot after its authority locks. Configured projects use
+/// `fetch_progress`; projects without settings keep the Projects list's legacy
+/// lifetime spend. Scope details never leave this function.
+pub(super) async fn project_budget(
+    access: &mut super::projects::read_access::ReadAccess<'_>,
+    org_id: Uuid,
+    viewer_id: Uuid,
+    project_id: Uuid,
+    date: NaiveDate,
+) -> Result<Option<crate::models::project::ProjectDetailBudget>, ServerFnError> {
+    use horae_core::budget::{BudgetHeadline, headline};
+
+    let permissions = access.permissions.as_ref();
+    let has = |permission| permissions.is_some_and(|state| state.grants.contains(permission));
+    // Non-arithmetic facts first, so withheld or unallocated budgets never
+    // value an entry. The predicates and joins match the consumption queries.
+    let meta = sqlx::query!(
+        r#"SELECT p.budget_kind AS "kind!: BudgetKind", p.currency AS "currency!",
+            p.budget_minutes, p.budget_amount_cents,
+            ps.project_id IS NOT NULL AS "configured!",
+            COALESCE(ps.monthly_reset, false) AS "monthly!",
+            CASE WHEN ps.project_id IS NOT NULL
+              THEN $3 OR $4 OR ($5 AND management.id IS NOT NULL)
+              ELSE CASE WHEN $3 THEN COALESCE(legacy.can_view_progress, false)
+                ELSE $4 OR ($5 AND management.id IS NOT NULL) END
+            END AS "can_view_money!",
+            CASE
+              WHEN ps.project_id IS NULL OR ps.budget_scope = 'project'
+                THEN CASE WHEN p.budget_kind = 'hours' THEN p.budget_minutes
+                  ELSE p.budget_amount_cents END IS NOT NULL
+              WHEN ps.budget_scope = 'task' THEN EXISTS (
+                SELECT 1 FROM project_tasks pt
+                JOIN tasks t ON t.id = pt.task_id AND t.org_id = $1
+                JOIN project_task_settings s ON s.project_id = p.id AND s.org_id = $1
+                  AND s.task_id = pt.task_id
+                WHERE pt.project_id = p.id AND CASE WHEN p.budget_kind = 'hours'
+                  THEN s.budget_minutes ELSE s.budget_cents END IS NOT NULL)
+              ELSE p.budget_kind = 'hours' AND EXISTS (
+                SELECT 1 FROM assignments a
+                JOIN users u ON u.id = a.user_id AND u.org_id = $1
+                JOIN project_member_budgets s ON s.project_id = p.id AND s.org_id = $1
+                  AND s.user_id = a.user_id
+                WHERE a.project_id = p.id)
+            END AS "allocated!"
+        FROM projects p
+        LEFT JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id = p.org_id
+        LEFT JOIN project_management_assignments management ON management.org_id = p.org_id
+          AND management.project_id = p.id AND management.manager_id = $6
+        LEFT JOIN project_read_access legacy ON legacy.org_id = p.org_id
+          AND legacy.project_id = p.id AND legacy.user_id = $6
+        WHERE p.org_id = $1 AND p.id = $2"#,
+        org_id,
+        project_id,
+        permissions.is_none(),
+        has(Permission::BillableRateReadAll),
+        has(Permission::BillableRateReadManaged),
+        viewer_id,
+    )
+    .fetch_one(&mut *access.tx)
+    .await
+    .map_err(server_err)?;
+    if meta.kind == BudgetKind::None {
+        return Ok(None);
+    }
+    let budget = |headline| crate::models::project::ProjectDetailBudget {
+        kind: meta.kind,
+        currency: meta.currency.clone(),
+        period_key: if meta.monthly {
+            date.format("%Y-%m").to_string()
+        } else {
+            "lifetime".to_string()
+        },
+        headline,
+    };
+    if meta.kind == BudgetKind::Amount && !meta.can_view_money {
+        return Ok(Some(budget(BudgetHeadline::Unavailable)));
+    }
+    if !meta.allocated {
+        return Ok(Some(budget(BudgetHeadline::Unallocated)));
+    }
+
+    // Valuation can exceed bigint and aborts the statement. A savepoint keeps
+    // the snapshot and authority locks while containing only that failure.
+    let mut savepoint = sqlx::Connection::begin(&mut *access.tx)
+        .await
+        .map_err(server_err)?;
+    let consumption = if meta.configured {
+        fetch_progress(
+            &mut savepoint,
+            org_id,
+            Some(project_id),
+            Some(viewer_id),
+            date,
+            permissions,
+            true,
+        )
+        .await
+        .map(|rows| {
+            let first = rows.first()?;
+            Some(if first.scope == "project" {
+                headline(&[(first.budget, first.consumed)])
+            } else {
+                let scopes: Vec<_> = rows.iter().map(|row| (row.budget, row.consumed)).collect();
+                headline(&scopes)
+            })
+        })
+    } else {
+        super::projects::spend_in_transaction(
+            &mut savepoint,
+            org_id,
+            viewer_id,
+            permissions,
+            Some(project_id),
+            meta.kind == BudgetKind::Amount,
+        )
+        .await
+        .map(|mut rows| {
+            let spend = rows.pop()?;
+            Some(match meta.kind {
+                BudgetKind::Hours => headline(&[(meta.budget_minutes, spend.spent_minutes)]),
+                _ => headline(&[(meta.budget_amount_cents, spend.spent_cents?)]),
+            })
+        })
+    };
+    let headline = match consumption {
+        Ok(Some(headline)) => {
+            savepoint.commit().await.map_err(server_err)?;
+            headline
+        }
+        Ok(None) => return Err(server_err("Readable project budget has no consumption")),
+        Err(error) if numeric_overflow(&error) => {
+            savepoint.rollback().await.map_err(server_err)?;
+            BudgetHeadline::Unavailable
+        }
+        Err(error) => return Err(server_err(error)),
+    };
+    Ok(Some(budget(headline)))
+}
+
+fn numeric_overflow(error: &sqlx::Error) -> bool {
+    error
+        .as_database_error()
+        .is_some_and(|error| error.code().as_deref() == Some("22003"))
+}
+
 struct BudgetRow {
     project_id: Uuid,
     task_id: Option<Uuid>,
@@ -253,6 +406,8 @@ struct BudgetRow {
     can_read_details: bool,
 }
 
+/// `allocated_only` skips valuing entries no non-blank scope can count, so an
+/// excluded entry's value cannot overflow the allocated total.
 async fn fetch_progress(
     connection: &mut PgConnection,
     org_id: Uuid,
@@ -260,6 +415,7 @@ async fn fetch_progress(
     viewer_id: Option<Uuid>,
     date: NaiveDate,
     permissions: Option<&PersonPermissions>,
+    allocated_only: bool,
 ) -> Result<Vec<BudgetRow>, sqlx::Error> {
     let has = |permission| permissions.is_some_and(|state| state.grants.contains(permission));
 
@@ -303,7 +459,13 @@ async fn fetch_progress(
              WHERE c.budget_scope = 'person' AND c.budget_kind = 'hours'
            ), entries AS (
              SELECT c.id AS project_id, te.task_id, te.user_id,
-                    CASE WHEN c.budget_kind = 'hours'
+                    CASE WHEN $10 AND NOT EXISTS (
+                        SELECT 1 FROM scopes allocated
+                        WHERE allocated.project_id = c.id AND allocated.budget IS NOT NULL
+                          AND (allocated.task_id IS NULL OR allocated.task_id = te.task_id)
+                          AND (allocated.user_id IS NULL OR allocated.user_id = te.user_id))
+                      THEN 0
+                      WHEN c.budget_kind = 'hours'
                       THEN effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)::bigint
                       WHEN c.can_view_money THEN COALESCE(line.amount_cents, line_amount_cents(
                         COALESCE(resolve_project_rate(c.rate_mode, pt.rate_cents, a.rate_cents, c.rate_cents,
@@ -351,6 +513,7 @@ async fn fetch_progress(
         has(Permission::ProjectReadManaged),
         has(Permission::BillableRateReadAll),
         has(Permission::BillableRateReadManaged),
+        allocated_only,
     )
     .fetch_all(connection)
     .await

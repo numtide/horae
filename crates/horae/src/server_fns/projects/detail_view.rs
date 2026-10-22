@@ -11,18 +11,21 @@ pub async fn get_project_detail_view(
     let viewer = require_user().await?;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let state = crate::state::global_state().await;
-    fetch(&state.db, &viewer, project_id, expected_requester).await
+    let today = chrono::Utc::now().date_naive();
+    fetch(&state.db, &viewer, project_id, expected_requester, today).await
 }
 
+/// `today` selects a monthly-reset budget's month, as the Projects list does.
 #[cfg(feature = "server")]
 pub(super) async fn fetch(
     pool: &sqlx::PgPool,
     viewer: &User,
     project_id: uuid::Uuid,
     expected_requester: Option<PermissionRequester>,
+    today: chrono::NaiveDate,
 ) -> Result<ProjectDetailView, ServerFnError> {
     let requester = project_requester(viewer, expected_requester)?;
-    let mut access = read_access::ReadAccess::begin(pool, viewer.org_id, viewer.id)
+    let mut access = read_access::ReadAccess::begin_snapshot(pool, viewer.org_id, viewer.id)
         .await?
         .ok_or_else(|| forbidden("Project access is unavailable"))?;
     let project = project_details_in_transaction(&mut access, viewer.org_id, viewer.id, project_id)
@@ -79,6 +82,14 @@ pub(super) async fn fetch(
     // The Clients page's `ClientReadScope::can_read`, applied to this reader.
     let can_open_client = access.legacy() || access.has(Permission::ClientReadAll);
     let can_change_status = access.legacy() && context.org_role.is_manager_or_above();
+    let budget = crate::server_fns::budgets::project_budget(
+        &mut access,
+        viewer.org_id,
+        viewer.id,
+        project_id,
+        today,
+    )
+    .await?;
     access.tx.commit().await.map_err(server_err)?;
     Ok(ProjectDetailView {
         requester,
@@ -92,5 +103,6 @@ pub(super) async fn fetch(
         can_change_status,
         team,
         tasks,
+        budget,
     })
 }

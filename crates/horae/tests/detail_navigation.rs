@@ -1201,6 +1201,7 @@ mod server_fns {
             can_change_status: false,
             team,
             tasks,
+            budget: None,
         })
     }
     pub async fn list_project_spend(

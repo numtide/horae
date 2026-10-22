@@ -7,10 +7,16 @@ use uuid::Uuid;
 mod budgets;
 mod concurrency;
 mod detail;
+mod detail_budget;
 mod overview;
 mod spend;
 mod tasks;
 mod team;
+
+/// A fixed server date, so monthly budgets never depend on the wall clock.
+pub(super) fn today() -> chrono::NaiveDate {
+    "2026-09-07".parse().unwrap()
+}
 
 pub(super) async fn fixture(
     pool: &PgPool,

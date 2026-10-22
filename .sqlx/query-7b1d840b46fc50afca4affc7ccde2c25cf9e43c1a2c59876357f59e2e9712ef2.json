@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(o) AS \"row!\", xmin::text AS \"version!\" FROM organizations o WHERE id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "row!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "version!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "7b1d840b46fc50afca4affc7ccde2c25cf9e43c1a2c59876357f59e2e9712ef2"
+}

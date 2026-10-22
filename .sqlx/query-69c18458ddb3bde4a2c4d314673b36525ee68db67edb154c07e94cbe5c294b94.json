@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_tasks SET rate_cents=$3 WHERE project_id=$1 AND task_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "69c18458ddb3bde4a2c4d314673b36525ee68db67edb154c07e94cbe5c294b94"
+}

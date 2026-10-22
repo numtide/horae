@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_task_settings SET budget_minutes=0 WHERE task_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5dde9795cf97692b2e1cda8807ca0fad391ab9a4b37da5c00d987c8d0dab1dcf"
+}

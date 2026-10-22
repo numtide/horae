@@ -83,8 +83,13 @@ pub(crate) async fn lock_organization(
             .await?;
         }
         OrganizationLock::AccessChange => {
+            // A no-op update takes the same NO KEY UPDATE lock but also writes a
+            // new row version. REPEATABLE READ readers that took their snapshot
+            // before this change then fail their gate lock with 40001 and
+            // retry, instead of authorizing from the older snapshot. The
+            // revision value is deliberately unchanged.
             sqlx::query!(
-                "SELECT id FROM organizations WHERE id = $1 FOR NO KEY UPDATE",
+                "UPDATE organizations SET access_revision = access_revision WHERE id = $1 RETURNING id",
                 org_id
             )
             .fetch_one(&mut **tx)

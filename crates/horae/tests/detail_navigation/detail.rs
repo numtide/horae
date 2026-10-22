@@ -34,6 +34,7 @@ fn view() -> project::ProjectDetailView {
             id: Uuid::from_u128(40),
             name: "Visible task".into(),
         }],
+        budget: None,
     }
 }
 

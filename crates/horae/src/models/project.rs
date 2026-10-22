@@ -151,6 +151,20 @@ pub struct ProjectDetailView {
     pub can_change_status: bool,
     pub team: Vec<ProjectDetailIdentity>,
     pub tasks: Vec<ProjectDetailIdentity>,
+    /// Absent when no budget is set.
+    pub budget: Option<ProjectDetailBudget>,
+}
+
+/// Whole-project budget figures for one period. Task/person scope details and
+/// the reason a figure is unavailable never leave the server.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectDetailBudget {
+    /// `Hours` (minutes) or `Amount` (minor units); never `None`.
+    pub kind: BudgetKind,
+    pub currency: String,
+    /// `YYYY-MM` for a monthly-reset budget, otherwise `lifetime`.
+    pub period_key: String,
+    pub headline: horae_core::budget::BudgetHeadline,
 }
 
 /// A tag associated with a project whose progress the caller may read.
