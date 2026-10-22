@@ -142,7 +142,12 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await screen.locator('#np-second-tax').fill('2');
     // A set planning date also shows its clear control beside the field.
     await activate(screen.locator('#np-start'));
-    await activate(page.getByRole('dialog', { name: 'Choose Start date', exact: true }).getByRole('button', { name: 'Today', exact: true }));
+    const startCalendar = page.getByRole('dialog', { name: 'Choose Start date', exact: true });
+    await expect(startCalendar).toBeVisible();
+    await expect.poll(() => startCalendar.evaluate(node => node.contains(document.activeElement))).toBe(true);
+    await activate(startCalendar.getByRole('button', { name: 'Today', exact: true }));
+    await expect(startCalendar).toBeHidden();
+    await expect(screen.locator('#np-start')).toBeFocused();
     await expect(screen.getByRole('button', { name: 'Clear Start date', exact: true })).toBeVisible();
     const hourly = [
       ['Person', 'No budget'], ['Task', 'Hours per task'], ['Project', 'Total project hours'],
