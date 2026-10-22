@@ -40,6 +40,43 @@ pub fn allocated_totals(
     (budget.filter(|_| has_allocation), consumed)
 }
 
+/// One period's whole-budget figures, in minutes or minor currency units.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BudgetHeadline {
+    /// No applicable allowance is set; a blank allowance is not zero.
+    Unallocated,
+    /// No exact figure can be shown.
+    Unavailable,
+    Exact {
+        budget: i64,
+        spent: i64,
+        remaining: i64,
+    },
+}
+
+/// Headline over [`allocated_totals`]. Its `(None, Some(_))` means either
+/// "all blank" or "allowance overflow", so allocation is checked separately.
+pub fn headline(scopes: &[(Option<i64>, i64)]) -> BudgetHeadline {
+    if scopes.iter().all(|(allowance, _)| allowance.is_none()) {
+        return BudgetHeadline::Unallocated;
+    }
+    match allocated_totals(scopes.iter().copied()) {
+        (Some(budget), Some(spent)) => {
+            budget
+                .checked_sub(spent)
+                .map_or(BudgetHeadline::Unavailable, |remaining| {
+                    BudgetHeadline::Exact {
+                        budget,
+                        spent,
+                        remaining,
+                    }
+                })
+        }
+        _ => BudgetHeadline::Unavailable,
+    }
+}
+
 /// The effective bands: the configured warning percentages plus the implicit
 /// over-budget line, positive-only, sorted and de-duplicated.
 fn effective_bands(thresholds: &[i32]) -> Vec<i32> {
@@ -107,6 +144,49 @@ mod tests {
     use super::*;
 
     const BANDS: &[i32] = &[80, 100];
+
+    fn exact(budget: i64, spent: i64, remaining: i64) -> BudgetHeadline {
+        BudgetHeadline::Exact {
+            budget,
+            spent,
+            remaining,
+        }
+    }
+
+    #[test]
+    fn headline_is_unallocated_only_without_any_allowance() {
+        assert_eq!(headline(&[]), BudgetHeadline::Unallocated);
+        assert_eq!(headline(&[(None, 120)]), BudgetHeadline::Unallocated);
+        // A visible all-blank fee budget consumes nothing allocated.
+        assert_eq!(headline(&[(None, 0)]), BudgetHeadline::Unallocated);
+    }
+
+    #[test]
+    fn headline_allowance_overflow_is_unavailable_not_unallocated() {
+        assert_eq!(
+            headline(&[(Some(i64::MAX), 0), (Some(1), 0)]),
+            BudgetHeadline::Unavailable
+        );
+    }
+
+    #[test]
+    fn headline_consumption_or_remaining_overflow_is_unavailable() {
+        assert_eq!(
+            headline(&[(Some(0), i64::MAX), (Some(0), 1)]),
+            BudgetHeadline::Unavailable
+        );
+        assert_eq!(
+            headline(&[(Some(i64::MIN), 1)]),
+            BudgetHeadline::Unavailable
+        );
+    }
+
+    #[test]
+    fn headline_excludes_blank_counts_zero_and_keeps_overrun_signed() {
+        assert_eq!(headline(&[(Some(60), 30), (None, 1000)]), exact(60, 30, 30));
+        assert_eq!(headline(&[(Some(0), 120)]), exact(0, 120, -120));
+        assert_eq!(headline(&[(Some(120), 150)]), exact(120, 150, -30));
+    }
 
     #[test]
     fn allocated_totals_exclude_blank_but_include_zero_allowances() {

@@ -58,9 +58,12 @@ pub fn format_decimal(minutes: i64) -> String {
 }
 
 /// Minutes as fixed two-decimal hours — the report/export convention
-/// (e.g. 90 → "1.50").
+/// (e.g. 90 → "1.50"). Integer half-up rounding: whole minutes never land
+/// exactly on a half hundredth, and large values keep every digit.
 pub fn format_hours2(minutes: i64) -> String {
-    format!("{:.2}", minutes as f64 / 60.0)
+    let hundredths = (u128::from(minutes.unsigned_abs()) * 100 + 30) / 60;
+    let sign = if minutes < 0 { "-" } else { "" };
+    format!("{sign}{}.{:02}", hundredths / 100, hundredths % 100)
 }
 
 /// Whole minutes elapsed between two instants, floored to the minute — the
@@ -155,6 +158,26 @@ mod tests {
     fn format_clamps_negative_to_zero() {
         assert_eq!(format_hhmm(-5), "0:00");
         assert_eq!(format_decimal(-5), "0");
+    }
+
+    #[test]
+    fn format_hours2_keeps_ordinary_output_and_sign() {
+        for minutes in -100_000..=100_000_i64 {
+            assert_eq!(
+                format_hours2(minutes),
+                format!("{:.2}", minutes as f64 / 60.0),
+                "{minutes}"
+            );
+        }
+        assert_eq!(format_hours2(-30), "-0.50");
+        assert_eq!(format_hours2(1), "0.02");
+    }
+
+    #[test]
+    fn format_hours2_is_exact_where_float_division_is_not() {
+        assert_eq!(format_hours2(9_007_199_254_740_991), "150119987579016.52");
+        assert_eq!(format_hours2(i64::MAX), "153722867280912930.12");
+        assert_eq!(format_hours2(i64::MIN), "-153722867280912930.13");
     }
 
     #[test]
