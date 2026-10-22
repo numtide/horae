@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (SELECT xmin::text FROM projects WHERE id=$1) AS \"project!\",\n                (SELECT xmin::text FROM project_settings WHERE project_id=$1) AS \"settings!\",\n                (SELECT string_agg(xmin::text, ',' ORDER BY id) FROM time_entries WHERE project_id=$1) AS \"entries!\",\n                (SELECT count(*) FROM project_budget_notifications) AS \"notifications!\",\n                (SELECT count(*) FROM horae_outbox) AS \"outbox!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "settings!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "entries!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "notifications!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "outbox!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "c9d4dd6b360a3ea58f065046883cc8a21c270aabad30f7e706e6cf98781f447a"
+}

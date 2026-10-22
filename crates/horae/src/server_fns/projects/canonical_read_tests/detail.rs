@@ -18,7 +18,7 @@ async fn detail_view_contains_only_scoped_workflow_labels_and_current_edit_autho
     .execute(&pool)
     .await
     .unwrap();
-    let view = detail_view::fetch(&pool, &viewer, ids.project_id, None)
+    let view = detail_view::fetch(&pool, &viewer, ids.project_id, None, today())
         .await
         .unwrap();
     assert_eq!(view.project.id, ids.project_id);
@@ -40,24 +40,42 @@ async fn detail_view_contains_only_scoped_workflow_labels_and_current_edit_autho
     )
     .await;
     assert!(
-        !detail_view::fetch(&pool, &viewer, ids.project_id, Some(view.requester))
-            .await
-            .unwrap()
-            .can_edit
+        !detail_view::fetch(
+            &pool,
+            &viewer,
+            ids.project_id,
+            Some(view.requester),
+            today()
+        )
+        .await
+        .unwrap()
+        .can_edit
     );
     designate(&pool, &ids).await;
     assert!(
-        detail_view::fetch(&pool, &viewer, ids.project_id, Some(view.requester))
-            .await
-            .unwrap()
-            .can_edit
+        detail_view::fetch(
+            &pool,
+            &viewer,
+            ids.project_id,
+            Some(view.requester),
+            today()
+        )
+        .await
+        .unwrap()
+        .can_edit
     );
     replace_grants(&pool, &ids, &[Permission::ProjectReadAll]).await;
     assert!(
-        !detail_view::fetch(&pool, &viewer, ids.project_id, Some(view.requester))
-            .await
-            .unwrap()
-            .can_edit
+        !detail_view::fetch(
+            &pool,
+            &viewer,
+            ids.project_id,
+            Some(view.requester),
+            today()
+        )
+        .await
+        .unwrap()
+        .can_edit
     );
 }
 
@@ -77,7 +95,7 @@ async fn detail_view_shared_member_gets_own_identity_not_other_people_or_legacy_
     .execute(&pool)
     .await
     .unwrap();
-    let view = detail_view::fetch(&pool, &viewer, ids.project_id, None)
+    let view = detail_view::fetch(&pool, &viewer, ids.project_id, None, today())
         .await
         .unwrap();
     assert!(!view.can_edit);
@@ -97,7 +115,7 @@ async fn detail_view_rejects_changed_requester_and_current_resource_denial(pool:
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
-    let view = detail_view::fetch(&pool, &viewer, ids.project_id, None)
+    let view = detail_view::fetch(&pool, &viewer, ids.project_id, None, today())
         .await
         .unwrap();
     for expected in [
@@ -111,7 +129,7 @@ async fn detail_view_rejects_changed_requester_and_current_resource_denial(pool:
         },
     ] {
         assert!(matches!(
-            detail_view::fetch(&pool, &viewer, ids.project_id, Some(expected)).await,
+            detail_view::fetch(&pool, &viewer, ids.project_id, Some(expected), today()).await,
             Err(ServerFnError::ServerError {
                 code: FORBIDDEN,
                 ..
@@ -120,7 +138,14 @@ async fn detail_view_rejects_changed_requester_and_current_resource_denial(pool:
     }
     let foreign = seed(&pool, OrgRole::Admin).await;
     assert!(matches!(
-        detail_view::fetch(&pool, &viewer, foreign.project_id, Some(view.requester)).await,
+        detail_view::fetch(
+            &pool,
+            &viewer,
+            foreign.project_id,
+            Some(view.requester),
+            today()
+        )
+        .await,
         Err(ServerFnError::ServerError {
             code: NOT_FOUND,
             ..
@@ -128,7 +153,14 @@ async fn detail_view_rejects_changed_requester_and_current_resource_denial(pool:
     ));
     replace_grants(&pool, &ids, &[]).await;
     assert!(matches!(
-        detail_view::fetch(&pool, &viewer, ids.project_id, Some(view.requester)).await,
+        detail_view::fetch(
+            &pool,
+            &viewer,
+            ids.project_id,
+            Some(view.requester),
+            today()
+        )
+        .await,
         Err(ServerFnError::ServerError {
             code: NOT_FOUND,
             ..
@@ -139,7 +171,14 @@ async fn detail_view_rejects_changed_requester_and_current_resource_denial(pool:
         .await
         .unwrap();
     assert!(matches!(
-        detail_view::fetch(&pool, &viewer, ids.project_id, Some(view.requester)).await,
+        detail_view::fetch(
+            &pool,
+            &viewer,
+            ids.project_id,
+            Some(view.requester),
+            today()
+        )
+        .await,
         Err(ServerFnError::ServerError {
             code: FORBIDDEN,
             ..
@@ -147,7 +186,7 @@ async fn detail_view_rejects_changed_requester_and_current_resource_denial(pool:
     ));
 }
 
-fn legacy_viewer(ids: &SeedIds, role: OrgRole) -> User {
+pub(super) fn legacy_viewer(ids: &SeedIds, role: OrgRole) -> User {
     User {
         id: ids.user_id,
         org_id: ids.org_id,
@@ -183,7 +222,7 @@ async fn detail_view_identity_and_lifecycle_affordances_match_policy_zero_author
         .await
         .unwrap();
         let viewer = legacy_viewer(&ids, role);
-        let view = detail_view::fetch(&pool, &viewer, ids.project_id, None)
+        let view = detail_view::fetch(&pool, &viewer, ids.project_id, None, today())
             .await
             .unwrap();
         assert!(!view.canonical_permissions, "{role:?}");
@@ -200,9 +239,15 @@ async fn detail_view_identity_and_lifecycle_affordances_match_policy_zero_author
         .execute(&pool)
         .await
         .unwrap();
-        let archived = detail_view::fetch(&pool, &viewer, ids.project_id, Some(view.requester))
-            .await
-            .unwrap();
+        let archived = detail_view::fetch(
+            &pool,
+            &viewer,
+            ids.project_id,
+            Some(view.requester),
+            today(),
+        )
+        .await
+        .unwrap();
         assert!(!archived.active, "{role:?}");
         assert_eq!(archived.project_type, ProjectType::FixedFee, "{role:?}");
         assert_eq!(archived.can_change_status, can_change_status, "{role:?}");
@@ -222,7 +267,7 @@ async fn detail_view_policy_one_offers_no_role_derived_status_change_and_scopes_
         PermissionSelection::new(&[Permission::ProjectReadAll, Permission::ProjectWriteAll]),
     )
     .await;
-    let view = detail_view::fetch(&pool, &viewer, ids.project_id, None)
+    let view = detail_view::fetch(&pool, &viewer, ids.project_id, None, today())
         .await
         .unwrap();
     assert!(view.canonical_permissions);
@@ -238,9 +283,15 @@ async fn detail_view_policy_one_offers_no_role_derived_status_change_and_scopes_
         &[Permission::ProjectReadAll, Permission::ClientReadAll],
     )
     .await;
-    let view = detail_view::fetch(&pool, &viewer, ids.project_id, Some(view.requester))
-        .await
-        .unwrap();
+    let view = detail_view::fetch(
+        &pool,
+        &viewer,
+        ids.project_id,
+        Some(view.requester),
+        today(),
+    )
+    .await
+    .unwrap();
     assert!(view.can_open_client);
     assert!(!view.can_change_status && !view.can_edit);
 }

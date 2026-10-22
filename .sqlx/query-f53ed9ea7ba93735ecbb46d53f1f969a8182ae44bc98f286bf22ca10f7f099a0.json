@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET name='Renamed while reading', budget_minutes=30 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f53ed9ea7ba93735ecbb46d53f1f969a8182ae44bc98f286bf22ca10f7f099a0"
+}
