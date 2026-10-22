@@ -4,6 +4,7 @@ use dioxus::prelude::*;
 // CSV exporter.
 use horae_core::duration::format_hours2 as hours;
 use horae_core::money::format_cents as money;
+use horae_core::money::{Withheld, sum_by_currency};
 
 use super::loaded;
 use crate::components::badge::Badge;
@@ -14,27 +15,24 @@ use crate::server_fns;
 #[path = "reports/scoped.rs"]
 mod scoped;
 
-/// Do not add monetary values until their currencies have been checked.
-fn money_total(
+/// One line per currency; a single withheld amount hides them all.
+fn money_totals(
     rows: &[crate::models::ReportRow],
     amount: fn(&crate::models::ReportRow) -> Option<i64>,
     currency: fn(&crate::models::ReportRow) -> &str,
-) -> String {
-    let Some(first) = rows.first() else {
-        return "\u{2014}".into();
-    };
-    if rows.iter().any(|row| amount(row).is_none()) {
-        return "Restricted".into();
+) -> Vec<String> {
+    if rows.is_empty() {
+        return vec!["\u{2014}".into()];
     }
-    if rows.iter().any(|row| currency(row) != currency(first)) {
-        return "\u{2014}".into();
-    }
-    match rows
-        .iter()
-        .try_fold(0i64, |sum, row| sum.checked_add(amount(row)?))
-    {
-        Some(total) => money(total, currency(first)),
-        None => "Amount exceeds supported range".into(),
+    match sum_by_currency(rows.iter().map(|row| (currency(row), amount(row)))) {
+        Err(Withheld) => vec!["Restricted".into()],
+        Ok(totals) => totals
+            .into_iter()
+            .map(|(code, total)| match total {
+                Some(cents) => money(cents, code),
+                None => format!("{code} amount exceeds supported range"),
+            })
+            .collect(),
     }
 }
 
@@ -340,8 +338,8 @@ fn LegacyReports() -> Element {
                         let grand_total: i64 = rows.iter().map(|r| r.total_minutes).sum();
                         let grand_rounded: i64 = rows.iter().map(|r| r.rounded_minutes).sum();
                         let grand_billable: i64 = rows.iter().map(|r| r.billable_minutes).sum();
-                        let grand_bill_amount = money_total(rows, |r| Some(r.billable_cents), |r| &r.currency);
-                        let grand_cost_amount = money_total(rows, |r| r.cost_cents, |r| &r.cost_currency);
+                        let grand_bill_amount = money_totals(rows, |r| Some(r.billable_cents), |r| &r.currency);
+                        let grand_cost_amount = money_totals(rows, |r| r.cost_cents, |r| &r.cost_currency);
                         rsx! {
                             DataTable {
                                 table {
@@ -373,8 +371,12 @@ fn LegacyReports() -> Element {
                                             td { class: "text-mono text-right", "{hours(grand_total)}" }
                                             td { class: "text-mono text-right", "{hours(grand_rounded)}" }
                                             td { class: "text-mono text-right", "{hours(grand_billable)}" }
-                                            td { class: "text-mono text-right", "{grand_bill_amount}" }
-                                            td { class: "text-mono text-right", "{grand_cost_amount}" }
+                                            td { class: "text-mono text-right",
+                                                for line in grand_bill_amount { div { "{line}" } }
+                                            }
+                                            td { class: "text-mono text-right",
+                                                for line in grand_cost_amount { div { "{line}" } }
+                                            }
                                         }
                                     }
                                 }
@@ -466,47 +468,74 @@ mod tests {
         }
     }
 
+    fn billable(rows: &[ReportRow]) -> Vec<String> {
+        money_totals(rows, |r| Some(r.billable_cents), |r| &r.currency)
+    }
+
+    fn cost(rows: &[ReportRow]) -> Vec<String> {
+        money_totals(rows, |r| r.cost_cents, |r| &r.cost_currency)
+    }
+
     #[test]
     fn redacted_costs_do_not_become_zero_or_partial_totals() {
         let mut payload = serde_json::to_value(row("EUR", 100)).unwrap();
         payload.as_object_mut().unwrap().remove("cost_cents");
         let restricted: ReportRow = serde_json::from_value(payload).unwrap();
         let rows = [row("EUR", 250), restricted];
-        assert_eq!(
-            money_total(&rows, |r| r.cost_cents, |r| &r.cost_currency),
-            "Restricted"
-        );
+        assert_eq!(cost(&rows), ["Restricted"]);
     }
 
     #[test]
-    fn mixed_currencies_are_not_added_even_when_the_numbers_would_overflow() {
-        let rows = [row("EUR", i64::MAX), row("USD", i64::MAX)];
+    fn a_withheld_cost_hides_every_currency_and_out_of_range_total() {
+        let mut rows = [row("EUR", 1), row("USD", 2), row("CHF", 3), row("CHF", 4)];
+        // Two currencies, one already out of range, before the withheld row.
+        rows[0].cost_currency = "USD".into();
+        rows[1].cost_cents = Some(i64::MAX);
+        rows[2].cost_cents = Some(i64::MAX);
+        rows[3].cost_cents = None;
+        assert_eq!(cost(&rows), ["Restricted"]);
+    }
+
+    #[test]
+    fn mixed_currencies_are_totalled_separately_even_beyond_the_range_of_one_sum() {
+        let rows = [row("USD", i64::MAX), row("EUR", i64::MAX)];
         assert_eq!(
-            money_total(&rows, |r| Some(r.billable_cents), |r| &r.currency),
-            "\u{2014}"
+            billable(&rows),
+            [money(i64::MAX, "EUR"), money(i64::MAX, "USD")]
         );
     }
 
     #[test]
     fn monetary_total_overflow_is_visible_instead_of_panicking() {
         let rows = [row("EUR", i64::MAX), row("EUR", 1)];
+        assert_eq!(billable(&rows), ["EUR amount exceeds supported range"]);
+        let rows = [row("EUR", i64::MAX), row("USD", 500), row("EUR", 1)];
         assert_eq!(
-            money_total(&rows, |r| Some(r.billable_cents), |r| &r.currency),
-            "Amount exceeds supported range"
+            billable(&rows),
+            [
+                "EUR amount exceeds supported range".to_string(),
+                money(500, "USD")
+            ]
         );
     }
 
     #[test]
     fn single_currency_totals_are_formatted_and_empty_reports_have_no_amount() {
         let rows = [row("EUR", 100), row("EUR", 250)];
-        assert_eq!(
-            money_total(&rows, |r| Some(r.billable_cents), |r| &r.currency),
-            money(350, "EUR")
-        );
-        assert_eq!(
-            money_total(&[], |r| Some(r.billable_cents), |r| &r.currency),
-            "\u{2014}"
-        );
+        assert_eq!(billable(&rows), [money(350, "EUR")]);
+        assert_eq!(billable(&[]), ["\u{2014}"]);
+    }
+
+    #[test]
+    fn zero_and_negative_currency_totals_are_still_shown() {
+        let rows = [row("USD", 0), row("EUR", 500), row("EUR", -550)];
+        assert_eq!(billable(&rows), ["EUR -0.50", "USD 0.00"]);
+    }
+
+    #[test]
+    fn padded_codes_stay_separate_groups_even_though_labels_are_trimmed() {
+        let rows = [row("EU ", 200), row(" EU", 100), row("EU ", 5)];
+        assert_eq!(billable(&rows), ["EU 1.00", "EU 2.05"]);
     }
 
     #[test]
@@ -514,9 +543,6 @@ mod tests {
         let mut rows = [row("USD", 100), row("CHF", 250)];
         rows[0].cost_cents = Some(50);
         rows[1].cost_cents = Some(75);
-        assert_eq!(
-            money_total(&rows, |r| r.cost_cents, |r| &r.cost_currency),
-            money(125, "EUR")
-        );
+        assert_eq!(cost(&rows), [money(125, "EUR")]);
     }
 }
