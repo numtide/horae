@@ -131,13 +131,14 @@ Third correction, written and not yet accepted:
   full width.
 
 - `horae.css` + `new_project.rs`: the pinned footer stays, with
-  `.np-footer { max-height: 50%; }` and the existing `overflow-y-auto` utility.
-  When the actions need more than half of the editor, they scroll within the
-  footer, so the fields always keep at least the other half. The shell, the
+  `.np-footer { max-height: 25%; }` and the existing `overflow-y-auto` utility.
+  When the actions need more than a quarter of the editor, they scroll within the
+  footer, so the fields always keep at least three quarters. (A first 50% cap
+  left the fields too little room; see the footer-cap evidence below.) The shell, the
   navigation and the pinned layout are unchanged. This replaces an earlier
   short-phone rule that moved the editor into document scrolling. It was withdrawn
-  because it also removed the pinned footer at 100% text and broke the existing
-  390x320 and 390x420 navigation checks in `new-project.cjs`.
+  because it also removed the pinned footer at 100% text and contradicted the
+  existing 390x320 and 390x420 navigation assertions in `new-project.cjs`.
 
 - `horae.css` + `new_project/billing.rs`: the milestone list is an inline-size
   container (`np-milestones`, the `client-detail` pattern). Below 30rem it uses
@@ -146,8 +147,8 @@ Third correction, written and not yet accepted:
   not fit.
 
 - `new_project/team.rs`: Add everyone adds `flex-wrap justify-center max-w-full`,
-  so its icon can sit above the label. The space is tight; the button-clipping
-  check reports a shortfall.
+  so its icon can sit above the label. The space is tight; acceptance requires
+  the button-clipping check to pass, not an exemption for this control.
 
 - Discard, reload, New client and task-access dialogs: `modal-body px-4 sm:px-6`,
   as an existing `projects.rs` dialog does locally. Only the horizontal padding
@@ -191,11 +192,76 @@ each 200% case sets a date first.
 
 Preferred control widths remain unchanged. At 100% text, narrow assignment rows
 now use the full row for overrides, and the pinned footer scrolls within itself
-only when it would take more than half the editor (390x320 measured 105 of 245, so
-it does not bind there). These intentional accessibility changes still need
+only when it would take more than a quarter of the editor. At 390x568 that is
+about 123px against a 105px footer, so the cap does not apply; desktop is also
+unaffected. At 390x320 the earlier measurement (a 105px footer in a 245px editor)
+means the 25% cap does apply at 100% text: the footer stays pinned, shows about
+61px and scrolls the rest. That needs checking against the existing 390x320 cases
+before acceptance. These intentional accessibility changes still need
 visual verification. No text
 sizes, overflow clipping, truncation, tokens, utilities or shared component
 defaults were changed.
+
+Focused run 35160 on `f3c7d7b3` exited 1 after all 98 creation branches, 13
+dialog audits and 4 short-screen audits, with 53 collected geometry problems.
+This is not acceptance. Measured causes:
+
+- At 390px and 200% text, the Billable rates fieldset kept its default
+  `min-width: min-content` and was 371px wide. Its option labels spanned
+  90..461, the project-rate input 171..411, and the fee and budget inputs reached
+  406\.
+- At 320px and 200% text: the same causes, plus the fee-mode segmented items
+  (Single fee 65..325, Milestones 65..338), the second-tax name input and its
+  remove button (to 340), and the task-access dialog labels (197 against a 190px
+  body content box).
+- The negative left edges reported for Back to Projects and other focused
+  controls are what's left of the horizontal scroll these overflows cause.
+  They are not patched separately.
+- At 320px and 200% text, some non-billable branches scroll 325 against 320 with
+  no control outside. The overflow check now names up to three innermost
+  elements (text, legend or container) that spill, so the next run identifies
+  them.
+- Short screens: a radio card 272px tall is taller than the 192px form area left
+  by the half-height footer cap. This led to the 25% cap below.
+
+Footer-cap DOM diagnosis in native Chrome, with real Acme client and name values
+in a temporary database and Save enabled. This is not acceptance; it waits for
+the built artifact and a real Tab run. With a 25% cap, at 320x568 and 200% text
+the form was 288.5px and the footer 96.2px. The whole 272px Non-billable radio
+card was visible, and Save and Cancel (84px) were fully inside the footer when
+actually focused. The same held at 390x568 and 844x390. A first attempt with
+Save still disabled could not focus it and was discarded. The second confirmed
+`activeElement === control` and `disabled === false` in all nine cases.
+
+Fourth correction, written and not yet accepted:
+
+- `new_project/billing.rs`: the Billable rates and Project fee fieldsets add
+  `min-w-0`. The project-rate, budget-value and fee-amount groups add
+  `flex-wrap min-w-0` beside their existing `max-w-full`, so the currency prefix,
+  input and suffix wrap inside the option or panel.
+- `new_project/invoice_defaults.rs`: the second-tax group adds `max-w-full`, so
+  its `w-40 max-w-full` name input caps at the row.
+- `new_project/tasks.rs`: the task-access fieldset adds `min-w-0`.
+- The fee-mode segmented items have no `nowrap`; their text already wraps at
+  spaces. "Milestones" is one word: radio, gap and `--space-4` padding on both
+  sides make about 273px, while the fee panel leaves about 190px at 320px with
+  200% text. The fieldset fix doesn't close that gap. It needs a separate,
+  authorized local decision, such as reducing the panel or item padding at narrow
+  widths in editor-scoped CSS. The shared `.segmented` styles stay unchanged.
+
+Separate Edit run 29544 on `f3c7d7b3` exited 1 after 3 normal-text and 7 reflow
+cases. The form scrolled 342 against 320 and 408 against 390 with no control
+outside. At 320px the discard dialog body left 190px of content for a 200px
+"Discard changes" button, so the dialog scrolled 261 against 254. There were no
+footer or Tab failures in the legacy editor, and no regressions in normal-text
+save or data. Candidate, pending the next run and not accepted: the four editor
+dialogs use `modal-body px-3 sm:px-6`, as a `projects.rs` dialog already does.
+At 200% text that is 24px a side instead of 32, so 206px of content for the
+200px button and the 197px task-access labels. Vertical and desktop padding are
+unchanged, and the buttons are not touched. (`sm:px-5` is not a generated
+utility, and the generator stays unchanged.) The overflow check's fallback now
+also measures text nodes directly, so text that spills without its own element
+is named.
 
 ## Implementation and validation
 

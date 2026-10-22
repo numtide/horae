@@ -137,7 +137,7 @@ pub(super) fn Billing(
                         if let Some(message) = error_for(ProjectFormField::ProjectRate) { p { id: "np-billing-field-error", class: "text-sm text-danger", "{message}" } }
                     }
                 } else if project_type == ProjectType::TimeAndMaterials {
-                    fieldset { class: "border-0 p-0 m-0",
+                    fieldset { class: "border-0 p-0 m-0 min-w-0",
                         legend { class: "text-xs uppercase tracking-eyebrow text-faint mb-2", "Billable rates" }
                         div { class: "flex flex-col gap-2",
                             for (mode, title, hint) in [
@@ -155,7 +155,7 @@ pub(super) fn Billing(
                                         span { span { class: "block text-sm", "{title}" } span { class: "block text-xs text-subtle mt-1", "{hint}" } }
                                     }
                                     if mode == RateMode::Project && form.read().rate_mode == mode {
-                                        div { class: "flex items-center gap-2 max-w-full",
+                                        div { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full",
                                             span { class: "font-mono text-sm text-subtle", "{currency_label}" }
                                             Input { id: "np-project-rate", error_id: error_id(ProjectFormField::ProjectRate), label: "Hourly rate ({currency_label})", class: "w-30 max-w-full font-mono text-right", value: form.read().project_rate.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::ProjectRate); form.write().project_rate = event.value(); } }
                                             span { class: "text-xs text-subtle whitespace-nowrap", "/ h" }
@@ -259,7 +259,7 @@ fn Budget(
                     }
                 }
                 if matches!(mode, BudgetMode::TotalHours | BudgetMode::TotalFees) {
-                    div { class: "flex items-center gap-2 max-w-full",
+                    div { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full",
                         if mode == BudgetMode::TotalFees { span { class: "font-mono text-sm text-subtle", "{currency}" } }
                         Input { id: "np-budget-value", error_id: error_id(ProjectFormField::BudgetValue), label: amount_label, class: "w-40 max-w-full font-mono text-right", value: form.read().budget_value.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::Budget); form.write().budget_value = event.value(); } }
                         span { class: "text-xs text-subtle", if mode == BudgetMode::TotalFees { "total" } else { "hours" } }
@@ -323,7 +323,7 @@ fn FeeSchedule(
         });
     rsx! {
         div {
-            fieldset { class: "border-0 p-0 m-0",
+            fieldset { class: "border-0 p-0 m-0 min-w-0",
                 legend { class: "text-xs uppercase tracking-eyebrow text-faint mb-2", "Project fee" }
                 div { class: "segmented flex-wrap",
                     for (choice, label) in [(FeeMode::Single, "Single fee"), (FeeMode::Milestones, "Milestones"), (FeeMode::Monthly, "Monthly")] {
@@ -350,7 +350,7 @@ fn FeeSchedule(
                 }
             } else {
                 div { class: "flex flex-wrap items-center gap-2 mt-4",
-                    div { class: "flex items-center gap-2 max-w-full",
+                    div { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full",
                         span { class: "font-mono text-sm text-subtle", "{currency}" }
                         Input { id: "np-fee-amount", error_id: error_id(ProjectFormField::FeeAmount), label: "Fee ({currency})", class: "w-50 max-w-full font-mono text-right", value: form.read().fee_amount.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::Fees); form.write().fee_amount = event.value(); } }
                     }

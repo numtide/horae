@@ -74,6 +74,31 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
         }
       }
     }
+    // A wider scroll with no control outside comes from text, a legend or a
+    // container: name the innermost few so the cause is identified, not guessed.
+    if (node.scrollWidth > node.clientWidth + 1 && !outside.length) {
+      const [left, right] = regions[0].slice(1, 3), shift = node.scrollLeft;
+      const spills = item => {
+        const rect = item.getBoundingClientRect();
+        return rect.width > 1 && (rect.right + shift > right + 1 || rect.left + shift < left - 1)
+          || (!['INPUT', 'TEXTAREA', 'SELECT'].includes(item.tagName) && getComputedStyle(item).overflowX === 'visible' && item.scrollWidth > item.clientWidth + 1);
+      };
+      for (const item of node.querySelectorAll('*')) {
+        if (outside.length >= 3) break;
+        if (!visible(item) || !spills(item) || [...item.children].some(child => visible(child) && spills(child))) continue;
+        const rect = item.getBoundingClientRect();
+        outside.push(`unexplained ${item.tagName.toLowerCase()}${item.id ? `#${item.id}` : ''}.${[...item.classList].join('.')} "${item.textContent.trim().slice(0, 32)}": ${Math.round(rect.left + shift - left)}..${Math.round(rect.right + shift - left)}, content ${item.scrollWidth} in ${item.clientWidth}`);
+      }
+      // Text can spill without any element box doing so; measure the text itself.
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT), range = document.createRange();
+      for (let text = walker.nextNode(); text && outside.length < 6; text = walker.nextNode()) {
+        if (!text.textContent.trim() || !visible(text.parentElement)) continue;
+        range.selectNodeContents(text);
+        const rect = range.getBoundingClientRect();
+        if (rect.width > 1 && (rect.right + shift > right + 1 || rect.left + shift < left - 1))
+          outside.push(`unexplained text in ${text.parentElement.tagName.toLowerCase()}.${[...text.parentElement.classList].join('.')} "${text.textContent.trim().slice(0, 32)}": ${Math.round(rect.left + shift - left)}..${Math.round(rect.right + shift - left)}`);
+      }
+    }
     return node.scrollWidth <= node.clientWidth + 1 && !outside.length ? ''
       : `scroll ${node.scrollWidth} > client ${node.clientWidth}; outside: ${JSON.stringify(outside)}`;
   });

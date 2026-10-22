@@ -84,7 +84,7 @@ pub(super) fn InvoiceDefaults(
                         span { class: "text-sm text-subtle", "%" }
                     }
                     if let Some(tax) = form.read().invoice_defaults.second_tax.clone() {
-                        div { class: "flex flex-wrap items-center gap-2",
+                        div { class: "flex flex-wrap items-center gap-2 max-w-full",
                             span { class: "text-sm text-faint", "+" }
                             Input { id: "np-second-tax-name", error_id: error_id(ProjectFormField::SecondTaxName), label: "Second tax name", placeholder: "Second tax name", class: "w-40 max-w-full", value: tax.name,
                                 oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::InvoiceDefaults); if let Some(tax) = &mut form.write().invoice_defaults.second_tax { tax.name = event.value(); } }

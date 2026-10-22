@@ -347,7 +347,7 @@ fn NewClientDialog(
     }));
     rsx! {
         Modal { id: "np-client-dialog", labelledby: "np-client-title", open, busy: busy(), on_dismiss,
-            div { class: "modal-body px-4 sm:px-6",
+            div { class: "modal-body px-3 sm:px-6",
                 h2 { id: "np-client-title", class: "modal-title", "New client" }
                 if let Some(message) = error() { div { class: "alert alert-danger", role: "alert", "{message}" } }
                 form { onsubmit: move |event| {

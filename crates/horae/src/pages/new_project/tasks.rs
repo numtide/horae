@@ -346,9 +346,9 @@ fn TaskAccessDialog(
     }));
     rsx! {
         Modal { id: "np-task-access", labelledby: "np-task-access-title", open: task_id.is_some(), on_dismiss,
-            div { class: "modal-body px-4 sm:px-6",
+            div { class: "modal-body px-3 sm:px-6",
                 h2 { id: "np-task-access-title", class: "modal-title", "Who can track to this task?" }
-                fieldset { class: "border-0 p-0 m-0 flex flex-col gap-3", aria_label: "Task access",
+                fieldset { class: "border-0 p-0 m-0 min-w-0 flex flex-col gap-3", aria_label: "Task access",
                     label { class: "flex items-center gap-3",
                         input { r#type: "radio", name: "np-task-access-mode", checked: matches!(*access.read(), TaskAccess::Everyone), onchange: move |_| access.set(TaskAccess::Everyone) }
                         "Everyone on the project"
