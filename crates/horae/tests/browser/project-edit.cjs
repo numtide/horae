@@ -18,6 +18,29 @@ const project = JSON.parse(sql(`SELECT row_to_json(p) FROM (
   WHERE o.name = 'Demo Org' AND p.code = 'ACME-01'
 ) p`));
 assert.match(project.id, /^[0-9a-f-]{36}$/);
+// The enlarged-text reflow checks need a legacy hourly project with linked tasks
+// and a person, whatever earlier suites in a full run did to ACME-01. This
+// test-owned fixture is removed by its exact IDs at the end.
+const legacy = {
+  id: '019f4e00-0000-7000-8000-000000000001',
+  assignment: '019f4e00-0000-7000-8000-000000000002',
+  name: 'Reflow legacy hourly project',
+};
+sql(`BEGIN;
+  INSERT INTO projects (id, org_id, client_id, code, name, project_type, currency)
+    SELECT '${legacy.id}', org_id, client_id, 'REFLOW-LEGACY', '${legacy.name}', 'time_and_materials', currency
+    FROM projects WHERE id = '${project.id}';
+  INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
+    SELECT '${legacy.id}', id, true, 12000 FROM tasks
+    WHERE org_id = (SELECT org_id FROM projects WHERE id = '${legacy.id}') AND active ORDER BY name LIMIT 2;
+  INSERT INTO assignments (id, project_id, user_id, role, rate_cents)
+    SELECT '${legacy.assignment}', '${legacy.id}', id, 'lead', 12000 FROM users WHERE email = 'admin@example.com';
+  COMMIT;`);
+assert.equal(sql(`SELECT json_build_array(
+  (SELECT count(*) FROM project_tasks WHERE project_id = '${legacy.id}'),
+  (SELECT count(*) FROM assignments WHERE project_id = '${legacy.id}'),
+  (SELECT count(*) FROM project_settings WHERE project_id = '${legacy.id}')
+)`), '[2, 1, 0]', 'The reflow fixture is a legacy project with two tasks and one person');
 const before = sql(`SELECT json_build_array(
   (SELECT count(*) FROM projects),
   (SELECT count(*) FROM project_drafts),
@@ -78,6 +101,220 @@ const before = sql(`SELECT json_build_array(
       await expect(editor.getByLabel('Project name', { exact: true })).toHaveValue(name);
       console.log(`PASS: shared editor prefills, cancels, saves the same project and survives reload at ${width}px`);
     }
+    // Focus scrolls an inner scroller to reveal its control, so geometry must be
+    // read against the unscrolled scrollport, not only the viewport. Field cells,
+    // row controls and dialog bodies are checked too, against their content boxes:
+    // a control can spill into a gutter or padding without growing the scroll
+    // width. Inputs are compared only by their boxes, so text scrolling inside a
+    // field is never reported; a button whose own content is clipped is.
+    const overflow = container => container.evaluate(node => {
+      const visible = item => item.getClientRects().length && getComputedStyle(item).visibility !== 'hidden';
+      const content = (item, rect) => {
+        const style = getComputedStyle(item), left = rect.left + item.clientLeft + parseFloat(style.paddingLeft);
+        return [left, rect.left + item.clientLeft + item.clientWidth - parseFloat(style.paddingRight)];
+      };
+      const name = item => `${item.tagName.toLowerCase()}${item.id ? `#${item.id}` : ''} ${item.getAttribute('aria-label') || item.textContent.trim().slice(0, 24)}`;
+      const regions = [[node, ...content(node, node.getBoundingClientRect()), node.scrollLeft],
+        ...[...node.querySelectorAll('.np-row > .min-w-0, .np-row-controls, .modal-body')].filter(visible)
+          .map(cell => [cell, ...content(cell, cell.getBoundingClientRect()), 0])];
+      const reported = new Set(), outside = [];
+      for (const [region, left, right, shift] of regions) {
+        for (const item of region.querySelectorAll('button, input:not([type="hidden"]), select, textarea, a[href], label, .form-group')) {
+          const rect = item.getBoundingClientRect();
+          if (outside.length >= 8 || reported.has(item) || !visible(item) || rect.width <= 1 || rect.height <= 1) continue;
+          if (rect.left + shift < left - 1 || rect.right + shift > right + 1) {
+            reported.add(item);
+            outside.push(`${name(item)}: ${Math.round(rect.left + shift - left)}..${Math.round(rect.right + shift - left)} of ${Math.round(right - left)}${region === node ? '' : ` in .${region.classList[0]}`}`);
+          } else if (item.tagName === 'BUTTON' && !item.matches('.truncate') && item.scrollWidth > item.clientWidth + 1) {
+            reported.add(item);
+            outside.push(`${name(item)}: content ${item.scrollWidth} clipped to ${item.clientWidth}`);
+          }
+        }
+      }
+      // Assignment-row text must keep room for itself: a role squeezed to zero width
+      // can spill without any control moving. Names truncated on purpose are exempt.
+      for (const cell of node.querySelectorAll('.np-assignment-row div, .np-assignment-row span')) {
+        if (outside.length >= 8 || !visible(cell) || cell.closest('.truncate') || cell.children.length
+          || !cell.textContent.trim() || getComputedStyle(cell).display === 'inline') continue;
+        if (cell.clientWidth === 0 || cell.scrollWidth > cell.clientWidth + 1)
+          outside.push(`squeezed ${cell.tagName.toLowerCase()}.${[...cell.classList].join('.')} "${cell.textContent.trim().slice(0, 32)}": content ${cell.scrollWidth} in ${cell.clientWidth}`);
+      }
+      // A wider scroll with no control outside comes from text, a legend or a
+      // container: name the innermost few so the cause is identified, not guessed.
+      if (node.scrollWidth > node.clientWidth + 1 && !outside.length) {
+        const [left, right] = regions[0].slice(1, 3), shift = node.scrollLeft;
+        const spills = item => {
+          const rect = item.getBoundingClientRect();
+          return rect.width > 1 && (rect.right + shift > right + 1 || rect.left + shift < left - 1)
+            || (!['INPUT', 'TEXTAREA', 'SELECT'].includes(item.tagName) && getComputedStyle(item).overflowX === 'visible' && item.scrollWidth > item.clientWidth + 1);
+        };
+        for (const item of node.querySelectorAll('*')) {
+          if (outside.length >= 3) break;
+          if (!visible(item) || !spills(item) || [...item.children].some(child => visible(child) && spills(child))) continue;
+          const rect = item.getBoundingClientRect();
+          outside.push(`unexplained ${item.tagName.toLowerCase()}${item.id ? `#${item.id}` : ''}.${[...item.classList].join('.')} "${item.textContent.trim().slice(0, 32)}": ${Math.round(rect.left + shift - left)}..${Math.round(rect.right + shift - left)}, content ${item.scrollWidth} in ${item.clientWidth}`);
+        }
+        // Text can spill without any element box doing so; measure the text itself.
+        const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT), range = document.createRange();
+        for (let text = walker.nextNode(); text && outside.length < 6; text = walker.nextNode()) {
+          if (!text.textContent.trim() || !visible(text.parentElement)) continue;
+          range.selectNodeContents(text);
+          const rect = range.getBoundingClientRect();
+          if (rect.width > 1 && (rect.right + shift > right + 1 || rect.left + shift < left - 1))
+            outside.push(`unexplained text in ${text.parentElement.tagName.toLowerCase()}.${[...text.parentElement.classList].join('.')} "${text.textContent.trim().slice(0, 32)}": ${Math.round(rect.left + shift - left)}..${Math.round(rect.right + shift - left)}`);
+        }
+      }
+      return node.scrollWidth <= node.clientWidth + 1 && !outside.length ? ''
+        : `scroll ${node.scrollWidth} > client ${node.clientWidth}; outside: ${JSON.stringify(outside)}`;
+    });
+    // The focused element is fully on screen inside its own visible scrollport:
+    // overlays against the viewport, footer actions inside the footer's area, and
+    // form controls inside the form's scrollport above the pinned footer.
+    const onScreen = () => page.evaluate(() => {
+      const item = document.activeElement, rect = item.getBoundingClientRect();
+      const overlay = item.closest('dialog, [role="dialog"]');
+      const port = overlay ? null : (item.closest('.np-footer') || item.closest('.np-scroll'))?.getBoundingClientRect();
+      const footer = document.querySelector('.np-footer')?.getBoundingClientRect();
+      const top = Math.max(port?.top ?? 0, 0);
+      const bottom = Math.min(port?.bottom ?? innerHeight, innerHeight,
+        overlay || item.closest('.np-footer') ? innerHeight : footer?.top ?? innerHeight);
+      return rect.left >= -1 && rect.right <= innerWidth + 1 && rect.top >= top - 1 && rect.bottom <= bottom + 1 ? ''
+        : `${item.id || item.getAttribute('aria-label') || item.textContent.trim().slice(0, 24)} at ${Math.round(rect.left)}..${Math.round(rect.right)} x ${Math.round(rect.top)}..${Math.round(rect.bottom)} (visible ${Math.round(top)}..${Math.round(bottom)})`;
+    });
+    // Geometry is collected across sizes so one overflow cannot hide another.
+    // 390x568 at 100% text guards the normal-size pinned layout.
+    const problems = [];
+    for (const [width, height, scale] of [[320, 900, 2], [390, 900, 2], [768, 900, 2], [320, 568, 2], [390, 568, 2], [844, 390, 2], [390, 568, 1], [390, 320, 1], [320, 568, 1]]) {
+      const size = `${width}x${height} at ${scale * 100}% text`;
+      await page.setViewportSize({ width, height });
+      await page.goto(`${base}/projects/${legacy.id}/edit`);
+      const reflow = page.locator('.np-page');
+      const startsOn = sql(`SELECT coalesce(starts_on::text, '') FROM projects WHERE id = '${legacy.id}'`);
+      await expect(reflow.getByLabel('Project name', { exact: true })).toHaveValue(legacy.name);
+      // User text enlargement, applied only to the test document, not app styles.
+      await page.evaluate(scale => { document.documentElement.style.fontSize = `${scale * 100}%`; }, scale);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      for (const selector of ['input[id^="np-task-rate-"]', 'input[id^="np-person-rate-"]', 'input[id^="np-cost-rate-"]'])
+        await expect(reflow.locator(selector).first()).toBeVisible();
+      const start = reflow.locator('#np-start');
+      await start.click();
+      const calendar = page.getByRole('dialog', { name: 'Choose Start date', exact: true });
+      await expect(calendar).toBeVisible();
+      await expect.poll(() => calendar.evaluate(node => node.contains(document.activeElement))).toBe(true);
+      const panel = await calendar.evaluate(node => {
+        const rect = node.getBoundingClientRect();
+        const scrolls = node.scrollHeight <= node.clientHeight + 1 || ['auto', 'scroll'].includes(getComputedStyle(node).overflowY);
+        return rect.left >= -1 && rect.right <= innerWidth + 1 && rect.top >= -1 && rect.bottom <= innerHeight + 1 && scrolls ? ''
+          : `${Math.round(rect.left)}..${Math.round(rect.right)} x ${Math.round(rect.top)}..${Math.round(rect.bottom)}, scrolls ${scrolls}`;
+      });
+      if (panel) problems.push(`${size} calendar: ${panel}`);
+      await calendar.getByRole('button', { name: 'Today', exact: true }).focus();
+      const today = await onScreen();
+      if (today) problems.push(`${size} calendar Today: ${today}`);
+      await page.keyboard.press('Enter');
+      await expect(calendar).toBeHidden();
+      await expect(start).toBeFocused();
+      await expect(reflow.getByRole('button', { name: 'Clear Start date', exact: true })).toBeVisible();
+      // Ensure a dirty editor even if the saved planning date already is today.
+      await reflow.getByLabel('Project name', { exact: true }).fill('Unsaved reflow check');
+      const form = await overflow(reflow.locator('.np-scroll'));
+      if (form) problems.push(`${size} form: ${form}`);
+      if (!await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)) problems.push(`${size}: document overflow`);
+      const footerFit = await overflow(reflow.locator('.np-footer'));
+      if (footerFit) problems.push(`${size} footer: ${footerFit}`);
+      // At rest, before any focus scrolls it, Save is whole inside the footer.
+      const rest = await reflow.locator('.np-footer').evaluate(footer => {
+        footer.scrollTop = 0;
+        const save = footer.querySelector('#np-save');
+        const box = save.getBoundingClientRect(), port = footer.getBoundingClientRect();
+        const top = Math.max(port.top + footer.clientTop, 0), bottom = Math.min(port.top + footer.clientTop + footer.clientHeight, innerHeight);
+        return box.top >= top - 1 && box.bottom <= bottom + 1 && box.left >= -1 && box.right <= innerWidth + 1 ? ''
+          : `Save at rest ${Math.round(box.top)}..${Math.round(box.bottom)} outside ${Math.round(top)}..${Math.round(bottom)}`;
+      });
+      if (rest) problems.push(`${size}: ${rest}`);
+      for (const action of await reflow.locator('.np-footer').getByRole('button').all()) {
+        await action.focus();
+        const fit = await onScreen();
+        if (fit) problems.push(`${size} footer: ${fit}`);
+      }
+      if (height < 700) {
+        // The actual Tab order from the name reaches the footer, each stop on screen.
+        await reflow.getByLabel('Project name', { exact: true }).focus();
+        let reached = false;
+        for (let step = 0; step < 300 && !reached; step++) {
+          const fit = await onScreen();
+          if (fit && problems.length < 40) problems.push(`${size} Tab stop ${step}: ${fit}`);
+          reached = await page.evaluate(() => !!document.activeElement.closest('.np-footer'));
+          if (!reached) await page.keyboard.press('Tab');
+        }
+        if (!reached) problems.push(`${size}: Tab never reached the footer`);
+      }
+
+      const cancel = reflow.locator('.np-footer').getByRole('button', { name: 'Cancel', exact: true });
+      await cancel.focus();
+      await page.keyboard.press('Enter');
+      const confirmation = page.getByRole('dialog', { name: 'Discard changes?', exact: true });
+      await expect(confirmation).toBeVisible();
+      const dialog = await overflow(confirmation.locator('.modal'));
+      if (dialog) problems.push(`${size} discard dialog: ${dialog}`);
+      for (const name of ['Discard changes', 'Keep editing']) {
+        await confirmation.getByRole('button', { name, exact: true }).focus();
+        const fit = await onScreen();
+        if (fit) problems.push(`${size} discard dialog: ${fit}`);
+      }
+      await confirmation.getByRole('button', { name: 'Keep editing', exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await expect(confirmation).toBeHidden();
+      await expect(cancel).toBeFocused();
+      await expect(reflow.getByRole('button', { name: 'Clear Start date', exact: true })).toBeVisible();
+      await cancel.focus();
+      await page.keyboard.press('Enter');
+      await confirmation.getByRole('button', { name: 'Discard changes', exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await expect(page).not.toHaveURL(atEditor(legacy.id));
+      await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+      assert.equal(sql(`SELECT coalesce(starts_on::text, '') FROM projects WHERE id = '${legacy.id}'`), startsOn, 'Discarding leaves the saved planning date unchanged');
+      assert.equal(sql(`SELECT name FROM projects WHERE id = '${legacy.id}'`), legacy.name, 'Discarding leaves the saved name unchanged');
+      console.log(`DONE: legacy editor rows, planning date, footer and discard actions measured at ${size}`);
+    }
+    // At normal text a long name truncates beside the avatar instead of wrapping
+    // below it. The rename is a temporary fixture and is always restored.
+    const member = JSON.parse(sql(`SELECT row_to_json(m) FROM (
+      SELECT u.id, u.name FROM assignments a JOIN users u ON u.id = a.user_id
+      WHERE a.project_id = '${legacy.id}' ORDER BY (u.org_role = 'admin'), u.name LIMIT 1
+    ) m`));
+    // Long enough to truncate even in the wide desktop identity column.
+    const longName = 'Maximiliana Wilhelmina Konstantinopoulou-Ravensworth of Northumberland and the Western Isles of Strathclyde';
+    sql(`UPDATE users SET name = $$${longName}$$ WHERE id = '${member.id}'`);
+    try {
+      for (const width of [390, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(`${base}/projects/${legacy.id}/edit`);
+        const longLabel = page.locator('.np-assignment-row').locator(`[title="${longName}"]`);
+        await expect(longLabel).toBeVisible();
+        const layout = await longLabel.evaluate(item => {
+          const avatar = item.closest('.np-assignment-row').querySelector('.avatar').getBoundingClientRect();
+          const text = item.getBoundingClientRect();
+          return { sameRow: text.top < avatar.bottom && text.bottom > avatar.top && text.left >= avatar.right - 1,
+            ellipsis: getComputedStyle(item).textOverflow === 'ellipsis' && item.scrollWidth > item.clientWidth };
+        });
+        if (!layout.sameRow || !layout.ellipsis) problems.push(`${width}x900 at 100% text long name: ${JSON.stringify(layout)}`);
+      }
+    } finally {
+      sql(`UPDATE users SET name = $$${member.name}$$ WHERE id = '${member.id}'`);
+    }
+    // An ordinary short laptop at normal text keeps the 16px footer padding; only
+    // a short editor compacts it.
+    await page.setViewportSize({ width: 1366, height: 650 });
+    await page.goto(`${base}/projects/${legacy.id}/edit`);
+    await expect(page.locator('#np-save')).toBeVisible();
+    const laptop = await page.locator('.np-footer').evaluate(footer => {
+      const style = getComputedStyle(footer);
+      return `${style.paddingTop} ${style.paddingBottom}`;
+    });
+    if (laptop !== '16px 16px') problems.push(`1366x650 at 100% text footer padding: ${laptop}`);
+    // The following cases were written for the desktop viewport the first loop left behind.
+    await page.setViewportSize({ width: 1440, height: 900 });
     assert.equal(sql(`SELECT json_build_array(
       (SELECT count(*) FROM projects),
       (SELECT count(*) FROM project_drafts),
@@ -86,6 +323,7 @@ const before = sql(`SELECT json_build_array(
       (SELECT jsonb_agg(to_jsonb(l) ORDER BY id) FROM invoice_line_items l)
     )`), before, 'Editing must not create projects/drafts or rewrite historical time/invoices');
     assert.equal(draftWrites, 0, 'Existing-project editing must never autosave a creation draft');
+    assert.deepEqual(problems, [], 'Legacy editor must reflow at enlarged text, including short screens');
 
     await page.goto(`${base}/projects/new`);
     const editor = page.locator('.np-page');
@@ -186,12 +424,41 @@ const before = sql(`SELECT json_build_array(
     await expect(editor.locator('#np-name')).toHaveValue('Configured edit fixture');
     await editor.locator('#np-name').fill('Committed with a lost acknowledgement');
     const requests = [];
+    // Hold the save open so its busy action can be measured; it then commits and
+    // loses its acknowledgement exactly as before.
+    let releaseSave;
+    const heldSave = new Promise(resolve => { releaseSave = resolve; });
     await page.route('**/api/save_project_editor*', async route => {
       requests.push(route.request().postData());
+      await heldSave;
       await route.fetch();
       await route.abort('failed');
     });
     await editor.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(editor.locator('#np-save')).toHaveText('Saving…');
+    await expect(editor.locator('#np-save')).toBeDisabled();
+    const busyViewport = page.viewportSize();
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.evaluate(async () => {
+      document.documentElement.style.fontSize = '200%';
+      await document.fonts.ready;
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+    const busyFit = await editor.locator('#np-save').evaluate(save => {
+      const footer = save.closest('.np-footer');
+      footer.scrollTop = 0;
+      const box = save.getBoundingClientRect(), port = footer.getBoundingClientRect();
+      const top = Math.max(port.top + footer.clientTop, 0);
+      const bottom = Math.min(port.top + footer.clientTop + footer.clientHeight, innerHeight);
+      return box.top >= top - 1 && box.bottom <= bottom + 1 && box.left >= -1 && box.right <= innerWidth + 1
+        && save.scrollWidth <= save.clientWidth + 1 ? ''
+        : JSON.stringify({ label: save.textContent.trim(), box: [box.left, box.right, box.top, box.bottom].map(Math.round),
+          visible: [top, bottom].map(Math.round), viewport: [innerWidth, innerHeight] });
+    });
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.setViewportSize(busyViewport);
+    releaseSave();
+    assert.equal(busyFit, '', 'The busy Saving… action fits its footer at 320x568 with 200% text');
     await expect(editor.getByRole('alert')).toBeVisible();
     assert.equal(sql(`SELECT name FROM projects WHERE id = '${configuredId}'`), 'Committed with a lost acknowledgement');
     const savedRevision = sql(`SELECT edit_revision FROM projects WHERE id = '${configuredId}'`);
@@ -230,14 +497,36 @@ const before = sql(`SELECT json_build_array(
     await editor.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(editor.getByRole('alert')).toBeVisible();
     await expect(editor.locator('#np-name')).toHaveValue('Local conflicting changes');
-    await editor.getByRole('button', { name: 'Reload project…', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    const reloadTrigger = editor.getByRole('button', { name: 'Reload project…', exact: true });
+    const reloadDialog = page.getByRole('dialog', { name: 'Reload project?', exact: true });
+    await reloadTrigger.focus();
+    await page.keyboard.press('Enter');
+    await expect(reloadDialog).toBeVisible();
+    const reloadOverflow = await overflow(reloadDialog.locator('.modal'));
+    await reloadDialog.getByRole('button', { name: 'Keep editing', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(reloadDialog).toBeHidden();
+    await expect(reloadTrigger).toBeFocused();
     await expect(editor.locator('#np-name')).toHaveValue('Local conflicting changes');
-    await editor.getByRole('button', { name: 'Reload project…', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Reload project', exact: true }).click();
+    await reloadTrigger.focus();
+    await page.keyboard.press('Enter');
+    await reloadDialog.getByRole('button', { name: 'Reload project', exact: true }).focus();
+    await page.keyboard.press('Enter');
     await expect(editor.locator('#np-name')).toHaveValue('Saved from another tab');
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    assert.equal(reloadOverflow, '', 'Reload confirmation actions fit at 390px and 200% text');
     assert.equal(draftWrites, draftWritesAfterCreate);
     console.log('PASS: concurrent edits reject a stale save, retain local input and require confirmation before reloading');
     assert.deepEqual(errors, []);
-  } finally { await browser.close(); }
+  } finally {
+    await browser.close();
+    sql(`BEGIN;
+      DELETE FROM assignments WHERE id = '${legacy.assignment}';
+      DELETE FROM project_tasks WHERE project_id = '${legacy.id}';
+      DELETE FROM projects WHERE id = '${legacy.id}';
+      COMMIT;`);
+  }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -28,10 +28,10 @@ pub(super) fn DateField(
         });
     rsx! {
         document::Script { src: asset!("/assets/js/menu.js") }
-        div { class: "flex items-center gap-1",
+        div { class: "flex flex-wrap items-center gap-1",
             button {
                 id: "{id}", r#type: "button",
-                class: "np-date-field form-input flex items-center justify-between gap-3 font-mono text-left",
+                class: "np-date-field form-input flex items-center justify-between gap-3 max-w-full font-mono text-left",
                 popovertarget: "{id}-calendar",
                 aria_haspopup: "dialog", aria_expanded: "false", aria_controls: "{id}-calendar",
                 aria_invalid: error_id.as_ref().map(|_| "true"),

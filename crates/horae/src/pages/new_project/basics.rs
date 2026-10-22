@@ -159,7 +159,7 @@ pub(super) fn Basics(
         }
         FormRow { label: "Project code", id: "np-code", hint: "Optional",
             div { class: "flex flex-wrap items-center gap-3",
-                input { id: "np-code", class: "np-code form-input font-mono", value: form.read().code.clone(), placeholder: "Project code",
+                input { id: "np-code", class: "np-code form-input max-w-full font-mono", value: form.read().code.clone(), placeholder: "Project code",
                     aria_invalid: error_id(ProjectFormField::Code).map(|_| "true"),
                     aria_describedby: error_id(ProjectFormField::Code),
                     oninput: move |event| form.write().code = event.value() }
@@ -176,7 +176,7 @@ pub(super) fn Basics(
             }
         }
         FormRow { label: "Dates", hint: "Optional · planning only",
-            div { class: "flex flex-wrap items-center gap-3",
+            div { class: "np-dates flex flex-wrap items-center gap-3",
                 FormGroup { label: "Start date", id: "np-start",
                     DateField { id: "np-start", error_id: error_id(ProjectFormField::StartsOn), label: "Start date", placeholder: "Starts on", value: form.read().starts_on.clone(), onchange: move |value| form.write().starts_on = value }
                 }
@@ -230,7 +230,7 @@ pub(super) fn Basics(
         }
         FormRow { label: "Currency", id: "np-currency", hint: "For billing and project rates",
             div { class: "w-form-select max-w-full",
-                fieldset { class: "border-0 p-0 m-0", disabled: editing,
+                fieldset { class: "border-0 p-0 m-0 min-w-0", disabled: editing,
                 SelectField { id: "np-currency", error_id: error_id(ProjectFormField::Currency), label: "Currency", options: currency_options, selected: form.read().currency.clone().unwrap_or_default(), onselect: move |value: String| {
                     form.write().currency = (!value.is_empty()).then_some(value);
                 } } }
@@ -347,7 +347,7 @@ fn NewClientDialog(
     }));
     rsx! {
         Modal { id: "np-client-dialog", labelledby: "np-client-title", open, busy: busy(), on_dismiss,
-            div { class: "modal-body",
+            div { class: "modal-body px-3 sm:px-6",
                 h2 { id: "np-client-title", class: "modal-title", "New client" }
                 if let Some(message) = error() { div { class: "alert alert-danger", role: "alert", "{message}" } }
                 form { onsubmit: move |event| {
@@ -374,7 +374,7 @@ fn NewClientDialog(
                         Input { id: "np-new-client-rate", value: rate(), disabled: busy(), oninput: move |event: FormEvent| rate.set(event.value()) }
                     }
                     p { class: "text-sm text-subtle", "Creates a client immediately, even if you later discard this project draft." }
-                    div { class: "modal-actions",
+                    div { class: "modal-actions flex-wrap",
                         button { class: "btn btn-primary", r#type: "submit", disabled: busy() || name.read().trim().is_empty(), if busy() { "Creating…" } else { "Create client" } }
                         button { class: "btn btn-secondary", r#type: "button", disabled: busy(), onclick: move |_| on_dismiss.call(()), "Cancel" }
                     }

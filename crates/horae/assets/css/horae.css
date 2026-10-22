@@ -808,7 +808,9 @@ h1, h2, h3, h4, h5, h6 {
 /* Opt in only while this editor is mounted; other routes retain document scrolling. */
 .app-shell:has(> .app-content > .np-page) { height: 100dvh; min-height: 0; overflow: hidden; }
 .app-content:has(> .np-page) { padding: 0; }
-.np-page { --project-form-gutter: var(--space-10); }
+/* Panel padding stays 20px at 100% text from 320px up, and stops doubling with
+   enlarged text on narrow screens. */
+.np-page { --project-form-gutter: var(--space-10); --project-panel-gutter: min(var(--space-5), 6.25vw); }
 .np-scroll { scroll-padding-block: var(--space-4); }
 @media (max-width: 1320px) {
   .np-page { --project-form-gutter: var(--space-6); }
@@ -823,21 +825,55 @@ h1, h2, h3, h4, h5, h6 {
   .app-shell.mobile-open:has(> .app-content > .np-page) { display: block; height: auto; min-height: 100dvh; overflow: visible; }
   .app-shell.mobile-open > .app-content:has(> .np-page) { height: 100dvh; }
 }
+/* Cap the pinned actions so wrapping them cannot consume the whole editor. */
+.np-footer { max-height: 25%; }
+/* The editor's own height (definite through h-full) decides compaction, not the
+   viewport. 19rem = 4 × (control height + 2rem padding): below it, a 25% cap is
+   shorter than one normal row of actions. Then padding tightens and the cap keeps
+   one control row plus its 1px border, so Save stays whole at rest. The page
+   prefix outranks the footer's py-4 utility. */
+.np-page { container: np-editor / size; }
+@container np-editor (max-height: 19rem) {
+  .np-page .np-footer {
+    padding-block: var(--space-1);
+    max-height: max(25%, calc(var(--height-form-control) + 2 * var(--space-1) + 1px));
+  }
+}
 .np-code.form-input { width: var(--width-project-code); }
 .np-tags { min-height: var(--height-form-control); }
 .np-tags .chip { max-width: 100%; }
 .np-tags .chip-input-field { min-width: min(100%, var(--width-tag-entry)); }
 .np-date-field.form-input { width: var(--width-planning-date); }
+/* A planning-date group may narrow below the field's preferred width at enlarged text. */
+.np-dates > .form-group { min-width: 0; }
 /* Only the planning-date wrapper opts into top-layer calendar positioning. */
 .np-date-popover { background: transparent; }
 .np-date-popover .dp { max-width: 100%; }
 .np-row { grid-template-columns: var(--width-form-label) minmax(0, 1fr); }
-.np-assignment-row { grid-template-columns: var(--space-5) minmax(0, 1fr) auto var(--space-8); }
+/* The identity keeps a floor before the controls take free space; controls may
+   shrink below one line because their labels and inputs already wrap. */
+.np-assignment-row { grid-template-columns: var(--space-5) minmax(var(--space-24), 1fr) minmax(0, auto) var(--space-8); }
+/* 16px at 100% text; at enlarged text on narrow screens no wider than the panel gutter.
+   The page prefix outranks the row's gap utility. */
+.np-page .np-assignment-row { column-gap: min(var(--space-4), var(--project-panel-gutter)); }
 .np-assignment-row .avatar-project { width: var(--size-project-avatar); height: var(--size-project-avatar); }
 .np-milestone-row { grid-template-columns: minmax(0, 1fr) var(--space-40) var(--width-milestone-amount) var(--space-10); }
 @media (max-width: 900px) {
   .np-milestone-row { grid-template-columns: minmax(0, 1fr) var(--space-10); }
   .np-milestone-row > input:first-child, .np-milestone-row > input[type="date"] { grid-column: 1 / -1; }
+}
+/* The same stacked layout when enlarged text leaves the list too narrow for its
+   rem-sized columns; at 100% text the list is wider than this wherever it shows four. */
+.np-milestones { container: np-milestones / inline-size; }
+@container np-milestones (max-width: 30rem) {
+  .np-milestone-row { grid-template-columns: minmax(0, 1fr) var(--space-10); }
+  .np-milestone-row > input:first-child, .np-milestone-row > input[type="date"] { grid-column: 1 / -1; }
+}
+/* Each type card takes the full row when enlarged text leaves the three-card grid
+   too narrow; at 100% text the grid is wider than this wherever it shows three. */
+.np-types { container: np-types / inline-size; }
+@container np-types (max-width: 30rem) {
+  .np-type { grid-column: 1 / -1; }
 }
 .np-type:hover, .np-option:hover { border-color: var(--color-border-strong); }
 .np-type:has(input:checked), .np-option:has(input:checked) {
@@ -859,6 +895,12 @@ h1, h2, h3, h4, h5, h6 {
   .np-page .np-types { grid-template-columns: minmax(0, 1fr); }
   .np-page .np-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
   .np-row > .np-label { padding-top: 0; }
+}
+/* Narrow screens: the gutter stops growing with enlarged text (unchanged at 100%
+   from 320px up), and row overrides take the full row beneath the person or task. */
+@media (max-width: 480px) {
+  .np-page { --project-form-gutter: min(var(--space-5), 6.25vw); }
+  .np-row-controls { grid-column: 1 / -1; }
 }
 
 .form-group { margin-bottom: var(--space-4); }

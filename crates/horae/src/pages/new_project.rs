@@ -690,33 +690,34 @@ fn ProjectEditor(
                     }
                 }
             }
-            footer { class: "np-footer flex flex-none flex-wrap items-center gap-3 py-4 px-project-form bg-cell-empty border-t border-light",
+            footer { class: "np-footer flex flex-none flex-wrap items-center gap-3 overflow-y-auto py-4 px-project-form bg-cell-empty border-t border-light",
                 button {
                     id: "np-save",
-                    class: "btn btn-primary",
+                    class: "btn btn-primary px-project-panel",
                     r#type: "button",
                     disabled: !can_create || locked || unresolved_request,
                     onclick: move |_| request_intent.call(if editing { Intent::Save } else { Intent::Create }),
+                    // Short in both modes; the header status reports the save progress.
                     if busy() && editing {
-                        "Saving changes…"
+                        "Saving…"
                     } else if editing {
                         "Save changes"
                     } else if intent() == Some(Intent::Create) {
-                        "Saving project…"
+                        "Saving…"
                     } else {
                         "Save project"
                     }
                 }
                 button {
                     id: "np-cancel",
-                    class: "btn btn-secondary",
+                    class: "btn btn-secondary px-project-panel",
                     r#type: "button",
                     disabled: locked || unresolved_request,
                     onclick: move |_| request_intent.call(Intent::Leave),
                     "Cancel"
                 }
                 if !editing { button {
-                    class: "btn btn-ghost ml-auto",
+                    class: "btn btn-ghost ml-auto px-project-panel",
                     r#type: "button",
                     disabled: busy() || locked || unresolved_request,
                     onclick: move |_| discard_open.set(true),
@@ -730,10 +731,10 @@ fn ProjectEditor(
             labelledby: "np-discard-title",
             open: discard_open(),
             on_dismiss: move |_| discard_open.set(false),
-            div { class: "modal-body",
+            div { class: "modal-body px-3 sm:px-6",
                 h2 { id: "np-discard-title", class: "modal-title", if editing { "Discard changes?" } else { "Discard this draft?" } }
                 p { if editing { "Your unsaved changes will be lost. The saved project will not be changed." } else { "The draft will be removed. Clients you created will remain available." } }
-                div { class: "modal-actions",
+                div { class: "modal-actions flex-wrap",
                     button {
                         class: "btn btn-danger",
                         onclick: move |_| {
@@ -755,10 +756,10 @@ fn ProjectEditor(
         Modal {
             id: "np-reload-dialog", labelledby: "np-reload-title", open: reload_open(),
             on_dismiss: move |_| reload_open.set(false),
-            div { class: "modal-body",
+            div { class: "modal-body px-3 sm:px-6",
                 h2 { id: "np-reload-title", class: "modal-title", "Reload project?" }
                 p { "Your local edits will be discarded and replaced with the current saved project." }
-                div { class: "modal-actions",
+                div { class: "modal-actions flex-wrap",
                     button { class: "btn btn-danger", onclick: move |_| on_reload.call(()), "Reload project" }
                     button { class: "btn btn-secondary", onclick: move |_| reload_open.set(false), "Keep editing" }
                 }

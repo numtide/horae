@@ -115,7 +115,7 @@ pub(super) fn Team(
         .collect();
     rsx! {
         section { class: "bg-secondary border rounded-xl mt-4", aria_labelledby: "np-team-heading",
-            div { class: "flex flex-wrap items-baseline gap-3 py-4 px-5 border-b",
+            div { class: "flex flex-wrap items-baseline gap-3 py-4 px-project-panel border-b",
                 h2 { id: "np-team-heading", class: "text-xl font-semibold m-0", "Team" }
                 span { class: "text-xs text-subtle", "{form.read().team.len()} people" }
                 span { class: "text-xs text-label ml-auto", "Check = manages this project" }
@@ -129,25 +129,25 @@ pub(super) fn Team(
                 }
             }
             for person in manager_people.read().iter().filter(|person| !form.read().team.iter().any(|member| member.user_id == person.id)).cloned() {
-                div { key: "{person.id}", class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-b border-light min-w-0",
+                div { key: "{person.id}", class: "np-assignment-row grid items-center gap-4 px-project-panel py-3 border-b border-light min-w-0",
                     Checkbox {
                         id: "np-person-manager-{person.id}",
                         checked: managers.read().as_ref().is_some_and(|selection| selection.manager_ids.contains(&person.id)),
                         compact: true, label: "{person.name} manages this project",
                         onclick: move |_| on_toggle_manager.call(person.id),
                     }
-                    div { class: "flex items-center gap-4 min-w-0",
+                    div { class: "flex flex-wrap items-center gap-4 min-w-0",
                         Avatar { initials: first_initial(&person.name), size: "project" }
-                        div { class: "min-w-0",
+                        div { class: "flex-1 basis-project-identity min-w-0",
                             div { class: "text-sm text-strong truncate", title: "{person.name}", "{person.name}" }
-                            div { class: "text-xs text-subtle", "Not on the tracking team" }
+                            div { class: "text-xs text-subtle wrap-anywhere", "Not on the tracking team" }
                             if !person.active { div { class: "text-xs text-subtle", "Inactive" } }
                         }
                     }
                 }
             }
-            if form.read().team.is_empty() { p { class: "text-sm text-subtle px-5", "No teammates selected yet." } }
-            div { class: "px-5 py-3",
+            if form.read().team.is_empty() { p { class: "text-sm text-subtle px-project-panel", "No teammates selected yet." } }
+            div { class: "px-project-panel py-3",
                 p { class: "form-hint mt-0",
                     if form.read().rate_mode == RateMode::Legacy {
                         "Person rates apply after task overrides and before the project and profile rates. Blank costs inherit the profile cost. Rates are not converted between currencies."
@@ -188,7 +188,7 @@ pub(super) fn Team(
                             }
                         }
                     }
-                    button { id: "np-add-everyone", r#type: "button", class: "btn btn-secondary", disabled: busy(), onclick: move |_| {
+                    button { id: "np-add-everyone", r#type: "button", class: "btn btn-secondary flex-wrap justify-center max-w-full", disabled: busy(), onclick: move |_| {
                         if busy() { return; }
                         busy.set(true);
                         error.set(None);
@@ -260,19 +260,19 @@ fn MemberRow(
         })
         .unwrap_or_else(|| "project currency".into());
     rsx! {
-        div { class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-0 border-b border-light m-0 min-w-0",
+        div { class: "np-assignment-row grid items-center gap-4 px-project-panel py-3 border-0 border-b border-light m-0 min-w-0",
             Checkbox { id: "np-person-manager-{id}", checked: member.manager, compact: true, disabled: !manager_editable, label: "{name} manages this project", onclick: move |_| on_toggle_manager.call(id) }
-            div { class: "flex items-center gap-4 min-w-0",
+            div { class: "flex flex-wrap items-center gap-4 min-w-0",
                 Avatar { initials: first_initial(&name), size: "project" }
-                div { class: "min-w-0",
+                div { class: "flex-1 basis-project-identity min-w-0",
                     div { class: "text-sm text-strong truncate", title: "{name}", "{name}" }
                     if inactive { div { class: "text-xs text-subtle", "Inactive · tracking settings read only" } }
-                    div { class: "text-xs text-subtle", if member.manager { "Project manager" } else { "Project member" } }
+                    div { class: "text-xs text-subtle wrap-anywhere", if member.manager { "Project manager" } else { "Project member" } }
                 }
             }
             fieldset { class: "np-row-controls flex flex-wrap items-center gap-4 min-w-0 border-0 p-0 m-0", aria_label: "Tracking settings for {name}", disabled: inactive,
                 if billable_access != ProjectFieldAccess::Withheld && ((form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Person) || form.read().rate_mode == RateMode::Legacy) {
-                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-person-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::PersonRate(id)),
+                    label { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full text-xs text-subtle", r#for: "np-person-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::PersonRate(id)),
                         "bill"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-rate-{id}", disabled: billable_access != ProjectFieldAccess::Editable, label: "Billable rate for {name} ({billing_currency}/h)", value: member.billable_rate,
                             error_id: (invalid_field == Some(ProjectFormField::PersonRate(id))).then(|| format!("np-person-error-{id}")),
@@ -283,7 +283,7 @@ fn MemberRow(
                     }
                 }
                 if cost_access != ProjectFieldAccess::Withheld {
-                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-cost-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::CostRate(id)),
+                    label { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full text-xs text-subtle", r#for: "np-cost-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::CostRate(id)),
                         "cost"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-cost-rate-{id}", disabled: cost_access != ProjectFieldAccess::Editable, label: "Cost rate for {name} ({org_currency}/h)", value: member.cost_rate,
                             error_id: (invalid_field == Some(ProjectFormField::CostRate(id))).then(|| format!("np-person-error-{id}")),
@@ -294,7 +294,7 @@ fn MemberRow(
                     }
                 }
                 if form.read().budget_mode == BudgetMode::HoursPerPerson {
-                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-person-budget-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::Budget),
+                    label { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full text-xs text-subtle", r#for: "np-person-budget-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::Budget),
                         "budget"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-person-budget-{id}", label: "Budget hours for {name}", value: member.budget,
                             error_id: (invalid_field == Some(ProjectFormField::PersonBudget(id))).then(|| format!("np-person-error-{id}")),
@@ -312,7 +312,7 @@ fn MemberRow(
                 }, "×" }
         }
         if matches!(invalid_field, Some(ProjectFormField::Person(row) | ProjectFormField::PersonRate(row) | ProjectFormField::CostRate(row) | ProjectFormField::PersonBudget(row)) if row == id) {
-            p { id: "np-person-error-{id}", class: "text-sm text-danger px-5",
+            p { id: "np-person-error-{id}", class: "text-sm text-danger px-project-panel",
                 "{error_message.as_deref().unwrap_or_default()}"
                 if invalid_field == Some(ProjectFormField::Person(id)) { " Remove this person and select an available teammate below." }
             }

@@ -168,6 +168,7 @@ fn families() -> Vec<Family> {
                     "basis-assignment-picker",
                     "flex-basis: var(--width-assignment-picker)",
                 ),
+                ("basis-project-identity", "flex-basis: var(--space-24)"),
                 ("max-w-full", "max-width: 100%"),
                 ("h-full", "height: 100%"),
                 ("h-10", "height: var(--space-10)"),
@@ -269,6 +270,10 @@ fn spacing_family() -> Family {
     rules.push((
         "px-project-form".into(),
         "padding-inline: var(--project-form-gutter)".into(),
+    ));
+    rules.push((
+        "px-project-panel".into(),
+        "padding-inline: var(--project-panel-gutter)".into(),
     ));
     rules.push(("pb-30".into(), "padding-bottom: var(--space-30)".into()));
     for (n, v) in space() {

@@ -114,26 +114,26 @@ pub(super) fn Tasks(
     let billable_project = form.read().project_type != ProjectType::NonBillable;
     rsx! {
         section { class: "bg-secondary border rounded-xl mt-2", aria_labelledby: "np-tasks-heading",
-            div { class: "flex flex-wrap items-baseline gap-3 py-4 px-5 border-b",
+            div { class: "flex flex-wrap items-baseline gap-3 py-4 px-project-panel border-b",
                 h2 { id: "np-tasks-heading", class: "text-xl font-semibold m-0", "Tasks" }
                 span { class: "text-xs text-subtle", "{form.read().tasks.len()} tasks" }
                 if billable_project && billable_access == ProjectFieldAccess::Editable {
-                    div { class: "flex items-center gap-2 ml-auto",
+                    div { class: "flex flex-wrap items-center gap-2 ml-auto",
                         span { class: "text-xs text-label", "Billable" }
                         button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| { for task in &mut form.write().tasks { if !matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id) || archived_ids.read().contains(&task_id)) { task.billable = true; } } }, "All" }
                         button { r#type: "button", class: "btn btn-ghost btn-sm", onclick: move |_| { for task in &mut form.write().tasks { if !matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id) || archived_ids.read().contains(&task_id)) { task.billable = false; } } }, "None" }
                     }
                 }
             }
-            p { class: "flex items-center gap-2 px-5 py-2.5 m-0 text-xs text-subtle bg-primary-wash border-b border-light",
+            p { class: "flex items-center gap-2 px-project-panel py-2.5 m-0 text-xs text-subtle bg-primary-wash border-b border-light",
                 span { class: "inline-flex flex-none text-sm text-primary", aria_hidden: "true", NavIcon { name: "info", class: "size-em" } }
                 span { "Everyone on the project can track to unrestricted tasks. Open a task's access settings to limit who can." }
             }
             for task in form.read().tasks.clone() {
                 TaskRow { key: "{task.id}", form, options, billable_access, on_edit, id: task.id, archived_ids, retained: retained_ids.contains(&task.id), inactive: matches!(task.source, TaskSource::Existing { task_id } if inactive_ids.read().contains(&task_id)), invalid_field, error_message: error_message.clone(), on_access: move |id| editing_access.set(Some(id)) }
             }
-            if form.read().tasks.is_empty() { p { class: "text-sm text-subtle px-5", "No tasks selected yet." } }
-            div { class: "px-5 py-3",
+            if form.read().tasks.is_empty() { p { class: "text-sm text-subtle px-project-panel", "No tasks selected yet." } }
+            div { class: "px-project-panel py-3",
                 if form.read().rate_mode == RateMode::Legacy {
                     p { class: "form-hint mt-0", "Task rates override person and project rates. Blank uses the existing rate hierarchy; zero is an explicit rate. Rates are not converted." }
                 } else if form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Task {
@@ -257,7 +257,7 @@ fn TaskRow(
         None => "Inherit".into(),
     };
     rsx! {
-        div { class: "np-assignment-row grid items-center gap-4 px-5 py-3 border-0 border-b border-light m-0 min-w-0",
+        div { class: "np-assignment-row grid items-center gap-4 px-project-panel py-3 border-0 border-b border-light m-0 min-w-0",
             Checkbox { checked: task.billable && billable_project, compact: true, disabled: read_only || !billable_project || billable_access != ProjectFieldAccess::Editable, label: "{name} is billable", onclick: move |_| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.billable = !task.billable; } } }
             div { class: "min-w-0 text-sm text-strong",
                 span { class: "block truncate", title: "{name}", "{name}" }
@@ -265,7 +265,7 @@ fn TaskRow(
             }
             div { class: "np-row-controls flex flex-wrap items-center gap-4 min-w-0",
                 if billable_access != ProjectFieldAccess::Withheld && ((form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Task) || form.read().rate_mode == RateMode::Legacy) {
-                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-task-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::TaskRate(id)),
+                    label { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full text-xs text-subtle", r#for: "np-task-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::TaskRate(id)),
                         "rate"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-task-rate-{id}", disabled: read_only || billable_access != ProjectFieldAccess::Editable, label: "Hourly rate for {name} ({currency})", value: task.rate,
                             error_id: (invalid_field == Some(ProjectFormField::TaskRate(id))).then(|| format!("np-task-error-{id}")),
@@ -276,7 +276,7 @@ fn TaskRow(
                     }
                 }
                 if form.read().budget_mode == BudgetMode::HoursPerTask || (form.read().budget_mode == BudgetMode::FeesPerTask && billable_access != ProjectFieldAccess::Withheld) {
-                    label { class: "flex items-center gap-2 text-xs text-subtle", r#for: "np-task-budget-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::Budget),
+                    label { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full text-xs text-subtle", r#for: "np-task-budget-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::Budget),
                         "budget"
                         Input { class: "w-30 max-w-full font-mono text-right", id: "np-task-budget-{id}", label: if form.read().budget_mode == BudgetMode::FeesPerTask { format!("Budget for {name} ({currency})") } else { format!("Budget hours for {name}") }, value: task.budget,
                             disabled: read_only || (form.read().budget_mode == BudgetMode::FeesPerTask && billable_access != ProjectFieldAccess::Editable),
@@ -316,7 +316,7 @@ fn TaskRow(
             }
         }
         if matches!(invalid_field, Some(ProjectFormField::Task(row) | ProjectFormField::TaskName(row) | ProjectFormField::TaskAccess(row) | ProjectFormField::TaskRate(row) | ProjectFormField::TaskBudget(row)) if row == id) {
-            p { id: "np-task-error-{id}", class: "text-sm text-danger px-5",
+            p { id: "np-task-error-{id}", class: "text-sm text-danger px-project-panel",
                 "{error_message.as_deref().unwrap_or_default()}"
                 if invalid_field == Some(ProjectFormField::TaskName(id)) { " Remove this row and add the corrected task name below." }
                 if invalid_field == Some(ProjectFormField::Task(id)) { " Remove this row and select an available task below." }
@@ -346,9 +346,9 @@ fn TaskAccessDialog(
     }));
     rsx! {
         Modal { id: "np-task-access", labelledby: "np-task-access-title", open: task_id.is_some(), on_dismiss,
-            div { class: "modal-body",
+            div { class: "modal-body px-3 sm:px-6",
                 h2 { id: "np-task-access-title", class: "modal-title", "Who can track to this task?" }
-                fieldset { class: "border-0 p-0 m-0 flex flex-col gap-3", aria_label: "Task access",
+                fieldset { class: "border-0 p-0 m-0 min-w-0 flex flex-col gap-3", aria_label: "Task access",
                     label { class: "flex items-center gap-3",
                         input { r#type: "radio", name: "np-task-access-mode", checked: matches!(*access.read(), TaskAccess::Everyone), onchange: move |_| access.set(TaskAccess::Everyone) }
                         "Everyone on the project"
@@ -372,7 +372,7 @@ fn TaskAccessDialog(
                     }
                     if form.read().team.is_empty() { p { class: "form-hint", "Add people to the project team to grant access." } }
                 }
-                div { class: "modal-actions",
+                div { class: "modal-actions flex-wrap",
                     button { r#type: "button", class: "btn btn-primary", onclick: move |_| {
                         if let Some(task) = form.write().tasks.iter_mut().find(|task| Some(task.id) == task_id) { task.access = access(); }
                         on_dismiss.call(());
