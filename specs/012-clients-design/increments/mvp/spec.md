@@ -101,6 +101,10 @@ draft/recovery payload; cancel, reload and navigate back.
    require an active client. Invoice navigation preserves the current active-only
    picker without introducing an active-client restriction on historical invoice
    recovery or server-side billing.
+1. Existing invoice list/detail identify the linked client by its current saved
+   name even after deactivation, without requiring an active catalog entry.
+   Only the name needed by the authorized invoice is returned; unrelated client
+   records and billing fields are not added. New-invoice choices remain active-only.
 
 ### Edge Cases
 

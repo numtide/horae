@@ -60,11 +60,26 @@ pub struct InvoiceLine {
     pub amount_cents: i64,
 }
 
-/// Invoice with its line items, returned by `get_invoice`.
+/// Invoice with its line items, returned by invoice writes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InvoiceWithLines {
     pub invoice: Invoice,
     pub lines: Vec<InvoiceLine>,
+}
+
+/// List projection with the current client name, independent of picker activity.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InvoiceListItem {
+    pub invoice: Invoice,
+    pub client_name: String,
+}
+
+/// Invoice detail and client identity materialized under the same read authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct InvoiceDetailView {
+    pub invoice: Invoice,
+    pub lines: Vec<InvoiceLine>,
+    pub client_name: String,
 }
 
 /// Editable invoice values, copied from projects rather than linked to them.

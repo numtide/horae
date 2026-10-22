@@ -74,3 +74,18 @@ the nested feature pointer; actual Git branch remains `feat/clients-mvp`.
 
 No constitutional exception, new architecture, generic repository layer or
 dependency. Keep pickers compatible and sensitive rates/invoices separately gated.
+
+## Invoice identity regression follow-up
+
+Scope: US4, MVP-003/007/011. Invoice list/detail currently resolve names through
+the active client catalog and fall back to UUIDs. Return client names with the
+existing authorized invoice reads, inside the same organization/active-manager
+snapshot. Batch list lookup; no per-invoice queries, catalog expansion, migration,
+new permission policy, write-contract change or visual redesign. Preserve the
+active-only creation picker and existing historical billing/recovery behavior.
+
+Files: `models/invoice.rs`, `server_fns/invoices.rs`, `pages/invoices.rs`, their
+existing test seams and `tests/browser/`. Tests cover active/inactive names,
+tenant/actor rejection, stored invoice values and unchanged picker eligibility.
+Use the existing disposable browser runner plus Windows Chrome. Two independent
+reviews, SQLx cache, server/web builds and published-head CI gate delivery.

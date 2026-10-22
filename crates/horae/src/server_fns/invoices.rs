@@ -4,8 +4,9 @@ use super::*;
 #[cfg(feature = "server")]
 use crate::models::invoice::InvoiceSource;
 use crate::models::invoice::{
-    InvoiceDefaults, InvoiceDraftEdit, InvoiceDraftSave, InvoiceEditReview, InvoiceEditor,
-    InvoiceFeeSelection, InvoiceGenerationRequest, InvoicePreparation,
+    InvoiceDefaults, InvoiceDetailView, InvoiceDraftEdit, InvoiceDraftSave, InvoiceEditReview,
+    InvoiceEditor, InvoiceFeeSelection, InvoiceGenerationRequest, InvoiceListItem,
+    InvoicePreparation,
 };
 
 #[cfg(feature = "server")]
@@ -147,10 +148,13 @@ mod fee_tests;
 #[cfg(all(test, feature = "server"))]
 mod snapshot_tests;
 
+#[cfg(all(test, feature = "server"))]
+mod client_label_tests;
+
 // ── Invoices ──────────────────────────────────────────────────────────────────
 
 #[server]
-pub async fn list_invoices(status: Option<String>) -> Result<Vec<Invoice>, ServerFnError> {
+pub async fn list_invoices(status: Option<String>) -> Result<Vec<InvoiceListItem>, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
 
@@ -168,11 +172,48 @@ pub(super) async fn fetch_list(
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
     status_filter: Option<InvoiceStatus>,
-) -> Result<Vec<Invoice>, ServerFnError> {
+) -> Result<Vec<InvoiceListItem>, ServerFnError> {
     let mut tx = super::snapshot::manager(pool, org_id, actor_id).await?;
     let invoices = fetch_invoices(&mut *tx, org_id, status_filter, None).await?;
+    let client_ids: Vec<_> = invoices.iter().map(|invoice| invoice.client_id).collect();
+    let names = fetch_client_names(&mut tx, org_id, &client_ids).await?;
+    let invoices = invoices
+        .into_iter()
+        .map(|invoice| {
+            let client_name = names
+                .get(&invoice.client_id)
+                .cloned()
+                .ok_or_else(|| not_found("Invoice client not found"))?;
+            Ok(InvoiceListItem {
+                invoice,
+                client_name,
+            })
+        })
+        .collect::<Result<_, ServerFnError>>()?;
     tx.commit().await.map_err(server_err)?;
     Ok(invoices)
+}
+
+#[cfg(feature = "server")]
+async fn fetch_client_names(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: uuid::Uuid,
+    client_ids: &[uuid::Uuid],
+) -> Result<std::collections::HashMap<uuid::Uuid, String>, ServerFnError> {
+    // Only identities referenced by the already-authorized invoice read; never
+    // the client catalog or its address, tax ID and rate fields.
+    let clients = sqlx::query!(
+        "SELECT id, name FROM clients WHERE org_id=$1 AND id=ANY($2)",
+        org_id,
+        client_ids,
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(server_err)?;
+    Ok(clients
+        .into_iter()
+        .map(|client| (client.id, client.name))
+        .collect())
 }
 
 #[cfg(feature = "server")]
@@ -209,7 +250,7 @@ pub(super) async fn fetch_invoices<'e>(
 }
 
 #[server]
-pub async fn get_invoice(invoice_id: String) -> Result<InvoiceWithLines, ServerFnError> {
+pub async fn get_invoice(invoice_id: String) -> Result<InvoiceDetailView, ServerFnError> {
     let manager = require_manager().await?;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
 
@@ -223,15 +264,23 @@ pub(super) async fn fetch_detail(
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
     invoice_id: uuid::Uuid,
-) -> Result<InvoiceWithLines, ServerFnError> {
+) -> Result<InvoiceDetailView, ServerFnError> {
     let mut tx = super::snapshot::manager(pool, org_id, actor_id).await?;
     let (invoice, lines) = crate::reports::fetch_invoice_from(&mut tx, invoice_id, org_id)
         .await
         .map_err(server_err)?
         .ok_or_else(|| not_found("Invoice not found"))?;
 
+    let client_name = fetch_client_names(&mut tx, org_id, &[invoice.client_id])
+        .await?
+        .remove(&invoice.client_id)
+        .ok_or_else(|| not_found("Invoice client not found"))?;
     tx.commit().await.map_err(server_err)?;
-    Ok(InvoiceWithLines { invoice, lines })
+    Ok(InvoiceDetailView {
+        invoice,
+        lines,
+        client_name,
+    })
 }
 
 #[server]
