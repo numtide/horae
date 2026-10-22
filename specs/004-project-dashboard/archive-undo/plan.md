@@ -68,6 +68,16 @@ retryable outside the dialog and converge without rewriting the row (`xmin`);
 changed account, policy and role denying Undo with the existing recovery; and
 leaving during a pending Undo for another project without carrying its notice.
 
+Review additions (author tests, before correction): a pending Undo dismissed
+before it fails must still show a visible, retryable failure; the duplicate
+request count waits one render; and at 320px/200% the action toast's message
+must stay at least one word wide, with a semibold (600) Undo as in the handoff.
+
+Recovery feedback differs from the handoff by design of the existing flow: the
+prototype's `undoArchive` simply hides the toast, while this view keeps the
+existing "Project reactivated." success notice after an Undo succeeds, exactly as
+after a confirmed Reactivate. No new product behavior is introduced for it.
+
 Run focused browser checks before the complete flake checks:
 
 ```sh

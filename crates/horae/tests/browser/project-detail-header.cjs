@@ -419,6 +419,15 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await expect(header.getByText('Archived', { exact: true })).toBeVisible();
     assert.deepEqual(await overflowing(), [], '320px/200% archived overflow');
     for (const name of ['Undo', 'Dismiss']) await expect(toastAction(name)).toBeInViewport({ ratio: 1 });
+    // With an action beside it, the message must stay at least one word wide rather than
+    // collapsing to a letter column; the handoff's action is semibold text.
+    const [messageWidth, longestWord] = await page.locator('.toast .toast-msg').evaluate(el => {
+      const style = getComputedStyle(el), ctx = document.createElement('canvas').getContext('2d');
+      ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      return [el.getBoundingClientRect().width, Math.max(...el.textContent.trim().split(/\s+/).map(word => ctx.measureText(word).width))];
+    });
+    assert.ok(messageWidth + 1 >= longestWord, `320px/200% toast message ${messageWidth}px is narrower than a word (${longestWord}px)`);
+    assert.equal(await undo.evaluate(el => getComputedStyle(el).fontWeight), '600', 'Undo uses the handoff weight');
     await trigger.scrollIntoViewIfNeeded();
     await open('Reactivate');
     for (const name of ['Reactivate project', 'Cancel']) {
@@ -492,6 +501,7 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await pendingUndo.click({ force: true });
     await trigger.click({ force: true });
     await expect(dialog).toBeHidden();
+    await settle();
     assert.equal(statusRequests.length, sent + 1, 'A pending Undo sends one request');
     assert.equal(statusRequests.at(-1).active, true);
     assert.deepEqual(statusRequests.at(-1).expected_requester, { org_id: org, user_id: actor.id });
@@ -521,6 +531,37 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await reactivate();
     assert.equal(persisted(), content);
     console.log('PASS: Dismiss removes Undo without writing; a later Reactivate works and offers no inverse Undo');
+
+    // Dismissing a pending Undo must not hide its later failure, or the archive has no visible retry.
+    await archive();
+    let failHeld;
+    const dismissHeld = new Promise(resolve => { failHeld = resolve; });
+    await page.route('**/api/set_project_active*', async route => { await dismissHeld; await route.abort(); }, { times: 1 });
+    try {
+      const abandoned = page.waitForEvent('requestfailed', isStatusWrite);
+      await undo.focus();
+      await page.keyboard.press('Enter');
+      await expect(toastAction('Updating project…')).toBeDisabled();
+      await toastAction('Dismiss').focus();
+      await page.keyboard.press('Enter');
+      failHeld();
+      await abandoned;
+    } finally {
+      failHeld();
+    }
+    await expect(dialog).toBeHidden();
+    await expect(failure).toBeVisible();
+    await expect(undo).toBeEnabled();
+    assert.equal(active(), 'f');
+    const recovered = page.waitForResponse(isStatusWrite);
+    await undo.focus();
+    await page.keyboard.press('Enter');
+    assert.equal((await recovered).status(), 200);
+    await expect(header).not.toContainText('Archived');
+    await expect(undo).toHaveCount(0);
+    assert.equal(active(), 't');
+    assert.equal(persisted(), content);
+    console.log('PASS: a pending Undo dismissed before it fails still shows a retryable failure');
 
     await archive();
     await page.route('**/api/set_project_active*', route => route.abort(), { times: 1 });
