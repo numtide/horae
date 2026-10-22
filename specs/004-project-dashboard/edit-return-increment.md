@@ -55,18 +55,18 @@ all existing writes stay on their authenticated server-function path. No excepti
 
 ## Tasks
 
-- [ ] E001 [US7] Add route/parser and unsafe-target tests in
+- [x] E001 [US7] Add route/parser and unsafe-target tests in
   `crates/horae/src/route.rs`, plus SSR link assertions in
   `crates/horae/tests/detail_navigation/detail.rs`; observe failure first.
-- [ ] E002 [US7] Implement query and typed destination mapping in
+- [x] E002 [US7] Implement query and typed destination mapping in
   `crates/horae/src/route.rs`, updating required route constructors and test mirrors.
-- [ ] E003 [US7] Thread destination and truthful Back copy through the shared
+- [x] E003 [US7] Thread destination and truthful Back copy through the shared
   loader/editor in `crates/horae/src/pages/new_project.rs`; add detail-origin
   context in `crates/horae/src/pages/projects.rs` without changing list behavior.
-- [ ] E004 [US7] Extend `crates/horae/tests/browser/project-detail-header.cjs`
+- [x] E004 [US7] Extend `crates/horae/tests/browser/project-detail-header.cjs`
   for Cancel/Back, discard/stay, Save persistence, reload, dirty browser history
   and forged targets. Preserve list-origin and creation regression assertions.
-- [ ] E005 Run server/WASM build, strict lint, formatting, route/SSR tests and
+- [x] E005 Run server/WASM build, strict lint, formatting, route/SSR tests and
   complete browser regression checks; record results in this document.
 - [ ] E006 Obtain independent technical and visual/UX reviews, resolve findings,
   verify exact-head mandatory CI and deliver through the protected merge queue.
@@ -92,10 +92,10 @@ compile-red by construction (missing field and function) and were not executed
 separately; the SSR link assertions were not run before implementation.
 
 E002–E004 were implemented in `f785f187` and passed the full check, but
-runtime review then found that the destination changed between the server
-render and the hydrated page. The router decodes the query once when parsing
-but serialized a `String` value without re-escaping `%`. The server's memory
-history holds that serialized route and the client hydrates from it, so
+runtime review then found that repeated parsing changed the destination.
+The router decodes the query once when parsing but serialized a `String`
+value without re-escaping `%`. Both server memory history and hydration
+reparse serialized routes, so
 `return_to=%252Fprojects%252F<id>` was decoded a second time to
 `/projects/<id>`: the editor showed "Back to project" and Cancel opened the
 detail. The defect was the changed destination, not the address bar's spelling.
@@ -118,7 +118,8 @@ edited project's own detail is honoured. Non-canonical targets are dropped.
 The type is its own file, using only `std` and `uuid` with no UI or router
 imports, so both SSR harnesses include the real type rather than a copy.
 
-This fix has not been delivered: it awaits E005 again.
+The corrected implementation passed E005 on `cfa85271`; delivery still requires
+exact-head mandatory CI and the protected merge queue (E006).
 
 The mapping `edit_return_route` lives beside the
 editor in `pages/new_project.rs`, not in `route.rs`, because the SSR harnesses
@@ -129,3 +130,40 @@ exactly the same origin and project with or without that empty delimiter;
 assertions that were already regex-only keep an anchored regex. The router
 decodes the query once, so a standard percent-encoded same-project target is
 honoured and a double-encoded one is not.
+
+## Verification — 2026-10-22
+
+The corrected code and tests passed the complete five-check command with
+Nix-isolated PostgreSQL fixtures:
+
+```sh
+nix build .#checks.x86_64-linux.tests .#checks.x86_64-linux.browser \
+  .#checks.x86_64-linux.clippy .#checks.x86_64-linux.sqlx-prepare \
+  .#checks.x86_64-linux.treefmt --no-link --max-jobs 1 --cores 8 -L
+```
+
+- 191 core tests, 1,504 server tests and 352 tests across 15 external binaries
+  passed. The 11 pre-existing manual server tests remain ignored.
+- The complete browser runner passed, including detail-origin Back/Cancel,
+  discard/stay, actual Save persistence, dirty history, reload, malformed and
+  multiply encoded targets, and the existing list-origin/creation suites.
+- Strict core/server all-target Clippy, SQLx cache verification and formatting
+  passed; the application package built both SSR and WASM. Separate strict WASM
+  application-binary Clippy also passed (`--features web --target wasm32-unknown-unknown --bin horae -- -D warnings -W clippy::perf`).
+- Native Windows Chrome verified valid single-encoded and invalid double-encoded
+  targets before/after reload, extra parameters, foreign targets, list Actions →
+  Edit → Cancel, keyboard Back/Cancel, dirty discard and load-error recovery.
+  The changed Back control was inspected at 390/768/1440px in both themes, with
+  actual keyboard focus and activation. These checks used disposable local data.
+- Independent technical and visual/UX reviews found no unresolved blocking issue.
+  Review caught the repeated-decoding defect before publication; its failing
+  browser regression was observed before the typed-query correction. Final
+  review also checked the SSR harness assertions and settled theme captures.
+
+The editor's existing inner overflow and clipped discard actions at 390px with
+200% root text reproduce on the merged baseline, before this change. They remain
+open for a separate feature 011 editor-reflow follow-up, outside this PR; this
+record does not claim full enlarged-text acceptance for the whole editor.
+Existing raw server-error copy and unmeasured shared focus-ring contrast also
+remain outside this increment. Native browser zoom and physical-device coverage
+are not claimed.

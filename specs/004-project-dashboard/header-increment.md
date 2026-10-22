@@ -8,8 +8,8 @@ this feature's historical `plan.md` and `tasks.md`, which describe the original
 the Project Detail dashboard; every other dashboard slice remains open.
 
 Implementation checkboxes record written code or tests, not acceptance. The
-verification record below distinguishes local acceptance from pending remote CI
-and delivery; it does not certify the remaining dashboard slices.
+verification record below distinguishes local acceptance from remote CI and
+delivery; it does not certify the remaining dashboard slices.
 
 ## Requirement reconciliation
 
@@ -24,9 +24,9 @@ increment reaches. Requirement IDs below are #208's (`feat/project-dashboard`,
 | FR-014 edit | Partial | Edit project uses the shared `EditProject` route under the existing `can_edit` affordance, with a decorative pencil glyph. | H101 `return_to`; "Set up a budget". |
 | FR-015 archive/reactivate | **Incomplete** | Shared Actions menu, native confirmation, pending/duplicate protection, retryable transport errors, success toast, persisted reload, focus return. | H102 Undo; H103 archived-edit lifecycle (P02). |
 | FR-017 current authority | Partial | Affordances come from the current read; status writes recheck actor, role and policy zero in their own transaction; denied writes hide the loaded project behind the bound Retry. | Status changes under policy one need a reviewed canonical capability (not in scope). |
-| FR-018 states | Locally verified | Loading, unavailable and Retry keep the existing stale-resource guards; Back is available in every state. Denied reloads clear success feedback and restore recovery focus. | Exact-head CI and delivery. |
-| FR-019 layout | Locally verified | 320/390/768/1440px, a 1440×360 viewport, 200% CSS zoom and 200% root-font enlargement, in both themes; keyboard path to Actions and the dialog. | Exact-head CI and delivery; no claim of physical devices or native browser zoom. |
-| FR-020 design system | Locally verified | Utility classes, `Menu`, `Modal`, `Badge`, `Toast`, `NavIcon`; no inline styles, sample data or prototype handlers. Shared menu/toast fixes have cross-screen regression coverage. | Exact-head CI and delivery. |
+| FR-018 states | Delivered | Loading, unavailable and Retry keep the existing stale-resource guards; Back is available in every state. Denied reloads clear success feedback and restore recovery focus. | — |
+| FR-019 layout | Delivered | 320/390/768/1440px, a 1440×360 viewport, 200% CSS zoom and 200% root-font enlargement, in both themes; keyboard path to Actions and the dialog. | No claim of physical devices or native browser zoom. |
+| FR-020 design system | Delivered | Utility classes, `Menu`, `Modal`, `Badge`, `Toast`, `NavIcon`; no inline styles, sample data or prototype handlers. Shared menu/toast fixes have cross-screen regression coverage. | — |
 | FR-021 / FR-022 | Not affected | No quantities; the detail read gains no writes. | — |
 
 Tasks and Team cards and fee-balance behavior are unchanged; later dashboard
@@ -112,7 +112,7 @@ remain mandatory. No constitutional exception is required.
   (`detail_navigation`, `canonical_read_tests::detail`, `bulk_tests`,
   `mutation_tests`), `nix fmt`, and the browser runner including
   `project-detail-header`.
-- [ ] H010 Resolve both independent reviews, inspect live desktop/mobile themes,
+- [x] H010 Resolve both independent reviews, inspect live desktop/mobile themes,
   keyboard, enlarged text and post-mutation focus; verify exact-head CI and merge
   through the protected queue. Do not infer this acceptance from written tests.
 
@@ -156,13 +156,17 @@ height, stale feedback, scaled menu coordinates, missing responsive padding and
 cyclic toast sizing. A pre-existing successful Refresh/Retry focus gap remains
 outside this increment; denied and post-status reload recovery are covered.
 
-H010 remains open only for verification of the published commit and protected
-delivery. This local record does not assert that remote CI or merge has occurred.
+H010 completed: [PR #298](https://github.com/numtide/horae/pull/298) merged through
+the protected queue on 2026-10-22 at 02:53 UTC, as `5e555351`. Both mandatory
+Nixbot checks passed on published head `029b0d79`; build 683 completed all 22
+attributes, including the ARM browser and NixOS checks.
 
 ### Pending, outside this increment
 
 - [ ] H101 FR-014: Edit project carries `return_to=/projects/<id>` and the editor
   returns there on save and cancel, as Harvest does; test with browser history.
+  Implemented and locally verified in [the return increment](edit-return-increment.md);
+  its exact-head CI and protected delivery remain pending.
 - [ ] H102 FR-015: "Project archived" toast offers Undo that reactivates through
   the same authorized write, following the handoff's direct Undo action; test
   pending, failure and lost authority without a second confirmation dialog.
