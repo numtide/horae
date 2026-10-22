@@ -230,7 +230,7 @@ pub(super) fn Basics(
         }
         FormRow { label: "Currency", id: "np-currency", hint: "For billing and project rates",
             div { class: "w-form-select max-w-full",
-                fieldset { class: "border-0 p-0 m-0", disabled: editing,
+                fieldset { class: "border-0 p-0 m-0 min-w-0", disabled: editing,
                 SelectField { id: "np-currency", error_id: error_id(ProjectFormField::Currency), label: "Currency", options: currency_options, selected: form.read().currency.clone().unwrap_or_default(), onselect: move |value: String| {
                     form.write().currency = (!value.is_empty()).then_some(value);
                 } } }
@@ -347,7 +347,7 @@ fn NewClientDialog(
     }));
     rsx! {
         Modal { id: "np-client-dialog", labelledby: "np-client-title", open, busy: busy(), on_dismiss,
-            div { class: "modal-body p-4 sm:p-6",
+            div { class: "modal-body px-4 sm:px-6",
                 h2 { id: "np-client-title", class: "modal-title", "New client" }
                 if let Some(message) = error() { div { class: "alert alert-danger", role: "alert", "{message}" } }
                 form { onsubmit: move |event| {

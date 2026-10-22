@@ -24,9 +24,10 @@ certify this new regression. No backend or product decision is being reopened.
   the task "None" shortcut overflowed at 390px with 200% text, and `#np-code`
   overflowed at 320px. Run 2237 on `420457fc` was red at 320px with 200% text
   (it stopped before 390). Creation run 18262 was red at 1440px with 200% text for
-  Milestones. The third correction (gutter, full-row overrides, short-height
-  document flow, milestone container, Add everyone, dialog padding) and its
-  checks are written but have not been run.
+  Milestones. The third correction (gutter, full-row overrides, footer capped
+  at half the editor, milestone container, Add everyone, horizontal dialog
+  padding) and its checks are written but have not been run. The short-phone
+  document-flow rule was withdrawn.
 - [ ] R004 [US7] Verify configured/legacy Edit, creation conditional panels,
   discard/reload focus and unchanged saved/draft state with the existing browser
   suites; record evidence in this directory's `plan.md`.

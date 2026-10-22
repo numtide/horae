@@ -111,25 +111,32 @@ const before = sql(`SELECT json_build_array(
       return node.scrollWidth <= node.clientWidth + 1 && !outside.length ? ''
         : `scroll ${node.scrollWidth} > client ${node.clientWidth}; outside: ${JSON.stringify(outside)}`;
     });
-    // The focused element is fully on screen and, outside the footer, not behind it.
+    // The focused element is fully on screen inside its own visible scrollport:
+    // overlays against the viewport, footer actions inside the footer's area, and
+    // form controls inside the form's scrollport above the pinned footer.
     const onScreen = () => page.evaluate(() => {
       const item = document.activeElement, rect = item.getBoundingClientRect();
+      const overlay = item.closest('dialog, [role="dialog"]');
+      const port = overlay ? null : (item.closest('.np-footer') || item.closest('.np-scroll'))?.getBoundingClientRect();
       const footer = document.querySelector('.np-footer')?.getBoundingClientRect();
-      const bottom = item.closest('.np-footer, [role="dialog"]') ? innerHeight : Math.min(footer?.top ?? innerHeight, innerHeight);
-      return rect.left >= -1 && rect.right <= innerWidth + 1 && rect.top >= -1 && rect.bottom <= bottom + 1 ? ''
-        : `${item.id || item.getAttribute('aria-label') || item.textContent.trim().slice(0, 24)} at ${Math.round(rect.left)}..${Math.round(rect.right)} x ${Math.round(rect.top)}..${Math.round(rect.bottom)} (limit ${Math.round(bottom)})`;
+      const top = Math.max(port?.top ?? 0, 0);
+      const bottom = Math.min(port?.bottom ?? innerHeight, innerHeight,
+        overlay || item.closest('.np-footer') ? innerHeight : footer?.top ?? innerHeight);
+      return rect.left >= -1 && rect.right <= innerWidth + 1 && rect.top >= top - 1 && rect.bottom <= bottom + 1 ? ''
+        : `${item.id || item.getAttribute('aria-label') || item.textContent.trim().slice(0, 24)} at ${Math.round(rect.left)}..${Math.round(rect.right)} x ${Math.round(rect.top)}..${Math.round(rect.bottom)} (visible ${Math.round(top)}..${Math.round(bottom)})`;
     });
     // Geometry is collected across sizes so one overflow cannot hide another.
+    // 390x568 at 100% text guards the normal-size pinned layout.
     const problems = [];
-    for (const [width, height] of [[320, 900], [390, 900], [768, 900], [320, 568], [390, 568]]) {
-      const size = `${width}x${height}`;
+    for (const [width, height, scale] of [[320, 900, 2], [390, 900, 2], [768, 900, 2], [320, 568, 2], [390, 568, 2], [844, 390, 2], [390, 568, 1]]) {
+      const size = `${width}x${height} at ${scale * 100}% text`;
       await page.setViewportSize({ width, height });
       await page.goto(`${base}/projects/${project.id}/edit`);
       const reflow = page.locator('.np-page');
       const startsOn = sql(`SELECT coalesce(starts_on::text, '') FROM projects WHERE id = '${project.id}'`);
       await expect(reflow.getByLabel('Project name', { exact: true })).toHaveValue(project.name);
       // User text enlargement, applied only to the test document, not app styles.
-      await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+      await page.evaluate(scale => { document.documentElement.style.fontSize = `${scale * 100}%`; }, scale);
       for (const selector of ['input[id^="np-task-rate-"]', 'input[id^="np-person-rate-"]', 'input[id^="np-cost-rate-"]'])
         await expect(reflow.locator(selector).first()).toBeVisible();
       const start = reflow.locator('#np-start');
@@ -199,7 +206,7 @@ const before = sql(`SELECT json_build_array(
       await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
       assert.equal(sql(`SELECT coalesce(starts_on::text, '') FROM projects WHERE id = '${project.id}'`), startsOn, 'Discarding leaves the saved planning date unchanged');
       assert.equal(sql(`SELECT name FROM projects WHERE id = '${project.id}'`), project.name, 'Discarding leaves the saved name unchanged');
-      console.log(`DONE: legacy editor rows, planning date, footer and discard actions measured at ${size} and 200% text`);
+      console.log(`DONE: legacy editor rows, planning date, footer and discard actions measured at ${size}`);
     }
     // The following cases were written for the desktop viewport the first loop left behind.
     await page.setViewportSize({ width: 1440, height: 900 });

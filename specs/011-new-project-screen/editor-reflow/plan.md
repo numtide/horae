@@ -129,35 +129,71 @@ Third correction, written and not yet accepted:
   doubled by enlarged text. Row overrides (`.np-row-controls`) take the full row
   under the person or task, so a single-word action such as Everyone keeps its
   full width.
-- `horae.css`, at 768px wide and 700px tall or less: the editor joins document
-  scrolling (`height: auto` on the shell and `.np-page`), so the fields and then
-  the footer actions scroll in order and stay reachable. This also applies to
-  short phones at 100% text, which then lose the pinned footer; nothing is hidden
-  or reordered. Desktop is unchanged.
+
+- `horae.css` + `new_project.rs`: the pinned footer stays, with
+  `.np-footer { max-height: 50%; }` and the existing `overflow-y-auto` utility.
+  When the actions need more than half of the editor, they scroll within the
+  footer, so the fields always keep at least the other half. The shell, the
+  navigation and the pinned layout are unchanged. This replaces an earlier
+  short-phone rule that moved the editor into document scrolling. It was withdrawn
+  because it also removed the pinned footer at 100% text and broke the existing
+  390x320 and 390x420 navigation checks in `new-project.cjs`.
+
 - `horae.css` + `new_project/billing.rs`: the milestone list is an inline-size
   container (`np-milestones`, the `client-detail` pattern). Below 30rem it uses
   the existing stacked layout. At 100% text the list is wider than 30rem wherever
   four columns show; at 200% text it stacks whenever the doubled columns would
   not fit.
+
 - `new_project/team.rs`: Add everyone adds `flex-wrap justify-center max-w-full`,
   so its icon can sit above the label. The space is tight; the button-clipping
   check reports a shortfall.
-- Discard, reload, New client and task-access dialogs: `modal-body p-4 sm:p-6`,
-  as an existing `projects.rs` dialog does locally. The shared Modal styles
-  are unchanged.
+
+- Discard, reload, New client and task-access dialogs: `modal-body px-4 sm:px-6`,
+  as an existing `projects.rs` dialog does locally. Only the horizontal padding
+  changes below 640px; the vertical padding and desktop padding stay as they
+  are. (`sm:p-6` is not a generated utility; `build.rs` only has responsive
+  `px-6`.) The shared Modal styles are unchanged.
+
+- `new_project/basics.rs`: the `fieldset` around Currency adds `min-w-0`, as the
+  editor's other fieldsets already do. A native measurement at 390x900 with 200%
+  text showed `#np-currency` at x 24..486 (461 wide) because the fieldset keeps
+  its default `min-width: min-content`. That made it 461 wide inside a 331px field
+  cell, with the form scrolling to 486. The shared select field and the other
+  fieldsets are unchanged until the full creation matrix reports them.
+
+Native diagnosis of the footer cap, not acceptance: with the shell at `100dvh`
+and `.np-page` at 100% restored, adding `.np-footer { max-height: 50%; overflow-y: auto }` by hand in DevTools gave:
+
+| Viewport | Text | Form | Footer | Document height |
+|---|---|---|---|---|
+| 320x568 | 200% | 192 | 192 | 568 |
+| 390x568 | 200% | 210 | 210 | — |
+| 390x568 | 100% | 388 | 105 | 568 |
+| 390x320 | 100% | 140 | 105 | 320 |
+| 844x390 | 200% | 195 | 195 | 390 |
+
+Tab order through that layout has not been verified yet.
 
 The checks now also measure each region's content box, including dialog bodies,
 report a button whose content is clipped, check that the calendar fits the
 viewport (and scrolls when tall) with Today reachable, and run the actual Tab
-order at 320x568 and 390x568 with name and footer actions fully visible. Both
-suites collect geometry problems and assert them once, after the enlarged-text
-sections in the creation suite and after the data-integrity checks in the Edit
-suite. Keyboard, focus and data assertions stay fatal. Creation cases at 100%
-text keep empty dates again; each 200% case sets a date first.
+order at 320x568 and 390x568 (200% text), 844x390 (200%) and 390x568 (100%, a
+regression guard). Every focused control must show inside its own visible
+scrollport: form controls inside `.np-scroll` above the footer, footer actions
+inside the footer's area, dialogs inside the viewport. Both suites collect
+geometry problems, including the audit's vertical and horizontal focus checks,
+and assert them once: after the enlarged-text sections in the creation suite and
+after the data-integrity checks in the Edit suite. The creation suite prints the
+collected list if a fatal assertion stops it first. Focus, names, Tab order and
+data assertions stay fatal. Creation cases at 100% text keep empty dates again;
+each 200% case sets a date first.
 
 Preferred control widths remain unchanged. At 100% text, narrow assignment rows
-now use the full row for overrides, and short phones use document scrolling;
-these intentional accessibility changes still need visual verification. No text
+now use the full row for overrides, and the pinned footer scrolls within itself
+only when it would take more than half the editor (390x320 measured 105 of 245, so
+it does not bind there). These intentional accessibility changes still need
+visual verification. No text
 sizes, overflow clipping, truncation, tokens, utilities or shared component
 defaults were changed.
 

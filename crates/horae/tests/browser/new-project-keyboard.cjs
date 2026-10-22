@@ -138,16 +138,23 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       assert.notEqual(index, null, `${label}: Tab escaped the active surface before reaching all controls`);
       await expect(current).toHaveAccessibleName(/\S/);
       const geometry = await current.evaluate(item => {
-        const box = item.getBoundingClientRect(), footer = document.querySelector('.np-footer')?.getBoundingClientRect();
-        return { top: box.top, bottom: box.bottom, left: box.left, right: box.right,
-          // In document flow the footer may sit below the viewport, so the viewport bounds both.
-          limit: item.closest('.np-footer') ? innerHeight : Math.min(footer?.top ?? innerHeight, innerHeight),
-          height: innerHeight, width: innerWidth };
+        const box = item.getBoundingClientRect();
+        // A form control must show inside the form's visible scrollport, above the
+        // pinned footer; a footer action inside the footer's own visible area.
+        const port = (item.closest('.np-footer') || item.closest('.np-scroll'))?.getBoundingClientRect();
+        const footer = document.querySelector('.np-footer')?.getBoundingClientRect();
+        const ceiling = Math.max(port?.top ?? 0, 0);
+        const floor = Math.min(port?.bottom ?? innerHeight, innerHeight, item.closest('.np-footer') ? innerHeight : footer?.top ?? innerHeight);
+        return { control: `${item.tagName.toLowerCase()}${item.id ? `#${item.id}` : ''} ${item.getAttribute('aria-label') || item.textContent.trim().slice(0, 32)}`,
+          top: Math.round(box.top), bottom: Math.round(box.bottom), left: Math.round(box.left), right: Math.round(box.right),
+          ceiling: Math.round(ceiling), limit: Math.round(floor), height: innerHeight, width: innerWidth };
       });
-      assert.ok(geometry.top >= -1 && geometry.bottom <= (form ? geometry.limit : geometry.height) + 1,
-        `${label}: focused control ${index} is vertically obscured: ${JSON.stringify(geometry)}`);
-      assert.ok(geometry.left >= -1 && geometry.right <= geometry.width + 1,
-        `${label}: focused control ${index} is horizontally clipped`);
+      // Geometry joins the global report; focus, names and Tab order stay fatal.
+      if (!(form ? geometry.top >= geometry.ceiling - 1 && geometry.bottom <= geometry.limit + 1
+        : geometry.top >= -1 && geometry.bottom <= geometry.height + 1))
+        geometryProblems.push(`${label}: focused control ${index} is vertically obscured: ${JSON.stringify(geometry)}`);
+      if (!(geometry.left >= -1 && geometry.right <= geometry.width + 1))
+        geometryProblems.push(`${label}: focused control ${index} is horizontally clipped: ${JSON.stringify(geometry)}`);
       visited.add(index);
       if (visited.size < count) await page.keyboard.press('Tab');
     }
@@ -276,11 +283,15 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
         await expect(trigger).toBeFocused();
       }
     }
-    // Short phones: the actual Tab order reaches every control and the footer,
-    // each fully on screen when focused, with nothing hidden behind the footer.
-    for (const width of [320, 390]) {
-      await page.setViewportSize({ width, height: 568 });
-      await audit(screen, `${width}x568 at 200% text`);
+    // Short screens keep the pinned footer: the actual Tab order reaches every
+    // control, and each focused control shows inside its own visible scrollport
+    // (the form above the footer, or the footer's own area). 390x568 at 100% text
+    // guards the normal-size layout.
+    for (const [width, height, scale] of [[320, 568, 2], [390, 568, 2], [844, 390, 2], [390, 568, 1]]) {
+      const size = `${width}x${height} at ${scale * 100}% text`;
+      await page.setViewportSize({ width, height });
+      await page.evaluate(scale => { document.documentElement.style.fontSize = `${scale * 100}%`; }, scale);
+      await audit(screen, size);
       for (const control of [
         screen.getByLabel('Project name', { exact: true }),
         screen.locator('.np-footer').getByRole('button', { name: 'Save project', exact: true }),
@@ -289,7 +300,14 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       ]) {
         await control.focus();
         await expect(control).toBeFocused();
-        await expect(control).toBeInViewport({ ratio: 1 });
+        const shown = await control.evaluate(item => {
+          const box = item.getBoundingClientRect(), port = item.closest('.np-footer, .np-scroll').getBoundingClientRect();
+          const footer = document.querySelector('.np-footer').getBoundingClientRect();
+          const floor = Math.min(port.bottom, innerHeight, item.closest('.np-footer') ? innerHeight : footer.top);
+          return box.top >= Math.max(port.top, 0) - 1 && box.bottom <= floor + 1 && box.left >= -1 && box.right <= innerWidth + 1 ? ''
+            : `${item.id || item.textContent.trim()} at ${Math.round(box.top)}..${Math.round(box.bottom)} outside ${Math.round(Math.max(port.top, 0))}..${Math.round(floor)}`;
+        });
+        if (shown) geometryProblems.push(`${size}: ${shown}`);
       }
     }
     await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
@@ -398,5 +416,9 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     assert.deepEqual(geometryProblems, [], 'Later audits fit their containers');
     assert.deepEqual(errors, []);
     console.log('PASS: modal traversal/Escape restores focus and configured email threshold is keyboard reachable without sending mail');
-  } finally { await browser.close(); }
+  } finally {
+    // A fatal keyboard failure must not lose the geometry already collected.
+    if (geometryProblems.length) console.error(`Collected geometry problems (${geometryProblems.length}):\n${geometryProblems.join('\n')}`);
+    await browser.close();
+  }
 })().catch(error => { console.error(error); process.exitCode = 1; });

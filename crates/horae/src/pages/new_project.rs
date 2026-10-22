@@ -690,7 +690,7 @@ fn ProjectEditor(
                     }
                 }
             }
-            footer { class: "np-footer flex flex-none flex-wrap items-center gap-3 py-4 px-project-form bg-cell-empty border-t border-light",
+            footer { class: "np-footer flex flex-none flex-wrap items-center gap-3 overflow-y-auto py-4 px-project-form bg-cell-empty border-t border-light",
                 button {
                     id: "np-save",
                     class: "btn btn-primary",
@@ -730,7 +730,7 @@ fn ProjectEditor(
             labelledby: "np-discard-title",
             open: discard_open(),
             on_dismiss: move |_| discard_open.set(false),
-            div { class: "modal-body p-4 sm:p-6",
+            div { class: "modal-body px-4 sm:px-6",
                 h2 { id: "np-discard-title", class: "modal-title", if editing { "Discard changes?" } else { "Discard this draft?" } }
                 p { if editing { "Your unsaved changes will be lost. The saved project will not be changed." } else { "The draft will be removed. Clients you created will remain available." } }
                 div { class: "modal-actions flex-wrap",
@@ -755,7 +755,7 @@ fn ProjectEditor(
         Modal {
             id: "np-reload-dialog", labelledby: "np-reload-title", open: reload_open(),
             on_dismiss: move |_| reload_open.set(false),
-            div { class: "modal-body p-4 sm:p-6",
+            div { class: "modal-body px-4 sm:px-6",
                 h2 { id: "np-reload-title", class: "modal-title", "Reload project?" }
                 p { "Your local edits will be discarded and replaced with the current saved project." }
                 div { class: "modal-actions flex-wrap",
