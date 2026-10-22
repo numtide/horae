@@ -47,8 +47,12 @@ fn probe() -> Probe {
 }
 
 /// The detail Edit link, which returns the editor to this same project's detail.
+fn edit_link(project: Uuid) -> String {
+    format!("/projects/{project}/edit?return_to=/projects/{project}")
+}
+
 fn edit_href(project: Uuid) -> String {
-    format!("href=\"/projects/{project}/edit?return_to=/projects/{project}\"")
+    format!("href=\"{}\"", edit_link(project))
 }
 
 fn mount(probe: &Probe) -> VirtualDom {
@@ -81,7 +85,16 @@ async fn detail_uses_bound_labels_and_existing_editor_without_directory_or_dupli
     ] {
         assert!(!html.contains(label), "{html}");
     }
-    assert!(html.contains(&edit_href(Uuid::from_u128(1))), "{html}");
+    let project = Uuid::from_u128(1);
+    assert!(html.contains(&edit_href(project)), "{html}");
+    // The rendered link routes to this project's editor, returning to this project only.
+    let route::Route::EditProject { id, return_to } =
+        edit_link(project).parse::<route::Route>().unwrap()
+    else {
+        panic!("the Edit link must open the project editor");
+    };
+    assert_eq!(id, project);
+    assert!(return_to.returns_to(project) && !return_to.returns_to(Uuid::from_u128(2)));
     assert_eq!(*probe.detail_view_requests.borrow(), [None]);
     assert!(probe.auxiliary_requesters.borrow().is_empty());
 }

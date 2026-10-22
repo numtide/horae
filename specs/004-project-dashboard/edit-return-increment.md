@@ -91,21 +91,28 @@ expecting `/projects/<id>` and receiving `/projects`. The route unit tests were
 compile-red by construction (missing field and function) and were not executed
 separately; the SSR link assertions were not run before implementation.
 
-E002–E004 were implemented in `719dbd3a` and passed the full check, but
-runtime review then found that the router changed the destination after
-hydration. It decodes the query once when parsing but writes a `String` value
-back without re-escaping `%`, so `return_to=%252Fprojects%252F<id>` became
-`/projects/<id>` on the next parse: the editor showed "Back to project" and
-Cancel opened the detail. The extended tests reproduced this first: the focused
+E002–E004 were implemented in `f785f187` and passed the full check, but
+runtime review then found that the destination changed between the server
+render and the hydrated page. The router decodes the query once when parsing
+but serialized a `String` value without re-escaping `%`. The server's memory
+history holds that serialized route and the client hydrates from it, so
+`return_to=%252Fprojects%252F<id>` was decoded a second time to
+`/projects/<id>`: the editor showed "Back to project" and Cancel opened the
+detail. The defect was the changed destination, not the address bar's spelling.
+
+The extended tests reproduced this first: the focused
 `project-detail-header` run exited 1 because the double-encoded target showed
 "Back to project" instead of "Back to Projects".
 
 The fix makes the whole query the typed `EditReturn` (`?:..return_to`) in
 `pages/new_project/edit_return.rs`. The router hands it the query decoded
 once; it keeps only a project UUID, and only when the query is exactly
-`return_to=/projects/<canonical UUID>`. It writes back only that canonical
-query or nothing, so a reparse cannot reach a different destination. A
-canonical target naming another project is a valid query and is written back
+`return_to=/projects/<canonical UUID>`. Serializing the route, as links,
+navigation and the server's history do, emits only that canonical query or an
+empty one, so parsing a serialized route cannot reach a different destination.
+The address bar is separate: a direct load or reload keeps the typed URL, which
+is parsed again with the same single decode and reaches the same destination.
+A canonical target naming another project is a valid query and serializes
 unchanged; the editor still exits to the Projects list, because only the
 edited project's own detail is honoured. Non-canonical targets are dropped.
 The type is its own file, using only `std` and `uuid` with no UI or router

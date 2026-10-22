@@ -93,14 +93,21 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     const editLink = page.getByRole('link', { name: 'Edit project', exact: true });
     const editUrl = `${base}/projects/${project}/edit?return_to=/projects/${project}`;
     const editorClean = page.locator('[data-project-edit-state="clean"]');
-    // Wait for the hydrated editor: the router may rewrite the address bar after load.
-    const cancelTo = async (url, destination, hydrated) => {
-      await page.goto(url, { waitUntil: 'networkidle' });
-      await expect(page.getByRole('heading', { level: 1, name: 'Edit project', exact: true })).toBeVisible();
-      await expect(editorClean).toHaveCount(1);
+    // Check the hydrated editor's Back label, optionally again after a reload of the
+    // same address, then that Cancel really leaves for the expected destination.
+    const cancelTo = async (url, destination, reload = false) => {
       const label = destination === `${base}/projects` ? 'Back to Projects' : 'Back to project';
-      await expect(page.locator('.np-page').getByRole('button', { name: label, exact: true })).toBeVisible();
-      if (hydrated) await hydrated();
+      const ready = async () => {
+        await expect(page.getByRole('heading', { level: 1, name: 'Edit project', exact: true })).toBeVisible();
+        await expect(editorClean).toHaveCount(1);
+        await expect(page.locator('.np-page').getByRole('button', { name: label, exact: true })).toBeVisible();
+      };
+      await page.goto(url, { waitUntil: 'networkidle' });
+      await ready();
+      if (reload) {
+        await page.reload({ waitUntil: 'networkidle' });
+        await ready();
+      }
       await page.locator('#np-cancel').click();
       await expect(page).toHaveURL(destination);
     };
@@ -164,18 +171,14 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
       await cancelTo(`${base}/projects/${project}/edit?return_to=${forged}`, `${base}/projects`);
     }
     // One standard URL decoding yields this project. A second encoding, an encoded
-    // separator or any extra or repeated parameter fails closed, and the hydrated
-    // router rewrites the address bar to the canonical query for that destination.
-    const canonicalAt = (href, search) => expect.poll(async () => [page.url(), await page.evaluate(() => location.search)],
-      { message: `canonical address for ${href}` }).toEqual([href, search]);
-    await cancelTo(`${base}/projects/${project}/edit?return_to=%2Fprojects%2F${project}`, `${base}/projects/${project}`,
-      () => canonicalAt(editUrl, `?return_to=/projects/${project}`));
-    for (const query of [`return_to=%252Fprojects%252F${project}`, `return_to=%25252Fprojects%25252F${project}`,
+    // separator or any extra or repeated parameter fails closed. The browser keeps
+    // the typed address, so a reload must reach the same label and exit again.
+    await cancelTo(`${base}/projects/${project}/edit?return_to=%2Fprojects%2F${project}`, `${base}/projects/${project}`, true);
+    const doubleEncoded = `return_to=%252Fprojects%252F${project}`;
+    for (const query of [doubleEncoded, `return_to=%25252Fprojects%25252F${project}`,
       `return_to=/projects/${project}%26x=1`, `return_to=/projects/${project}&x=1`,
       `return_to=/projects/${project}&return_to=/projects/${project}`, `x=1&return_to=/projects/${project}`]) {
-      // A bare trailing ? leaves location.search empty.
-      await cancelTo(`${base}/projects/${project}/edit?${query}`, `${base}/projects`,
-        () => canonicalAt(`${base}/projects/${project}/edit?`, ''));
+      await cancelTo(`${base}/projects/${project}/edit?${query}`, `${base}/projects`, query === doubleEncoded);
     }
     await cancelTo(`${base}/projects/${project}/edit`, `${base}/projects`);
     assert.equal(savedName(), 'Header project', 'Leaving a clean editor saves nothing');

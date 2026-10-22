@@ -219,8 +219,8 @@ mod tests {
         assert!(
             matches!(&route, Route::EditProject { id: parsed, return_to } if *parsed == id && *return_to == EditReturn::default())
         );
-        // The router may append an empty query delimiter; the route itself must survive.
-        assert!([path.clone(), format!("{path}?")].contains(&route.to_string()));
+        // Serializing the route does append an empty query delimiter.
+        assert_eq!(route.to_string(), format!("{path}?"));
         assert!(route.to_string().parse::<Route>().unwrap() == route);
         assert!(matches_navigation(&Route::ProjectList {}, &route));
         assert!(!matches_navigation(&Route::ClientList {}, &route));
@@ -229,9 +229,9 @@ mod tests {
         );
     }
 
-    /// The editor's exit for a parsed edit URL and the URL the router writes back,
-    /// asserting the URL kept its project and that repeated write/parse round
-    /// trips change neither the route, its exit nor the written URL.
+    /// The editor's exit for a parsed edit URL and the route's serialized URL,
+    /// asserting the URL kept its project and that repeated serialize/parse round
+    /// trips change neither the route, its exit nor the serialized URL.
     fn edit_exit(url: &str, id: Uuid) -> (Route, String) {
         let exit_of = |route: &Route| match route {
             Route::EditProject {
@@ -262,8 +262,8 @@ mod tests {
         (exit, canonical)
     }
 
-    /// No target, or one that is not lexically the canonical query: the router
-    /// writes back only the bare editor URL, and the editor exits to Projects.
+    /// No target, or one that is not lexically the canonical query: the route
+    /// serializes to the bare editor URL, and the editor exits to Projects.
     fn assert_bare_list_exit(url: &str, id: Uuid) {
         let written = format!("/projects/{id}/edit?");
         assert!(
@@ -314,7 +314,7 @@ mod tests {
         let id = Uuid::now_v7();
         let other = Uuid::now_v7();
         // Another project's canonical target is a valid query, so it is kept as
-        // typed and written back unchanged, but it never leaves this editor for
+        // typed and serialized unchanged, but it never leaves this editor for
         // that project.
         let foreign = format!("/projects/{id}/edit?return_to=/projects/{other}");
         assert!(
@@ -361,7 +361,7 @@ mod tests {
     fn extra_encoded_targets_stay_invalid_after_the_router_rewrites_the_url() {
         let id = Uuid::now_v7();
         // After one decode these are not the exact path, so they must never
-        // become it, however often the router writes and reparses the URL.
+        // become it, however often the route is serialized and reparsed.
         for target in [
             format!("%252Fprojects%252F{id}"),
             format!("%25252Fprojects%25252F{id}"),

@@ -922,6 +922,14 @@ async fn detail_origin_clean_cancel_returns_to_the_same_project_without_writing(
     // The plain target and its one standard URL encoding name the same project.
     for slash in ["/", "%2F"] {
         let (probe, id) = editor_returning_to(|id| format!("{slash}projects{slash}{id}"));
+        if slash == "/" {
+            // The plain target is exactly the typed edit link the project detail builds.
+            let link = route::Route::EditProject {
+                id,
+                return_to: route::EditReturn::detail(id),
+            };
+            assert_eq!(probe.initial_path, Some(link.to_string()));
+        }
         let mut dom = VirtualDom::new_with_props(app, probe.clone());
         dom.rebuild_in_place();
         settle(&mut dom);

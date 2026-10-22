@@ -9,8 +9,8 @@ use uuid::Uuid;
 /// Where the project editor was opened from. Only the exact canonical query
 /// `return_to=/projects/<lowercase hyphenated UUID>` is kept; anything else,
 /// including extra or repeated parameters, is dropped. The router hands
-/// `From<&str>` the whole query decoded once, and writes back only `Display`,
-/// so a reparsed URL always resolves to the same destination. The query alone
+/// `From<&str>` the whole query decoded once, and serializes only `Display`,
+/// so reparsing a serialized route preserves the destination. The query alone
 /// cannot know which project is being edited: a canonical target naming another
 /// project is kept, and `returns_to` is what binds it to the edited project.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
