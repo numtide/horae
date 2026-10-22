@@ -379,7 +379,8 @@ The follow-up source inventory covers credential/identity/job-maintenance paths
 and identifies the legacy-report converter's job-to-organization FK inversion.
 Read these findings with the contract's dated reconciliations: T068–T070 already
 established the project-family prefix and T192–T194 the invoice-writer prefix,
-rechecked at `109402b9` on 2026-10-21. Do not reopen those completed increments
+rechecked at `109402b9` on 2026-10-21. That ancestor has the same `crates/`
+source as baseline `b675d960`, which changes only CI and `Cargo.lock`. Do not reopen those completed increments
 from the historical inventory. Validate the remaining candidate hierarchy and
 maintenance exceptions; do not mark T042 complete from source inspection alone.
 
@@ -579,7 +580,7 @@ retention without opt-in, combined person losses, cancellation, failed/stale
 previews, revocation, rollback and no automatic reassignment. Reuse the shared
 editor and existing grant/revision/audit mechanics; no new grant or bypass.
 
-- [ ] T043 [US2] Finalize the calendar/execution and correction cases in `specs/015-scoped-permissions/contracts/company-locks.md`; add failing injected-clock boundary tests in `crates/core/src/permissions/company_lock/tests.rs` for the finalized modes, timezone/week-start/month-end/DST rules and nondecreasing automatic cutoff (FR-019/023). Include every monthly acceptance example from the 2026-10-20 reference investigation: short and leap February, April, unchanged configured day in the following month, and an ordinary existing day. Include the approved DST-gap case and the following day's unchanged schedule, with preview/execution and viewer-timezone independence checks. Monthly clamping and DST gaps are resolved; repeated local times, missed-run and correction cases remain open. Pure calculation code needs this local contract closed first; unrelated full-matrix rows are not prerequisites. T044–T046 remain gated on storage/command review and T042 before integration.
+- [ ] T043 [US2] Finalize the calendar/execution and correction cases in `specs/015-scoped-permissions/contracts/company-locks.md`; add failing injected-clock boundary tests in `crates/core/src/permissions/company_lock/tests.rs` for the finalized modes, timezone/week-start/month-end/DST rules and nondecreasing automatic cutoff (FR-019/023). Include every monthly acceptance example from the 2026-10-20 reference investigation: short and leap February, April, unchanged configured day in the following month, and an ordinary existing day. Include the approved DST-gap case and the following day's unchanged schedule, with preview/execution and viewer-timezone independence checks. The DST gap is a user-approved rule. Monthly clamping is a reference-derived target from the shipped client preview, pending the user's confirmation; it is not an accepted decision or verified server behavior. Repeated local times, missed-run and correction cases remain open. Pure calculation code needs this local contract closed first; unrelated full-matrix rows are not prerequisites. T044–T046 remain gated on storage/command review and T042 before integration.
 
 - [ ] T044 [US2] Add failing production-transaction tests in `crates/horae/src/server_fns/approvals/company_lock_tests.rs` for configuration revocation, worker/manual races, replay, stopped timers, submission without notifications, separate approval/invoice locks and privileged correction. Include feature 016 expense fixtures before combined acceptance (FR-007/010/013/019/023).
 

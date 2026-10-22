@@ -92,7 +92,11 @@ not passing Horae tests or proof of a particular Harvest storage schema.
 Raw snapshots and the fixture/cleanup ledger remain outside Git under the root
 checkout's `.scratch/playwright-windows/output/approval-*-20261020.yml` and
 `.scratch/harvest-reference-20261020/approval-lifecycle.md`; they contain account
-identity. The test entry was permanently deleted. Its empty submitted-day marker
+identity. The 2026-10-20 private ledger records user approval for a disposable
+probe. Two 2026-10-21 ledgers describe authorized entries or probes without
+identifying the approver; the interior-withdrawal ledger does not mention
+authorization. No separately dated or scoped consent record is in Git.
+The test entry was permanently deleted. Its empty submitted-day marker
 remains; no unsubmit action was exposed in the inspected Day controls. No manual
 email/reminder, invoice, expense, account-setting or other-person action was used.
 
@@ -285,7 +289,7 @@ These refine T012/T013; they are not passing tests:
 | AC05 | Hidden selected expense, new expense racing approval, and revoked read/approval/assignment in both race orders. All effects or none; no private denial detail. | FR-024; real feature 016 records required |
 | AC06 | Approve A then independently B; partial/complete display and historical actors remain truthful; retry/cancel cannot duplicate or erase history. | FR-009/010, SC-008 |
 | AC07 | For one owner/project and no expenses, submit and approve Monday–Wednesday (6/7/8 minutes), withdraw Tuesday through Approvals, then edit it to nine without resubmission. Outer entries remain approved/locked; Tuesday remains submitted/editable. The range has nine pending plus 14 approved minutes, equal to the 23-minute week total. | Observed single-interval owner probe, 2026-10-21; FR-009/019/020, SC-008 subset |
-| AC08 | With no time/expenses, submit only Monday–Tuesday and approve the owner's zero-hours row. Initially both empty dates are covered and Wednesday remains editable. A two-minute entry created Wednesday cannot move into approved Monday; after scoped Monday withdrawal, the same move persists without resubmission. Do not assert later Tuesday coverage or whole-week submission from the conflicting display described above. | Observed empty-interval owner probe, 2026-10-21; FR-019/020, SC-008 subset |
+| AC08 | With no time/expenses, submit only Monday–Tuesday and approve the owner's zero-hours row. Initially both empty dates are covered and Wednesday remains editable. A two-minute entry created Wednesday cannot move into approved Monday; after scoped Monday withdrawal, the same move persists without resubmission. Do not assert later Tuesday coverage or whole-week submission from the conflicting display described above. The later persisted Monday → Tuesday write is the open **U-AC08** conflict in [Effective destination write follow-up](#effective-destination-write-follow-up--2026-10-21); no expected outcome is chosen for it. | Observed empty-interval owner probe, 2026-10-21; FR-019/020, SC-008 subset |
 
 Open discriminators, to resolve with suitable reference fixtures or an explicit
 Horae product decision rather than guessed expected outputs:

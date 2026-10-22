@@ -1,6 +1,6 @@
 # Approved decisions: Harvest parity review
 
-Checked: 2026-10-20. User approval establishes Horae's intended behavior, not
+Checked: 2026-10-20; AP-02's web-transport section added 2026-10-21. User approval establishes Horae's intended behavior, not
 Harvest parity. The user requested revalidation of previously approved decisions.
 This register covers all 21 Q/A entries in `spec.md`; it does not certify all
 36 requirements, 238 tasks, or runtime enforcement.
@@ -41,6 +41,11 @@ Status meanings:
 | Missing local scheduled time executes at first valid instant, FR-023 | Unverified Horae rule | Harvest server DST-gap execution; monthly clamping evidence does not settle DST |
 
 The DST-fold question remains unanswered and is not a 22nd approved decision.
+FR-023's monthly last-day clamping is not an approved decision either: it is
+reference-derived from Harvest's shipped client preview
+([monthly boundary evidence](company-locks.md#monthly-boundary-evidence--2026-10-20)),
+Harvest server behavior is unverified, and it remains pending the user's
+confirmation. No user answer is recorded for it.
 No decision is silently reversed by this review. A known conflict is nevertheless
 an open parity issue, not an accepted deviation merely because the older decision
 was approved.

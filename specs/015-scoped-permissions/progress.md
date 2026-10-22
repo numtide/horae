@@ -8,6 +8,13 @@ original work, not live processes or instructions for the current separation.
 Do not append separation progress here: the single current record is the
 separation ledger in PR #218. Historical passes do not certify extracted heads.
 
+The entries dated 2026-10-13 onward reconcile specification readiness and
+reference evidence; they are not a continuation of the historical PR separation.
+Historical contract citations `b7e730c`, `c4e83c8`, `412035d`, `d7a5a21`,
+`a7727f1`, `8c1bf9b`, `3f45b7c` and `d3a4ff3` refer to reference-branch work,
+not commits delivered on the `b675d960` master baseline. Use the dated source
+reconciliations to establish which behavior is integrated.
+
 ## 2026-10-06 — Corrected client reader verification
 
 - Previous goal turn made progress: reproduced the authorization failures and
@@ -8953,3 +8960,78 @@ historical unknown requesters cannot be assigned an identity by assumption.
 Preserve these unresolved cases in T006/T007/T014/T015/T042 and the migration
 contract. No implementation is authorized before the user's global-readiness
 gate. Checklist and task markers remain unchanged.
+
+## 2026-10-22 — Reconcile 2026-10-20/21 reference evidence
+
+Documentation baseline remains `b675d960`. The 2026-10-21 source rechecks cite
+its ancestor `109402b9`; both have identical `crates/` source, and `b675d960`
+changes only `.github/workflows/ci.yml` and `Cargo.lock`. No build or test ran
+at either commit for these entries.
+
+- **Monthly clamping (FR-023, T043)**: the 2026-10-13 clarification about a
+  missing monthly day was never answered by the user. On 2026-10-20 the shipped
+  Preferences client (`preferences-I5UQWPUO.js`, hash in
+  [company locks](contracts/company-locks.md#monthly-boundary-evidence--2026-10-20))
+  showed a last-day preview and explanation. FR-023, T043, the decision register
+  and that contract now record last-day clamping as a reference-derived target,
+  **pending the user's confirmation**. Harvest server execution is unverified.
+  No user answer is recorded or implied.
+- **DST gap (FR-023)**: the user answered on 2026-10-20 (spec Session
+  2026-10-20): run at the first valid instant after the gap. DST fold and
+  missed-run recovery remain unanswered.
+- **AP-01 (FR-028/029)**: the current permissions guide contradicts the accepted
+  eligibility rule. PM01–PM08 are planned reference discriminators and have not
+  been executed. T050–T052 remain complete as unit tests of the previous Horae
+  oracle. That is historical completion, not acceptance of the target policy;
+  the local checklist's boxes are unchanged and now point at AP-01.
+- **AP-02 (FR-015)**: the Custom Roles API documents in-place update, rename and
+  propagation, which conflicts with the web guide. CR01–CR04 remain open. The
+  approved preservation rule is unchanged, and no template was deleted.
+- **Approval probes (AC03/AC04, AC07, AC08)**: four owner-only probes in the
+  connected Harvest account created, edited, submitted, approved, withdrew,
+  moved and permanently deleted disposable time entries in an existing test
+  project: 2026-11-02 (run 2026-10-20), and November 9–11, 16–22 and 23–29 (run
+  2026-10-21). Residue: empty submitted display markers remain on November 2, on
+  Wednesday November 11, and on all seven days of each of the weeks of November
+  16–22 and 23–29. According to the cleanup records, no approval data remains in
+  those test weeks. No other person, project, expense or setting was changed.
+- **Authorization provenance**: the only record of the authorization is in the
+  git-ignored investigation ledgers under the root checkout's
+  `.scratch/harvest-reference-20261020/` and `.scratch/harvest-reference-20261021/`.
+  The October 20 ledger records user approval for a disposable-record probe on
+  the connected account. Two October 21 ledgers describe authorized entries or
+  probes without identifying the approver; the interior-withdrawal ledger has
+  no authorization wording. These investigation notes contain no verbatim
+  consent or separately dated scope statement,
+  and none exists in Git, so the consent date and scope cannot be verified
+  independently from this repository.
+- **U-AC08**: in the owner sequence, moving an entry into a Tuesday that still
+  showed an approval persisted (HTTP 200), contrary to the guide's approved-date
+  locking. The AC08 row now cross-references this. It awaits explicit
+  clarification; neither preserving coverage nor deferring has been accepted.
+- **Invoice scope (OP21–OP24/OP33)**: `contracts/invoice-scope-evidence.md`
+  defines ten planned cases for T014/T015 from the public linking guide. No
+  account data was changed. The whole-invoice managed predicate stays open under T006.
+- **M07/M08 (T007/T019)**: H01–H03 record source-level history limits. J01–J07
+  are recorded as explicitly deferred on 2026-10-20. Policy for unknown
+  requesters, retry authority and the deployment fence remains unapproved.
+- **T042**: the project-family (T068–T070) and invoice-writer (T192–T194) lock
+  prefixes are confirmed in source. The remaining hierarchy keeps T042 open.
+
+Success-criterion deltas to the 2026-10-13 table: SC-001 and SC-007 now also
+depend on AP-01 and AP-02. SC-004 depends on M07 and the deferred M08. SC-008
+depends on U-AC08, confirmation of the monthly rule, DST fold and missed runs.
+SC-009 depends on AP-02's CR01–CR04. None is met.
+
+Requirements checklist remains 12/16. No task marker, checklist box, runtime
+permission, schema, dependency or CSS changed. This entry is documentation only.
+No browser, account, test or build action was taken for it. Raw snapshots and
+downloaded client code are available only in the private `.scratch/` artifacts,
+with hashes recorded in the contracts. CDN and Help Center sources may change.
+
+Next: obtain the user's confirmation or rejection of monthly clamping, and
+clarification of U-AC08, DST fold and missed runs. Resolve AP-01, AP-02 and the
+M08 deferral before treating their tasks as ready. This record does not authorize
+policy activation, real-data migration or further account mutation. Integration
+of this documentation follows the separate delivery authorization and review/CI
+gates; it does not approve the unresolved feature requirements.

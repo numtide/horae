@@ -52,8 +52,9 @@ The editor was exited with Cancel, without changing fields or saving. This
 confirms the account limitation, not enforcement of the newer independent
 calendars, behavior for a restricted actor, or an approved change to FR-023.
 That observation alone leaves monthly missing-date, daylight-saving and downtime
-behavior unresolved. The following shipped-client evidence subsequently resolves
-the monthly product rule without claiming server execution.
+behavior unresolved. The following shipped-client evidence subsequently supplies
+a reference-derived monthly rule, pending user confirmation, without claiming
+server execution.
 
 ### Monthly boundary evidence — 2026-10-20
 
@@ -81,13 +82,15 @@ The source locations above were inspected directly, not inferred from that
 incomplete graph. Raw downloaded code and the partial evidence export remain
 local investigation artifacts, not application dependencies.
 
-Under the confirmed Harvest-parity requirement, a monthly schedule MUST retain
+Proposed target, pending user confirmation: a monthly schedule would retain
 its configured day and use the last available day in a shorter month, rather
-than skip the month. A clamped February occurrence MUST NOT change a configured
-31 into 28 or 29 for subsequent months. The cutoff remains the end of the month
-preceding the occurrence, as documented above. This supersedes the unanswered
-last-day-versus-skip question with reference evidence; it is not a fabricated
-user answer. The DST gap rule is resolved separately below; DST fold and
+than skip the month. A clamped February occurrence would not change a configured
+31 into 28 or 29 for subsequent months. The cutoff would remain the end of the
+month preceding the occurrence, as documented above. This answers the
+last-day-versus-skip question from reference evidence only; the user has not
+answered it and no user answer is recorded. **Status: pending the user's
+confirmation**; the rule is the reference-derived target, not an accepted
+decision, until confirmed. The DST gap rule is resolved separately below; DST fold and
 missed-run recovery remain unresolved. A client
 date-library implementation does not establish the server's timezone policy.
 
@@ -128,8 +131,8 @@ about Harvest's internal design:
   a human actor for system execution.
 - Persist effective organization timezone and week-start inputs. Compute the
   displayed next run and applied cutoff through one shared calculation, with
-  an injected clock for tests. Use monthly clamping and the approved DST gap
-  contract above; resolve DST folds and missed-run behavior before implementation. Shipped preview
+  an injected clock for tests. Use the approved DST gap contract above and
+  monthly clamping once the user confirms it; resolve DST folds and missed-run behavior before implementation. Shipped preview
   code does not establish those server algorithms.
 - Serialize manual changes, due execution, module changes and entry mutations.
   A worker rechecks current enabled/configuration state, not stale admission
@@ -189,7 +192,8 @@ Use disposable fixtures and production helpers with an injected clock.
 
 Monthly acceptance examples for T043 use company timezone UTC and a scheduled
 time of 12:00, with the clock before that month's occurrence. They specify
-Horae's expected results from the reference rule, not completed Harvest tests:
+Horae's expected results from the reference rule, pending the user's
+confirmation above, not completed Harvest tests:
 
 | Configured day | Occurrence month | Expected occurrence | Inclusive cutoff |
 | --- | --- | --- | --- |

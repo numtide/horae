@@ -119,8 +119,9 @@ deleting, reparenting, resetting revisions or normalizing financial values.
 
 ### M07 recoverable history and invoice transitions — 2026-10-20
 
-Source review at `109402b921939a8043eeb3eed29718561c693936` identifies
-limits beyond missing actor/time fields. These are code paths, not findings
+Source review at `109402b921939a8043eeb3eed29718561c693936` (identical
+`crates/` source to baseline `b675d960`, which changes only CI and
+`Cargo.lock`; this also applies to M08 below) identifies limits beyond missing actor/time fields. These are code paths, not findings
 from the installation or newly executed tests:
 
 - `approvals::reopen_period` deletes the approval row; a later submission can

@@ -11,6 +11,10 @@ Read with [data-model](../data-model.md), [migration](migration.md) and the
 [current entry-point inventory](current-access.md) and
 [operation matrix](operation-matrix.md).
 
+The historical `b7e730c`, `c4e83c8`, `412035d` and `d7a5a21` revisions cited here
+belong to reference branch `feat/scoped-permissions`, not the delivered master baseline. Dated source
+reconciliations below distinguish their findings from the integrated code.
+
 ## One authorization serialization boundary
 
 Use the existing organization row as the first lock for protected operations:
@@ -32,7 +36,9 @@ Even non-permission branding/preferences writes on the organization row must
 start exclusive to avoid implicitly upgrading that gate. This lock choice does
 not itself require Administrator permission; the operation matrix decides that.
 
-Source reconciliation at `109402b9` on 2026-10-21 confirms that
+Source reconciliation at `109402b9` on 2026-10-21 (an ancestor of baseline
+`b675d960` with identical `crates/` source; the baseline changes only CI and
+`Cargo.lock`) confirms that
 `users::begin_user_access_change`, project editing/finalization and the three
 invoice writers already acquire organization before actor locks. T068–T070 and
 T192–T194 below describe those completed increments; their earlier inversions

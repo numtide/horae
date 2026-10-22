@@ -1,7 +1,7 @@
 # Pure person-management prerequisites
 
-Status: implemented and unit-tested under T050–T052, not runtime authorization or
-complete US2. It refines user-approved FR-028/029/031 using the existing catalog.
+Status: implemented and unit-tested under T050–T052 (historical completion; see
+AP-01 below), not runtime authorization, target-policy acceptance or complete US2. It refines user-approved FR-028/029/031 using the existing catalog.
 FR-027 remains the independent Administrator-only writer boundary.
 
 Parity review, 2026-10-20: [AP-01](approved-decision-review.md#ap-01--person-assignment-eligibility-high)
