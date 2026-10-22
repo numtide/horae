@@ -18,9 +18,9 @@ through reload and preserves project content. Dismiss does not write.
 - [x] T003 [US1] Add missing-action, direct keyboard Undo, pending duplicate guard,
   dismissal and reload assertions in `crates/horae/tests/browser/project-detail-header.cjs`;
   observe the baseline failure before production changes.
-- [ ] T004 [US1] Add opt-in action rendering in `crates/horae/src/components/toast.rs`,
+- [x] T004 [US1] Add opt-in action rendering in `crates/horae/src/components/toast.rs`,
   preserving actionless markup and shared tokens.
-- [ ] T005 [US1] Connect archive-only Undo and direct authorized reactivation in
+- [x] T005 [US1] Connect archive-only Undo and direct authorized reactivation in
   `crates/horae/src/pages/projects.rs`, with transient typed state and focus recovery.
 
 ## US2 — Failure and authority recovery (P1)
@@ -31,7 +31,7 @@ denial cannot write or leave stale details/toasts; project navigation isolates s
 - [x] T006 [US2] Extend `crates/horae/tests/browser/project-detail-header.cjs` with
   retryable failure, lost response after commit, authority loss and project-navigation
   cases, preserving existing real-server and data-isolation assertions.
-- [ ] T007 [US2] Complete visible retry and access-loss handling in
+- [x] T007 [US2] Complete visible retry and access-loss handling in
   `crates/horae/src/pages/projects.rs`; no error may hide inside a closed modal.
 
 ## Cross-cutting delivery
@@ -39,7 +39,7 @@ denial cannot write or leave stale details/toasts; project navigation isolates s
 - [ ] T008 Verify keyboard, themes, 320/390/768/1440, enlarged text and shared
   actionless notices; record actual artifact evidence and full Nix/WASM/format
   results in `specs/004-project-dashboard/archive-undo/plan.md`.
-- [ ] T009 Resolve two independent reviews and Spec Kit analysis; update H101/H102
+- [x] T009 Resolve two independent reviews and Spec Kit analysis; update H101/H102
   delivery and qualify the H103 conflict in `specs/004-project-dashboard/header-increment.md`.
 - [ ] T010 Publish and protected-merge only with exact-head required CI green;
   record PR and integrated verification in `specs/004-project-dashboard/archive-undo/plan.md`.

@@ -1,6 +1,6 @@
 # Implementation plan: undo project archive
 
-Branch `feat/project-archive-undo`, based on `8b3eda6b` (#299). Scope:
+Branch `feat/project-archive-undo`, originally based on `8b3eda6b` (#299). Scope:
 [spec.md](spec.md), existing H102 only. No broader dashboard completion.
 
 ## Technical context and approach
@@ -119,6 +119,8 @@ After a committed write whose reply is lost, the loaded header may still say
 Archived until the successful retry refreshes it. The error does not assert that
 the write failed. Dismissing a notice retains the shared component's existing
 focus-to-body behavior; this increment does not change all toast consumers.
+Clicking a pending, pointer-disabled action can instead focus `main#app-main`;
+recovery deliberately preserves that target, also used by Skip to content.
 The short failure message uses Harvest's "restore" wording while the existing
 menu/success use Reactivate; this bounded copy difference is accepted to keep the
 enlarged failure notice readable, not a new lifecycle state.
@@ -154,16 +156,29 @@ loaded. Forty-eight archive/pending/error cases covered both themes,
 320/390/768/1440px and 100%/200% root text; the toast and button contents fit in
 all cases, including 320×568. Held real requests were aborted and retried; no
 response was fabricated. At the narrowest enlarged size the icon occupies its
-own line and the disabled progress label wraps, both remaining readable.
+own line and the disabled progress label wraps. The disabled label retains
+the shared reduced opacity and is dim, especially in the dark theme. At
+320×568/200% the notice is tall (about 369px pending, 418px failed) and covers
+much of the underlying content until dismissed. The existing bottom-right stack
+also overlays content on desktop; this increment does not reposition all toasts.
 
 Actual Tab traversal reached Undo eleven stops after Actions in the seeded
 detail, at desktop and 320px/200%; this is reachable, not a short keyboard path.
 Keyboard Undo succeeded. Dismiss during a held Undo followed by an aborted
 request restored the visible error and retry, and retry succeeded. Reactivated
 feedback has no inverse action. Three actionless gallery notices retained their
-original classes and 280×46.33px geometry in both themes. Importer comparison,
-the corrected focused check, full automation and final review remain pending.
+original classes and 280×46.33px geometry in both themes. A real local importer
+dry-run with one unmatched-user row produced the same actionless notice as the
+baseline, also 280×46.33px in both themes; keyboard Dismiss worked. The synthetic
+file was supplied through `DataTransfer` because the cross-OS file-path upload
+was unavailable. No import was committed and no real-account data was touched.
 These are emulated viewports/root text, not physical devices or native zoom.
+
+Focused run 50307 passed every header and Undo scenario using tests `78e1c51c`
+and the existing `h21r4` binary: production was unchanged, so no replacement
+binary is claimed for this test-only revision. Both independent reviews accepted
+the corrected source, split tests and native visuals with the explicit limits.
+Full checks and exact-head CI remain gates before publication/merge.
 
 ## Constitution check
 
@@ -179,6 +194,12 @@ items passing; no product question. Plan setup executed for this bounded path.
 T002 recorded above. T003/T006 baseline red observed: against the `8b3eda6b`
 header and backend, the existing header, navigation and sixteen theme/size checks
 passed and the first archive failed only on the missing Undo. T004/T005/T007 are
-implemented (optional `Toast` action; one status writer shared by confirmation and
-Undo, failures shown in the toast for Undo) and await green verification.
-Independent reviews and delivery are pending.
+implemented and verified by the focused checks and native acceptance (optional
+`Toast` action; one writer shared by confirmation and Undo, visible retry).
+Spec Kit reanalysis covers all eight requirements/outcomes with ten tasks and no
+unmapped task or constitutional conflict. The pending-dismissal exception was
+clarified consistently with the existing retry requirement and test.
+Independent reviews are resolved, conditional on full checks. Delivery remains
+pending. Integrate the independently reviewed editor reflow before the complete
+combined run; after its protected merge, preserve the verified source tree while
+rebasing onto the actual master commit. Exact-head required CI is still mandatory.
