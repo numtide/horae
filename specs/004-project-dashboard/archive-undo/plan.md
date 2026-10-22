@@ -78,6 +78,31 @@ prototype's `undoArchive` simply hides the toast, while this view keeps the
 existing "Project reactivated." success notice after an Undo succeeds, exactly as
 after a confirmed Reactivate. No new product behavior is introduced for it.
 
+Observed red after the review additions (`e2767535`, focused run compiled native
+and WASM): at 320px/200% the action toast's message measured 108px against a
+133px longest word, and the native package measured 101.7px; separately, a held
+Undo, keyboard Dismiss and aborted request left zero toasts with the project
+still archived. Correction: an Undo failure restores the archive notice with its
+retry; the action uses `text-sm font-semibold`; and only an action toast wraps,
+with its message `flex-none max-w-full` so it keeps its text width. Actionless
+toast markup is unchanged. The pending label `Updating project…` may wrap inside
+its button at 320px/200% rather than being shortened.
+
+A DOM-only diagnostic of that correction found the longer failure text above the
+viewport at 320×568/200%, and the pending action wider than its content column.
+The bounded correction uses existing `px-1 max-w-full` on the action and the
+truthful, shorter "Could not confirm restore. Retry Undo." message (a lost reply
+does not establish whether the write committed). The test now requires the entire
+pending and failure toast, including button contents, to fit that short viewport.
+This diagnostic is not acceptance of the rebuilt artifact; those gates remain
+pending below.
+
+Known limits: a successful Undo is a real reactivation and emits the ordinary
+`ProjectReactivated` event; leaving the project while Undo is pending may let the
+write finish with no notice anywhere (the detail then shows the persisted
+status); and a refresh that fails or loses access discards the transient Undo,
+leaving the normal Reactivate action as the recovery path.
+
 Run focused browser checks before the complete flake checks:
 
 ```sh

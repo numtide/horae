@@ -463,7 +463,7 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     // xmin changes only when the row is rewritten, so it proves an idempotent retry wrote nothing.
     const rowVersion = () => sql(`SELECT xmin FROM projects WHERE id='${project}'`);
     const content = persisted();
-    const failure = page.getByText('Could not update project status');
+    const failure = page.getByText('Could not confirm restore. Retry Undo.', { exact: true });
     const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const archive = async () => {
       await open('Archive');
@@ -534,6 +534,22 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
 
     // Dismissing a pending Undo must not hide its later failure, or the archive has no visible retry.
     await archive();
+    // The whole toast and each action's content stay on screen at a short 320px with 200% text.
+    const toastFits = async state => {
+      await expect(page.locator('.toast')).toBeInViewport({ ratio: 1 });
+      const spilled = await page.locator('.toast').evaluate(toast => {
+        const style = getComputedStyle(toast), box = toast.getBoundingClientRect();
+        const left = box.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+        const right = box.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
+        return [...toast.querySelectorAll('button')].filter(button => {
+          const r = button.getBoundingClientRect();
+          return r.left < left - 1 || r.right > right + 1 || button.scrollWidth > button.clientWidth + 1;
+        }).map(button => button.textContent.trim() || button.getAttribute('aria-label'));
+      });
+      assert.deepEqual(spilled, [], `320x568/200% ${state}: toast actions spill`);
+    };
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
     let failHeld;
     const dismissHeld = new Promise(resolve => { failHeld = resolve; });
     await page.route('**/api/set_project_active*', async route => { await dismissHeld; await route.abort(); }, { times: 1 });
@@ -542,6 +558,7 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
       await undo.focus();
       await page.keyboard.press('Enter');
       await expect(toastAction('Updating project…')).toBeDisabled();
+      await toastFits('pending');
       await toastAction('Dismiss').focus();
       await page.keyboard.press('Enter');
       failHeld();
@@ -552,6 +569,7 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await expect(dialog).toBeHidden();
     await expect(failure).toBeVisible();
     await expect(undo).toBeEnabled();
+    await toastFits('failure');
     assert.equal(active(), 'f');
     const recovered = page.waitForResponse(isStatusWrite);
     await undo.focus();
@@ -561,6 +579,8 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await expect(undo).toHaveCount(0);
     assert.equal(active(), 't');
     assert.equal(persisted(), content);
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.setViewportSize({ width: 1440, height: 900 });
     console.log('PASS: a pending Undo dismissed before it fails still shows a retryable failure');
 
     await archive();

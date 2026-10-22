@@ -20,22 +20,28 @@ pub fn Toast(
     action_busy: bool,
     #[props(default)] onaction: EventHandler<MouseEvent>,
 ) -> Element {
-    // An action can make the toast too wide for narrow screens and large text.
-    let wrap = if action_label.is_empty() {
-        ""
+    // An action can make the toast too wide for narrow screens and large text:
+    // wrap instead, keeping the message at its text width rather than letting
+    // the zero flex basis squeeze it into a letter-wide column.
+    let (wrap, message_class) = if action_label.is_empty() {
+        ("", "toast-msg")
     } else {
-        " flex-wrap"
+        (" flex-wrap", "toast-msg flex-none max-w-full")
     };
     rsx! {
         div { class: "toast {variant}{wrap}", role: "status",
             if !icon.is_empty() {
                 span { "{icon}" }
             }
-            span { class: "toast-msg", "{message}" }
+            span { class: "{message_class}", "{message}" }
             if !action_label.is_empty() {
                 button {
                     r#type: "button",
-                    class: if action_busy { "btn btn-ghost btn-sm is-disabled" } else { "btn btn-ghost btn-sm" },
+                    class: if action_busy {
+                        "btn btn-ghost btn-sm px-1 max-w-full text-sm font-semibold is-disabled"
+                    } else {
+                        "btn btn-ghost btn-sm px-1 max-w-full text-sm font-semibold"
+                    },
                     "aria-disabled": action_busy,
                     onclick: move |e| if !action_busy { onaction.call(e) },
                     "{action_label}"

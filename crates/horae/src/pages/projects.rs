@@ -1159,7 +1159,11 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                     status_saved.set(None);
                     access_lost.set(true);
                 }
-                Err(_) if undoing => undo_failed.set(true),
+                // A Dismiss while Undo was pending must not hide its retry.
+                Err(_) if undoing => {
+                    status_saved.set(Some(false));
+                    undo_failed.set(true);
+                }
                 Err(_) => status_failed.set(true),
             }
             status_busy.set(false);
@@ -1198,11 +1202,8 @@ fn ProjectDetailContent(id: Uuid) -> Element {
         _ => "",
     };
     let (status_message, status_variant, status_icon) = match status_saved() {
-        _ if undo_failed() => (
-            "Could not update project status. You can retry Undo safely.",
-            "danger",
-            "!",
-        ),
+        // The response may be lost after the write committed, so claim no outcome.
+        _ if undo_failed() => ("Could not confirm restore. Retry Undo.", "danger", "!"),
         Some(true) => ("Project reactivated.", "success", "✓"),
         _ => ("Project archived.", "success", "✓"),
     };

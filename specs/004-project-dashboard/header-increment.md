@@ -21,7 +21,7 @@ increment reaches. Requirement IDs below are #208's (`feat/project-dashboard`,
 | #208 requirement | Status | This increment | Remaining |
 |---|---|---|---|
 | FR-001 identity | Partial | Client (link when the viewer may open it), `[code] name`, type, currency, Archived state, Back to Projects; saved dates, tags and administrator notes under "Project information". | Active Projects navigation highlighting is not verified here. |
-| FR-014 edit | Partial | Edit project uses the shared `EditProject` route under the existing `can_edit` affordance, with a decorative pencil glyph. | H101 `return_to`; "Set up a budget". |
+| FR-014 edit | Partial | Edit project uses the shared `EditProject` route under the existing `can_edit` affordance, with a decorative pencil glyph; H101 contextual return delivered in #299. | "Set up a budget". |
 | FR-015 archive/reactivate | **Incomplete** | Shared Actions menu, native confirmation, pending/duplicate protection, retryable transport errors, success toast, persisted reload, focus return. | H102 Undo; H103 archived-edit lifecycle (P02). |
 | FR-017 current authority | Partial | Affordances come from the current read; status writes recheck actor, role and policy zero in their own transaction; denied writes hide the loaded project behind the bound Retry. | Status changes under policy one need a reviewed canonical capability (not in scope). |
 | FR-018 states | Delivered | Loading, unavailable and Retry keep the existing stale-resource guards; Back is available in every state. Denied reloads clear success feedback and restore recovery focus. | — |
@@ -57,10 +57,15 @@ one and unknown policies are rejected; no permission is added or activated.
 
 ## Gaps reported, not changed
 
-- Harvest blocks editing while a project is archived and restores first
+- Harvest's documentation says to restore an archived project before editing
   ([Archiving, restoring and deleting projects](https://support.getharvest.com/hc/en-us/articles/360048686911-Archiving-restoring-and-deleting-projects),
-  verified 2026-10-22). Horae's editor and `can_edit` still allow editing archived
-  projects (P02). This increment claims no archived-edit parity.
+  read 2026-10-22). A read-only browser check on an existing archived project
+  showed no header Edit action, but its budget/rate links opened an enabled,
+  populated editor. No save was attempted. Thus the archived write behavior is
+  unverified and the documentation alone does not establish a route prohibition.
+  Horae's editor and `can_edit` still allow archived projects (P02). H103 must
+  reconcile the evidence before imposing a new restriction; this increment
+  claims no archived-edit parity.
 
 ## Plan
 
@@ -161,14 +166,19 @@ the protected queue on 2026-10-22 at 02:53 UTC, as `5e555351`. Both mandatory
 Nixbot checks passed on published head `029b0d79`; build 683 completed all 22
 attributes, including the ARM browser and NixOS checks.
 
-### Pending, outside this increment
+### Follow-up increments
 
-- [ ] H101 FR-014: Edit project carries `return_to=/projects/<id>` and the editor
+- [x] H101 FR-014: Edit project carries `return_to=/projects/<id>` and the editor
   returns there on save and cancel, as Harvest does; test with browser history.
-  Implemented and locally verified in [the return increment](edit-return-increment.md);
-  its exact-head CI and protected delivery remain pending.
+  [PR #299](https://github.com/numtide/horae/pull/299) merged through the protected
+  queue at 05:12 UTC on 2026-10-22 as `8b3eda6b`, after both reviews and required
+  checks on head `25390256` (Nixbot build 684). Local verification is recorded in
+  [the return increment](edit-return-increment.md).
 - [ ] H102 FR-015: "Project archived" toast offers Undo that reactivates through
   the same authorized write, following the handoff's direct Undo action; test
   pending, failure and lost authority without a second confirmation dialog.
-- [ ] H103 P02: implement archived-project editing restrictions (Harvest: restore
-  first) across `can_edit`, the editor and its server write.
+  Implementation and review corrections are in [the bounded Undo package](archive-undo/plan.md);
+  final runtime checks, reviews and protected delivery remain pending.
+- [ ] H103 P02: resolve the archived-editor documentation/runtime conflict above
+  before deciding whether restrictions belong in `can_edit`, the editor and its
+  server write. Enabled GET controls are not proof that an archived save succeeds.
