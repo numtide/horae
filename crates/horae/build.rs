@@ -178,6 +178,7 @@ fn families() -> Vec<Family> {
                 ("size-em", "width: 1em; height: 1em"),
                 ("min-w-0", "min-width: 0"),
                 ("min-h-0", "min-height: 0"),
+                ("min-h-control", "min-height: var(--height-form-control)"),
                 ("max-w-project-form", "max-width: var(--width-project-form)"),
                 ("max-w-sm", "max-width: 24rem"),
                 ("max-w-md", "max-width: 28rem"),
@@ -358,10 +359,17 @@ const RESPONSIVE: &[(&str, &str)] = &[
     ("flex", "display: flex"),
     ("flex-row", "flex-direction: row"),
     ("flex-col", "flex-direction: column"),
+    ("p-6", "padding: var(--space-6)"),
     (
         "px-6",
         "padding-left: var(--space-6); padding-right: var(--space-6)",
     ),
+    (
+        "px-3",
+        "padding-left: var(--space-3); padding-right: var(--space-3)",
+    ),
+    ("border", "border: 1px solid var(--color-border)"),
+    ("bg-secondary", "background: var(--color-bg-secondary)"),
     (
         "grid-cols-2",
         "grid-template-columns: repeat(2, minmax(0, 1fr))",
