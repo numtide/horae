@@ -96,6 +96,15 @@ creation uniqueness for Horae (FR-032). The retained current editor's `vi` handl
 trims the name and rejects blank input before POST; duplicate checking is left to
 the server. That source observation does not prove Harvest's case comparison.
 
+Revalidated 2026-10-20: the [Custom Roles API](https://help.getharvest.com/api-v2/roles-api/roles/custom-roles/)
+explicitly documents case-insensitive name uniqueness on creation and update.
+FR-032 therefore has documentary support beyond lookup normalization, without
+establishing web persistence or exact Unicode equivalence. Its update propagation,
+delete reset and writer authority differ from the earlier web reference;
+[AP-02](approved-decision-review.md#ap-02--custom-role-api-and-web-lifecycle-conflict-high)
+records those unresolved surface differences. The older observation of no
+in-place update in the inspected web editor is not an assertion of API absence.
+
 The current API defines `permissions_profile` as a name matching the person's
 current permissions, and explains its lossy `access_roles` representation. It
 does not define an immutable applied-template ID. Horae therefore stores explicit

@@ -41,8 +41,10 @@ it or implement its deferred contacts, deletion or bulk actions here.
 
 ## Remaining connected surface
 
-The current `list_clients` returns the full client DTO to Clients, legacy Reports
-and two invoice selectors. It cannot become a general workflow identity API:
+At the original baseline, `list_clients` returned the full client DTO to Clients,
+legacy Reports and two invoice consumers. Rechecked at `b675d960` on 2026-10-13:
+Clients now uses the canonical page readers described below; legacy Reports and
+invoice list/detail still call `list_clients`. It cannot become a general workflow identity API:
 addresses and tax IDs need catalog or explicitly authorized billing context.
 Canonical Reports already uses its scoped source; invoice/project discovery
 requires its own verified workflow predicate and minimal projection.

@@ -3,6 +3,11 @@
 This checklist permits T050–T052 only. It is not runtime acceptance or completion
 of the full feature's requirements checklist.
 
+Parity review, 2026-10-20: [AP-01](../contracts/approved-decision-review.md#ap-01--person-assignment-eligibility-high)
+documents a Harvest counterexample to FR-028 that also affects FR-029. The items
+below remain checked as the historical permission for T050–T052; they do not
+accept FR-028/029 as the target policy or close AP-01.
+
 - [x] FR-028/029/031 are explicitly approved; do not ask those choices again.
 - [x] Existing catalog and strict restoration are complete (T027–T029, T047–T049).
 - [x] [Contract](../contracts/person-management-validation.md) maps exact current grants and self-link cases without guessing operation predicates.

@@ -8,6 +8,13 @@ original work, not live processes or instructions for the current separation.
 Do not append separation progress here: the single current record is the
 separation ledger in PR #218. Historical passes do not certify extracted heads.
 
+The entries dated 2026-10-13 onward reconcile specification readiness and
+reference evidence; they are not a continuation of the historical PR separation.
+Historical contract citations `b7e730c`, `c4e83c8`, `412035d`, `d7a5a21`,
+`a7727f1`, `8c1bf9b`, `3f45b7c` and `d3a4ff3` refer to reference-branch work,
+not commits delivered on the `b675d960` master baseline. Use the dated source
+reconciliations to establish which behavior is integrated.
+
 ## 2026-10-06 — Corrected client reader verification
 
 - Previous goal turn made progress: reproduced the authorization failures and
@@ -8868,3 +8875,163 @@ revision triggers. Person-management additions still await the existing
 active-responsible-person clarification, which is not answered by this repair.
 Full authenticated enforcement, approvals, UI, migration and acceptance remain
 required. The goal remains active, not complete or blocked.
+
+## 2026-10-13 — Global readiness before client workflow integration
+
+Current source baseline: `b675d960`. The user explicitly requires resolving the
+global specification checklist before starting the new client-workflow reader
+increment. Earlier permissions to execute independent increments do not waive
+this instruction. Documentation is isolated on `docs/permission-readiness`;
+implementation remains deferred. Reference PR #212 is not the delivery branch.
+
+- Spec Kit analysis found source-inventory drift: 16 of the 104 registered
+  server-function definitions were not named in the operation matrix. The
+  matrix now maps them to existing operations and contracts, without inventing
+  grants or claiming their authorization is verified. A repeat name-inventory
+  check reports 104 definitions and zero unnamed symbols. This excludes
+  alternate HTTP routes, workers, operators and implementation acceptance.
+- Client documentation now distinguishes PR #290's delivered list/detail
+  readers from the remaining legacy report, invoice and project/editor readers.
+  Client writes, workflow identities and whole-invoice predicates remain open.
+- Harvest owner Preferences were inspected through the browser and exited with
+  Cancel; no settings or data were changed. This account still requires a
+  deadline for the automatic lock/submission controls. Both public lock articles
+  were re-read through the Help Center API; they retain the newer independent
+  schedule description and do not settle month-end, DST or downtime cases.
+- One clarification is awaiting the user: whether a monthly occurrence whose
+  selected day is absent should use the month's last day or skip the month.
+  Neither result is recorded as approved or observed Harvest behavior.
+
+### Success-criterion coverage audit
+
+The table identifies verification ownership and remaining specification gaps,
+not passing runtime outcomes. T020 is the final integration gate, not a
+substitute for precise cases in the owning tasks.
+
+| Criterion | Verification ownership | Remaining readiness condition |
+| --- | --- | --- |
+| SC-001: six-profile allow/deny matrix | T006, T010, T014, T020; operation matrix and reference profiles | Close unresolved operation predicates and bind each allowed/denied case to its concrete test and delivery paths. Naming every server function does not satisfy this. |
+| SC-002: no unauthorized payloads | T012, T014, T020; resource, financial and export contracts | Define mixed-invoice, receipt, financial-report and operational-history projections before negative-payload expectations can be complete. |
+| SC-003: current authority and last administrator | T010, T012, T014, T042, T020; permission state and command contracts | Reconcile the complete cross-command resource/trigger/FK order and remaining approval/expense writers; earlier command-specific race tests are not global coverage. |
+| SC-004: preserved-data transition | T007, T019, T020; migration and preflight contracts | Approve concrete access mappings, historical approval conversion, unknown-requester handling and recovery outcomes; diagnostic counts alone are not migration acceptance. |
+| SC-005: consistent accessible Settings/Workspace | T018, T020; own-permission/editor contracts and dependent-spec register | Bind both actual surfaces to effective-access explanations and the full viewport/theme/keyboard matrix. Separate tested editor increments from full page delivery. |
+| SC-006: cross-surface regressions | T014, T015, T019, T020; current-access and operation inventories | Reconcile alternate routes, imports, authentication, workers and plugins with the current baseline and concrete preservation cases. |
+| SC-007: parity, governance and migration resolved | T006–T009, T020; reference evidence, migration and dependent specs | Open product predicates, unapproved mappings and the unadopted constitution amendment remain blockers; document-only inventory fixes do not close them. |
+| SC-008: partial approval and locks | T012, T013, T043–T046, T020; approval coverage/visibility and company locks | Resolve empty/future-project coverage, interior withdrawal state, custom self-approval/withdrawal, empty submission and scheduling boundaries before selecting final storage and expected outcomes. |
+| SC-009: custom-profile lifecycle | T016, T017, T020; profile application, templates and permission editor | Verify full lifecycle and unaffected-assignee scenarios against the delivered command/consumer set; do not infer template rename/update/propagation from an unverified reference hypothesis. |
+
+Checklist remains 12/16. The coverage table exposes work still needed; it does
+not make the incomplete acceptance-coverage item pass. No task marker, runtime
+permission, database, schema, dependency or CSS changed. Contract formatting
+passed through `nix fmt` and the diff whitespace check passed; no runtime tests
+were run for this documentary inventory.
+
+Next: incorporate the pending clarification when answered; continue independent
+alternate-route inventory and FR-to-concrete-case reconciliation. Resolve the
+remaining product and migration contracts, refine their plan/tasks, then repeat
+the global analysis and adversarial review before reconsidering implementation.
+Do not repeatedly probe the same account controls or rerun runtime suites for
+unchanged code. No policy activation, real-data migration or merge is authorized.
+
+### Alternate delivery inventory
+
+- Reconciled all 34 distinct explicit HTTP paths registered across `main.rs`,
+  authentication, Harvest compatibility/callback and import server functions.
+  This includes mutually exclusive authentication branches, not 34 routes
+  necessarily active together. Each path now has a matrix owner; the repeated
+  source-to-document path check reports no missing path.
+- The import functions use seven explicit `dioxus_fullstack::post` attributes.
+  Together with the 104 `server` definitions, these give 111 function definitions
+  across those two forms. The earlier 104 count was not total HTTP coverage.
+  Grouped CSV/XLSX exports are included independently from detailed exports.
+- Updated the historical access inventory instead of treating its September
+  claims as the current application: narrow session identity, canonical client
+  readers, captured export authority and original import requester storage are
+  already present. Invoice canonical scope, worker requester reauthorization,
+  custom budget recipients and widget consumer authority remain distinct gates.
+- Traced startup timer/budget, import, outbox and mail workers; remote session
+  commands remain separate from local operator commands. No worker, real-data
+  query, import, mail delivery or operator mutation was executed for this review.
+
+The import worker finding is contract reconciliation, not a new privilege rule:
+FR-007/010 already require current authority, and T086–T088 explicitly delivered
+provenance only. `ClaimedJob` and `execute` still use the lease-oriented context;
+historical unknown requesters cannot be assigned an identity by assumption.
+Preserve these unresolved cases in T006/T007/T014/T015/T042 and the migration
+contract. No implementation is authorized before the user's global-readiness
+gate. Checklist and task markers remain unchanged.
+
+## 2026-10-22 — Reconcile 2026-10-20/21 reference evidence
+
+Documentation baseline remains `b675d960`. The 2026-10-21 source rechecks cite
+its ancestor `109402b9`; both have identical `crates/` source, and `b675d960`
+changes only `.github/workflows/ci.yml` and `Cargo.lock`. No build or test ran
+at either commit for these entries.
+
+- **Monthly clamping (FR-023, T043)**: the 2026-10-13 clarification about a
+  missing monthly day was never answered by the user. On 2026-10-20 the shipped
+  Preferences client (`preferences-I5UQWPUO.js`, hash in
+  [company locks](contracts/company-locks.md#monthly-boundary-evidence--2026-10-20))
+  showed a last-day preview and explanation. FR-023, T043, the decision register
+  and that contract now record last-day clamping as a reference-derived target,
+  **pending the user's confirmation**. Harvest server execution is unverified.
+  No user answer is recorded or implied.
+- **DST gap (FR-023)**: the user answered on 2026-10-20 (spec Session
+  2026-10-20): run at the first valid instant after the gap. DST fold and
+  missed-run recovery remain unanswered.
+- **AP-01 (FR-028/029)**: the current permissions guide contradicts the accepted
+  eligibility rule. PM01–PM08 are planned reference discriminators and have not
+  been executed. T050–T052 remain complete as unit tests of the previous Horae
+  oracle. That is historical completion, not acceptance of the target policy;
+  the local checklist's boxes are unchanged and now point at AP-01.
+- **AP-02 (FR-015)**: the Custom Roles API documents in-place update, rename and
+  propagation, which conflicts with the web guide. CR01–CR04 remain open. The
+  approved preservation rule is unchanged, and no template was deleted.
+- **Approval probes (AC03/AC04, AC07, AC08)**: four owner-only probes in the
+  connected Harvest account created, edited, submitted, approved, withdrew,
+  moved and permanently deleted disposable time entries in an existing test
+  project: 2026-11-02 (run 2026-10-20), and November 9–11, 16–22 and 23–29 (run
+  2026-10-21). Residue: empty submitted display markers remain on November 2, on
+  Wednesday November 11, and on all seven days of each of the weeks of November
+  16–22 and 23–29. According to the cleanup records, no approval data remains in
+  those test weeks. No other person, project, expense or setting was changed.
+- **Authorization provenance**: the only record of the authorization is in the
+  git-ignored investigation ledgers under the root checkout's
+  `.scratch/harvest-reference-20261020/` and `.scratch/harvest-reference-20261021/`.
+  The October 20 ledger records user approval for a disposable-record probe on
+  the connected account. Two October 21 ledgers describe authorized entries or
+  probes without identifying the approver; the interior-withdrawal ledger has
+  no authorization wording. These investigation notes contain no verbatim
+  consent or separately dated scope statement,
+  and none exists in Git, so the consent date and scope cannot be verified
+  independently from this repository.
+- **U-AC08**: in the owner sequence, moving an entry into a Tuesday that still
+  showed an approval persisted (HTTP 200), contrary to the guide's approved-date
+  locking. The AC08 row now cross-references this. It awaits explicit
+  clarification; neither preserving coverage nor deferring has been accepted.
+- **Invoice scope (OP21–OP24/OP33)**: `contracts/invoice-scope-evidence.md`
+  defines ten planned cases for T014/T015 from the public linking guide. No
+  account data was changed. The whole-invoice managed predicate stays open under T006.
+- **M07/M08 (T007/T019)**: H01–H03 record source-level history limits. J01–J07
+  are recorded as explicitly deferred on 2026-10-20. Policy for unknown
+  requesters, retry authority and the deployment fence remains unapproved.
+- **T042**: the project-family (T068–T070) and invoice-writer (T192–T194) lock
+  prefixes are confirmed in source. The remaining hierarchy keeps T042 open.
+
+Success-criterion deltas to the 2026-10-13 table: SC-001 and SC-007 now also
+depend on AP-01 and AP-02. SC-004 depends on M07 and the deferred M08. SC-008
+depends on U-AC08, confirmation of the monthly rule, DST fold and missed runs.
+SC-009 depends on AP-02's CR01–CR04. None is met.
+
+Requirements checklist remains 12/16. No task marker, checklist box, runtime
+permission, schema, dependency or CSS changed. This entry is documentation only.
+No browser, account, test or build action was taken for it. Raw snapshots and
+downloaded client code are available only in the private `.scratch/` artifacts,
+with hashes recorded in the contracts. CDN and Help Center sources may change.
+
+Next: obtain the user's confirmation or rejection of monthly clamping, and
+clarification of U-AC08, DST fold and missed runs. Resolve AP-01, AP-02 and the
+M08 deferral before treating their tasks as ready. This record does not authorize
+policy activation, real-data migration or further account mutation. Integration
+of this documentation follows the separate delivery authorization and review/CI
+gates; it does not approve the unresolved feature requirements.

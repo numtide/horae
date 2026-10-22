@@ -373,12 +373,16 @@ review described under T035/T036; no database work is unlocked by these pure tes
 - [x] T034 Adversarially review the proposal against current writers, record findings/gates in `specs/015-scoped-permissions/research.md` and `progress.md`, and refine dependent tests without marking T006–T009 complete.
 - [ ] T042 Complete the cross-command resource hierarchy and trigger/FK lock inventory in `specs/015-scoped-permissions/contracts/permission-state.md` from the finalized operation matrix before closing T009 or executing T039/T040.
 
-Partial T042 evidence now identifies the current writer orders, parent-writing
+Partial T042 evidence records baseline writer orders, parent-writing
 triggers/cascades, READ ONLY incompatibility and network waits in inline imports.
 The follow-up source inventory covers credential/identity/job-maintenance paths
 and identifies the legacy-report converter's job-to-organization FK inversion.
-Validate the corrected candidate hierarchy and maintenance exceptions; do not
-mark it complete from source inspection alone.
+Read these findings with the contract's dated reconciliations: T068–T070 already
+established the project-family prefix and T192–T194 the invoice-writer prefix,
+rechecked at `109402b9` on 2026-10-21. That ancestor has the same `crates/`
+source as baseline `b675d960`, which changes only CI and `Cargo.lock`. Do not reopen those completed increments
+from the historical inventory. Validate the remaining candidate hierarchy and
+maintenance exceptions; do not mark T042 complete from source inspection alone.
 
 Inventory evidence is in `contracts/current-access.md`; browser limitations and unresolved reference cases are in `contracts/harvest-evidence.md`. Neither T006 nor T007 is complete until the remaining verification/migration review is done.
 
@@ -388,6 +392,13 @@ Inventory evidence is in `contracts/current-access.md`; browser limitations and 
 inspected at `b7e730c` and additional delivery surfaces. Its C/U cells still need
 resolved predicates and executable allowed/denied cases; coverage alone does not
 complete T006.
+
+For person-assignment eligibility, T006 must resolve
+[PM01–PM08](contracts/person-management-validation.md#harvest-eligibility-discriminators--2026-10-20)
+before correcting the affected FR-028/029 oracle or handing it to T012/T013.
+Distinguish documented outcomes from unexecuted reference probes; historical
+T050–T052 results do not close AP-01. This adds no implementation task or
+authorization to mutate the connected Harvest account.
 
 - [ ] T007 Inventory role checks across `crates/horae/src/` and legacy core transitions; document migration grant/revocation differences and obtain review in `specs/015-scoped-permissions/contracts/migration.md` (FR-014/017).
 - [ ] T008 Amend the three-role constraint through `.specify/memory/constitution.md` governance and reconcile dependent specs; finalize persistence/revocation design in `specs/015-scoped-permissions/data-model.md`.
@@ -523,7 +534,7 @@ contracts: see `contracts/approval-visibility.md`.
 
 - [x] T138 [US2] Verify focused/full core tests, core Clippy, formatting and adversarial scope/empty-input review; record actual evidence and remaining transactional acceptance in `quickstart.md` and `progress.md`.
 
-- [ ] T012 [US2] Add management-assignment and scoped approval/withdrawal/lock concurrency tests in `crates/horae/tests/integration.rs`. Cover every FR-024 case in `contracts/approval-visibility.md`: readable/unreadable time and expenses, missing approval authority, truly expense-free selections, revocation/new-record races, non-disclosing errors, direct requests and atomic full-selection effects. Combined acceptance requires feature 016 expense fixtures, not mocks alone (FR-005/006/009/010/019/024).
+- [ ] T012 [US2] Add management-assignment and scoped approval/withdrawal/lock concurrency tests in `crates/horae/tests/integration.rs`. Trace AC01–AC08 in `contracts/approval-coverage.md`; the observed owner cases do not settle overlapping actions, restricted actors or AC08's later display/coverage conflict. Cover every FR-024 case in `contracts/approval-visibility.md`: readable/unreadable time and expenses, missing approval authority, truly expense-free selections, revocation/new-record races, non-disclosing errors, direct requests and atomic full-selection effects. Combined acceptance requires feature 016 expense fixtures, not mocks alone (FR-005/006/009/010/019/024).
 
 - [ ] T013 [US2] Implement verified assignment storage, date/project approval coverage and transitions in `crates/horae/migrations/`, `crates/horae/src/server_fns/approvals.rs`, relevant project/person server functions and `crates/core/src/state.rs`; refresh `.sqlx/`. Enforce FR-024's complete-set visibility and atomic denial under the reviewed transaction protocol, without silent filtering, implicit grants or extrapolating withdrawal semantics. Apply FR-025's existing-designation retention/read-loss rules atomically with permission revision and audit (FR-005/006/009/010/013/017/019/024/025).
 
@@ -569,7 +580,7 @@ retention without opt-in, combined person losses, cancellation, failed/stale
 previews, revocation, rollback and no automatic reassignment. Reuse the shared
 editor and existing grant/revision/audit mechanics; no new grant or bypass.
 
-- [ ] T043 [US2] Finalize the calendar/execution and correction cases in `specs/015-scoped-permissions/contracts/company-locks.md`; add failing injected-clock boundary tests in `crates/core/src/permissions/company_lock/tests.rs` for the finalized modes, timezone/week-start/month-end/DST rules and nondecreasing automatic cutoff (FR-019/023). Pure calculation code needs this local contract closed first; unrelated full-matrix rows are not prerequisites. T044–T046 remain gated on storage/command review and T042 before integration.
+- [ ] T043 [US2] Finalize the calendar/execution and correction cases in `specs/015-scoped-permissions/contracts/company-locks.md`; add failing injected-clock boundary tests in `crates/core/src/permissions/company_lock/tests.rs` for the finalized modes, timezone/week-start/month-end/DST rules and nondecreasing automatic cutoff (FR-019/023). Include every monthly acceptance example from the 2026-10-20 reference investigation: short and leap February, April, unchanged configured day in the following month, and an ordinary existing day. Include the approved DST-gap case and the following day's unchanged schedule, with preview/execution and viewer-timezone independence checks. The DST gap is a user-approved rule. Monthly clamping is a reference-derived target from the shipped client preview, pending the user's confirmation; it is not an accepted decision or verified server behavior. Repeated local times, missed-run and correction cases remain open. Pure calculation code needs this local contract closed first; unrelated full-matrix rows are not prerequisites. T044–T046 remain gated on storage/command review and T042 before integration.
 
 - [ ] T044 [US2] Add failing production-transaction tests in `crates/horae/src/server_fns/approvals/company_lock_tests.rs` for configuration revocation, worker/manual races, replay, stopped timers, submission without notifications, separate approval/invoice locks and privileged correction. Include feature 016 expense fixtures before combined acceptance (FR-007/010/013/019/023).
 
@@ -686,6 +697,14 @@ full T039/T040/T042 and policy activation remain open.
 Independent test: replay forbidden direct reads/writes and downloads; revoke between preview/execution/download; inspect returned payloads.
 
 - [ ] T014 [US3] Add cross-surface negative payload, aggregation and revocation tests in `crates/horae/tests/integration.rs` and surface-specific test modules. Include approved C02: report-only grants allow defined financial report fields and matching exports, but not ordinary rate reads/history/edits or unrelated reports; rate-only grants do not authorize financial reports. Cover neither grant, out-of-scope/foreign records, forged report-family selection and revocation before generation/download (FR-007/008/010/018).
+
+For OP21–OP24/OP33, T014/T015 must cover the ten cases in
+`contracts/invoice-scope-evidence.md`: original source versus linked project,
+T&M/Fixed Fee balance effects, mixed and empty/manual lines, project-specific
+projections, foreign IDs, revocation, draft payment state and draft-only authority.
+T006 still owns the unresolved whole-invoice managed predicate. Do not turn those
+open outcomes into permissive assertions or treat status changes as payment
+workflow completion.
 
 - [ ] T015 [US3] Integrate trusted permission loading and enforcement across the completed entry-point inventory in `crates/horae/src/server_fns/`, `reports.rs`, `harvest/`, jobs, CLI and plugin hosts; activate only after all paths are covered (FR-007/008/010/017/018).
 
@@ -805,7 +824,12 @@ after reload and unchanged other assignees. No profile-ID shortcut may discard
 explicit edits or normalize stored grants. FR-032 and `permission-storage.md`
 now close the storage-specific name/provenance gate. T178 supplies T016/T017's
 50-template limit and concurrent-creation acceptance via authenticated commands.
-In-place template update/rename is not an evidenced mandatory lifecycle operation.
+Public API update/rename/propagation are documented; their web exposure and
+assignee effects remain unresolved under AP-02. T006 owns CR01–CR04 in
+`contracts/approved-decision-review.md` before T016/T017/T018 can claim complete
+lifecycle parity. Neither absence from the owner editor nor the existing
+create/delete tests may silently exclude those operations. This does not add
+an API mutation surface or authorize unverified web operations.
 
 - [x] T178 [US4] Exercise the 50-template boundary through registered session routes in `server_fns/importers/authorization_tests/permission_editor.rs`: two distinct Administrators waiting at the same organization gate, one accepted creation, stale and current-revision overflow denial, exact replay and unchanged state/receipt count. Refresh SQLx and verify the real HTTP matrix (FR-004/010/013/018/032); this does not close full profile application or policy activation.
 
@@ -956,6 +980,20 @@ revision exhaustion/stale editors, historical approval attribution and unknown
 job requesters versus tenant-safe artifacts. Compare identities and values, not
 just counts. Fixtures must use isolated databases; preflight is read-only and no
 data repair, role mapping or runtime activation is authorized by these cases.
+
+The [M07 history cases H01–H03](contracts/migration.md#m07-recoverable-history-and-invoice-transitions--2026-10-20)
+cover deleted/replaced approval records, ambiguous invoiced entry states and
+voided invoices with surviving approvals. T007/T019 must distinguish preserved
+facts from unavailable history; T013 owns target coverage. Clean diagnostic
+counts and best-effort plugin events do not establish a lossless mapping.
+
+The [M08 execution/control cases J01–J07](contracts/migration.md#m08-execution-versus-control-authority--2026-10-20)
+separate original-requester provenance, current retry/download authority and
+worker execution. T007/T019 own transition acceptance; T014/T015 own enforcement.
+Historical T086–T088 provenance tests and synthetic job completion do not satisfy
+these actual-worker cases. This block is explicitly pending/deferred as of
+2026-10-20; unknown-requester, retry and deployment-transition policy remain
+unapproved. Continue independent readiness work without clearing this gate.
 
 ## Phase 9: Acceptance
 

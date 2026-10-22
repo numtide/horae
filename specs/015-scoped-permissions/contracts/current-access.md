@@ -1,6 +1,6 @@
 # Current authorization inventory
 
-Baseline: `a7727f1`, reviewed 2026-09-30; approval and legacy assignment repairs are recorded below, with user-mutation reauthorization added on 2026-10-02. This describes current code, not the target permission policy. New scope evaluation is not yet consumed by the application.
+Historical baseline: `a7727f1`, reviewed 2026-09-30; approval and legacy assignment repairs are recorded below, with user-mutation reauthorization added on 2026-10-02. The original rows are not a description of every later delivery. Read them with the dated current-source reconciliation below and the owning contracts; some canonical consumers now exist behind the policy gate. No policy activation or full-feature acceptance follows from their presence.
 
 ## Delivery paths
 
@@ -41,6 +41,10 @@ predicates explicit; symbol coverage is not six-profile enforcement evidence.
 
 ## Verified risks to address
 
+These findings belong to the historical inventory. Later delivered fixes and
+remaining obligations must be distinguished using the reconciliation below;
+do not reopen completed payload/provenance work solely from this list.
+
 1. `approve_ids` originally updated approvals by ID/state without organization; `reject_submission` originally loaded by ID alone. Tests must invoke actual transaction helpers using two tenants, not duplicate SQL in a test body. The independent tenant repair is tracked separately from the future flexible-approval cutover.
 1. Legacy assignment endpoints previously accepted foreign project/person IDs. The independent repair now validates both sides and current administrator authority transactionally. Database assignment relationships still lack organization provenance; schema-level constraints and treatment of pre-existing malformed links remain part of the full migration. The repair does not delete or rewrite those links.
 1. Entry-time role checks do not prevent every stale-authority commit. User creation/role/activation now reload and lock the actor after acquiring the organization lock, retaining existing last-admin serialization. Profile revisions, durable access-change audit and other entry-point revocation remain separate cutover work.
@@ -65,3 +69,30 @@ The [migration contract](migration.md), checked against `d3a4ff3` on 2026-10-01,
 specifies preview evidence, stale-confirmation and activation safeguards,
 historical assignment/job/approval gaps and required fixtures. It does not choose
 the mappings or complete the runtime cutover gate.
+
+## Current-source reconciliation (2026-10-13)
+
+Read-only source inspection at `b675d960`; no runtime tests or user-data queries
+were executed. The operation matrix now records explicit HTTP registrations,
+including grouped downloads and the seven Dioxus POST import routes. This
+section updates concrete stale statements, not every historical row's complete
+authorization audit.
+
+| Surface | Source evidence at this baseline | Remaining target / verification |
+| --- | --- | --- |
+| Session identity and Clients | `get_me` has the narrow identity projection; Clients list/detail call the canonical page readers. See `own-permissions.md` and `client-permissions.md`. | Do not describe these as the original full-model readers. Legacy workflow readers and compatibility `/users/me` have separate contracts and must not inherit a pass from `get_me`. |
+| Detailed/grouped time exports | The registered CSV handlers call streaming sources; XLSX handlers call `limits::time` and reauthorize captured scope during rendering. Grouped exports are distinct registered routes. | Follow `time-reports.md` and `csv-exports.md` for exact policy, filters, payload and release checks. Their presence is not financial-report or full-picker acceptance. |
+| Project exports | CSV uses the project streaming source; XLSX binds requester identity, loads bounded rows and passes captured project/monetary IDs to `render_project_export`. | Verify the current project/progress/financial contract and both actual formats under `project-exports.md`; do not infer unrestricted amounts from ordinary visibility. |
+| Invoice exports | All three public handlers still enter through `require_manager`; materialized formats also call `render_manager_export`. | Current-authority machinery does not implement `InvoiceReadManaged/All` or settle mixed/manual invoice scope. OP21/33 still need that contract and equivalent content/metadata tests. |
+| New import provenance | API/CSV command insertion records `original_requester_id` through `enqueue_api_in`/`enqueue_csv_in`. Historical NULL remains unrecorded provenance. | T086–T088 storage is distinct from worker execution authority and historical transition policy; do not add another provenance field or claim execution is solved. |
+| Import worker execution | `ClaimedJob` carries job/org/payload/claim token, not the requester; `execute` passes a lease to API/CSV importers. Production references to `original_requester_id` persist provenance rather than authorize execution. | Reconcile current requester at execution/commit under FR-007/010, lease and account-generation fencing, and the reviewed historical-job policy. Admission authorization and a valid lease are not authority after revocation. |
+| Job controls and error-report download | `jobs::access::begin_admin_access` holds organization/active-Administrator authority for bounded operations; `jobs::report` uses it. | Preserve actual-route checks, report streaming/release semantics and current actor authority; this is not original-requester worker authorization or permission to widen import access. |
+| Budget mail | `notifications::preparation::prepare` validates stored claim and current recipient/project facts before returning a prepared message; `budget-email-authority.md` preserves the existing recipient predicate. | Canonical/custom recipient and protected-payload mapping remains an OP37 requirement. Transport after authorized release cannot retract an already released message. |
+| Timers, outbox and plugins | Startup runs the existing timer/budget scheduler and separate job, outbox and mail workers. Plugin host functions use explicit capabilities and a separately validated read-only database identity. | Service authority, timer-event payload, widget consumer access and future company-lock execution remain distinct. Do not silently convert stored service work into an Administrator user grant. |
+| Login and CLI | `auth::router` selects development versus OIDC registration; `login_redirect_guard` handles page navigation only. Remote Import/Jobs use session HTTP transport, while local operator commands use their separate deployment boundary. | Preserve branch-specific auth, direct handler checks, identity-linking invariants and operator coordination at cutover; no real authentication settings or operator commands were exercised. |
+
+This closes neither the complete legacy-to-canonical access-difference review
+nor the cross-command lock audit. It prevents source-inventory drift from being
+mistaken for missing implementation or proof of full enforcement. T006/T007,
+T014/T015, T042 and T020 remain open until their respective contracts and actual
+acceptance evidence are complete.

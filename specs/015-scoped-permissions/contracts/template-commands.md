@@ -20,6 +20,13 @@ supplies the approved naming comparison and FR-015/C01 supplies grant-preserving
 deletion; no new product choice is needed. Replay/audit are Horae mechanics, not
 claims about Harvest's internal implementation.
 
+Reference update, 2026-10-20: [AP-02](approved-decision-review.md#ap-02--custom-role-api-and-web-lifecycle-conflict-high)
+records conflicting Custom Roles API deletion/authority and newly documented
+update propagation. The approved local command contract below is unchanged, but
+its tests are not evidence that Harvest web lifecycle parity is settled. The
+API's case-insensitive creation-name rule supports FR-032; it does not settle the
+other conflicts or authorize a destructive reference test.
+
 ## Local lock order
 
 Open a fresh READ COMMITTED, READ WRITE transaction with bounded transaction-local

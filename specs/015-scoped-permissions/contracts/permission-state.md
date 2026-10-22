@@ -11,6 +11,10 @@ Read with [data-model](../data-model.md), [migration](migration.md) and the
 [current entry-point inventory](current-access.md) and
 [operation matrix](operation-matrix.md).
 
+The historical `b7e730c`, `c4e83c8`, `412035d` and `d7a5a21` revisions cited here
+belong to reference branch `feat/scoped-permissions`, not the delivered master baseline. Dated source
+reconciliations below distinguish their findings from the integrated code.
+
 ## One authorization serialization boundary
 
 Use the existing organization row as the first lock for protected operations:
@@ -32,11 +36,15 @@ Even non-permission branding/preferences writes on the organization row must
 start exclusive to avoid implicitly upgrading that gate. This lock choice does
 not itself require Administrator permission; the operation matrix decides that.
 
-The current `users::begin_user_access_change` establishes organization-before-actor
-locking for user changes. It is not yet a shared protocol: project editing and
-finalization have actor-before-organization paths. All participating consumers
-must adopt one order before activation; adding the gate to just the new editor
-would retain a deadlock/revocation gap. A single cross-command resource/table
+Source reconciliation at `109402b9` on 2026-10-21 (an ancestor of baseline
+`b675d960` with identical `crates/` source; the baseline changes only CI and
+`Cargo.lock`) confirms that
+`users::begin_user_access_change`, project editing/finalization and the three
+invoice writers already acquire organization before actor locks. T068–T070 and
+T192–T194 below describe those completed increments; their earlier inversions
+are not outstanding implementation work. This common prefix does not establish
+the remaining child-resource order or participation of every writer. All
+participating consumers must adopt one order before activation. A single cross-command resource/table
 hierarchy, then sorted IDs within each resource class, must be validated against
 all participating paths, including locks acquired by foreign keys and triggers.
 The existing assignment triggers also touch project revisions. T042 must record
@@ -62,13 +70,19 @@ artifact's complete recorded scope, not just its original generation permission.
 
 ### Invoice writers and user revocation (T192–T194)
 
-Source rechecked at `c4e83c8`, 2026-10-04. The three production invoice writers
-are `generate_invoice_with_request`, `editing::save` and `transition_invoice`.
-Each currently takes invoice advisory serialization before actor SHARE and
-does not acquire the organization gate. User role/activity changes take
+Implemented by T192–T194 in `82c11cda` (PR #233); source rechecked at
+`109402b9` on 2026-10-21. `generate_invoice_with_request`, `editing::save`
+and `transition_invoice` all call `begin_invoice_write`: explicit READ COMMITTED /
+READ WRITE, organization SHARE, then invoice advisory serialization. Each
+production caller revalidates its active same-tenant manager under actor SHARE
+before mutation or replay. Only test adapters omit the generation actor.
+
+The original finding at `c4e83c8`, 2026-10-04, was that these writers took
+invoice advisory serialization before actor SHARE without an organization gate.
+User role/activity changes take
 organization UPDATE before updating the target user. Invoice generation/edit
 then inserts invoice or receipt rows whose organization FK takes KEY SHARE.
-This admits a cycle: invoice holds the target actor and waits for organization;
+That former order admitted a cycle: invoice holds the target actor and waits for organization;
 revocation holds organization and waits for that actor. The T068 assignment/FK
 test uses NO KEY UPDATE and generation without a request actor, so it cannot
 establish safety for this different pair of production commands.
@@ -89,7 +103,7 @@ money or replay checks, or move plugin dispatch inside transactions. Test-only
 generation adapters without an actor still acquire the common organization and
 invoice gates; they are not production admission paths.
 
-Cover completed and waiting revocation, both command orders, edit/generation
+Retain coverage for completed and waiting revocation, both command orders, edit/generation
 replay and transition denial, cancelled waits and released connections, keeping
 all existing invoice financial/fee/default/revision tests. The local change uses
 existing schema, SQLx locks and transaction conventions; no dependency, new
@@ -98,7 +112,12 @@ Cancellation coverage aborts the writer waiting for invoice serialization, joins
 the cancelled task, releases the test blocker and verifies rollback, revocation
 completion and single-connection reuse. SQLx queues rollback behind the current
 statement; this does not promise immediate PostgreSQL query cancellation or
-prove interruption halfway through invoice mutation.
+prove interruption halfway through invoice mutation. Existing tests in
+`server_fns/invoices/tests/authority.rs` exercise both real-command orders
+(`invoice_generation_and_user_revocation_commit_in_gate_order` and
+`invoice_edit_and_transition_observe_user_revocation_order`), connection defaults
+and cancelled waits. Their source was reviewed on 2026-10-21; no new test run or
+CI result is claimed by this reconciliation.
 It does not close the separate source/fee/entry order, import/operator writers
 or full T042. Historical project orders below were already replaced by T068–070
 and must not be reported as current defects.
@@ -259,14 +278,19 @@ paths, foreign/missing jobs, cancelled/completed states, changed generations,
 late upload-write rollback, immediate retry and a single-connection pool. Existing
 HTTP/CLI registration, admission, import/cancellation and retention tests must pass.
 
-Source inspection at `b7e730c`, not a successful concurrency test. Paths below
+Historical baseline from source inspection at `b7e730c`, not a successful concurrency test. Paths below
 are under `crates/horae/src/`; `S` means `FOR SHARE`, `U` means `FOR UPDATE`,
 and `W` includes implicit row locks from DML. `TS` is the existing per-person
 timesheet advisory barrier; `INV` is the per-organization invoice advisory lock.
 The right column classifies the proposed organization gate, not the caller's
-required permission. Existing transactions do not yet follow this protocol.
+required permission. Rows retain their recorded revision unless explicitly dated.
+They are not a current defect list: the completed project-family T068–T070 and
+invoice T192–T194 increments replace their baseline prefixes as described above
+and below; the import and other focused sections record separate reconciliations.
+Do not reopen completed tasks from an unchanged baseline row. Full T042 still
+requires the remaining cross-command hierarchy and production-path validation.
 
-| Current path | Observed lock order / important hidden edge | Required integration |
+| Path at recorded revision | Observed lock order / important hidden edge | Integration requirement at that revision |
 | --- | --- | --- |
 | `server_fns/users::begin_user_access_change` | Organization U → actor S → subject W; last-admin count under organization lock | Exclusive; already supplies the common prefix, but has no new-policy revisions/audit |
 | `server_fns/projects::{insert_assignment,remove_assignment}` | Actor S → project/user S or assignment DELETE → child cascades → project W through revision triggers | Exclusive from entry; lock parent before child mutation and avoid upgrading a shared parent lock |

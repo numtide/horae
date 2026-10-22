@@ -82,11 +82,14 @@ as separate operation-matrix rows, not one blanket invoice-write grant.
 
 ### D04 — Public API cannot substitute for custom-template interaction
 
-The [Users API](https://help.getharvest.com/api-v2/users-api/users/users/#custom-profiles)
-explicitly does not offer custom-profile creation or editing. Its documented
-profile application behavior supplements the editor evidence but is not an
-alternative way to test template persistence with an immutable owner. A failed
-or refused owner mutation would not establish normal non-owner behavior either.
+The earlier Users API reference did not offer custom-profile creation or editing.
+Rechecked 2026-10-20: it now links a
+[Custom Roles API](https://help.getharvest.com/api-v2/roles-api/roles/custom-roles/)
+with those operations. [AP-02](approved-decision-review.md#ap-02--custom-role-api-and-web-lifecycle-conflict-high)
+records its naming evidence and conflicts with the web guide over deletion and
+authority. The old absence claim is superseded, not a reason to call mutations
+against the immutable owner. No endpoint was invoked. A failed or refused owner
+mutation would not establish normal non-owner behavior either.
 
 ### D05 — Company cutoff is distinct from scoped approval coverage
 

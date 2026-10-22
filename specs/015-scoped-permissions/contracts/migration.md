@@ -117,6 +117,99 @@ inputs at activation; a report from an earlier snapshot is not permission to
 commit. Anomalies block the affected organization transition without silently
 deleting, reparenting, resetting revisions or normalizing financial values.
 
+### M07 recoverable history and invoice transitions — 2026-10-20
+
+Source review at `109402b921939a8043eeb3eed29718561c693936` (identical
+`crates/` source to baseline `b675d960`, which changes only CI and
+`Cargo.lock`; this also applies to M08 below) identifies limits beyond missing actor/time fields. These are code paths, not findings
+from the installation or newly executed tests:
+
+- `approvals::reopen_period` deletes the approval row; a later submission can
+  create a new ID for the same week. `submit_user_week` refreshes `submitted_at`
+  on an existing non-approved row. The table is not an append-only history.
+- `approve_ids` and `reject_submission` emit plugin events after committing and
+  separately reading current period totals. `submission_payload` has no acting
+  approver, approval timestamp or affected entry/project set. Plugin `dispatch`
+  is best-effort, not a transactional history store. These paths do not insert
+  into `audit_log`; the table's existence does not guarantee recoverable history.
+- `invoices::generate_invoice_with_request` changes both open and approved time
+  to invoiced. `transition_invoice` on Void clears the invoice link, sets that
+  time to open and clears its frozen rounding, without changing `approvals`.
+  Thus an approved period can coexist with open time after invoice voiding.
+  `permissions::preflight::read` does not compare those rows; complete approval
+  attribution can yield zero diagnostic counts despite an unresolved mapping.
+
+Harvest's [unlocking guide](https://support.getharvest.com/hc/en-us/articles/360048687491-Unlocking-time-and-expenses),
+rechecked 2026-10-20, requires removing both approval and invoicing protection
+when both apply. Its [flexible approval guide](https://support.getharvest.com/hc/en-us/articles/39974542812429-Flexible-timesheet-approval)
+also distinguishes withdrawal from other locks. This supports independent
+target locks, not a rule for reconstructing Horae's historical coverage.
+
+T007/T019 must preserve these source distinctions under FR-014/017/019 and
+Constitution I; T013 owns the separately reviewed target coverage:
+
+| Case | Required migration check |
+| --- | --- |
+| H01 — Reopen and resubmit | Compare a surviving approved row, its deleted-on-reopen state and a later submission for the same week. Preserve surviving IDs, timestamps and values; do not invent deleted events, a continuous approval ID or an actor from plugin totals/current assignments. Disclose unavailable history rather than claim a complete reconstructed timeline. |
+| H02 — Invoiced source ambiguity | Invoice initially open and initially approved time. Current `invoiced` state alone cannot identify which was approved. Preserve invoice links, line snapshots, frozen minutes and surviving approval evidence; do not infer approval from being billed or replay plugin events during conversion. |
+| H03 — Void with surviving approval | Approve, invoice, then void. Record the surviving approved row alongside open time, cleared entry rounding and retained void invoice lines. Zero count-only findings must not clear the coverage gate. Require an explicit reviewed mapping; neither silently reopen the approval nor relock/reprice the time to make the sources agree. |
+
+Use disposable fixtures for future execution. The existing
+`own_organization_can_reopen_without_unlocking_invoiced_entries` test checks
+legacy deletion and an invoiced state, not these complete invoice lifecycles
+or a migration. No new history table, backfill or repair policy is selected.
+
+### M08 execution versus control authority — 2026-10-20
+
+Status: pending, explicitly deferred on 2026-10-20. Resume when historical
+unknown-requester recovery, retry authority and the deployment fence have a
+reviewed contract. J01–J07 remain required; this deferral neither approves a
+default nor clears the activation gate. Independent readiness work can continue.
+
+Read-only source review at `109402b921939a8043eeb3eed29718561c693936`
+distinguishes three existing boundaries:
+
+- `server_fns/importers/commands::{start_api,start_csv}` records the authorized
+  session actor on insertion. `cancel` and `retry` authorize the current session actor
+  through `jobs::access::begin_admin_access`; they do not replace the original
+  requester. `jobs::retry_in` retains API account-generation and CSV-upload checks.
+- `jobs::{claim,execute}` carries job, organization, payload and claim token, not
+  requester authority. `JobLease` checks claim/lease/cancellation and account
+  generation. The import transaction's organization gate orders writes but does
+  not itself authorize the original requester. These safeguards must remain;
+  they do not complete FR-007/010 worker reauthorization.
+- `jobs::report::{download_response,download_body}` checks the current downloader
+  during preparation and bounded page/tail release. Download authority is not
+  worker execution authority or permission to rewrite historical attribution.
+
+The existing requester test
+`duplicates_and_job_lifecycle_never_replace_or_invent_the_original_requester`
+deliberately revokes the original actor, retries as another Administrator and
+completes a synthetic work future. It verifies unchanged provenance under the
+legacy lifecycle, not actual API/CSV execution under the new policy. Neither
+that test nor the count-only preflight is a worker authorization acceptance test.
+This review inspected source only; no tests or migrations were executed.
+
+T007/T019 must cover the following M08 cases; T014/T015 own the corresponding
+worker and delivery enforcement. These refine FR-007/010/014/017, not a selected
+historical-job recovery policy:
+
+| Case | Required check before accepting cutover |
+| --- | --- |
+| J01 — Admission versus execution | Enqueue while authorized, then revoke before claim. A valid lease must not permit protected execution under revoked authority. Exercise actual API/CSV adapters, not a synthetic completion. |
+| J02 — Bounded progress | Revoke between durable batches in Commit and DryRun modes. If revocation wins the next authorization boundary, no further protected effects or new result publication occur; already committed batches and their attribution remain exact. If a batch wins first, revocation orders after that bounded transaction. No gate is held across source/network waits. |
+| J03 — Different retry actor | Let Administrator B retry work originally requested by A. Preserve A or historical NULL; B's control permission alone cannot establish execution authority. Resolve retry/restoration policy explicitly rather than silently transferring ownership or treating the retry as a new attributed job. |
+| J04 — Unknown historical requester | Cover both import kinds in queued, running, failed, cancelled and succeeded states. Preserve stored facts and artifacts subject to existing retention. Activation remains blocked until the reviewed policy defines pending execution and later retry; do not infer a trusted service actor or fill NULL with the current owner. |
+| J05 — Independent delivery | Compare an authorized current downloader with a revoked downloader, including retained reports whose original requester is unknown or revoked. Apply the reviewed current-download rule independently; a permitted download neither reauthorizes execution nor changes provenance. |
+| J06 — Existing execution fences | Combine otherwise valid requester authority with a changed Harvest account generation, expired claim token, cancellation and a missing CSV upload. New authorization must not revive an old attempt, bypass source checks or recreate purged artifacts. |
+| J07 — Deployment and activation race | A waiting or running legacy worker must not cross cutover and commit using old admission alone. Verify the deployment fence and both transaction orders using actual workers; setting the organization policy bit or checking a clean preflight once is insufficient. |
+
+Reuse the existing queue, requester column, authorization transaction, source
+adapters and report-release boundaries. No new queue, inferred actor, automatic
+historical repair or destructive fixture against the user's installation is
+authorized. Exact unknown-requester recovery and retry outcomes remain review
+inputs, not implemented decisions.
+
 ## Reviewable preview
 
 Before any policy activation, produce a same-organization, administrator-only

@@ -2,7 +2,8 @@
 
 Status: implementation-boundary review, 2026-10-04, against `3f45b7c`.
 Owns the remaining T006/T009 approval work before T012/T013. This is not a
-closed schema contract, browser observation or permission to activate policy.
+closed schema contract or permission to activate policy. Dated browser probes
+below supplement that initial source review without proving Horae behavior.
 Read with [combined visibility](approval-visibility.md) and
 [serialization](permission-state.md).
 
@@ -29,9 +30,188 @@ description cannot override the flexible guide's scoped withdrawal permissions.
 must be evaluated separately: withdrawing approval does not remove invoice,
 archive or company protection.
 
-All sources were read on 2026-10-04. No interactive browser/MCP tool was loaded.
+At the initial 2026-10-04 review, these sources were read without browser access.
 An empty owner approval list from an earlier session cannot resolve lifecycle or
 restricted-actor behavior.
+
+### Shipped approval controls — 2026-10-20
+
+An authenticated, read-only visit to `/approvals` identified
+[`approvals-KWHMATMH.js`](https://cache.harvestapp.com/static/approvals-KWHMATMH.js):
+1,126,269 bytes, SHA-256
+`69bcda32acd63890fdbf85e805cc717039be118e93176ad67e7b95c1d68b1f1d`.
+Direct static inspection establishes the following client predicates; no approve,
+withdraw, submit or reminder command was invoked.
+
+| Observation | Exact UTF-8 byte range, zero-based/end-exclusive |
+| --- | --- |
+| `rc` tests whether the current actor's `permissions_claims` contains `timers:approve:all`; it does not compare a profile label. | `[431792, 432291)` |
+| Own-work control helpers permit the self-action gate when manager self-approval is enabled **or** `rc()` is true. Both approval and withdrawal controls use that gate. | `[1032886, 1036935)` |
+| Row controls pass the actual self/mixed-row facts, the setting and `rc()` into those helpers. | `[1080291, 1080742)` |
+| The Withdraw button additionally requires the separate `canWithdrawApproval` state; passing the self-action gate alone is not withdrawal authority. | `[1083420, 1083611)` |
+| A successful row withdrawal toggles a local row marker; it does not assign an explicit submitted/unsubmitted state. | `[1078053, 1078236)` |
+
+For UI parity, test own-work approval and withdrawal with the setting off/on
+and the organization-wide approval claim absent/present, while keeping ordinary
+operation authority separate. The own-work gate itself is true when either is
+present and false when both are absent. Grouped mixed-owner controls also carry
+explicit own-work-exclusion explanations; inspect their final selection contract
+before translating that presentation into an atomic Horae command.
+
+This narrows the custom-profile question: the shipped control checks a claim,
+not a hard-coded Administrator name. It does **not** prove the server's claim
+issuance, restricted-user enforcement, withdrawal visibility, mixed-selection
+effects, or post-withdrawal submission persistence. In particular, a local
+boolean and an Undo action cannot decide how overlapping approval intervals
+are stored or split. Keep those transaction discriminators open. The artifact
+was inspected as text without executing its downloaded code locally.
+
+### Owner single-day lifecycle — browser verification, 2026-10-20
+
+The user authorized a disposable probe in the connected owner account, without
+switching accounts. One stopped, non-recurring time entry was created on
+2026-11-02 in an existing test project. The week initially had no time; Expenses
+showed no work in that period. Approval-page totals independently confirmed zero
+expenses. Only the new entry and its day's submission/approval were changed.
+
+| Action | Persisted observation |
+| --- | --- |
+| Submit the day containing six minutes | That day becomes pending; the other six days remain unsubmitted. |
+| Edit six to seven minutes while pending | The saved entry and a freshly loaded pending Approvals row show seven minutes, without resubmission. |
+| Approve the owner's row for that single day | Reloaded Day view marks it approved and shows an approval lock in place of the ordinary entry controls. |
+| Withdraw the owner's row from Approvals, with the same single-day range | Reloaded Day view returns to pending/submitted, not unsubmitted, with editing controls restored. |
+| Edit seven to eight minutes after withdrawal | The saved entry remains submitted; a fresh pending Approvals row shows eight minutes and offers approval, before any resubmission. |
+| Resubmit that day through its confirmation | Submission succeeds, retains the eight minutes and stays pending; no duplicate time entry appears. |
+| Delete only the disposable entry during cleanup | Reloaded Day view and week total return to zero. The day retains its submitted marker despite having no time entries. |
+
+For this case, withdrawal preserves submission, and editing does not require
+resubmission to appear in pending review. Deleting the last entry does not erase
+the submitted-day fact. These are observed reference outcomes for AC03/AC04,
+not passing Horae tests or proof of a particular Harvest storage schema.
+
+Raw snapshots and the fixture/cleanup ledger remain outside Git under the root
+checkout's `.scratch/playwright-windows/output/approval-*-20261020.yml` and
+`.scratch/harvest-reference-20261020/approval-lifecycle.md`; they contain account
+identity. The 2026-10-20 private ledger records user approval for a disposable
+probe. Two 2026-10-21 ledgers describe authorized entries or probes without
+identifying the approver; the interior-withdrawal ledger does not mention
+authorization. No separately dated or scoped consent record is in Git.
+The test entry was permanently deleted. Its empty submitted-day marker
+remains; no unsubmit action was exposed in the inspected Day controls. No manual
+email/reminder, invoice, expense, account-setting or other-person action was used.
+
+This probe does not settle interior/overlapping withdrawal, Day/Week withdrawal,
+mixed projects or expenses, invoice locks, non-owner/custom-grant enforcement,
+or initially empty submission eligibility. Existing migration/history questions
+also remain separate. Do not generalize owner success into a role matrix.
+
+### Owner interior-date withdrawal — browser verification, 2026-10-21
+
+A second authorized probe used an initially empty week and three stopped,
+non-recurring entries in the same existing test project: Monday six minutes,
+Tuesday seven and Wednesday eight. The custom submission picker explicitly
+selected November 9–11; its Submit date range action submitted those three days
+directly. Thursday–Sunday remained unsubmitted. The pending approval row showed
+21 minutes and zero expenses before approving only the owner's row for that range.
+
+| Action | Persisted observation |
+| --- | --- |
+| Approve November 9–11 once | Fresh Day visits show all three date markers approved and each entry's ordinary controls replaced by an approval lock. |
+| Withdraw only November 10 from the owner's Approved row in Approvals | Fresh visits retain Monday and Wednesday approvals and their entry locks. Tuesday retains submission, becomes pending and regains Start/Edit. Values remain six, seven and eight minutes. |
+| Edit Tuesday from seven to nine minutes without resubmitting | The saved week totals 23 minutes. Fresh Approvals views for the same three-day range show nine minutes in Pending Approval and 14 minutes in Approved, with zero expenses in each. |
+| Withdraw the remaining approval within November 9–11, then delete only the three fixture entries | Fresh visits to all three days contain no entries and show a zero week total. The final week display retains an empty submitted marker on Wednesday; Monday and Tuesday show none. |
+
+The aggregate Pending approval text also appeared while viewing the still-locked
+outer days. Use per-date markers, per-entry locks and scoped approval results to
+distinguish the portions; do not interpret that banner as every entry's state.
+The exact entries and selected range were checked before each mutation. Cleanup
+permanently removed the fixtures, not the pre-existing project or expense; the
+remaining empty-day marker means this is not exact initial-state restoration.
+The cleanup observations do not identify which operation removed the other
+submission markers or establish a universal empty-range rule.
+
+This resolves the single-interval owner case in AC07, not overlapping approval
+actions, historical attribution, project-filter coverage, non-owner authority,
+independent locks or Day/Week withdrawal. No physical range-splitting schema is
+inferred. Private fixture IDs and evidence remain outside Git in the root
+checkout's `.scratch/harvest-reference-20261021/interior-withdrawal.md` and
+`.scratch/playwright-windows/output/interior-*-20261021.yml`.
+
+### Initially empty interval — browser verification, 2026-10-21
+
+An authorized owner probe began with November 16–22 empty and unsubmitted, with
+no expenses in that period. The custom picker selected only November 16–17.
+Submit date range succeeded without a second confirmation; both dates became
+submitted while the other five remained unsubmitted. The fresh pending Approvals
+row had zero hours/expenses, a `No time tracked in this period.` warning and an
+enabled Approve action. Approval succeeded. Fresh Day views of both selected
+dates showed approval and omitted Track time/copy controls; Wednesday retained
+those controls. Thus empty submission eligibility and initial empty-date coverage
+are observed, not inferred from deleting a previously populated submission.
+
+One stopped two-minute entry was then created on unsubmitted Wednesday in the
+existing test project. Moving it to approved Monday via Edit → Change date
+closed the editor but logged HTTP 409 for that entry's update. Fresh visits
+confirmed the entry remained on Wednesday and Monday stayed empty. No visible
+validation message was captured. After withdrawing only Monday through its
+Approved row, Monday regained editing and Tuesday still displayed approval.
+Repeating the move then persisted the same entry on Monday, absent Wednesday,
+with two minutes total and no resubmission action.
+
+**Conflicting presentation after the successful move:** fresh Day views now
+labelled all seven dates submitted and exposed Tuesday's Track time controls.
+Yet a fresh Approved list filtered to Tuesday still offered the owner's
+zero-hours row and Withdraw. These display observations alone do not prove that
+Tuesday's approval was erased, that a server write there would succeed, or that
+moving an entry intentionally submits the whole week. No Tuesday write was
+attempted in this first probe. Record this discrepancy
+under FR-020; do not adopt either surface as a complete coverage oracle or turn
+the observed expansion into a Horae requirement.
+
+Cleanup withdrew Tuesday through that scoped Approved row and permanently deleted
+only the identified fixture. Fresh Day totals returned to zero; the settled
+Approved list for November 16–22 contained no approval data. All seven submitted
+display markers remained, so this is not exact initial-state restoration. No
+existing project, expense, other person's work or setting was changed. Private
+IDs and snapshots remain under the root checkout's
+`.scratch/harvest-reference-20261021/empty-submission.md` and
+`.scratch/playwright-windows/output/empty-*-20261021.yml`.
+
+This resolves the initial owner eligibility and move checks in AC08 only. The
+later display/coverage conflict, project-filter promotion, restricted actors,
+expenses, independent locks and overlapping history remain unresolved.
+
+#### Effective destination write follow-up — 2026-10-21
+
+A fresh empty November 23–29 week reproduced the two-day submission/approval,
+one stopped two-minute Wednesday entry, Monday-only withdrawal and successful
+Wednesday → Monday move. The update returned HTTP 200; fresh visits verified
+the same entry on Monday only. All seven submitted markers and Tuesday's Track
+time controls reappeared, while the fresh Approved Tuesday list retained the
+zero-hours row with Withdraw.
+
+The same entry was then moved Monday → Tuesday through the ordinary editor,
+without withdrawing Tuesday or resubmitting. That update also returned HTTP 200.
+Fresh visits found the same two-minute entry on Tuesday, absent Monday, with
+Start/Edit controls. Separate fresh Tuesday Approvals views showed zero hours
+in Approved and two minutes in Pending Approval. Thus the discrepancy is not
+only a glyph: this exact owner sequence permits a persisted destination write.
+It does not automatically approve the moved time. No request was sent outside
+the UI, and no disabled control was overridden.
+
+The flexible guide, re-read that day, still specifies approved-date locking and
+scoped withdrawal. **U-AC08 remains a high-priority contract conflict**, now
+between that documented rule and observed writes, not merely unknown server
+enforcement. Do not infer an intentional exception, storage model or root cause.
+The Horae rule is awaiting explicit clarification: preserve Tuesday's coverage
+until scoped withdrawal, or defer this case for reference clarification. Neither
+choice has been accepted; FR-019/020 and the implementation gate remain unchanged.
+
+Cleanup withdrew only Tuesday's remaining approval and permanently deleted the
+fixture. Fresh totals were zero and the settled Approved November 23–29 list
+contained no data; all seven submitted display markers remained. Private evidence:
+`.scratch/harvest-reference-20261021/lock-discriminator.md` and
+`.scratch/playwright-windows/output/lock-discriminator-*-20261021.yml`.
 
 ## Facts that must not share one state field
 
@@ -108,6 +288,8 @@ These refine T012/T013; they are not passing tests:
 | AC04 | Edit submitted, unapproved work; approver sees current values and totals, including changed rounding inputs. | Submission guide, FR-019 and Constitution I |
 | AC05 | Hidden selected expense, new expense racing approval, and revoked read/approval/assignment in both race orders. All effects or none; no private denial detail. | FR-024; real feature 016 records required |
 | AC06 | Approve A then independently B; partial/complete display and historical actors remain truthful; retry/cancel cannot duplicate or erase history. | FR-009/010, SC-008 |
+| AC07 | For one owner/project and no expenses, submit and approve Monday–Wednesday (6/7/8 minutes), withdraw Tuesday through Approvals, then edit it to nine without resubmission. Outer entries remain approved/locked; Tuesday remains submitted/editable. The range has nine pending plus 14 approved minutes, equal to the 23-minute week total. | Observed single-interval owner probe, 2026-10-21; FR-009/019/020, SC-008 subset |
+| AC08 | With no time/expenses, submit only Monday–Tuesday and approve the owner's zero-hours row. Initially both empty dates are covered and Wednesday remains editable. A two-minute entry created Wednesday cannot move into approved Monday; after scoped Monday withdrawal, the same move persists without resubmission. Do not assert later Tuesday coverage or whole-week submission from the conflicting display described above. The later persisted Monday → Tuesday write is the open **U-AC08** conflict in [Effective destination write follow-up](#effective-destination-write-follow-up--2026-10-21); no expected outcome is chosen for it. | Observed empty-interval owner probe, 2026-10-21; FR-019/020, SC-008 subset |
 
 Open discriminators, to resolve with suitable reference fixtures or an explicit
 Horae product decision rather than guessed expected outputs:
@@ -118,12 +300,17 @@ Horae product decision rather than guessed expected outputs:
   or creation-time project snapshot is chosen by this document.
 - Withdraw a strict interior range from overlapping approvals: inspect remaining
   coverage, pending/unsubmitted status, resubmission and historical attribution.
-  The ability to unlock does not decide which submission records survive.
-- Verify own approval and withdrawal for arbitrary custom grants, plus the
-  withdrawal visibility predicate. FR-024 answers approval visibility only.
-- Submit an entirely empty interval and edit/move/add within a submitted one;
-  verify submission eligibility and any review confirmation before finalizing
-  the submission command. Preserve invoice/rounding facts independently.
+  The single-day and single-interval owner cases above preserve submission at
+  withdrawal and leave outer entry locks intact. They do not establish history
+  or which records survive overlapping withdrawals.
+- Verify server enforcement of own approval and withdrawal for arbitrary custom
+  grants against the shipped-client gate above, plus the withdrawal visibility
+  and mixed-selection predicates. FR-024 answers approval visibility only.
+- Resolve U-AC08's documented-lock versus observed-write conflict before choosing
+  the subsequent-date rule. The follow-up proves the owner move persists; it
+  does not establish an intentional exception or an approved Horae deviation.
+  AC08 still does not settle all add/move/expense cases or confirmation rules.
+  Preserve invoice/rounding facts independently.
 
 ## Expense dependency and execution gate
 
