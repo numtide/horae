@@ -7,8 +7,9 @@ this feature's historical `plan.md` and `tasks.md`, which describe the original
 2026-09-01 package and are not the current header contract. It does not complete
 the Project Detail dashboard; every other dashboard slice remains open.
 
-Implementation checkboxes record written code or tests, not acceptance. Runtime
-verification and independent review remain pending until explicitly recorded.
+Implementation checkboxes record written code or tests, not acceptance. The
+verification record below distinguishes local acceptance from pending remote CI
+and delivery; it does not certify the remaining dashboard slices.
 
 ## Requirement reconciliation
 
@@ -23,9 +24,9 @@ increment reaches. Requirement IDs below are #208's (`feat/project-dashboard`,
 | FR-014 edit | Partial | Edit project uses the shared `EditProject` route under the existing `can_edit` affordance, with a decorative pencil glyph. | H101 `return_to`; "Set up a budget". |
 | FR-015 archive/reactivate | **Incomplete** | Shared Actions menu, native confirmation, pending/duplicate protection, retryable transport errors, success toast, persisted reload, focus return. | H102 Undo; H103 archived-edit lifecycle (P02). |
 | FR-017 current authority | Partial | Affordances come from the current read; status writes recheck actor, role and policy zero in their own transaction; denied writes hide the loaded project behind the bound Retry. | Status changes under policy one need a reviewed canonical capability (not in scope). |
-| FR-018 states | Implemented; verification pending | Loading, unavailable and Retry keep the existing stale-resource guards; Back is available in every state. | H009 and independent review. |
-| FR-019 layout | Tests written; verification pending | 320/390/768/1440px, a 1440×360 viewport and 200% CSS zoom, in both themes; keyboard path to Actions and the dialog. | H009, visual review and actual 200% text enlargement; CSS zoom alone is not text zoom. |
-| FR-020 design system | Implemented; verification pending | Utility classes, `Menu`, `Modal`, `Badge`, `Toast`, `NavIcon`; no inline styles, sample data or prototype handlers. | H009 and independent review. |
+| FR-018 states | Locally verified | Loading, unavailable and Retry keep the existing stale-resource guards; Back is available in every state. Denied reloads clear success feedback and restore recovery focus. | Exact-head CI and delivery. |
+| FR-019 layout | Locally verified | 320/390/768/1440px, a 1440×360 viewport, 200% CSS zoom and 200% root-font enlargement, in both themes; keyboard path to Actions and the dialog. | Exact-head CI and delivery; no claim of physical devices or native browser zoom. |
+| FR-020 design system | Locally verified | Utility classes, `Menu`, `Modal`, `Badge`, `Toast`, `NavIcon`; no inline styles, sample data or prototype handlers. Shared menu/toast fixes have cross-screen regression coverage. | Exact-head CI and delivery. |
 | FR-021 / FR-022 | Not affected | No quantities; the detail read gains no writes. | — |
 
 Tasks and Team cards and fee-balance behavior are unchanged; later dashboard
@@ -100,20 +101,63 @@ remain mandatory. No constitutional exception is required.
   policy change committed while the write waits (`bulk_tests.rs`); existing
   callers pass the actor.
 - [x] H008 Regenerate `.sqlx/` (detail context query and new test queries).
-- [ ] H008a Fix the shared popover coordinate mismatch exposed by the header's
+- [x] H008a Fix the shared popover coordinate mismatch exposed by the header's
   200% CSS-zoom test; verify normal/scaled menus, selectors and calendars, plus
   their existing keyboard, scrolling and dismissal checks. CSS zoom is distinct
   from native browser zoom; 200% root-font tests also enlarge rem-based spacing.
-- [ ] H008b Verify enlarged-text date controls, wrapping confirmation actions,
+- [x] H008b Verify enlarged-text date controls, wrapping confirmation actions,
   viewport-constrained shared toasts and focus after a denied refresh. Cover
   other shared-toast consumers and retain normal desktop sizing.
-- [ ] H009 Server/WASM Clippy, `cargo test -p horae --features server`
+- [x] H009 Server all-target/WASM binary Clippy, `cargo test -p horae --features server`
   (`detail_navigation`, `canonical_read_tests::detail`, `bulk_tests`,
   `mutation_tests`), `nix fmt`, and the browser runner including
   `project-detail-header`.
 - [ ] H010 Resolve both independent reviews, inspect live desktop/mobile themes,
   keyboard, enlarged text and post-mutation focus; verify exact-head CI and merge
   through the protected queue. Do not infer this acceptance from written tests.
+
+## Verification record — 2026-10-22
+
+Implementation commit `3a360f5e23f1c4c049ba3634c0befeb69b5ad16a` passed the
+following complete local command, using Nix-isolated PostgreSQL fixtures:
+
+```sh
+nix build .#checks.x86_64-linux.tests .#checks.x86_64-linux.browser \
+  .#checks.x86_64-linux.clippy .#checks.x86_64-linux.sqlx-prepare \
+  .#checks.x86_64-linux.treefmt --no-link --max-jobs 1 --cores 8 -L
+```
+
+- 191 core tests, 1,498 server tests and 349 tests across 15 external binaries
+  passed; 11 pre-existing manual server tests remain ignored. No assertion,
+  ignored-test policy or CI configuration was weakened.
+- The complete browser runner passed, including header lifecycle, binding and
+  denial recovery, shared menus/selectors/calendars, responsive toasts, bulk
+  actions, creation/editing, Clients and invoice-client labels.
+- Strict core/server all-target Clippy, SQLx cache verification and formatting
+  passed. The package built both SSR and WASM and supplied the browser binary.
+- A supplementary WASM **all-target** lint invocation failed on existing native
+  test modules requiring Tokio/SSR. Those files are unchanged from the base;
+  their native tests passed above. This is not a passing check or a reason to
+  alter their coverage. Separate strict WASM application-binary Clippy passed:
+  `cargo clippy -p horae --features web --target wasm32-unknown-unknown --bin horae -- -D warnings -W clippy::perf`.
+
+Native Windows Chrome also exercised the built package on a disposable local
+database: settled desktop/mobile captures in both themes, actual archive and
+reactivation, keyboard cancellation, enlarged text and a denied reload. Desktop
+toast width is 280px; at 320px with 200% root font the toast and page remain inside
+the viewport, and Tab scrolls each dialog action fully into view. Status reloads
+return focus to Actions; denied refresh returns focus to Back with no old toast.
+CSS zoom scales the whole page; root-font enlargement also scales rem spacing.
+These checks do not claim physical-device or native browser-zoom coverage.
+
+Independent technical and visual/UX reviews found no unresolved blocking issues
+after remediation and runtime inspection. Resolved findings included action
+height, stale feedback, scaled menu coordinates, missing responsive padding and
+cyclic toast sizing. A pre-existing successful Refresh/Retry focus gap remains
+outside this increment; denied and post-status reload recovery are covered.
+
+H010 remains open only for verification of the published commit and protected
+delivery. This local record does not assert that remote CI or merge has occurred.
 
 ### Pending, outside this increment
 
