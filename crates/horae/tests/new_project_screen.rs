@@ -175,6 +175,7 @@ impl document::Document for Probe {
 }
 
 mod route {
+    pub use super::new_project::EditReturn;
     use super::*;
     use new_project::{EditProject, NewProject};
 
@@ -186,8 +187,8 @@ mod route {
         ProjectList {},
         #[route("/projects/new")]
         NewProject {},
-        #[route("/projects/:id/edit?:return_to")]
-        EditProject { id: Uuid, return_to: Option<String> },
+        #[route("/projects/:id/edit?:..return_to")]
+        EditProject { id: Uuid, return_to: EditReturn },
         #[route("/projects/:id")]
         ProjectDetail { id: Uuid },
     }
@@ -198,7 +199,7 @@ mod route {
             if let Some(project) = probe.other_project {
                 Link {
                     id: "test-other-project",
-                    to: Route::EditProject { id: project.id, return_to: None },
+                    to: Route::EditProject { id: project.id, return_to: EditReturn::default() },
                     "Open another project"
                 }
             }
@@ -918,32 +919,43 @@ fn editor_returning_to(target: impl FnOnce(Uuid) -> String) -> (Probe, Uuid) {
 
 #[tokio::test]
 async fn detail_origin_clean_cancel_returns_to_the_same_project_without_writing() {
-    let (probe, id) = editor_returning_to(|id| format!("/projects/{id}"));
-    let mut dom = VirtualDom::new_with_props(app, probe.clone());
-    dom.rebuild_in_place();
-    settle(&mut dom);
-    let html = dioxus::ssr::render(&dom);
-    assert!(html.contains("data-project-edit-state=\"clean\""), "{html}");
-    assert!(
-        html.contains("Back to project") && !html.contains("Back to Projects"),
-        "{html}"
-    );
-    click(&mut dom, "np-cancel");
-    let html = dioxus::ssr::render(&dom);
-    assert!(html.contains(&format!("Project {id}")), "{html}");
-    assert!(!html.contains("Edit project"), "{html}");
-    assert_eq!(probe.writes.get(), 0);
+    // The plain target and its one standard URL encoding name the same project.
+    for slash in ["/", "%2F"] {
+        let (probe, id) = editor_returning_to(|id| format!("{slash}projects{slash}{id}"));
+        let mut dom = VirtualDom::new_with_props(app, probe.clone());
+        dom.rebuild_in_place();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(html.contains("data-project-edit-state=\"clean\""), "{html}");
+        assert!(
+            html.contains("Back to project") && !html.contains("Back to Projects"),
+            "{html}"
+        );
+        click(&mut dom, "np-cancel");
+        let html = dioxus::ssr::render(&dom);
+        assert!(html.contains(&format!("Project {id}")), "{html}");
+        assert!(!html.contains("Edit project"), "{html}");
+        assert_eq!(probe.writes.get(), 0);
+    }
 }
 
 #[tokio::test]
 async fn forged_return_targets_leave_a_clean_editor_for_projects() {
     let other = Uuid::now_v7();
-    for target in [
-        format!("/projects/{other}"),
-        "//example.com/projects".to_owned(),
-        String::new(),
-    ] {
-        let (probe, id) = editor_returning_to(|_| target.clone());
+    let targets: [&dyn Fn(Uuid) -> String; 7] = [
+        &|_| format!("/projects/{other}"),
+        &|_| "//example.com/projects".to_owned(),
+        &|_| String::new(),
+        // Extra encodings of this same project, and an encoded separator, decode
+        // once to something other than the exact query and must fail closed.
+        &|id| format!("%252Fprojects%252F{id}"),
+        &|id| format!("%25252Fprojects%25252F{id}"),
+        &|id| format!("/projects/{id}%26x=1"),
+        &|id| format!("/projects/{id}&return_to=/projects/{id}"),
+    ];
+    for target in targets {
+        let (probe, id) = editor_returning_to(target);
+        let target = probe.initial_path.clone().unwrap();
         let mut dom = VirtualDom::new_with_props(app, probe.clone());
         dom.rebuild_in_place();
         settle(&mut dom);

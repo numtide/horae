@@ -13,7 +13,7 @@ use crate::components::toast::{Toast, ToastContainer};
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::ProjectOverview;
 use crate::models::{Project, ProjectBudgetOverview, ProjectDetails, ProjectTagLink};
-use crate::route::Route;
+use crate::route::{EditReturn, Route};
 use crate::server_fns;
 use horae_core::money::format_cents;
 use horae_core::types::{BudgetKind, ProjectType};
@@ -941,7 +941,7 @@ fn ProjectListContent(
                                                         MenuItem {
                                                             onclick: {
                                                                 let id = p.id;
-                                                                move |_| { navigator.push(Route::EditProject { id, return_to: None }); }
+                                                                move |_| { navigator.push(Route::EditProject { id, return_to: EditReturn::default() }); }
                                                             },
                                                             "Edit"
                                                         }
@@ -1196,7 +1196,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                                 onclick: move |_| details.restart(), "Refresh details"
                             }
                             if view.can_edit {
-                                Link { id: "project-detail-edit", class: "btn btn-secondary", to: Route::EditProject { id, return_to: Some(Route::ProjectDetail { id }.to_string()) },
+                                Link { id: "project-detail-edit", class: "btn btn-secondary", to: Route::EditProject { id, return_to: EditReturn::detail(id) },
                                     span { class: "inline-flex", aria_hidden: "true", NavIcon { name: "pencil", class: "size-4" } }
                                     "Edit project"
                                 }

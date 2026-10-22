@@ -24,6 +24,8 @@ mod catalog;
 mod date_field;
 #[path = "new_project/draft.rs"]
 mod draft;
+#[path = "new_project/edit_return.rs"]
+mod edit_return;
 #[path = "new_project/invoice_defaults.rs"]
 mod invoice_defaults;
 #[path = "new_project/protected.rs"]
@@ -37,6 +39,7 @@ mod team;
 use basics::Basics;
 use billing::Billing;
 use draft::DraftState;
+pub use edit_return::EditReturn;
 use invoice_defaults::InvoiceDefaults;
 use tasks::Tasks;
 use team::{Team, Visibility};
@@ -130,13 +133,11 @@ pub fn NewProject(#[props(default)] client_context: Option<String>) -> Element {
     }
 }
 
-/// Where leaving the editor for project `id` goes. `return_to` comes from the URL
-/// and is untrusted, so only this project's exact detail path is honoured;
-/// anything else returns to the Projects list.
-pub fn edit_return_route(id: Uuid, return_to: Option<&str>) -> Route {
-    let detail = Route::ProjectDetail { id };
-    if return_to == Some(detail.to_string().as_str()) {
-        detail
+/// Where leaving the editor for project `id` goes: its detail only when the URL
+/// named this same project, otherwise the Projects list.
+pub fn edit_return_route(id: Uuid, return_to: EditReturn) -> Route {
+    if return_to.returns_to(id) {
+        Route::ProjectDetail { id }
     } else {
         Route::ProjectList {}
     }
@@ -151,8 +152,8 @@ fn back_label(exit: &Route) -> &'static str {
 }
 
 #[component]
-pub fn EditProject(id: Uuid, return_to: Option<String>) -> Element {
-    let exit = edit_return_route(id, return_to.as_deref());
+pub fn EditProject(id: Uuid, return_to: EditReturn) -> Element {
+    let exit = edit_return_route(id, return_to);
     // Keyed fragments remount resources and local state when the route changes.
     rsx! {
         for project_id in [id] {

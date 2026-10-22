@@ -42,6 +42,8 @@ mod assignment;
 pub mod client;
 #[path = "../src/pages/clients.rs"]
 mod clients;
+#[path = "../src/pages/new_project/edit_return.rs"]
+mod edit_return;
 #[path = "../src/models/invoice.rs"]
 pub mod invoice;
 #[path = "../src/pages/invoices.rs"]
@@ -143,6 +145,7 @@ fn app(probe: Probe) -> Element {
 }
 
 mod route {
+    pub use super::edit_return::EditReturn;
     use super::*;
     use clients::{ClientDetail, ClientList};
     use invoices::{InvoiceDetail, InvoiceList, NewInvoiceForClient};
@@ -169,8 +172,8 @@ mod route {
         NewProject {},
         #[route("/projects/new/client/:client")]
         NewProjectForClient { client: String },
-        #[route("/projects/:id/edit?:return_to")]
-        EditProject { id: Uuid, return_to: Option<String> },
+        #[route("/projects/:id/edit?:..return_to")]
+        EditProject { id: Uuid, return_to: EditReturn },
         #[route("/projects/:id")]
         ProjectDetail { id: Uuid },
         #[route("/admin/importers")]
@@ -188,7 +191,7 @@ mod route {
     }
 
     #[component]
-    fn EditProject(id: Uuid, return_to: Option<String>) -> Element {
+    fn EditProject(id: Uuid, return_to: EditReturn) -> Element {
         let _ = return_to;
         rsx! { h1 { "Edit project {id}" } }
     }

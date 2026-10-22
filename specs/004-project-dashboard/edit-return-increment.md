@@ -20,9 +20,12 @@ gap is Cancel/Back/discard returning to the list when entering from detail.
 
 - ER-001: Detail → Edit carries the current project destination through reload.
   Clean Cancel/Back and confirmed discard return there without saving changes.
-- ER-002: Only the exact same-project detail path is an accepted return target.
-  Missing, foreign-project, absolute, protocol-relative, malformed or extended
-  targets fall back to the existing Projects list. Never navigate a raw string.
+- ER-002: Only the exact same-project detail path is an accepted return target,
+  and it must be the whole query. Missing, foreign-project, absolute,
+  protocol-relative, malformed, non-canonical or extended targets, and any
+  extra or repeated query parameter, fall back to the existing Projects list.
+  Never navigate a raw string. The destination must not change when the
+  router writes the URL back and parses it again.
 - ER-003: List-origin editing keeps its existing destinations: Cancel/Back to
   Projects, successful Save to the saved project's detail. Plain existing edit
   URLs continue to parse. A router-generated empty query delimiter is not a
@@ -88,8 +91,29 @@ expecting `/projects/<id>` and receiving `/projects`. The route unit tests were
 compile-red by construction (missing field and function) and were not executed
 separately; the SSR link assertions were not run before implementation.
 
-E002–E004 are implemented and await E005 validation. `EditProject` carries
-`return_to: Option<String>`. The mapping `edit_return_route` lives beside the
+E002–E004 were implemented in `719dbd3a` and passed the full check, but
+runtime review then found that the router changed the destination after
+hydration. It decodes the query once when parsing but writes a `String` value
+back without re-escaping `%`, so `return_to=%252Fprojects%252F<id>` became
+`/projects/<id>` on the next parse: the editor showed "Back to project" and
+Cancel opened the detail. The extended tests reproduced this first: the focused
+`project-detail-header` run exited 1 because the double-encoded target showed
+"Back to project" instead of "Back to Projects".
+
+The fix makes the whole query the typed `EditReturn` (`?:..return_to`) in
+`pages/new_project/edit_return.rs`. The router hands it the query decoded
+once; it keeps only a project UUID, and only when the query is exactly
+`return_to=/projects/<canonical UUID>`. It writes back only that canonical
+query or nothing, so a reparse cannot reach a different destination. A
+canonical target naming another project is a valid query and is written back
+unchanged; the editor still exits to the Projects list, because only the
+edited project's own detail is honoured. Non-canonical targets are dropped.
+The type is its own file, using only `std` and `uuid` with no UI or router
+imports, so both SSR harnesses include the real type rather than a copy.
+
+This fix has not been delivered: it awaits E005 again.
+
+The mapping `edit_return_route` lives beside the
 editor in `pages/new_project.rs`, not in `route.rs`, because the SSR harnesses
 compile that page against their own route enums; one implementation is then
 exercised by the route, SSR and browser tests. Plain list-origin navigation
