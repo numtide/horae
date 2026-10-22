@@ -45,6 +45,30 @@ pub fn add(a: Money, b: Money) -> Result<Money, AddError> {
     })
 }
 
+/// Some amount in the set is not visible to the viewer.
+#[derive(Debug, Error, PartialEq, Eq)]
+#[error("an amount in the total is withheld")]
+pub struct Withheld;
+
+/// Exact per-currency totals, ordered by currency code. Amounts in different
+/// currencies are never combined, and codes are compared exactly as given.
+/// Any withheld (`None`) amount makes the whole result `Err(Withheld)`,
+/// whatever else the set contains, so no partial total can leak. Within a
+/// currency, `None` marks a final sum that does not fit in `i64`; summing in
+/// `i128` makes that independent of input order.
+pub fn sum_by_currency<'a>(
+    amounts: impl IntoIterator<Item = (&'a str, Option<i64>)>,
+) -> Result<Vec<(&'a str, Option<i64>)>, Withheld> {
+    let mut sums = std::collections::BTreeMap::<&str, i128>::new();
+    for (currency, cents) in amounts {
+        *sums.entry(currency).or_default() += i128::from(cents.ok_or(Withheld)?);
+    }
+    Ok(sums
+        .into_iter()
+        .map(|(currency, sum)| (currency, i64::try_from(sum).ok()))
+        .collect())
+}
+
 #[derive(Debug, Error)]
 #[error("invalid amount: {0}")]
 pub struct AmountError(pub String);
@@ -180,6 +204,68 @@ mod tests {
             add(Money::new(i64::MIN + 1, *b"EUR"), Money::new(-1, *b"EUR")).unwrap(),
             Money::new(i64::MIN, *b"EUR")
         );
+    }
+
+    #[test]
+    fn currency_totals_are_exact_per_currency_and_ordered_by_code() {
+        let amounts = [
+            ("USD", Some(i64::MAX)),
+            ("EUR", Some(100)),
+            ("eur", Some(1)),
+            ("EUR", Some(i64::MAX - 100)),
+        ];
+        let expected = vec![
+            ("EUR", Some(i64::MAX)),
+            ("USD", Some(i64::MAX)),
+            ("eur", Some(1)),
+        ];
+        assert_eq!(sum_by_currency(amounts), Ok(expected.clone()));
+        assert_eq!(sum_by_currency(amounts.into_iter().rev()), Ok(expected));
+        assert_eq!(sum_by_currency([]), Ok(vec![]));
+    }
+
+    #[test]
+    fn currency_totals_report_only_the_final_sum_out_of_range() {
+        for edge in [i64::MAX, i64::MIN] {
+            let amounts = [("EUR", Some(edge)), ("EUR", Some(edge)), ("USD", Some(5))];
+            assert_eq!(
+                sum_by_currency(amounts),
+                Ok(vec![("EUR", None), ("USD", Some(5))])
+            );
+        }
+        // Leaves the range part-way through but ends inside it.
+        let amounts = [("EUR", Some(i64::MAX)), ("EUR", Some(1)), ("EUR", Some(-2))];
+        assert_eq!(
+            sum_by_currency(amounts),
+            Ok(vec![("EUR", Some(i64::MAX - 1))])
+        );
+    }
+
+    #[test]
+    fn currency_totals_keep_zero_and_signed_sums() {
+        let amounts = [
+            ("EUR", Some(500)),
+            ("USD", Some(0)),
+            ("EUR", Some(-500)),
+            ("CHF", Some(-1)),
+        ];
+        assert_eq!(
+            sum_by_currency(amounts),
+            Ok(vec![("CHF", Some(-1)), ("EUR", Some(0)), ("USD", Some(0))])
+        );
+    }
+
+    #[test]
+    fn a_withheld_amount_hides_every_currency_total() {
+        let late = [
+            ("EUR", Some(i64::MAX)),
+            ("EUR", Some(i64::MAX)),
+            ("USD", Some(5)),
+            ("EUR", None),
+        ];
+        assert_eq!(sum_by_currency(late), Err(Withheld));
+        let early = [("USD", None), ("EUR", Some(1))];
+        assert_eq!(sum_by_currency(early), Err(Withheld));
     }
 
     #[test]
