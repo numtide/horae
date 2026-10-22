@@ -11,13 +11,42 @@ pub fn Toast(
     #[props(default)]
     dismissible: bool,
     #[props(default)] ondismiss: EventHandler<MouseEvent>,
+    /// Label of an optional action beside the message, e.g. Undo; empty shows none.
+    #[props(default)]
+    action_label: String,
+    /// Marks the action unavailable without disabling it, so it keeps focus
+    /// while pending and after a retryable failure.
+    #[props(default)]
+    action_busy: bool,
+    #[props(default)] onaction: EventHandler<MouseEvent>,
 ) -> Element {
+    // An action can make the toast too wide for narrow screens and large text:
+    // wrap instead, keeping the message at its text width rather than letting
+    // the zero flex basis squeeze it into a letter-wide column.
+    let (wrap, message_class) = if action_label.is_empty() {
+        ("", "toast-msg")
+    } else {
+        (" flex-wrap", "toast-msg flex-none max-w-full")
+    };
     rsx! {
-        div { class: "toast {variant}", role: "status",
+        div { class: "toast {variant}{wrap}", role: "status",
             if !icon.is_empty() {
                 span { "{icon}" }
             }
-            span { class: "toast-msg", "{message}" }
+            span { class: "{message_class}", "{message}" }
+            if !action_label.is_empty() {
+                button {
+                    r#type: "button",
+                    class: if action_busy {
+                        "btn btn-ghost btn-sm px-1 max-w-full text-sm font-semibold is-disabled"
+                    } else {
+                        "btn btn-ghost btn-sm px-1 max-w-full text-sm font-semibold"
+                    },
+                    "aria-disabled": action_busy,
+                    onclick: move |e| if !action_busy { onaction.call(e) },
+                    "{action_label}"
+                }
+            }
             if dismissible {
                 button {
                     r#type: "button",

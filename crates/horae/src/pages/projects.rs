@@ -1124,8 +1124,51 @@ fn ProjectDetailContent(id: Uuid) -> Element {
     let mut status_change = use_signal(|| None::<bool>);
     let mut status_busy = use_signal(|| false);
     let mut status_failed = use_signal(|| false);
-    let mut status_saved = use_signal(|| None::<&'static str>);
+    // The status a change from this view saved; only an archive offers Undo.
+    let mut status_saved = use_signal(|| None::<bool>);
+    let mut undo_failed = use_signal(|| false);
     let mut refocus_actions = use_signal(|| false);
+    // The confirmation and Undo both write the absolute status under the bound
+    // requester. A failure shows where it was requested: the dialog or the toast.
+    let mut write_status = move |active: bool| {
+        let Some((requester, _)) = *binding.peek() else {
+            return;
+        };
+        if status_busy() {
+            return;
+        }
+        let undoing = status_change().is_none();
+        status_busy.set(true);
+        status_failed.set(false);
+        undo_failed.set(false);
+        spawn(async move {
+            match server_fns::set_project_active(id.to_string(), active, Some(requester)).await {
+                Ok(_) => {
+                    status_saved.set(Some(active));
+                    status_change.set(None);
+                    refocus_actions.set(true);
+                    // Show the persisted state under current authority.
+                    details.restart();
+                }
+                // Denied authority hides the loaded project, as the fee
+                // balances do; Retry reloads under the bound requester.
+                Err(ServerFnError::ServerError {
+                    code: 401 | 403, ..
+                }) => {
+                    status_change.set(None);
+                    status_saved.set(None);
+                    access_lost.set(true);
+                }
+                // A Dismiss while Undo was pending must not hide its retry.
+                Err(_) if undoing => {
+                    status_saved.set(Some(false));
+                    undo_failed.set(true);
+                }
+                Err(_) => status_failed.set(true),
+            }
+            status_busy.set(false);
+        });
+    };
     use_effect(move || {
         if details.state()() != UseResourceState::Ready {
             return;
@@ -1152,6 +1195,18 @@ fn ProjectDetailContent(id: Uuid) -> Element {
     };
     let can_change_status = view.as_ref().is_some_and(|view| view.can_change_status);
     let reactivate = status_change() == Some(true);
+    // Undo needs the current loaded authority, not the one that archived.
+    let undo_label = match (status_saved(), can_change_status, status_busy()) {
+        (Some(false), true, true) => "Updating project…",
+        (Some(false), true, false) => "Undo",
+        _ => "",
+    };
+    let (status_message, status_variant, status_icon) = match status_saved() {
+        // The response may be lost after the write committed, so claim no outcome.
+        _ if undo_failed() => ("Could not confirm restore. Retry Undo.", "danger", "!"),
+        Some(true) => ("Project reactivated.", "success", "✓"),
+        _ => ("Project archived.", "success", "✓"),
+    };
 
     rsx! {
         div {
@@ -1281,30 +1336,9 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                                 id: "project-status-confirm", r#type: "button", class: "btn btn-primary",
                                 disabled: status_busy(),
                                 onclick: move |_| {
-                                    let (Some(active), Some((requester, _))) = (status_change(), *binding.peek()) else { return; };
-                                    if status_busy() { return; }
-                                    status_busy.set(true);
-                                    status_failed.set(false);
-                                    spawn(async move {
-                                        match server_fns::set_project_active(id.to_string(), active, Some(requester)).await {
-                                            Ok(_) => {
-                                                status_saved.set(Some(if active { "Project reactivated." } else { "Project archived." }));
-                                                status_change.set(None);
-                                                refocus_actions.set(true);
-                                                // Show the persisted state under current authority.
-                                                details.restart();
-                                            }
-                                            // Denied authority hides the loaded project, as the fee
-                                            // balances do; Retry reloads under the bound requester.
-                                            Err(ServerFnError::ServerError { code: 401 | 403, .. }) => {
-                                                status_change.set(None);
-                                                status_saved.set(None);
-                                                access_lost.set(true);
-                                            }
-                                            Err(_) => status_failed.set(true),
-                                        }
-                                        status_busy.set(false);
-                                    });
+                                    if let Some(active) = status_change() {
+                                        write_status(active);
+                                    }
                                 },
                                 if status_busy() { "Updating project…" }
                                 else if reactivate { "Reactivate project" }
@@ -1318,9 +1352,11 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                 }
             }
             ToastContainer {
-                if let Some(message) = status_saved() {
-                    Toast { message: "{message}", variant: "success", icon: "✓", dismissible: true,
+                if status_saved().is_some() {
+                    Toast { message: "{status_message}", variant: "{status_variant}", icon: "{status_icon}", dismissible: true,
                         ondismiss: move |_| status_saved.set(None),
+                        action_label: "{undo_label}", action_busy: status_busy(),
+                        onaction: move |_| write_status(true),
                     }
                 }
             }

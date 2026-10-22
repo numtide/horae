@@ -31,6 +31,9 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
   const title = page.getByRole('heading', { level: 1, name: '[HDR-1] Header project', exact: true });
   const trigger = page.locator('#project-detail-actions-trigger');
   const dialog = page.getByRole('dialog');
+  const toastAction = name => page.locator('.toast').getByRole('button', { name, exact: true });
+  const undo = toastAction('Undo');
+  const isStatusWrite = r => new URL(r.url()).pathname.startsWith('/api/set_project_active');
   const open = async item => {
     await trigger.click();
     await page.locator('#project-detail-actions').getByRole('menuitem', { name: item, exact: true }).click();
@@ -322,6 +325,10 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
       await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
       const toastWidth = (await archivedToast.boundingBox()).width;
       assert.ok(toastWidth >= 280, `${theme}: toast width ${toastWidth}`);
+      // H102: the archive result offers a direct Undo beside Dismiss.
+      for (const name of ['Undo', 'Dismiss']) {
+        await expect(archivedToast.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
+      }
     }
     await expect(header).toContainText('Archived');
     await expect(trigger).toBeFocused();
@@ -411,6 +418,16 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
     await expect(header.getByText('Archived', { exact: true })).toBeVisible();
     assert.deepEqual(await overflowing(), [], '320px/200% archived overflow');
+    for (const name of ['Undo', 'Dismiss']) await expect(toastAction(name)).toBeInViewport({ ratio: 1 });
+    // With an action beside it, the message must stay at least one word wide rather than
+    // collapsing to a letter column; the handoff's action is semibold text.
+    const [messageWidth, longestWord] = await page.locator('.toast .toast-msg').evaluate(el => {
+      const style = getComputedStyle(el), ctx = document.createElement('canvas').getContext('2d');
+      ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      return [el.getBoundingClientRect().width, Math.max(...el.textContent.trim().split(/\s+/).map(word => ctx.measureText(word).width))];
+    });
+    assert.ok(messageWidth + 1 >= longestWord, `320px/200% toast message ${messageWidth}px is narrower than a word (${longestWord}px)`);
+    assert.equal(await undo.evaluate(el => getComputedStyle(el).fontWeight), '600', 'Undo uses the handoff weight');
     await trigger.scrollIntoViewIfNeeded();
     await open('Reactivate');
     for (const name of ['Reactivate project', 'Cancel']) {
@@ -424,6 +441,7 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await expect(dialog).toBeHidden();
     const toast = page.getByRole('status').filter({ hasText: 'Project reactivated.' });
     await expect(toast).toBeInViewport({ ratio: 1 });
+    await expect(undo).toHaveCount(0);
     await expect(header).not.toContainText('Archived');
     await expect(trigger).toBeFocused();
     assert.deepEqual(await overflowing(), [], '320px/200% reactivation overflow');
@@ -434,8 +452,263 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
     await page.setViewportSize({ width: 1440, height: 900 });
-    assert.deepEqual(errors, []);
     console.log('PASS: changed requester, policy and role fail closed and hide the project; Retry recovers the bound view; reactivation persists');
+
+    // Undo reactivates directly under current authority and changes nothing but the status.
+    const persisted = () => sql(`SELECT row_to_json(p) FROM (SELECT client_id,code,name,project_type,currency,rate_cents,
+        starts_on,ends_on,budget_kind,budget_amount_cents,budget_minutes,created_at,
+        (SELECT admin_notes FROM project_private_settings s WHERE s.project_id=projects.id) notes,
+        (SELECT array_agg(tag_id) FROM project_tag_links l WHERE l.project_id=projects.id) tags
+      FROM projects WHERE id='${project}') p`);
+    // xmin changes only when the row is rewritten, so it proves an idempotent retry wrote nothing.
+    const rowVersion = () => sql(`SELECT xmin FROM projects WHERE id='${project}'`);
+    const content = persisted();
+    const failure = page.getByText('Could not confirm restore. Retry Undo.', { exact: true });
+    const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const archive = async () => {
+      await open('Archive');
+      const done = page.waitForResponse(isStatusWrite);
+      await dialog.getByRole('button', { name: 'Archive project', exact: true }).click();
+      assert.equal((await done).status(), 200);
+      await expect(dialog).toBeHidden();
+      await expect(header.getByText('Archived', { exact: true })).toBeVisible();
+      await expect(undo).toBeEnabled();
+      assert.equal(active(), 'f');
+    };
+    const reactivate = async () => {
+      await open('Reactivate');
+      const done = page.waitForResponse(isStatusWrite);
+      await dialog.getByRole('button', { name: 'Reactivate project', exact: true }).click();
+      assert.equal((await done).status(), 200);
+      await expect(page.getByRole('status').filter({ hasText: 'Project reactivated.' })).toBeVisible();
+      await expect(undo).toHaveCount(0);
+      assert.equal(active(), 't');
+    };
+
+    await archive();
+    let releaseUndo;
+    const undoHeld = new Promise(resolve => { releaseUndo = resolve; });
+    await page.route('**/api/set_project_active*', async route => { await undoHeld; await route.continue(); }, { times: 1 });
+    let sent = statusRequests.length;
+    const undone = page.waitForResponse(isStatusWrite);
+    await undo.focus();
+    await page.keyboard.press('Enter');
+    const pendingUndo = toastAction('Updating project…');
+    await expect(pendingUndo).toBeDisabled();
+    await expect(trigger).toBeDisabled();
+    await expect(dialog).toBeHidden();
+    await page.keyboard.press('Enter');
+    await expect(dialog).toBeHidden();
+    await settle();
+    assert.equal(statusRequests.length, sent + 1, 'A pending Undo sends one request');
+    assert.equal(statusRequests.at(-1).active, true);
+    assert.deepEqual(statusRequests.at(-1).expected_requester, { org_id: org, user_id: actor.id });
+    releaseUndo();
+    assert.equal((await undone).status(), 200);
+    await expect(header).not.toContainText('Archived');
+    await expect(undo).toHaveCount(0);
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+    assert.equal(active(), 't');
+    assert.equal(persisted(), content, 'Undo changes only the status');
+    await page.reload();
+    await expect(title).toBeVisible();
+    await expect(header).not.toContainText('Archived');
+    await expect(header).toContainText('Header private note');
+    await expect(page.locator('.toast')).toHaveCount(0);
+    console.log('PASS: keyboard Undo reactivates once without a second confirmation; pending duplicates are suppressed; the result persists');
+
+    // Disabled buttons take no pointer events, so forced clicks fall through to the page;
+    // they must still send nothing, and a reload must not steal focus the user moved.
+    await archive();
+    let releasePointer;
+    const pointerHeld = new Promise(resolve => { releasePointer = resolve; });
+    await page.route('**/api/set_project_active*', async route => { await pointerHeld; await route.continue(); }, { times: 1 });
+    const sidebarProjects = page.locator('#app-navigation').getByRole('link', { name: 'Projects', exact: true });
+    try {
+      sent = statusRequests.length;
+      const pointerUndo = page.waitForResponse(isStatusWrite);
+      await undo.click();
+      await expect(pendingUndo).toBeDisabled();
+      await pendingUndo.click({ force: true });
+      await trigger.click({ force: true });
+      await expect(dialog).toBeHidden();
+      await settle();
+      assert.equal(statusRequests.length, sent + 1, 'Forced clicks on a pending Undo send nothing more');
+      await sidebarProjects.focus();
+      releasePointer();
+      assert.equal((await pointerUndo).status(), 200);
+    } finally {
+      releasePointer();
+    }
+    await expect(header).not.toContainText('Archived');
+    await expect(undo).toHaveCount(0);
+    await settle();
+    await expect(sidebarProjects).toBeFocused();
+    assert.equal(active(), 't');
+    assert.equal(persisted(), content);
+    console.log('PASS: forced pointer duplicates send one request; the reload keeps deliberately moved focus');
+
+    await archive();
+    sent = statusRequests.length;
+    await toastAction('Dismiss').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.toast')).toHaveCount(0);
+    await settle();
+    assert.equal(statusRequests.length, sent, 'Dismissal writes nothing');
+    assert.equal(active(), 'f');
+    await reactivate();
+    assert.equal(persisted(), content);
+    console.log('PASS: Dismiss removes Undo without writing; a later Reactivate works and offers no inverse Undo');
+
+    // Dismissing a pending Undo must not hide its later failure, or the archive has no visible retry.
+    await archive();
+    // The whole toast and each action's content stay on screen at a short 320px with 200% text.
+    const toastFits = async state => {
+      await expect(page.locator('.toast')).toBeInViewport({ ratio: 1 });
+      const spilled = await page.locator('.toast').evaluate(toast => {
+        const style = getComputedStyle(toast), box = toast.getBoundingClientRect();
+        const left = box.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+        const right = box.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
+        return [...toast.querySelectorAll('button')].filter(button => {
+          const r = button.getBoundingClientRect();
+          return r.left < left - 1 || r.right > right + 1 || button.scrollWidth > button.clientWidth + 1;
+        }).map(button => button.textContent.trim() || button.getAttribute('aria-label'));
+      });
+      assert.deepEqual(spilled, [], `320x568/200% ${state}: toast actions spill`);
+    };
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    let failHeld;
+    const dismissHeld = new Promise(resolve => { failHeld = resolve; });
+    await page.route('**/api/set_project_active*', async route => { await dismissHeld; await route.abort(); }, { times: 1 });
+    try {
+      const abandoned = page.waitForEvent('requestfailed', isStatusWrite);
+      await undo.focus();
+      await page.keyboard.press('Enter');
+      await expect(toastAction('Updating project…')).toBeDisabled();
+      await toastFits('pending');
+      await toastAction('Dismiss').focus();
+      await page.keyboard.press('Enter');
+      failHeld();
+      await abandoned;
+    } finally {
+      failHeld();
+    }
+    await expect(dialog).toBeHidden();
+    await expect(failure).toBeVisible();
+    await expect(undo).toBeEnabled();
+    await toastFits('failure');
+    assert.equal(active(), 'f');
+    const recovered = page.waitForResponse(isStatusWrite);
+    await undo.focus();
+    await page.keyboard.press('Enter');
+    assert.equal((await recovered).status(), 200);
+    await expect(header).not.toContainText('Archived');
+    await expect(undo).toHaveCount(0);
+    assert.equal(active(), 't');
+    assert.equal(persisted(), content);
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    console.log('PASS: a pending Undo dismissed before it fails still shows a retryable failure');
+
+    await archive();
+    await page.route('**/api/set_project_active*', route => route.abort(), { times: 1 });
+    const failedUndo = page.waitForEvent('requestfailed', isStatusWrite);
+    await undo.click();
+    await failedUndo;
+    await expect(dialog).toBeHidden();
+    await expect(failure).toBeVisible();
+    await expect(undo).toBeEnabled();
+    assert.equal(active(), 'f');
+    // The write commits but its response is lost; the retry converges without rewriting the row.
+    await page.route('**/api/set_project_active*', async route => { await route.fetch(); await route.abort(); }, { times: 1 });
+    const lostUndo = page.waitForEvent('requestfailed', isStatusWrite);
+    await undo.focus();
+    await page.keyboard.press('Enter');
+    await lostUndo;
+    await expect(failure).toBeVisible();
+    await expect(undo).toBeEnabled();
+    assert.equal(active(), 't', 'The unacknowledged write committed');
+    const committed = rowVersion();
+    const retriedUndo = page.waitForResponse(isStatusWrite);
+    await undo.focus();
+    await page.keyboard.press('Enter');
+    assert.equal((await retriedUndo).status(), 200);
+    await expect(header).not.toContainText('Archived');
+    await expect(undo).toHaveCount(0);
+    await expect(failure).toBeHidden();
+    assert.equal(active(), 't');
+    assert.equal(rowVersion(), committed, 'Retrying an already-active project rewrites nothing');
+    assert.equal(persisted(), content);
+    console.log('PASS: a failed or unacknowledged Undo stays visible and retryable outside the dialog and converges to active');
+
+    const rebind = route => {
+      const body = route.request().postDataJSON();
+      body.expected_requester.user_id = id(99);
+      return route.continue({ postData: JSON.stringify(body) });
+    };
+    for (const [change, revoke, restore] of [
+      ['account', () => page.route('**/api/set_project_active*', rebind, { times: 1 }), () => {}],
+      ['policy', () => sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'`),
+        () => sql(`UPDATE organizations SET permission_policy_version=0 WHERE id='${org}'`)],
+      ['role', () => sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`),
+        () => sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'`)],
+    ]) {
+      await archive();
+      await revoke();
+      try {
+        const denied = page.waitForResponse(isStatusWrite);
+        await undo.click();
+        assert.equal((await denied).status(), 403, `${change}: Undo is denied`);
+        await expect(page.getByRole('alert')).toContainText('Project details are unavailable');
+        await expect(header).toHaveCount(0);
+        await expect(page.locator('.toast')).toHaveCount(0);
+        await expect(dialog).toBeHidden();
+        await expect.poll(() => page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName),
+          { message: `${change}: focus after a denied Undo` }).toMatch(/^project-detail-(retry|back)$/);
+        assert.equal(active(), 'f', `${change}: a denied Undo changes nothing`);
+      } finally {
+        await restore();
+      }
+      await retry();
+      await expect(header.getByText('Archived', { exact: true })).toBeVisible();
+      await expect(undo).toHaveCount(0);
+      await reactivate();
+    }
+    assert.equal(persisted(), content);
+    console.log('PASS: a changed account, policy or role denies Undo, writes nothing and removes the stale notice');
+
+    // Leaving while Undo is pending carries neither its action nor its feedback to another project.
+    await archive();
+    let releaseAway;
+    const awayHeld = new Promise(resolve => { releaseAway = resolve; });
+    await page.route('**/api/set_project_active*', async route => { await awayHeld; await route.continue().catch(() => {}); }, { times: 1 });
+    const awaySettled = Promise.race([page.waitForResponse(isStatusWrite), page.waitForEvent('requestfailed', isStatusWrite)]);
+    await undo.click();
+    await expect(toastAction('Updating project…')).toBeDisabled();
+    await page.getByRole('link', { name: 'Back to Projects', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/projects`);
+    await page.getByRole('link', { name: 'Uncoded header project', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/projects/${uncoded}`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Uncoded header project', exact: true })).toBeVisible();
+    releaseAway();
+    await awaySettled;
+    await settle();
+    await expect(page.locator('.toast')).toHaveCount(0);
+    await expect(failure).toBeHidden();
+    await expect(header).not.toContainText('Archived');
+    assert.equal(sql(`SELECT active FROM projects WHERE id='${uncoded}'`), 't');
+    await page.goBack();
+    await page.goBack();
+    await expect(title).toBeVisible();
+    await expect(page.locator('.toast')).toHaveCount(0);
+    // Whether the abandoned request completed or not, the page shows the persisted status.
+    if (active() === 'f') await expect(header.getByText('Archived', { exact: true })).toBeVisible();
+    else await expect(header).not.toContainText('Archived');
+    assert.equal(persisted(), content);
+    console.log('PASS: navigating away during Undo isolates its action and feedback; the detail shows the persisted status');
+    assert.deepEqual(errors, []);
   } catch (error) {
     console.error(error);
     console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot({ timeout: 3000 }).catch(failure => failure.message) });
