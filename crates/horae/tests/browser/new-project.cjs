@@ -1158,9 +1158,33 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await screen.getByRole('button', { name: 'Save project', exact: true }).click();
     await expect(screen.getByRole('alert')).toBeVisible();
     await expect(screen.getByLabel('Project name', { exact: true })).toBeDisabled();
-    await expect(screen.getByRole('button', { name: 'Saving project…', exact: true })).toBeDisabled();
+    await expect(screen.getByRole('button', { name: 'Saving…', exact: true })).toBeDisabled();
     await expect(screen.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
     await expect(screen.getByRole('button', { name: 'Back to Projects', exact: true })).toBeDisabled();
+    // The disabled action stays whole while the commit outcome is unresolved,
+    // on a short narrow screen after the available fonts have settled.
+    const blockedViewport = page.viewportSize();
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.evaluate(async () => {
+      document.documentElement.style.fontSize = '200%';
+      await document.fonts.ready;
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+    await expect(screen.locator('#np-save')).toBeDisabled();
+    const busyFit = await screen.locator('#np-save').evaluate(save => {
+      const footer = save.closest('.np-footer');
+      footer.scrollTop = 0;
+      const box = save.getBoundingClientRect(), port = footer.getBoundingClientRect();
+      const top = Math.max(port.top + footer.clientTop, 0);
+      const bottom = Math.min(port.top + footer.clientTop + footer.clientHeight, innerHeight);
+      return box.top >= top - 1 && box.bottom <= bottom + 1 && box.left >= -1 && box.right <= innerWidth + 1
+        && save.scrollWidth <= save.clientWidth + 1 ? ''
+        : JSON.stringify({ label: save.textContent.trim(), box: [box.left, box.right, box.top, box.bottom].map(Math.round),
+          visible: [top, bottom].map(Math.round), viewport: [innerWidth, innerHeight] });
+    });
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.setViewportSize(blockedViewport);
+    assert.equal(busyFit, '', 'The blocked Saving… action fits its footer at 320x568 with 200% text');
     await screen.getByRole('button', { name: 'Retry request', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects/${created}`);
     await expect(page.getByRole('heading', { level: 1, name: '[BROWSER-NEW] Recovered latest edit', exact: true })).toBeVisible();

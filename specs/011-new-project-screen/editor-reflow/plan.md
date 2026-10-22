@@ -132,7 +132,31 @@ cases:
 - 390x320/100%: 184px form, 61px footer.
 
 The Edit suite now also checks the 1366x650/100% padding and long names at 1440px
-alongside 390px. This correction is pending the actual-package run.
+alongside 390px.
+
+On `68421ac9`, actual focused run 82103 exited 0: all 126 creation branches and
+the complete Edit suite, including configured and conflict flows, passed. Thirty
+native Edit cases passed in both themes with Instrument Sans loaded. The UX review
+then confirmed a remaining defect in native Chrome at 320x568 with 200% text:
+the busy label "Saving changes…" wrapped to two lines and the footer cut off the
+button's bottom. Correction, pending the actual-package run and not accepted:
+the footer button says "Saving…" while busy in both New and Edit; the header
+status keeps its full wording. New measures the disabled action inside the
+footer while its finalize outcome is unresolved. Edit holds the intercepted save open
+before its unchanged lost-acknowledgement flow. Both measure at 320x568 with 200%
+text after `document.fonts.ready`, then restore viewport and text size.
+
+Known limits:
+
+- The editor's size container and both container queries assume `.np-page` keeps
+  a definite height through `h-full` from the fixed shell. A future shell where
+  the editor's height depends on its content would collapse under size
+  containment. The existing short-screen and open-navigation checks would catch
+  that, but the assumption is not otherwise enforced.
+- On short editors the pinned footer can hold fewer rows than its actions need.
+  Cancel, Discard draft and the status text then scroll within the footer.
+  Focusing them scrolls them into view, and Save is checked whole at rest, but
+  not every action is visible at once.
 
 ## Validation and delivery
 

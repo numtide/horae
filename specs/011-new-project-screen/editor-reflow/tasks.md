@@ -24,6 +24,9 @@ certify this new regression. No backend or product decision is being reopened.
   Written and corrected after rebased `7555b08c`, not accepted: awaiting green actual-package
   regression checks. Measured causes and prior failures are summarized in
   `plan.md`; shared defaults and the persistent-actions contract are unchanged.
+  Run 82103 on `68421ac9` passed; a native UX finding (two-line busy label cut
+  off at 320x568/200%) led to a shorter "Saving…" button label and blocked-save
+  geometry checks, still pending.
 - [ ] R004 [US7] Verify configured/legacy Edit, creation conditional panels,
   discard/reload focus and unchanged saved/draft state with the existing browser
   suites; record evidence in this directory's `plan.md`.

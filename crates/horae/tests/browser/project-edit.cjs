@@ -401,12 +401,41 @@ const before = sql(`SELECT json_build_array(
     await expect(editor.locator('#np-name')).toHaveValue('Configured edit fixture');
     await editor.locator('#np-name').fill('Committed with a lost acknowledgement');
     const requests = [];
+    // Hold the save open so its busy action can be measured; it then commits and
+    // loses its acknowledgement exactly as before.
+    let releaseSave;
+    const heldSave = new Promise(resolve => { releaseSave = resolve; });
     await page.route('**/api/save_project_editor*', async route => {
       requests.push(route.request().postData());
+      await heldSave;
       await route.fetch();
       await route.abort('failed');
     });
     await editor.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(editor.locator('#np-save')).toHaveText('Saving…');
+    await expect(editor.locator('#np-save')).toBeDisabled();
+    const busyViewport = page.viewportSize();
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.evaluate(async () => {
+      document.documentElement.style.fontSize = '200%';
+      await document.fonts.ready;
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+    const busyFit = await editor.locator('#np-save').evaluate(save => {
+      const footer = save.closest('.np-footer');
+      footer.scrollTop = 0;
+      const box = save.getBoundingClientRect(), port = footer.getBoundingClientRect();
+      const top = Math.max(port.top + footer.clientTop, 0);
+      const bottom = Math.min(port.top + footer.clientTop + footer.clientHeight, innerHeight);
+      return box.top >= top - 1 && box.bottom <= bottom + 1 && box.left >= -1 && box.right <= innerWidth + 1
+        && save.scrollWidth <= save.clientWidth + 1 ? ''
+        : JSON.stringify({ label: save.textContent.trim(), box: [box.left, box.right, box.top, box.bottom].map(Math.round),
+          visible: [top, bottom].map(Math.round), viewport: [innerWidth, innerHeight] });
+    });
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.setViewportSize(busyViewport);
+    releaseSave();
+    assert.equal(busyFit, '', 'The busy Saving… action fits its footer at 320x568 with 200% text');
     await expect(editor.getByRole('alert')).toBeVisible();
     assert.equal(sql(`SELECT name FROM projects WHERE id = '${configuredId}'`), 'Committed with a lost acknowledgement');
     const savedRevision = sql(`SELECT edit_revision FROM projects WHERE id = '${configuredId}'`);

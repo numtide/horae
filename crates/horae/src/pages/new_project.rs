@@ -697,12 +697,13 @@ fn ProjectEditor(
                     r#type: "button",
                     disabled: !can_create || locked || unresolved_request,
                     onclick: move |_| request_intent.call(if editing { Intent::Save } else { Intent::Create }),
+                    // Short in both modes: the header status keeps the full wording.
                     if busy() && editing {
-                        "Saving changes…"
+                        "Saving…"
                     } else if editing {
                         "Save changes"
                     } else if intent() == Some(Intent::Create) {
-                        "Saving project…"
+                        "Saving…"
                     } else {
                         "Save project"
                     }
