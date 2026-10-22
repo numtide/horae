@@ -327,6 +327,9 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
               await probe.addScriptTag({ url: script });
               await probe.locator('#panel-trigger').click();
               await expect(probe.locator('#panel')).toBeVisible();
+              // menu.js focuses after the native toggle event; wait for that before any keys.
+              const initial = { menu: '[role="menuitem"]', select: 'input', calendar: '.dp-day.picked' }[kind];
+              await expect(probe.locator(`#panel ${initial}`).first()).toBeFocused();
               const g = await probe.evaluate(() => {
                 const panel = document.getElementById('panel');
                 const a = document.getElementById('panel-trigger').getBoundingClientRect(), p = panel.getBoundingClientRect();

@@ -119,6 +119,11 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
         }
         await open('Archive');
         assert.equal(await dialog.locator('.modal').evaluate(el => el.scrollWidth <= el.clientWidth + 1), true, `${label}: dialog overflow`);
+        if (zoom === 1 && !fontSize && height === 900 && [320, 1440].includes(width)) {
+          const padding = await dialog.locator('.modal-body').evaluate(el => { const s = getComputedStyle(el); return [s.paddingLeft, s.paddingRight]; });
+          const expected = width === 320 ? '12px' : '24px';
+          assert.deepEqual(padding, [expected, expected], `${label}: dialog body padding`);
+        }
         for (const name of ['Archive project', 'Cancel']) {
           const action = dialog.getByRole('button', { name, exact: true });
           await action.scrollIntoViewIfNeeded();
@@ -213,7 +218,15 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     release();
     assert.equal((await archived).status(), 200);
     await expect(dialog).toBeHidden();
-    await expect(page.getByRole('status').filter({ hasText: 'Project archived.' })).toBeInViewport({ ratio: 1 });
+    const archivedToast = page.getByRole('status').filter({ hasText: 'Project archived.' });
+    await expect(archivedToast).toBeInViewport({ ratio: 1 });
+    // The fixed container's toast keeps the token minimum (280px) at desktop width, in both themes.
+    assert.equal(page.viewportSize().width, 1440);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+      const toastWidth = (await archivedToast.boundingBox()).width;
+      assert.ok(toastWidth >= 280, `${theme}: toast width ${toastWidth}`);
+    }
     await expect(header).toContainText('Archived');
     await expect(trigger).toBeFocused();
     assert.equal(active(), 'f');
