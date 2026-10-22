@@ -96,7 +96,21 @@ collects the work.
 
 ## Acceptance status (2026-10-22)
 
-**Local gates on the frozen candidate package** (all pass unless noted):
+**Post-rebase local gates** (source `ba48745b` on master `b109a26a`):
+
+- The five changed source, generator, CSS, suite and runner files are
+  byte-identical to the pre-rebase candidate.
+- `horae-core` tests (201), the 8 `pages::reports` tests, offline server
+  all-targets clippy, the wasm check and `nix fmt -- --ci` pass.
+- The Nix package builds:
+  `/nix/store/1y9asdb4h97nkcl0z96nyylja6nn4p0r-horae-0.1.0`.
+- On that package, in a fresh disposable database, the six focused suites from
+  quickstart.md pass (`reports-currency-totals` first).
+- The full 39-suite order, the style audit and the native checks below were not
+  repeated after the rebase. They are pre-rebase evidence until exact-head CI
+  (T020) runs.
+
+**Pre-rebase local gates** (candidate on `8ae8458e`; all pass unless noted):
 
 - The new suite fails cleanly on the merged base: `the From control has id report-filter-from`.
 - The regenerated utilities add exactly 13 selectors and remove none.
@@ -109,7 +123,7 @@ collects the work.
   changes: narrow date padding, a shorter page at 320px, and the select height
   exception at 768px.
 
-**Native Chrome (coordinator):**
+**Native Chrome (coordinator, pre-rebase preview):**
 
 - The 24-case matrix and keyboard editing of both dates pass.
 - The native date picker passes:
