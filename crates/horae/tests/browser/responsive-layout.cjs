@@ -171,6 +171,49 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
       await expect(page.locator('.ts-dayitem.active .ts-dayitem-name')).toHaveText('Sun');
       await headersFit();
     });
+    await check('shared toasts keep message and dismiss control inside the viewport at normal and enlarged text', async () => {
+      await visit('/components', 'get_me');
+      const toasts = page.locator('.gallery-section .toast');
+      await expect(toasts).toHaveCount(3);
+      // Stress only a rendered label, not stored data.
+      await toasts.last().locator('.toast-msg').evaluate(el => { el.textContent = `Draft saved ${'unbroken_reference_'.repeat(6)}`; });
+      try {
+        for (const theme of ['dark', 'light']) {
+          for (const fontSize of ['', '200%']) {
+            for (const width of [320, 390, 1440]) {
+              const label = `${theme}/${width}px/text ${fontSize || '100%'}`;
+              await page.setViewportSize({ width, height: 1000 });
+              await page.evaluate(({ theme, fontSize }) => {
+                document.documentElement.dataset.theme = theme;
+                document.documentElement.style.fontSize = fontSize;
+              }, { theme, fontSize });
+              await toasts.last().scrollIntoViewIfNeeded();
+              const problems = await toasts.evaluateAll(toasts => toasts.flatMap(toast => {
+                const box = toast.getBoundingClientRect(), problems = [];
+                const name = toast.querySelector('.toast-msg').textContent.slice(0, 20);
+                if (box.left < -1 || box.right > innerWidth + 1) problems.push(`${name}: outside viewport ${box.left}..${box.right}`);
+                if (toast.scrollWidth > toast.clientWidth + 1) problems.push(`${name}: content overflows the toast`);
+                for (const part of toast.querySelectorAll('.toast-msg, .toast-close')) {
+                  const r = part.getBoundingClientRect();
+                  if (r.left < box.left - 1 || r.right > box.right + 1 || r.top < box.top - 1 || r.bottom > box.bottom + 1)
+                    problems.push(`${name}: ${part.className} outside the toast`);
+                }
+                const close = toast.querySelector('.toast-close');
+                if (close) {
+                  const r = close.getBoundingClientRect();
+                  if (!close.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2))) problems.push(`${name}: dismiss control is covered`);
+                }
+                return problems;
+              }));
+              assert.deepEqual(problems, [], label);
+              await expect(toasts.last().getByRole('button', { name: 'Dismiss', exact: true })).toBeInViewport({ ratio: 1 });
+            }
+          }
+        }
+      } finally {
+        await page.evaluate(() => { document.documentElement.style.fontSize = ''; delete document.documentElement.dataset.theme; });
+      }
+    });
     assert.deepEqual(errors, []);
     assert.deepEqual(failures, []);
   } finally { await browser.close(); }

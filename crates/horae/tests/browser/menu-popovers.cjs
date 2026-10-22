@@ -396,7 +396,31 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
           const menu = page.getByRole('menu');
           await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toBeFocused();
           const geometry = await visibleItems(menu);
-          assert.ok(geometry.inside && geometry.items.every(item => item.hit), JSON.stringify({ zoom, geometry }));
+          assert.ok(geometry.inside, JSON.stringify({ zoom, geometry }));
+          // A zoomed menu may scroll internally: every enabled item becomes visible
+          // as the keyboard reaches it, rather than all rows at once.
+          const hit = item => item.evaluate(el => { const b = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)); });
+          for (const name of ['Edit', 'Pin', 'Archive', 'Delete']) {
+            const item = menu.getByRole('menuitem', { name, exact: true });
+            if (name !== 'Edit') await page.keyboard.press('ArrowDown');
+            await expect(item).toBeFocused();
+            assert.ok(await hit(item), `keyboard reveals ${name} at zoom ${zoom}`);
+          }
+          await page.keyboard.press('Home');
+          await expect(menu.getByRole('menuitem', { name: 'Edit', exact: true })).toBeFocused();
+          // The final, disabled row is reachable by scrolling inside the menu with the pointer.
+          const unavailable = menu.getByRole('menuitem', { name: 'Unavailable', exact: true });
+          const scrollable = await menu.evaluate(el => el.scrollHeight > el.clientHeight);
+          if (zoom === 2) assert.ok(scrollable, 'The zoomed gallery menu scrolls internally');
+          if (scrollable) {
+            const box = await menu.boundingBox();
+            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+            await page.mouse.wheel(0, 400);
+            await expect.poll(() => hit(unavailable), { message: `pointer scroll reveals Unavailable at zoom ${zoom}` }).toBe(true);
+            await expect(menu).toBeVisible();
+          } else {
+            assert.ok(await hit(unavailable), `Unavailable visible at zoom ${zoom}`);
+          }
           await page.keyboard.press('End');
           await expect(menu.getByRole('menuitem', { name: 'Delete', exact: true })).toBeFocused();
           await page.keyboard.press('Escape');

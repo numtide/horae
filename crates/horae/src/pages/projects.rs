@@ -1131,12 +1131,13 @@ fn ProjectDetailContent(id: Uuid) -> Element {
             return;
         }
         // A reload that loses access must not leave the previous success beside it.
-        let loaded = matches!(&*details.read(), Some(Ok(_)));
+        let loaded = !access_lost() && matches!(&*details.read(), Some(Ok(_)));
         if !loaded {
             status_saved.set(None);
+            restore_detail_focus("project-detail-back");
         }
         if refocus_actions.take() && loaded {
-            restore_actions_focus();
+            restore_detail_focus("project-detail-actions-trigger");
         }
     });
     let ready = details.state()() == UseResourceState::Ready;
@@ -1262,7 +1263,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                     h2 { id: "project-status-title", class: "modal-title m-0",
                         if reactivate { "Reactivate this project?" } else { "Archive this project?" }
                     }
-                    div { class: "modal-body",
+                    div { class: "modal-body px-3 sm:px-6 wrap-anywhere",
                         p { class: "text-sm text-secondary",
                             if reactivate {
                                 "Only project status changes. Existing time entries, invoices and budgets are kept."
@@ -1275,7 +1276,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                                 "Could not update project status. You can retry safely, or cancel and refresh."
                             }
                         }
-                        div { class: "modal-actions",
+                        div { class: "modal-actions flex-wrap",
                             button {
                                 id: "project-status-confirm", r#type: "button", class: "btn btn-primary",
                                 disabled: status_busy(),
@@ -1327,18 +1328,18 @@ fn ProjectDetailContent(id: Uuid) -> Element {
     }
 }
 
-/// A status change reloads the page, unmounting the Actions menu before the
-/// dialog can return focus to it. Refocus the rebuilt trigger, unless the user
-/// has already moved focus beyond the dialog's fallback during the reload.
-fn restore_actions_focus() {
-    document::eval(
-        "requestAnimationFrame(() => {
+/// A reload unmounts its opener. Recover focus on the rebuilt action or Back
+/// after an error, without overriding deliberate navigation during the reload.
+fn restore_detail_focus(target: &'static str) {
+    let target = serde_json::json!(target);
+    document::eval(&format!(
+        "requestAnimationFrame(() => {{
             const active = document.activeElement;
-            if (!active || active === document.body || active.id === 'project-detail-back') {
-                document.getElementById('project-detail-actions-trigger')?.focus();
-            }
-        });",
-    );
+            if (!active || active === document.body || active.id === 'project-detail-back') {{
+                document.getElementById({target})?.focus();
+            }}
+        }});",
+    ));
 }
 
 fn matching_tag_projects(links: &[ProjectTagLink], selected: Option<Uuid>) -> BTreeSet<Uuid> {

@@ -110,11 +110,20 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
         assert.deepEqual(await overflowing(), [], `${label}: overflow`);
         assert.equal(await header.evaluate(el => el.scrollWidth <= el.clientWidth + 1), true, `${label}: header overflow`);
         if (width === 1440 && height === 900) titleColors[theme] = await title.evaluate(el => getComputedStyle(el).color);
+        if (zoom === 1 && !fontSize && height >= 844 && [390, 1440].includes(width)) {
+          // The handoff's header controls are 44px tall.
+          for (const control of [page.getByRole('link', { name: 'Edit project', exact: true }), trigger]) {
+            const box = await control.boundingBox();
+            assert.ok(Math.abs(box.height - 44) <= 1, `${label}: control height ${box.height}`);
+          }
+        }
         await open('Archive');
         assert.equal(await dialog.locator('.modal').evaluate(el => el.scrollWidth <= el.clientWidth + 1), true, `${label}: dialog overflow`);
-        const cancel = dialog.getByRole('button', { name: 'Cancel', exact: true });
-        await cancel.scrollIntoViewIfNeeded();
-        await expect(cancel).toBeInViewport();
+        for (const name of ['Archive project', 'Cancel']) {
+          const action = dialog.getByRole('button', { name, exact: true });
+          await action.scrollIntoViewIfNeeded();
+          await expect(action).toBeInViewport({ ratio: 1 });
+        }
         await page.keyboard.press('Escape');
         await expect(dialog).toBeHidden();
       }
@@ -204,15 +213,23 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     release();
     assert.equal((await archived).status(), 200);
     await expect(dialog).toBeHidden();
-    await expect(page.getByRole('status').filter({ hasText: 'Project archived.' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Project archived.' })).toBeInViewport({ ratio: 1 });
     await expect(header).toContainText('Archived');
     await expect(trigger).toBeFocused();
     assert.equal(active(), 'f');
     assert.deepEqual(statusRequests.at(-1).expected_requester, { org_id: org, user_id: actor.id });
-    // A new action replaces the previous result rather than showing beside it.
-    await open('Reactivate');
+    // A refresh that loses access must not leave the previous success beside the unavailable state.
+    await page.route('**/api/get_project_detail_view*', route => route.fulfill({ status: 403, contentType: 'text/plain', body: 'Forbidden' }), { times: 1 });
+    const deniedRefresh = page.waitForResponse(r => new URL(r.url()).pathname.startsWith('/api/get_project_detail_view'));
+    await page.locator('#project-detail-refresh').click();
+    assert.equal((await deniedRefresh).status(), 403);
+    await expect(page.getByRole('alert')).toContainText('Project details are unavailable');
     await expect(page.locator('.toast')).toHaveCount(0);
-    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    // The focused Refresh button unmounts; focus should land on a recovery control, not the page body.
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName),
+      { message: 'Focus after a denied refresh' }).toMatch(/^project-detail-(retry|back)$/);
+    await retry();
+    await expect(header).toContainText('Archived');
     await page.reload();
     await expect(title).toBeVisible();
     await expect(header).toContainText('Archived');
@@ -255,22 +272,58 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
       sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'`);
       sql(`DELETE FROM assignments WHERE id='${id(7)}'`);
     }
-    await page.setViewportSize({ width: 320, height: 700 });
     await page.locator('#project-detail-refresh').click();
+    await expect(trigger).toBeVisible();
+
+    // A successful write whose reload is denied shows no success beside the unavailable state.
+    await open('Reactivate');
+    await page.route('**/api/get_project_detail_view*', route => route.fulfill({ status: 403, contentType: 'text/plain', body: 'Forbidden' }), { times: 1 });
+    const written = page.waitForResponse(r => new URL(r.url()).pathname.startsWith('/api/set_project_active'));
+    const deniedReload = page.waitForResponse(r => new URL(r.url()).pathname.startsWith('/api/get_project_detail_view'));
+    await dialog.getByRole('button', { name: 'Reactivate project', exact: true }).click();
+    assert.equal((await written).status(), 200);
+    assert.equal((await deniedReload).status(), 403);
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole('alert')).toContainText('Project details are unavailable');
+    await expect(page.locator('.toast')).toHaveCount(0);
+    await expect(page.locator('#project-detail-back')).toBeFocused();
+    assert.equal(active(), 't');
+    await retry();
+    await expect(header).not.toContainText('Archived');
+    await open('Archive');
+    const rearchived = page.waitForResponse(r => new URL(r.url()).pathname.startsWith('/api/set_project_active'));
+    await dialog.getByRole('button', { name: 'Archive project', exact: true }).click();
+    assert.equal((await rearchived).status(), 200);
     await expect(header.getByText('Archived', { exact: true })).toBeVisible();
+    assert.equal(active(), 'f');
+
+    // 320px with a 200% root font size (text and rem spacing): archived, reactivated, then a new action.
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });
+    await expect(header.getByText('Archived', { exact: true })).toBeVisible();
+    assert.deepEqual(await overflowing(), [], '320px/200% archived overflow');
     await trigger.scrollIntoViewIfNeeded();
     await open('Reactivate');
-    await expect(dialog.getByRole('button', { name: 'Reactivate project', exact: true })).toBeInViewport();
+    for (const name of ['Reactivate project', 'Cancel']) {
+      const action = dialog.getByRole('button', { name, exact: true });
+      await action.scrollIntoViewIfNeeded();
+      await expect(action).toBeInViewport({ ratio: 1 });
+    }
     const reactivated = page.waitForResponse(r => new URL(r.url()).pathname.startsWith('/api/set_project_active'));
     await dialog.getByRole('button', { name: 'Reactivate project', exact: true }).click();
     assert.equal((await reactivated).status(), 200);
     await expect(dialog).toBeHidden();
     const toast = page.getByRole('status').filter({ hasText: 'Project reactivated.' });
-    await expect(toast).toBeInViewport();
+    await expect(toast).toBeInViewport({ ratio: 1 });
     await expect(header).not.toContainText('Archived');
     await expect(trigger).toBeFocused();
-    assert.deepEqual(await overflowing(), [], '320px reactivation overflow');
+    assert.deepEqual(await overflowing(), [], '320px/200% reactivation overflow');
     assert.equal(active(), 't');
+    // A new action replaces the previous result rather than showing beside it.
+    await open('Archive');
+    await expect(page.locator('.toast')).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
     await page.setViewportSize({ width: 1440, height: 900 });
     assert.deepEqual(errors, []);
     console.log('PASS: changed requester, policy and role fail closed and hide the project; Retry recovers the bound view; reactivation persists');

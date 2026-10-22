@@ -28,8 +28,9 @@ increment reaches. Requirement IDs below are #208's (`feat/project-dashboard`,
 | FR-020 design system | Implemented; verification pending | Utility classes, `Menu`, `Modal`, `Badge`, `Toast`, `NavIcon`; no inline styles, sample data or prototype handlers. | H009 and independent review. |
 | FR-021 / FR-022 | Not affected | No quantities; the detail read gains no writes. | — |
 
-Tasks and Team cards and fee balances are unchanged; later dashboard slices
-replace them.
+Tasks and Team cards and fee-balance behavior are unchanged; later dashboard
+slices replace them. The fee date controls gain local minimum-width utilities
+because their intrinsic width overflowed the page with enlarged text.
 
 ## Authority mapping
 
@@ -103,6 +104,9 @@ remain mandatory. No constitutional exception is required.
   200% CSS-zoom test; verify normal/scaled menus, selectors and calendars, plus
   their existing keyboard, scrolling and dismissal checks. CSS zoom is distinct
   from native browser zoom; 200% root-font tests also enlarge rem-based spacing.
+- [ ] H008b Verify enlarged-text date controls, wrapping confirmation actions,
+  viewport-constrained shared toasts and focus after a denied refresh. Cover
+  other shared-toast consumers and retain normal desktop sizing.
 - [ ] H009 Server/WASM Clippy, `cargo test -p horae --features server`
   (`detail_navigation`, `canonical_read_tests::detail`, `bulk_tests`,
   `mutation_tests`), `nix fmt`, and the browser runner including
