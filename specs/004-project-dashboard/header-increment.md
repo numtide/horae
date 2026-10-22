@@ -65,17 +65,17 @@ one and unknown policies are rejected; no permission is added or activated.
 1. Reuse `ProjectDetailView` and its bound requester, policy and generation guards.
    Add identity fields in the existing authorized transaction; do not fetch a
    broader client catalog or expose private editor data.
-2. Compose the header with existing tokens/utilities and shared controls. Keep
+1. Compose the header with existing tokens/utilities and shared controls. Keep
    Back available during loading and denial; preserve saved project information
    in a disclosure and current unrelated detail sections until their own slices.
-3. Use the existing status endpoints, with a current policy-zero active-actor
+1. Use the existing status endpoints, with a current policy-zero active-actor
    check inside their transaction before project locks. Reject denied mutations,
    suppress stale details and retain the original requester for Retry. Do not
    implement or activate policy-one lifecycle authority.
-4. Regenerate SQLx in an isolated PostgreSQL sandbox, then compile/test offline,
+1. Regenerate SQLx in an isolated PostgreSQL sandbox, then compile/test offline,
    validate SSR/WASM, existing bulk callers, browser navigation and lifecycle,
    desktop/mobile themes, keyboard and enlarged text. Preserve shared CSS defaults.
-5. Obtain independent technical and UX/regression reviews; resolve findings and
+1. Obtain independent technical and UX/regression reviews; resolve findings and
    verify required CI on the exact published head before the protected merge queue.
 
 Constitution: no amount/duration arithmetic or domain-rule duplication, no new
@@ -99,6 +99,10 @@ remain mandatory. No constitutional exception is required.
   policy change committed while the write waits (`bulk_tests.rs`); existing
   callers pass the actor.
 - [x] H008 Regenerate `.sqlx/` (detail context query and new test queries).
+- [ ] H008a Fix the shared popover coordinate mismatch exposed by the header's
+  200% CSS-zoom test; verify normal/scaled menus, selectors and calendars, plus
+  their existing keyboard, scrolling and dismissal checks. CSS zoom is distinct
+  from native browser zoom; 200% root-font tests also enlarge rem-based spacing.
 - [ ] H009 Server/WASM Clippy, `cargo test -p horae --features server`
   (`detail_navigation`, `canonical_read_tests::detail`, `bulk_tests`,
   `mutation_tests`), `nix fmt`, and the browser runner including

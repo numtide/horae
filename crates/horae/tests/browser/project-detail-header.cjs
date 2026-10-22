@@ -92,10 +92,11 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
 
     const titleColors = {};
     for (const theme of ['dark', 'light']) {
-      // CSS zoom scales the whole page; a 200% root font size enlarges text only.
+      // CSS zoom scales the whole page; a 200% root font size enlarges text and rem-based spacing, not px.
       for (const [width, height, zoom, fontSize] of [[320, 900, 1, ''], [390, 844, 1, ''], [768, 900, 1, ''], [1440, 900, 1, ''],
         [1440, 360, 1, ''], [768, 900, 2, ''], [320, 900, 1, '200%'], [390, 844, 1, '200%']]) {
         const label = `${theme}/${width}x${height}/zoom ${zoom}/text ${fontSize || '100%'}`;
+        console.log(`CHECK: header and confirmation at ${label}`);
         await page.setViewportSize({ width, height });
         await page.evaluate(({ theme, zoom, fontSize }) => {
           document.documentElement.dataset.theme = theme;

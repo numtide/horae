@@ -12,9 +12,11 @@
   function focusItem(menu, item) {
     if (!item) return;
     focus(item);
+    // Rects are visual pixels; scroll offsets are the popover's own CSS-zoomed pixels.
+    const zoom = menu.currentCSSZoom || 1;
     const box = menu.getBoundingClientRect(), bounds = item.getBoundingClientRect();
-    if (bounds.bottom > box.bottom) menu.scrollTop += bounds.bottom - box.bottom;
-    else if (bounds.top < box.top) menu.scrollTop -= box.top - bounds.top;
+    if (bounds.bottom > box.bottom) menu.scrollTop += (bounds.bottom - box.bottom) / zoom;
+    else if (bounds.top < box.top) menu.scrollTop -= (box.top - bounds.top) / zoom;
   }
   function close(menu, restoreFocus = false) {
     menu.hidePopover();
@@ -35,16 +37,20 @@
     const gap = 4, edge = 8;
     // Measure before opening without painting or scrolling the containing table.
     menu.style.display = 'block';
+    // The anchor and viewport are visual pixels, but the popover's own sizes and
+    // styles are scaled by its effective CSS zoom (inherited from a zoomed page).
+    // A hidden popover reports 1, so read it once displayed; unsupported means 1.
+    const zoom = menu.currentCSSZoom || 1;
     menu.style.maxHeight = '';
-    if (isSelect(menu)) menu.style.width = `${anchor.width}px`;
-    const width = menu.offsetWidth, height = menu.offsetHeight;
+    if (isSelect(menu)) menu.style.width = `${anchor.width / zoom}px`;
+    const width = menu.offsetWidth * zoom, height = menu.offsetHeight * zoom;
     const below = Math.max(0, innerHeight - anchor.bottom - gap - edge);
     const above = Math.max(0, anchor.top - gap - edge);
     const upward = height > below && above > below;
-    menu.style.maxHeight = `${Math.max(1, upward ? above : below)}px`;
+    menu.style.maxHeight = `${Math.max(1, upward ? above : below) / zoom}px`;
     const left = menu.classList.contains('menu-popover-right') ? anchor.right - width : anchor.left;
-    menu.style.left = `${Math.max(edge, Math.min(left, innerWidth - width - edge))}px`;
-    menu.style.top = `${Math.max(edge, upward ? anchor.top - gap - menu.offsetHeight : anchor.bottom + gap)}px`;
+    menu.style.left = `${Math.max(edge, Math.min(left, innerWidth - width - edge)) / zoom}px`;
+    menu.style.top = `${Math.max(edge, upward ? anchor.top - gap - menu.offsetHeight * zoom : anchor.bottom + gap) / zoom}px`;
     menu.style.removeProperty('display');
     menu.scrollTop = scrollTop;
   }
