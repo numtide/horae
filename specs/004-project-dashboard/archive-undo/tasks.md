@@ -15,7 +15,7 @@ disposable; no account writes, schema changes or policy activation.
 Independent acceptance: keyboard Undo has no extra dialog, restores active state
 through reload and preserves project content. Dismiss does not write.
 
-- [ ] T003 [US1] Add missing-action, direct keyboard Undo, pending duplicate guard,
+- [x] T003 [US1] Add missing-action, direct keyboard Undo, pending duplicate guard,
   dismissal and reload assertions in `crates/horae/tests/browser/project-detail-header.cjs`;
   observe the baseline failure before production changes.
 - [ ] T004 [US1] Add opt-in action rendering in `crates/horae/src/components/toast.rs`,
@@ -28,7 +28,7 @@ through reload and preserves project content. Dismiss does not write.
 Independent acceptance: retry/lost-response requests converge to active state;
 denial cannot write or leave stale details/toasts; project navigation isolates state.
 
-- [ ] T006 [US2] Extend `crates/horae/tests/browser/project-detail-header.cjs` with
+- [x] T006 [US2] Extend `crates/horae/tests/browser/project-detail-header.cjs` with
   retryable failure, lost response after commit, authority loss and project-navigation
   cases, preserving existing real-server and data-isolation assertions.
 - [ ] T007 [US2] Complete visible retry and access-loss handling in

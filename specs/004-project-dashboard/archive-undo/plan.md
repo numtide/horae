@@ -94,5 +94,9 @@ mandatory. No new policy, SQL cache, migration or constitutional exception.
 
 Specify/clarify: reused H102, two user stories, five requirements, eight checklist
 items passing; no product question. Plan setup executed for this bounded path.
-T002 recorded above; T003/T006 browser tests written, baseline red observation
-pending. Implementation, independent reviews and delivery are pending.
+T002 recorded above. T003/T006 baseline red observed: against the `8b3eda6b`
+header and backend, the existing header, navigation and sixteen theme/size checks
+passed and the first archive failed only on the missing Undo. T004/T005/T007 are
+implemented (optional `Toast` action; one status writer shared by confirmation and
+Undo, failures shown in the toast for Undo) and await green verification.
+Independent reviews and delivery are pending.
