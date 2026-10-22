@@ -202,7 +202,7 @@ const before = sql(`SELECT json_build_array(
       // At rest, before any focus scrolls it, Save is whole inside the footer.
       const rest = await reflow.locator('.np-footer').evaluate(footer => {
         footer.scrollTop = 0;
-        const save = [...footer.querySelectorAll('button')].find(button => button.textContent.trim() === 'Save changes');
+        const save = footer.querySelector('#np-save');
         const box = save.getBoundingClientRect(), port = footer.getBoundingClientRect();
         const top = Math.max(port.top + footer.clientTop, 0), bottom = Math.min(port.top + footer.clientTop + footer.clientHeight, innerHeight);
         return box.top >= top - 1 && box.bottom <= bottom + 1 && box.left >= -1 && box.right <= innerWidth + 1 ? ''
@@ -260,23 +260,36 @@ const before = sql(`SELECT json_build_array(
       SELECT u.id, u.name FROM assignments a JOIN users u ON u.id = a.user_id
       WHERE a.project_id = '${project.id}' ORDER BY (u.org_role = 'admin'), u.name LIMIT 1
     ) m`));
-    const longName = 'Maximiliana Wilhelmina Konstantinopoulou-Ravensworth of Northumberland';
+    // Long enough to truncate even in the wide desktop identity column.
+    const longName = 'Maximiliana Wilhelmina Konstantinopoulou-Ravensworth of Northumberland and the Western Isles of Strathclyde';
     sql(`UPDATE users SET name = $$${longName}$$ WHERE id = '${member.id}'`);
     try {
-      await page.setViewportSize({ width: 390, height: 900 });
-      await page.goto(`${base}/projects/${project.id}/edit`);
-      const longLabel = page.locator('.np-assignment-row').locator(`[title="${longName}"]`);
-      await expect(longLabel).toBeVisible();
-      const layout = await longLabel.evaluate(item => {
-        const avatar = item.closest('.np-assignment-row').querySelector('.avatar').getBoundingClientRect();
-        const text = item.getBoundingClientRect();
-        return { sameRow: text.top < avatar.bottom && text.bottom > avatar.top && text.left >= avatar.right - 1,
-          ellipsis: getComputedStyle(item).textOverflow === 'ellipsis' && item.scrollWidth > item.clientWidth };
-      });
-      if (!layout.sameRow || !layout.ellipsis) problems.push(`390x900 at 100% text long name: ${JSON.stringify(layout)}`);
+      for (const width of [390, 1440]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(`${base}/projects/${project.id}/edit`);
+        const longLabel = page.locator('.np-assignment-row').locator(`[title="${longName}"]`);
+        await expect(longLabel).toBeVisible();
+        const layout = await longLabel.evaluate(item => {
+          const avatar = item.closest('.np-assignment-row').querySelector('.avatar').getBoundingClientRect();
+          const text = item.getBoundingClientRect();
+          return { sameRow: text.top < avatar.bottom && text.bottom > avatar.top && text.left >= avatar.right - 1,
+            ellipsis: getComputedStyle(item).textOverflow === 'ellipsis' && item.scrollWidth > item.clientWidth };
+        });
+        if (!layout.sameRow || !layout.ellipsis) problems.push(`${width}x900 at 100% text long name: ${JSON.stringify(layout)}`);
+      }
     } finally {
       sql(`UPDATE users SET name = $$${member.name}$$ WHERE id = '${member.id}'`);
     }
+    // An ordinary short laptop at normal text keeps the 16px footer padding; only
+    // a short editor compacts it.
+    await page.setViewportSize({ width: 1366, height: 650 });
+    await page.goto(`${base}/projects/${project.id}/edit`);
+    await expect(page.locator('#np-save')).toBeVisible();
+    const laptop = await page.locator('.np-footer').evaluate(footer => {
+      const style = getComputedStyle(footer);
+      return `${style.paddingTop} ${style.paddingBottom}`;
+    });
+    if (laptop !== '16px 16px') problems.push(`1366x650 at 100% text footer padding: ${laptop}`);
     // The following cases were written for the desktop viewport the first loop left behind.
     await page.setViewportSize({ width: 1440, height: 900 });
     assert.equal(sql(`SELECT json_build_array(

@@ -21,7 +21,7 @@ certify this new regression. No backend or product decision is being reopened.
   use `assets/css/horae.css` only for necessary scoped structural rules and
   generate the opt-in panel utility through `crates/horae/build.rs` into
   `assets/css/horae-utils.css`.
-  Written through `3f954e5a`, not accepted: awaiting green actual-package
+  Written and corrected after rebased `7555b08c`, not accepted: awaiting green actual-package
   regression checks. Measured causes and prior failures are summarized in
   `plan.md`; shared defaults and the persistent-actions contract are unchanged.
 - [ ] R004 [US7] Verify configured/legacy Edit, creation conditional panels,

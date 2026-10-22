@@ -827,13 +827,16 @@ h1, h2, h3, h4, h5, h6 {
 }
 /* Cap the pinned actions so wrapping them cannot consume the whole editor. */
 .np-footer { max-height: 25%; }
-/* Short screens at any width: tighter vertical padding, and never less than one
-   row of controls, so Save stays whole at rest while the fields keep the rest.
-   The page prefix outranks the footer's py-4 utility. */
-@media (max-height: 700px) {
+/* The editor's own height (definite through h-full) decides compaction, not the
+   viewport. 19rem = 4 × (control height + 2rem padding): below it, a 25% cap is
+   shorter than one normal row of actions. Then padding tightens and the cap keeps
+   one control row plus its 1px border, so Save stays whole at rest. The page
+   prefix outranks the footer's py-4 utility. */
+.np-page { container: np-editor / size; }
+@container np-editor (max-height: 19rem) {
   .np-page .np-footer {
     padding-block: var(--space-1);
-    max-height: max(25%, calc(var(--height-form-control) + 2 * var(--space-1)));
+    max-height: max(25%, calc(var(--height-form-control) + 2 * var(--space-1) + 1px));
   }
 }
 .np-code.form-input { width: var(--width-project-code); }
@@ -853,7 +856,8 @@ h1, h2, h3, h4, h5, h6 {
 /* 16px at 100% text; at enlarged text on narrow screens no wider than the panel gutter.
    The page prefix outranks the row's gap utility. */
 .np-page .np-assignment-row { column-gap: min(var(--space-4), var(--project-panel-gutter)); }
-.np-assignment-row .avatar-project { width: var(--size-project-avatar); height: var(--size-project-avatar); }.np-milestone-row { grid-template-columns: minmax(0, 1fr) var(--space-40) var(--width-milestone-amount) var(--space-10); }
+.np-assignment-row .avatar-project { width: var(--size-project-avatar); height: var(--size-project-avatar); }
+.np-milestone-row { grid-template-columns: minmax(0, 1fr) var(--space-40) var(--width-milestone-amount) var(--space-10); }
 @media (max-width: 900px) {
   .np-milestone-row { grid-template-columns: minmax(0, 1fr) var(--space-10); }
   .np-milestone-row > input:first-child, .np-milestone-row > input[type="date"] { grid-column: 1 / -1; }

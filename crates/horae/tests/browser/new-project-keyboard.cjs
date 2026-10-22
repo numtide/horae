@@ -344,7 +344,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       // At rest, before any focus scrolls it, Save is whole inside the footer.
       const rest = await screen.locator('.np-footer').evaluate(footer => {
         footer.scrollTop = 0;
-        const save = [...footer.querySelectorAll('button')].find(button => button.textContent.trim() === 'Save project');
+        const save = footer.querySelector('#np-save');
         const box = save.getBoundingClientRect(), port = footer.getBoundingClientRect();
         const top = Math.max(port.top + footer.clientTop, 0), bottom = Math.min(port.top + footer.clientTop + footer.clientHeight, innerHeight);
         return box.top >= top - 1 && box.bottom <= bottom + 1 && box.left >= -1 && box.right <= innerWidth + 1 ? ''
