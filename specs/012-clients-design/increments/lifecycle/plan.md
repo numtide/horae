@@ -48,17 +48,17 @@ design: PASS, no exceptions.
    row (or sees the new project) and refuses. Rejected: an exclusive organization
    gate for client archive (blocks unrelated work, not needed), locking project rows
    on archive (adds a lock order with no benefit).
-2. **Reuse the legacy status authority.** Make `projects::authorize_legacy_status_write`
+1. **Reuse the legacy status authority.** Make `projects::authorize_legacy_status_write`
    `pub(super)` with the policy-not-0 message as a parameter, and call it first in
    `set_client_active_record`. Rejected: extending `lock_client_manager` (no gate,
    no policy check; would duplicate the same query).
-3. **Check project restore only on an actual transition.** Already-active projects
+1. **Check project restore only on an actual transition.** Already-active projects
    stay no-ops even if legacy data has them under an archived client.
-4. **Import check on the create path only**, by turning the existing currency
+1. **Import check on the create path only**, by turning the existing currency
    lookup in `resolve_project` into `SELECT currency, active … FOR SHARE`. Existing
    matches return before it. Parent-failure caching already fails dependents
    (`parents.rs`, `apply.rs`); tests confirm it.
-5. **READ COMMITTED is set explicitly in the archive transaction.** The proof in 1
+1. **READ COMMITTED is set explicitly in the archive transaction.** The proof in 1
    needs the post-lock project check to see writes that committed while archive
    waited. `db::lock_organization` sets no isolation and `pool.begin()` inherits
    the session default. Under REPEATABLE READ, a restoration or import that holds
@@ -78,7 +78,7 @@ design: PASS, no exceptions.
    `AccessChange` mode, which conflicts with archive's SHARE gate. A test runs both
    commit orders with the database default set to REPEATABLE READ, so this does not
    rest on the server default.
-6. **Archive confirmation on list and detail; Restore direct.** FR-036 removes the
+1. **Archive confirmation on list and detail; Restore direct.** FR-036 removes the
    cascade and the affected-project count, not the archive confirmation (parent
    US4 scenario 3, the detail prototype's `ConfirmDialog` bound to `archive`). No
    approved source asks to confirm restore, so Restore calls the server directly
@@ -91,7 +91,7 @@ design: PASS, no exceptions.
    `Route::ProjectsForClient` and a safe retry. Cancel and Escape go through
    `Modal::on_dismiss`, which is ignored while busy. A restore failure uses the
    page's existing alert.
-7. **Focus after refresh, for both actions.** After the reload, call the existing
+1. **Focus after refresh, for both actions.** After the reload, call the existing
    `restore_opener_focus(opener, fallback)` with `client-activity-{id}` /
    `clients-heading` (list) or `client-status` / `client-back` (detail). It acts
    only while focus is on the body or the fallback, so a user who moved focus keeps

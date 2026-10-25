@@ -14,9 +14,6 @@ prerequisite. Harvest references: [clients guide][clients] ("You can only archiv
 clients if you archive all of their projects") and [unlocking guide][unlocking]
 (restore the client before its project).
 
-[clients]: https://support.getharvest.com/hc/en-us/articles/360048181312-Create-and-edit-clients-and-client-contacts
-[unlocking]: https://support.getharvest.com/hc/en-us/articles/4408222060301-Unlocking-time-and-expenses-if-the-project-task-or-person-is-archived
-
 ## Governance
 
 This increment is governed by this spec, its
@@ -241,3 +238,6 @@ screens and both themes.
 - Owner-session read-only Harvest observation (2026-10-22, root
   `.scratch/client-lifecycle-next-20261022.md`) corroborates the archive
   restriction; no Harvest record was changed.
+
+[clients]: https://support.getharvest.com/hc/en-us/articles/360048181312-Create-and-edit-clients-and-client-contacts
+[unlocking]: https://support.getharvest.com/hc/en-us/articles/4408222060301-Unlocking-time-and-expenses-if-the-project-task-or-person-is-archived
