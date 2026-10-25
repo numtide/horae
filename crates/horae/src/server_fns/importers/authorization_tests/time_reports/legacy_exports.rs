@@ -10,6 +10,7 @@ const PROJECTS: [(&str, usize); 3] = [("Export alpha", 0), ("Export beta", 0), (
 const TASK: &str = "Export task";
 const ACTOR: &str = "Test User";
 const COLLEAGUE: &str = "Export colleague";
+const FOREIGN_NOTE: &str = "Foreign organization entry";
 const HEADERS: [&str; 8] = [
     "Date",
     "Project",
@@ -234,11 +235,39 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .await
         .unwrap();
     }
+    // Another organization's client with an entry in the period: a legacy
+    // filter naming it must not reach across tenants.
+    let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    sqlx::query!(
+        "INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, billable, notes)
+             VALUES ($1, $2, $3, $4, $5, $6::text::date, $7, $8, $9)",
+        fixture_id(200),
+        foreign.org_id,
+        foreign.user_id,
+        foreign.project_id,
+        foreign.task_id,
+        "2041-03-05",
+        60,
+        true,
+        Some(FOREIGN_NOTE),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    // The route takes the legacy path only at policy 0; never rely on a default.
+    let policy = sqlx::query_scalar!(
+        "SELECT permission_policy_version FROM organizations WHERE id = $1",
+        ids.org_id
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    assert_eq!(policy, 0);
     let cookie = api.cookie(ids.user_id).await;
 
     let (client_a, beta, gamma) = (fixture_id(10), fixture_id(21), fixture_id(22));
     // (filters, expected entries, raw/rounded/billable-rounded minutes)
-    let states: [(String, &[usize], [i64; 3]); 5] = [
+    let states: [(String, &[usize], [i64; 3]); 6] = [
         (String::new(), &[0, 1, 2, 3, 4], [250, 240, 180]),
         (format!("&project_id={gamma}"), &[4], [90, 90, 90]),
         (
@@ -257,6 +286,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             &[],
             [0, 0, 0],
         ),
+        (format!("&client_id={}", foreign.client_id), &[], [0, 0, 0]),
     ];
     for (filters, expected, totals) in states {
         let entries: Vec<&Entry> = expected.iter().map(|&n| &ENTRIES[n]).collect();
@@ -346,5 +376,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 assert!(!strings.contains(e.xlsx_notes), "{filters}: {}", e.notes);
             }
         }
+        assert!(!strings.contains(FOREIGN_NOTE), "{filters}");
     }
 }
