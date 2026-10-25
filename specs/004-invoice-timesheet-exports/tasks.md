@@ -92,8 +92,7 @@ disposable database.
   test `cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization`;
   strict clippy as in `nix/checks/clippy.nix`; `nix fmt -- --ci`.
 - [ ] T010 As the single heavy-build owner, build the server package once, then run
-  `crates/horae/tests/browser/run-design-checks.sh reports-currency-totals
-  reports-legacy-exports reports-permissions` (its own `/tmp` database). Record commands,
+  `crates/horae/tests/browser/run-design-checks.sh reports-currency-totals reports-legacy-exports reports-permissions` (its own `/tmp` database). Record commands,
   exit codes and PASS lines.
 - [ ] T011 Delivery gates, all required before publication:
   - small unsigned commits with plain messages;
@@ -103,7 +102,7 @@ disposable database.
   - mandatory CI passing on the exact published head;
   - analyze findings D1 (`f64` XLSX durations) and C1 (invoice backup not implemented)
     reported as open, not as resolved.
-  No push, PR or merge before coordinator acceptance.
+    No push, PR or merge before coordinator acceptance.
 
 ## Dependencies and order
 

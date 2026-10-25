@@ -106,8 +106,7 @@ the run guide is in `quickstart.md` (Scenario 5), and the tasks are in `tasks.md
   `permission_policy_version = 0`) and its Export CSV/XLSX links to
   `/api/reports/export/{csv,xlsx}`. CSV is streamed by `reports/streaming.rs::entries`;
   XLSX is built by `limits::time::entries` and `entries_xlsx`.
-- **Values**: Hours = `te.minutes`; Rounded = `effective_minutes(minutes, frozen,
-  org.round_minutes, org.round_dir)`. On the Time tab, Billable hrs sums rounded minutes
+- **Values**: Hours = `te.minutes`; Rounded = `effective_minutes(minutes, frozen, org.round_minutes, org.round_dir)`. On the Time tab, Billable hrs sums rounded minutes
   where the entry is billable. The page and CSV show `format_hours2` (half-up to two
   decimals); XLSX writes `minutes / 60` as a number.
 - **Harnesses**: the existing browser runner `tests/browser/run-design-checks.sh`

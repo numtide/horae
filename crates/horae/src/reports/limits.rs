@@ -200,8 +200,8 @@ mod tests {
     use super::*;
     use crate::models::DetailedReportRow;
     use crate::reports::ExportParams;
-    use crate::server_fns::test_seed::{SeedIds, seed};
     use crate::reports::xlsx_cells::{assert_cell, assert_text_cell, xlsx_part};
+    use crate::server_fns::test_seed::{SeedIds, seed};
     use horae_core::types::OrgRole;
 
     mod authorization;
