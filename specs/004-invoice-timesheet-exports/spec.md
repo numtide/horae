@@ -16,6 +16,15 @@
 - Q: When must a monetary amount appear in the backup (CSV/XLSX/PDF)? → A: Only when a billed line carries a rate. The amount shown is the amount already recorded on the invoice line, never recomputed. When a line has no rate (unbilled/zero-rate context), the backup shows hours only for that line and omits its amount, and amount subtotals sum only the lines that have amounts.
 - Q: How is the filtered detailed export scoped beyond the existing date range? → A: By optional client and/or project selectors that narrow the existing detailed export. Absent selectors mean "all" (today's behavior). Choosing a client narrows to that client's projects; choosing a project narrows to that project; the two combine (a project outside the chosen client yields an empty-but-valid export).
 
+### Session 2026-10-25
+
+These clarifications apply only to the legacy report export acceptance increment at the end of this spec.
+
+- Q: Which requirements does the legacy report export acceptance increment prove? → A: FR-011 to FR-015 and FR-017 to FR-019, with SC-005 and SC-006. FR-008 is the invoice backup and is out of scope.
+- Q: How are raw and rounded hours compared? → A: Each value shown on screen is compared with its own column (Hours or Rounded Hours) and with its own expected fixture value. Raw and rounded totals are never assumed to be equal. Detailed downloads carry both values; summary totals include rounded and billable hours, and billable hours count rounded time.
+- Q: Does the increment change how hours are rounded or displayed? → A: No. Totals are summed in whole minutes and only then shown to two decimals, so a sum of displayed row values can differ from the displayed total.
+- Q: What counts as evidence? → A: Expected values come from fixed fixture data, never from the report's own response. A browser check is required to prove both download links carry the visible period and filters, and to compare on-screen rows and totals with the fixture. File contents must be proven for both CSV and Excel, and each proof must state which link it covers.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Attach the hours behind an invoice (Priority: P1)
@@ -161,3 +170,71 @@ ______________________________________________________________________
 - Builds on the existing invoice model and invoice line items, which already reference the billed time entries and record billed minutes, rate, and amount.
 - Reuses the existing document/PDF generation approach already used for invoice PDFs.
 - Relies on the existing client/project/time-entry data and the current authorization for viewing invoices and reports.
+
+## Acceptance Increment: Legacy Report Export Reconciliation (2026-10-25)
+
+This increment verifies behavior that already exists. It adds no requirement, column,
+rounding rule, monetary column or grouped export, and it leaves FR-001 to FR-020
+unchanged. It proves User Story 2 and FR-011 to FR-015 and FR-017 to FR-019 on the
+legacy Reports page, the page shown while the organization has not adopted scoped
+permissions. FR-001 to FR-010, FR-016 and FR-020 belong to the invoice backup and are not
+exercised here.
+
+### Acceptance Scenarios
+
+1. **Given** a period containing entries for two clients and one entry just outside it,
+   **When** the user views the report with no client or project selected, **Then** both
+   download links carry exactly the visible period, and the CSV and Excel files each hold
+   one row per entry in that period and none for the entry outside it.
+1. **Given** the same period, **When** the user selects one client, **Then** both
+   download links carry the period and that client, the detailed rows on screen and the
+   rows in both files are exactly that client's entries in the same order, and the other
+   client's entry is absent from the screen and from both files.
+1. **Given** no client selected, **When** the user selects one project, **Then** both
+   download links carry the period and that project only, and the screen and both files
+   narrow to that project's entries. The project filter works on its own.
+1. **Given** a selected client, **When** the user also selects one of its projects,
+   **Then** both download links carry the period, the client and the project, and the
+   screen and both files narrow to that project's entries.
+1. **Given** a project that does not belong to the selected client, **When** that
+   combination is downloaded, **Then** both formats return a valid file with headers and
+   no entry rows.
+1. **Given** an organization that rounds time, **When** the report and its downloads are
+   compared, **Then** each entry's Hours is its unrounded tracked time and its Rounded
+   Hours is the organization-rounded time, and the on-screen Total, Rounded and Billable
+   totals each equal the exact sum, in minutes, of the matching column. Billable hours
+   count rounded time. Raw and rounded totals are checked separately and are never
+   assumed to be equal.
+1. **Given** entries whose durations are not whole hundredths of an hour, **When** hours
+   are shown to two decimals, **Then** each total is summed in minutes and only then
+   shown in hours. The displayed per-row values may therefore add up to a slightly
+   different figure than the displayed total, and this is correct. The Excel values
+   convert back to exact whole minutes.
+
+### Measures
+
+- **SC-L01**: 100% of rows in each downloaded file match exactly one expected entry,
+  with no additions, omissions or duplicates, in both formats.
+- **SC-L02**: The on-screen raw, rounded and billable totals equal the expected sums to
+  the minute. The files contain entry rows only, with no total rows. Summing the files'
+  Hours, the Rounded Hours, and the Rounded Hours of rows marked billable, in minutes,
+  gives the same three expected totals.
+- **SC-L04**: With no filter, both files are unchanged: the CSV equals the expected
+  bytes exactly, and the Excel cells equal the expected values exactly.
+- **SC-L03**: An excluded client's entries appear in 0 rows on screen and in 0 rows of
+  either file.
+
+### Evidence Rules
+
+- Expected values come from fixed fixture data stated in the test. They are not taken
+  from the report's own response or from the rows the page has loaded.
+- The existing organization and role download checks remain in force unchanged.
+- Out of scope: scoped-permission reports and adopting them, the pending
+  percentage-label decision, monetary export columns and grouped exports.
+- Status of other work in this package, recorded here without being tasked: the invoice
+  timesheet backup (User Stories 1 and 3, FR-001 to FR-010, FR-016, FR-020) is not
+  implemented. This increment neither waives it nor claims it.
+- Open finding, not waived: the Excel export writes each duration as a floating-point
+  number (minutes ÷ 60). Constitution principle I forbids floating point for durations.
+  This existing behavior is left for independent review; this increment neither changes
+  it nor treats it as compliant, and passing tests do not resolve it.

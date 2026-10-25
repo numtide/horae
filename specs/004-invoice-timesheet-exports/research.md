@@ -67,3 +67,56 @@ Decisions that resolve the open design questions from the spec. Each records wha
 **Decision**: The invoice line is the source of truth for billed **minutes and amount**; descriptive detail (project/task/date) comes from the referenced entry. If a referenced entry no longer exists, the backup still accounts for the line's minutes/amount so totals stay consistent with the invoice; exact display of an orphaned line (e.g. "(entry removed)") is a rendering detail left to implementation. In normal operation invoiced entries are not deleted, so this is a defensive path, not a primary flow.
 
 **Rationale**: Guarantees FR-009 (totals equal the invoice) even under data anomalies, without over-engineering the display. Marked as the one deliberately-open rendering detail (see checklist notes).
+
+## Legacy report export acceptance (2026-10-25)
+
+These decisions cover the acceptance increment in `spec.md` and `plan.md` only.
+
+## L1 — Evidence layers
+
+**Decision**: Use a browser suite in the existing disposable runner for the screen, both
+links and CSV contents, plus a Rust HTTP-harness test for XLSX and CSV contents over the
+same routes and query strings.
+
+**Rationale**: Only the browser can prove what the page shows and which links it
+builds. The browser runner (`nix/checks/browser.nix`) has bash, coreutils, curl, node,
+PostgreSQL and Playwright, but no XLSX reader. The Rust harness already reads XLSX through
+the `zip` dev-dependency.
+
+**Alternatives considered**: Rust alone (rejected: it cannot see the page); decoding XLSX
+in node (rejected: it needs a handwritten ZIP/XML parser or a new dependency); adding
+`unzip` to the browser check (rejected: a new tool, and cells would still need a new parser).
+
+## L2 — Independent expectations
+
+**Decision**: Expected rows and totals are literal constants derived by hand from the
+fixture minutes and the organization's rounding (15, nearest), and written as both minutes
+and two-decimal strings. Neither layer takes expectations from a report response or from
+rows the page has loaded.
+
+**Rationale**: The R02 currency-totals suite and the scoped export tests compare
+against their own responses, which proves agreement between surfaces, not correctness.
+
+## L3 — Decimal display and XLSX numbers
+
+**Decision**: Totals are reconciled in integer minutes. Displayed values are compared as
+exact two-decimal strings. The fixture deliberately includes rows (50, 50, 53 and 7 minutes)
+whose displayed values add up to 2.66 while the correct total is 2.67, and the test asserts both.
+XLSX number cells are compared as the exact `<v>` text the existing writer emits (plan.md
+fixture table). Each matched row maps to its fixture entry, and the totals are summed from
+those entries' integer minutes. The tests do no float parsing or arithmetic.
+
+**Rationale**: `format_hours2` rounds half-up per value, so adding displayed decimals is
+not a valid check; summing minutes is (Constitution I, FR-019). No rounding behavior
+changes. The writer's use of `f64` remains open analyze finding D1 (spec, plan; not this file's D1) and is not
+certified by these tests.
+
+## L4 — XLSX reading utility
+
+**Decision**: Move the existing test-only helpers `xlsx_part`, `assert_cell` and
+`assert_text_cell` from the `reports/limits.rs` test module, verbatim, into
+`reports/xlsx_cells.rs` (`#[cfg(test)]`). No helper is added.
+
+**Rationale**: One shared copy of the existing reading pattern, with no new parser and no
+new dependency. The other inline `zip` readers in the authorization tests are left as
+they are (out of scope).

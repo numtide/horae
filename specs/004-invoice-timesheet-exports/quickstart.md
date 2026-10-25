@@ -56,6 +56,33 @@ returns 200 with a CSV scoped to that client+project+range.
 1. Backup an invoice with **no lines** (or construct one): every format returns a valid, empty document — headers/grouping present, zero rows, zero totals — not an error (FR-010, SC-006).
 1. Request a backup for an unknown invoice id: 404.
 
+## Scenario 5 — Legacy report export reconciliation (acceptance increment, 2026-10-25)
+
+Proves the existing filtered export from the legacy Reports page against fixed fixture
+values. The fixture, expected totals and proof map (P1–P9) are in `plan.md` under
+"Acceptance Increment"; the decisions are in `research.md` L1–L4. Use only disposable
+databases.
+
+**Rust layer** (P6–P8, plus P9 unchanged), with Postgres in a fresh `mktemp -d /tmp/…` directory:
+
+```sh
+DATABASE_URL=… cargo test -p horae --features server --bin horae \
+  job_endpoints_enforce_session_role_and_organization
+```
+
+**Browser layer** (P1–P5) uses the existing runner, which creates its own `/tmp/horae-browser.*`
+database on port 8093:
+
+```sh
+HORAE_TEST_SERVER=…/bin/horae PLAYWRIGHT_MODULE=… \
+  crates/horae/tests/browser/run-design-checks.sh \
+  reports-currency-totals reports-legacy-exports reports-permissions
+```
+
+**Expected**: both commands exit 0. The browser suite prints one PASS line naming filter
+states S1–S4. Any mismatch is reported as a product bug before scope grows. Passing does
+not resolve open analyze finding D1 (`f64` XLSX durations).
+
 ## Automated coverage
 
 - **`horae-core` unit tests** (`export_backup`): roll-up correctness — minute subtotals equal the sum of parts; cent subtotals sum only present amounts and stay `None` when absent; empty input ⇒ zero groups / `None` amount (R1–R5 in data-model.md).
