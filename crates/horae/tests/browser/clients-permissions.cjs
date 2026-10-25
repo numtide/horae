@@ -138,7 +138,7 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
     assert.ok([unset, zero].every(client => overview.clients.some(row => row.client.id === client)));
     await expect(page.getByRole('link', { name: 'Permission zero client', exact: true })).toBeVisible();
     await expect(sidebarClients).toBeVisible();
-    for (const control of ['New client', 'Edit', 'Deactivate', 'Activate']) {
+    for (const control of ['New client', 'Edit', 'Archive', 'Restore', 'Archive client', 'Restore client']) {
       await expect(page.getByRole('button', { name: control, exact: true })).toHaveCount(0);
     }
     await expect(page.getByRole('link', { name: 'Import', exact: true })).toHaveCount(0);
@@ -149,8 +149,8 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
       await expect(billing).toBeVisible();
       await expect(billing).not.toContainText('Default rate');
     }
-    for (const control of ['Edit client', 'New project', 'New invoice']) {
-      await expect(page.getByRole(control === 'Edit client' ? 'button' : 'link', { name: control, exact: true })).toHaveCount(0);
+    for (const control of ['Edit client', 'Archive client', 'Restore client', 'New project', 'New invoice']) {
+      await expect(page.getByRole(control.endsWith('client') ? 'button' : 'link', { name: control, exact: true })).toHaveCount(0);
     }
     console.log('PASS: ClientReadAll reads the catalog without client management or default rates');
 

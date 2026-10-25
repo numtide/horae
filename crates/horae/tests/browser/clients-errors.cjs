@@ -52,7 +52,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(page.getByRole('link', { name: 'Acme Corp', exact: true })).toHaveCount(0);
     await page.locator('#client-scope-menu-trigger').click();
     await expect(page.getByRole('menuitem', { name: 'Active clients (1)', exact: true })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Inactive clients (1)', exact: true })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Archived clients (1)', exact: true })).toBeVisible();
     await page.getByRole('menuitem', { name: 'All clients (2)', exact: true }).click();
     await page.locator('#client-currency-menu-trigger').click();
     await page.getByRole('menuitem', { name: 'GBP', exact: true }).click();

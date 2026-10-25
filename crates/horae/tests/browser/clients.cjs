@@ -166,21 +166,299 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(page.getByRole('link', { name: committedName, exact: true })).toHaveCount(1);
     console.log('PASS: lost creation acknowledgement can be inspected without duplicating or undoing the client');
 
-    await page.getByRole('searchbox', { name: 'Search clients by name' }).fill('Acme Corp');
-    await page.locator('#client-scope-menu-trigger').click();
-    await page.getByRole('menuitem', { name: /^All clients/ }).click();
-    const acme = page.getByRole('row').filter({ has: page.getByRole('link', { name: 'Acme Corp', exact: true }) });
-    const projects = sql("SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY id), '[]') FROM projects p");
-    const invoices = sql("SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY id), '[]') FROM invoices i");
-    await acme.getByRole('button', { name: 'Deactivate', exact: true }).click();
-    await expect(acme.getByText('Inactive', { exact: true })).toBeVisible();
-    assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY id), '[]') FROM projects p"), projects);
-    assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY id), '[]') FROM invoices i"), invoices);
-    await acme.getByRole('button', { name: 'Activate', exact: true }).click();
+    // Archive needs every project archived first; restore changes only the client.
+    const history = () => sql(`SELECT jsonb_build_object(
+      'projects', (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY id), '[]') FROM projects t),
+      'entries', (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY id), '[]') FROM time_entries t),
+      'invoices', (SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY id), '[]') FROM invoices t))`);
+    const before = history();
+    const clientActive = id => sql(`SELECT active FROM clients WHERE id = '${id}'`);
+    let statusRequests = 0;
+    page.on('request', request => { if (request.url().includes('/api/set_client_active')) statusRequests++; });
+    const search = page.getByRole('searchbox', { name: 'Search clients by name' });
+    const rowFor = client => page.getByRole('row').filter({ has: page.getByRole('link', { name: client, exact: true }) });
+    const scopeTo = async label => {
+      await page.locator('#client-scope-menu-trigger').click();
+      await page.getByRole('menuitem', { name: new RegExp(`^${label}`) }).click();
+    };
+    const archiveDialog = client => page.getByRole('dialog', { name: `Archive ${client}?` });
+
+    await search.fill('Acme Corp');
+    const acme = rowFor('Acme Corp');
+    const acmeId = sql("SELECT id FROM clients WHERE name = 'Acme Corp'");
+    const acmeArchive = acme.getByRole('button', { name: 'Archive', exact: true });
+    for (const dismiss of ['Cancel', 'Escape']) {
+      await acmeArchive.click();
+      await expect(archiveDialog('Acme Corp')).toBeVisible();
+      await expect(archiveDialog('Acme Corp')).toContainText('Only the client is archived. Its projects must already be archived.');
+      await expect(archiveDialog('Acme Corp')).not.toContainText(/\d+\s+projects?/);
+      if (dismiss === 'Cancel') await archiveDialog('Acme Corp').getByRole('button', { name: 'Cancel', exact: true }).click();
+      else await page.keyboard.press('Escape');
+      await expect(archiveDialog('Acme Corp')).toBeHidden();
+      await expect(acmeArchive).toBeFocused();
+    }
+    assert.equal(statusRequests, 0, 'Cancel and Escape send nothing');
+    await acmeArchive.click();
+    await archiveDialog('Acme Corp').getByRole('button', { name: 'Archive client', exact: true }).click();
+    await expect(archiveDialog('Acme Corp').getByRole('alert')).toContainText("Archive this client's projects before archiving the client.");
+    await expect(archiveDialog('Acme Corp').getByRole('alert')).not.toContainText(/\d/);
+    console.log(`OBSERVE: focus after a refused archive is ${await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName)}`);
+    assert.equal(
+      await archiveDialog('Acme Corp').getByRole('link', { name: "View this client's projects", exact: true }).getAttribute('href'),
+      `/projects/client/${acmeId}`,
+    );
+    await archiveDialog('Acme Corp').getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(acme.getByText('Active', { exact: true })).toBeVisible();
-    assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY id), '[]') FROM projects p"), projects);
-    assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY id), '[]') FROM invoices i"), invoices);
-    console.log('PASS: existing activation/deactivation does not cascade into projects or historical invoices');
+    assert.equal(clientActive(acmeId), 't');
+    assert.equal(history(), before);
+    console.log('PASS: archive confirms without project counts, Cancel/Escape change nothing, active projects refuse with a recovery link');
+
+    // A client without projects: a pending archive cannot be repeated, and the
+    // row leaving the Active filter returns focus to the page heading.
+    await search.fill(committedName);
+    const committed = rowFor(committedName);
+    const committedId = sql(`SELECT id FROM clients WHERE name = '${committedName.replaceAll("'", "''")}'`);
+    let release;
+    const held = new Promise(resolve => { release = resolve; });
+    await page.route('**/api/set_client_active*', async route => { await held; await route.continue(); });
+    statusRequests = 0;
+    await committed.getByRole('button', { name: 'Archive', exact: true }).click();
+    const confirm = archiveDialog(committedName).getByRole('button', { name: /^Archiv/ });
+    await confirm.click();
+    await expect(confirm).toBeDisabled();
+    await expect(archiveDialog(committedName)).toHaveAttribute('aria-busy', 'true');
+    await page.keyboard.press('Escape');
+    await expect(archiveDialog(committedName)).toBeVisible();
+    await confirm.click({ force: true });
+    release();
+    await expect(archiveDialog(committedName)).toBeHidden();
+    await expect(committed).toHaveCount(0);
+    await expect(page.locator('#clients-heading')).toBeFocused();
+    await page.unroute('**/api/set_client_active*');
+    assert.equal(statusRequests, 1, 'a pending archive is sent once');
+    assert.equal(clientActive(committedId), 'f');
+    assert.equal(history(), before);
+
+    await expect(page.getByRole('status').filter({ hasText: `${committedName} archived` })).toBeVisible();
+
+    // Restore is direct, shows that it is pending and sends once. A row that
+    // stays visible keeps focus on its control.
+    await scopeTo('All clients');
+    await expect(committed.getByText('Archived', { exact: true })).toBeVisible();
+    let releaseRestore;
+    const heldRestore = new Promise(resolve => { releaseRestore = resolve; });
+    await page.route('**/api/set_client_active*', async route => { await heldRestore; await route.continue(); });
+    statusRequests = 0;
+    await committed.getByRole('button', { name: 'Restore', exact: true }).click();
+    const restoringButton = committed.getByRole('button', { name: 'Restoring…', exact: true });
+    await expect(restoringButton).toBeDisabled();
+    await expect(restoringButton).toHaveAttribute('aria-busy', 'true');
+    await restoringButton.click({ force: true });
+    releaseRestore();
+    await expect(committed.getByText('Active', { exact: true })).toBeVisible();
+    await page.unroute('**/api/set_client_active*');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(committed.getByRole('button', { name: 'Archive', exact: true })).toBeFocused();
+    await expect(page.getByRole('status').filter({ hasText: `${committedName} restored` })).toBeVisible();
+    assert.equal(statusRequests, 1, 'a pending restore is sent once');
+    assert.equal(clientActive(committedId), 't');
+    assert.equal(history(), before);
+
+    // Focus the user moves while the reload is still pending stays there.
+    await committed.getByRole('button', { name: 'Archive', exact: true }).click();
+    await archiveDialog(committedName).getByRole('button', { name: 'Archive client', exact: true }).click();
+    await expect(committed.getByText('Archived', { exact: true })).toBeVisible();
+    let releaseReload;
+    const heldReload = new Promise(resolve => { releaseReload = resolve; });
+    await page.route('**/api/client_overview*', async route => { await heldReload; await route.continue(); }, { times: 1 });
+    const reloadStarted = page.waitForRequest(request => request.url().includes('/api/client_overview'));
+    await committed.getByRole('button', { name: 'Restore', exact: true }).click();
+    await reloadStarted;
+    await search.focus();
+    releaseReload();
+    await expect(committed.getByText('Active', { exact: true })).toBeVisible();
+    await expect(search).toBeFocused();
+
+    // A failed restore keeps its alert; where focus lands is observed, not changed.
+    await committed.getByRole('button', { name: 'Archive', exact: true }).click();
+    await archiveDialog(committedName).getByRole('button', { name: 'Archive client', exact: true }).click();
+    await expect(committed.getByText('Archived', { exact: true })).toBeVisible();
+    await page.route('**/api/set_client_active*', route => route.abort('failed'), { times: 1 });
+    await committed.getByRole('button', { name: 'Restore', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Could not change client status' })).toBeVisible();
+    await expect(committed.getByRole('button', { name: 'Restore', exact: true })).toBeEnabled();
+    console.log(`OBSERVE: focus after a failed list restore is ${await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName)}`);
+    assert.equal(clientActive(committedId), 'f');
+
+    // Busy overlap: another row's restore finishing reloads the list while an
+    // archive is pending. The pending confirmation stays open, and its late
+    // refusal appears there and never in a different client's confirmation.
+    const gates = [];
+    const hold = () => { let release; gates.push(new Promise(resolve => { release = resolve; })); return release; };
+    await page.route('**/api/set_client_active*', async route => { await gates.shift(); await route.continue(); });
+    const releaseRestoreX = hold(), releaseArchiveY = hold();
+    await committed.getByRole('button', { name: 'Restore', exact: true }).click();
+    await search.fill('Acme Corp');
+    await acmeArchive.click();
+    const acmeConfirm = archiveDialog('Acme Corp').getByRole('button', { name: /^Archiv/ });
+    await acmeConfirm.click();
+    await expect(acmeConfirm).toHaveText('Archiving client…');
+    const ordinaryReload = page.waitForResponse(response => response.url().includes('/api/client_overview'));
+    releaseRestoreX();
+    await ordinaryReload;
+    await expect(archiveDialog('Acme Corp')).toBeVisible();
+    await expect(acmeConfirm).toBeDisabled();
+    const refusal = page.waitForResponse(response => response.url().includes('/api/set_client_active'));
+    releaseArchiveY();
+    assert.equal((await refusal).status(), 409);
+    await expect(archiveDialog('Acme Corp').getByRole('alert')).toContainText("Archive this client's projects before archiving the client.");
+    await archiveDialog('Acme Corp').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.unroute('**/api/set_client_active*');
+    assert.equal(clientActive(committedId), 't');
+    assert.equal(clientActive(acmeId), 't');
+    // A different target opens with no error from the previous one.
+    await search.fill(committedName);
+    await committed.getByRole('button', { name: 'Archive', exact: true }).click();
+    await expect(archiveDialog(committedName)).toBeVisible();
+    await expect(archiveDialog(committedName).getByRole('alert')).toHaveCount(0);
+    await archiveDialog(committedName).getByRole('button', { name: 'Archive client', exact: true }).click();
+    await expect(committed.getByText('Archived', { exact: true })).toBeVisible();
+
+    // Busy, then denied: a settled reload under changed policy clears even a
+    // pending confirmation, its late error is dropped, and reopening the same
+    // client once authority returns shows no earlier error.
+    const busyGates = [];
+    const busyHold = () => { let release; busyGates.push(new Promise(resolve => { release = resolve; })); return release; };
+    await page.route('**/api/set_client_active*', async route => { await busyGates.shift(); await route.continue(); });
+    const releaseBusyRestore = busyHold(), releaseBusyArchive = busyHold();
+    let releaseBusyReload;
+    const heldBusyReload = new Promise(resolve => { releaseBusyReload = resolve; });
+    await committed.getByRole('button', { name: 'Restore', exact: true }).click();
+    await search.fill('Acme Corp');
+    await acmeArchive.click();
+    await acmeConfirm.click();
+    await expect(acmeConfirm).toHaveText('Archiving client…');
+    await page.route('**/api/client_overview*', async route => { await heldBusyReload; await route.continue(); }, { times: 1 });
+    const busyReload = page.waitForRequest(request => request.url().includes('/api/client_overview'));
+    releaseBusyRestore();
+    await busyReload;
+    await expect(archiveDialog('Acme Corp')).toBeVisible();
+    const busyOrg = sql(`SELECT org_id FROM clients WHERE id = '${acmeId}'`);
+    sql(`UPDATE organizations SET permission_policy_version = 1 WHERE id = '${busyOrg}'`);
+    try {
+      releaseBusyReload();
+      await expect(page.getByRole('alert').filter({ hasText: 'Could not load clients' })).toBeVisible();
+      await expect(archiveDialog('Acme Corp')).toBeHidden();
+    } finally {
+      sql(`UPDATE organizations SET permission_policy_version = 0 WHERE id = '${busyOrg}'`);
+    }
+    // Authority returns and the list is retried while the old archive is still
+    // outstanding: no Archive opener works, for that client or any other, and
+    // no confirmation appears for a new target.
+    await page.locator('#clients-retry').click();
+    await expect(acmeArchive).toBeDisabled();
+    await acmeArchive.click({ force: true });
+    await search.fill(committedName);
+    await expect(committed.getByRole('button', { name: 'Archive', exact: true })).toBeDisabled();
+    await committed.getByRole('button', { name: 'Archive', exact: true }).click({ force: true });
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    // The old archive then settles; its late refusal reaches no confirmation.
+    const lateRefusal = page.waitForResponse(response => response.url().includes('/api/set_client_active'));
+    releaseBusyArchive();
+    assert.equal((await lateRefusal).status(), 409);
+    await page.unroute('**/api/set_client_active*');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(committed.getByRole('button', { name: 'Archive', exact: true })).toBeEnabled();
+    await search.fill('Acme Corp');
+    await expect(acmeArchive).toBeEnabled();
+    await acmeArchive.click();
+    await expect(archiveDialog('Acme Corp')).toBeVisible();
+    await expect(archiveDialog('Acme Corp').getByRole('alert')).toHaveCount(0);
+    await archiveDialog('Acme Corp').getByRole('button', { name: 'Cancel', exact: true }).click();
+    assert.equal(clientActive(acmeId), 't');
+    await search.fill(committedName);
+    await committed.getByRole('button', { name: 'Archive', exact: true }).click();
+    await archiveDialog(committedName).getByRole('button', { name: 'Archive client', exact: true }).click();
+    await expect(committed.getByText('Archived', { exact: true })).toBeVisible();
+
+    // A policy change during an overlapping reload clears the open
+    // confirmation and withholds every status control.
+    let releaseOverlap, releaseOverview;
+    const heldOverlap = new Promise(resolve => { releaseOverlap = resolve; });
+    const heldOverview = new Promise(resolve => { releaseOverview = resolve; });
+    await page.route('**/api/set_client_active*', async route => { await heldOverlap; await route.continue(); }, { times: 1 });
+    await page.route('**/api/client_overview*', async route => { await heldOverview; await route.continue(); }, { times: 1 });
+    await committed.getByRole('button', { name: 'Restore', exact: true }).click();
+    await search.fill('Acme Corp');
+    await acmeArchive.click();
+    await expect(archiveDialog('Acme Corp')).toBeVisible();
+    const reloadRequested = page.waitForRequest(request => request.url().includes('/api/client_overview'));
+    const org = sql(`SELECT org_id FROM clients WHERE id = '${acmeId}'`);
+    releaseOverlap();
+    await reloadRequested;
+    // Until the reload settles the page cannot confirm authority, so an idle
+    // confirmation closes (only an archive already in flight stays open).
+    await expect(archiveDialog('Acme Corp')).toBeHidden();
+    sql(`UPDATE organizations SET permission_policy_version = 1 WHERE id = '${org}'`);
+    try {
+      releaseOverview();
+      await expect(page.getByRole('alert').filter({ hasText: 'Could not load clients' })).toBeVisible();
+      await expect(archiveDialog('Acme Corp')).toBeHidden();
+      for (const control of ['Archive', 'Restore', 'Archive client']) {
+        await expect(page.getByRole('button', { name: control, exact: true })).toHaveCount(0);
+      }
+    } finally {
+      sql(`UPDATE organizations SET permission_policy_version = 0 WHERE id = '${org}'`);
+    }
+    await page.reload();
+    assert.equal(clientActive(committedId), 't');
+    assert.equal(clientActive(acmeId), 't');
+
+    // An edit that renames a client out of the current search refocuses the heading.
+    await search.fill(committedName);
+    await committed.getByRole('button', { name: 'Edit', exact: true }).click();
+    await field('Client name').fill(`Renamed away ${Date.now()}`);
+    await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(committed).toHaveCount(0);
+    await expect(page.locator('#clients-heading')).toBeFocused();
+    sql(`UPDATE clients SET name = '${committedName.replaceAll("'", "''")}' WHERE id = '${committedId}'`);
+    await page.reload();
+    console.log('PASS: archive and restore are guarded while pending with visible feedback; focus returns to the live control or heading, never overrides the user, and an open confirmation closes under changed authority');
+
+    // Client Detail offers the same actions in its header.
+    await page.goto(`${base}/clients/${committedId}`);
+    const status = page.locator('#client-status');
+    await expect(status).toHaveText('Archive client');
+    await status.click();
+    await archiveDialog(committedName).getByRole('button', { name: 'Archive client', exact: true }).click();
+    await expect(archiveDialog(committedName)).toBeHidden();
+    await expect(page.getByText('Archived', { exact: true })).toBeVisible();
+    await expect(status).toHaveText('Restore client');
+    await expect(status).toBeFocused();
+    await expect(page.getByRole('status').filter({ hasText: `${committedName} archived` })).toBeVisible();
+    let releaseDetail;
+    const heldDetail = new Promise(resolve => { releaseDetail = resolve; });
+    await page.route('**/api/set_client_active*', async route => { await heldDetail; await route.continue(); }, { times: 1 });
+    await status.click();
+    await expect(status).toHaveText('Restoring client…');
+    await expect(status).toBeDisabled();
+    releaseDetail();
+    await expect(status).toHaveText('Archive client');
+    await expect(page.getByRole('status').filter({ hasText: `${committedName} restored` })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(status).toBeFocused();
+    assert.equal(clientActive(committedId), 't');
+    assert.equal(history(), before);
+    await page.goto(`${base}/clients/${acmeId}`);
+    await status.click();
+    await archiveDialog('Acme Corp').getByRole('button', { name: 'Archive client', exact: true }).click();
+    await expect(archiveDialog('Acme Corp').getByRole('alert')).toContainText("Archive this client's projects before archiving the client.");
+    await page.keyboard.press('Escape');
+    await expect(status).toHaveText('Archive client');
+    assert.equal(history(), before);
+    console.log('PASS: Client Detail archives with confirmation, restores directly and refuses while projects are active');
+    await page.goto(`${base}/clients`);
     await page.getByRole('link', { name: 'Import', exact: true }).click();
     await expect(page).toHaveURL(`${base}/admin/importers`);
     await expect(page.getByRole('heading', { name: 'Importers', exact: true })).toBeVisible();
