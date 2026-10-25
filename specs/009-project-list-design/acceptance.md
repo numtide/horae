@@ -217,8 +217,10 @@ assertion for rustfmt.
   screenshots.
 - Two source reviews approved the product and test changes at bab2bc8c; the
   technical review accepted the snapshot correction at 2291ae37.
-- Full local `nix flake check` and CI on the exact published head remain
-  required before merge.
+- `nix flake check -L` on clean head 8785a711 reported "all checks passed!" and
+  exited 0, including the Nix browser suites. It checked x86_64-linux only;
+  aarch64-linux and aarch64-darwin were omitted.
+- CI on the exact published head remains required before merge.
 
 ### Limits
 

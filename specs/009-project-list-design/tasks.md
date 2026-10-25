@@ -31,7 +31,7 @@ T014; T016 last.
 
 - [x] T017 Native desktop and mobile checks in light and dark themes, including keyboard navigation from a client band to Client Detail and back, recorded in specs/009-project-list-design/acceptance.md (coordinator, package `bxf41wjahws2v2r47zfaw9zm71jdjdy2-horae-0.1.0` at bab2bc8c: 4/4 passed at 1440 and 390 px in light and dark; UX accepted all 12 screenshots)
 - [x] T018 Two independent code reviews of the branch diff, findings resolved or recorded in specs/009-project-list-design/acceptance.md (two source reviews approved bab2bc8c; technical review accepted the test-only correction at 2291ae37)
-- [ ] T019 Full local `nix flake check` on the final head, result recorded in specs/009-project-list-design/acceptance.md
+- [x] T019 Full local `nix flake check` on the final head, result recorded in specs/009-project-list-design/acceptance.md (8785a711: all checks passed, exit 0; x86_64-linux only)
 - [ ] T020 Mandatory CI green on the exact published head before merge, recorded in specs/009-project-list-design/acceptance.md
 
 This slice closes one navigation gap; it does not complete the UI parity goal.
