@@ -62,7 +62,7 @@ Independent check: both commit orders for each writer, at the server default and
 
 Independent check: keyboard-only list and detail; Cancel/Escape; delayed and failed responses; Active and Archived filters; narrow screens; both themes.
 
-- [ ] T013 [US4] Update browser checks before changing the UI:
+- [x] T013 [US4] Update browser checks before changing the UI:
   - tests/browser/clients.cjs, list and detail:
     - archive confirmation text has no count; Cancel and Escape change nothing;
     - a refused archive of a client with active projects stays in the dialog with a projects link;
@@ -72,7 +72,7 @@ Independent check: keyboard-only list and detail; Cancel/Escape; delayed and fai
     - focus is left alone after the user moves it.
   - action-errors.cjs, clients-errors.cjs and clients-permissions.cjs: the new labels and the dialog step.
     (LC-009, LC-SC-005)
-- [ ] T014 [US4] Build the archive dialog in new src/pages/clients/status.rs on `Modal`. In src/pages/clients.rs: Archive opens the dialog, Restore calls directly, a per-client pending guard, and focus per plan decision 7, including the one-expression fallback in `restore_opener_focus`. src/pages/clients/filters.rs: "Archived clients", with its unit test. src/pages/clients/detail.rs: the `client-status` header action, the Archived badge, the same dialog and a detail refresh. No other detail change (LC-009).
+- [x] T014 [US4] Build the archive dialog in new src/pages/clients/status.rs on `Modal`. In src/pages/clients.rs: Archive opens the dialog, Restore calls directly, a per-client pending guard, and focus per plan decision 7, including the one-expression fallback in `restore_opener_focus`. src/pages/clients/filters.rs: "Archived clients", with its unit test. src/pages/clients/detail.rs: the `client-status` header action, the Archived badge, the same dialog and a detail refresh. No other detail change (LC-009).
 
 ## Phase 7: Verification and delivery
 
@@ -122,8 +122,23 @@ Logs are in `/tmp/horae-c03.l9DeCi` (a disposable socket-only cluster). Every ru
   - `test-green4-*` (project_creation 103);
   - `gate4-*` (`detail_navigation` 74, clients 53, projects 199, project_creation 103,
     wasm, clippy).
-- **Open:** T013 and T014 are implemented, but their browser checks haven't run. T015 is
-  partial; its cache and format gates are pending. T016–T019 are pending.
+- **T013, T014:** headless suites against the package built from `00440476`:
+  `browser1-{action-errors,clients-errors,clients-permissions,project-detail-header}.log`
+  and `browser2-clients.log`, all exit 0. The coordinator accepted this evidence.
+- **T015:** `gate5-*` (cache regeneration, offline all-targets build, affected tests,
+  wasm, clippy, `fmt --ci`). After the native corrections, `gate7-*` reran wasm, clippy
+  and the affected tests.
+- **Native first pass (T016, coordinator) on `00440476`:** 23 functional and 27+27 visual
+  checks passed. It found two MEDIUM issues:
+  - Undo refusal focus left on BODY, with the alert below the fold.
+  - Archive dialog button labels breaking into letter columns at 390px with 200% text.
+    Both have RED logs against that package (`browser3red-*`) and are fixed in `07e55f8e`
+    and `25de7f9f`.
+- **Recorded as LOW, not changed in this increment:** focus lands on BODY after a refused
+  archive inside its dialog, after a failed list restore, and after a refused
+  reactivation in the Project Detail dialog.
+- **Open:** T016 needs the remaining native keyboard configurations and the Undo retest.
+  T017's final review, T018's full flake check and CI, and T019 are pending.
 
 ## Evidence notes
 
