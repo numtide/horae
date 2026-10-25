@@ -218,8 +218,8 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await search.fill(committedName);
     const committed = rowFor(committedName);
     const committedId = sql(`SELECT id FROM clients WHERE name = '${committedName.replaceAll("'", "''")}'`);
-    let release;
-    const held = new Promise(resolve => { release = resolve; });
+    let releaseArchive;
+    const held = new Promise(resolve => { releaseArchive = resolve; });
     await page.route('**/api/set_client_active*', async route => { await held; await route.continue(); });
     statusRequests = 0;
     await committed.getByRole('button', { name: 'Archive', exact: true }).click();
@@ -230,7 +230,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await page.keyboard.press('Escape');
     await expect(archiveDialog(committedName)).toBeVisible();
     await confirm.click({ force: true });
-    release();
+    releaseArchive();
     await expect(archiveDialog(committedName)).toBeHidden();
     await expect(committed).toHaveCount(0);
     await expect(page.locator('#clients-heading')).toBeFocused();
