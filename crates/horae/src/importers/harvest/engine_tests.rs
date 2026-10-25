@@ -1577,3 +1577,160 @@ async fn large_run_reuses_parents_and_reconciles_totals(pool: PgPool) {
             .unwrap_or(0);
     assert_eq!(total, expected_minutes);
 }
+
+// ── Archived clients (specs/012-clients-design/increments/lifecycle LC-006) ──
+
+const ARCHIVED_CLIENT_CSV: &str = "Date,Client,Project,Project Code,Task,Notes,Hours,Billable?,Invoiced?,Email,Currency\n\
+2026-01-15,Acme,Website,WEB,Design,kickoff,1.5,Yes,No,dev@acme.com,USD\n\
+2026-01-16,Acme,Website,WEB,Design,,0.25,No,No,dev@acme.com,USD\n\
+2026-01-16,Fresh,Other,OTH,Design,,1,Yes,No,dev@acme.com,USD\n";
+
+async fn archived_client(pool: &PgPool, org: Uuid) -> Uuid {
+    let id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO clients (id, org_id, name, currency, active) VALUES ($1, $2, 'Acme', 'USD', false)",
+        id,
+        org,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    id
+}
+
+/// A new active project under an archived local client fails on every CSV line
+/// that needs it, each with its own location and reason, under the existing
+/// per-row accounting. Nothing is suppressed or deduplicated, other rows import,
+/// dry run and commit agree, and a re-run after restoring the client creates it once.
+#[sqlx::test(migrations = "./migrations")]
+async fn csv_lines_for_a_new_project_of_an_archived_client_fail_and_retry(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let client = archived_client(&pool, org).await;
+    let csv = ARCHIVED_CLIENT_CSV.as_bytes();
+
+    let preview = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::DryRun)
+        .await
+        .unwrap();
+    let report = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(
+        (&preview.summary, &preview.row_errors),
+        (&report.summary, &report.row_errors)
+    );
+    assert!(report.reconciles(), "{report:?}");
+    let failed: Vec<_> = report
+        .row_errors
+        .iter()
+        .filter(|error| error.reason.contains("client is archived"))
+        .collect();
+    assert_eq!(failed.len(), 2, "{report:?}");
+    assert!(
+        failed
+            .iter()
+            .all(|error| error.entity == EntityType::Project)
+    );
+    assert_ne!(failed[0].source_location, failed[1].source_location);
+    assert_eq!(report.summary.time_entries.created, 1, "{report:?}");
+    let archived = sqlx::query!(
+        r#"SELECT c.active, (SELECT count(*) FROM projects p WHERE p.client_id = c.id) AS "projects!"
+           FROM clients c WHERE c.id = $1"#,
+        client
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!((archived.active, archived.projects), (false, 0));
+
+    sqlx::query!("UPDATE clients SET active = true WHERE id = $1", client)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let retry = super::csv_source::import_csv(&pool, org, "USD", csv, ImportMode::Commit)
+        .await
+        .unwrap();
+    assert_eq!(retry.error_count(), 0, "{retry:?}");
+    assert_eq!(retry.summary.time_entries.created, 2, "{retry:?}");
+    assert_eq!(retry.summary.time_entries.skipped, 1, "{retry:?}");
+    let created = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM projects WHERE client_id = $1 AND active"#,
+        client
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(created, 1);
+}
+
+/// An archive commits while an import waits to create a project under that
+/// client. The import must not create it, at READ COMMITTED (it reads the
+/// archived client) or REPEATABLE READ (its share lock fails to serialize and
+/// the record errors), and the run still finishes with the other rows.
+#[sqlx::test(migrations = "./migrations")]
+async fn an_import_waiting_for_a_client_archive_creates_no_project_under_it(pool: PgPool) {
+    let rr = crate::server_fns::test_seed::repeatable_read_pool(&pool).await;
+    for (n, (isolation, import_pool)) in [("default", &pool), ("repeatable read", &rr)]
+        .into_iter()
+        .enumerate()
+    {
+        let org = seed_org(&pool).await;
+        // User emails are unique across organizations.
+        let email = format!("dev{n}@acme.com");
+        seed_user(&pool, org, &email).await;
+        let csv = ARCHIVED_CLIENT_CSV.replace("dev@acme.com", &email);
+        let client = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Acme', 'USD')",
+            client,
+            org,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let mut archive = pool.begin().await.unwrap();
+        let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+            .fetch_one(&mut *archive)
+            .await
+            .unwrap();
+        crate::db::lock_organization(&mut archive, org, crate::db::OrganizationLock::Shared)
+            .await
+            .unwrap();
+        sqlx::query!("SELECT id FROM clients WHERE id = $1 FOR UPDATE", client)
+            .fetch_one(&mut *archive)
+            .await
+            .unwrap();
+        sqlx::query!("UPDATE clients SET active = false WHERE id = $1", client)
+            .execute(&mut *archive)
+            .await
+            .unwrap();
+        let run_pool = import_pool.clone();
+        let import = tokio::spawn(async move {
+            super::csv_source::import_csv(&run_pool, org, "USD", csv.as_bytes(), ImportMode::Commit)
+                .await
+        });
+        crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+        archive.commit().await.unwrap();
+        let report = tokio::time::timeout(std::time::Duration::from_secs(10), import)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert!(report.reconciles(), "{isolation}: {report:?}");
+        assert_eq!(
+            report.summary.time_entries.created, 1,
+            "{isolation}: {report:?}"
+        );
+        let linked = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM projects WHERE client_id = $1"#,
+            client
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            linked, 0,
+            "{isolation}: an archived client gained a project"
+        );
+    }
+}

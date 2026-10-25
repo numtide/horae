@@ -2,10 +2,11 @@ use dioxus::prelude::*;
 use std::collections::BTreeSet;
 use uuid::Uuid;
 
-use super::{is_admin, run_action};
+use super::is_admin;
 use crate::components::badge::Badge;
 use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuItem};
+use crate::components::toast::{Toast, ToastContainer};
 use crate::models::permission_editor::PermissionRequester;
 use crate::route::Route;
 use crate::server_fns;
@@ -20,6 +21,9 @@ pub use detail::ClientDetail;
 
 #[path = "clients/form.rs"]
 mod form;
+
+#[path = "clients/status.rs"]
+mod status;
 
 /// The account and permission policy a Clients page first loaded under.
 type Binding = (PermissionRequester, bool);
@@ -36,9 +40,10 @@ fn bind(mut binding: Signal<Option<Binding>>, current: Binding) -> Result<(), Se
     Ok(())
 }
 
-/// A save reloads the page, unmounting the editor's opener before the dialog
-/// can return focus to it. Focus the rebuilt opener, unless the user has
-/// already moved focus beyond the dialog's fallback during the reload.
+/// A save reloads the page, unmounting the opener before focus can return to
+/// it. Focus the rebuilt opener, or the fallback when the opener is gone (for
+/// example a row that left the current filter), unless the user has already
+/// moved focus beyond the fallback during the reload.
 fn restore_opener_focus(opener: &str, fallback: &str) {
     let opener = serde_json::json!(opener);
     let fallback = serde_json::json!(fallback);
@@ -46,7 +51,7 @@ fn restore_opener_focus(opener: &str, fallback: &str) {
         "requestAnimationFrame(() => {{
             const active = document.activeElement;
             if (!active || active === document.body || active.id === {fallback}) {{
-                document.getElementById({opener})?.focus();
+                (document.getElementById({opener}) ?? document.getElementById({fallback}))?.focus();
             }}
         }});"
     ));
@@ -62,15 +67,26 @@ pub fn ClientList() -> Element {
     let mut show_form = use_signal(|| false);
     // `Some(id)` while editing an existing client, `None` while creating.
     let mut editing_id = use_signal(|| None::<Uuid>);
-    let action_error = use_signal(|| None::<String>);
+    let mut action_error = use_signal(|| None::<String>);
+    let mut archiving = use_signal(|| None::<status::ArchiveTarget>);
+    // The client whose archive is in flight, shared with the confirmation.
+    let archive_pending = use_signal(|| None::<Uuid>);
+    // Clients whose restore is in flight; each control ignores its own repeats.
+    let mut restoring = use_signal(BTreeSet::<Uuid>::new);
+    let mut saved = use_signal(|| None::<String>);
     // The opener to refocus after a save's reload; see `restore_opener_focus`.
     let mut refocus = use_signal(|| None::<String>);
 
     let binding = use_signal(|| None::<Binding>);
     let mut clients = use_resource(move || async move {
-        // An editor opened under the previous authority must not survive a refresh.
+        // An editor or idle confirmation opened under the previous authority must
+        // not survive a refresh. An archive already in flight keeps its
+        // confirmation through an ordinary refresh; the settled result decides.
         editing_id.set(None);
         show_form.set(false);
+        if archive_pending.peek().is_none() {
+            archiving.set(None);
+        }
         let expected = binding.peek().as_ref().map(|(requester, _)| *requester);
         let overview = server_fns::client_overview(expected).await?;
         bind(
@@ -84,9 +100,16 @@ pub fn ClientList() -> Element {
         if clients.state()() != UseResourceState::Ready {
             return;
         }
+        let managed = matches!(&*clients.peek(), Some(Ok(overview)) if overview.can_manage);
+        // A notice or confirmation names a client of the bound account; a failed,
+        // denied or rebound reload must not keep it, even while it is pending.
+        if !managed {
+            saved.set(None);
+            archiving.set(None);
+        }
         // One-shot: a failed, denied or rebound reload consumes it without focusing.
         if let Some(opener) = refocus.take()
-            && matches!(&*clients.peek(), Some(Ok(overview)) if overview.can_manage)
+            && managed
         {
             restore_opener_focus(&opener, "clients-heading");
         }
@@ -175,7 +198,7 @@ pub fn ClientList() -> Element {
                         MenuItem { selected: scope() == ClientScope::Active,
                             onclick: move |_| scope.set(ClientScope::Active), "Active clients ({active_count})" }
                         MenuItem { selected: scope() == ClientScope::Inactive,
-                            onclick: move |_| scope.set(ClientScope::Inactive), "Inactive clients ({inactive_count})" }
+                            onclick: move |_| scope.set(ClientScope::Inactive), "Archived clients ({inactive_count})" }
                         MenuItem { selected: scope() == ClientScope::All,
                             onclick: move |_| scope.set(ClientScope::All), "All clients ({all_count})" }
                     }
@@ -203,6 +226,21 @@ pub fn ClientList() -> Element {
                     reset_form();
                     clients.restart();
                 },
+            }
+
+            status::ArchiveDialog { target: archiving, pending: archive_pending, focus_fallback: "clients-heading",
+                on_archived: move |client: status::ArchiveTarget| {
+                    action_error.set(None);
+                    saved.set(Some(format!("{} archived", client.name)));
+                    refocus.set(Some(format!("client-activity-{}", client.id)));
+                    clients.restart();
+                },
+            }
+            ToastContainer {
+                // Only beside the settled, bound list it describes.
+                if let (true, Some(message)) = (is_manager, saved()) {
+                    Toast { message, variant: "success", dismissible: true, ondismiss: move |_| saved.set(None) }
+                }
             }
 
             if let Some(message) = action_error() {
@@ -278,7 +316,7 @@ pub fn ClientList() -> Element {
                                                     if c.active {
                                                         Badge { variant: "success", "Active" }
                                                     } else {
-                                                        Badge { variant: "neutral", "Inactive" }
+                                                        Badge { variant: "neutral", "Archived" }
                                                     }
                                                 }
                                                 if is_manager {
@@ -296,20 +334,53 @@ pub fn ClientList() -> Element {
                                                             },
                                                             "Edit"
                                                         }
-                                                        button {
-                                                            id: "client-activity-{c.id}",
-                                                            class: "btn btn-secondary btn-sm",
-                                                            onclick: {
-                                                                let id = c.id;
-                                                                let next_active = !c.active;
-                                                                move |_| run_action(
-                                                                    server_fns::set_client_active(id.to_string(), next_active),
-                                                                    clients,
-                                                                    action_error,
-                                                                    || (),
-                                                                )
-                                                            },
-                                                            if c.active { "Deactivate" } else { "Activate" }
+                                                        if c.active {
+                                                            button {
+                                                                id: "client-activity-{c.id}",
+                                                                r#type: "button",
+                                                                class: "btn btn-secondary btn-sm",
+                                                                // One archive request at a time, even after its
+                                                                // confirmation was closed by a failed reload.
+                                                                disabled: archive_pending().is_some(),
+                                                                onclick: {
+                                                                    let target = status::ArchiveTarget { id: c.id, name: c.name.clone() };
+                                                                    move |_| {
+                                                                        if archive_pending().is_none() {
+                                                                            archiving.set(Some(target.clone()));
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "Archive"
+                                                            }
+                                                        } else {
+                                                            button {
+                                                                id: "client-activity-{c.id}",
+                                                                r#type: "button",
+                                                                class: "btn btn-secondary btn-sm",
+                                                                disabled: restoring.read().contains(&c.id),
+                                                                aria_busy: restoring.read().contains(&c.id),
+                                                                onclick: {
+                                                                    let (id, name) = (c.id, c.name.clone());
+                                                                    move |_| {
+                                                                        if !restoring.write().insert(id) { return; }
+                                                                        let name = name.clone();
+                                                                        spawn(async move {
+                                                                            let result = server_fns::set_client_active(id.to_string(), true).await;
+                                                                            restoring.write().remove(&id);
+                                                                            match result {
+                                                                                Ok(_) => {
+                                                                                    action_error.set(None);
+                                                                                    saved.set(Some(format!("{name} restored")));
+                                                                                    refocus.set(Some(format!("client-activity-{id}")));
+                                                                                    clients.restart();
+                                                                                }
+                                                                                Err(error) => action_error.set(Some(error.to_string())),
+                                                                            }
+                                                                        });
+                                                                    }
+                                                                },
+                                                                if restoring.read().contains(&c.id) { "Restoring…" } else { "Restore" }
+                                                            }
                                                         }
                                                         }
                                                     }

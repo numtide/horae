@@ -2,7 +2,11 @@ use dioxus::prelude::*;
 use horae_core::{duration::format_hhmm, money::format_cents};
 use uuid::Uuid;
 
-use crate::components::{badge::Badge, icons::NavIcon};
+use crate::components::{
+    badge::Badge,
+    icons::NavIcon,
+    toast::{Toast, ToastContainer},
+};
 use crate::models::client::ClientDetailView;
 use crate::route::Route;
 use crate::server_fns;
@@ -16,25 +20,44 @@ pub fn ClientDetail(id: Uuid) -> Element {
 #[component]
 fn ClientDetailContent(id: Uuid) -> Element {
     let mut show_editor = use_signal(|| false);
+    let mut archiving = use_signal(|| None::<super::status::ArchiveTarget>);
+    let archive_pending = use_signal(|| None::<Uuid>);
     let binding = use_signal(|| None::<super::Binding>);
     let mut details = use_resource(move || async move {
-        // An editor opened under the previous authority must not survive a refresh.
+        // An editor or idle confirmation opened under the previous authority must
+        // not survive a refresh; an archive in flight waits for the settled result.
         show_editor.set(false);
+        if archive_pending.peek().is_none() {
+            archiving.set(None);
+        }
         let expected = binding.peek().as_ref().map(|(requester, _)| *requester);
         let view = server_fns::client_detail_view(id.to_string(), expected).await?;
         super::bind(binding, (view.requester, view.canonical_permissions))?;
         Ok::<_, ServerFnError>(view)
     });
-    let mut refocus_edit = use_signal(|| false);
+    // The header control to refocus once a save or status change has reloaded.
+    let mut refocus = use_signal(|| None::<&'static str>);
+    let mut saved = use_signal(|| None::<String>);
     use_effect(move || {
         if details.state()() != UseResourceState::Ready {
             return;
         }
+        let managed = matches!(&*details.peek(), Some(Ok(view)) if view.can_manage);
+        // A notice or confirmation names a client of the bound account; a failed,
+        // denied or rebound reload must not keep it, even while it is pending.
+        if !managed {
+            saved.set(None);
+            archiving.set(None);
+        }
         // One-shot: a failed, denied or rebound reload consumes it without focusing.
-        if refocus_edit.take() && matches!(&*details.peek(), Some(Ok(view)) if view.can_manage) {
-            super::restore_opener_focus("client-edit", "client-back");
+        if let Some(opener) = refocus.take()
+            && managed
+        {
+            super::restore_opener_focus(opener, "client-back");
         }
     });
+    let mut restoring = use_signal(|| false);
+    let mut status_error = use_signal(|| None::<String>);
     let ready = details.state()() == UseResourceState::Ready;
     let data = details.read();
     // Legacy-only until client writes and invoices use canonical permissions;
@@ -63,7 +86,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
                             span { class: "font-mono text-xs text-secondary rounded-full border bg-tertiary px-2 py-1",
                                 "{detail.client.currency.trim()}"
                             }
-                            if !detail.client.active { Badge { variant: "neutral", "Inactive" } }
+                            if !detail.client.active { Badge { variant: "neutral", "Archived" } }
                         }
                     }
                     if can_manage {
@@ -73,8 +96,53 @@ fn ClientDetailContent(id: Uuid) -> Element {
                                 Link { to: Route::NewInvoiceForClient { client: id.to_string() }, class: "btn btn-primary", "New invoice" }
                             }
                             button { id: "client-edit", r#type: "button", class: "btn btn-secondary", onclick: move |_| show_editor.set(true), "Edit client" }
+                            if detail.client.active {
+                                button { id: "client-status", r#type: "button", class: "btn btn-secondary",
+                                    // One archive request at a time, even after its
+                                    // confirmation was closed by a failed reload.
+                                    disabled: archive_pending().is_some(),
+                                    onclick: {
+                                        let target = super::status::ArchiveTarget { id, name: detail.client.name.clone() };
+                                        move |_| {
+                                            if archive_pending().is_none() {
+                                                archiving.set(Some(target.clone()));
+                                            }
+                                        }
+                                    },
+                                    "Archive client"
+                                }
+                            } else {
+                                button { id: "client-status", r#type: "button", class: "btn btn-secondary",
+                                    disabled: restoring(), aria_busy: restoring(),
+                                    onclick: {
+                                        let name = detail.client.name.clone();
+                                        move |_| {
+                                            if restoring() { return; }
+                                            restoring.set(true);
+                                            let name = name.clone();
+                                            spawn(async move {
+                                                let result = server_fns::set_client_active(id.to_string(), true).await;
+                                                restoring.set(false);
+                                                match result {
+                                                    Ok(_) => {
+                                                        status_error.set(None);
+                                                        saved.set(Some(format!("{name} restored")));
+                                                        refocus.set(Some("client-status"));
+                                                        details.restart();
+                                                    }
+                                                    Err(error) => status_error.set(Some(error.to_string())),
+                                                }
+                                            });
+                                        }
+                                    },
+                                    if restoring() { "Restoring client…" } else { "Restore client" }
+                                }
+                            }
                         }
                     }
+                }
+                if let Some(message) = status_error() {
+                    div { class: "alert alert-danger mb-4", role: "alert", "Could not change client status: {message}" }
                 }
                 div { class: "client-detail-grid grid gap-4 items-start",
                     ClientProjects { client_id: id }
@@ -116,10 +184,24 @@ fn ClientDetailContent(id: Uuid) -> Element {
             super::form::ClientEditor { open: show_editor() && can_manage, client_id: Some(id), focus_fallback: "client-back",
                 on_dismiss: move |_| show_editor.set(false),
                 on_saved: move |_| {
-                    refocus_edit.set(true);
+                    refocus.set(Some("client-edit"));
                     show_editor.set(false);
                     details.restart();
                 },
+            }
+            super::status::ArchiveDialog { target: archiving, pending: archive_pending, focus_fallback: "client-back",
+                on_archived: move |client: super::status::ArchiveTarget| {
+                    status_error.set(None);
+                    saved.set(Some(format!("{} archived", client.name)));
+                    refocus.set(Some("client-status"));
+                    details.restart();
+                },
+            }
+            ToastContainer {
+                // Only beside the settled, bound client it describes.
+                if let (true, Some(message)) = (can_manage, saved()) {
+                    Toast { message, variant: "success", dismissible: true, ondismiss: move |_| saved.set(None) }
+                }
             }
         }
     }

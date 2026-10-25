@@ -20,7 +20,7 @@ impl ClientScope {
     pub(super) fn label(self) -> &'static str {
         match self {
             Self::Active => "Active clients",
-            Self::Inactive => "Inactive clients",
+            Self::Inactive => "Archived clients",
             Self::All => "All clients",
         }
     }

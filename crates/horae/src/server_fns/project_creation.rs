@@ -33,6 +33,9 @@ use options::{load_creation_options, load_selected_catalog, load_selected_client
 mod assignment_tests;
 
 #[cfg(all(test, feature = "server"))]
+mod client_lifecycle_tests;
+
+#[cfg(all(test, feature = "server"))]
 mod import_tests;
 
 #[cfg(all(test, feature = "server"))]

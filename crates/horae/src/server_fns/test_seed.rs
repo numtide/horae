@@ -31,6 +31,35 @@ pub async fn wait_for_blocked(pool: &PgPool, blocker: i32) {
     }).await.expect("operation must wait for the competing transaction");
 }
 
+/// A second pool on the same database whose transactions default to REPEATABLE
+/// READ, to prove a writer selects the isolation its checks rely on rather than
+/// inheriting the server default.
+pub async fn repeatable_read_pool(pool: &PgPool) -> PgPool {
+    // Connection `options` would pass the value's space unescaped, so set the
+    // session default on each new connection instead.
+    let rr = sqlx::postgres::PgPoolOptions::new()
+        .after_connect(|connection, _| {
+            Box::pin(async move {
+                sqlx::query!(
+                    "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ"
+                )
+                .execute(connection)
+                .await
+                .map(|_| ())
+            })
+        })
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    let isolation =
+        sqlx::query_scalar!(r#"SELECT current_setting('transaction_isolation') AS "isolation!""#)
+            .fetch_one(&rr)
+            .await
+            .unwrap();
+    assert_eq!(isolation, "repeatable read");
+    rr
+}
+
 /// Seed the minimal tenant, giving the user `role`, and return its ids.
 pub async fn seed(pool: &PgPool, role: OrgRole) -> SeedIds {
     let org_id = Uuid::now_v7();

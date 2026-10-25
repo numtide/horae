@@ -353,6 +353,90 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await expect(header).toContainText('header-tag');
     console.log('PASS: a failed transport retries in place; pending and duplicate requests send once; archived state persists');
 
+    // An archived client refuses its project's reactivation; the dialog says why
+    // and links to the client instead of offering a retry (client lifecycle US2).
+    sql(`UPDATE clients SET active = false WHERE id = '${client}'`);
+    try {
+      await open('Reactivate');
+      const refused = page.waitForResponse(isStatusWrite);
+      await dialog.getByRole('button', { name: 'Reactivate project', exact: true }).click();
+      assert.equal((await refused).status(), 409);
+      await expect(dialog.getByRole('alert')).toContainText('Restore the client before restoring this project.');
+      await expect(dialog.getByRole('alert')).not.toContainText('retry safely');
+      assert.equal(await dialog.getByRole('link', { name: 'Open the client', exact: true }).getAttribute('href'), `/clients/${client}`);
+      console.log(`OBSERVE: focus after a refused reactivation is ${await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName)}`);
+      const refusalText = page.getByText('Restore the client before restoring this project.');
+      await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(dialog).toBeHidden();
+      // A dialog refusal ends with the dialog, by Cancel or by Escape.
+      await expect(refusalText).toHaveCount(0);
+      await open('Reactivate');
+      await dialog.getByRole('button', { name: 'Reactivate project', exact: true }).click();
+      await expect(dialog.getByRole('alert')).toContainText('Restore the client before restoring this project.');
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await expect(refusalText).toHaveCount(0);
+      assert.equal(active(), 'f');
+
+      // Undo meets the same refusal: the Undo notice gives way to the reason.
+      sql(`UPDATE clients SET active = true WHERE id = '${client}'`);
+      sql(`UPDATE projects SET active = true WHERE id = '${project}'`);
+      await page.reload();
+      await expect(title).toBeVisible();
+      await open('Archive');
+      await dialog.getByRole('button', { name: 'Archive project', exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await expect(undo).toBeVisible();
+      sql(`UPDATE clients SET active = false WHERE id = '${client}'`);
+      const undone = page.waitForResponse(isStatusWrite);
+      await undo.click();
+      assert.equal((await undone).status(), 409);
+      await expect(undo).toHaveCount(0);
+      const refusalAlert = page.getByRole('alert').filter({ hasText: 'Restore the client before restoring this project.' });
+      await expect(refusalAlert).toBeVisible();
+      await expect(refusalAlert).not.toContainText('Retry');
+      assert.equal(await refusalAlert.getByRole('link', { name: 'Open the client', exact: true }).getAttribute('href'), `/clients/${client}`);
+      // The removed Undo leaves focus nowhere: it moves to the refusal, which
+      // scrolls into view, and the next Tab reaches the recovery link.
+      const refusal = page.locator('#project-detail-status-refusal');
+      await expect(refusal).toBeFocused();
+      await expect(refusal).toBeInViewport({ ratio: 1 });
+      await page.keyboard.press('Tab');
+      await expect(refusal.getByRole('link', { name: 'Open the client', exact: true })).toBeFocused();
+      assert.equal(active(), 'f');
+
+      // Focus the user moves while Undo is pending stays where they put it.
+      sql(`UPDATE clients SET active = true WHERE id = '${client}'`);
+      sql(`UPDATE projects SET active = true WHERE id = '${project}'`);
+      await page.reload();
+      await expect(title).toBeVisible();
+      await open('Archive');
+      await dialog.getByRole('button', { name: 'Archive project', exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await expect(undo).toBeVisible();
+      sql(`UPDATE clients SET active = false WHERE id = '${client}'`);
+      let releaseUndo;
+      const heldUndo = new Promise(resolve => { releaseUndo = resolve; });
+      await page.route('**/api/set_project_active*', async route => { await heldUndo; await route.continue(); }, { times: 1 });
+      const heldResponse = page.waitForResponse(isStatusWrite);
+      await undo.click();
+      // Back is a deliberate choice here too, although reloads use it as their fallback.
+      const moved = page.locator('#project-detail-back');
+      await moved.focus();
+      releaseUndo();
+      assert.equal((await heldResponse).status(), 409);
+      await expect(refusal).toBeVisible();
+      // The refusal's focus runs in an animation frame; let two pass first.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      await expect(moved).toBeFocused();
+      assert.equal(active(), 'f');
+    } finally {
+      sql(`UPDATE clients SET active = true WHERE id = '${client}'`);
+    }
+    await page.reload();
+    await expect(title).toBeVisible();
+    console.log('PASS: reactivating a project of an archived client is refused with the reason and a client link, from the dialog and from Undo');
+
     await page.route('**/api/set_project_active*', async route => {
       const body = route.request().postDataJSON();
       body.expected_requester.user_id = id(99);

@@ -3,8 +3,15 @@
 // Requires Playwright; PLAYWRIGHT_MODULE and CHROMIUM_PATH can select local installs.
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
 const base = process.env.HORAE_TEST_URL;
 assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
+const database = new URL(process.env.DATABASE_URL);
+assert.ok(database.searchParams.get('host')?.startsWith('/tmp/horae-browser.'));
+const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
+const ARCHIVED_CLIENT = `Action error archived client ${Date.now()}`;
+sql(`INSERT INTO clients (id, org_id, name, currency, active)
+  SELECT gen_random_uuid(), org_id, '${ARCHIVED_CLIENT}', 'EUR', false FROM users WHERE email = 'admin@example.com'`);
 
 (async () => {
   const browser = await chromium.launch({
@@ -22,7 +29,15 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
       name: 'client activation', path: '/clients', resource: 'client_overview',
       endpoint: 'set_client_active', form: 'New client',
       formEndpoint: 'create_client_profile', submit: 'Create client',
-      action: async () => page.getByRole('button', { name: 'Deactivate', exact: true }).first().click(),
+      // Restore is the direct action; archive failures stay in its dialog (clients.cjs).
+      action: async () => {
+        await page.locator('#client-scope-menu-trigger').click();
+        await page.getByRole('menuitem', { name: /^Archived clients/ }).click();
+        await page.getByRole('row').filter({ hasText: ARCHIVED_CLIENT })
+          .getByRole('button', { name: 'Restore', exact: true }).click();
+        await page.locator('#client-scope-menu-trigger').click();
+        await page.getByRole('menuitem', { name: /^Active clients/ }).click();
+      },
     },
     {
       name: 'project archive', path: '/projects', resource: 'get_project_overview',
@@ -112,12 +127,14 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated, seeded test instance');
           await page.getByRole('menuitem', { name: /^All clients/ }).click();
           await page.unroute(pattern);
           const changed = page.waitForResponse(r => r.url().includes('/api/set_client_active'));
-          await row.getByRole('button', { name: 'Deactivate', exact: true }).click();
+          await row.getByRole('button', { name: 'Archive', exact: true }).click();
+          await page.getByRole('dialog', { name: `Archive ${name}?` })
+            .getByRole('button', { name: 'Archive client', exact: true }).click();
           assert.equal((await changed).status(), 200);
-          await expect(row.getByText('Inactive', { exact: true })).toBeVisible();
+          await expect(row.getByText('Archived', { exact: true })).toBeVisible();
           await expect(page.getByRole('alert')).toHaveCount(0);
           const restored = page.waitForResponse(r => r.url().includes('/api/set_client_active'));
-          await row.getByRole('button', { name: 'Activate', exact: true }).click();
+          await row.getByRole('button', { name: 'Restore', exact: true }).click();
           assert.equal((await restored).status(), 200);
           await expect(row.getByText('Active', { exact: true })).toBeVisible();
           console.log('PASS: successful form save preserves action error; real status retry clears it and refreshes the row');

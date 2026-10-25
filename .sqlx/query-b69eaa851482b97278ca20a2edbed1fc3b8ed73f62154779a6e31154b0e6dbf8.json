@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.active, (SELECT count(*) FROM projects p WHERE p.client_id = c.id) AS \"projects!\"\n           FROM clients c WHERE c.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "projects!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "b69eaa851482b97278ca20a2edbed1fc3b8ed73f62154779a6e31154b0e6dbf8"
+}

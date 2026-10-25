@@ -84,7 +84,8 @@ Denials must not reveal hidden project identities/counts. Recheck concurrent
 project creation/reactivation and current client authority under the existing
 organization-first gate; preserve history and independent state constraints.
 Policy-zero compatibility and the reviewed activation delta remain explicit:
-the existing legacy operation changes only the client without this prerequisite.
+under the legacy manager role, client archive now enforces this prerequisite and
+restores only the client, implemented and tested in the 012 lifecycle increment.
 
 ## Clients page read slice (partial T238)
 
