@@ -17,10 +17,32 @@ the product bug before widening scope.
 **Fixture, states S1–S6 and proofs P1–P9**: plan.md "Acceptance Increment" is the only
 source; tasks refer to it rather than repeat it.
 
-**Status (2026-10-25)**: T001–T010 were done at 962034c8 (evidence logs in
-`/tmp/horae-r02.vcDtiK/`). T012 (review remediation) stays open until its gates pass on
-the committed remediation head and its changed lines are re-reviewed. T011 is open: no
-gate in it is claimed.
+**Status (2026-10-25)**: evidence logs are in `/tmp/horae-r02.vcDtiK/`.
+
+- **T001–T010**:
+  - The work was authored and committed up to 962034c8.
+  - Their Rust runs (T003, the T004 GREEN/RED/restored runs, the T008 prepare and offline
+    build) ran on the working tree before the formatter commit b459f4f0, so they are not
+    evidence for a committed head.
+  - Strict clippy, the server package build and the focused browser suites (three PASS
+    lines) ran at committed 962034c8.
+  - The browser suite's deliberate RED (expected 2.66, actual 2.67) was restored to the
+    committed bytes without a rerun.
+- **T012**, on committed 86c60ce1 (`t012-head.txt`):
+  - the focused Rust test: 1 passed;
+  - the `SQLX_OFFLINE=true` all-targets `--no-run` build: exit 0;
+  - strict clippy: exit 0;
+  - formatting and `.sqlx` prepare were clean before the commit;
+  - the independent re-reviews accepted the changed source;
+  - the browser suite source is unchanged since 962034c8, so its runs there carry forward.
+- **Native acceptance**, by the coordinator on the 962034c8 package (unchanged production
+  code at 86c60ce1), recorded in the root `.scratch/r02-native-artifacts-20261025.md`:
+  - all 4 stages pass, covering 16 filter states;
+  - CSV by click and XLSX by Enter each returned a 200 response carrying the visible query;
+  - no download event fired (microsoft/playwright#39253);
+  - the downloaded files were inspected afterwards on disk, the XLSX with `unzip`. The
+    browser decoded no XLSX.
+- **T011** is open; no gate in it is claimed.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -95,14 +117,14 @@ disposable database.
 - [x] T008 Regenerate the query cache against the T001 database: run
   `touch crates/horae/src/main.rs crates/horae/tests/*.rs`, then
   `cargo sqlx prepare --workspace -- --features server --all-targets`, and stage `.sqlx/`.
-  Confirm with an offline build: `SQLX_OFFLINE=true cargo test -p horae --features server --no-run`.
+  Confirm with an offline build: `SQLX_OFFLINE=true cargo test -p horae --features server --all-targets --no-run`.
 - [x] T009 Run the gates one at a time, with no edits while a check runs: the focused Rust
   test `cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization`;
   strict clippy as in `nix/checks/clippy.nix`; `nix fmt -- --ci`.
 - [x] T010 As the single heavy-build owner, build the server package once, then run
   `crates/horae/tests/browser/run-design-checks.sh reports-currency-totals reports-legacy-exports reports-permissions` (its own `/tmp` database). Record commands,
   exit codes and PASS lines.
-- [ ] T012 Review remediation (technical and UX reviews of 962034c8): remove the unproven
+- [x] T012 Review remediation (technical and UX reviews of 962034c8): remove the unproven
   "XLSX values convert back to whole minutes" claim (M1); describe the layers as the same
   route and query template over parallel fixtures (F1, L4); assert policy 0 and add S6
   (L2, L3); correct the P9 citations (L3). Then, one at a time on the committed head:
