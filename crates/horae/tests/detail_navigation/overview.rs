@@ -182,7 +182,10 @@ async fn policy_one_client_bands_stay_plain_labels() {
     *probe.overview.borrow_mut() = Some(overview());
     let dom = mount(&probe);
     let html = dioxus::ssr::render(&dom);
-    assert!(html.contains("text-primary\">Visible client</div>"), "{html}");
+    assert!(
+        html.contains("text-primary\">Visible client</div>"),
+        "{html}"
+    );
     assert!(!html.contains("href=\"/clients/"), "{html}");
 }
 
