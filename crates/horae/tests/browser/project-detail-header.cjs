@@ -396,8 +396,39 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
       await expect(refusalAlert).toBeVisible();
       await expect(refusalAlert).not.toContainText('Retry');
       assert.equal(await refusalAlert.getByRole('link', { name: 'Open the client', exact: true }).getAttribute('href'), `/clients/${client}`);
-      // Focus and placement after the Undo refusal are for the native pass to judge.
-      console.log(`OBSERVE: focus after a refused Undo is ${await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName)}; alert top ${Math.round((await refusalAlert.boundingBox()).y)}px`);
+      // The removed Undo leaves focus nowhere: it moves to the refusal, which
+      // scrolls into view, and the next Tab reaches the recovery link.
+      const refusal = page.locator('#project-detail-status-refusal');
+      await expect(refusal).toBeFocused();
+      await expect(refusal).toBeInViewport({ ratio: 1 });
+      await page.keyboard.press('Tab');
+      await expect(refusal.getByRole('link', { name: 'Open the client', exact: true })).toBeFocused();
+      assert.equal(active(), 'f');
+
+      // Focus the user moves while Undo is pending stays where they put it.
+      sql(`UPDATE clients SET active = true WHERE id = '${client}'`);
+      sql(`UPDATE projects SET active = true WHERE id = '${project}'`);
+      await page.reload();
+      await expect(title).toBeVisible();
+      await open('Archive');
+      await dialog.getByRole('button', { name: 'Archive project', exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await expect(undo).toBeVisible();
+      sql(`UPDATE clients SET active = false WHERE id = '${client}'`);
+      let releaseUndo;
+      const heldUndo = new Promise(resolve => { releaseUndo = resolve; });
+      await page.route('**/api/set_project_active*', async route => { await heldUndo; await route.continue(); }, { times: 1 });
+      const heldResponse = page.waitForResponse(isStatusWrite);
+      await undo.click();
+      // Back is a deliberate choice here too, although reloads use it as their fallback.
+      const moved = page.locator('#project-detail-back');
+      await moved.focus();
+      releaseUndo();
+      assert.equal((await heldResponse).status(), 409);
+      await expect(refusal).toBeVisible();
+      // The refusal's focus runs in an animation frame; let two pass first.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      await expect(moved).toBeFocused();
       assert.equal(active(), 'f');
     } finally {
       sql(`UPDATE clients SET active = true WHERE id = '${client}'`);

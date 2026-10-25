@@ -1139,6 +1139,23 @@ fn ProjectDetailContent(id: Uuid) -> Element {
     let mut status_failed = use_signal(|| false);
     // A definite refusal, with the client to open when it must be restored first.
     let mut status_refused = use_signal(|| None::<(String, Option<Uuid>)>);
+    // One-shot: move focus to a refusal shown outside the dialog once it renders,
+    // only when focus was lost with Undo's button; any focused control, even
+    // Back, is the user's choice and stays.
+    let mut focus_refusal = use_signal(|| false);
+    use_effect(move || {
+        if status_refused().is_some() && status_change().is_none() && focus_refusal() {
+            focus_refusal.set(false);
+            document::eval(
+                "requestAnimationFrame(() => {
+                    const active = document.activeElement;
+                    if (!active || active === document.body) {
+                        document.getElementById('project-detail-status-refusal')?.focus();
+                    }
+                });",
+            );
+        }
+    });
     // The status a change from this view saved; only an archive offers Undo.
     let mut status_saved = use_signal(|| None::<bool>);
     let mut undo_failed = use_signal(|| false);
@@ -1188,6 +1205,8 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                 }) => {
                     status_saved.set(None);
                     status_refused.set(Some((message, client_id)));
+                    // Undo's notice disappears with its focused button.
+                    focus_refusal.set(undoing);
                 }
                 // A Dismiss while Undo was pending must not hide its retry.
                 Err(_) if undoing => {
@@ -1403,7 +1422,8 @@ fn ProjectDetailContent(id: Uuid) -> Element {
             // A refusal outside the dialog, such as from Undo.
             if status_change().is_none() && loaded {
                 if let Some((message, client)) = status_refused() {
-                    div { class: "alert alert-danger mt-5", role: "alert",
+                    div { id: "project-detail-status-refusal", tabindex: "-1",
+                        class: "alert alert-danger mt-5", role: "alert",
                         p { class: "m-0", "{message}" }
                         if let Some(client) = client {
                             Link { to: Route::ClientDetail { id: client }, class: "font-semibold", "Open the client" }
