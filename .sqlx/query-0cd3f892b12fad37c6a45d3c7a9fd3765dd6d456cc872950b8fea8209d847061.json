@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO horae_job_report_error_chunks (id, job_id, org_id, sequence, body)\n         VALUES ($1, $2, $3, 0, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0cd3f892b12fad37c6a45d3c7a9fd3765dd6d456cc872950b8fea8209d847061"
+}

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT jsonb_build_object(\n          'projects', (SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id) FROM projects t),\n          'clients', (SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id) FROM clients t),\n          'entries', (SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id) FROM time_entries t),\n          'invoices', (SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id) FROM invoices t)\n        ) AS \"snapshot!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "snapshot!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ddfaffad20650a42ee2f271f7407a1fcc36310e8e99c416ff96475846a5b2412"
+}

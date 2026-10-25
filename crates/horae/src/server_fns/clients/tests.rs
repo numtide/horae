@@ -509,6 +509,28 @@ async fn client(pool: &PgPool) -> Client {
     .unwrap()
 }
 
+/// Archiving a client needs every linked project archived first (015 FR-036).
+async fn archive_projects_of(pool: &PgPool, client_id: uuid::Uuid) {
+    sqlx::query!(
+        "UPDATE projects SET active = false WHERE client_id = $1",
+        client_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// The fixture organization's first (seeded) user.
+async fn seeded_actor(pool: &PgPool, org_id: uuid::Uuid) -> uuid::Uuid {
+    sqlx::query_scalar!(
+        "SELECT id FROM users WHERE org_id = $1 ORDER BY id LIMIT 1",
+        org_id
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
 async fn row_version(pool: &PgPool, id: uuid::Uuid) -> Option<String> {
     sqlx::query_scalar!("SELECT xmin::text FROM clients WHERE id = $1", id)
         .fetch_one(pool)
@@ -1149,9 +1171,11 @@ async fn currency_edit_rechecks_a_concurrently_added_client_default_rate(pool: P
 async fn unchanged_activation_preserves_the_row(pool: PgPool) {
     let client = client(&pool).await;
     let before = row_version(&pool, client.id).await;
-    let (returned, transition) = set_client_active_record(&pool, client.org_id, client.id, true)
-        .await
-        .unwrap();
+    let actor = seeded_actor(&pool, client.org_id).await;
+    let (returned, transition) =
+        set_client_active_record(&pool, client.org_id, actor, client.id, true)
+            .await
+            .unwrap();
     let after = row_version(&pool, client.id).await;
     assert_eq!((transition, returned, after), (None, client, before));
 }
@@ -1220,9 +1244,10 @@ async fn competing_activation(pool: &PgPool, active: bool) -> (Client, Option<Ac
         .await
         .unwrap();
     let run_pool = pool.clone();
+    let actor = seeded_actor(pool, client.org_id).await;
     let mut run = tokio::task::JoinSet::new();
     run.spawn(async move {
-        set_client_active_record(&run_pool, client.org_id, client.id, active).await
+        set_client_active_record(&run_pool, client.org_id, actor, client.id, active).await
     });
     wait_for_blocked(pool, blocker).await;
     first.commit().await.unwrap();
@@ -1252,7 +1277,9 @@ async fn restoring_a_competing_deactivation_reports_reactivation(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn each_field_changes_once_and_preserves_inactive_status(pool: PgPool) {
     let client = client(&pool).await;
-    set_client_active_record(&pool, client.org_id, client.id, false)
+    archive_projects_of(&pool, client.id).await;
+    let actor = seeded_actor(&pool, client.org_id).await;
+    set_client_active_record(&pool, client.org_id, actor, client.id, false)
         .await
         .unwrap();
     for (name, currency, address, tax_id) in [
@@ -1307,19 +1334,21 @@ async fn each_field_changes_once_and_preserves_inactive_status(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn both_activation_transitions_change_once_and_preserve_details(pool: PgPool) {
     let mut expected = client(&pool).await;
+    archive_projects_of(&pool, expected.id).await;
+    let actor = seeded_actor(&pool, expected.org_id).await;
     for (active, transition) in [
         (false, ActiveTransition::Deactivated),
         (true, ActiveTransition::Reactivated),
     ] {
         expected.active = active;
         let (updated, actual) =
-            set_client_active_record(&pool, expected.org_id, expected.id, active)
+            set_client_active_record(&pool, expected.org_id, actor, expected.id, active)
                 .await
                 .unwrap();
         assert_eq!((actual, updated), (Some(transition), expected.clone()));
         let before = row_version(&pool, expected.id).await;
         let (repeated, actual) =
-            set_client_active_record(&pool, expected.org_id, expected.id, active)
+            set_client_active_record(&pool, expected.org_id, actor, expected.id, active)
                 .await
                 .unwrap();
         let after = row_version(&pool, expected.id).await;
@@ -1346,7 +1375,8 @@ async fn missing_and_foreign_clients_are_not_noops(pool: PgPool) {
                 ..
             }
         ));
-        let error = set_client_active_record(&pool, org_id, client_id, true)
+        let actor = seeded_actor(&pool, org_id).await;
+        let error = set_client_active_record(&pool, org_id, actor, client_id, true)
             .await
             .unwrap_err();
         assert!(matches!(
@@ -1379,10 +1409,11 @@ async fn concurrent_deletion_is_not_an_unchanged_mutation(pool: PgPool) {
             .await
             .unwrap();
         let run_pool = pool.clone();
+        let actor = seeded_actor(&pool, client.org_id).await;
         let mut run = tokio::task::JoinSet::new();
         run.spawn(async move {
             if activation {
-                set_client_active_record(&run_pool, client.org_id, client.id, true)
+                set_client_active_record(&run_pool, client.org_id, actor, client.id, true)
                     .await
                     .map(|_| ())
             } else {

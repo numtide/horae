@@ -711,7 +711,8 @@ async fn update_client_record(
     Ok((client.unwrap_or(before), changed))
 }
 
-/// Activate or deactivate a client. Deactivated clients are hidden from
+/// Archive or restore a client. Archiving needs every linked project archived
+/// first; restoring changes only the client. Archived clients are hidden from
 /// new-entry pickers but remain linked to existing projects and entries (FR-011).
 #[server]
 pub async fn set_client_active(client_id: String, active: bool) -> Result<Client, ServerFnError> {
@@ -719,7 +720,7 @@ pub async fn set_client_active(client_id: String, active: bool) -> Result<Client
     let state = crate::state::global_state().await;
     let client_id = parse_uuid(&client_id, "client_id")?;
     let (client, transition) =
-        set_client_active_record(&state.db, manager.org_id, client_id, active).await?;
+        set_client_active_record(&state.db, manager.org_id, manager.id, client_id, active).await?;
     if let Some(t) = transition {
         let occurred_at = chrono::Utc::now();
         let client = client_payload(&client);
@@ -747,11 +748,42 @@ pub async fn set_client_active(client_id: String, active: bool) -> Result<Client
 async fn set_client_active_record(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
     client_id: uuid::Uuid,
     active: bool,
 ) -> Result<(Client, Option<crate::plugin::event::ActiveTransition>), ServerFnError> {
     let mut tx = db.begin().await.map_err(server_err)?;
+    // The linked-project check below must see projects committed while this
+    // waited for the client lock, which an older snapshot would miss.
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE")
+        .execute(&mut *tx)
+        .await
+        .map_err(server_err)?;
+    super::projects::authorize_legacy_status_write(
+        &mut tx,
+        org_id,
+        actor_id,
+        "Client status changes are unavailable",
+    )
+    .await?;
     let before = lock_client(&mut tx, org_id, client_id).await?;
+    // Project writers share-lock this client before making a project active, so
+    // a separate statement after the lock sees any that committed meanwhile.
+    if !active
+        && before.active
+        && sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM projects WHERE org_id = $1 AND client_id = $2 AND active) AS "exists!""#,
+            org_id,
+            client_id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(server_err)?
+    {
+        return Err(conflict(
+            "Archive this client's projects before archiving the client.",
+        ));
+    }
 
     let client = sqlx::query_as!(
         Client,
@@ -796,6 +828,8 @@ async fn lock_client(
     .ok_or_else(|| not_found("Client not found"))
 }
 
+#[cfg(all(test, feature = "server"))]
+mod lifecycle_tests;
 #[cfg(all(test, feature = "server"))]
 mod page_tests;
 #[cfg(all(test, feature = "server"))]

@@ -40,6 +40,9 @@ mod mutation_tests;
 mod bulk_tests;
 
 #[cfg(all(test, feature = "server"))]
+mod client_lifecycle_tests;
+
+#[cfg(all(test, feature = "server"))]
 mod assignment_tests;
 
 #[cfg(all(test, feature = "server"))]
@@ -728,7 +731,7 @@ async fn set_projects_active_records(
     active: bool,
 ) -> Result<Vec<(Project, Option<crate::plugin::event::ActiveTransition>)>, ServerFnError> {
     let mut tx = db.begin().await.map_err(server_err)?;
-    authorize_legacy_status_write(&mut tx, org_id, actor_id).await?;
+    authorize_legacy_status_write(&mut tx, org_id, actor_id, PROJECT_STATUS_UNAVAILABLE).await?;
     let mut results = Vec::with_capacity(sorted_ids.len());
     for &id in sorted_ids {
         results.push(set_project_active_in_transaction(&mut tx, org_id, id, active).await?);
@@ -746,20 +749,24 @@ async fn set_project_active_record(
     active: bool,
 ) -> Result<(Project, Option<crate::plugin::event::ActiveTransition>), ServerFnError> {
     let mut tx = db.begin().await.map_err(server_err)?;
-    authorize_legacy_status_write(&mut tx, org_id, actor_id).await?;
+    authorize_legacy_status_write(&mut tx, org_id, actor_id, PROJECT_STATUS_UNAVAILABLE).await?;
     let result = set_project_active_in_transaction(&mut tx, org_id, project_id, active).await?;
     tx.commit().await.map_err(server_err)?;
     Ok(result)
 }
 
+#[cfg(feature = "server")]
+const PROJECT_STATUS_UNAVAILABLE: &str = "Project status changes are unavailable";
+
 /// Status changes still use the legacy role, which policy one does not grant.
 /// Recheck the account, role and policy under the organization gate, so a change
 /// since the session was read fails closed instead of writing.
 #[cfg(feature = "server")]
-async fn authorize_legacy_status_write(
+pub(super) async fn authorize_legacy_status_write(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
+    unavailable: &'static str,
 ) -> Result<(), ServerFnError> {
     lock_organization(tx, org_id, OrganizationLock::Shared)
         .await
@@ -778,7 +785,7 @@ async fn authorize_legacy_status_write(
     match actor.permission_policy_version {
         0 if actor.role.is_manager_or_above() => Ok(()),
         0 => Err(forbidden("Manager access required")),
-        _ => Err(forbidden("Project status changes are unavailable")),
+        _ => Err(forbidden(unavailable)),
     }
 }
 
@@ -790,6 +797,23 @@ async fn set_project_active_in_transaction(
     active: bool,
 ) -> Result<(Project, Option<crate::plugin::event::ActiveTransition>), ServerFnError> {
     let before = lock_project(tx, org_id, project_id).await?;
+    if active && !before.active {
+        // A client archive locks this row too, so the two serialize here: an
+        // archived client's projects stay archived until it is restored.
+        let client_active = sqlx::query_scalar!(
+            "SELECT active FROM clients WHERE id = $1 AND org_id = $2 FOR SHARE",
+            before.client_id,
+            org_id,
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(server_err)?;
+        if !client_active {
+            return Err(conflict(
+                "Restore the client before restoring this project.",
+            ));
+        }
+    }
 
     let project = sqlx::query_as!(
         Project,

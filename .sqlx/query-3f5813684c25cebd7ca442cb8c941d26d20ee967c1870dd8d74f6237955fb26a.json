@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO horae_jobs (id, org_id, kind, status, payload, original_requester_id, report)\n         VALUES ($1, $2, 'harvest_csv_import', 'succeeded', '{\"source\":\"lifecycle\"}', $3, '{\"errors\":[]}')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3f5813684c25cebd7ca442cb8c941d26d20ee967c1870dd8d74f6237955fb26a"
+}
