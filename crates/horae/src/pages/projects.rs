@@ -1108,6 +1108,10 @@ pub fn ProjectDetail(id: Uuid) -> Element {
     rsx! { for id in [id] { ProjectDetailContent { key: "{id}", id } } }
 }
 
+/// A status change the server refuses outright, such as restoring a project
+/// whose client is archived.
+const CONFLICT: u16 = 409;
+
 #[component]
 fn ProjectDetailContent(id: Uuid) -> Element {
     let mut binding = use_signal(|| None::<(PermissionRequester, bool)>);
@@ -1133,6 +1137,8 @@ fn ProjectDetailContent(id: Uuid) -> Element {
     let mut status_change = use_signal(|| None::<bool>);
     let mut status_busy = use_signal(|| false);
     let mut status_failed = use_signal(|| false);
+    // A definite refusal, with the client to open when it must be restored first.
+    let mut status_refused = use_signal(|| None::<(String, Option<Uuid>)>);
     // The status a change from this view saved; only an archive offers Undo.
     let mut status_saved = use_signal(|| None::<bool>);
     let mut undo_failed = use_signal(|| false);
@@ -1147,8 +1153,13 @@ fn ProjectDetailContent(id: Uuid) -> Element {
             return;
         }
         let undoing = status_change().is_none();
+        let client_id = match &*details.peek() {
+            Some(Ok(view)) => Some(view.client_id),
+            _ => None,
+        };
         status_busy.set(true);
         status_failed.set(false);
+        status_refused.set(None);
         undo_failed.set(false);
         spawn(async move {
             match server_fns::set_project_active(id.to_string(), active, Some(requester)).await {
@@ -1168,6 +1179,16 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                     status_saved.set(None);
                     access_lost.set(true);
                 }
+                // Restoring under an archived client is refused every time, so
+                // say why instead of offering a retry, from the dialog or Undo.
+                Err(ServerFnError::ServerError {
+                    code: CONFLICT,
+                    message,
+                    ..
+                }) => {
+                    status_saved.set(None);
+                    status_refused.set(Some((message, client_id)));
+                }
                 // A Dismiss while Undo was pending must not hide its retry.
                 Err(_) if undoing => {
                     status_saved.set(Some(false));
@@ -1186,6 +1207,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
         let loaded = !access_lost() && matches!(&*details.read(), Some(Ok(_)));
         if !loaded {
             status_saved.set(None);
+            status_refused.set(None);
             restore_detail_focus("project-detail-back");
         }
         if refocus_actions.take() && loaded {
@@ -1203,6 +1225,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
         None
     };
     let can_change_status = view.as_ref().is_some_and(|view| view.can_change_status);
+    let loaded = view.is_some();
     let reactivate = status_change() == Some(true);
     // Undo needs the current loaded authority, not the one that archived.
     let undo_label = match (status_saved(), can_change_status, status_busy()) {
@@ -1274,6 +1297,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                                             let next = !view.active;
                                             move |_| {
                                                 status_failed.set(false);
+                                                status_refused.set(None);
                                                 status_saved.set(None);
                                                 status_change.set(Some(next));
                                             }
@@ -1322,7 +1346,11 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                 id: "project-status-dialog", labelledby: "project-status-title",
                 focus_fallback: "project-detail-back",
                 open: status_change().is_some() && can_change_status, busy: status_busy(),
-                on_dismiss: move |_| status_change.set(None),
+                // A dialog refusal ends with the dialog; only Undo shows one outside it.
+                on_dismiss: move |_| {
+                    status_refused.set(None);
+                    status_change.set(None);
+                },
                 if can_change_status {
                     h2 { id: "project-status-title", class: "modal-title m-0",
                         if reactivate { "Reactivate this project?" } else { "Archive this project?" }
@@ -1340,6 +1368,14 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                                 "Could not update project status. You can retry safely, or cancel and refresh."
                             }
                         }
+                        if let Some((message, client)) = status_refused() {
+                            div { class: "alert alert-danger", role: "alert",
+                                p { class: "m-0", "{message}" }
+                                if let Some(client) = client {
+                                    Link { to: Route::ClientDetail { id: client }, class: "font-semibold", "Open the client" }
+                                }
+                            }
+                        }
                         div { class: "modal-actions flex-wrap",
                             button {
                                 id: "project-status-confirm", r#type: "button", class: "btn btn-primary",
@@ -1354,8 +1390,23 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                                 else { "Archive project" }
                             }
                             button { r#type: "button", class: "btn btn-secondary", disabled: status_busy(),
-                                onclick: move |_| status_change.set(None), "Cancel"
+                                onclick: move |_| {
+                                    status_refused.set(None);
+                                    status_change.set(None);
+                                },
+                                "Cancel"
                             }
+                        }
+                    }
+                }
+            }
+            // A refusal outside the dialog, such as from Undo.
+            if status_change().is_none() && loaded {
+                if let Some((message, client)) = status_refused() {
+                    div { class: "alert alert-danger mt-5", role: "alert",
+                        p { class: "m-0", "{message}" }
+                        if let Some(client) = client {
+                            Link { to: Route::ClientDetail { id: client }, class: "font-semibold", "Open the client" }
                         }
                     }
                 }

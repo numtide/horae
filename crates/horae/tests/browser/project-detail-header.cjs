@@ -353,6 +353,59 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await expect(header).toContainText('header-tag');
     console.log('PASS: a failed transport retries in place; pending and duplicate requests send once; archived state persists');
 
+    // An archived client refuses its project's reactivation; the dialog says why
+    // and links to the client instead of offering a retry (client lifecycle US2).
+    sql(`UPDATE clients SET active = false WHERE id = '${client}'`);
+    try {
+      await open('Reactivate');
+      const refused = page.waitForResponse(isStatusWrite);
+      await dialog.getByRole('button', { name: 'Reactivate project', exact: true }).click();
+      assert.equal((await refused).status(), 409);
+      await expect(dialog.getByRole('alert')).toContainText('Restore the client before restoring this project.');
+      await expect(dialog.getByRole('alert')).not.toContainText('retry safely');
+      assert.equal(await dialog.getByRole('link', { name: 'Open the client', exact: true }).getAttribute('href'), `/clients/${client}`);
+      console.log(`OBSERVE: focus after a refused reactivation is ${await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName)}`);
+      const refusalText = page.getByText('Restore the client before restoring this project.');
+      await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(dialog).toBeHidden();
+      // A dialog refusal ends with the dialog, by Cancel or by Escape.
+      await expect(refusalText).toHaveCount(0);
+      await open('Reactivate');
+      await dialog.getByRole('button', { name: 'Reactivate project', exact: true }).click();
+      await expect(dialog.getByRole('alert')).toContainText('Restore the client before restoring this project.');
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await expect(refusalText).toHaveCount(0);
+      assert.equal(active(), 'f');
+
+      // Undo meets the same refusal: the Undo notice gives way to the reason.
+      sql(`UPDATE clients SET active = true WHERE id = '${client}'`);
+      sql(`UPDATE projects SET active = true WHERE id = '${project}'`);
+      await page.reload();
+      await expect(title).toBeVisible();
+      await open('Archive');
+      await dialog.getByRole('button', { name: 'Archive project', exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await expect(undo).toBeVisible();
+      sql(`UPDATE clients SET active = false WHERE id = '${client}'`);
+      const undone = page.waitForResponse(isStatusWrite);
+      await undo.click();
+      assert.equal((await undone).status(), 409);
+      await expect(undo).toHaveCount(0);
+      const refusalAlert = page.getByRole('alert').filter({ hasText: 'Restore the client before restoring this project.' });
+      await expect(refusalAlert).toBeVisible();
+      await expect(refusalAlert).not.toContainText('Retry');
+      assert.equal(await refusalAlert.getByRole('link', { name: 'Open the client', exact: true }).getAttribute('href'), `/clients/${client}`);
+      // Focus and placement after the Undo refusal are for the native pass to judge.
+      console.log(`OBSERVE: focus after a refused Undo is ${await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName)}; alert top ${Math.round((await refusalAlert.boundingBox()).y)}px`);
+      assert.equal(active(), 'f');
+    } finally {
+      sql(`UPDATE clients SET active = true WHERE id = '${client}'`);
+    }
+    await page.reload();
+    await expect(title).toBeVisible();
+    console.log('PASS: reactivating a project of an archived client is refused with the reason and a client link, from the dialog and from Undo');
+
     await page.route('**/api/set_project_active*', async route => {
       const body = route.request().postDataJSON();
       body.expected_requester.user_id = id(99);
