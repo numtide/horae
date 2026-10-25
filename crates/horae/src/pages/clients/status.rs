@@ -57,13 +57,14 @@ pub(super) fn ArchiveDialog(
             on_dismiss: move |_| close(),
             if let Some(client) = current {
                 h2 { id: "client-archive-title", class: "modal-title m-0 wrap-anywhere", "Archive {client.name}?" }
-                div { class: "modal-body px-3 sm:px-6 wrap-anywhere",
-                    p { class: "text-sm text-secondary",
+                // Only prose may break anywhere; button labels keep their words.
+                div { class: "modal-body px-3 sm:px-6",
+                    p { class: "text-sm text-secondary wrap-anywhere",
                         "Only the client is archived. Its projects must already be archived. Tracked time, invoices and import history are kept."
                     }
                     if let Some(failure) = shown_error {
                         div { class: "alert alert-danger", role: "alert",
-                            p { class: "m-0", "{failure.message}" }
+                            p { class: "m-0 wrap-anywhere", "{failure.message}" }
                             if failure.refused {
                                 Link { to: Route::ProjectsForClient { client: client.id.to_string() }, class: "font-semibold",
                                     "View this client's projects"

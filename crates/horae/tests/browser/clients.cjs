@@ -213,6 +213,51 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     assert.equal(history(), before);
     console.log('PASS: archive confirms without project counts, Cancel/Escape change nothing, active projects refuse with a recovery link');
 
+    // Narrow screens with enlarged text: labels keep their words, nothing clips
+    // vertically, and both actions stay reachable by scrolling and keyboard.
+    const originalTheme = await page.evaluate(() => document.documentElement.dataset.theme ?? null);
+    for (const theme of ['light', 'dark']) {
+      for (const [width, height] of [[320, 900], [390, 844]]) {
+        const label = `${theme}/${width}x${height}/text 200%`;
+        await page.setViewportSize({ width, height });
+        await page.evaluate(theme => {
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.fontSize = '200%';
+        }, theme);
+        await acmeArchive.scrollIntoViewIfNeeded();
+        await acmeArchive.click();
+        await expect(archiveDialog('Acme Corp')).toBeVisible();
+        for (const name of ['Archive client', 'Cancel']) {
+          const action = archiveDialog('Acme Corp').getByRole('button', { name, exact: true });
+          await action.scrollIntoViewIfNeeded();
+          await expect(action).toBeInViewport({ ratio: 1 });
+          const layout = await action.evaluate(button => {
+            const range = document.createRange();
+            range.selectNodeContents(button);
+            const lines = new Set([...range.getClientRects()].map(rect => Math.round(rect.top))).size;
+            return { lines, clipped: button.scrollHeight > button.clientHeight + 1 || button.scrollWidth > button.clientWidth + 1 };
+          });
+          // At most one line per word: a label may wrap between words, never inside one.
+          assert.ok(layout.lines <= name.split(' ').length, `${label}: "${name}" wraps into ${layout.lines} lines`);
+          assert.equal(layout.clipped, false, `${label}: "${name}" clips its label`);
+        }
+        await archiveDialog('Acme Corp').getByRole('button', { name: 'Archive client', exact: true }).focus();
+        await page.keyboard.press('Tab');
+        await expect(archiveDialog('Acme Corp').getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+        await expect(archiveDialog('Acme Corp').getByRole('button', { name: 'Cancel', exact: true })).toBeInViewport({ ratio: 1 });
+        await page.keyboard.press('Escape');
+        await expect(archiveDialog('Acme Corp')).toBeHidden();
+      }
+    }
+    await page.evaluate(theme => {
+      document.documentElement.style.fontSize = '';
+      if (theme === null) delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = theme;
+    }, originalTheme);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    assert.equal(statusRequests, 1, 'layout checks send nothing');
+    console.log('PASS: the archive confirmation keeps readable, reachable actions at 320 and 390px with 200% text in both themes');
+
     // A client without projects: a pending archive cannot be repeated, and the
     // row leaving the Active filter returns focus to the page heading.
     await search.fill(committedName);
