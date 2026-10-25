@@ -401,11 +401,22 @@ pub async fn resolve_project(
     if name.is_empty() {
         return Err(RowFailure::new("project name is empty"));
     }
-    // Project currency defaults from the client (FR-013).
-    let client_currency: String =
-        sqlx::query_scalar!("SELECT currency FROM clients WHERE id = $1", client_id)
-            .fetch_one(&mut *conn)
-            .await?;
+    // Project currency defaults from the client (FR-013). The share lock orders
+    // this creation against a client archive, which locks the same row.
+    let client = sqlx::query!(
+        "SELECT currency, active FROM clients WHERE id = $1 FOR SHARE",
+        client_id
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+    if row.project_active && !client.active {
+        // Archived clients keep only archived projects; the record is reported,
+        // not created archived or used to restore the client.
+        return Err(RowFailure::new(
+            "client is archived; restore it before importing an active project",
+        ));
+    }
+    let client_currency = client.currency;
     let id = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO projects (id, org_id, client_id, code, name, currency, starts_on, ends_on, active)
