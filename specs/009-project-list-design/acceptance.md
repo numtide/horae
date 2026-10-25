@@ -168,3 +168,60 @@ Validation of the final corrections on 2026-09-17:
   the application empty-state screenshot; prototype files were not rendered.
 - Formatting and diff checks passed. Preview 8092 is updated; imported workspace
   8080 remains healthy and untouched. Bulk selection/actions remain a separate PR.
+
+## Client-detail navigation — 2026-10-25
+
+Client bands in the Projects list now link to Client Detail under the legacy
+policy and group by client identifier. Policy one and unknown clients keep their
+plain labels in the existing band color. No query, response, permission, CSS or
+dependency changed. No live Harvest session was available; this follows the
+checked-in handoff and the existing Client Detail route and authorization.
+
+### Tests first
+
+- `detail_navigation` (`client_bands_link_each_client_by_identifier`) failed
+  against the previous page: two same-named clients produced duplicate band
+  keys and Dioxus panicked ("keyed siblings must each have a unique key").
+  `policy_one_client_bands_stay_plain_labels` passed before and after as a guard.
+- `client-context.cjs` failed against a bundle of the previous page with no
+  band link found (exit 1), after its earlier steps passed.
+
+### Local checks (Nix dev shell, x86_64-linux)
+
+- `SQLX_OFFLINE=true cargo test -p horae --features server --test detail_navigation --locked`:
+  74 passed, exit 0.
+- `cargo test -p horae --features server --bin horae --locked -- clients::page_tests`
+  against a disposable migrated cluster: 11 passed, exit 0, including legacy
+  admin/manager/member reads and foreign/missing clients failing closed.
+- `run-design-checks.sh projects-design project-bulk-actions client-context`
+  with package `/nix/store/bxf41wjahws2v2r47zfaw9zm71jdjdy2-horae-0.1.0`
+  (built at bab2bc8c): 20 checks passed, exit 0. The band check walks the real
+  Tab order from the list scroller as a manager and as a member, presses Enter,
+  lands on Client Detail and returns with Back.
+- `cargo clippy -p horae --features server --all-targets --locked -- -D warnings`,
+  `cargo check -p horae --features web --target wasm32-unknown-unknown --locked`,
+  `nix fmt -- --ci` and `git diff --check`: exit 0.
+
+Two test-only corrections followed. The band fixture's temporary assignment
+advances the project's edit revision through the assignment trigger, so the
+suite's record snapshots now run before it. Suites are order-dependent:
+`client-context` adds projects that `project-bulk-actions` does not expect, so
+they run in the runner's default order. A later commit only re-wraps one test
+assertion for rustfmt.
+
+### Delivery gates
+
+- Native checks (coordinator) on the package above: 4/4 passed at 1440 and
+  390 px in light and dark, with visible focus, Tab reaching the link, Enter
+  opening the correct client, Back, and no page overflow. UX accepted all 12
+  screenshots.
+- Two source reviews approved the product and test changes at bab2bc8c; the
+  technical review accepted the snapshot correction at 2291ae37.
+- Full local `nix flake check` and CI on the exact published head remain
+  required before merge.
+
+### Limits
+
+Policy-one readers who hold the client-read grant get no link yet; the list
+does not carry that grant. This slice closes one navigation gap and does not
+complete the UI parity goal.
