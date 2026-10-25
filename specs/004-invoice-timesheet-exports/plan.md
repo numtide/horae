@@ -131,9 +131,11 @@ the run guide is in `quickstart.md` (Scenario 5), and the tasks are in `tasks.md
 
 Result: PASS for the test-only work. Analyze finding D1 stays open: it is a pre-existing deviation, not one introduced here, so this increment does not justify it in Complexity Tracking.
 
-### Fixture (the single source of expectations for both layers)
+### Fixture (expectations shared by both layers)
 
-Every name is created by the fixture: clients "Export client A" and "Export client B",
+Each layer builds its own parallel copy of this fixture in its own disposable database:
+the same names, minutes, flags and order, but different UUIDs (only the ascending order
+of entry IDs matters). Every name is created by the fixture: clients "Export client A" and "Export client B",
 projects "Export alpha" and "Export beta" (client A) and "Export gamma" (client B), task
 "Export task", and user "Export colleague". The actor is the session user: "Admin User"
 in the browser (the demo seed's admin) and "Test User" in Rust (`test_seed::seed`,
@@ -173,7 +175,7 @@ Filter states and expected entries (raw / rounded / billable-rounded minutes →
 |---|---|---|---|
 The four visible states (S1 no filter, S2 project gamma only, S3 client A only, S4 client A
 and project beta) are covered in both layers. S5, the impossible client A and project gamma
-combination, is Rust only.
+combination, and S6, another organization's client, are Rust only.
 
 | Proof | Layer | What it shows | Requirements |
 |---|---|---|---|
@@ -182,10 +184,10 @@ combination, is Rust only.
 | P3 | Browser | For S1–S4, the Detailed-tab rows (8 cells each, in order) equal the expected entries; excluded entries (E5 in S3/S4, E1–E4 in S2, E6 always) are absent | FR-013, SC-L03 |
 | P4 | Browser | For S1–S4, clicking Export CSV (real download event) yields `timesheet.csv` whose bytes equal the CSV built from the constants. S1 is the regression proof that the export is unchanged | FR-011–FR-013, FR-012, FR-015, SC-L01, SC-L04 |
 | P5 | Browser | For S1–S4, clicking Export XLSX yields `timesheet.xlsx` starting with `PK`. Contents are not decoded in the browser; see P6 | FR-015 (link only) |
-| P6 | Rust | For S1–S4, using the same query strings as P1: the XLSX row count is entries + 1; A–D, G and H match via `assert_text_cell`; E and F match via `assert_cell` with the exact literal for each entry. Each row maps to one fixture entry, and that entry's integer minutes give the raw, rounded and billable-rounded sums | FR-011–FR-015, FR-019, SC-L01, SC-L02, SC-L04 |
+| P6 | Rust | For S1–S4, using the same route and query template as P1 over the Rust fixture's UUIDs: the XLSX row count is entries + 1; A–D, G and H match via `assert_text_cell`; E and F match via `assert_cell` with the exact literal for each entry. Each row maps to one fixture entry, and that entry's integer minutes give the raw, rounded and billable-rounded sums | FR-011–FR-015, FR-019, SC-L01, SC-L02, SC-L04 |
 | P7 | Rust | For S1–S4, the CSV (parsed with `csv`) equals the literal rows; the integer minutes of the matched entries reconcile to the three totals | FR-015, SC-L02 |
-| P8 | Rust | S5 gives a header-only CSV and a header-only XLSX, both 200 | FR-014, SC-006 |
-| P9 | Existing | The org and role download boundaries in `authorization_tests/time_reports.rs` stay unchanged and passing | FR-018 |
+| P8 | Rust | S5 gives a header-only CSV and a header-only XLSX, both 200. The Rust fixture's organization is asserted to be at policy 0 before any download | FR-014, SC-006 |
+| P9 | Rust + existing | S6 (Rust only): `client_id` naming another organization's client that has an entry in the period gives header-only files, both 200; that entry never appears in S1. Existing tests, unchanged: `authorization_tests/time_reports.rs` covers 401/403, role and policy binding (its foreign-ID downloads run after a switch to policy 1), and legacy-path tenant scoping is covered at function level in `reports/streaming/database_tests.rs` and the `reports/limits.rs` tests | FR-018 |
 
 - **G1 (FR-012 / SC-005)**: no file from before this change is stored. The proof that the
   unfiltered export is unchanged is the exact expected S1 content (P4 bytes, P6 cells), fixed
@@ -194,8 +196,10 @@ combination, is Rust only.
   describe `fetch_entries`. The current paths are the ones in this section's Technical
   Context. The historical text is kept as written.
 - **Residual**: the browser proves the XLSX link and that a file downloads. XLSX contents
-  are proven by the Rust layer for the identical route and query strings, because the
-  browser environment has no XLSX reader and adding one is outside scope.
+  are proven by the Rust layer for the same route and query template over its own parallel
+  fixture, because the browser environment has no XLSX reader and adding one is outside
+  scope. The XLSX number cells are checked as exact text only; that they convert back to
+  whole minutes is not claimed (analyze finding D1).
 
 ### Structure
 

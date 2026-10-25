@@ -63,7 +63,7 @@ values. The fixture, expected totals and proof map (P1–P9) are in `plan.md` un
 "Acceptance Increment"; the decisions are in `research.md` L1–L4. Use only disposable
 databases.
 
-**Rust layer** (P6–P8, plus P9 unchanged), with Postgres in a fresh `mktemp -d /tmp/…` directory:
+**Rust layer** (P6–P9; P9 also relies on existing tests, see plan.md), with Postgres in a fresh `mktemp -d /tmp/…` directory:
 
 ```sh
 DATABASE_URL=… cargo test -p horae --features server --bin horae \

@@ -76,7 +76,8 @@ These decisions cover the acceptance increment in `spec.md` and `plan.md` only.
 
 **Decision**: Use a browser suite in the existing disposable runner for the screen, both
 links and CSV contents, plus a Rust HTTP-harness test for XLSX and CSV contents over the
-same routes and query strings.
+same routes and query template (`from`, `to`, `client_id`, `project_id`). Each layer builds
+its own parallel fixture with the same names, minutes and order; the UUIDs differ.
 
 **Rationale**: Only the browser can prove what the page shows and which links it
 builds. The browser runner (`nix/checks/browser.nix`) has bash, coreutils, curl, node,

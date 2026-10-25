@@ -14,14 +14,19 @@ durations) is not waived or resolved by these tasks.
 If an assertion fails because the product disagrees with the fixture, stop and report
 the product bug before widening scope.
 
-**Fixture, states S1–S5 and proofs P1–P9**: plan.md "Acceptance Increment" is the only
+**Fixture, states S1–S6 and proofs P1–P9**: plan.md "Acceptance Increment" is the only
 source; tasks refer to it rather than repeat it.
+
+**Status (2026-10-25)**: T001–T010 were done at 962034c8 (evidence logs in
+`/tmp/horae-r02.vcDtiK/`). T012 (review remediation) stays open until its gates pass on
+the committed remediation head and its changed lines are re-reviewed. T011 is open: no
+gate in it is claimed.
 
 ## Format: `[ID] [P?] [Story] Description`
 
 ## Phase 1: Setup
 
-- [ ] T001 Start a disposable PostgreSQL in a fresh `mktemp -d /tmp/horae-r02.XXXXXX`
+- [x] T001 Start a disposable PostgreSQL in a fresh `mktemp -d /tmp/horae-r02.XXXXXX`
   directory (role with `CREATEDB` for `#[sqlx::test]`), apply migrations with
   `sqlx migrate run --source crates/horae/migrations`, and use it as `DATABASE_URL` for
   T003–T009. Keep its logs and data until the evidence has been collected; no automatic
@@ -29,12 +34,12 @@ source; tasks refer to it rather than repeat it.
 
 ## Phase 2: Foundational (blocks the user story)
 
-- [ ] T002 Move `xlsx_part`, `assert_cell` and `assert_text_cell`, verbatim, from the test
+- [x] T002 Move `xlsx_part`, `assert_cell` and `assert_text_cell`, verbatim, from the test
   module in `crates/horae/src/reports/limits.rs` into a new
   `crates/horae/src/reports/xlsx_cells.rs`, declared in `crates/horae/src/reports.rs` as
   `#[cfg(test)] pub(crate) mod xlsx_cells;`. The `limits.rs` tests import them. No helper is
   added and no assertion changes (research.md L4).
-- [ ] T003 Run the existing tests that use the moved helpers, unchanged:
+- [x] T003 Run the existing tests that use the moved helpers, unchanged:
   `cargo test -p horae --features server --bin horae reports::limits`. Every test must pass
   as before.
 
@@ -45,7 +50,7 @@ source; tasks refer to it rather than repeat it.
 **Independent test**: the Rust check and the browser suite each pass against their own
 disposable database.
 
-- [ ] T004 [US2] Create
+- [x] T004 [US2] Create
   `crates/horae/src/server_fns/importers/authorization_tests/time_reports/legacy_exports.rs`
   with a `check(pool, api)` that:
   - builds the plan fixture (all names created explicitly; ascending fixed entry IDs) in a
@@ -60,12 +65,15 @@ disposable database.
     the same entry match gives the integer totals; the excluded notes are absent from
     `sharedStrings.xml`;
   - **P8**: S5 returns 200 and only the header row, in both formats.
+  - **P9** (added by T012): asserts policy 0 before downloading; S6, another
+    organization's client with an entry in the period, returns header-only files and
+    that entry never appears.
   - No float parsing or arithmetic.
-- [ ] T005 [US2] In
+- [x] T005 [US2] In
   `crates/horae/src/server_fns/importers/authorization_tests/time_reports.rs`, add
   `mod legacy_exports;` and call `legacy_exports::check(pool, api).await` at the end of
   `check`. The existing org and role assertions (P9) stay untouched.
-- [ ] T006 [P] [US2] Create `crates/horae/tests/browser/reports-legacy-exports.cjs`
+- [x] T006 [P] [US2] Create `crates/horae/tests/browser/reports-legacy-exports.cjs`
   following the guards in `reports-currency-totals.cjs`:
   - **Preconditions**: the disposable `/tmp/horae-browser.*` database on port 8093; policy 0;
     organization rounding 15, nearest; no entries in 2041-03; fixture IDs unused.
@@ -77,23 +85,29 @@ disposable database.
     total; Detailed cells and absent entries; the clicked CSV download's bytes; and the
     clicked XLSX download's filename and `PK` signature.
   - `pageerror` is empty, and the suite prints one PASS line.
-- [ ] T007 [US2] In `crates/horae/tests/browser/run-design-checks.sh`, insert
+- [x] T007 [US2] In `crates/horae/tests/browser/run-design-checks.sh`, insert
   `reports-legacy-exports` into the default `suites=(…)` right after `reports-currency-totals`
   (both need policy 0 and the fresh seed's rounding; `reports-permissions` later moves to
   policy 1). Every other suite keeps its relative order.
 
 ## Phase 4: Polish and verification
 
-- [ ] T008 Regenerate the query cache against the T001 database: run
+- [x] T008 Regenerate the query cache against the T001 database: run
   `touch crates/horae/src/main.rs crates/horae/tests/*.rs`, then
   `cargo sqlx prepare --workspace -- --features server --all-targets`, and stage `.sqlx/`.
   Confirm with an offline build: `SQLX_OFFLINE=true cargo test -p horae --features server --no-run`.
-- [ ] T009 Run the gates one at a time, with no edits while a check runs: the focused Rust
+- [x] T009 Run the gates one at a time, with no edits while a check runs: the focused Rust
   test `cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization`;
   strict clippy as in `nix/checks/clippy.nix`; `nix fmt -- --ci`.
-- [ ] T010 As the single heavy-build owner, build the server package once, then run
+- [x] T010 As the single heavy-build owner, build the server package once, then run
   `crates/horae/tests/browser/run-design-checks.sh reports-currency-totals reports-legacy-exports reports-permissions` (its own `/tmp` database). Record commands,
   exit codes and PASS lines.
+- [ ] T012 Review remediation (technical and UX reviews of 962034c8): remove the unproven
+  "XLSX values convert back to whole minutes" claim (M1); describe the layers as the same
+  route and query template over parallel fixtures (F1, L4); assert policy 0 and add S6
+  (L2, L3); correct the P9 citations (L3). Then, one at a time on the committed head:
+  `nix fmt -- --ci`, `.sqlx` prepare, the focused Rust test, and the offline all-targets
+  build. Changed lines need independent re-review. L1 and L5 are left as optional.
 - [ ] T011 Delivery gates, all required before publication:
   - small unsigned commits with plain messages;
   - **two independent reviews** resolved;

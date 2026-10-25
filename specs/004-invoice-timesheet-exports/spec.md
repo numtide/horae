@@ -208,8 +208,10 @@ exercised here.
 1. **Given** entries whose durations are not whole hundredths of an hour, **When** hours
    are shown to two decimals, **Then** each total is summed in minutes and only then
    shown in hours. The displayed per-row values may therefore add up to a slightly
-   different figure than the displayed total, and this is correct. The Excel values
-   convert back to exact whole minutes.
+   different figure than the displayed total, and this is correct. The Excel duration
+   values are checked as the exact text the export writes. This increment does not claim
+   that they convert back to exact whole minutes; that question is part of the open
+   floating-point finding below.
 
 ### Measures
 
