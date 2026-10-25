@@ -76,7 +76,7 @@ Independent check: keyboard-only list and detail; Cancel/Escape; delayed and fai
 
 ## Phase 7: Verification and delivery
 
-- [ ] T015 Run in order, one at a time, against T004's database:
+- [x] T015 Run in order, one at a time, against T004's database:
   - `touch crates/horae/src/main.rs crates/horae/tests/*.rs && cargo sqlx prepare --workspace -- --features server --all-targets`, then stage `.sqlx/`;
   - `SQLX_OFFLINE=true cargo test -p horae --features server --all-targets --no-run`;
   - `DATABASE_URL=… cargo test -p horae --features server --bin horae server_fns::clients::`;
@@ -87,10 +87,10 @@ Independent check: keyboard-only list and detail; Cancel/Escape; delayed and fai
   - `cargo check -p horae --features web --target wasm32-unknown-unknown`;
   - `nix fmt -- --ci`.
     Rerun the focused tests on the committed head after any formatting change. Record exact results here (LC-010).
-- [ ] T016 Coordinator browser/native pass: `run-design-checks.sh clients action-errors clients-errors clients-permissions` plus native checks in both themes, keyboard only, at 320/390/768/1440px and 200% text, with delayed and failed responses. Record the evidence (LC-009, LC-SC-005).
-- [ ] T017 Two independent reviews; fix critical/high findings and rerun the affected checks.
+- [x] T016 Coordinator browser/native pass: `run-design-checks.sh clients action-errors clients-errors clients-permissions` plus native checks in both themes, keyboard only, at 320/390/768/1440px and 200% text, with delayed and failed responses. Record the evidence (LC-009, LC-SC-005).
+- [x] T017 Two independent reviews; fix critical/high findings and rerun the affected checks.
 - [ ] T018 Final local `nix flake check` on the candidate head with a single build owner. Small unsigned commits. A PR only after coordinator acceptance, and its exact head must pass mandatory CI. No merge here.
-- [ ] T019 After T015–T017 pass, replace the sentence in specs/015-scoped-permissions/contracts/client-permissions.md that says the legacy operation "changes only the client without this prerequisite". The replacement records, as implemented and tested evidence, that policy 0 now enforces the FR-036 prerequisite under the legacy role. No other 015 change.
+- [x] T019 After T015–T017 pass, replace the sentence in specs/015-scoped-permissions/contracts/client-permissions.md that says the legacy operation "changes only the client without this prerequisite". The replacement records, as implemented and tested evidence, that policy 0 now enforces the FR-036 prerequisite under the legacy role. No other 015 change.
 
 ## Dependencies
 
@@ -137,8 +137,19 @@ Logs are in `/tmp/horae-c03.l9DeCi` (a disposable socket-only cluster). Every ru
 - **Recorded as LOW, not changed in this increment:** focus lands on BODY after a refused
   archive inside its dialog, after a failed list restore, and after a refused
   reactivation in the Project Detail dialog.
-- **Open:** T016 needs the remaining native keyboard configurations and the Undo retest.
-  T017's final review, T018's full flake check and CI, and T019 are pending.
+- **T016, native confirmation (coordinator) on `2be32e09`:**
+  - `.scratch/c03-native-dialog-confirm-mvnzdt7a.json`: 5/5 stages, 10 list and detail
+    dialogs, with no mid-word splitting and keyboard-visible controls.
+  - `.scratch/c03-native-undo-confirm-20261025.json`: the 409 refusal takes focus within
+    the 900px viewport, and the next Tab reaches the client link.
+  - The keyboard matrix is complete: 1440 light, 1440 dark, 320 light and 320 dark.
+  - The headless `browser4-*` suites all exit 0 on that package.
+- **T017:** the independent technical and UI source reviews (gate4, gate5, gate7) found no
+  critical, high or medium issues. The coordinator accepted the implementation and
+  runtime evidence.
+- **T019:** one sentence in 015 `contracts/client-permissions.md` now records the
+  implemented, tested prerequisite under the legacy role.
+- **Open:** T018 (full local flake check and exact-head CI).
 
 ## Evidence notes
 
@@ -215,5 +226,5 @@ Coordinator findings are also folded in:
 - The 015 sentence only as post-test evidence (T019).
 
 Result: 15/15 requirement and criteria keys are cited by tasks. No constitution
-conflict, duplicate, placeholder, open clarification or unmapped task. One LOW
-item stays open: the plan's archive wording is draft copy, to be checked in T016.
+conflict, duplicate, placeholder, open clarification or unmapped task. The one LOW
+item, the plan's draft archive wording, was confirmed in the T016 native pass.

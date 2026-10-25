@@ -4,7 +4,8 @@
 
 **Created**: 2026-10-25
 
-**Status**: Specified; not implemented
+**Status**: Implemented and locally validated under policy 0; exact-head CI pending.
+Parent 012 (checklist 11/16) and 015 global readiness remain incomplete.
 
 **Input**: Deliver the approved client lifecycle under the current (policy 0)
 permission model. Parent: [feature 012](../../spec.md) FR-016, resolved by
@@ -230,10 +231,9 @@ screens and both themes.
 
 - Policy 0 only; client-write grants under policy 1 stay in 015 T238. Client
   status changes fail closed under any other policy, as project status changes
-  already do. 015 `client-permissions.md` currently says the legacy operation
-  "changes only the client without this prerequisite". Only once this increment
-  is implemented and its tests pass may one sentence there record that evidence;
-  until then it stays as written.
+  already do. After implementation and tests, one sentence in 015
+  `client-permissions.md` records that the legacy operation enforces the
+  prerequisite (T019); nothing else in 015 changed.
 - Single-client controls only; 012's bulk client actions and contacts stay separate.
 - Owner-session read-only Harvest observation (2026-10-22, root
   `.scratch/client-lifecycle-next-20261022.md`) corroborates the archive
