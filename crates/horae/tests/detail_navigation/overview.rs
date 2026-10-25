@@ -39,6 +39,40 @@ fn overview() -> project::ProjectOverview {
     }
 }
 
+/// A legacy overview whose project names interleave across two clients that
+/// share a name, plus a case-only variant and a project without client details.
+fn same_name_overview() -> project::ProjectOverview {
+    let template = overview().projects.remove(0);
+    let row = |project: u128, client: u128, name: &str, client_name: Option<&str>| {
+        let mut row = template.clone();
+        row.project.id = Uuid::from_u128(project);
+        row.project.client_id = Uuid::from_u128(client);
+        row.project.name = name.into();
+        row.client = client_name.map(|name| project::ProjectOverviewClient {
+            id: Uuid::from_u128(client),
+            name: name.into(),
+            active: true,
+        });
+        row
+    };
+    project::ProjectOverview {
+        canonical_permissions: false,
+        projects: vec![
+            row(51, 41, "Alpha", Some("Same name")),
+            row(52, 42, "Beta", Some("Same name")),
+            row(53, 41, "Gamma", Some("Same name")),
+            row(54, 43, "Delta", Some("same NAME")),
+            row(55, 44, "Orphan", None),
+        ],
+        ..overview()
+    }
+}
+
+fn position(html: &str, needle: &str) -> usize {
+    html.find(needle)
+        .unwrap_or_else(|| panic!("missing {needle}: {html}"))
+}
+
 fn mount(probe: &Probe) -> VirtualDom {
     let mut dom = VirtualDom::new_with_props(app, probe.clone());
     dom.rebuild_in_place();
@@ -86,6 +120,70 @@ async fn overview_uses_workflow_client_labels_and_binds_auxiliary_reads() {
         !html.contains("href=\"/projects/new\"") && !html.contains("href=\"/admin/importers\""),
         "{html}"
     );
+}
+
+#[tokio::test]
+async fn client_bands_link_each_client_by_identifier() {
+    let probe = Probe {
+        initial_path: Some("/projects".into()),
+        ..Probe::default()
+    };
+    *probe.overview.borrow_mut() = Some(same_name_overview());
+    let mut dom = mount(&probe);
+    let html = dioxus::ssr::render(&dom);
+    let client = |id: u128| format!("href=\"/clients/{}\"", Uuid::from_u128(id));
+    let project = |id: u128| format!("href=\"/projects/{}\"", Uuid::from_u128(id));
+    for id in [41, 42, 43] {
+        assert_eq!(html.matches(&client(id)).count(), 1, "{id}: {html}");
+    }
+    assert!(!html.contains(&client(44)), "{html}");
+    assert_eq!(html.matches("Unknown client").count(), 1, "{html}");
+    // The fallback stays a plain label in the band's existing color.
+    assert!(
+        html.contains("text-primary\">Unknown client</div>"),
+        "{html}"
+    );
+    // Each band holds exactly its own client's projects, in name order.
+    let order = [
+        position(&html, "Unknown client"),
+        position(&html, &project(55)),
+        position(&html, &client(41)),
+        position(&html, &project(51)),
+        position(&html, &project(53)),
+        position(&html, &client(42)),
+        position(&html, &project(52)),
+        position(&html, &client(43)),
+        position(&html, &project(54)),
+    ];
+    assert!(order.is_sorted(), "{order:?}: {html}");
+    // Links come from the loaded overview; nothing else is read to render them.
+    assert_eq!(*probe.overview_requests.borrow(), [None]);
+    assert_eq!(*probe.client_catalog_reads.borrow(), 0);
+    assert!(probe.client_requests.borrow().is_empty());
+    assert!(probe.client_view_requests.borrow().is_empty());
+
+    let navigator = probe.navigator.borrow().unwrap();
+    let target = format!("/clients/{}", Uuid::from_u128(42));
+    dom.in_scope(probe.scope.borrow().unwrap(), || navigator.push(target));
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Client-42"));
+    assert_eq!(*probe.client_requests.borrow(), [Uuid::from_u128(42)]);
+    dom.in_scope(probe.scope.borrow().unwrap(), || navigator.go_back());
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains(&client(42)));
+}
+
+#[tokio::test]
+async fn policy_one_client_bands_stay_plain_labels() {
+    let probe = Probe {
+        initial_path: Some("/projects".into()),
+        ..Probe::default()
+    };
+    *probe.overview.borrow_mut() = Some(overview());
+    let dom = mount(&probe);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("text-primary\">Visible client</div>"), "{html}");
+    assert!(!html.contains("href=\"/clients/"), "{html}");
 }
 
 #[tokio::test]

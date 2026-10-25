@@ -99,9 +99,37 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await page.locator('#inv-client').selectOption(acme);
     await page.locator('#inv-from').fill('2026-09-01');
     await expect(page.locator('#inv-client')).toHaveValue(acme);
+    // Legacy managers and members follow a client band to that client's record.
+    const assignment = '01970000-0000-7000-8000-000000000433';
+    sql(`INSERT INTO assignments (id, project_id, user_id) VALUES ('${assignment}', '${acmeProject}', '${actor.id}')`);
+    try {
+      for (const role of ['manager', 'member']) {
+        sql(`UPDATE users SET org_role = '${role}' WHERE id = '${actor.id}'`);
+        await page.goto(`${base}/projects`);
+        const band = page.locator(`.proj-group a[href="/clients/${acme}"]`);
+        await expect(band).toHaveText('Acme Corp');
+        // The actual Tab order from the list's scroller reaches the band.
+        await page.getByRole('region', { name: 'Projects by client', exact: true }).focus();
+        let reached = false;
+        for (let step = 0; step < 200 && !reached; step++) {
+          await page.keyboard.press('Tab');
+          reached = await band.evaluate(link => link === document.activeElement);
+        }
+        assert.ok(reached, `${role}: Tab never reached the client band`);
+        await expect(band).toBeFocused();
+        await page.keyboard.press('Enter');
+        await expect(page).toHaveURL(`${base}/clients/${acme}`);
+        await expect(page.getByRole('heading', { name: 'Acme Corp', exact: true })).toBeVisible();
+        await page.goBack();
+        await expect(page).toHaveURL(`${base}/projects`);
+      }
+    } finally {
+      sql(`UPDATE users SET org_role = 'admin' WHERE id = '${actor.id}';
+        DELETE FROM assignments WHERE id = '${assignment}'`);
+    }
     assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY id), '[]') FROM projects p"), projects);
     assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY id), '[]') FROM invoices i"), invoices);
     assert.deepEqual(errors, []);
-    console.log('PASS: client links filter real projects, prefill once, preserve every draft and never create business records');
+    console.log('PASS: client links filter real projects, project client bands open their client, prefill once, preserve every draft and never create business records');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exit(1); });
