@@ -754,25 +754,26 @@ fn ProjectListContent(
                     let visible_ids: BTreeSet<Uuid> = visible.iter().map(|p| p.id).collect();
                     let all_selected = !visible_ids.is_empty() && selected_count == visible_ids.len();
                     let mut items = visible.clone();
-                    // Group by client, ordered by client name then project name.
+                    // Group by client identity, ordered by client name then project
+                    // name; the ID keeps same-named clients apart.
                     items.sort_by(|a, b| {
                         let an = client_names.get(&a.client_id).cloned().unwrap_or_default();
                         let bn = client_names.get(&b.client_id).cloned().unwrap_or_default();
                         an.to_lowercase()
                             .cmp(&bn.to_lowercase())
+                            .then_with(|| a.client_id.cmp(&b.client_id))
                             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
                     });
-                    let mut groups: Vec<(String, Vec<Project>)> = Vec::new();
+                    let mut groups: Vec<(Uuid, Option<String>, Vec<Project>)> = Vec::new();
                     for p in items {
-                        let cn = client_names
-                            .get(&p.client_id)
-                            .cloned()
-                            .unwrap_or_else(|| "Unknown client".to_string());
                         match groups.last_mut() {
-                            Some((n, v)) if *n == cn => v.push(p),
-                            _ => groups.push((cn, vec![p])),
+                            Some((id, _, v)) if *id == p.client_id => v.push(p),
+                            _ => groups.push((p.client_id, client_names.get(&p.client_id).cloned(), vec![p])),
                         }
                     }
+                    // Client Detail admits every legacy reader to their organization's
+                    // clients; the overview carries no policy-one client grant.
+                    let link_clients = !overview.canonical_permissions;
                     if groups.is_empty() {
                         rsx! {
                             div { class: "empty-state bg-secondary border rounded-xl px-6 justify-center",
@@ -838,8 +839,16 @@ fn ProjectListContent(
                                     span { class: "text-right", "Budget remaining" }
                                     span {}
                                 }
-                                for (group_name, group) in groups {
-                                    div { key: "grp-{group_name}", class: "proj-group py-3 px-5 text-sm font-semibold text-primary", "{group_name}" }
+                                for (client_id, client_name, group) in groups {
+                                    div { key: "grp-{client_id}", class: "proj-group py-3 px-5 text-sm font-semibold text-primary",
+                                        if let Some(name) = client_name.as_ref().filter(|_| link_clients) {
+                                            Link { to: Route::ClientDetail { id: client_id }, "{name}" }
+                                        } else if let Some(name) = client_name.as_ref() {
+                                            "{name}"
+                                        } else {
+                                            "Unknown client"
+                                        }
+                                    }
                                     for p in group {
                                         {
                                             let (sm, sc) = spend_map.get(&p.id).copied().unwrap_or((0, None));
