@@ -99,7 +99,11 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await page.locator('#inv-client').selectOption(acme);
     await page.locator('#inv-from').fill('2026-09-01');
     await expect(page.locator('#inv-client')).toHaveValue(acme);
+    assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY id), '[]') FROM projects p"), projects);
+    assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY id), '[]') FROM invoices i"), invoices);
     // Legacy managers and members follow a client band to that client's record.
+    // Its assignment fixture advances the project's edit revision, so the record
+    // snapshots above come first.
     const assignment = '01970000-0000-7000-8000-000000000433';
     sql(`INSERT INTO assignments (id, project_id, user_id) VALUES ('${assignment}', '${acmeProject}', '${actor.id}')`);
     try {
@@ -127,8 +131,6 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       sql(`UPDATE users SET org_role = 'admin' WHERE id = '${actor.id}';
         DELETE FROM assignments WHERE id = '${assignment}'`);
     }
-    assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY id), '[]') FROM projects p"), projects);
-    assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY id), '[]') FROM invoices i"), invoices);
     assert.deepEqual(errors, []);
     console.log('PASS: client links filter real projects, project client bands open their client, prefill once, preserve every draft and never create business records');
   } finally { await browser.close(); }
