@@ -11,6 +11,7 @@ use crate::week::week_start;
 pub enum ActivityError {
     #[error("Choose both reporting dates or all time")]
     IncompleteRange,
+    /// A bound is not a real date in canonical ISO `%Y-%m-%d` form.
     #[error("Invalid reporting date (use YYYY-MM-DD)")]
     InvalidDate,
     #[error("The reporting start date must not follow the end date")]
@@ -35,17 +36,17 @@ pub struct ActivityRange {
 impl ActivityRange {
     /// Parse an optional inclusive period. Only two absent bounds mean all time;
     /// an empty, malformed or incomplete range must not broaden a report.
+    ///
+    /// Each bound must be exactly the canonical `%Y-%m-%d` text of its date:
+    /// zero-padded four-digit years 0000–9999, and a sign with at least four
+    /// digits outside that span (e.g. `-0001-01-01`, `+12026-09-07`).
     pub fn parse_optional(
         from: Option<&str>,
         to: Option<&str>,
     ) -> Result<Option<Self>, ActivityError> {
         match (from, to) {
             (None, None) => Ok(None),
-            (Some(from), Some(to)) => Self::new(
-                from.parse().map_err(|_| ActivityError::InvalidDate)?,
-                to.parse().map_err(|_| ActivityError::InvalidDate)?,
-            )
-            .map(Some),
+            (Some(from), Some(to)) => Self::new(parse_date(from)?, parse_date(to)?).map(Some),
             _ => Err(ActivityError::IncompleteRange),
         }
     }
@@ -93,6 +94,15 @@ impl ActivityRange {
     }
 }
 
+fn parse_date(value: &str) -> Result<NaiveDate, ActivityError> {
+    let date: NaiveDate = value.parse().map_err(|_| ActivityError::InvalidDate)?;
+    // chrono also accepts unpadded, whitespace-padded and redundantly signed forms.
+    if date.format("%Y-%m-%d").to_string() != value {
+        return Err(ActivityError::InvalidDate);
+    }
+    Ok(date)
+}
+
 /// Actual tracked minutes for a work date; no invoice rounding is applied.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DailyActivity {
@@ -115,11 +125,12 @@ pub struct WeeklyActivity {
 /// Build ordered weekly buckets, ignoring dates outside `range`.
 ///
 /// `max_weeks` is a caller-owned resource bound, not a truncation instruction.
-/// Duplicate dates are added; input order does not affect the result.
+/// Duplicate dates are added; input order affects neither the series nor the error.
 ///
 /// # Errors
-/// Rejects negative included minutes, arithmetic/date overflow and a range with
-/// more than `max_weeks` buckets. No partial series is returned on error.
+/// Rejects an unrepresentable first week or more than `max_weeks` buckets, then
+/// negative included minutes (checked before any addition), then arithmetic
+/// overflow. No partial series is returned on error.
 pub fn weekly_activity(
     range: ActivityRange,
     first_day: Weekday,
@@ -152,13 +163,15 @@ pub fn weekly_activity(
         });
     }
 
-    for day in days
-        .iter()
-        .filter(|day| (range.from..=range.to).contains(&day.date))
-    {
-        if day.billable_minutes < 0 || day.non_billable_minutes < 0 {
-            return Err(ActivityError::NegativeMinutes);
-        }
+    let included = || {
+        days.iter()
+            .filter(|day| (range.from..=range.to).contains(&day.date))
+    };
+    // Validate every included day first so the error does not depend on input order.
+    if included().any(|day| day.billable_minutes < 0 || day.non_billable_minutes < 0) {
+        return Err(ActivityError::NegativeMinutes);
+    }
+    for day in included() {
         let index = ((day.date - first_week).num_days() / 7) as usize;
         let week = &mut weeks[index];
         week.billable_minutes = week
@@ -239,6 +252,46 @@ mod tests {
     }
 
     #[test]
+    fn rejects_noncanonical_iso_dates_in_either_bound() {
+        for value in [
+            "26-09-01",
+            "2026-9-01",
+            "2026-09-1",
+            " 2026-09-01",
+            "2026-09-01 ",
+            "+2026-09-01",
+        ] {
+            for (from, to) in [(value, "2026-09-30"), ("2026-08-01", value)] {
+                assert_eq!(
+                    ActivityRange::parse_optional(Some(from), Some(to)),
+                    Err(ActivityError::InvalidDate),
+                    "{from:?} / {to:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn accepts_canonical_signed_and_expanded_years() {
+        let (min, max) = (NaiveDate::MIN.to_string(), NaiveDate::MAX.to_string());
+        for (value, expected) in [
+            ("-0001-01-01", NaiveDate::from_ymd_opt(-1, 1, 1).unwrap()),
+            (
+                "+12026-09-07",
+                NaiveDate::from_ymd_opt(12026, 9, 7).unwrap(),
+            ),
+            (min.as_str(), NaiveDate::MIN),
+            (max.as_str(), NaiveDate::MAX),
+        ] {
+            assert_eq!(
+                ActivityRange::parse_optional(Some(value), Some(value)),
+                Ok(Some(ActivityRange::new(expected, expected).unwrap())),
+                "{value:?}"
+            );
+        }
+    }
+
+    #[test]
     fn rejects_reversed_custom_dates() {
         assert_eq!(
             ActivityRange::new(date("2026-02-02"), date("2026-02-01")),
@@ -252,6 +305,16 @@ mod tests {
             ActivityRange::month(date("2024-02-29")).unwrap(),
             range("2024-02-01", "2024-02-29")
         );
+    }
+
+    #[test]
+    fn non_leap_february_ends_on_the_28th() {
+        for (anchor, from, to) in [
+            ("2026-02-10", "2026-02-01", "2026-02-28"),
+            ("2100-02-15", "2100-02-01", "2100-02-28"),
+        ] {
+            assert_eq!(ActivityRange::month(date(anchor)).unwrap(), range(from, to));
+        }
     }
 
     #[test]
@@ -460,6 +523,36 @@ mod tests {
     }
 
     #[test]
+    fn negative_minutes_win_over_overflow_in_any_input_order() {
+        let mut entries = [
+            day("2026-09-01", i64::MAX, 0),
+            day("2026-09-01", 1, 0),
+            day("2026-09-01", -1, 0),
+        ];
+        let selected = range("2026-09-01", "2026-09-01");
+        for _ in 0..2 {
+            assert_eq!(
+                weekly_activity(selected, Weekday::Mon, &entries, 1),
+                Err(ActivityError::NegativeMinutes),
+                "{entries:?}"
+            );
+            entries.reverse();
+        }
+    }
+
+    #[test]
+    fn ignores_negative_minutes_outside_the_period() {
+        let entries = [
+            day("2026-08-31", -1, -1),
+            day("2026-09-01", 2, 3),
+            day("2026-09-02", -1, 0),
+        ];
+        let weeks =
+            weekly_activity(range("2026-09-01", "2026-09-01"), Weekday::Mon, &entries, 1).unwrap();
+        assert_eq!(weeks[0].cumulative_minutes, 5);
+    }
+
+    #[test]
     fn rejects_overflow_within_a_bucket() {
         let entries = [day("2026-09-01", i64::MAX, 0), day("2026-09-01", 1, 0)];
         assert_eq!(
@@ -566,6 +659,12 @@ mod tests {
                 assert_eq!(weeks.last().unwrap().to, selected.to());
                 for pair in weeks.windows(2) {
                     assert_eq!(pair[0].to.succ_opt(), Some(pair[1].from));
+                    // Interior boundaries fall exactly on the configured week start.
+                    assert_eq!(pair[1].from.weekday(), first_day);
+                    assert_eq!(pair[0].to.weekday(), first_day.pred());
+                }
+                for week in &weeks {
+                    assert!((0..7).contains(&(week.to - week.from).num_days()));
                 }
             }
         }
