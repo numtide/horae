@@ -26,17 +26,17 @@ invalid input never becomes all time.
 Independent acceptance: buckets for all seven week starts reconcile exactly;
 limits, negative input and overflow fail with no partial series.
 
-- [ ] T004 [US2] Add `weekly_activity` tests (clipping, empty weeks, inclusive
+- [x] T004 [US2] Add `weekly_activity` tests (clipping, empty weeks, inclusive
   filter, week start at year end, single day, duplicates/order, bucket limit,
   zero limit, negative minutes, three overflow paths, date extremes, full-year
   reconciliation, largest total) in `crates/core/src/project_activity.rs` and
   observe the failure.
-- [ ] T005 [US2] Implement `DailyActivity`, `WeeklyActivity` and `weekly_activity`
+- [x] T005 [US2] Implement `DailyActivity`, `WeeklyActivity` and `weekly_activity`
   in `crates/core/src/project_activity.rs` until all tests pass.
 
 ## Polish
 
-- [ ] T006 Run core tests, Clippy (`-D warnings`) and rustfmt in the Nix dev shell
+- [x] T006 Run core tests, Clippy (`-D warnings`) and rustfmt in the Nix dev shell
   with a private target directory; record exact results in
   `specs/004-project-dashboard/activity-foundation/plan.md`.
 - [x] T007 Run Spec Kit analysis across spec/plan/tasks and record it in

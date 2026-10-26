@@ -58,8 +58,7 @@ Re-checked after design: unchanged. No complexity-tracking entries.
 - `ActivityRange` (inclusive, nonempty, private fields): `parse_optional`,
   `new`, `month`, `quarter`, `year`, `from`, `to`.
 - `DailyActivity { date, billable_minutes, non_billable_minutes }` input.
-- `WeeklyActivity { from, to, billable_minutes, non_billable_minutes,
-  cumulative_minutes }` output, `from`/`to` clipped to the range.
+- `WeeklyActivity { from, to, billable_minutes, non_billable_minutes, cumulative_minutes }` output, `from`/`to` clipped to the range.
 - `weekly_activity(range, first_day, days, max_weeks) -> Result<Vec<_>, _>`.
 
 ## Quickstart (validation)
@@ -101,6 +100,28 @@ a task. U1 (medium): the reference invalid-date test only asserted `is_err()`;
 it now asserts the exact error for each case. C1 (low): `nix flake check` is
 coordinator-scheduled before merge, not run here.
 
-### Verification
+### Verification (2026-10-26, Nix dev shell, private `CARGO_TARGET_DIR`)
 
-Filled in after T006; see [tasks.md](tasks.md).
+- Red: US1's 9 tests failed on `todo!()` stubs; then US2's 16 tests failed while
+  the 9 US1 tests passed. Both went green after restoring the reference bodies.
+- `cargo test -p horae-core`: 226 passed, 0 failed (201 existing + 25 in
+  `project_activity::tests`); doc-tests 0.
+- `cargo clippy -p horae-core --all-targets -- -D warnings`: no warnings.
+- `cargo fmt -p horae-core --check` and `nix fmt -- --ci` on the changed files:
+  clean (0 changed).
+- Production code differs from the #208 reference only in the `thiserror::Error`
+  import. The tests are the reference's 25, merged into one module; the invalid
+  input test now asserts exact variants and adds a non-ISO date case.
+- Covered errors: `IncompleteRange` (either bound missing), `InvalidDate`
+  (empty, 2026-02-30, `07/09/2026`), `ReversedRange`, `DateOutOfRange` (first
+  week before `NaiveDate::MIN`), `TooManyWeeks` (limit 4, limit 0, and
+  MIN..MAX before allocation), `NegativeMinutes` (either split), `Overflow`
+  (within a bucket, across the split, cumulative across weeks); `i64::MAX`
+  exact total accepted; final week at `NaiveDate::MAX` clipped.
+- Not run: full app build, `nix flake check`, database or browser checks; no
+  Harvest or native UI behavior is newly verified. Coordinator schedules the
+  heavy checks.
+
+### Next action
+
+Coordinator's two independent reviews (T008). No push, PR or merge until then.
