@@ -45,7 +45,9 @@ the seven week starts and reconcile every bucket and the cumulative total.
   a zero limit always fails.
 - Negative included minutes, overflow within a bucket, across the billable split
   or across weeks fail with no partial series; the largest representable total
-  succeeds without saturation.
+  succeeds without saturation. Negative included minutes are reported in
+  preference to overflow whatever the input order; negative values on dates
+  outside the period are ignored like any other excluded entry.
 - A first week preceding the representable calendar fails; a final week at the
   last representable date is clipped and succeeds.
 
@@ -53,6 +55,12 @@ the seven week starts and reconcile every bucket and the cumulative total.
 
 - AFR-001: Parse an optional pair of ISO dates: both absent is all time; one
   absent is incomplete; malformed is invalid; start after end is reversed.
+  A bound is valid only if it is a real date and exactly equals that date's
+  canonical `%Y-%m-%d` text: years 0000–9999 as four zero-padded digits, other
+  representable years with a sign and at least four digits (`-0001-01-01`,
+  `+12026-09-07`). Unpadded parts (`26-09-01`, `2026-9-01`), surrounding
+  whitespace and a redundant sign (`+2026-09-01`) are invalid; no year in the
+  supported calendar is otherwise restricted.
 - AFR-002: Month/quarter/year periods are inclusive complete calendar periods,
   and every representable anchor date yields a period that contains it.
 - AFR-003: Weekly buckets honour the configured week start, cover the whole

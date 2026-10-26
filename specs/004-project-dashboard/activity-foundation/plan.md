@@ -122,6 +122,46 @@ coordinator-scheduled before merge, not run here.
   Harvest or native UI behavior is newly verified. Coordinator schedules the
   heavy checks.
 
+The analysis and verification above describe head `d83fb4c7`, before review.
+
+### Review corrections (T009–T012, 2026-10-26)
+
+Two independent reviews of `d83fb4c7` requested:
+
+- **M1:** `parse_optional` used chrono's lenient `FromStr`, so `26-09-01` became
+  year 26. Bounds must now equal their canonical `%Y-%m-%d` text, mirroring
+  `server_fns/project_creation/validation.rs` without trimming. Signed and
+  expanded years that round-trip (`-0001-01-01`, `+12026-09-07`,
+  `NaiveDate::MIN`/`MAX`) stay valid. AFR-001 states the contract.
+- **L1:** the error depended on input order (`[MAX, 1, -1]` gave `Overflow`).
+  All included days are now checked for negatives before aggregation, and
+  out-of-period entries are still ignored. The spec edge cases and the doc
+  comment state the precedence.
+- **Test gaps:** non-leap February (2026, 2100), and in the full-year test every
+  interior boundary falls on the configured week start and every bucket spans
+  1–7 days.
+- **L2:** T007 ran before implementation. It moved to a pre-implementation
+  phase with its original ID kept, and this re-analysis is T012.
+
+Production code now differs from #208 by the import, `parse_date` and the
+negative pre-pass. Raw logs (`set -o pipefail`, Nix dev shell rustc 1.96.1,
+private `CARGO_TARGET_DIR`) are in `/tmp/horae-activity-logs-20261026/`:
+
+| Step | Log | Result |
+|------|-----|--------|
+| Red (new tests, old code) | `red.log` | exit 101: 28 passed, 2 failed (`rejects_noncanonical_iso_dates_in_either_bound` got `Ok` for year 0026; `negative_minutes_win_over_overflow_in_any_input_order` got `Overflow`) |
+| Targeted `cargo test -p horae-core --locked project_activity` | `targeted.log` | exit 0, 30 passed |
+| Core `cargo test -p horae-core --locked` | `core-test.log` | exit 0, 231 passed, doc-tests 0 |
+| `cargo clippy -p horae-core --all-targets --locked -- -D warnings` | `clippy.log` | exit 0, re-checked `horae-core`, no warnings |
+| `cargo fmt -p horae-core --check` | `cargo-fmt.log` | exit 0 |
+| `nix fmt -- --ci` on changed files | `treefmt.log` | exit 0, 0 changed |
+| `check-prerequisites.sh --json --require-tasks --include-tasks` | `check-prerequisites.log` | exit 0, child `FEATURE_DIR`; selector restored to 016 |
+
+Re-analysis (T012): spec AFR-001/edge cases, the code docs and tasks agree; each
+AFR and ASC still maps to tasks; no constitution findings. Still not run: app
+build, `nix flake check`, database, browser; no Harvest or native UI behavior is
+newly verified.
+
 ### Next action
 
-Coordinator's two independent reviews (T008). No push, PR or merge until then.
+Coordinator's delta re-review (T008). No push, PR or merge until then.
