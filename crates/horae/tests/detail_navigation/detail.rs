@@ -186,68 +186,6 @@ async fn detail_refresh_removes_edit_affordance_without_losing_authorized_labels
     );
 }
 
-#[tokio::test]
-async fn late_fee_access_denial_hides_loaded_detail_and_retry_keeps_original_identity() {
-    for status in [
-        axum::http::StatusCode::UNAUTHORIZED,
-        axum::http::StatusCode::FORBIDDEN,
-    ] {
-        let probe = probe();
-        probe
-            .detail_view
-            .borrow_mut()
-            .as_mut()
-            .unwrap()
-            .canonical_permissions = false;
-        let (send, receive) = oneshot::channel();
-        *probe.fee_response.borrow_mut() = Some(receive);
-        let mut dom = mount(&probe);
-        let html = dioxus::ssr::render(&dom);
-        assert!(
-            html.contains("Visible teammate") && html.contains("Edit project"),
-            "{html}"
-        );
-        assert!(html.contains("Loading fee balances"), "{html}");
-        assert_eq!(
-            *probe.auxiliary_requesters.borrow(),
-            [Some(view().requester)]
-        );
-
-        send.send(Err(ServerFnError::ServerError {
-            code: status.as_u16(),
-            message: "Private access diagnostic".into(),
-            details: None,
-        }))
-        .unwrap();
-        settle(&mut dom);
-        let html = dioxus::ssr::render(&dom);
-        assert!(
-            html.contains("Project details are unavailable"),
-            "{status}: {html}"
-        );
-        for hidden in [
-            "Visible project",
-            "Visible teammate",
-            "Edit project",
-            "Fee balances",
-            "Private access diagnostic",
-        ] {
-            assert!(!html.contains(hidden), "{status}: {html}");
-        }
-
-        click(&mut dom, "project-detail-retry");
-        assert_eq!(
-            *probe.detail_view_requests.borrow(),
-            [None, Some(view().requester)]
-        );
-        assert_eq!(
-            *probe.auxiliary_requesters.borrow(),
-            [Some(view().requester), Some(view().requester)]
-        );
-        assert!(dioxus::ssr::render(&dom).contains("Visible teammate"));
-    }
-}
-
 /// Rendered menu item labels, so closed-dialog copy cannot satisfy an action check.
 fn menu_items(html: &str) -> Vec<String> {
     html.split("role=\"menuitem\"")
@@ -296,9 +234,11 @@ async fn header_shows_real_identity_and_only_the_offered_actions() {
         assert!(html.contains(&expected), "missing {expected}: {html}");
     }
     assert_eq!(menu_items(&html), ["Archive"], "{html}");
-    for hidden in ["Reactivate", "Archived"] {
+    // A legacy manager who can edit gets no separate fee panel or fee read.
+    for hidden in ["Reactivate", "Archived", "Fee balances"] {
         assert!(!html.contains(hidden), "{hidden}: {html}");
     }
+    assert!(legacy.auxiliary_requesters.borrow().is_empty());
 
     // Policy one offers no role-derived status change, even with edit authority.
     let canonical = probe();

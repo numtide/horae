@@ -18,9 +18,6 @@ use crate::server_fns;
 use horae_core::money::format_cents;
 use horae_core::types::{BudgetKind, ProjectType};
 
-#[path = "projects/fee_balances.rs"]
-mod fee_balances;
-
 fn hours(minutes: i64) -> String {
     // Remaining budgets can be negative. Keep the sign and round integer
     // minutes to hundredths without the tracking formatter's zero clamp.
@@ -1115,7 +1112,6 @@ const CONFLICT: u16 = 409;
 #[component]
 fn ProjectDetailContent(id: Uuid) -> Element {
     let mut binding = use_signal(|| None::<(PermissionRequester, bool)>);
-    let mut generation = use_signal(Uuid::now_v7);
     let mut access_lost = use_signal(|| false);
     let mut details = use_resource(move || async move {
         let expected = *binding.peek();
@@ -1130,7 +1126,6 @@ fn ProjectDetailContent(id: Uuid) -> Element {
         }
         binding.set(Some(current));
         access_lost.set(false);
-        generation.set(Uuid::now_v7());
         Ok(view)
     });
     // The requested status; the dialog is open while it is set.
@@ -1187,8 +1182,8 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                     // Show the persisted state under current authority.
                     details.restart();
                 }
-                // Denied authority hides the loaded project, as the fee
-                // balances do; Retry reloads under the bound requester.
+                // Denied authority hides the loaded project; Retry reloads
+                // under the bound requester.
                 Err(ServerFnError::ServerError {
                     code: 401 | 403, ..
                 }) => {
@@ -1338,19 +1333,6 @@ fn ProjectDetailContent(id: Uuid) -> Element {
                     h2 { class: "page-title text-xl", "Team" }
                     if view.team.is_empty() { p { class: "text-muted text-sm", "No visible team members." } }
                     else { ul { for person in view.team { li { key: "{person.id}", "{person.name}" } } } }
-                }
-                if !view.canonical_permissions && view.can_edit {
-                    for key in [generation()] {
-                        fee_balances::ProjectFeeBalances {
-                            key: "{key}",
-                            project_id: id,
-                            requester: view.requester,
-                            on_access_change: move |_| {
-                                status_saved.set(None);
-                                access_lost.set(true);
-                            },
-                        }
-                    }
                 }
             } else {
                 p { class: "text-danger mt-5", role: "alert",
