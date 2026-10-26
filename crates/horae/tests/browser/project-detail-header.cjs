@@ -732,20 +732,33 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
       body.expected_requester.user_id = id(99);
       return route.continue({ postData: JSON.stringify(body) });
     };
-    for (const [change, revoke, restore] of [
-      ['account', () => page.route('**/api/set_project_active*', rebind, { times: 1 }), () => {}],
+    let cookies;
+    for (const [change, revoke, restore, status] of [
+      ['account', () => page.route('**/api/set_project_active*', rebind, { times: 1 }), () => {}, 403],
       ['policy', () => sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'`),
-        () => sql(`UPDATE organizations SET permission_policy_version=0 WHERE id='${org}'`)],
+        () => sql(`UPDATE organizations SET permission_policy_version=0 WHERE id='${org}'`), 403],
       ['role', () => sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`),
-        () => sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'`)],
+        () => sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'`), 403],
+      ['session', async () => { cookies = await page.context().cookies(); await page.context().clearCookies(); },
+        () => page.context().addCookies(cookies), 401],
     ]) {
       await archive();
       await revoke();
       try {
         const denied = page.waitForResponse(isStatusWrite);
         await undo.click();
-        assert.equal((await denied).status(), 403, `${change}: Undo is denied`);
+        const response = await denied;
+        assert.equal(response.status(), status, `${change}: Undo is denied`);
         await expect(page.getByRole('alert')).toContainText('Project details are unavailable');
+        // The server's error text, whether a JSON error or plain text, never reaches the page.
+        const body = await response.text();
+        let parsed;
+        try { parsed = JSON.parse(body); } catch { parsed = body; }
+        const strings = value => typeof value === 'string' ? [value]
+          : value && typeof value === 'object' ? Object.values(value).flatMap(strings) : [];
+        const diagnostics = strings(parsed).map(text => text.trim()).filter(text => text.length > 3);
+        assert.ok(diagnostics.length > 0, `${change}: the denial carries a diagnostic: ${body}`);
+        for (const diagnostic of diagnostics) await expect(page.locator('body')).not.toContainText(diagnostic);
         await expect(header).toHaveCount(0);
         await expect(page.locator('.toast')).toHaveCount(0);
         await expect(dialog).toBeHidden();
@@ -761,7 +774,7 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
       await reactivate();
     }
     assert.equal(persisted(), content);
-    console.log('PASS: a changed account, policy or role denies Undo, writes nothing and removes the stale notice');
+    console.log('PASS: a changed account, policy, role or expired session denies Undo, writes nothing, hides its diagnostic and removes the stale notice');
 
     // Leaving while Undo is pending carries neither its action nor its feedback to another project.
     await archive();

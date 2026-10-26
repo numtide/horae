@@ -123,7 +123,6 @@ struct Probe {
     overview_response: DeferredResponse<project::ProjectOverview>,
     auxiliary_requesters: Rc<RefCell<Vec<Option<permission_editor::PermissionRequester>>>>,
     client_catalog_reads: Rc<RefCell<usize>>,
-    fee_response: DeferredResponse<Vec<project::ProjectFeeBalance>>,
     detail_view: Rc<RefCell<Option<project::ProjectDetailView>>>,
     detail_view_requests: Rc<RefCell<Vec<Option<permission_editor::PermissionRequester>>>>,
     detail_view_response: DeferredResponse<project::ProjectDetailView>,
@@ -688,11 +687,6 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("User-101"), "rendered: {html}");
     assert!(html.contains("Task-1"), "rendered: {html}");
-    assert!(html.contains("Fee-1"), "rendered: {html}");
-    assert!(
-        html.contains("Over-invoiced: EUR -0.10"),
-        "rendered: {html}"
-    );
     assert_eq!(*probe.assignment_requests.borrow(), [first]);
     assert_eq!(*probe.task_requests.borrow(), [first]);
 
@@ -723,8 +717,6 @@ async fn navigating_between_project_ids_loads_current_assignments_and_tasks() {
     );
     assert!(html.contains("User-102"), "rendered: {html}");
     assert!(html.contains("Task-2"), "rendered: {html}");
-    assert!(html.contains("Fee-2"), "rendered: {html}");
-    assert!(!html.contains("Fee-1"), "rendered: {html}");
     assert!(!html.contains("User-101"), "rendered: {html}");
     assert!(!html.contains("Task-1"), "rendered: {html}");
     assert!(!html.contains("CODE-1"), "rendered: {html}");
@@ -1107,30 +1099,6 @@ mod server_fns {
             return response.await.unwrap();
         }
         Ok(Vec::new())
-    }
-    pub async fn get_project_fee_balances(
-        id: String,
-        _from: String,
-        _to: String,
-        _expected: Option<permission_editor::PermissionRequester>,
-    ) -> Result<Vec<project::ProjectFeeBalance>, ServerFnError> {
-        let probe = consume_context::<Probe>();
-        probe.auxiliary_requesters.borrow_mut().push(_expected);
-        let response = probe.fee_response.borrow_mut().take();
-        if let Some(response) = response {
-            return response.await.expect("controlled fee response was dropped");
-        }
-        let id = Uuid::parse_str(&id).unwrap();
-        Ok(vec![project::ProjectFeeBalance {
-            period_key: "single".into(),
-            description: format!("Fee-{}", id.as_u128()),
-            currency: "EUR".into(),
-            balance: invoice::InvoiceFeeBalance {
-                agreed_cents: 100,
-                invoiced_cents: 110,
-                remaining_cents: -10,
-            },
-        }])
     }
     pub async fn get_project_details(
         id: String,
