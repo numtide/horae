@@ -70,8 +70,11 @@ authoritative. Nothing new is stored.
 ## Success criteria
 
 - PSC-001: The panel is absent for every role and policy on Project Detail.
-- PSC-002: Each removed financial, recovery or authorization assertion has an
-  equivalent passing assertion in invoice preparation or the status flow.
+- PSC-002: Each removed financial or authorization assertion has an equivalent
+  passing assertion in invoice preparation or the status flow. For recovery, the
+  panel's hiding of stale amounts goes with the panel. Preparation keeps its
+  unchanged behavior: "Last review" values and local edits stay visible while an
+  error is shown and Generate is disabled, until a retried review succeeds.
 - PSC-003: Focused SSR and browser suites, server/WASM lint and formatting pass.
   Two independent reviews are done before publication.
 

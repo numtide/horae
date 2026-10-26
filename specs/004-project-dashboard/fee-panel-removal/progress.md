@@ -10,9 +10,12 @@
   to `specs/016-expense-parity` (no diff). The increment checklist is 9/9; the
   parent checklists and G01/O1/015 gates are untouched.
 - Analysis (read-only): C1 MEDIUM, US1's "no fee-balance read" had no explicit
-  task. It is covered in P003 by a browser request counter and in P004 by the
-  SSR auxiliary-request check. C2 LOW: monthly occurrence labels confirmed as
-  "<project> — YYYY-MM fee". No constitution conflicts; coverage 100%.
+  task. In SSR, compilation proves there is no fee caller: the
+  `get_project_fee_balances` mock is deleted, so any remaining page call would
+  not compile. The SSR `auxiliary_requesters` assertion covers only the other
+  auxiliary reads recorded by the tag, spend and budget-progress mocks. At runtime, the browser request counter
+  in P003 proves no fee read is issued. C2 LOW: monthly occurrence labels
+  confirmed as "<project> — YYYY-MM fee". No constitution conflicts; coverage 100%.
 
 ## 2026-10-26 — iteration 2
 
@@ -36,3 +39,20 @@
   server builds, and that suite was rerun with the final test (0).
 - Next: P008, Spec Kit reanalysis and two independent reviews (coordinator).
   Then P009, publication. The full flake has not been run.
+
+## 2026-10-26 — iteration 3
+
+- Done: P008. Two independent read-only reviews of `b8126096` both approved
+  with no blocking findings. Their low notes were documentation and test
+  precision only: the stale-amount recovery wording, the SSR no-fee-read proof
+  and optional extra SSR status-denial coverage. The coordinator also approved
+  the production code and tests.
+- Corrected docs: the plan relocation row and PSC-002 now separate the removed
+  panel's stale-amount hiding from preparation's unchanged "Last review"
+  behavior. The C1 note above now says SSR proof comes from compilation and
+  runtime proof from the browser counter. No product code or test changed.
+- Spec Kit re-analysis: `check-prerequisites.sh --json --require-tasks --include-tasks` with this `SPECIFY_FEATURE_DIRECTORY` exited 0; the selector
+  was restored to `specs/016-expense-parity`. Spec, plan and tasks are
+  consistent, with 100% coverage, 0 critical and no new findings.
+- Open: P009 (publication), the full `nix flake check` and exact-head hosted CI.
+  The parent 004, 015, G01 and O1 gates stay open.

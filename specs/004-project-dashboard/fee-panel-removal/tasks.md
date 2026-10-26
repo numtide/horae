@@ -31,7 +31,7 @@ Disposable fixtures only; no account writes, schema changes or policy activation
 
 - [x] P007 Run focused SSR, server/WASM lint, formatting and the three browser
   suites on disposable data; record exact results in `progress.md`.
-- [ ] P008 Run Spec Kit analysis and two independent reviews (coordinator).
+- [x] P008 Run Spec Kit analysis and two independent reviews (coordinator).
 - [ ] P009 Publish only after coordinator review; no merge from this worktree.
 
 Dependencies: P001 → P002 → P003–P005 → P006 → P007 → P008 → P009.
