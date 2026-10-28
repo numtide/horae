@@ -34,7 +34,7 @@
 - No `[NEEDS CLARIFICATION]` marker is used. The narrow-width layout decision
   (spec Clarifications, last entry) was settled by the coordinator from native
   measurements; see
-  [research.md](../research.md#d1-date-layout-at-320px-with-200-text). Acceptance
+  [research.md](../research.md#layout-d1-date-layout-at-320px-with-200-text). Acceptance
   is still pending the native and browser gates.
 - "CSS pixels", "root font size" and "native" appear in Assumptions and Context as
   test conditions, not as implementation choices.

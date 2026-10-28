@@ -4,7 +4,10 @@
 
 **Created**: 2026-10-22
 
-**Status**: Draft (clarified; plan awaiting coordinator approval before application edits)
+**Status**: Draft (clarified). The coordinator approved the plan and the application
+edits are implemented. On 2026-10-28 the coordinator authorized a rebase onto
+`8a796361` and refreshed gates. Acceptance is still open: T018 (native long-name
+popup proof) and T020 (exact-head checks and reviews).
 
 **Parent**: `specs/001-time-tracking-invoicing`. Refines the presentation of the
 FR-016 report filters on one surface. It does not amend the parent spec and does
@@ -212,7 +215,7 @@ stored or exported.
   dates use a smaller horizontal padding, using existing utilities with `sm:`
   variants that restore today's desktop panel and date values. The one desktop
   change is the approved select height (next entry). Native measurements are in
-  [research.md](research.md#d1-date-layout-at-320px-with-200-text). FR-R01-003
+  [research.md](research.md#layout-d1-date-layout-at-320px-with-200-text). FR-R01-003
   applies unchanged; no exception has been approved.
 - Q: The base selects are 42px, below the kit's 44px control floor. Must desktop
   stay pixel-identical? → No, for this one property only: the filter inputs and

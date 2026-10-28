@@ -53,7 +53,7 @@ If that content width were held constant, a date would fit only when
 
 **What this does and does not show**: card and input padding changes alone did not
 show the full date in either probe. Whether a layout can do so depends on the
-native rendering, not on this arithmetic; see the D1 measurements. FR-R01-003
+native rendering, not on this arithmetic; see the layout D1 measurements. FR-R01-003
 stays the acceptance bar in every case.
 
 ### 390px with 32px text
@@ -64,7 +64,11 @@ about 73px past the card's content box, which is about 24px beyond the card's
 right border. Page-geometry checks cannot detect this. Capture M2 confirmed in
 native screenshots that the input extends outside the card.
 
-## D1: date layout at 320px with 200% text
+## Layout D1: date layout at 320px with 200% text
+
+Layout D1 is this increment's date-layout decision. It is unrelated to the open
+XLSX duration-cell question also labelled D1 in the delivery notes, which this
+increment does not touch.
 
 **Decided: utility-only markup.** No `horae.css` rules and no shared component
 change. The only generator changes are the four responsive variants in D2 and the
@@ -266,7 +270,7 @@ What applies to this panel:
 Deviation: this increment keeps the native date and select controls and their
 calendar button (FR-R01-004, as the brief requires), and the current Instrument
 Sans control font. From the kit it takes only the bare-bar treatment at narrow
-widths (D1). Moving to Dropdown, PeriodNav or a mono date display is
+widths (layout D1). Moving to Dropdown, PeriodNav or a mono date display is
 report-builder work.
 
 ## Scoped report (not in scope)
@@ -274,7 +278,7 @@ report-builder work.
 `pages/reports/scoped.rs` renders its own filter row with no card, already-paired
 ids and the same native date. It may behave similarly at 320px with 200% text,
 because it uses the same native control. That has not been measured. It is owned
-by `015` and stays unchanged. The D1 utilities could later be applied there as a
+by `015` and stays unchanged. The layout D1 utilities could later be applied there as a
 separate, measured change.
 
 ## Tooling notes

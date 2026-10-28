@@ -1,6 +1,6 @@
 # Implementation Plan: Legacy Time report filter reflow and label association (R01/X01)
 
-**Branch**: `fix/report-filter-reflow` | **Date**: 2026-10-22 | **Base**: `8ae8458e` | **Spec**: [spec.md](spec.md)
+**Branch**: `fix/report-filter-reflow` | **Date**: 2026-10-22 | **Base**: `8a796361` (planned on `8ae8458e`) | **Spec**: [spec.md](spec.md)
 
 ## Summary
 
@@ -16,7 +16,7 @@ The plan has four parts:
   and fill at 640px and wider. Control height is the separate, approved exception
   below.
   The coordinator measured this direction in native Chrome
-  ([research.md, D1](research.md#d1-date-layout-at-320px-with-200-text)).
+  ([research.md, layout D1](research.md#layout-d1-date-layout-at-320px-with-200-text)).
 - **Generator.** Four of those `sm:` variants are not generated today, so
   `crates/horae/build.rs` adds four existing base utilities to its `RESPONSIVE`
   list: `p-6`, `px-3`, `border` and `bg-secondary`

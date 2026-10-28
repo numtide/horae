@@ -5,9 +5,10 @@
 
 **Tests**: Requested by the acceptance plan (browser suite plus native capture).
 
-**Gate**: Source, test and generator edits are authorised. No compilation, browser
-or DB work until the build slot is granted. No commits until the coordinator
-collects the work.
+**Gate**: Source, test and generator edits are authorised. On 2026-10-28 the
+coordinator granted the build slot for the rebase onto `8a796361` and the refreshed
+T016/T017 gates, with disposable databases only. Native Chrome stays with the
+coordinator. No push or PR before coordinator review.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -18,7 +19,7 @@ collects the work.
 
 ## Phase 2: Foundational
 
-- [x] T003 Record D1 (utility-only markup) and D2 (four `RESPONSIVE` entries) with the static cross-screen audit in specs/001-time-tracking-invoicing/report-filter-reflow/research.md
+- [x] T003 Record layout D1 (utility-only markup) and D2 (four `RESPONSIVE` entries) with the static cross-screen audit in specs/001-time-tracking-invoicing/report-filter-reflow/research.md
 - [x] T004 Read `rust-best-practices` (chapters 1, 5 and 8), `rust-testing` and the impeccable craft floor in full before editing
 - [x] T005 Add `p-6`, `px-3`, `border` and `bg-secondary` to `RESPONSIVE` in crates/horae/build.rs, with the same declarations as their base utilities. Do not hand-edit horae-utils.css
 
