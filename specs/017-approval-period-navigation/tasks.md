@@ -133,7 +133,7 @@ until its red tests can actually run, which needs the heavy slot.
   - no new CSS;
   - `git diff --check`;
   - `.specify/feature.json` unchanged.
-- [ ] T019 Heavy slot (root grants): run the quickstart's "Disposable database" block. That includes `cargo sqlx prepare` with the `touch` step, checking that `.sqlx` changes only the `list_approvals` descriptor. Then the offline all-targets build, clippy, the wasm check, `nix fmt`, and `responsive-layout` unmodified.
+- [x] T019 Heavy slot (root grants): run the quickstart's "Disposable database" block. That includes `cargo sqlx prepare` with the `touch` step, checking that `.sqlx` changes only the `list_approvals` descriptor. Then the offline all-targets build, clippy, the wasm check, `nix fmt`, and `responsive-layout` unmodified.
 - [ ] T020 Root native smoke per quickstart.md.
 - [ ] T021 Two independent reviews of the exact head, then an exact-head `nix flake check`. Small unsigned commits with no AI attribution. No push or PR before root collects.
 
@@ -146,8 +146,8 @@ All runs used:
 - the offline dev shell;
 - a scratch `CARGO_TARGET_DIR`.
 
-**Status, 2026-10-28**: T001–T018 are done. T019 is done except
-`responsive-layout`. T020 and T021 are open.
+**Status, 2026-10-28**: T001–T019 are done. T020 (native smoke) and T021
+(reviews, exact-head `nix flake check`) are open.
 
 ### Red → green
 
@@ -185,6 +185,14 @@ behaviour:
   The tests were re-run green after formatting.
 - Static sweep: no inline style, hex or CSS changes; `git diff --check` clean;
   `.specify/feature.json` unchanged.
+- `nix build .#default` from source `12ae010b`, with the same code as the next
+  docs-only commit, exited 0:
+  `/nix/store/kx781vm0h1q7brw1vv67nagmhnkaj3f3-horae-0.1.0`.
+- On that package, `run-design-checks.sh responsive-layout` exited 0 with
+  60/60 PASS, including `/approvals` headers at 320, 390, 768, 1280 and 1440px.
+  It used the runner's own temporary database and port 8093.
+- Logs, with their final `exit=` lines, are in the root checkout's
+  `.scratch/mvp-approvals-20261028/`, files `01`–`11`.
 
 ## Dependencies
 
