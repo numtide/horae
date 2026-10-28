@@ -137,26 +137,65 @@ until its red tests can actually run, which needs the heavy slot.
 - [x] T019 Heavy slot (root grants): run the quickstart's "Disposable database" block. That includes `cargo sqlx prepare` with the `touch` step, checking that `.sqlx` changes only the `list_approvals` descriptor. Then the offline all-targets build, clippy, the wasm check, `nix fmt`, and `responsive-layout` unmodified.
 - [ ] T020 Root native smoke per quickstart.md.
 - [ ] T021 Two independent reviews of the exact head, then an exact-head `nix flake check`. Small unsigned commits with no AI attribution. No push or PR before root collects.
+  - Done locally for evidence head `fd83e00d`:
+    - Both independent reviews approved `fd83e00d`. Root and the second reviewer checked its runtime results directly.
+    - `nix flake check -L --max-jobs 1` exited 0 (see Evidence).
+  - Open: remote CI. The head is not published.
 
 ### Review fixes (second review)
 
-- [ ] T022 H1: crates/horae/src/server_fns/importers/authorization_tests/approval_labels.rs posted `list_approvals` without `week_start` at all five call sites. Each now sends the fixture's Monday, `2026-09-21`, and the authorization assertions are unchanged. That test has an approval row in the manager's own organization whose submitter belongs to another organization. It starts on `2026-09-28`, outside that week, so one added request checks that this row is hidden in its own week too. Pre-fix: the already-built test executable, run against the private cluster with no compilation, failed `job_endpoints_enforce_session_role_and_organization`: `list_approvals` returned 500, "missing field `week_start`". Post-fix: not run yet; it needs the full `cargo test -p horae --features server`.
-- [ ] T023 M2: in crates/horae/tests/approval_labels_ui.rs, T-U3 compared hrefs only. During the week of 2026-10-26, Next and This week lead to the same week, so a missing Next still passed. Each link is now found by its name (`aria-label` for Previous and Next, the text for This week), and the test asserts there is exactly one of each and checks its href. Not run yet.
+- [x] T022 H1: crates/horae/src/server_fns/importers/authorization_tests/approval_labels.rs posted `list_approvals` without `week_start` at all five call sites. Each now sends the fixture's Monday, `2026-09-21`, and the authorization assertions are unchanged. That test has an approval row in the manager's own organization whose submitter belongs to another organization. It starts on `2026-09-28`, outside that week, so one added request checks that this row is hidden in its own week too. Pre-fix: the already-built test executable, run against the private cluster with no compilation, failed `job_endpoints_enforce_session_role_and_organization`: `list_approvals` returned 500, "missing field `week_start`". Post-fix, at `fd83e00d`: the full server suite in `nix flake check` passed this test (see Evidence).
+- [x] T023 M2: in crates/horae/tests/approval_labels_ui.rs, T-U3 compared hrefs only. During the week of 2026-10-26, Next and This week lead to the same week, so a missing Next still passed. Each link is now found by its name (`aria-label` for Previous and Next, the text for This week), and the test asserts there is exactly one of each and checks its href. At `fd83e00d`, `approval_labels_ui` passed 14/14 in `nix flake check`, including this test.
 - [ ] T024 M1 deployment gate (owner decision recorded in spec.md Clarifications): immediately before deploying, run the read-only query in quickstart.md, "Deployment gate", against the target database. Any row: do not deploy, and keep the previous version. No overlap, normalization, migration or mutation change is made. Not run against any real database.
 
 ## Evidence (2026-10-28)
 
-All runs used:
+The cargo runs used:
 
-- a private PostgreSQL 17 cluster at `/tmp/horae-approvals.Cr3l9U`, on a Unix
-  socket only (`listen_addresses` empty), with role `horae` (CREATEDB);
+- a disposable private PostgreSQL 17 cluster, on a Unix socket only
+  (`listen_addresses` empty), with role `horae` (CREATEDB);
 - the offline dev shell;
 - a scratch `CARGO_TARGET_DIR`.
 
-**Status, 2026-10-28**: T001–T019 are done. T020 (native smoke), T021
-(reviews, exact-head `nix flake check`) and the review fixes T022–T024 are
-open. The server runs below were filtered to `server_fns::approvals`. They did
-not cover the HTTP authorization check that H1 broke.
+`nix flake check` uses its own PostgreSQL inside the build sandbox.
+
+**Status, 2026-10-28**:
+
+- T001–T019, T022 and T023 are done.
+- T021 is done locally (reviews and exact-head `nix flake check`); its remote
+  CI is open.
+- T020 (native smoke) and T024 (the deployment gate) are open.
+- The earlier server runs listed below were filtered to
+  `server_fns::approvals`, so they missed the HTTP authorization check that H1
+  broke. The full suite under "Exact-head gates" covers it.
+
+### Exact-head gates (evidence head `fd83e00d`)
+
+These ran on the clean head `fd83e00dadb1cd6173a712a7b4e8723f96aec7e6`. The
+commit that records them changes only this file, and nothing was re-run on it.
+
+- `CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=1 cargo test -p horae-core`: 237
+  passed.
+- `nix flake check -L --max-jobs 1`: exit 0. It covered:
+  - the package build;
+  - the full test suite;
+  - clippy;
+  - the `.sqlx` prepare check;
+  - treefmt;
+  - the browser checks;
+  - both NixOS e2e VM tests (plain and OIDC).
+- In that run:
+  - the server unit suite passed 1558, failed 0, with 11 ignored and none
+    filtered out. That includes
+    `job_endpoints_enforce_session_role_and_organization` (T022);
+  - `approval_labels_ui` passed 14/14, including
+    `the_pager_links_to_the_adjacent_and_current_weeks` (T023).
+- H1 before the fix: the prebuilt test executable failed that test with a 500,
+  "missing field `week_start`".
+- Not run here:
+  - remote CI;
+  - native smoke (T020);
+  - the deployment-gate query against any real database (T024).
 
 ### Red → green
 
