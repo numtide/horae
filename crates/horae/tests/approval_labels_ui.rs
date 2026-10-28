@@ -340,14 +340,23 @@ async fn the_pager_links_to_the_adjacent_and_current_weeks() {
     };
     let (dom, _) = render(&probe);
     let html = html(&dom);
-    for target in [
-        "/approvals?week=2026-10-12".to_string(),
-        "/approvals?week=2026-10-26".to_string(),
-        format!("/approvals?week={}", this_week(Weekday::Mon)),
+    // Each link is found by its name, so Next and This week stay distinct even
+    // when they lead to the same week.
+    let links: Vec<&str> = html
+        .split("<a ")
+        .skip(1)
+        .map(|link| link.split("</a>").next().unwrap())
+        .collect();
+    for (name, target) in [
+        ("aria-label=\"Previous week\"", "2026-10-12".to_string()),
+        ("aria-label=\"Next week\"", "2026-10-26".to_string()),
+        (">This week", this_week(Weekday::Mon).to_string()),
     ] {
+        let named: Vec<_> = links.iter().filter(|link| link.contains(name)).collect();
+        assert_eq!(named.len(), 1, "{name}: {html}");
         assert!(
-            html.contains(&format!("href=\"{target}\"")),
-            "{target}: {html}"
+            named[0].contains(&format!("href=\"/approvals?week={target}\"")),
+            "{name} -> {target}: {html}"
         );
     }
 }
