@@ -5,7 +5,7 @@ Sync Impact Report
   duration" is redefined: one narrowly bounded floating-point conversion is now permitted.
   The governance rule makes a principle redefinition MAJOR, even though the change is small.
 - Modified principles:
-  - I. Exactness (NON-NEGOTIABLE): title unchanged; adds the spreadsheet duration cell
+  - I. Exactness (NON-NEGOTIABLE): title unchanged; adds the XLSX (Excel) duration cell
     exception. Integer storage, calculation, rounding and totals stay mandatory, and money
     is excluded.
 - Added sections: none
@@ -19,8 +19,8 @@ Sync Impact Report
   - README.md: describes integer storage only, which is unchanged ✅ (no change)
   - Earlier feature plans that cite 1.0.0 are historical records and are deliberately left as
     written; later plans check against 2.0.0.
-- Follow-up: the exception covers only spreadsheet duration cells. Other existing
-  floating-point conversions (money cells in spreadsheet exports, hours and amounts in the
+- Follow-up: the exception covers only XLSX duration cells. Other existing
+  floating-point conversions (money cells in XLSX exports, hours and amounts in the
   Harvest-compatible API, string formatting helpers) are neither covered nor assessed by
   this amendment.
 -->
@@ -36,21 +36,24 @@ explicit ISO 4217 currency code**. Floating-point MUST NOT be used for any durat
 except as the single narrow exception below. Every reported total MUST equal the exact sum of its
 parts across any grouping or period.
 
-**Spreadsheet duration cells (the only exception)**: when a spreadsheet export writes a duration
-as a numeric hours cell and the writing library accepts only floating-point numbers, the export MAY
+**XLSX duration cells (the only exception)**: when an XLSX (Excel) export writes a duration as a
+numeric hours cell and the writing library accepts only floating-point numbers, the export MAY
 convert one integer-minute value to hours (minutes ÷ 60) as the final step that writes the cell.
 
 - The minutes MUST already be final: stored, rounded and totalled as integers beforehand.
-- The converted value MUST NOT be summed, rounded, compared, stored, read back or used for any
-  further calculation.
+- Within Horae's code paths, the converted value MUST NOT be summed, rounded, compared,
+  persisted, parsed back or used in any further calculation. Writing it into the cell is the
+  permitted use. A regression test that inspects the serialized cell text, and a spreadsheet
+  user's own formulas, are not reuse.
 - The cell is an approximate presentation. The integer minutes remain the authority. No exact
   fractional-hours value or round trip back to minutes may be claimed unless a test proves it.
 - The exception does not extend to money, text or CSV output, APIs, domain logic or storage.
 
 **Rationale**: Billing and invoicing are financial operations; floating-point accumulation produces
 rounding drift that corrupts totals and erodes trust. Integer representation makes correctness verifiable.
-Spreadsheet numbers are binary floating-point by format, and users need hours they can sum in a
-spreadsheet. Confining the conversion to the last write keeps every Horae calculation in integers.
+The XLSX library's numeric-cell API takes an `f64`, so the value is converted at that call; most
+n/60 values have no exact finite representation. Users need hours they can sum in a spreadsheet.
+Confining the conversion to that last call keeps every Horae calculation in integers.
 
 ### II. Domain Purity
 

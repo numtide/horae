@@ -128,12 +128,12 @@ they are (out of scope).
 **Decision**: The owner chose to keep numeric decimal hours in Excel duration cells (timesheet
 Hours and Rounded Hours, invoice Hours). Constitution 2.0.0 Principle I permits the one
 floating-point step this needs: converting final integer minutes to hours where the
-spreadsheet library writes the cell. Verifying that the existing writers meet the exception's
+XLSX library writes the cell. Verifying that the existing writers meet the exception's
 conditions is still pending.
 
-**Rationale**: Spreadsheet number cells are binary floating point, so n/60 hours cannot be
-stored exactly in any numeric cell. Users need hours they can sum, and Harvest's detailed
-Excel export was observed to use numeric hours cells. Integer minutes stay the authority for
+**Rationale**: The XLSX library's numeric-cell API takes an `f64`, so the value is converted at
+that call; most n/60 values have no exact finite representation. Users need hours they
+can sum, and Harvest's detailed Excel export was observed to use numeric hours cells. Integer minutes stay the authority for
 storage, rounding and totals, and each cell is only an approximate presentation of them.
 
 **Alternatives considered**: exact two-decimal text matching the CSV (rejected: a spreadsheet
