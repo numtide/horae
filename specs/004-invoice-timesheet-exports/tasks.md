@@ -124,7 +124,7 @@ disposable database.
 - [x] T010 As the single heavy-build owner, build the server package once, then run
   `crates/horae/tests/browser/run-design-checks.sh reports-currency-totals reports-legacy-exports reports-permissions` (its own `/tmp` database). Record commands,
   exit codes and PASS lines.
-- [x] T012 Review remediation (technical and UX reviews of 962034c8): remove the unproven
+- [ ] T012 Review remediation (technical and UX reviews of 962034c8): remove the unproven
   "XLSX values convert back to whole minutes" claim (M1); describe the layers as the same
   route and query template over parallel fixtures (F1, L4); assert policy 0 and add S6
   (L2, L3); correct the P9 citations (L3). Then, one at a time on the committed head:
