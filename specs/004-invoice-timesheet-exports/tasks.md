@@ -37,7 +37,7 @@ source; tasks refer to it rather than repeat it.
   - the independent re-reviews accepted the changed source;
   - the browser suite source is unchanged since 962034c8, so its runs there carry forward.
 - **Native acceptance**, by the coordinator on the 962034c8 package (unchanged production
-  code at 86c60ce1), recorded in the root `.scratch/r02-native-artifacts-20261025.md`:
+  code at 86c60ce1), recorded in the coordinator's local notes:
   - all 4 stages pass, covering 16 filter states;
   - CSV by click and XLSX by Enter each returned a 200 response carrying the visible query;
   - no download event fired (microsoft/playwright#39253);
