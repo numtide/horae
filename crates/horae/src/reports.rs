@@ -26,6 +26,9 @@ mod privacy_tests;
 #[cfg(test)]
 mod export_params_tests;
 
+#[cfg(test)]
+pub(crate) mod xlsx_cells;
+
 /// `login_redirect_guard` lets `/api/` through, because everything else there is
 /// a server function that checks its own session. These handlers must too. The
 /// `active` check is what revokes a deactivated user's still-live session

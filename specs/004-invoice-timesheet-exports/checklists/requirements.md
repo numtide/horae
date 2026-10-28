@@ -33,3 +33,5 @@
 
 - The period-accuracy decision (exact billed entries via invoice lines) and the amounts-are-recorded-not-recomputed decision are resolved in Clarifications and Assumptions; no open questions remain.
 - Orphaned-entry display (a billed line whose time entry was later deleted) is intentionally left as a design detail for planning; the spec fixes the invariant (totals stay consistent with the invoice) but not the exact rendering.
+- 2026-10-25: rechecked all 16 items against the added section "Acceptance Increment: Legacy Report Export Reconciliation". The increment adds acceptance scenarios and measures only. FR-001 to FR-020 are unchanged, it has no [NEEDS CLARIFICATION] markers, and it names formats (CSV, Excel), not implementation details. All items still pass.
+- 2026-10-25 remediation: rechecked after adding the project-only scenario, the reworded SC-L02 (files hold entry rows; totals are reconciled from them), SC-L04, and the recorded statuses of the invoice backup and open analyze finding D1. 16/16 pass. Nothing here waives the global 015 checklist.

@@ -125,7 +125,7 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 
 ## Domain invariants (from the Horae Constitution — do not violate)
 
-- Durations are stored as **integer minutes**; money as **integer minor units (cents) + ISO currency code** — never floats.
+- Durations are stored as **integer minutes**; money as **integer minor units (cents) + ISO currency code** — never floats. The one exception: an XLSX (Excel) export may convert final integer minutes to a numeric hours cell at write time (Constitution I).
 - Primary keys are **UUID v7** (time-ordered).
 - **PostgreSQL only** (no SQLite). Migrations live in `crates/horae/migrations/` and apply via `sqlx` / `migrate run`.
 - Single organization for now, but every table keeps an `org_id` FK so multi-org is a later flip.

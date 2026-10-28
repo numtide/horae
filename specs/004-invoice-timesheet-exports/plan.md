@@ -93,3 +93,133 @@ crates/horae/tests/integration.rs   # filtered-export scoping; backup entry set 
 ## Complexity Tracking
 
 No constitutional violations — section intentionally empty.
+
+## Acceptance Increment: Legacy Report Export Reconciliation (2026-10-25)
+
+Scope: the spec section of the same name. This adds tests only: no product code, query,
+column, migration or dependency changes. The Phase 0 decisions are in `research.md` (L1–L4),
+the run guide is in `quickstart.md` (Scenario 5), and the tasks are in `tasks.md`.
+
+### Technical Context
+
+- **Surface under test**: `pages/reports.rs` `LegacyReports` (rendered while
+  `permission_policy_version = 0`) and its Export CSV/XLSX links to
+  `/api/reports/export/{csv,xlsx}`. CSV is streamed by `reports/streaming.rs::entries`;
+  XLSX is built by `limits::time::entries` and `entries_xlsx`.
+- **Values**: Hours = `te.minutes`; Rounded = `effective_minutes(minutes, frozen, org.round_minutes, org.round_dir)`. On the Time tab, Billable hrs sums rounded minutes
+  where the entry is billable. The page and CSV show `format_hours2` (half-up to two
+  decimals); XLSX writes `minutes / 60` as a number.
+- **Harnesses**: the existing browser runner `tests/browser/run-design-checks.sh`
+  (disposable `/tmp/horae-browser.*` PostgreSQL, seeded, on port 8093, Playwright) and the existing
+  Rust HTTP harness `server_fns/importers/authorization_tests` (`Api`: real export routes,
+  session cookies, `#[sqlx::test]` throwaway database).
+- **Readers**: CSV with the `csv` crate (Rust) and an exact expected-text comparison
+  (browser). XLSX with the existing `zip` dev-dependency and the existing test-only cell
+  helpers (`xlsx_part`, `assert_cell`, `assert_text_cell`), extracted from the
+  `reports/limits.rs` tests into a shared `#[cfg(test)]` module. No new reader, helper or
+  dependency.
+
+### Constitution Check (pre- and post-design)
+
+| Principle | Assessment |
+|---|---|
+| I. Exactness | ✅ for the new tests: expectations are integer fixture minutes, totals are summed as integers, and XLSX number cells are compared as exact text literals, so tests do no float arithmetic. ⚠️ **XLSX-D1, decided 2026-10-28, verification pending**: the existing `entries_xlsx` writes durations as `f64` (`minutes / 60`) at the final cell write. Constitution 2.0.0 Principle I now permits exactly that step for spreadsheet duration cells. The cell is an approximate presentation, and the exact source minutes remain the authority. This increment changes no writer; it does not claim exact fractional hours or a round trip to minutes. Conformance of the writers to the exception's conditions still awaits independent verification. |
+| II. Domain Purity | ✅ No domain logic is added. |
+| III. Single Datastore | ✅ PostgreSQL only; fixtures live in disposable databases; no migration. `.sqlx/` is regenerated for the new test queries. |
+| IV. Mutations Through Server Functions | ✅ Read-only download routes are only read; fixture SQL runs in test setup. |
+| V. Reproducible Builds | ✅ Runs under the existing flake checks (`tests`, `browser`); `nix fmt` gate. |
+
+Result: PASS for the test-only work. XLSX-D1 is now an approved owner decision under Constitution 2.0.0 rather than an unwaived deviation. Its conformance check is pending, so the parent package is not claimed complete, and nothing goes in Complexity Tracking.
+
+### Fixture (expectations shared by both layers)
+
+Each layer builds its own parallel copy of this fixture in its own disposable database:
+the same names, minutes, flags and order, but different UUIDs (only the ascending order
+of entry IDs matters). Every name is created by the fixture: clients "Export client A" and "Export client B",
+projects "Export alpha" and "Export beta" (client A) and "Export gamma" (client B), task
+"Export task", and user "Export colleague". The actor is the session user: "Admin User"
+in the browser (the demo seed's admin) and "Test User" in Rust (`test_seed::seed`,
+Manager). Organization rounding: 15 minutes, nearest. The browser asserts the seed's
+setting; Rust sets it. Period: 2041-03-04 to 2041-03-06. Rows are ordered by date, project
+name, task name, then entry ID; fixture IDs ascend E1 → E6, which fixes E1 before E2 and E3
+before E4.
+
+| Entry | Date | Client / project | User | Raw | Rounded | Billable | XLSX E / F text | Notes |
+|---|---|---|---|---|---|---|---|---|
+| E1 | 03-04 | A / Export alpha | actor | 50 | 45 | Yes | `0.8333333333333334` / `0.75` | `Legacy export, "one"` |
+| E2 | 03-04 | A / Export alpha | Export colleague | 50 | 45 | Yes | `0.8333333333333334` / `0.75` | `Legacy export <two> & more` |
+| E3 | 03-05 | A / Export beta | actor | 53 | 60 | No | `0.8833333333333333` / `1` | `Legacy export three` |
+| E4 | 03-05 | A / Export beta | actor | 7 | 0 | Yes | `0.11666666666666667` / `0` | none (screen "—", file empty) |
+| E5 | 03-06 | B / Export gamma | actor | 90 | 90 | Yes | `1.5` / `1.5` | `Legacy export excluded` |
+| E6 | 03-07 | A / Export alpha | actor | 60 | 60 | Yes | n/a | `Legacy export outside` (out of period) |
+
+The XLSX text is what the existing writer emits for `minutes / 60` (Rust `f64` display).
+T004's first run confirms the strings. A different string is either a test-literal
+correction, reviewed before it is accepted, or a product change to report; it is never
+tolerance-matched.
+
+Filter states and expected entries (raw / rounded / billable-rounded minutes → displayed):
+
+- No filter: E1–E5, 250 / 240 / 180 → 4.17 / 4.00 / 3.00. By project: alpha
+  100/90/90 → 1.67/1.50/1.50, beta 60/60/0 → 1.00/1.00/0.00, gamma 90/90/90 → 1.50/1.50/1.50.
+- Project only (gamma, no client): E5, 90 / 90 / 90 → 1.50 / 1.50 / 1.50.
+- Client A only: E1–E4, 160 / 150 / 90 → 2.67 / 2.50 / 1.50. The raw row values 0.83 + 0.83 +
+  0.88 + 0.12 add up to 2.66, which is not 2.67; the total is correct because it is summed in minutes.
+- Client A and project beta: E3–E4, 60 / 60 / 0 → 1.00 / 1.00 / 0.00.
+- Teammate only (Export colleague, no client or project): E2, 50 / 45 / 45 → 0.83 / 0.75 /
+  0.75. By project: alpha 0.83/0.75/0.75. E1 shares E2's date and project, so only the
+  person filter excludes it.
+- Client A and project gamma (impossible): no rows; direct link only, because the page's
+  project list narrows to the chosen client.
+
+### Proof Map
+
+| Proof | Layer | What it shows | Requirements |
+|---|---|---|---|
+The four visible states (S1 no filter, S2 project gamma only, S3 client A only, S4 client A
+and project beta) are covered in both layers. S5, the impossible client A and project gamma
+combination, and S6, another organization's client, are Rust only. S7, teammate "Export
+colleague" only, is covered in both layers. It is regression coverage for the existing
+Teammate filter and traces to no FR; the Requirements column applies to S1–S4.
+
+| Proof | Layer | What it shows | Requirements |
+|---|---|---|---|
+| P1 | Browser | For S1–S4 and S7, both Export links equal `/api/reports/export/{csv,xlsx}?from=2041-03-04&to=2041-03-06` plus exactly the visible filters (`&project_id=gamma`; `&client_id=A`; `&client_id=A&project_id=beta`; `&user_id=colleague`) and differ only in path | FR-011, FR-013, FR-017 |
+| P2 | Browser | For S1–S4 and S7, Time-tab rows (by label) and the total row's Total, Rounded and Billable hrs equal the fixture constants | FR-019, 001 SC-007 |
+| P3 | Browser | For S1–S4 and S7, the Detailed-tab rows (8 cells each, in order) equal the expected entries; excluded entries (E5 in S3/S4, E1–E4 in S2, E1 and E3–E5 in S7, E6 always) are absent | FR-013, SC-L03 |
+| P4 | Browser | For S1–S4 and S7, clicking Export CSV (real download event) yields `timesheet.csv` whose bytes equal the CSV built from the constants. S1 is the regression proof that the export is unchanged | FR-011–FR-013, FR-012, FR-015, SC-L01, SC-L04 |
+| P5 | Browser | For S1–S4 and S7, clicking Export XLSX yields `timesheet.xlsx` starting with `PK`. Contents are not decoded in the browser; see P6 | FR-015 (link only) |
+| P6 | Rust | For every state S1–S7 (S5 and S6 hold header rows only; see P8, P9), using the same route and query template as P1 over the Rust fixture's UUIDs: the XLSX row count is entries + 1; A–D, G and H match via `assert_text_cell`; E and F match via `assert_cell` with the exact literal for each entry. Each row maps to one fixture entry, and that entry's integer minutes give the raw, rounded and billable-rounded sums | FR-011–FR-015, FR-019, SC-L01, SC-L02, SC-L04 |
+| P7 | Rust | For every state S1–S7, the CSV (parsed with `csv`) equals the literal rows, so each row matches one fixture entry. The minute totals are a fixture self-check: the matched entries' integer minutes are summed and compared with the hand-derived totals, not read from the file | FR-015, SC-L02 |
+| P8 | Rust | S5 gives a header-only CSV and a header-only XLSX, both 200. The Rust fixture's organization is asserted to be at policy 0 before any download | FR-014, SC-006 |
+| P9 | Rust + existing | S6 (Rust only): `client_id` naming another organization's client that has an entry in the period gives header-only files, both 200; that entry never appears in S1. Existing tests, unchanged: `authorization_tests/time_reports.rs` covers 401/403, role and policy binding (its foreign-ID downloads run after a switch to policy 1), and legacy-path tenant scoping is covered at function level in `reports/streaming/database_tests.rs` and the `reports/limits.rs` tests | FR-018 |
+
+- **G1 (FR-012 / SC-005)**: no file from before this change is stored. The proof that the
+  unfiltered export is unchanged is the exact expected S1 content (P4 bytes, P6 cells), fixed
+  at the current product behavior. Any later change to the unfiltered export fails it.
+- **I1**: the plan Summary and the route contract above are historical text and still
+  describe `fetch_entries`. The current paths are the ones in this section's Technical
+  Context. The historical text is kept as written.
+- **Residual**: the browser proves the XLSX link and that a file downloads. XLSX contents
+  are proven by the Rust layer for the same route and query template over its own parallel
+  fixture, because the browser environment has no XLSX reader and adding one is outside
+  scope. The XLSX number cells are checked as exact text only; that they convert back to
+  whole minutes is not claimed (XLSX-D1).
+
+### Structure
+
+```text
+crates/horae/src/reports.rs                      # + #[cfg(test)] pub(crate) mod xlsx_cells;
+crates/horae/src/reports/xlsx_cells.rs           # NEW: xlsx_part, assert_cell, assert_text_cell moved
+                                                 #      verbatim from limits.rs tests (no new helper)
+crates/horae/src/reports/limits.rs               # tests import the moved helpers (no behavior change)
+crates/horae/src/server_fns/importers/authorization_tests/time_reports.rs
+                                                 # + mod legacy_exports; call from check()
+crates/horae/src/server_fns/importers/authorization_tests/time_reports/legacy_exports.rs  # NEW (P6–P8)
+crates/horae/tests/browser/reports-legacy-exports.cjs                                     # NEW (P1–P5)
+crates/horae/tests/browser/run-design-checks.sh  # add the suite after reports-currency-totals
+                                                 # (it needs policy 0, before reports-permissions)
+.sqlx/                                           # regenerated for the new test queries
+```
+
+No change to `nix/checks/browser.nix`, product code or ignore files.
