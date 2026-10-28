@@ -44,6 +44,7 @@ owner decision:
 
 - Week membership: an approval belongs to the selected week exactly when its
   period starts on that week's first day. Evidence at `8a79636`:
+
   - `submit_user_week` is the only non-test writer of `approvals`. It
     validates that the start is the organization's first weekday and that the
     end is start + 6.

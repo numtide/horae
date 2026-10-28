@@ -22,10 +22,10 @@ Prev, This week and Next push `/approvals?week=<canonical start>`.
 Checks run in this order, after `require_manager()` (403 for non-managers, as
 today). The first failure returns:
 
-1. `week_start` is not `YYYY-MM-DD`: `BAD_REQUEST`.
-1. `week_bounds(week_start, org first weekday)` is `None`: `BAD_REQUEST`, "week_start is out of range".
-1. `week_start` is not its own week's start: `BAD_REQUEST`, "week_start must match the organization's first weekday".
-1. `status` is not an entry state: `BAD_REQUEST` (existing `parse_enum`).
+1. `week_start` is not `YYYY-MM-DD`: `BAD_REQUEST`, "Invalid week_start (use YYYY-MM-DD)". This is mapped locally; the shared `parse_date` returns `INTERNAL_ERROR`, and it is not changed.
+1. `week_start`'s weekday is not the organization's first weekday: `BAD_REQUEST`, "week_start must match the organization's first weekday". This uses the same numeric comparison as `submit_user_week`.
+1. `week_start + 6 days` is not representable: `BAD_REQUEST`, "week_start is out of range". For an aligned start this equals `week_bounds(week_start, first_day)` being `None`.
+1. `status` is not an entry state: the existing `parse_enum` error, unchanged.
 
 Result rows are `a.org_id = manager.org_id AND a.period_start = week_start`,
 filtered by the optional `status`, ordered by `u.name, a.id`. Each row keeps the

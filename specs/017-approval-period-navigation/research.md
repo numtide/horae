@@ -6,16 +6,19 @@ All findings below were taken read-only at `8a796361`.
 
 - **Decision**: a week lists the approvals whose `period_start` equals the
   selected week's first day.
+
 - **Rationale**: `server_fns/approvals.rs::submit_user_week` is the only
   non-test writer of `approvals`. It rejects a start that is not the
   organization's first weekday and sets `period_end = start + 6`. Nothing
   outside tests updates `organizations.week_start`. Its only writers are:
+
   - the column default (migration `0001`);
   - `init.rs`, which uses the default;
   - `seed.rs`, which writes 1.
 
   No importer, CLI command or migration inserts approvals. So every supported
   row aligns with exactly one week.
+
 - **Alternatives considered**: matching by overlap was rejected. If a row were
   ever misaligned, overlap would put dates outside the selected week into
   "Approve visible", contrary to 015 FR-009 ("grouping MUST NOT widen" the
@@ -59,7 +62,9 @@ All findings below were taken read-only at `8a796361`.
 - **Decision**: add one pure helper to `horae-core`:
   `week::week_bounds(date, first_day) -> Option<(NaiveDate, NaiveDate)>`. It
   returns the aligned start and start + 6 days, or `None` when either is not
-  representable. The page and the server both use it.
+  representable. The page uses it. The server validates an already aligned
+  start with the same `checked_add_days(6)`, after the weekday comparison it
+  shares with `submit_user_week`.
 - **Rationale**: `week::week_start` already returns `Option` for underflow, but
   nothing checks that the seventh day exists. The submission path does its own
   `checked_add_days(6)`. Keeping the check in core gives it unit tests with no
