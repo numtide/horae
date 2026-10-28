@@ -18,7 +18,7 @@ the product bug before widening scope.
 **Fixture, states S1–S7 and proofs P1–P9**: plan.md "Acceptance Increment" is the only
 source; tasks refer to it rather than repeat it.
 
-**Status (2026-10-25)**: evidence logs are in `/tmp/horae-r02.vcDtiK/`.
+**Status (2026-10-25)**: the results below were recorded from local logs that are not kept in the repository.
 
 - **T001–T010**:
   - The work was authored and committed up to 962034c8.
@@ -29,7 +29,7 @@ source; tasks refer to it rather than repeat it.
     lines) ran at committed 962034c8.
   - The browser suite's deliberate RED (expected 2.66, actual 2.67) was restored to the
     committed bytes without a rerun.
-- **T012**, on committed 86c60ce1 (`t012-head.txt`):
+- **T012**, on committed 86c60ce1:
   - the focused Rust test: 1 passed;
   - the `SQLX_OFFLINE=true` all-targets `--no-run` build: exit 0;
   - strict clippy: exit 0;
