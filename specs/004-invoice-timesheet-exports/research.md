@@ -109,8 +109,9 @@ those entries' integer minutes. The tests do no float parsing or arithmetic.
 
 **Rationale**: `format_hours2` rounds half-up per value, so adding displayed decimals is
 not a valid check; summing minutes is (Constitution I, FR-019). No rounding behavior
-changes. The writer's use of `f64` remains open analyze finding D1 (spec, plan; not this file's D1) and is not
-certified by these tests.
+changes. The writer's `f64` step is XLSX-D1 (spec, plan; not this file's D1): an approved
+owner decision under Constitution 2.0.0 whose conformance check is pending. These tests do not
+certify it.
 
 ## L4 — XLSX reading utility
 
@@ -121,3 +122,21 @@ certified by these tests.
 **Rationale**: One shared copy of the existing reading pattern, with no new parser and no
 new dependency. The other inline `zip` readers in the authorization tests are left as
 they are (out of scope).
+
+## L5 — Excel duration cells (XLSX-D1, 2026-10-28)
+
+**Decision**: The owner chose to keep numeric decimal hours in Excel duration cells (timesheet
+Hours and Rounded Hours, invoice Hours). Constitution 2.0.0 Principle I permits the one
+floating-point step this needs: converting final integer minutes to hours where the
+spreadsheet library writes the cell. Verifying that the existing writers meet the exception's
+conditions is still pending.
+
+**Rationale**: Spreadsheet number cells are binary floating point, so n/60 hours cannot be
+stored exactly in any numeric cell. Users need hours they can sum, and Harvest's detailed
+Excel export was observed to use numeric hours cells. Integer minutes stay the authority for
+storage, rounding and totals, and each cell is only an approximate presentation of them.
+
+**Alternatives considered**: exact two-decimal text matching the CSV (rejected: a spreadsheet
+cannot sum it); integer minutes as numbers (rejected: the unit and headers would differ from
+hours); a `=minutes/60` formula (rejected: the file still holds a floating-point duration,
+and readers that do not recalculate show the cached value).

@@ -8,8 +8,9 @@ Reconciliation (2026-10-25)**. It proves User Story 2 (FR-011 to FR-015, FR-017 
 SC-005, SC-006, SC-L01 to SC-L04) on the legacy Reports page; T013 adds regression
 coverage for the existing Teammate filter, which no FR names. It does not task User Story 1, User Story 3,
 FR-001 to FR-010, FR-016 or FR-020. The invoice backup is not implemented, and it is
-neither claimed nor waived here (spec, Evidence Rules). Open analyze finding D1 (`f64` XLSX
-durations) is not waived or resolved by these tasks.
+neither claimed nor waived here (spec, Evidence Rules). XLSX-D1 (`f64` XLSX durations) is an
+approved decision under Constitution 2.0.0 whose conformance check is still pending; these
+tasks change no writer and do not resolve it.
 
 **Tests**: requested. The deliverable of this increment is tests; no product code changes.
 If an assertion fails because the product disagrees with the fixture, stop and report
@@ -164,8 +165,8 @@ disposable database.
   - the relevant browser and native acceptance by the coordinator;
   - a final full local `nix flake check` on the candidate head, with one build owner;
   - mandatory CI passing on the exact published head;
-  - analyze findings D1 (`f64` XLSX durations) and C1 (invoice backup not implemented)
-    reported as open, not as resolved.
+  - XLSX-D1 (`f64` XLSX durations) reported as decided with its conformance check pending,
+    and C1 (invoice backup not implemented) reported as open; neither is reported as resolved.
     No push, PR or merge before coordinator acceptance.
 
 ## Dependencies and order

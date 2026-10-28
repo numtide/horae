@@ -123,13 +123,13 @@ the run guide is in `quickstart.md` (Scenario 5), and the tasks are in `tasks.md
 
 | Principle | Assessment |
 |---|---|
-| I. Exactness | ✅ for the new tests: expectations are integer fixture minutes, totals are summed as integers, and XLSX number cells are compared as exact text literals, so tests do no float arithmetic. ⚠️ **Open analyze finding D1, not waived**: the existing `entries_xlsx` writes durations as `f64` (`minutes / 60`). This increment does not change that behavior and does not certify it; it is left for independent review. |
+| I. Exactness | ✅ for the new tests: expectations are integer fixture minutes, totals are summed as integers, and XLSX number cells are compared as exact text literals, so tests do no float arithmetic. ⚠️ **XLSX-D1, decided 2026-10-28, verification pending**: the existing `entries_xlsx` writes durations as `f64` (`minutes / 60`) at the final cell write. Constitution 2.0.0 Principle I now permits exactly that step for spreadsheet duration cells. The cell is an approximate presentation, and the exact source minutes remain the authority. This increment changes no writer; it does not claim exact fractional hours or a round trip to minutes. Conformance of the writers to the exception's conditions still awaits independent verification. |
 | II. Domain Purity | ✅ No domain logic is added. |
 | III. Single Datastore | ✅ PostgreSQL only; fixtures live in disposable databases; no migration. `.sqlx/` is regenerated for the new test queries. |
 | IV. Mutations Through Server Functions | ✅ Read-only download routes are only read; fixture SQL runs in test setup. |
 | V. Reproducible Builds | ✅ Runs under the existing flake checks (`tests`, `browser`); `nix fmt` gate. |
 
-Result: PASS for the test-only work. Analyze finding D1 stays open: it is a pre-existing deviation, not one introduced here, so this increment does not justify it in Complexity Tracking.
+Result: PASS for the test-only work. XLSX-D1 is now an approved owner decision under Constitution 2.0.0 rather than an unwaived deviation. Its conformance check is pending, so the parent package is not claimed complete, and nothing goes in Complexity Tracking.
 
 ### Fixture (expectations shared by both layers)
 
@@ -204,7 +204,7 @@ Teammate filter and traces to no FR; the Requirements column applies to S1–S4.
   are proven by the Rust layer for the same route and query template over its own parallel
   fixture, because the browser environment has no XLSX reader and adding one is outside
   scope. The XLSX number cells are checked as exact text only; that they convert back to
-  whole minutes is not claimed (analyze finding D1).
+  whole minutes is not claimed (XLSX-D1).
 
 ### Structure
 

@@ -25,6 +25,10 @@ These clarifications apply only to the legacy report export acceptance increment
 - Q: Does the increment change how hours are rounded or displayed? → A: No. Totals are summed in whole minutes and only then shown to two decimals, so a sum of displayed row values can differ from the displayed total.
 - Q: What counts as evidence? → A: Expected values come from fixed fixture data, never from the report's own response. A browser check is required to prove both download links carry the visible period and filters, and to compare on-screen rows and totals with the fixture. File contents must be proven for both CSV and Excel, and each proof must state which link it covers.
 
+### Session 2026-10-28
+
+- Q: How should Excel duration cells (timesheet Hours and Rounded Hours, invoice Hours) be written? → A: The owner decided to keep numeric decimal hours that a spreadsheet can sum. The only floating-point step allowed is the final conversion of integer minutes that the spreadsheet library requires (Constitution 2.0.0, Principle I). Integer storage, calculation, rounding and totals stay mandatory, and CSV, money, precision and rounding behavior are unchanged. For reference, Harvest's detailed Excel export was observed to use numeric hours cells; that observation is external context, not a Horae test result.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Attach the hours behind an invoice (Priority: P1)
@@ -216,8 +220,7 @@ exercised here.
    shown in hours. The displayed per-row values may therefore add up to a slightly
    different figure than the displayed total, and this is correct. The Excel duration
    values are checked as the exact text the export writes. This increment does not claim
-   that they convert back to exact whole minutes; that question is part of the open
-   floating-point finding below.
+   that they convert back to exact whole minutes (see the Excel duration decision below).
 
 ### Measures
 
@@ -242,7 +245,12 @@ exercised here.
 - Status of other work in this package, recorded here without being tasked: the invoice
   timesheet backup (User Stories 1 and 3, FR-001 to FR-010, FR-016, FR-020) is not
   implemented. This increment neither waives it nor claims it.
-- Open finding, not waived: the Excel export writes each duration as a floating-point
-  number (minutes ÷ 60). Constitution principle I forbids floating point for durations.
-  This existing behavior is left for independent review; this increment neither changes
-  it nor treats it as compliant, and passing tests do not resolve it.
+- Excel duration decision (XLSX-D1, 2026-10-28), verification pending: the Excel export
+  keeps numeric hours cells that can be summed in a spreadsheet. Each is written as
+  minutes ÷ 60 through the spreadsheet library's floating-point API, under the narrow
+  exception in Constitution 2.0.0 Principle I. Storage, rounding and totals stay in integer
+  minutes, and those minutes remain the authority. Each cell is an approximate
+  presentation of them; no exact fractional-hours value and no round trip to minutes is
+  claimed. Nobody has yet independently verified that the existing writers meet the
+  exception's conditions, and passing tests do not establish that. The decision changes no
+  CSV, money, precision or rounding behavior.
