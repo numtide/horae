@@ -9,12 +9,14 @@ Anything not listed here keeps its behaviour at `8a796361`.
 |----------------|---------------------|
 | absent, empty or not `YYYY-MM-DD` | `week_bounds(today_utc, first_day).0` |
 | any valid date D | `week_bounds(D, first_day).0` (no redirect) |
-| D whose week is not representable | none: inline error "This week is outside the supported date range.", no list request, both pager directions disabled |
+| D whose week is not representable | none: inline error "This week is outside the supported date range.", no list request, no pager; only a "This week" link |
 
 Prev, This week and Next push `/approvals?week=<canonical start>`.
 
-- Prev is disabled when the start minus 7 days has no representable week.
-- Next is disabled when the start plus 7 days has no representable week.
+- For a representable week, Prev is disabled when the start minus 7 days has
+  no representable week.
+- For a representable week, Next is disabled when the start plus 7 days has no
+  representable week.
 - The sidebar link targets `Route::Approvals { week: String::new() }`.
 
 ## Server: `list_approvals(status: Option<String>, week_start: String)`
@@ -49,7 +51,7 @@ unchanged, including:
 | not manager | existing "Manager or admin access is required…" card | no `list_approvals` |
 | manager, `get_week_start` loading | "Loading…" | no `list_approvals` |
 | manager, `get_week_start` failed | error alert with its message | no `list_approvals` |
-| manager, week unrepresentable | the inline error above | no `list_approvals` |
+| manager, week unrepresentable | the inline error and "This week" link above, no pager | no `list_approvals` |
 | list response for a different start than selected | "Loading…" (never the other week's rows) | the selected week's request |
 | list loaded, empty | "No approvals found." | — |
 | list loaded | the total card, rows, and bulk bar for that week | — |

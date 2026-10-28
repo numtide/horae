@@ -14,6 +14,7 @@ SQLX_OFFLINE=true cargo test -p horae --features server --test approval_labels_u
 ## Disposable database (heavy slot)
 
 ```sh
+DATABASE_URL=… cargo test -p horae --features server                         # whole suite, including the HTTP authorization checks
 DATABASE_URL=… cargo test -p horae --features server server_fns::approvals   # T-S1..T-S4 and the existing submission/isolation tests
 DATABASE_URL=… cargo test -p horae --features server --test integration approval   # existing integration approval tests, unmodified
 touch crates/horae/src/main.rs crates/horae/tests/*.rs
@@ -29,6 +30,28 @@ Expected results:
   `list_approvals`.
 - The browser suite `responsive-layout` (which visits `/approvals`) passes
   unmodified.
+
+## Operator precondition (read-only, existing databases)
+
+Approvals submitted before `a55b3a47` (2026-09-09) may start on a day other
+than the organization's first weekday. The weekly page shows such a row under
+no week. Before relying on the page, an operator can list them; this query
+changes nothing:
+
+```sql
+BEGIN READ ONLY;
+SELECT a.org_id, a.id, a.user_id, a.state, a.period_start, a.period_end,
+       o.week_start, EXTRACT(ISODOW FROM a.period_start)::int AS start_isodow
+FROM approvals a JOIN organizations o ON o.id = a.org_id
+WHERE EXTRACT(ISODOW FROM a.period_start) <> o.week_start
+   OR a.period_end <> a.period_start + 6
+ORDER BY a.org_id, a.period_start, a.id;
+ROLLBACK;
+```
+
+No rows means that snapshot meets the precondition. It is not a guarantee for
+other databases. If rows are returned, this feature has no remedy: what to do
+with them is an open owner decision.
 
 ## Native smoke (root's Chrome, disposable local Horae DB only)
 

@@ -16,8 +16,15 @@ All findings below were taken read-only at `8a796361`.
   - `init.rs`, which uses the default;
   - `seed.rs`, which writes 1.
 
-  No importer, CLI command or migration inserts approvals. So every supported
-  row aligns with exactly one week.
+  No importer, CLI command or migration inserts approvals. So every row written
+  since `a55b3a47` (2026-09-09) aligns with exactly one week.
+
+- **Historical rows (unresolved)**: before `a55b3a47`, `submit_week` accepted
+  any start date with end = start + 6, and no migration normalizes those rows.
+  An older database may hold misaligned approvals. Exact matching shows them
+  under no week, and no supported screen lists every period any more.
+  Detection is a read-only operator precondition (quickstart.md). How to
+  handle any rows found is an open owner decision.
 
 - **Alternatives considered**: matching by overlap was rejected. If a row were
   ever misaligned, overlap would put dates outside the selected week into
@@ -29,8 +36,8 @@ All findings below were taken read-only at `8a796361`.
 - **Decision**: with no usable week in the address, show the week containing
   today, aligned to the organization's first weekday. No indicator for pending
   work in other weeks.
-- **Rationale**: a read-only Harvest observation on 2026-10-28 (root checkout
-  `.scratch/harvest-approval-default-20261028.md`) found that a bare
+- **Rationale**: a read-only Harvest observation on 2026-10-28 (notes kept
+  locally, outside the repository, because they hold account identity) found that a bare
   `/approvals` opens the current week, even after the previous week had been
   viewed.
 - **Today's date**: taken from `chrono::Utc::now().date_naive()`, as in

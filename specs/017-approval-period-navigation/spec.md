@@ -43,7 +43,8 @@ No owner answers are recorded. The item below rests on code evidence, not an
 owner decision:
 
 - Week membership: an approval belongs to the selected week exactly when its
-  period starts on that week's first day. Evidence at `8a79636`:
+  period starts on that week's first day. Evidence at `8a79636`, which holds
+  for rows written since `a55b3a47` (2026-09-09):
 
   - `submit_user_week` is the only non-test writer of `approvals`. It
     validates that the start is the organization's first weekday and that the
@@ -52,6 +53,15 @@ owner decision:
     the column default, `init` (default), `seed` (1) and the branding update
     (not that column).
   - No importer, CLI command or migration inserts approvals.
+
+  Before `a55b3a47`, `submit_week` accepted any start date (with end = start +
+  6), and no migration normalizes those rows. A database that took submissions
+  then may hold approvals whose start is not the organization's first weekday.
+  Exact matching shows such a row under no week, so it cannot be approved or
+  reopened from this page. Detecting them is a read-only operator precondition
+  (quickstart.md, "Operator precondition"). How to handle any that exist is an
+  **open owner decision**: no overlap, normalization, migration or risk
+  acceptance is chosen here.
 
   Overlap matching is not used: it could include dates outside the selected
   week in a bulk approval (015 FR-009).
@@ -67,8 +77,8 @@ owner decision:
     Bare `/approvals` redirected to the current week (26 Oct – 1 Nov 2026, Week,
     Pending Approval, Person). After stepping to the previous week, a second
     bare visit again opened the current week, not the remembered one.
-  - Evidence: root checkout `.scratch/harvest-approval-default-20261028.md` and
-    its listed snapshots (they hold account identity and stay outside Git).
+  - Evidence: notes and snapshots recorded locally during that observation.
+    They hold account identity and are not kept in the repository.
   - Limitation: the observed current week was empty. Whether Harvest shows an
     indicator for older pending work is **unverified**. This feature neither
     adds one nor claims Harvest lacks one.
@@ -267,7 +277,8 @@ response harness.
 - Harvest's approvals API returns inclusive date-range buckets. Its support
   article ([Submitting and approving timesheets](https://support.getharvest.com/hc/en-us/articles/360048181832-Submitting-and-approving-timesheets))
   describes period-based review. Neither defines a rule for historical
-  misaligned rows. With none possible in Horae, none is adopted.
+  misaligned rows. Horae can no longer create them, but older databases may
+  hold some (see Clarifications), and no rule is adopted for them here.
 - Harvest default navigation (observed 2026-10-28, see Clarifications): a bare
   visit opens the current week with Pending Approval, which matches Horae's
   existing default status. Harvest's indicator for older pending work, if any,

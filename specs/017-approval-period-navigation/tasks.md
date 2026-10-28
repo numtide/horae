@@ -37,7 +37,8 @@ until its red tests can actually run, which needs the heavy slot.
 
 - [x] T003 Implement `pub fn week_bounds(date, first_day) -> Option<(NaiveDate, NaiveDate)>` in crates/core/src/week.rs, reusing `week_start` and `checked_add_days(6)` (T002 green).
 
-  Green: `cargo test -p horae-core` passed 237 tests. Core all-targets clippy
+  Green: `cargo test -p horae-core` passed 237 tests (seen in the terminal; no
+  log of this run was kept, so it should be re-run). Core all-targets clippy
   with `-D warnings` was clean, and `rustfmt --check` was clean. Run in the
   offline dev shell with `CARGO_BUILD_JOBS=1` and a scratch `CARGO_TARGET_DIR`.
 
@@ -137,6 +138,12 @@ until its red tests can actually run, which needs the heavy slot.
 - [ ] T020 Root native smoke per quickstart.md.
 - [ ] T021 Two independent reviews of the exact head, then an exact-head `nix flake check`. Small unsigned commits with no AI attribution. No push or PR before root collects.
 
+### Review fixes (second review)
+
+- [ ] T022 H1: crates/horae/src/server_fns/importers/authorization_tests/approval_labels.rs posted `list_approvals` without `week_start` at all five call sites. Each now sends the fixture's Monday, `2026-09-21`, and the authorization assertions are unchanged. The cross-organization row starts on `2026-09-28`, outside that week, so one added request checks it is hidden in its own week too. Pre-fix: the already-built test executable, run against the private cluster with no compilation, failed `job_endpoints_enforce_session_role_and_organization`: `list_approvals` returned 500, "missing field `week_start`". Post-fix: not run yet; it needs the full `cargo test -p horae --features server`.
+- [ ] T023 M2: in crates/horae/tests/approval_labels_ui.rs, T-U3 compared hrefs only. During the week of 2026-10-26, Next and This week lead to the same week, so a missing Next still passed. Each link is now found by its name (`aria-label` for Previous and Next, the text for This week), and the test asserts there is exactly one of each and checks its href. Not run yet.
+- [ ] T024 M1 (open owner decision): approvals submitted before `a55b3a47` may be misaligned, and exact matching hides them. The read-only detection query is in quickstart.md, "Operator precondition". No overlap, normalization, migration or mutation change is made.
+
 ## Evidence (2026-10-28)
 
 All runs used:
@@ -146,8 +153,10 @@ All runs used:
 - the offline dev shell;
 - a scratch `CARGO_TARGET_DIR`.
 
-**Status, 2026-10-28**: T001–T019 are done. T020 (native smoke) and T021
-(reviews, exact-head `nix flake check`) are open.
+**Status, 2026-10-28**: T001–T019 are done. T020 (native smoke), T021
+(reviews, exact-head `nix flake check`) and the review fixes T022–T024 are
+open. The server runs below were filtered to `server_fns::approvals`. They did
+not cover the HTTP authorization check that H1 broke.
 
 ### Red → green
 
@@ -175,7 +184,9 @@ behaviour:
 ### Regressions and gates
 
 - `cargo test --test integration approv`: 5/5.
-- Existing approval unit, submission and isolation tests: unchanged and green.
+- Existing approval unit, submission and isolation tests in
+  `server_fns::approvals`: unchanged and green. The full server suite was not
+  run (see T022).
 - `cargo sqlx prepare` (with the `touch` step) replaced exactly one descriptor:
   `be742e50…` removed, `ab8a7e02…` added, both the `list_approvals` query. The
   org read reuses `get_week_start`'s query text.
@@ -191,8 +202,8 @@ behaviour:
 - On that package, `run-design-checks.sh responsive-layout` exited 0 with
   60/60 PASS, including `/approvals` headers at 320, 390, 768, 1280 and 1440px.
   It used the runner's own temporary database and port 8093.
-- Logs, with their final `exit=` lines, are in the root checkout's
-  `.scratch/mvp-approvals-20261028/`, files `01`–`11`.
+- Each run's log ends with an `exit=` line. The logs are kept locally for
+  review and are not part of the repository.
 
 ## Dependencies
 

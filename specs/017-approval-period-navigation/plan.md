@@ -96,7 +96,7 @@ design: unchanged.
 | FR-010 | T-U6: a response tagged with another start renders "Loading…", not its rows. T-U7: while an action is pending, every action button is `disabled`. |
 | FR-011 | T-U8: a non-manager makes zero `list_approvals` calls. A `get_week_start` error shows its alert and makes zero list calls. |
 | FR-013 | T-U9: the stub returns 2 for 3 ids, and the page shows "Approved 2 of 3 timesheets"; it is hidden after navigating to another week. |
-| Boundary edge case | T-U2b: a `week` naming the max-representable week shows the inline error with both directions disabled and no list call. |
+| Boundary edge case | T-U2b: a `week` naming the max-representable week shows the inline error, no pager (only a "This week" link) and no list call. |
 
 ## Gates
 
