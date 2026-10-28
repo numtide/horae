@@ -227,12 +227,44 @@ async fn submit_user_week(
     Ok((approval, total_minutes))
 }
 
-/// List approvals, optionally filtered by state. Requires manager role.
+/// List one week's approvals, optionally filtered by state. Requires manager role.
 #[server]
-pub async fn list_approvals(status: Option<String>) -> Result<Vec<ApprovalSummary>, ServerFnError> {
+pub async fn list_approvals(
+    status: Option<String>,
+    week_start: String,
+) -> Result<Vec<ApprovalSummary>, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
+    list_week(&state.db, &manager, status, &week_start).await
+}
 
+#[cfg(feature = "server")]
+async fn list_week(
+    pool: &sqlx::PgPool,
+    manager: &User,
+    status: Option<String>,
+    week_start: &str,
+) -> Result<Vec<ApprovalSummary>, ServerFnError> {
+    use chrono::Datelike;
+    let ws: chrono::NaiveDate = week_start
+        .parse()
+        .map_err(|_| err(BAD_REQUEST, "Invalid week_start (use YYYY-MM-DD)"))?;
+    let first_day = sqlx::query_scalar!(
+        "SELECT week_start FROM organizations WHERE id = $1",
+        manager.org_id
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(server_err)?;
+    if ws.weekday().number_from_monday() as i16 != first_day {
+        return Err(err(
+            BAD_REQUEST,
+            "week_start must match the organization's first weekday",
+        ));
+    }
+    if ws.checked_add_days(chrono::Days::new(6)).is_none() {
+        return Err(err(BAD_REQUEST, "week_start is out of range"));
+    }
     let state_filter: Option<EntryState> = status.map(|s| parse_enum(&s, "status")).transpose()?;
 
     // Hours are aggregated per row from the user's entries in the approval's
@@ -259,12 +291,14 @@ pub async fn list_approvals(status: Option<String>) -> Result<Vec<ApprovalSummar
                AND te.spent_date BETWEEN a.period_start AND a.period_end
          ) t ON true
          WHERE a.org_id = $2
+           AND a.period_start = $3
            AND ($1::entry_state IS NULL OR a.state = $1)
-         ORDER BY a.period_start DESC"#,
+         ORDER BY u.name, a.id"#,
         state_filter as Option<EntryState>,
         manager.org_id,
+        ws as chrono::NaiveDate,
     )
-    .fetch_all(&state.db)
+    .fetch_all(pool)
     .await
     .map_err(server_err)?;
 
@@ -545,19 +579,20 @@ mod tests {
     use sqlx::PgPool;
     use uuid::Uuid;
 
-    async fn insert_entry(
+    pub(super) async fn insert_entry(
         pool: &PgPool,
         ids: &SeedIds,
         spent_date: chrono::NaiveDate,
         is_running: bool,
-    ) {
+    ) -> Uuid {
+        let id = Uuid::now_v7();
         sqlx::query!(
             "INSERT INTO time_entries \
                (id, org_id, user_id, project_id, task_id, spent_date, \
                 minutes, billable, is_running, started_at, state) \
              VALUES ($1, $2, $3, $4, $5, $6, 0, true, $7, \
                      CASE WHEN $7 THEN now() END, $8)",
-            Uuid::now_v7(),
+            id,
             ids.org_id,
             ids.user_id,
             ids.project_id,
@@ -569,6 +604,7 @@ mod tests {
         .execute(pool)
         .await
         .unwrap();
+        id
     }
 
     #[sqlx::test(migrations = "./migrations")]
@@ -609,3 +645,6 @@ mod submission_tests;
 
 #[cfg(all(test, feature = "server"))]
 mod isolation_tests;
+
+#[cfg(all(test, feature = "server"))]
+mod period_tests;

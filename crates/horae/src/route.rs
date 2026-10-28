@@ -75,8 +75,8 @@ pub enum Route {
     EditProject { id: Uuid, return_to: EditReturn },
     #[route("/projects/:id")]
     ProjectDetail { id: Uuid },
-    #[route("/approvals")]
-    Approvals {},
+    #[route("/approvals?:week")]
+    Approvals { week: String },
     #[route("/reports")]
     Reports {},
     #[route("/invoices")]

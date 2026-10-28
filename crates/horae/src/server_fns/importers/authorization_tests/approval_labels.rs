@@ -81,7 +81,11 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             (Some("approved"), vec![approved]),
         ] {
             let response = api
-                .json("list_approvals", json!({"status":status}), &cookie)
+                .json(
+                    "list_approvals",
+                    json!({"status":status,"week_start":"2026-09-21"}),
+                    &cookie,
+                )
                 .await;
             let rows = response.as_array().unwrap();
             // Retained approvals carry names even when the submitter is archived.
@@ -125,11 +129,25 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 }
             }
         }
+        // The cross-organization submitter's row is hidden in its own week too.
+        let response = api
+            .json(
+                "list_approvals",
+                json!({"status":null,"week_start":"2026-09-28"}),
+                &cookie,
+            )
+            .await;
+        assert_eq!(response, json!([]));
     }
     assert_eq!(
-        api.call("list_approvals", json!({"status":null}), None, false)
-            .await
-            .status(),
+        api.call(
+            "list_approvals",
+            json!({"status":null,"week_start":"2026-09-21"}),
+            None,
+            false
+        )
+        .await
+        .status(),
         StatusCode::UNAUTHORIZED
     );
     for (actor, expected) in [
@@ -140,7 +158,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         assert_eq!(
             api.call(
                 "list_approvals",
-                json!({"status":null}),
+                json!({"status":null,"week_start":"2026-09-21"}),
                 Some(&cookie),
                 false
             )
@@ -158,7 +176,11 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .await
     .unwrap();
     let renamed = api
-        .json("list_approvals", json!({"status":"submitted"}), &cookie)
+        .json(
+            "list_approvals",
+            json!({"status":"submitted","week_start":"2026-09-21"}),
+            &cookie,
+        )
         .await;
     assert_eq!(renamed[0]["user_name"], "Renamed archived teammate");
     sqlx::query!(
@@ -171,7 +193,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(
         api.call(
             "list_approvals",
-            json!({"status":null}),
+            json!({"status":null,"week_start":"2026-09-21"}),
             Some(&cookie),
             false
         )
