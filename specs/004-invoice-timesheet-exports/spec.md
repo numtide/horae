@@ -224,9 +224,9 @@ exercised here.
 - **SC-L01**: 100% of rows in each downloaded file match exactly one expected entry,
   with no additions, omissions or duplicates, in both formats.
 - **SC-L02**: The on-screen raw, rounded and billable totals equal the expected sums to
-  the minute. The files contain entry rows only, with no total rows. Summing the files'
-  Hours, the Rounded Hours, and the Rounded Hours of rows marked billable, in minutes,
-  gives the same three expected totals.
+  the minute. The files contain entry rows only, with no total rows. Each file row
+  matches exactly one fixture entry, and those entries' integer minutes reconcile to the
+  same three expected totals. The files' displayed decimal hours are not summed.
 - **SC-L04**: With no filter, both files are unchanged: the CSV equals the expected
   bytes exactly, and the Excel cells equal the expected values exactly.
 - **SC-L03**: An excluded client's entries appear in 0 rows on screen and in 0 rows of

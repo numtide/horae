@@ -18,7 +18,15 @@ the product bug before widening scope.
 **Fixture, states S1–S7 and proofs P1–P9**: plan.md "Acceptance Increment" is the only
 source; tasks refer to it rather than repeat it.
 
-**Status (2026-10-25)**: the results below were recorded from local logs that are not kept in the repository.
+**Status (2026-10-28)**: **no gate has evidence at the current head.** On 2026-10-28 the
+branch was rebuilt on a newer base. The commits named below (b459f4f0, 962034c8, 86c60ce1)
+are not ancestors of the current head, and the browser suite has changed since then (S7).
+An `[x]` on T001–T010 records that the task was authored and, where it is a gate, that it
+ran at the old commit named here; it is not a current-head result. All current-head
+validation is pending under T013 and T011.
+
+**History (2026-10-25)**, recorded from local logs that are not kept in the repository.
+These results apply only to the commits they name:
 
 - **T001–T010**:
   - The work was authored and committed up to 962034c8.
@@ -35,7 +43,8 @@ source; tasks refer to it rather than repeat it.
   - strict clippy: exit 0;
   - formatting and `.sqlx` prepare were clean before the commit;
   - the independent re-reviews accepted the changed source;
-  - the browser suite source is unchanged since 962034c8, so its runs there carry forward.
+  - the browser suite was not rerun at 86c60ce1; its source there was unchanged from
+    962034c8, where it last ran.
 - **Native acceptance**, by the coordinator on the 962034c8 package (unchanged production
   code at 86c60ce1), recorded in the coordinator's local notes:
   - all 4 stages pass, covering 16 filter states;
@@ -43,8 +52,9 @@ source; tasks refer to it rather than repeat it.
   - no download event fired (microsoft/playwright#39253);
   - the downloaded files were inspected afterwards on disk, the XLSX with `unzip`. The
     browser decoded no XLSX.
-- **T013** (S7) has been written but not run: no build, test, browser or formatter run on it yet.
-- **T011** is open; no gate in it is claimed.
+
+**Current head**: T013 (S7) is written and has not run: no build, test, browser or
+formatter run. T011 is open; no gate in it is claimed.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -79,7 +89,7 @@ disposable database.
   with a `check(pool, api)` that:
   - builds the plan fixture (all names created explicitly; ascending fixed entry IDs) in a
     new `test_seed::seed(pool, OrgRole::Manager)` organization at policy 0, with rounding set to 15, nearest;
-  - downloads CSV and XLSX for S1–S5 with the Manager session;
+  - downloads CSV and XLSX for S1–S5 with the Manager session (T012 adds S6 and T013 adds S7, so the loop now runs S1–S7);
   - **P7**: parses the CSV with `csv`; the header equals the eight `ENTRY_EXPORT_HEADERS`; records
     equal the literal rows. Each row is matched to exactly one expected entry; the raw,
     rounded and billable-rounded minute sums of the matched entries equal the plan totals.
@@ -142,8 +152,10 @@ disposable database.
     Teammate select, and wait for responses whose `user_id` is the colleague. Then assert
     P1–P5 with the S7 Time-row override for alpha (0.83 / 0.75 / 0.75). Every existing
     state now also requires `user_id` to be null.
-  - Gates, one at a time after a resource grant: the focused Rust test, the offline
-    all-targets build, strict clippy, `nix fmt -- --ci`, and the browser suites as in T010.
+  - Gates, one at a time on the exact current head after a resource grant. They also stand
+    in for the T009, T010 and T012 runs, which have no current-head evidence: the focused
+    Rust test, the `.sqlx` prepare check (no diff expected), the offline all-targets build,
+    strict clippy, `nix fmt -- --ci`, and the browser suites as in T010.
     Optionally, as a sensitivity check that is never committed, drop `user_id` from the
     request with the expectations unchanged and confirm the state fails.
 - [ ] T011 Delivery gates, all required before publication:
