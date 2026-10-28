@@ -19,16 +19,25 @@ until its red tests can actually run, which needs the heavy slot.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm the worktree is clean on `feat/approval-period-navigation` at base `8a796361`, and that `.specify/feature.json` still names `specs/016-expense-parity`.
+- [x] T001 Confirm the worktree is clean on `feat/approval-period-navigation` at base `8a796361`, and that `.specify/feature.json` still names `specs/016-expense-parity`.
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T002 [P] Add failing unit tests for `week_bounds` in crates/core/src/week.rs:
+- [x] T002 [P] Add failing unit tests for `week_bounds` in crates/core/src/week.rs:
   - a Monday-start date maps to Mon..Sun;
   - a Sunday start maps to Sun..Sat;
+  - a cross-year week keeps both ends;
   - the week containing `NaiveDate::MIN` returns `None` when its start underflows;
-  - a week whose start + 6 exceeds `NaiveDate::MAX` returns `None`.
-- [ ] T003 Implement `pub fn week_bounds(date, first_day) -> Option<(NaiveDate, NaiveDate)>` in crates/core/src/week.rs, reusing `week_start` and `checked_add_days(6)` (T002 green).
+  - a week whose start + 6 exceeds `NaiveDate::MAX` returns `None`;
+  - the last whole representable week is `Some`.
+
+  Red, 2026-10-28: against a `todo!()` stub, 6 of 6 new tests panicked and the
+  4 existing week tests passed.
+- [x] T003 Implement `pub fn week_bounds(date, first_day) -> Option<(NaiveDate, NaiveDate)>` in crates/core/src/week.rs, reusing `week_start` and `checked_add_days(6)` (T002 green).
+
+  Green: `cargo test -p horae-core` passed 237 tests. Core all-targets clippy
+  with `-D warnings` was clean, and `rustfmt --check` was clean. Run in the
+  offline dev shell with `CARGO_BUILD_JOBS=1` and a scratch `CARGO_TARGET_DIR`.
 - [ ] T004 In crates/horae/src/route.rs, change the route to `#[route("/approvals?:week")] Approvals { week: String }`. In crates/horae/src/components/sidebar.rs, pass `Route::Approvals { week: String::new() }`. No other route changes.
 - [ ] T005 Signature-only seam in crates/horae/src/server_fns/approvals.rs, with no behaviour change:
   - move the existing `list_approvals` body unchanged into `list_week(pool, manager, status, week_start: &str)`;
