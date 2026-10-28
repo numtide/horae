@@ -35,10 +35,13 @@ const entries = [
 // Time tab, grouped by project: [Total hours, Rounded, Billable hrs].
 const byProject = { 'Export alpha': ['1.67', '1.50', '1.50'], 'Export beta': ['1.00', '1.00', '0.00'], 'Export gamma': ['1.50', '1.50', '1.50'] };
 const states = [
-  { name: 'no filter', client: null, project: null, entries: [0, 1, 2, 3, 4], total: ['4.17', '4.00', '3.00'] },
-  { name: 'project only', client: null, project: projects[2][0], entries: [4], total: ['1.50', '1.50', '1.50'] },
-  { name: 'client only', client: clients[0][0], project: null, entries: [0, 1, 2, 3], total: ['2.67', '2.50', '1.50'] },
-  { name: 'client and project', client: clients[0][0], project: projects[1][0], entries: [2, 3], total: ['1.00', '1.00', '0.00'] },
+  { name: 'no filter', client: null, project: null, user: null, entries: [0, 1, 2, 3, 4], total: ['4.17', '4.00', '3.00'] },
+  { name: 'project only', client: null, project: projects[2][0], user: null, entries: [4], total: ['1.50', '1.50', '1.50'] },
+  { name: 'client only', client: clients[0][0], project: null, user: null, entries: [0, 1, 2, 3], total: ['2.67', '2.50', '1.50'] },
+  { name: 'client and project', client: clients[0][0], project: projects[1][0], user: null, entries: [2, 3], total: ['1.00', '1.00', '0.00'] },
+  // Export alpha holds only the colleague's entry here, so its row differs from byProject.
+  { name: 'teammate only', client: null, project: null, user: colleague, entries: [1], total: ['0.83', '0.75', '0.75'],
+    groups: { 'Export alpha': ['0.83', '0.75', '0.75'] } },
 ];
 
 const row = entry => [entry.date, projects[entry.project][1], 'Export task', users[entry.user], entry.hours, entry.rounded, entry.billable ? 'Yes' : 'No'];
@@ -86,7 +89,8 @@ assert.equal(sql(`SELECT (SELECT count(*) FROM clients WHERE id IN (${fixtureIds
       if (!new URL(response.url()).pathname.startsWith(`/api/${name}`) || !response.ok()) return false;
       try {
         const args = JSON.parse(response.request().postData() || '{}');
-        return args.from === from && args.to === to && args.client_id === state.client && args.project_id === state.project;
+        return args.from === from && args.to === to && args.client_id === state.client && args.project_id === state.project
+          && args.user_id === state.user;
       } catch { return false; }
     })));
     const select = label => page.locator('.form-group', { has: page.locator('label', { hasText: new RegExp(`^${label}$`) }) }).locator('select');
@@ -100,13 +104,14 @@ assert.equal(sql(`SELECT (SELECT count(*) FROM clients WHERE id IN (${fixtureIds
       let query = `from=${from}&to=${to}`;
       if (state.client) query += `&client_id=${state.client}`;
       if (state.project) query += `&project_id=${state.project}`;
+      if (state.user) query += `&user_id=${state.user}`;
       assert.equal(await link('CSV').getAttribute('href'), `/api/reports/export/csv?${query}`, state.name);
       assert.equal(await link('XLSX').getAttribute('href'), `/api/reports/export/xlsx?${query}`, state.name);
 
       // P2: Time tab rows by project, and the total row, against the fixture.
       await tab('Time').click();
       const expectedGroups = [...new Set(picked.map(entry => projects[entry.project][1]))].sort()
-        .map(name => [name, ...byProject[name]]);
+        .map(name => [name, ...(state.groups || byProject)[name]]);
       await expect.poll(async () => (await cells(page.locator('tbody tr:not(.report-total-row)')))
         .map(cellsOfRow => cellsOfRow.slice(0, 4)).sort((a, b) => a[0].localeCompare(b[0]))).toEqual(expectedGroups);
       assert.deepEqual((await cells(page.locator('tr.report-total-row')))[0].slice(0, 4), ['Total', ...state.total], state.name);
@@ -154,6 +159,15 @@ assert.equal(sql(`SELECT (SELECT count(*) FROM clients WHERE id IN (${fixtureIds
     await select('Project').selectOption(states[3].project);
     await ready;
     await verify(states[3]);
+
+    // Clearing the client also clears its project.
+    ready = loaded(states[0]);
+    await select('Client').selectOption('');
+    await ready;
+    ready = loaded(states[4]);
+    await select('Teammate').selectOption(states[4].user);
+    await ready;
+    await verify(states[4]);
 
     assert.deepEqual(errors, []);
     console.log(`PASS: legacy report exports for ${states.map(state => state.name).join(', ')}: links, Time and Detailed rows, CSV bytes and XLSX downloads; Chromium ${browser.version()}`);

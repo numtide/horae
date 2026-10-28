@@ -80,7 +80,7 @@ HORAE_TEST_SERVER=…/bin/horae PLAYWRIGHT_MODULE=… \
 ```
 
 **Expected**: both commands exit 0. The browser suite prints one PASS line naming filter
-states S1–S4. Any mismatch is reported as a product bug before scope grows. Passing does
+states S1–S4 and S7. Any mismatch is reported as a product bug before scope grows. Passing does
 not resolve open analyze finding D1 (`f64` XLSX durations).
 
 ## Automated coverage

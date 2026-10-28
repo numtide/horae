@@ -267,7 +267,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
 
     let (client_a, beta, gamma) = (fixture_id(10), fixture_id(21), fixture_id(22));
     // (filters, expected entries, raw/rounded/billable-rounded minutes)
-    let states: [(String, &[usize], [i64; 3]); 6] = [
+    let states: [(String, &[usize], [i64; 3]); 7] = [
         (String::new(), &[0, 1, 2, 3, 4], [250, 240, 180]),
         (format!("&project_id={gamma}"), &[4], [90, 90, 90]),
         (
@@ -287,6 +287,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             [0, 0, 0],
         ),
         (format!("&client_id={}", foreign.client_id), &[], [0, 0, 0]),
+        // The colleague shares E1's project and date: only the person differs.
+        (format!("&user_id={colleague}"), &[1], [50, 45, 45]),
     ];
     for (filters, expected, totals) in states {
         let entries: Vec<&Entry> = expected.iter().map(|&n| &ENTRIES[n]).collect();

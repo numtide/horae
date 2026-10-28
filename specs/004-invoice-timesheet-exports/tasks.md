@@ -5,7 +5,8 @@
 
 **Scope of this file**: only the **Acceptance Increment: Legacy Report Export
 Reconciliation (2026-10-25)**. It proves User Story 2 (FR-011 to FR-015, FR-017 to FR-019,
-SC-005, SC-006, SC-L01 to SC-L04) on the legacy Reports page. It does not task User Story 1, User Story 3,
+SC-005, SC-006, SC-L01 to SC-L04) on the legacy Reports page; T013 adds regression
+coverage for the existing Teammate filter, which no FR names. It does not task User Story 1, User Story 3,
 FR-001 to FR-010, FR-016 or FR-020. The invoice backup is not implemented, and it is
 neither claimed nor waived here (spec, Evidence Rules). Open analyze finding D1 (`f64` XLSX
 durations) is not waived or resolved by these tasks.
@@ -14,7 +15,7 @@ durations) is not waived or resolved by these tasks.
 If an assertion fails because the product disagrees with the fixture, stop and report
 the product bug before widening scope.
 
-**Fixture, states S1–S6 and proofs P1–P9**: plan.md "Acceptance Increment" is the only
+**Fixture, states S1–S7 and proofs P1–P9**: plan.md "Acceptance Increment" is the only
 source; tasks refer to it rather than repeat it.
 
 **Status (2026-10-25)**: evidence logs are in `/tmp/horae-r02.vcDtiK/`.
@@ -42,6 +43,7 @@ source; tasks refer to it rather than repeat it.
   - no download event fired (microsoft/playwright#39253);
   - the downloaded files were inspected afterwards on disk, the XLSX with `unzip`. The
     browser decoded no XLSX.
+- **T013** (S7) has been written but not run: no build, test, browser or formatter run on it yet.
 - **T011** is open; no gate in it is claimed.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -130,6 +132,20 @@ disposable database.
   (L2, L3); correct the P9 citations (L3). Then, one at a time on the committed head:
   `nix fmt -- --ci`, `.sqlx` prepare, the focused Rust test, and the offline all-targets
   build. Changed lines need independent re-review. L1 and L5 are left as optional.
+  Unchecked again: its final validation and reviews are still pending.
+- [ ] T013 [US2] Add S7 (teammate "Export colleague" only, plan.md) as regression coverage
+  for the existing Teammate filter. Existing helpers and queries only; no product, query,
+  `.sqlx` or dependency change.
+  - In `legacy_exports.rs`, add `&user_id=` with expected entry E2 and totals 50 / 45 / 45
+    (P6, P7).
+  - In `reports-legacy-exports.cjs`, after S4 clear the client, select the colleague in the
+    Teammate select, and wait for responses whose `user_id` is the colleague. Then assert
+    P1–P5 with the S7 Time-row override for alpha (0.83 / 0.75 / 0.75). Every existing
+    state now also requires `user_id` to be null.
+  - Gates, one at a time after a resource grant: the focused Rust test, the offline
+    all-targets build, strict clippy, `nix fmt -- --ci`, and the browser suites as in T010.
+    Optionally, as a sensitivity check that is never committed, drop `user_id` from the
+    request with the expectations unchanged and confirm the state fails.
 - [ ] T011 Delivery gates, all required before publication:
   - small unsigned commits with plain messages;
   - **two independent reviews** resolved;
@@ -144,7 +160,7 @@ disposable database.
 
 - T001 → T002 → T003 → T004 → T005 → T008 → T009.
 - T006 has no task dependency; T007 follows T006. T010 follows T007 and T009.
-  T011 is last.
+  T013 follows T012. T011 is last.
 
 ## Parallel opportunities
 

@@ -196,6 +196,12 @@ exercised here.
 1. **Given** a selected client, **When** the user also selects one of its projects,
    **Then** both download links carry the period, the client and the project, and the
    screen and both files narrow to that project's entries.
+1. **Given** no client or project selected, **When** the user selects one teammate,
+   **Then** both download links carry the period and that teammate, and the screen and
+   both files narrow to that teammate's entries; another person's entry on the same
+   project and date is absent. The legacy page has carried this filter into its links
+   since #118. This scenario adds regression coverage for it, not a requirement: the
+   v1 requirements still name only client and project, as Out of Scope says.
 1. **Given** a project that does not belong to the selected client, **When** that
    combination is downloaded, **Then** both formats return a valid file with headers and
    no entry rows.

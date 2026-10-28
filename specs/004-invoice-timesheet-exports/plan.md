@@ -166,6 +166,9 @@ Filter states and expected entries (raw / rounded / billable-rounded minutes →
 - Client A only: E1–E4, 160 / 150 / 90 → 2.67 / 2.50 / 1.50. The raw row values 0.83 + 0.83 +
   0.88 + 0.12 add up to 2.66, which is not 2.67; the total is correct because it is summed in minutes.
 - Client A and project beta: E3–E4, 60 / 60 / 0 → 1.00 / 1.00 / 0.00.
+- Teammate only (Export colleague, no client or project): E2, 50 / 45 / 45 → 0.83 / 0.75 /
+  0.75. By project: alpha 0.83/0.75/0.75. E1 shares E2's date and project, so only the
+  person filter excludes it.
 - Client A and project gamma (impossible): no rows; direct link only, because the page's
   project list narrows to the chosen client.
 
@@ -175,17 +178,19 @@ Filter states and expected entries (raw / rounded / billable-rounded minutes →
 |---|---|---|---|
 The four visible states (S1 no filter, S2 project gamma only, S3 client A only, S4 client A
 and project beta) are covered in both layers. S5, the impossible client A and project gamma
-combination, and S6, another organization's client, are Rust only.
+combination, and S6, another organization's client, are Rust only. S7, teammate "Export
+colleague" only, is covered in both layers. It is regression coverage for the existing
+Teammate filter and traces to no FR; the Requirements column applies to S1–S4.
 
 | Proof | Layer | What it shows | Requirements |
 |---|---|---|---|
-| P1 | Browser | For S1–S4, both Export links equal `/api/reports/export/{csv,xlsx}?from=2041-03-04&to=2041-03-06` plus exactly the visible filters (`&project_id=gamma`; `&client_id=A`; `&client_id=A&project_id=beta`) and differ only in path | FR-011, FR-013, FR-017 |
-| P2 | Browser | For S1–S4, Time-tab rows (by label) and the total row's Total, Rounded and Billable hrs equal the fixture constants | FR-019, 001 SC-007 |
-| P3 | Browser | For S1–S4, the Detailed-tab rows (8 cells each, in order) equal the expected entries; excluded entries (E5 in S3/S4, E1–E4 in S2, E6 always) are absent | FR-013, SC-L03 |
-| P4 | Browser | For S1–S4, clicking Export CSV (real download event) yields `timesheet.csv` whose bytes equal the CSV built from the constants. S1 is the regression proof that the export is unchanged | FR-011–FR-013, FR-012, FR-015, SC-L01, SC-L04 |
-| P5 | Browser | For S1–S4, clicking Export XLSX yields `timesheet.xlsx` starting with `PK`. Contents are not decoded in the browser; see P6 | FR-015 (link only) |
-| P6 | Rust | For S1–S4, using the same route and query template as P1 over the Rust fixture's UUIDs: the XLSX row count is entries + 1; A–D, G and H match via `assert_text_cell`; E and F match via `assert_cell` with the exact literal for each entry. Each row maps to one fixture entry, and that entry's integer minutes give the raw, rounded and billable-rounded sums | FR-011–FR-015, FR-019, SC-L01, SC-L02, SC-L04 |
-| P7 | Rust | For S1–S4, the CSV (parsed with `csv`) equals the literal rows; the integer minutes of the matched entries reconcile to the three totals | FR-015, SC-L02 |
+| P1 | Browser | For S1–S4 and S7, both Export links equal `/api/reports/export/{csv,xlsx}?from=2041-03-04&to=2041-03-06` plus exactly the visible filters (`&project_id=gamma`; `&client_id=A`; `&client_id=A&project_id=beta`; `&user_id=colleague`) and differ only in path | FR-011, FR-013, FR-017 |
+| P2 | Browser | For S1–S4 and S7, Time-tab rows (by label) and the total row's Total, Rounded and Billable hrs equal the fixture constants | FR-019, 001 SC-007 |
+| P3 | Browser | For S1–S4 and S7, the Detailed-tab rows (8 cells each, in order) equal the expected entries; excluded entries (E5 in S3/S4, E1–E4 in S2, E1 and E3–E5 in S7, E6 always) are absent | FR-013, SC-L03 |
+| P4 | Browser | For S1–S4 and S7, clicking Export CSV (real download event) yields `timesheet.csv` whose bytes equal the CSV built from the constants. S1 is the regression proof that the export is unchanged | FR-011–FR-013, FR-012, FR-015, SC-L01, SC-L04 |
+| P5 | Browser | For S1–S4 and S7, clicking Export XLSX yields `timesheet.xlsx` starting with `PK`. Contents are not decoded in the browser; see P6 | FR-015 (link only) |
+| P6 | Rust | For S1–S4 and S7, using the same route and query template as P1 over the Rust fixture's UUIDs: the XLSX row count is entries + 1; A–D, G and H match via `assert_text_cell`; E and F match via `assert_cell` with the exact literal for each entry. Each row maps to one fixture entry, and that entry's integer minutes give the raw, rounded and billable-rounded sums | FR-011–FR-015, FR-019, SC-L01, SC-L02, SC-L04 |
+| P7 | Rust | For S1–S4 and S7, the CSV (parsed with `csv`) equals the literal rows; the integer minutes of the matched entries reconcile to the three totals | FR-015, SC-L02 |
 | P8 | Rust | S5 gives a header-only CSV and a header-only XLSX, both 200. The Rust fixture's organization is asserted to be at policy 0 before any download | FR-014, SC-006 |
 | P9 | Rust + existing | S6 (Rust only): `client_id` naming another organization's client that has an entry in the period gives header-only files, both 200; that entry never appears in S1. Existing tests, unchanged: `authorization_tests/time_reports.rs` covers 401/403, role and policy binding (its foreign-ID downloads run after a switch to policy 1), and legacy-path tenant scoping is covered at function level in `reports/streaming/database_tests.rs` and the `reports/limits.rs` tests | FR-018 |
 
