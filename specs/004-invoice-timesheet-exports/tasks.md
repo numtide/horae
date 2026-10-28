@@ -9,8 +9,10 @@ SC-005, SC-006, SC-L01 to SC-L04) on the legacy Reports page; T013 adds regressi
 coverage for the existing Teammate filter, which no FR names. It does not task User Story 1, User Story 3,
 FR-001 to FR-010, FR-016 or FR-020. The invoice backup is not implemented, and it is
 neither claimed nor waived here (spec, Evidence Rules). XLSX-D1 (`f64` XLSX durations) is an
-approved decision under Constitution 2.0.0 whose conformance check is still pending; these
-tasks change no writer and do not resolve it.
+approved, limited exception under Constitution 2.0.0. The three XLSX duration writers conform
+on static review; only the timesheet E and F numeric cells are runtime tested (P6), and the
+invoice Hours column B is reviewed statically only. These tasks change no writer and claim no
+general conformance.
 
 **Tests**: requested. The deliverable of this increment is tests; no product code changes.
 If an assertion fails because the product disagrees with the fixture, stop and report
@@ -19,12 +21,33 @@ the product bug before widening scope.
 **Fixture, states S1–S7 and proofs P1–P9**: plan.md "Acceptance Increment" is the only
 source; tasks refer to it rather than repeat it.
 
-**Status (2026-10-28)**: **no gate has evidence at the current head.** On 2026-10-28 the
-branch was rebuilt on a newer base. The commits named below (b459f4f0, 962034c8, 86c60ce1)
-are not ancestors of the current head, and the browser suite has changed since then (S7).
-An `[x]` on T001–T010 records that the task was authored and, where it is a gate, that it
-ran at the old commit named here; it is not a current-head result. All current-head
-validation is pending under T013 and T011.
+**Status (2026-10-28)**: the local gates ran on commit 660ea757 and all passed (T013).
+The commit that records them changes only this file, so its tree differs from 660ea757 in
+this file alone; no gate was rerun on it. T011 remains open.
+
+**Gates on 660ea757** (2026-10-28), one at a time, each exit code recorded separately:
+
+- the focused Rust test: exit 0, run before and after the sensitivity check;
+- the sensitivity check (`user_id` dropped from the S7 request, expectations unchanged):
+  the test failed as intended (exit 101); the source was restored and never committed;
+- `.sqlx` prepare: exit 0, no cache change;
+- the `SQLX_OFFLINE=true` all-targets `--no-run` build: exit 0;
+- strict clippy for `horae-core` and for `horae` with `server`: exit 0 each;
+- `nix fmt -- --ci`: exit 0, no file changed;
+- the server package build: exit 0; then the browser suites
+  `reports-currency-totals reports-legacy-exports reports-permissions`: exit 0, three PASS
+  lines, the export suite covering S1–S4 and S7 (teammate only);
+- the full `nix flake check` on x86_64-linux: exit 0, every check passed (the Rust test
+  suite, clippy, the `.sqlx` check, formatting, the whole browser suite and both NixOS
+  end-to-end tests).
+
+Two independent reviewers approved the source and documentation at 660ea757 and then the
+results of these gates.
+
+The commits named under History (b459f4f0, 962034c8, 86c60ce1) are not ancestors of
+660ea757: the branch was rebuilt on a newer base on 2026-10-28. An `[x]` on T001–T010
+records that the task was authored and, where it is a gate, that it ran at the old commit
+named there; their runs at 660ea757 are the T013 gates above.
 
 **History (2026-10-25)**, recorded from local logs that are not kept in the repository.
 These results apply only to the commits they name:
@@ -53,9 +76,6 @@ These results apply only to the commits they name:
   - no download event fired (microsoft/playwright#39253);
   - the downloaded files were inspected afterwards on disk, the XLSX with `unzip`. The
     browser decoded no XLSX.
-
-**Current head**: T013 (S7) is written and has not run: no build, test, browser or
-formatter run. T011 is open; no gate in it is claimed.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -137,14 +157,14 @@ disposable database.
 - [x] T010 As the single heavy-build owner, build the server package once, then run
   `crates/horae/tests/browser/run-design-checks.sh reports-currency-totals reports-legacy-exports reports-permissions` (its own `/tmp` database). Record commands,
   exit codes and PASS lines.
-- [ ] T012 Review remediation (technical and UX reviews of 962034c8): remove the unproven
+- [x] T012 Review remediation (technical and UX reviews of 962034c8): remove the unproven
   "XLSX values convert back to whole minutes" claim (M1); describe the layers as the same
   route and query template over parallel fixtures (F1, L4); assert policy 0 and add S6
   (L2, L3); correct the P9 citations (L3). Then, one at a time on the committed head:
   `nix fmt -- --ci`, `.sqlx` prepare, the focused Rust test, and the offline all-targets
   build. Changed lines need independent re-review. L1 and L5 are left as optional.
-  Unchecked again: its final validation and reviews are still pending.
-- [ ] T013 [US2] Add S7 (teammate "Export colleague" only, plan.md) as regression coverage
+  Its validation and reviews were completed at 660ea757 through the T013 gates (Status).
+- [x] T013 [US2] Add S7 (teammate "Export colleague" only, plan.md) as regression coverage
   for the existing Teammate filter. Existing helpers and queries only; no product, query,
   `.sqlx` or dependency change.
   - In `legacy_exports.rs`, add `&user_id=` with expected entry E2 and totals 50 / 45 / 45
@@ -154,19 +174,25 @@ disposable database.
     P1–P5 with the S7 Time-row override for alpha (0.83 / 0.75 / 0.75). Every existing
     state now also requires `user_id` to be null.
   - Gates, one at a time on the exact current head after a resource grant. They also stand
-    in for the T009, T010 and T012 runs, which have no current-head evidence: the focused
+    in for the T009, T010 and T012 runs, which had no evidence at the current head: the focused
     Rust test, the `.sqlx` prepare check (no diff expected), the offline all-targets build,
     strict clippy, `nix fmt -- --ci`, and the browser suites as in T010.
     Optionally, as a sensitivity check that is never committed, drop `user_id` from the
     request with the expectations unchanged and confirm the state fails.
+  - Done on 660ea757: every gate passed and the sensitivity check failed as intended
+    (Status).
 - [ ] T011 Delivery gates, all required before publication:
   - small unsigned commits with plain messages;
-  - **two independent reviews** resolved;
-  - the relevant browser and native acceptance by the coordinator;
-  - a final full local `nix flake check` on the candidate head, with one build owner;
-  - mandatory CI passing on the exact published head;
-  - XLSX-D1 (`f64` XLSX durations) reported as decided with its conformance check pending,
-    and C1 (invoice backup not implemented) reported as open; neither is reported as resolved.
+  - **two independent reviews** resolved (done at 660ea757, Status);
+  - the relevant browser runs (done at 660ea757) and native acceptance by the coordinator
+    (open);
+  - a final full local `nix flake check` on the candidate head, with one build owner (done
+    at 660ea757; the docs-only commit after it was not rerun);
+  - mandatory CI passing on the exact published head (open);
+  - XLSX-D1 (`f64` XLSX durations) reported as an approved, limited exception: static
+    conformance for the three writers, runtime tests for the timesheet E and F cells only,
+    invoice Hours B static only. C1 (invoice backup not implemented) reported as open.
+    Neither is reported as complete.
     No push, PR or merge before coordinator acceptance.
 
 ## Dependencies and order
