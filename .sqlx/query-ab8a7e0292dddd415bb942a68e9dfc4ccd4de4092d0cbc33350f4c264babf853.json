@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT a.id, a.org_id, a.user_id, u.name as user_name,\n                a.period_start as \"period_start: chrono::NaiveDate\",\n                a.period_end as \"period_end: chrono::NaiveDate\",\n                a.state as \"state: EntryState\",\n                a.submitted_at as \"submitted_at: chrono::DateTime<chrono::Utc>\",\n                a.approved_by,\n                a.approved_at as \"approved_at: chrono::DateTime<chrono::Utc>\",\n                COALESCE(t.total_minutes, 0) as \"total_minutes!\",\n                COALESCE(t.billable_minutes, 0) as \"billable_minutes!\"\n         FROM approvals a\n         JOIN users u ON u.id = a.user_id AND u.org_id = a.org_id\n         LEFT JOIN LATERAL (\n             SELECT (SUM(minutes))::bigint as total_minutes,\n                    (SUM(minutes) FILTER (WHERE billable))::bigint as billable_minutes\n             FROM time_entries te\n             WHERE te.org_id = a.org_id\n               AND te.user_id = a.user_id\n               AND te.spent_date BETWEEN a.period_start AND a.period_end\n         ) t ON true\n         WHERE a.org_id = $2\n           AND ($1::entry_state IS NULL OR a.state = $1)\n         ORDER BY a.period_start DESC",
+  "query": "SELECT a.id, a.org_id, a.user_id, u.name as user_name,\n                a.period_start as \"period_start: chrono::NaiveDate\",\n                a.period_end as \"period_end: chrono::NaiveDate\",\n                a.state as \"state: EntryState\",\n                a.submitted_at as \"submitted_at: chrono::DateTime<chrono::Utc>\",\n                a.approved_by,\n                a.approved_at as \"approved_at: chrono::DateTime<chrono::Utc>\",\n                COALESCE(t.total_minutes, 0) as \"total_minutes!\",\n                COALESCE(t.billable_minutes, 0) as \"billable_minutes!\"\n         FROM approvals a\n         JOIN users u ON u.id = a.user_id AND u.org_id = a.org_id\n         LEFT JOIN LATERAL (\n             SELECT (SUM(minutes))::bigint as total_minutes,\n                    (SUM(minutes) FILTER (WHERE billable))::bigint as billable_minutes\n             FROM time_entries te\n             WHERE te.org_id = a.org_id\n               AND te.user_id = a.user_id\n               AND te.spent_date BETWEEN a.period_start AND a.period_end\n         ) t ON true\n         WHERE a.org_id = $2\n           AND a.period_start = $3\n           AND ($1::entry_state IS NULL OR a.state = $1)\n         ORDER BY u.name, a.id",
   "describe": {
     "columns": [
       {
@@ -91,7 +91,8 @@
             }
           }
         },
-        "Uuid"
+        "Uuid",
+        "Date"
       ]
     },
     "nullable": [
@@ -109,5 +110,5 @@
       null
     ]
   },
-  "hash": "be742e5023fd8d75d50d0829a72007b52c33882afb6595c3df1baf3d511d12c1"
+  "hash": "ab8a7e0292dddd415bb942a68e9dfc4ccd4de4092d0cbc33350f4c264babf853"
 }
