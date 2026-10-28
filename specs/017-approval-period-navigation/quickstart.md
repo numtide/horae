@@ -31,12 +31,12 @@ Expected results:
 - The browser suite `responsive-layout` (which visits `/approvals`) passes
   unmodified.
 
-## Operator precondition (read-only, existing databases)
+## Deployment gate (mandatory, read-only)
 
 Approvals submitted before `a55b3a47` (2026-09-09) may start on a day other
 than the organization's first weekday. The weekly page shows such a row under
-no week. Before relying on the page, an operator can list them; this query
-changes nothing:
+no week. The owner requires an operator to run this query against the target
+database immediately before deploying. It changes nothing:
 
 ```sql
 BEGIN READ ONLY;
@@ -49,9 +49,12 @@ ORDER BY a.org_id, a.period_start, a.id;
 ROLLBACK;
 ```
 
-No rows means that snapshot meets the precondition. It is not a guarantee for
-other databases. If rows are returned, this feature has no remedy: what to do
-with them is an open owner decision.
+- **Zero rows**: deployment may proceed. The result covers only that database
+  at that moment, not other databases or later data.
+- **Any row**: do not deploy, and keep the previous version running. Do not
+  migrate, normalize or otherwise change the data.
+
+This gate has not been run against any real database.
 
 ## Native smoke (root's Chrome, disposable local Horae DB only)
 

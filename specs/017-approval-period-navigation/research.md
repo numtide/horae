@@ -19,12 +19,13 @@ All findings below were taken read-only at `8a796361`.
   No importer, CLI command or migration inserts approvals. So every row written
   since `a55b3a47` (2026-09-09) aligns with exactly one week.
 
-- **Historical rows (unresolved)**: before `a55b3a47`, `submit_week` accepted
-  any start date with end = start + 6, and no migration normalizes those rows.
-  An older database may hold misaligned approvals. Exact matching shows them
-  under no week, and no supported screen lists every period any more.
-  Detection is a read-only operator precondition (quickstart.md). How to
-  handle any rows found is an open owner decision.
+- **Historical rows (deployment gate)**: before `a55b3a47`, `submit_week`
+  accepted any start date with end = start + 6, and no migration normalizes
+  those rows. An older database may hold misaligned approvals. Exact matching
+  shows them under no week, and no supported screen lists every period any
+  more. The owner decided that a read-only check must run immediately before
+  deployment (quickstart.md, "Deployment gate"). Any returned row blocks
+  deployment, and the previous version stays running. No data is changed.
 
 - **Alternatives considered**: matching by overlap was rejected. If a row were
   ever misaligned, overlap would put dates outside the selected week into

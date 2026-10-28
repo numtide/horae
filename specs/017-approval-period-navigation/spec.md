@@ -39,8 +39,8 @@ exist only under the inactive scoped policy); full design parity with
 
 ## Clarifications
 
-No owner answers are recorded. The item below rests on code evidence, not an
-owner decision:
+The membership rule below rests on code evidence. The owner's answers are
+recorded under the session that follows it.
 
 - Week membership: an approval belongs to the selected week exactly when its
   period starts on that week's first day. Evidence at `8a79636`, which holds
@@ -58,10 +58,9 @@ owner decision:
   6), and no migration normalizes those rows. A database that took submissions
   then may hold approvals whose start is not the organization's first weekday.
   Exact matching shows such a row under no week, so it cannot be approved or
-  reopened from this page. Detecting them is a read-only operator precondition
-  (quickstart.md, "Operator precondition"). How to handle any that exist is an
-  **open owner decision**: no overlap, normalization, migration or risk
-  acceptance is chosen here.
+  reopened from this page. The owner made a read-only check for such rows a
+  mandatory deployment gate (see Session 2026-10-28 and quickstart.md,
+  "Deployment gate"). No overlap, normalization or migration is adopted.
 
   Overlap matching is not used: it could include dates outside the selected
   week in a bulk approval (015 FR-009).
@@ -82,6 +81,17 @@ owner decision:
   - Limitation: the observed current week was empty. Whether Harvest shows an
     indicator for older pending work is **unverified**. This feature neither
     adds one nor claims Harvest lacks one.
+- Q: Must deployment require zero misaligned historical approvals, or must this
+  feature handle them? → A: "Sí, exigir esa comprobación antes del despliegue"
+  ("Yes, require that check before deployment"). Immediately before deploying,
+  run the read-only check for approvals whose start is not the organization's
+  first weekday or whose end is not start + 6.
+  - Any returned row means: do not deploy, and keep the previous version
+    running.
+  - No migration, normalization or other data change is made, whatever the
+    check finds.
+  - The check is a deployment gate. It has not been run against any real
+    database.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -207,6 +217,9 @@ response harness.
 - Status filter (Pending/Approved/All) combined with the week: both apply.
 - Navigation does not change what counts as "today": the existing UTC date
   convention of the timesheet and reports pages is reused.
+- Historical misaligned approval (written before `a55b3a47`): it would appear
+  under no week. The page does not handle it. Instead, the deployment gate in
+  Clarifications blocks deployment while any such row exists.
 
 ## Requirements *(mandatory)*
 
@@ -278,7 +291,8 @@ response harness.
   article ([Submitting and approving timesheets](https://support.getharvest.com/hc/en-us/articles/360048181832-Submitting-and-approving-timesheets))
   describes period-based review. Neither defines a rule for historical
   misaligned rows. Horae can no longer create them, but older databases may
-  hold some (see Clarifications), and no rule is adopted for them here.
+  hold some. Per the owner (see Clarifications), deployment requires the
+  read-only check to return none, and no data rule is adopted.
 - Harvest default navigation (observed 2026-10-28, see Clarifications): a bare
   visit opens the current week with Pending Approval, which matches Horae's
   existing default status. Harvest's indicator for older pending work, if any,
