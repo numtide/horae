@@ -47,6 +47,8 @@ fixture makes the Project tag control render, so all seven controls are covered.
     `--height-form-control` at every text size.
   - At 640px and wider, the panel's computed padding, border and background, and
     the dates' horizontal padding, equal the `.card` and `.form-input` values.
+    Below 640px the panel has no padding, no border width and the page
+    background, and the dates' horizontal padding is 0.25rem.
   - Screenshots of every case go to `HORAE_BROWSER_ARTIFACTS`.
   - **Not a pass/fail signal:** the date's intrinsic width is logged as a
     diagnostic only. Full-date visibility is judged from the screenshots and the
@@ -66,9 +68,9 @@ fixture makes the Project tag control render, so all seven controls are covered.
   - a forced report failure shows the alert and "Retry report" inside the
     viewport, and Retry recovers;
   - an empty range shows "No time tracked in this range."
-- **Exports.** For a fixed state, the `href`s equal the strings the current code
-  builds: `from` and `to`, plus `client_id`, `project_id`, `user_id` and `tag_id`
-  when set. Grouping is not part of the export query today.
+- **Exports.** The `href`s equal the strings the current code builds, in four
+  states: dates only; client and project; the long-name client and tag; and a
+  teammate. Grouping is not part of the export query today.
 
 ## Native Chrome (coordinator capture)
 

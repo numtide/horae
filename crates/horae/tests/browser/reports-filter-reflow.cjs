@@ -148,7 +148,9 @@ const sizes = [[320, 900], [390, 900], [768, 900], [1440, 900], [320, 568], [144
               return {
                 overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
                 innerWidth,
-                panel: { left: box.left, right: box.right, padding: panelStyle.padding, border: panelStyle.borderTop, background: panelStyle.backgroundColor },
+                panel: { left: box.left, right: box.right, padding: panelStyle.padding, border: panelStyle.borderTop, borderWidth: panelStyle.borderTopWidth, background: panelStyle.backgroundColor },
+                bodyBackground: style(document.body).backgroundColor,
+                rootPx,
                 card,
                 input,
                 controls: ids.map(id => {
@@ -172,6 +174,13 @@ const sizes = [[320, 900], [390, 900], [768, 900], [1440, 900], [320, 568], [144
                 [geometry.card.padding, geometry.card.border, geometry.card.background],
                 `${label}: the panel keeps its card padding, border and fill`);
               for (const c of geometry.controls.slice(0, 2)) assert.deepEqual(c.paddingX, geometry.input.paddingX, `${label}: ${c.id} keeps its padding`);
+            } else {
+              assert.deepEqual(
+                [geometry.panel.padding, geometry.panel.borderWidth, geometry.panel.background],
+                ['0px', '0px', geometry.bodyBackground],
+                `${label}: the panel is bare (no padding, border or fill)`);
+              const narrowPad = `${geometry.rootPx * 0.25}px`;
+              for (const c of geometry.controls.slice(0, 2)) assert.deepEqual(c.paddingX, [narrowPad, narrowPad], `${label}: ${c.id} uses the narrow date padding`);
             }
             // Diagnostic only: a native date can show in full below this width.
             const intrinsic = await control('report-filter-from').evaluate(el => {
@@ -230,6 +239,7 @@ const sizes = [[320, 900], [390, 900], [768, 900], [1440, 900], [320, 568], [144
       await after('/api/report_time', args => args.tag_id === fixture.tag,
         () => control('report-tag').selectOption(fixture.tag));
       await settled();
+      assert.deepEqual(await exportHrefs(), expectedHrefs(`from=${from}&to=${to}&client_id=${fixture.client}&tag_id=${fixture.tag}`));
       for (const [id, name] of [['report-filter-client', fixture.clientName], ['report-tag', fixture.tagName]]) {
         assert.equal(await control(id).evaluate(el => el.selectedOptions[0].textContent.trim()), name, `${where}: ${id} keeps the full chosen name`);
         await control(id).focus();
@@ -273,6 +283,13 @@ const sizes = [[320, 900], [390, 900], [768, 900], [1440, 900], [320, 568], [144
     await settled();
     await expect(control('report-filter-project')).toHaveValue('');
     assert.deepEqual(await exportHrefs(), expectedHrefs(`from=${from}&to=${to}`));
+    const teammate = await control('report-filter-teammate').locator('option:not([value=""])').first().getAttribute('value');
+    assert.match(teammate, /^[0-9a-f-]{36}$/);
+    await after('/api/report_time', args => args.user_id === teammate, () => control('report-filter-teammate').selectOption(teammate));
+    await settled();
+    assert.deepEqual(await exportHrefs(), expectedHrefs(`from=${from}&to=${to}&user_id=${teammate}`));
+    await after('/api/report_time', args => args.user_id === null, () => control('report-filter-teammate').selectOption(''));
+    await settled();
 
     // An empty range keeps both empty states.
     await after('/api/report_time', args => args.from === '2099-01-01', async () => {
@@ -286,7 +303,7 @@ const sizes = [[320, 900], [390, 900], [768, 900], [1440, 900], [320, 568], [144
     await expect(page.getByText('No entries in this range.', { exact: true })).toBeVisible();
 
     assert.deepEqual(errors, []);
-    console.log(`PASS: legacy report filter labels (with Project tag), tab order, reflow at ${sizes.map(s => s.join('x')).join('/')} in both themes, base and 32px text, both tabs; keyboard date entry, retry, groupings, client reset, exports, empty states and long chosen names; Chromium ${browser.version()}`);
+    console.log(`PASS: legacy report filter labels (with Project tag), tab order, reflow at ${sizes.map(s => s.join('x')).join('/')} in both themes (bare panel below 640px), base and 32px text, both tabs; keyboard date entry, retry, groupings, client reset, exports, empty states and long chosen names; Chromium ${browser.version()}`);
   } finally {
     try {
       await page.unrouteAll({ behavior: 'wait' });

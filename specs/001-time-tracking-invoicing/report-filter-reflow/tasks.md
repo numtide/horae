@@ -27,7 +27,7 @@ coordinator. No push or PR before coordinator review.
 
 **Goal**: all seven labels paired. **Independent test**: the label checks in the new suite.
 
-- [x] T006 [US2] Draft the label section of crates/horae/tests/browser/reports-filter-reflow.cjs: `labels.length`, exact `getByLabel`, click-to-focus, tab order. It is expected to fail on the base for six controls. The seed has no project tags, so the Project tag pairing stays proved by the existing new-project.cjs `getByRole("combobox", { name: "Project tag" })` check, and this read-only suite does not create tags
+- [x] T006 [US2] Draft the label section of crates/horae/tests/browser/reports-filter-reflow.cjs: `labels.length`, exact `getByLabel`, click-to-focus, tab order. It is expected to fail on the base for six controls. The seed has no project tags, so the suite's bounded fixture (T022) adds one, and the label loop covers Project tag (`report-tag`) as well
 - [x] T007 [US2] In crates/horae/src/pages/reports.rs, add `id` to `FilterSelect` (label `for`, select `id`) and pass `report-filter-client`, `report-filter-project` and `report-filter-teammate`; give Group by `report-filter-group` inline
 - [x] T008 [US2] In crates/horae/src/pages/reports.rs, give the From/To `FormGroup`s and `Input`s `report-filter-from` and `report-filter-to`
 
@@ -95,9 +95,36 @@ coordinator. No push or PR before coordinator review.
   - The coordinator reviewed the native source; the static sweep of the added lines found no inline styles or hex colours.
 - [ ] T020 Restore `.specify/feature.json` to `specs/016-expense-parity` (after every Spec Kit step), then two independent reviews and exact-head `nix flake check`
 
-## Acceptance status (2026-10-22)
+## Acceptance status (2026-10-22, updated 2026-10-28)
 
-**Post-rebase local gates** (source `ba48745b` on master `b109a26a`):
+**Case counts.** The automated suite runs 48 cases: 6 sizes (four widths at height
+900 plus 320×568 and 1440×600) × 2 themes × 2 text sizes × 2 tabs. SC-R01-001's
+32 combinations are the four full-height widths of that matrix, before the short
+windows are added. The native capture covers 24 cases on one tab: the four widths ×
+2 text sizes × 2 themes (16), plus the two short windows × 2 themes × 2 text
+sizes (8).
+
+**Rebased gates** (2026-10-28, head `6993498f` on master `8a796361`; the rebase
+from `d53c7c48` was patch-identical):
+
+- Offline strict clippy (core and server, all targets), the wasm check,
+  `nix fmt -- --ci` (0 changed) and the 8 `pages::reports` tests pass. The
+  generated `horae-utils.css` is unchanged.
+- The Nix package builds: `/nix/store/n7sssyx93jrxs1dzg1lz90n54ilrqgii-horae-0.1.0`.
+- On that package, the six focused suites from quickstart.md pass.
+- The shared style audit, recorded on the base package and on the candidate,
+  differs in the same six properties as before, all on `/reports`. The values
+  moved with master:
+  - at 320px, `main` height 1090.5 → 955.5px, and From/To width 160 → 144px
+    with padding `12px` → `12px 4px`;
+  - at 768px, `main` height 624.5 → 628.5px (the approved select height).
+- After R1's review, the suite also asserts the bare panel below 640px and the
+  export `href`s with a client and tag, and with a teammate, selected. Those
+  additions must pass on the next frozen head before they count.
+- Not yet run on this base: the full 39-suite order and `nix flake check`
+  (T020).
+
+**Earlier post-rebase local gates** (source `ba48745b` on master `b109a26a`):
 
 - The five changed source, generator, CSS, suite and runner files are
   byte-identical to the pre-rebase candidate.
