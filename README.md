@@ -271,6 +271,57 @@ exists. Add the rest of the team with `horae user create`. Do not set `DEV_LOGIN
 production deployment — configure OIDC instead, and give the admin the email address the
 provider will assert.
 
+### Container image
+
+The flake also builds the server as an OCI image, for x86_64-linux and aarch64-linux:
+
+```sh
+nix build .#oci-image                                     # host architecture
+nix build .#packages.aarch64-linux.oci-image              # needs an aarch64 builder
+```
+
+`result` is an `oci-archive`: a tar of an OCI image layout (`oci-layout`, `index.json`,
+OCI manifest and config, gzip layers), tagged `horae:<version>`. It is not a `docker save`
+archive. Podman and skopeo read it directly; for Docker, convert it to a Docker archive
+first:
+
+```sh
+podman load -i result
+
+skopeo copy oci-archive:result docker-archive:horae.tar:horae:0.1.0
+docker load -i horae.tar
+```
+
+PostgreSQL runs outside the container; pass its URL and the rest of the configuration as
+environment variables. CLI subcommands run from the same image:
+
+```sh
+podman run --rm -e DATABASE_URL=postgres://horae@db.example/horae horae:0.1.0 migrate run
+podman run --rm -e DATABASE_URL=… horae:0.1.0 \
+  init --org-name "Contoso" --admin-email ops@contoso.example --admin-name "Ops"
+podman run -d -p 127.0.0.1:3000:3000 --read-only --tmpfs /tmp \
+  -e DATABASE_URL=… --env-file /run/secrets/horae-env horae:0.1.0
+```
+
+The image runs `horae serve` as uid/gid 65534 (`nobody`), bound to `0.0.0.0:3000` inside the
+container, from the directory holding the bundled WASM, JS and CSS. That bind is only the
+container's own network namespace: which host addresses reach it depends on how you publish
+the port. The example above publishes it on host loopback only; terminate TLS in a reverse
+proxy or private ingress in front of it, as for the NixOS module. Behind HTTPS, set
+`HORAE_SECURE_COOKIES=1` in the container's environment, since the server marks its own
+cookies.
+
+The image holds the server's runtime closure (the binary and the libraries it links) and
+minimal NSS files for the unprivileged user. It has no shell, database server, data or
+secrets, and no mail transport: a `HORAE_SENDMAIL_PATH` executable or a `HORAE_PLUGINS_DIR`
+has to be provided to the container yourself, for example from a mounted volume. Outbound
+HTTPS to an OIDC provider or Harvest trusts the Mozilla root certificates compiled into the
+binary (webpki-roots); a custom CA, through `SSL_CERT_FILE` or otherwise, is not supported.
+`DEV_LOGIN` is unset, and with the default bind, which is not loopback, the server refuses
+to start if you set it. `serve` applies pending migrations on start.
+
+No image is published to any registry; build it yourself from the flake.
+
 ### Backups and restore
 
 With `database.createLocally = true` the module enables `services.postgresqlBackup` for the
