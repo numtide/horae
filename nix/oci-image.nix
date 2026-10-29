@@ -4,7 +4,6 @@
 # change the default package's hash.
 { horae
 , dockerTools
-, cacert
 , skopeo
 , runCommand
 }:
@@ -15,9 +14,9 @@ let
     tag = horae.version;
     compressor = "none";
 
-    # fakeNss gives the unprivileged user a passwd entry; cacert lets OIDC and
-    # Harvest reach their providers over HTTPS.
-    contents = [ horae dockerTools.fakeNss cacert ];
+    # fakeNss gives the unprivileged user a passwd entry. No CA bundle: the
+    # OIDC and Harvest clients use the webpki roots compiled into the binary.
+    contents = [ horae dockerTools.fakeNss ];
     extraCommands = ''
       mkdir -m 1777 tmp
     '';
@@ -34,7 +33,6 @@ let
         # With this bind the server refuses to start if DEV_LOGIN=1 is passed.
         "HORAE_HOST=0.0.0.0"
         "HORAE_PORT=3000"
-        "SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt"
       ];
       ExposedPorts."3000/tcp" = { };
     };

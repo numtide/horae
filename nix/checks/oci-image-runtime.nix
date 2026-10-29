@@ -96,18 +96,19 @@ pkgs.testers.nixosTest {
         assert wasm_type == "application/wasm", f"WASM content type: {wasm_type}"
         machine.succeed(f"podman image unmount {image}")
 
-        # No authentication bypass: the dev login form is absent, its route
-        # signs nobody in, and session-protected APIs reject anonymous callers.
+        # No authentication bypass: the dev login form is absent, and posting
+        # to its route yields no session that a protected API accepts.
         login = machine.succeed("curl -fsS http://127.0.0.1:3000/auth/login")
         assert "/auth/dev-login" not in login, "Login page offers the dev bypass"
         headers = machine.succeed(
-            "curl -sS -o /dev/null -D - -X POST http://127.0.0.1:3000/auth/dev-login"
+            "curl -sS -c /tmp/cookies.txt -o /dev/null -D - -X POST http://127.0.0.1:3000/auth/dev-login"
         )
         assert " 303" not in headers.splitlines()[0], f"Dev login redirected: {headers}"
         status = machine.succeed(
-            "curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/harvest/v2/time_entries"
+            "curl -sS -b /tmp/cookies.txt -o /dev/null -w '%{http_code}' "
+            "http://127.0.0.1:3000/harvest/v2/time_entries"
         ).strip()
-        assert status == "401", f"Harvest API served without a session: {status}"
+        assert status == "401", f"Harvest API served after a dev login attempt: {status}"
     finally:
         print(machine.execute("podman logs horae 2>&1 | tail -n 80")[1])
   '';

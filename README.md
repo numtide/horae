@@ -307,16 +307,18 @@ The image runs `horae serve` as uid/gid 65534 (`nobody`), bound to `0.0.0.0:3000
 container, from the directory holding the bundled WASM, JS and CSS. That bind is only the
 container's own network namespace: which host addresses reach it depends on how you publish
 the port. The example above publishes it on host loopback only; terminate TLS in a reverse
-proxy or private ingress in front of it, as for the NixOS module, and set
-`HORAE_SECURE_COOKIES=1` there.
+proxy or private ingress in front of it, as for the NixOS module. Behind HTTPS, set
+`HORAE_SECURE_COOKIES=1` in the container's environment, since the server marks its own
+cookies.
 
-The image holds the server's runtime closure (the binary and the libraries it links), CA
-certificates for outbound HTTPS to an OIDC provider or Harvest, and minimal NSS files for the
-unprivileged user. It has no shell, database server, data or secrets, and no mail transport:
-a `HORAE_SENDMAIL_PATH` executable or a `HORAE_PLUGINS_DIR` has to be provided to the
-container yourself, for example from a mounted volume. `DEV_LOGIN` is unset, and because the
-bind is not loopback the server refuses to start if you set it. `serve` applies pending
-migrations on start.
+The image holds the server's runtime closure (the binary and the libraries it links) and
+minimal NSS files for the unprivileged user. It has no shell, database server, data or
+secrets, and no mail transport: a `HORAE_SENDMAIL_PATH` executable or a `HORAE_PLUGINS_DIR`
+has to be provided to the container yourself, for example from a mounted volume. Outbound
+HTTPS to an OIDC provider or Harvest trusts the Mozilla root certificates compiled into the
+binary (webpki-roots); a custom CA, through `SSL_CERT_FILE` or otherwise, is not supported.
+`DEV_LOGIN` is unset, and with the default bind, which is not loopback, the server refuses
+to start if you set it. `serve` applies pending migrations on start.
 
 No image is published to any registry; build it yourself from the flake.
 

@@ -4,8 +4,8 @@
 
 ## Summary
 
-`pkgs.dockerTools.buildLayeredImage` assembles the image from the existing default package, CA
-certificates and `fakeNss`; `skopeo copy docker-archive:… oci-archive:…` converts it to an OCI image
+`pkgs.dockerTools.buildLayeredImage` assembles the image from the existing default package and
+`fakeNss`; `skopeo copy docker-archive:… oci-archive:…` converts it to an OCI image
 layout inside the same derivation. Two checks cover it: a daemonless content check and a NixOS VM
 test running the image under podman.
 
@@ -17,6 +17,9 @@ test running the image under podman.
 - **Production code**: unchanged. The bind address comes from the existing `HORAE_HOST`/`HORAE_PORT`
   environment variables of `serve`; `DEV_LOGIN` is refused off loopback by the existing
   `check_dev_login_bind`.
+- **Outbound TLS**: the OIDC (`openidconnect` with `ureq` 2.12) and Harvest (`ureq` 2) clients
+  use rustls with compiled-in webpki roots; `Cargo.lock` has no native-certs crate. The image
+  therefore ships no CA bundle and sets no `SSL_CERT_FILE`, and custom CAs stay unsupported.
 
 ## Constitution Check
 

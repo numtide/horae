@@ -42,7 +42,8 @@ and fetch `/health` and the bundled assets.
 
 ### Edge Cases
 
-- OIDC and Harvest need outbound HTTPS: the image carries CA certificates.
+- OIDC and Harvest need outbound HTTPS: their clients trust the webpki roots compiled into the
+  binary, so the image carries no CA bundle, and a custom CA is not supported.
 - Docker loads the image after a documented `skopeo` conversion to a Docker archive.
 
 ## Requirements
@@ -53,7 +54,7 @@ and fetch `/health` and the bundled assets.
   media types), not a Docker-only archive presented as OCI.
 - **FR-003**: The image MUST run `horae serve` by default on `0.0.0.0:3000`, with the binary as an
   absolute entrypoint, no shell, and the asset directory as working directory.
-- **FR-004**: The image MUST run as uid/gid 65534 and include CA certificates.
+- **FR-004**: The image MUST run as uid/gid 65534.
 - **FR-005**: The image MUST NOT contain secrets, database data, `DEV_LOGIN` or a database server.
 - **FR-006**: Automated checks MUST verify the archive's format and config without a daemon, and the
   running image against a disposable PostgreSQL in a VM.

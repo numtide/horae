@@ -33,7 +33,6 @@ pkgs.runCommand "horae-oci-image-check"
     and .config.ExposedPorts == {"3000/tcp": {}}
     and (.config.Env | index("HORAE_HOST=0.0.0.0") != null)
     and (.config.Env | index("HORAE_PORT=3000") != null)
-    and (.config.Env | map(select(startswith("SSL_CERT_FILE="))) | length) == 1
     and (.config.Env | map(select(test("DEV_LOGIN|SECRET|DATABASE_URL|OIDC|HARVEST"))) | length) == 0' config.json
 
   # The root filesystem is the union of every layer.
@@ -46,7 +45,6 @@ pkgs.runCommand "horae-oci-image-check"
   test -n "$(ls rootfs${horae}/bin/public/assets | grep -E '\.wasm$')"
   test -n "$(ls rootfs${horae}/bin/public/assets | grep -E '\.js$')"
   test -n "$(ls rootfs${horae}/bin/public/assets | grep -E '\.css$')"
-  test -s "rootfs$(jq -r '.config.Env[] | select(startswith("SSL_CERT_FILE=")) | sub("SSL_CERT_FILE="; "")' config.json)"
   # /etc/passwd links into the store by absolute path.
   grep -q '^nobody:x:65534:65534:' "rootfs$(readlink rootfs/etc/passwd)"
   # Extraction applies the umask, so read the mode from the layer itself.
