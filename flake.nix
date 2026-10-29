@@ -65,6 +65,14 @@
     // {
       devShells = blueprint.devShells // darwinBlueprint.devShells;
 
+      packages = lib.mapAttrs
+        (system: packages: packages // {
+          oci-image = inputs.nixpkgs.legacyPackages.${system}.callPackage ./nix/oci-image.nix {
+            horae = packages.default;
+          };
+        })
+        blueprint.packages;
+
       # Expose horae as a nixpkgs overlay for downstream flakes:
       #   default        — reuse blueprint's prebuilt packages (cache-friendly)
       #   shared-nixpkgs — rebuild against the consumer's nixpkgs, so cross
