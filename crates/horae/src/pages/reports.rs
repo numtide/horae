@@ -45,6 +45,7 @@ fn opt(v: String) -> Option<String> {
 /// `(value, name)` choices. Emits the picked value ("" for "all").
 #[component]
 fn FilterSelect(
+    id: String,
     label: String,
     value: String,
     all_label: String,
@@ -52,10 +53,11 @@ fn FilterSelect(
     onselect: EventHandler<String>,
 ) -> Element {
     rsx! {
-        div { class: "form-group",
-            label { class: "form-label", "{label}" }
+        div { class: "form-group min-w-0 max-w-full",
+            label { class: "form-label", r#for: "{id}", "{label}" }
             select {
-                class: "form-select",
+                id: "{id}",
+                class: "form-select min-w-0 max-w-full min-h-control",
                 value: "{value}",
                 oninput: move |e| onselect.call(e.value()),
                 option { value: "", "{all_label}" }
@@ -233,26 +235,37 @@ fn LegacyReports() -> Element {
                 }
             }
 
-            div { class: "card mb-6",
+            // Below 640px the panel drops its chrome so a full native date fits at
+            // enlarged text; the sm: variants restore the card at wider widths.
+            div { class: "card mb-6 p-0 sm:p-6 border-0 sm:border bg-base sm:bg-secondary",
                 div { class: "flex gap-4 items-end flex-wrap",
-                    FormGroup { label: "From",
-                        Input {
-                            kind: "date",
-                            value: "{from_date}",
-                            oninput: move |e: FormEvent| from_date.set(e.value()),
+                    div { class: "min-w-0 max-w-full",
+                        FormGroup { label: "From", id: "report-filter-from",
+                            Input {
+                                kind: "date",
+                                id: "report-filter-from",
+                                class: "min-w-0 max-w-full min-h-control px-1 sm:px-3",
+                                value: "{from_date}",
+                                oninput: move |e: FormEvent| from_date.set(e.value()),
+                            }
                         }
                     }
-                    FormGroup { label: "To",
-                        Input {
-                            kind: "date",
-                            value: "{to_date}",
-                            oninput: move |e: FormEvent| to_date.set(e.value()),
+                    div { class: "min-w-0 max-w-full",
+                        FormGroup { label: "To", id: "report-filter-to",
+                            Input {
+                                kind: "date",
+                                id: "report-filter-to",
+                                class: "min-w-0 max-w-full min-h-control px-1 sm:px-3",
+                                value: "{to_date}",
+                                oninput: move |e: FormEvent| to_date.set(e.value()),
+                            }
                         }
                     }
-                    div { class: "form-group",
-                        label { class: "form-label", "Group by" }
+                    div { class: "form-group min-w-0 max-w-full",
+                        label { class: "form-label", r#for: "report-filter-group", "Group by" }
                         select {
-                            class: "form-select",
+                            id: "report-filter-group",
+                            class: "form-select min-w-0 max-w-full min-h-control",
                             value: "{group_by}",
                             oninput: move |e| group_by.set(e.value()),
                             option { value: "project", "Project" }
@@ -262,6 +275,7 @@ fn LegacyReports() -> Element {
                         }
                     }
                     FilterSelect {
+                        id: "report-filter-client",
                         label: "Client",
                         value: client_filter(),
                         all_label: "All clients",
@@ -272,6 +286,7 @@ fn LegacyReports() -> Element {
                         },
                     }
                     FilterSelect {
+                        id: "report-filter-project",
                         label: "Project",
                         value: project_filter(),
                         all_label: "All projects",
@@ -279,6 +294,7 @@ fn LegacyReports() -> Element {
                         onselect: move |v| project_filter.set(v),
                     }
                     FilterSelect {
+                        id: "report-filter-teammate",
                         label: "Teammate",
                         value: user_filter(),
                         all_label: "All teammates",
@@ -286,14 +302,16 @@ fn LegacyReports() -> Element {
                         onselect: move |v| user_filter.set(v),
                     }
                     if !tag_options.is_empty() || !tag_filter().is_empty() {
-                        FormGroup { label: "Project tag", id: "report-tag",
-                            select { id: "report-tag", class: "form-select", value: tag_filter(),
-                                oninput: move |event| tag_filter.set(event.value()),
-                                option { value: "", "All tags" }
-                                if !tag_filter().is_empty() && !tag_options.iter().any(|(id, _)| *id == tag_filter()) {
-                                    option { value: tag_filter(), disabled: true, "Selected tag unavailable" }
+                        div { class: "min-w-0 max-w-full",
+                            FormGroup { label: "Project tag", id: "report-tag",
+                                select { id: "report-tag", class: "form-select min-w-0 max-w-full min-h-control", value: tag_filter(),
+                                    oninput: move |event| tag_filter.set(event.value()),
+                                    option { value: "", "All tags" }
+                                    if !tag_filter().is_empty() && !tag_options.iter().any(|(id, _)| *id == tag_filter()) {
+                                        option { value: tag_filter(), disabled: true, "Selected tag unavailable" }
+                                    }
+                                    for (id, name) in tag_options { option { value: "{id}", "{name}" } }
                                 }
-                                for (id, name) in tag_options { option { value: "{id}", "{name}" } }
                             }
                         }
                     }
