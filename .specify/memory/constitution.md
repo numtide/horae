@@ -1,5 +1,35 @@
 <!--
 Sync Impact Report
+- Version change: 2.0.0 → 3.0.0
+- Bump rationale: MAJOR. Principle IV's "All data mutations MUST go through Dioxus `#[server]`
+  functions" is redefined: one narrowly bounded local-operator mutation is now permitted. As in
+  2.0.0, the governance rule makes a principle redefinition MAJOR, even though the change is small.
+- Modified principles:
+  - IV. Mutations Through Server Functions: title unchanged; adds the local operator identity
+    binding exception for `horae user link-oidc` only. It may bind an issuer and subject to an
+    existing, active, unbound account, or add the issuer to that account's own issuer-less binding
+    with the identical subject; it may not replace bindings, create accounts, sessions or provider
+    users, change roles, or be reachable over HTTP, the UI or plugins.
+- Added sections: none
+- Removed sections: none
+- Templates checked:
+  - .specify/templates/plan-template.md: Constitution Check takes its gates from this file ✅ (no change)
+  - .specify/templates/spec-template.md: no mandatory-section change ✅
+  - .specify/templates/tasks-template.md: no new principle-driven task type ✅
+  - .specify/templates/constitution-template.md: placeholder template, not a project copy ✅ (no change)
+  - .specify/templates/commands/: not present; the speckit-* skills carry no Principle IV text ✅
+  - AGENTS.md: describes the two API surfaces and lists CLI subcommands; it states no Principle IV
+    rule, so it needs no exception note ✅ (no change). The new subcommand is added to its CLI list
+    with the feature's implementation, not with this amendment.
+  - README.md: links the constitution only ✅ (no change)
+  - Earlier feature plans that cite 2.0.0 are historical records and are deliberately left as
+    written; later plans check against 3.0.0.
+- Follow-up: the exception covers only `horae user link-oidc`. The existing local CLI commands
+  that already write to the datastore (`init`, `user create`, `seed`, `migrate`) are neither
+  covered nor assessed by this amendment.
+-->
+<!--
+Sync Impact Report (2.0.0)
 - Version change: 1.0.0 → 2.0.0
 - Bump rationale: MAJOR. Principle I's blanket "Floating-point MUST NOT be used for any
   duration" is redefined: one narrowly bounded floating-point conversion is now permitted.
@@ -75,13 +105,29 @@ index-friendly identifiers; retaining `org_id` preserves an obvious future path.
 
 ### IV. Mutations Through Server Functions
 
-All data mutations MUST go through Dioxus `#[server]` functions (session-authenticated, role-checked).
-The UI MUST NOT issue ad-hoc client-side fetches for data reads or writes. Additional non-mutating
-surfaces (e.g. a read-only compatibility API, exports) are permitted but MUST NOT become a second
-mutation path.
+All data mutations MUST go through Dioxus `#[server]` functions (session-authenticated, role-checked),
+except as the single narrow exception below. The UI MUST NOT issue ad-hoc client-side fetches for
+data reads or writes. Additional non-mutating surfaces (e.g. a read-only compatibility API, exports)
+are permitted but MUST NOT become a second mutation path.
+
+**Local operator identity binding (the only exception)**: the local `horae user link-oidc` command
+MAY bind an OIDC issuer and subject to one existing user account by writing to the datastore
+directly, with the operator's database credentials as its authority.
+
+- It MUST only record an issuer and subject on an existing, active account that has no binding,
+  or record the issuer on that account's own issuer-less binding when the subject is identical.
+  Repeating the exact existing binding is a no-op. It MUST reject a binding held by another
+  account and MUST NOT replace a different subject or issuer, or remove a binding.
+- It MUST NOT create accounts, sessions or identity-provider users, change roles or any other user
+  field, or be reachable over HTTP, from the UI or from plugins.
+- The exception does not extend to any other command, field or mutation, and it is not a precedent
+  for one.
 
 **Rationale**: A single, typed, authorized mutation path keeps authorization and validation in one
-place and keeps client and server types in sync.
+place and keeps client and server types in sync. Some providers never assert a verified email, so
+the first administrator cannot sign in to bind their own identity; nobody holds a session yet. The
+operator who can already run `horae init` against the database is the only authority available at
+that point, so this one binding step is allowed there and nowhere else.
 
 ### V. Reproducible Builds & Formatting Gate
 
@@ -118,4 +164,4 @@ added principles or materially expanded guidance, PATCH for clarifications. Ever
 Check gate MUST verify compliance before Phase 0, and again after design. Unjustified violations block
 merge. Runtime working guidance for agents lives in `AGENTS.md`.
 
-**Version**: 2.0.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-10-28
+**Version**: 3.0.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-10-30
