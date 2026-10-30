@@ -109,7 +109,9 @@ let
     print(json.dumps({
         "iss": claims["iss"],
         "sub": claims["sub"],
-        "email_verified": claims.get("email_verified", "absent"),
+        "email": claims.get("email"),
+        "email_verified_present": "email_verified" in claims,
+        "email_verified": claims.get("email_verified"),
     }))
   '';
 in
@@ -251,22 +253,26 @@ pkgs.testers.nixosTest {
             f"--issuer {shlex.quote(identity['iss'])} --subject {shlex.quote(identity['sub'])}"
         )
 
-    def signed_in(jar):
-        server.execute(
-            f"curl -s -c {jar} -b {jar} -L --max-redirs 8 "
+    def api_status_after_sign_in(jar):
+        # The flow itself must complete: a transport error or a failed
+        # redirect chain is a test failure, not a denial.
+        server.succeed(
+            f"curl -sS -c {jar} -b {jar} -L --max-redirs 8 "
             "http://127.0.0.1:3000/auth/oidc/start -o /dev/null"
         )
         return server.succeed(
-            f"curl -s -o /dev/null -w '%{{http_code}}' -b {jar} "
+            f"curl -sS -o /dev/null -w '%{{http_code}}' -b {jar} "
             "http://127.0.0.1:3000/harvest/v2/time_entries"
-        ).strip() == "200"
+        ).strip()
 
     kilgore = sql("SELECT id FROM users WHERE email = 'kilgore@kilgore.trout'")
 
     # The normal client's signed ID token carries email_verified = true; it is
     # also the operator's validated evidence of the issuer and subject.
     verified = token("horae", "horae-e2e-secret")
+    assert verified["email_verified_present"] is True, verified
     assert verified["email_verified"] is True, verified
+    assert verified["email"] == "kilgore@kilgore.trout", verified
     assert verified["iss"] == "http://127.0.0.1:5556/dex", verified
 
     # Sign-in stored exactly this issuer and subject, so the explicit link is a
@@ -310,11 +316,14 @@ pkgs.testers.nixosTest {
     # The omitting client's token is signed by the same Dex for the same
     # person, but the optional claim is absent rather than false.
     omitted = token("${omitClient}", "horae-omit-e2e-secret")
-    assert omitted["email_verified"] == "absent", omitted
+    assert omitted["email_verified_present"] is False, omitted
+    # The email is still there, so a denial below is about verification only.
+    assert omitted["email"] == "kilgore@kilgore.trout", omitted
     assert (omitted["iss"], omitted["sub"]) == (verified["iss"], verified["sub"]), omitted
 
     # Without a binding the verified-email path cannot apply: denied, unbound.
-    assert not signed_in("/tmp/jar3.txt"), "absent email_verified must not sign in"
+    status = api_status_after_sign_in("/tmp/jar3.txt")
+    assert status == "401", f"absent email_verified must not sign in, got {status}"
     assert sql(
         "SELECT oidc_issuer IS NULL AND oidc_subject IS NULL "
         "FROM users WHERE email = 'kilgore@kilgore.trout'"
@@ -323,6 +332,7 @@ pkgs.testers.nixosTest {
     # The operator links the identity taken from the validated token.
     status, output = link(kilgore, omitted)
     assert status == 0 and output.startswith(f"Linked user {kilgore}"), (status, output)
+    assert omitted["sub"] not in output and omitted["iss"] not in output, output
     status, output = link(kilgore, omitted)
     assert status == 0 and "nothing changed" in output, (status, output)
     assert omitted["sub"] not in output and omitted["iss"] not in output, output
@@ -335,8 +345,10 @@ pkgs.testers.nixosTest {
     other = sql("SELECT id FROM users WHERE email = 'other@kilgore.trout'")
     status, output = link(other, omitted)
     assert status == 1 and "Another user is already linked" in output, (status, output)
+    assert omitted["sub"] not in output and omitted["iss"] not in output, output
 
     # Now the provider's normal flow signs the person in.
-    assert signed_in("/tmp/jar4.txt"), "linked identity must sign in without email_verified"
+    status = api_status_after_sign_in("/tmp/jar4.txt")
+    assert status == "200", f"linked identity must sign in without email_verified, got {status}"
   '';
 }
