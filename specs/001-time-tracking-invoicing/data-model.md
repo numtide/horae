@@ -20,7 +20,7 @@ Derived from the spec's Key Entities and the Horae Constitution. Everything is s
 
 ### User
 
-- **Fields**: `id`, `org_id`, `email` (unique), `name`, `oidc_subject` (unique, null until first OIDC login), `org_role`, `cost_rate_cents` (optional), `billable_rate_cents` (optional), `active`, `created_at`.
+- **Fields**: `id`, `org_id`, `email` (unique), `name`, `oidc_subject` (unique, null until first OIDC login), `oidc_issuer` (null for an unbound or legacy binding; see [oidc-identity-provisioning](oidc-identity-provisioning/data-model.md)), `org_role`, `cost_rate_cents` (optional), `billable_rate_cents` (optional), `active`, `created_at`.
 - **Relationships**: owns `TimeEntry` records; may be assigned to projects.
 - **Rules**: deactivating (`active = false`) blocks sign-in but preserves history (FR-002, edge case).
 

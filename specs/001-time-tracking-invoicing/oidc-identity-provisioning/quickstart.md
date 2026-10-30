@@ -15,7 +15,7 @@ run yet; the documents phase ran no build, database or provider.
    - a validated ID token: the `iss` and `sub` claims of a token whose signature,
      issuer, audience and expiry you have checked. A decoded token you have not
      validated is not evidence.
-   The issuer must be exactly the provider's `iss`, including any trailing slash.
+     The issuer must be exactly the provider's `iss`, including any trailing slash.
 1. Link: `horae user link-oidc --user-id <ID> --issuer <iss> --subject <sub>`.
    Exit 0 means linked or already linked; anything else prints the reason and
    changed nothing.

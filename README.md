@@ -271,6 +271,34 @@ exists. Add the rest of the team with `horae user create`. Do not set `DEV_LOGIN
 production deployment — configure OIDC instead, and give the admin the email address the
 provider will assert.
 
+### Linking OIDC identities
+
+On first sign-in, Horae links an account to the provider's issuer and subject when the
+ID token says the account's email is verified. Some providers never send
+`email_verified`; with them, an operator links each account instead:
+
+```sh
+sudo -u horae DATABASE_URL=postgres:///horae horae user list   # ID is the first column
+sudo -u horae DATABASE_URL=postgres:///horae \
+  horae user link-oidc --user-id <ID> --issuer <iss> --subject <sub>
+```
+
+Take the issuer and subject from the provider's own records for that person, or from the
+`iss` and `sub` claims of an ID token whose signature, issuer, audience and expiry you
+have checked. An email address is never evidence of a subject. The issuer must match the
+provider's `iss` exactly, trailing slash included; when `HORAE_OIDC_ISSUER` is set in the
+command's environment, the command refuses any other value.
+
+The command only binds an active account with no binding, or records the issuer on that
+account's existing binding with the same subject. Running it again is safe. It never
+replaces a binding, creates accounts or sessions, or changes roles. Horae cannot undo a
+wrong link; that needs direct database administration.
+
+**Upgrading**: accounts linked before this release have a subject but no recorded issuer
+and cannot sign in through OIDC until linked. After confirming the configured provider is
+the one that issued their subjects, run `link-oidc` for each with that issuer and the
+account's existing subject. Open sessions keep working until logout or expiry.
+
 ### Container image
 
 The flake also builds the server as an OCI image, for x86_64-linux and aarch64-linux:

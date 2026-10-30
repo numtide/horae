@@ -56,7 +56,7 @@ cd crates/horae && DEV_LOGIN=1 DATABASE_URL=… dx serve   # dev server (dx runs
 cargo run -p horae --features server -- <subcommand>     # run the server binary directly
 ```
 
-CLI subcommands: `serve`, `init --org-name … --admin-email … --admin-name …` (bootstrap: one org + one admin, refuses if an org exists), `migrate run`, `migrate reset --confirm`, `seed` (demo data), `user list`, `user create --email … --name … --role …`.
+CLI subcommands: `serve`, `init --org-name … --admin-email … --admin-name …` (bootstrap: one org + one admin, refuses if an org exists), `migrate run`, `migrate reset --confirm`, `seed` (demo data), `user list`, `user create --email … --name … --role …`, `user link-oidc --user-id … --issuer … --subject …` (binds an OIDC identity to an existing active account; never replaces a binding).
 
 Remote administrator commands: `import harvest-api`, `import harvest-csv FILE`,
 and `jobs status|list|report|errors|cancel|retry|wait`. They require a running
