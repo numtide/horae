@@ -130,8 +130,8 @@ the outcome to output and exit code.
 - D6: test-only Dex fixture patch, pending test evidence. Still to confirm while
   implementing: the Dex package attribute, that `services.dex.package` applies, and
   a dry run presented before the heavy check.
-- Still to confirm on the migrated schema: `users_oidc_subject_key` as the 23505
-  constraint name (T001).
+- Confirmed by T001 on the migrated schema: `users_oidc_subject_key` is the 23505
+  constraint name (research D3).
 - Under review: the Complexity Tracking entry below.
 
 ## Analyze record

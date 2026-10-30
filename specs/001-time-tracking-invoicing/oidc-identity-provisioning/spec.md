@@ -253,11 +253,14 @@ ID next to its name, email, role and status.
 - **FR-007**: The command MUST validate the subject (non-empty, at most 255 bytes in
   UTF-8, no leading or trailing whitespace as Unicode `White_Space` defines it, the
   set Rust's `str::trim` removes) and the issuer (absolute `https`
-  URL, or `http` for a loopback host, with no query or fragment) without
+  URL, or `http` for a loopback host, with no query, fragment, control character
+  or backslash, and exactly `//` before the host) without
   normalizing either value, and MUST store the subject byte for byte with its case.
   When `HORAE_OIDC_ISSUER` is set and non-empty in the command's environment, the
   given issuer MUST equal it exactly; no other OIDC setting is required for this
-  check. Validation and this check MUST complete before any database connection.
+  check. A set value that is not valid UTF-8 MUST be refused, never skipped, and
+  never printed. Validation and this check MUST complete before any database
+  connection.
 - **FR-008**: The command MUST print the outcome (linked, unchanged, issuer
   recorded, or the rejection reason) and exit 0 on success and non-zero on any
   rejection or error. It MUST NOT write the issuer or subject to logs.

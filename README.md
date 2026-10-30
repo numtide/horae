@@ -280,14 +280,21 @@ ID token says the account's email is verified. Some providers never send
 ```sh
 sudo -u horae DATABASE_URL=postgres:///horae horae user list   # ID is the first column
 sudo -u horae DATABASE_URL=postgres:///horae \
-  horae user link-oidc --user-id <ID> --issuer <iss> --subject <sub>
+  HORAE_OIDC_ISSUER='<HORAE_OIDC_ISSUER from the service configuration>' \
+  horae user link-oidc --user-id <ID> --issuer '<iss>' --subject '<sub>'
 ```
 
-Take the issuer and subject from the provider's own records for that person, or from the
-`iss` and `sub` claims of an ID token whose signature, issuer, audience and expiry you
+Take `--issuer` and `--subject` from the provider's own records for that person, or from
+the `iss` and `sub` claims of an ID token whose signature, issuer, audience and expiry you
 have checked. An email address is never evidence of a subject. The issuer must match the
-provider's `iss` exactly, trailing slash included; when `HORAE_OIDC_ISSUER` is set in the
-command's environment, the command refuses any other value.
+provider's `iss` exactly, trailing slash included.
+
+Copy `HORAE_OIDC_ISSUER` separately from the deployment's own configuration (the value the
+service runs with), not from the same place as `--issuer`. The command then refuses a
+mismatched issuer before touching the database. `sudo` does not pass the service's
+environment to the command, so set this one variable explicitly; do not source the
+service's whole environment or secret file. Without it the issuer is only checked for
+shape.
 
 The command only binds an active account with no binding, or records the issuer on that
 account's existing binding with the same subject. Running it again is safe. It never

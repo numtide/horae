@@ -106,8 +106,10 @@ review.
   `oidc_subject` unique index arbitrates between them. Only a unique violation
   (SQLSTATE 23505) whose constraint is `users_oidc_subject_key` maps to the
   `SubjectInUse` rejection; any other database error stays an error. The name is
-  PostgreSQL's default for the `0001` column constraint and is confirmed against the
-  migrated schema before the code relies on it (T001).
+  PostgreSQL's default for the `0001` column constraint; T001 confirmed it on
+  2026-10-30 in a disposable database migrated through `0048` (`pg_constraint`
+  lists `users_email_key`, `users_id_org_unique`, `users_oidc_subject_key`,
+  `users_org_id_id_key`).
 - **Linearization against deactivation**: deactivation updates the same row, so the
   row lock orders the two. If deactivation commits first, `link` sees
   `active = false` and rejects without writing. If `link` commits first, the binding

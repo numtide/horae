@@ -29,6 +29,7 @@ one transaction that holds the target row lock. It does not run migrations.
 | AlreadyLinked | stderr | `User <UUID> is already linked to a different OIDC identity. Horae does not replace bindings.` | 1 |
 | InvalidSubject | stderr | `The subject must be 1–255 bytes with no leading or trailing whitespace.` | 1 |
 | InvalidIssuer | stderr | `The issuer must be an https URL (or http on a loopback host) with no query or fragment.` | 1 |
+| UnreadableConfiguredIssuer | stderr | `HORAE_OIDC_ISSUER is not valid UTF-8; the issuer cannot be checked.` (the value is never printed) | 1 |
 | IssuerMismatch | stderr | `The issuer does not match HORAE_OIDC_ISSUER exactly.` (only when `HORAE_OIDC_ISSUER` is set and non-empty) | 1 |
 | Database or other error | stderr | `Error: …` (existing `anyhow` reporting) | 1 |
 | Usage error | stderr | Clap usage text | 2 |

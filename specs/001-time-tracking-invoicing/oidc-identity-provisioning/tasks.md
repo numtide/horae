@@ -37,7 +37,7 @@ and small; no push or PR without an explicit grant.
 **Independent test**: link creates the binding, a repeat is a no-op, and nothing
 else about the account or its sessions changes.
 
-- [x] T006 [US1] In crates/horae/src/auth/oidc/tests/link.rs (new, declared from the `tests` module in crates/horae/src/auth/oidc.rs), write `#[sqlx::test]` tests (red): unbound active account → `Linked` with issuer and subject stored byte for byte; repeat → `Unchanged`; role, email, name, rates, active and the session table are unchanged
+- [x] T006 [US1] In crates/horae/src/auth/oidc/tests/link.rs (new, declared from the `tests` module in crates/horae/src/auth/oidc.rs), write `#[sqlx::test]` tests (red): unbound active account → `Linked` with issuer and subject stored byte for byte; repeat → `Unchanged`; role, email, name, rates and active are unchanged. Sessions are covered statically only: `#[sqlx::test]` databases have no session table, and `link` takes only a pool and writes only `users.oidc_issuer`/`oidc_subject`
 - [x] T007 [US1] Implement `link(pool, user_id, issuer, subject)` in crates/horae/src/auth/oidc/link.rs: one transaction, `SELECT … FOR UPDATE` on the target, read the subject's holder, `decide`, write issuer and subject only; map only SQLSTATE 23505 on the constraint from T001 to `SubjectInUse`
 - [x] T008 [US1] Add `UserAction::LinkOidc { user_id: Uuid, issuer: String, subject: String }` in crates/horae/src/cli.rs with parse tests: all flags required, a non-UUID user ID rejected
 - [x] T009 [US1] Dispatch `link-oidc` in crates/horae/src/main.rs: run the T003 input validation before `db::create_pool` (today the pool opens before the `user` action is matched, so `link-oidc` is handled ahead of that); print the outcome text from contracts/link-oidc-cli.md, rejections on stderr with exit 1; never print or log issuer or subject; no migration run
@@ -101,6 +101,14 @@ subject, sign-in succeeds.
 - One CLI test (`invalid_input_is_refused_before_touching_the_database`) first
   passed against the stub for the wrong reason (unreachable database). It now
   asserts the exact validation message.
+- Review fixes: the parser-repair issuer cases (inline tab/CR/LF/DEL, backslash,
+  `https:host`, `https:/host`, `https:///host`) and the non-UTF-8
+  `HORAE_OIDC_ISSUER` case were observed red, then fixed. The case/percent
+  spelling test, the binary outcome-message cases (IssuerRecorded, AlreadyLinked,
+  Inactive), the unreachable-database mismatch case, the four same-account
+  callback/link orderings and the two-link race passed on first run: they are
+  coverage of already-correct code, not red-green evidence. CLI tests run
+  `#[serial]`.
 
 ## Dependencies
 

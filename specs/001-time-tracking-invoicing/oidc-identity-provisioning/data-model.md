@@ -63,9 +63,14 @@ Input validation (rejects, exit 1, before database access):
   2-byte characters is rejected); rejected when `subject.trim() != subject`, i.e.
   leading or trailing Unicode `White_Space`. The value is compared, never trimmed.
 - issuer: parses as an absolute URL; scheme `https`, or `http` with a loopback host
-  (`localhost`, `127.0.0.0/8`, `::1`); no query, no fragment. The parse is only a
-  check: the stored value is the original string, never the parser's normalized
-  form, and nothing is trimmed.
+  (`localhost`, `127.0.0.0/8`, `::1`); no query, no fragment; no ASCII control
+  character or backslash anywhere; exactly `//` between the scheme's `:` and the
+  host (so `https:host`, `https:/host` and `https:///host` are refused, which a
+  URL parser would otherwise repair). The parse is only a check: the stored value
+  is the original string (case and percent-encoding included), never the parser's
+  normalized form, and nothing is trimmed.
+- `HORAE_OIDC_ISSUER` set but not UTF-8: refused (`UnreadableConfiguredIssuer`),
+  never skipped; empty or unset means no configured issuer.
 - issuer equals `HORAE_OIDC_ISSUER` exactly when that variable is set and non-empty
   in the command's environment, whatever the other OIDC settings (research D4).
 

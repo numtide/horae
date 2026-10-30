@@ -7,18 +7,35 @@ run yet; the documents phase ran no build, database or provider.
 
 1. Bootstrap as today:
    `horae init --org-name … --admin-email … --admin-name …`.
+
 1. Configure OIDC (`HORAE_OIDC_ISSUER`, client ID, secret, redirect URL) as in the
    README.
+
 1. Find the account ID: `horae user list` (first column).
+
 1. Get the person's issuer and subject from evidence, never from an email address:
+
    - the provider's own administration records for that person, or
    - a validated ID token: the `iss` and `sub` claims of a token whose signature,
      issuer, audience and expiry you have checked. A decoded token you have not
      validated is not evidence.
      The issuer must be exactly the provider's `iss`, including any trailing slash.
-1. Link: `horae user link-oidc --user-id <ID> --issuer <iss> --subject <sub>`.
-   Exit 0 means linked or already linked; anything else prints the reason and
-   changed nothing.
+
+1. Link, with `HORAE_OIDC_ISSUER` copied separately from the deployment's own
+   configuration and `--issuer`/`--subject` from the evidence above:
+
+   ```sh
+   sudo -u horae DATABASE_URL=postgres:///horae \
+     HORAE_OIDC_ISSUER='<value from the service configuration>' \
+     horae user link-oidc --user-id <ID> --issuer '<iss>' --subject '<sub>'
+   ```
+
+   `sudo` does not pass the service's environment on, so the variable is set
+   explicitly; do not source the service's whole environment or secret file. With it
+   set, a mismatched issuer is refused before the database is touched; without it,
+   the issuer is only checked for shape. Exit 0 means linked or already linked;
+   anything else prints the reason and changed nothing.
+
 1. The person signs in through the normal sign-in page.
 
 Re-running the same link is safe. A wrong link cannot be replaced or removed
