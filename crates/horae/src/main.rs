@@ -112,6 +112,24 @@ fn main() -> anyhow::Result<()> {
         }
 
         Commands::User { action } => {
+            // Refuse bad link input before connecting, so a typo never reaches
+            // the database. Only the issuer variable is needed for the check.
+            if let cli::UserAction::LinkOidc {
+                user_id,
+                issuer,
+                subject,
+            } = &action
+            {
+                let configured = std::env::var("HORAE_OIDC_ISSUER")
+                    .ok()
+                    .filter(|issuer| !issuer.is_empty());
+                if let Err(rejection) =
+                    auth::oidc::link::validate(issuer, subject, configured.as_deref())
+                {
+                    eprintln!("{}", rejection.message(*user_id));
+                    std::process::exit(1);
+                }
+            }
             let rt = tokio::runtime::Runtime::new()?;
             rt.block_on(async {
                 init_tracing(&cfg.log_level);
@@ -143,9 +161,24 @@ fn main() -> anyhow::Result<()> {
 
                         println!("Created user: {} ({}) [{}]", name, email, role);
                     }
+                    cli::UserAction::LinkOidc {
+                        user_id,
+                        issuer,
+                        subject,
+                    } => {
+                        use auth::oidc::link::{LinkError, link};
+                        match link(&pool, user_id, &issuer, &subject).await {
+                            Ok(outcome) => println!("{}", outcome.message(user_id)),
+                            Err(LinkError::Rejected(rejection)) => {
+                                eprintln!("{}", rejection.message(user_id));
+                                std::process::exit(1);
+                            }
+                            Err(LinkError::Database(error)) => return Err(error.into()),
+                        }
+                    }
                     cli::UserAction::List => {
                         let users = sqlx::query!(
-                            "SELECT name, email, org_role::text as role, active \
+                            "SELECT id, name, email, org_role::text as role, active \
                              FROM users ORDER BY name ASC"
                         )
                         .fetch_all(&pool)
@@ -154,11 +187,15 @@ fn main() -> anyhow::Result<()> {
                         if users.is_empty() {
                             println!("No users found.");
                         } else {
-                            println!("{:<30} {:<30} {:<10} STATUS", "NAME", "EMAIL", "ROLE");
+                            println!(
+                                "{:<36} {:<30} {:<30} {:<10} STATUS",
+                                "ID", "NAME", "EMAIL", "ROLE"
+                            );
                             for u in &users {
                                 let status = if u.active { "active" } else { "inactive" };
                                 println!(
-                                    "{:<30} {:<30} {:<10} {}",
+                                    "{:<36} {:<30} {:<30} {:<10} {}",
+                                    u.id,
                                     u.name,
                                     u.email,
                                     u.role.as_deref().unwrap_or("?"),

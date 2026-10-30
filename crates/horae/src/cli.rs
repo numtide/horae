@@ -184,6 +184,17 @@ pub enum UserAction {
     },
     /// List all users
     List,
+    /// Bind an OIDC issuer and subject to an existing active user; never replaces a binding
+    LinkOidc {
+        #[arg(long)]
+        user_id: uuid::Uuid,
+        /// The provider's `iss`, exactly as its ID tokens spell it
+        #[arg(long)]
+        issuer: String,
+        /// The person's `sub`, from the provider's records or a validated ID token
+        #[arg(long)]
+        subject: String,
+    },
 }
 
 #[cfg(test)]
@@ -240,6 +251,31 @@ mod tests {
         ] {
             assert!(Cli::try_parse_from(args).is_err());
         }
+    }
+
+    #[test]
+    fn link_oidc_requires_every_flag_and_a_uuid() {
+        let id = uuid::Uuid::now_v7().to_string();
+        let full = [
+            "horae",
+            "user",
+            "link-oidc",
+            "--user-id",
+            &id,
+            "--issuer",
+            "i",
+            "--subject",
+            "s",
+        ];
+        assert!(Cli::try_parse_from(full).is_ok());
+        for missing in [3, 5, 7] {
+            let mut args = full.to_vec();
+            args.drain(missing..missing + 2);
+            assert!(Cli::try_parse_from(args).is_err());
+        }
+        let mut bad = full;
+        bad[4] = "not-a-uuid";
+        assert!(Cli::try_parse_from(bad).is_err());
     }
 
     #[test]

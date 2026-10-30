@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT email, name, org_role::text AS \"role!\", cost_rate_cents,\n                  billable_rate_cents, active FROM users WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "role!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "cost_rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "billable_rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "active",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "11722c3477b35218fbf94c48b735dc537f0b58d50b4b73ca4bbb5606a9ea6f30"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET oidc_issuer = $2, oidc_subject = 'race' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6a5970d4a44e9812e53469176e021778147cf87d49b8c1adca3731fad575e334"
+}
