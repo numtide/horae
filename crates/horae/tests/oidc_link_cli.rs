@@ -108,6 +108,7 @@ fn assert_private(output: &Output) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn link_reports_each_outcome_with_its_exit_code_and_never_echoes_the_identity(pool: PgPool) {
     let (database, admin, member) = setup(&pool).await;
 
@@ -148,6 +149,7 @@ async fn link_reports_each_outcome_with_its_exit_code_and_never_echoes_the_ident
 }
 
 #[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn invalid_input_is_refused_before_touching_the_database(pool: PgPool) {
     let (database, admin, _) = setup(&pool).await;
     // An unreachable database proves validation runs before any connection.
@@ -188,6 +190,7 @@ async fn invalid_input_is_refused_before_touching_the_database(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn a_configured_issuer_alone_guards_against_a_mismatch(pool: PgPool) {
     let (database, admin, _) = setup(&pool).await;
     // Only HORAE_OIDC_ISSUER is set: no client ID, secret or redirect URL.
@@ -207,9 +210,111 @@ async fn a_configured_issuer_alone_guards_against_a_mismatch(pool: PgPool) {
 
     let matching = link(&database, Some(ISSUER), admin, ISSUER, SUBJECT);
     assert_eq!(matching.status.code(), Some(0), "{matching:?}");
+
+    // The mismatch is refused before any connection, too.
+    let unreachable = link(
+        "postgres://nobody@127.0.0.1:1/none",
+        Some("https://id.example.com/"),
+        admin,
+        ISSUER,
+        "other",
+    );
+    assert_eq!(unreachable.status.code(), Some(1), "{unreachable:?}");
+    assert_eq!(
+        text(&unreachable).1.trim(),
+        "The issuer does not match HORAE_OIDC_ISSUER exactly."
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn a_configured_issuer_that_is_not_utf8_fails_closed(pool: PgPool) {
+    use std::os::unix::ffi::OsStrExt;
+    let (database, admin, _) = setup(&pool).await;
+    let output = Command::new(env!("CARGO_BIN_EXE_horae"))
+        .env("DATABASE_URL", &database)
+        .env(
+            "HORAE_OIDC_ISSUER",
+            std::ffi::OsStr::from_bytes(b"https://id\xffexample"),
+        )
+        .args([
+            "user",
+            "link-oidc",
+            "--user-id",
+            &admin.to_string(),
+            "--issuer",
+            ISSUER,
+            "--subject",
+            SUBJECT,
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert_eq!(
+        text(&output).1.trim(),
+        "HORAE_OIDC_ISSUER is not valid UTF-8; the issuer cannot be checked."
+    );
+    // The variable's value is never echoed.
+    assert!(!text(&output).1.contains("example"), "{output:?}");
+    assert!(!output.stderr.contains(&0xff), "{output:?}");
+    assert_eq!(binding(&pool, admin).await, (None, None));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn link_reports_issuer_recorded_inactive_and_already_linked(pool: PgPool) {
+    let (database, admin, member) = setup(&pool).await;
+    sqlx::query!(
+        "UPDATE users SET oidc_subject = $2 WHERE id = $1",
+        member,
+        SUBJECT
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Spelling is the provider's: case and percent-encoding are kept as given.
+    let issuer = "HTTPS://ID.Example.com/Realm%2Fa";
+    let recorded = link(&database, None, member, issuer, SUBJECT);
+    assert_eq!(recorded.status.code(), Some(0), "{recorded:?}");
+    assert_eq!(
+        text(&recorded).0.trim(),
+        format!("Recorded the issuer on the existing OIDC binding of user {member}.")
+    );
+    assert_eq!(
+        binding(&pool, member).await,
+        (Some(issuer.into()), Some(SUBJECT.into()))
+    );
+
+    let other = link(&database, None, member, issuer, "different");
+    assert_eq!(other.status.code(), Some(1), "{other:?}");
+    assert_eq!(
+        text(&other).1.trim(),
+        format!(
+            "User {member} is already linked to a different OIDC identity. \
+             Horae does not replace bindings."
+        )
+    );
+
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", admin)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let inactive = link(&database, None, admin, ISSUER, "free");
+    assert_eq!(inactive.status.code(), Some(1), "{inactive:?}");
+    assert_eq!(
+        text(&inactive).1.trim(),
+        format!("User {admin} is deactivated; reactivate the account before linking it.")
+    );
+    assert_eq!(binding(&pool, admin).await, (None, None));
+    for output in [&recorded, &other, &inactive] {
+        assert_private(output);
+        assert!(!text(output).0.contains("Example"), "{output:?}");
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
 async fn user_list_shows_ids_but_no_identity(pool: PgPool) {
     let (database, admin, member) = setup(&pool).await;
     assert!(

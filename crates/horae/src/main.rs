@@ -120,12 +120,18 @@ fn main() -> anyhow::Result<()> {
                 subject,
             } = &action
             {
-                let configured = std::env::var("HORAE_OIDC_ISSUER")
-                    .ok()
-                    .filter(|issuer| !issuer.is_empty());
-                if let Err(rejection) =
-                    auth::oidc::link::validate(issuer, subject, configured.as_deref())
-                {
+                use auth::oidc::link::{Rejection, validate};
+                // An unreadable value fails closed rather than skipping the check.
+                let checked = match std::env::var("HORAE_OIDC_ISSUER") {
+                    Ok(configured) if !configured.is_empty() => {
+                        validate(issuer, subject, Some(&configured))
+                    }
+                    Ok(_) | Err(std::env::VarError::NotPresent) => validate(issuer, subject, None),
+                    Err(std::env::VarError::NotUnicode(_)) => {
+                        Err(Rejection::UnreadableConfiguredIssuer)
+                    }
+                };
+                if let Err(rejection) = checked {
                     eprintln!("{}", rejection.message(*user_id));
                     std::process::exit(1);
                 }

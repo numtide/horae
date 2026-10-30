@@ -30,6 +30,8 @@ pub enum Rejection {
     InvalidSubject,
     InvalidIssuer,
     IssuerMismatch,
+    /// `HORAE_OIDC_ISSUER` is set but not UTF-8, so the issuer cannot be checked.
+    UnreadableConfiguredIssuer,
     UserNotFound,
     Inactive,
     SubjectInUse,
@@ -80,6 +82,9 @@ impl Rejection {
                                     with no query or fragment."
                 .into(),
             Self::IssuerMismatch => "The issuer does not match HORAE_OIDC_ISSUER exactly.".into(),
+            Self::UnreadableConfiguredIssuer => {
+                "HORAE_OIDC_ISSUER is not valid UTF-8; the issuer cannot be checked.".into()
+            }
             Self::UserNotFound => format!("No user with ID {user_id}."),
             Self::Inactive => {
                 format!("User {user_id} is deactivated; reactivate the account before linking it.")
@@ -122,6 +127,16 @@ fn validate_subject(subject: &str) -> Result<(), Rejection> {
 /// Parsed only to check its shape; the caller keeps the original string, since
 /// parsing normalizes (e.g. adds a trailing slash to a bare origin).
 fn validate_issuer(issuer: &str) -> Result<(), Rejection> {
+    // The parser silently drops tabs and newlines, reads `\` as `/`, and fills
+    // in a missing or extra `/` before the host. A token's `iss` would never be
+    // spelled like that, so such input is refused rather than repaired.
+    let authority = issuer.split_once(':').map(|(_, rest)| rest);
+    let well_formed = authority
+        .and_then(|rest| rest.strip_prefix("//"))
+        .is_some_and(|host| !host.starts_with('/'));
+    if !well_formed || issuer.contains(|c: char| c.is_ascii_control() || c == '\\') {
+        return Err(Rejection::InvalidIssuer);
+    }
     let url = Url::parse(issuer).map_err(|_| Rejection::InvalidIssuer)?;
     let loopback = match url.host() {
         Some(Host::Domain(domain)) => domain == "localhost",
@@ -295,6 +310,42 @@ mod tests {
                 Err(Rejection::InvalidIssuer),
                 "{bad:?}"
             );
+        }
+    }
+
+    #[test]
+    fn issuer_rejects_what_the_url_parser_would_silently_repair() {
+        // A parser drops inner tabs and newlines, treats a backslash like a
+        // slash and fills in a missing `//`. The token's `iss` would never be
+        // spelled that way, so the binding could never match.
+        for bad in [
+            "https://id.exa\tmple.com",
+            "https://id.example.com/\r",
+            "https://id.example.com/a\nb",
+            "https://id.example.com\\realm",
+            "https:\\\\id.example.com",
+            "https:id.example.com",
+            "https:/id.example.com",
+            "https:///id.example.com",
+            "https://id.example.com/\u{7f}",
+        ] {
+            assert_eq!(
+                validate_issuer(bad),
+                Err(Rejection::InvalidIssuer),
+                "{bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn issuer_spelling_is_accepted_as_given() {
+        // Validation never rewrites: case and percent-encoding are the provider's.
+        for ok in [
+            "HTTPS://ID.Example.COM",
+            "https://id.example.com/Realms/Main%2FSub",
+            "Http://LocalHost:5556/dex",
+        ] {
+            assert_eq!(validate(ok, "s", Some(ok)), Ok(()), "{ok}");
         }
     }
 

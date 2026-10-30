@@ -246,6 +246,149 @@ async fn a_callback_ordered_after_a_link_of_its_subject_gets_no_session(pool: Pg
     );
 }
 
+/// Lock `ids` so operations started next queue behind this transaction, in the
+/// order they reach the lock. Committing it releases them in that order.
+async fn hold(pool: &PgPool, ids: &[Uuid]) -> sqlx::Transaction<'static, sqlx::Postgres> {
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM users WHERE id = ANY($1) FOR UPDATE", ids)
+        .fetch_all(&mut *tx)
+        .await
+        .unwrap();
+    tx
+}
+
+type Spawned<T> = tokio::task::JoinHandle<T>;
+
+fn spawn_link(
+    pool: &PgPool,
+    id: Uuid,
+    subject: &'static str,
+) -> Spawned<Result<LinkOutcome, LinkError>> {
+    let db = pool.clone();
+    tokio::spawn(async move { link(&db, id, ISSUER, subject).await })
+}
+
+/// A verified-email sign-in for `id`, reporting which account it resolved to.
+fn spawn_callback(pool: &PgPool, email: String, subject: &'static str) -> Spawned<Option<Uuid>> {
+    let db = pool.clone();
+    tokio::spawn(async move {
+        let token = identity(ISSUER, subject, Some(email), true);
+        resolve_user(&db, &token).await.unwrap().map(|user| user.id)
+    })
+}
+
+async fn finish<T>(task: Spawned<T>) -> T {
+    timeout(Duration::from_secs(10), task)
+        .await
+        .unwrap()
+        .unwrap()
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_link_ordered_before_a_same_identity_callback_lets_it_resolve(pool: PgPool) {
+    let id = account(&pool).await;
+    let held = hold(&pool, &[id]).await;
+    let linking = spawn_link(&pool, id, "same");
+    wait_for_links(&pool, 1).await;
+    let callback = spawn_callback(&pool, email(&pool, id).await, "same");
+    wait_for_links(&pool, 2).await;
+    held.commit().await.unwrap();
+
+    assert_eq!(finish(linking).await.unwrap(), LinkOutcome::Linked);
+    // The callback's conditional update finds the account bound and rereads
+    // the pair: the same identity resolves to the same account.
+    assert_eq!(finish(callback).await, Some(id));
+    assert_eq!(
+        binding(&pool, id).await,
+        (Some(ISSUER.into()), Some("same".into()))
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_link_ordered_before_another_subjects_callback_keeps_its_binding(pool: PgPool) {
+    let id = account(&pool).await;
+    let held = hold(&pool, &[id]).await;
+    let linking = spawn_link(&pool, id, "operator");
+    wait_for_links(&pool, 1).await;
+    let callback = spawn_callback(&pool, email(&pool, id).await, "provider");
+    wait_for_links(&pool, 2).await;
+    held.commit().await.unwrap();
+
+    assert_eq!(finish(linking).await.unwrap(), LinkOutcome::Linked);
+    assert_eq!(finish(callback).await, None);
+    assert_eq!(
+        binding(&pool, id).await,
+        (Some(ISSUER.into()), Some("operator".into()))
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_callback_ordered_before_a_link_of_another_subject_is_never_replaced(pool: PgPool) {
+    let id = account(&pool).await;
+    let held = hold(&pool, &[id]).await;
+    let callback = spawn_callback(&pool, email(&pool, id).await, "provider");
+    wait_for_links(&pool, 1).await;
+    let linking = spawn_link(&pool, id, "operator");
+    wait_for_links(&pool, 2).await;
+    held.commit().await.unwrap();
+
+    assert_eq!(finish(callback).await, Some(id));
+    assert_eq!(rejected(finish(linking).await), Rejection::AlreadyLinked);
+    assert_eq!(
+        binding(&pool, id).await,
+        (Some(ISSUER.into()), Some("provider".into()))
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_callback_ordered_before_a_link_of_the_same_identity_makes_it_a_no_op(pool: PgPool) {
+    let id = account(&pool).await;
+    let held = hold(&pool, &[id]).await;
+    let callback = spawn_callback(&pool, email(&pool, id).await, "same");
+    wait_for_links(&pool, 1).await;
+    let linking = spawn_link(&pool, id, "same");
+    wait_for_links(&pool, 2).await;
+    held.commit().await.unwrap();
+
+    assert_eq!(finish(callback).await, Some(id));
+    assert_eq!(finish(linking).await.unwrap(), LinkOutcome::Unchanged);
+    assert_eq!(
+        binding(&pool, id).await,
+        (Some(ISSUER.into()), Some("same".into()))
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn two_links_of_one_subject_to_different_accounts_bind_exactly_one(pool: PgPool) {
+    let first = account(&pool).await;
+    let second = account(&pool).await;
+    // Release both together so neither sees the other's binding first.
+    let held = hold(&pool, &[first, second]).await;
+    let a = spawn_link(&pool, first, "contested");
+    let b = spawn_link(&pool, second, "contested");
+    wait_for_links(&pool, 2).await;
+    held.commit().await.unwrap();
+
+    let results = [(first, finish(a).await), (second, finish(b).await)];
+    let winners: Vec<Uuid> = results
+        .iter()
+        .filter(|(_, result)| matches!(result, Ok(LinkOutcome::Linked)))
+        .map(|(id, _)| *id)
+        .collect();
+    assert_eq!(winners.len(), 1, "{results:?}");
+    for (id, result) in results {
+        if id == winners[0] {
+            assert_eq!(
+                binding(&pool, id).await,
+                (Some(ISSUER.into()), Some("contested".into()))
+            );
+        } else {
+            assert_eq!(rejected(result), Rejection::SubjectInUse);
+            assert_eq!(binding(&pool, id).await, (None, None));
+        }
+    }
+}
+
 #[sqlx::test(migrations = "./migrations")]
 async fn a_deactivation_ordered_first_makes_the_link_write_nothing(pool: PgPool) {
     let id = account(&pool).await;
