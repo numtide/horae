@@ -26,8 +26,8 @@ and small; no push or PR without an explicit grant.
 
 ## Phase 2: Foundational
 
-- [ ] T003 [P] In crates/horae/src/auth/oidc/link.rs (new, declared from crates/horae/src/auth/oidc.rs), write unit tests for subject and issuer validation (red), then implement them: empty, whitespace-led/trailed, 255 vs 256 characters, case kept; `https`, `http` on `localhost`/`127.0.0.1`/`::1` accepted, `http` elsewhere, query, fragment, relative rejected; the original string is returned unchanged (trailing slash kept, never the parser's normalized form)
-- [ ] T004 [P] In crates/horae/src/auth/oidc/link.rs, write unit tests for the pure `decide` function covering transition rows 1–8 of data-model.md (red), then implement it
+- [ ] T003 [P] In crates/horae/src/auth/oidc/link.rs (new, declared from crates/horae/src/auth/oidc.rs), write unit tests for subject and issuer validation (red), then implement them: empty; leading/trailing ASCII space and a non-ASCII `White_Space` (U+00A0) rejected, inner space kept; 255 vs 256 ASCII bytes; 127 two-byte characters (254 bytes) accepted and 128 (256 bytes) rejected; case kept; `https`, `http` on `localhost`/`127.0.0.1`/`::1` accepted, `http` elsewhere, query, fragment, relative rejected; the original string is returned unchanged (trailing slash kept, never the parser's normalized form)
+- [ ] T004 [P] In crates/horae/src/auth/oidc/link.rs, write unit tests for the pure `decide` function covering transition rows 1–8 of data-model.md (red), including the subject's holder being U itself (must give `Unchanged`/`IssuerRecorded`, never `SubjectInUse`), then implement it with "holder id ≠ U"
 - [ ] T005 In crates/horae/src/auth/oidc.rs, add `issuer` to `Identity`, filled from `claims.issuer().as_str()`; update the `Identity` constructors in crates/horae/src/auth/oidc/tests/linking.rs; existing tests there are characterization and must still pass unchanged in meaning
 
 ## Phase 3: User Story 1 - Bootstrap without a verified email (P1) 🎯 MVP
@@ -51,7 +51,7 @@ else about the account or its sessions changes.
 unchanged.
 
 - [ ] T011 [P] [US2] In crates/horae/src/auth/oidc/tests/link.rs, add tests: user not found, deactivated, other account holds the subject, bound to a different subject, bound to the same subject with another issuer, legacy with a different subject; each asserts the rejection and unchanged rows
-- [ ] T012 [US2] In crates/horae/src/auth/oidc/tests/link.rs, add concurrency tests with a held row lock (pattern of `wait_for_links` in linking.rs): two links of one subject to two targets (exactly one wins, the other `SubjectInUse`); link versus an email-path callback for the same account (one binding, the loser gets no session unless it is the same pair); link versus deactivation (no binding on a deactivated account)
+- [ ] T012 [US2] In crates/horae/src/auth/oidc/tests/link.rs, add concurrency tests with a held row lock (pattern of `wait_for_links` in linking.rs): two links of one subject to two targets (exactly one wins, the other `SubjectInUse`); link versus an email-path callback for the same account (one binding, the loser gets no session unless it is the same pair); a callback whose verified email names unbound account M while `link-oidc` binds the same subject to U (no binding change on M, no successful resolution); FR-006 linearization against deactivation in both orders: deactivation committed first → `link` rejects `Inactive` and writes nothing; link committed first → binding stays and a later deactivation makes `resolve_user` deny (the per-request `require_user` re-check is characterization of existing behavior)
 - [ ] T013 [US2] Issuer equality with a configured `HORAE_OIDC_ISSUER` (research D4): when `HORAE_OIDC_ISSUER` is set and non-empty, compare against it in crates/horae/src/main.rs before opening the pool, reading that variable directly (not `AppConfig::oidc`, which needs all four settings); test in crates/horae/tests/oidc_link_cli.rs for mismatch with only `HORAE_OIDC_ISSUER` set (exit 1, nothing written), match, and unset
 
 ## Phase 5: User Story 3 - Sign-in resolves the pair (P1)
@@ -60,7 +60,7 @@ unchanged.
 
 **Independent test**: (I, S) signs in; (J, S) is denied.
 
-- [ ] T014 [US3] In crates/horae/src/auth/oidc/tests/linking.rs, add tests (red): bound (I, S) resolves with (I, S) and is denied with (J, S); the email path stores the token's issuer; `email_verified` false (characterization) and absent (mapped to false) are denied; the concurrent same-pair callbacks still both succeed and different subjects still yield one
+- [ ] T014 [US3] In crates/horae/src/auth/oidc/tests/linking.rs, add tests (red): bound (I, S) resolves with (I, S) and is denied with (J, S); the email path stores the token's issuer; `email_verified: false` is denied (characterization of the bool; an absent claim is only proven by the signed token in T021); the concurrent same-pair callbacks still both succeed and different subjects still yield one; subject S held by account L (legacy, and in a second case bound under another issuer) plus a token (I, S) whose verified email belongs to a different unbound active account M → `resolve_user` returns `Err` (existing behavior, no new mapping), the error's displayed text does not contain S, M stays unbound and L is unchanged
 - [ ] T015 [US3] In crates/horae/src/auth/oidc.rs, replace `fetch_by_subject` with a pair lookup (`oidc_issuer = $1 AND oidc_subject = $2`) used by `resolve_user` and its reread, and set `oidc_issuer` in the email-path conditional UPDATE; `models::User` and its column lists stay as they are
 
 ## Phase 6: User Story 4 - Legacy bindings are completed explicitly (P2)
@@ -80,8 +80,8 @@ subject, sign-in succeeds.
 
 - [ ] T018 [P] In crates/horae/src/plugin/database.rs, add `OR has_column_privilege('public.users', 'oidc_issuer', 'SELECT')` to the relation check and a test that a plugin role granted only `SELECT (oidc_issuer)` on `users` is rejected (red before the guard)
 - [ ] T019 [P] Documentation: README.md (operator flow, evidence rule, upgrade step, no rebind); AGENTS.md CLI list; specs/001-time-tracking-invoicing/contracts/plugin-interface.md (issuer excluded like the subject); specs/001-time-tracking-invoicing/data-model.md (users field list); specs/015-scoped-permissions/contracts/permission-state.md (identity writers: pair binding and `link-oidc`)
-- [ ] T020 In nix/checks/e2e-oidc.nix, after the existing verified-email sign-in with the normal `horae` client, run `horae user link-oidc` for that user with Dex's issuer and mock subject and assert exit 0 with "nothing changed", which proves sign-in stored the exact issuer string; keep the deactivation scenario
-- [ ] T021 In nix/checks/e2e-oidc.nix, the absent-claim scenario from research D6: a test-only `services.dex.package` override whose `postPatch` uses `--replace-fail` on the one `tok.EmailVerified = &claims.EmailVerified` line in `server/oauth2.go` to skip it for client `horae-omit-email-verified`; a dedicated static client; after T020, reset the fixture user's binding and switch the Horae service to that client; assert sign-in denied, then `link-oidc` exit 0, repeat exit 0 "nothing changed", same subject to another user exit 1, then sign-in succeeds. Verify each client's ID token signature with an existing library (test-only Python `PyJWT` + `cryptography`, or the `openidconnect` verifier; no handwritten RSA) and assert `email_verified` absent for the omit client and `true` for the normal client. First confirm the override applies and present `nix build --dry-run .#checks.x86_64-linux.e2e-oidc` for review before the heavy run
+- [ ] T020 In nix/checks/e2e-oidc.nix, after the existing verified-email sign-in with the normal `horae` client, run `horae user link-oidc` for that user with Dex's issuer and mock subject and assert exit 0 with "nothing changed", which proves sign-in stored the exact issuer string. This repeat runs before the existing deactivation step (`Inactive` is checked before `Unchanged`); keep the deactivation scenario after it
+- [ ] T021 In nix/checks/e2e-oidc.nix, the absent-claim scenario from research D6: a test-only `services.dex.package` override whose `postPatch` uses `--replace-fail` on the one `tok.EmailVerified = &claims.EmailVerified` line in `server/oauth2.go` to skip it for client `horae-omit-email-verified`; a dedicated static client; after T020 and the deactivation step, reset the fixture user (`active = true`, `oidc_issuer` and `oidc_subject` both NULL), switch the Horae service to that client and use fresh cookie jars; assert sign-in denied, then `link-oidc` exit 0, repeat exit 0 "nothing changed", same subject to another user exit 1, then sign-in succeeds. Verify each client's ID token signature with an existing library (test-only Python `PyJWT` + `cryptography`, or the `openidconnect` verifier; no handwritten RSA) and assert `email_verified` absent for the omit client and `true` for the normal client. First confirm the override applies and present `nix build --dry-run .#checks.x86_64-linux.e2e-oidc` for review before the heavy run
 - [ ] T022 Regenerate `.sqlx` in an own disposable migrated database (`touch` sources, `cargo sqlx prepare --workspace -- --features server --all-targets`), then the offline all-targets build, `cargo clippy -p horae --features server`, `nix fmt`
 - [ ] T023 On the exact head, in a granted slot: `nix flake check` (or the checks the reviewer names), then request independent reviews
 
@@ -118,7 +118,7 @@ task group.
 | FR-007 | T003, T013 |
 | FR-008 | T009, T010 |
 | FR-009 | T014, T015, T016 |
-| FR-010 | T014, T015 |
+| FR-010 | T014, T015 (bool); T021 (absent claim) |
 | FR-011 | T006 |
 | FR-012 | T009, T010, T015, T018 |
 | FR-013 | T017 |
@@ -126,6 +126,6 @@ task group.
 | SC-001 | T020, T021 |
 | SC-002 | T011, T013 |
 | SC-003 | T012 |
-| SC-004 | T014, T021 |
+| SC-004 | T014 (unverified bool), T021 (absent claim) |
 | SC-005 | T016, T019 |
 | SC-006 | T010, T017, T018 |

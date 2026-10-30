@@ -36,7 +36,10 @@ dependency, UI or permission change.
 - **Project Type**: web service with an operator CLI.
 - **Performance Goals**: none new. Sign-in keeps one indexed lookup by subject.
 - **Constraints**: exact issuer and subject bytes; no session or role writes from
-  the command; issuer never in `models::User`, logs, output or plugin reads.
+  the command; the new code adds the issuer to no `models::User`, page query or
+  plugin payload, and the command never prints or logs issuer or subject. Existing
+  exposures (subject in `models::User`, issuer text in an existing validation-error
+  log) stay as documented in research.md.
 - **Scale/Scope**: single organization, one configured provider.
 - **Touched code**:
   - `crates/horae/migrations/0049_oidc_issuer.sql` (new).
@@ -113,8 +116,8 @@ the outcome to output and exit code.
   `setup-plan.sh --json` (copied the plan template here) and
   `setup-tasks.sh`/`check-prerequisites.sh` for tasks and analyze.
 - The spec was created from `spec-template.md` by copy (the specify procedure does
-  that itself; `create-new-feature.sh` was not used because the coordinator chose
-  the child directory and it would number a top-level `specs/NNN-*`).
+  that itself; `create-new-feature.sh` was not used because the child directory was
+  chosen in advance and it would number a top-level `specs/NNN-*`).
 - The plan's agent-context update step has no script in this checkout; not run,
   nothing substituted.
 - Clarify asked the owner nothing new: the answers are technical decisions taken in

@@ -35,5 +35,8 @@
   `email_verified`) are the operator-facing contract approved by the owner, not
   implementation choices, so they stay in the spec. Storage, modules and queries are
   left to the plan.
+- This checklist measures spec readiness only. "Feature meets measurable outcomes"
+  means each success criterion is stated so it can be met and tested; it is not a
+  claim that the implementation exists or succeeds.
 - Validation pass 1: all items pass. No clarification markers were needed; the owner
   had already fixed scope, authority and the rejection rules.

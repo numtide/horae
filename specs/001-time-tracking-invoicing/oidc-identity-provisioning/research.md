@@ -88,6 +88,12 @@ review.
   quickstart and README carry this as an upgrade step.
 - **Concurrency of the email path**: the losing callback's reread uses the pair, so
   it succeeds only for the same issuer, subject and active account.
+- **Subject already held elsewhere**: when a token's pair misses but its subject is
+  held by another account (legacy, other issuer, or a concurrent `link-oidc`) and
+  its verified email matches a different unbound account, the email path's UPDATE
+  violates the unique subject index. The callback keeps its current behavior for
+  that `Err`: logged, redirected to sign-in, no session, no binding change. No new
+  error mapping is added there; only the CLI maps that 23505 to `SubjectInUse`.
 
 ### D3. The link decision is a pure function plus one locked transaction
 
@@ -154,9 +160,14 @@ review.
   1. The existing verified-email first-bind regression runs first, unchanged, with
      the normal `horae` client and no prior link.
   1. A repeat `link-oidc` for that user with Dex's issuer and subject reports
-     "nothing changed", which proves sign-in stored the exact issuer string.
-  1. In a separate phase, reset the fixture user's binding in the test database and
-     switch Horae's service to the dedicated `horae-omit-email-verified` client.
+     "nothing changed", which proves sign-in stored the exact issuer string. It runs
+     before the existing deactivation step, because `Inactive` is checked before
+     `Unchanged`.
+  1. The existing deactivation scenario.
+  1. In a separate phase, reset the fixture user in the test database
+     (`active = true`, `oidc_issuer` and `oidc_subject` both NULL), switch Horae's
+     service to the dedicated `horae-omit-email-verified` client, and use fresh
+     cookie jars.
   1. Sign-in is denied before any link.
   1. `link-oidc` links Dex's issuer and subject (exit 0), the repeat says nothing
      changed (exit 0), and a link of the same subject to another user fails (exit 1).

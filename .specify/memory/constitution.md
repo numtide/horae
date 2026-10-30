@@ -26,7 +26,10 @@ Sync Impact Report
     written; later plans check against 3.0.0.
 - Follow-up: the exception covers only `horae user link-oidc`. The existing local CLI commands
   that already write to the datastore (`init`, `user create`, `seed`, `migrate`) are neither
-  covered nor assessed by this amendment.
+  covered nor assessed by this amendment. The existing `/auth/callback` binding write (automatic
+  binding by verified email, before any session exists) is also outside this exception; it is
+  justified as an existing deviation in the Complexity Tracking of
+  specs/001-time-tracking-invoicing/oidc-identity-provisioning/plan.md.
 -->
 <!--
 Sync Impact Report (2.0.0)
@@ -126,8 +129,9 @@ directly, with the operator's database credentials as its authority.
 **Rationale**: A single, typed, authorized mutation path keeps authorization and validation in one
 place and keeps client and server types in sync. Some providers never assert a verified email, so
 the first administrator cannot sign in to bind their own identity; nobody holds a session yet. The
-operator who can already run `horae init` against the database is the only authority available at
-that point, so this one binding step is allowed there and nowhere else.
+operator who can already run `horae init` against the database is the only authority available
+when the provider never asserts a verified email, so this one binding step is allowed there and
+nowhere else.
 
 ### V. Reproducible Builds & Formatting Gate
 

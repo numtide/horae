@@ -27,7 +27,7 @@ one transaction that holds the target row lock. It does not run migrations.
 | Inactive | stderr | `User <UUID> is deactivated; reactivate the account before linking it.` | 1 |
 | SubjectInUse | stderr | `Another user is already linked to this subject.` | 1 |
 | AlreadyLinked | stderr | `User <UUID> is already linked to a different OIDC identity. Horae does not replace bindings.` | 1 |
-| InvalidSubject | stderr | `The subject must be 1–255 characters with no leading or trailing whitespace.` | 1 |
+| InvalidSubject | stderr | `The subject must be 1–255 bytes with no leading or trailing whitespace.` | 1 |
 | InvalidIssuer | stderr | `The issuer must be an https URL (or http on a loopback host) with no query or fragment.` | 1 |
 | IssuerMismatch | stderr | `The issuer does not match HORAE_OIDC_ISSUER exactly.` (only when `HORAE_OIDC_ISSUER` is set and non-empty) | 1 |
 | Database or other error | stderr | `Error: …` (existing `anyhow` reporting) | 1 |
@@ -60,3 +60,10 @@ and responses. Only which account a validated token resolves to changes:
    denied unless it carries the same `iss` and `sub` for the same active account.
 1. Otherwise denied, with no session and no account change. This includes a legacy
    binding (subject with no issuer) and a binding with another issuer.
+
+If step 2's update collides with the unique subject because another account already
+holds `sub` (a legacy or other-issuer binding, or a concurrent `link-oidc`), the
+callback keeps its existing behavior: the resolution error is logged by the existing
+line (its displayed text must not contain the subject, which T014 asserts), the browser is redirected to `/auth/login`, no session is created and no
+binding changes. No new error mapping is added on this path. Only `link-oidc` maps
+that unique violation (SQLSTATE 23505 on the subject constraint) to `SubjectInUse`.

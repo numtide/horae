@@ -72,10 +72,10 @@ run, evaluate the check without building
 | FR-002, FR-003 | link outcomes Linked / Unchanged / IssuerRecorded | T004, T006, T016 |
 | FR-004 | rejections: not found, inactive, other subject, other issuer, subject in use | T004, T011 |
 | FR-006 | link vs link on two targets, link vs email callback, link vs deactivation | T012 |
-| FR-007 | validation incl. trailing slash, case, whitespace, 255/256 chars, http loopback, query/fragment; issuer mismatch | T003, T013 |
+| FR-007 | validation incl. trailing slash, case, Unicode whitespace, 255/256 UTF-8 bytes incl. multibyte, http loopback, query/fragment; issuer mismatch | T003, T013 |
 | FR-008 | outcome text and exit codes from the real binary | T010 |
 | FR-009 | pair matches, other issuer denied, legacy denied with no write | T014, T016 |
-| FR-010 | email path records issuer; false or absent `email_verified` denied | T014, T021 |
+| FR-010 | email path records issuer; `false` denied (T014); absent claim in a signed token denied (T021 only) | T014, T021 |
 | FR-011 | session table unchanged by link; `require_user` unchanged | T006 |
 | FR-012 | plugin role with `oidc_issuer` grant rejected; issuer absent from `User`; nothing printed or logged | T010, T015, T018 |
 | FR-013 | `user list` shows ID, no issuer or subject | T017 |

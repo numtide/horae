@@ -202,8 +202,8 @@ ID next to its name, email, role and status.
 
 ### Edge Cases
 
-- Empty subject, a subject longer than 255 characters, or a subject with leading or
-  trailing whitespace: rejected, never trimmed. Otherwise the subject is stored
+- Empty subject, a subject longer than 255 bytes in UTF-8, or a subject with leading
+  or trailing Unicode whitespace: rejected, never trimmed. Otherwise the subject is stored
   byte for byte, case preserved.
 - Issuer that is not an absolute `https` URL (or `http` for a loopback host), or has
   a query or fragment: rejected. A valid issuer is stored exactly as given; a
@@ -222,6 +222,9 @@ ID next to its name, email, role and status.
   expiry. Operator documentation lists this as an upgrade step.
 - The same subject under another issuer: rejected by the link command (the subject
   is held), and a token carrying it matches no account.
+- A token whose subject is already held by another account and whose verified email
+  matches a different unbound account: sign-in is denied with no session and no
+  binding change. The existing error path handles it; nothing new is mapped.
 
 ## Requirements *(mandatory)*
 
@@ -247,8 +250,9 @@ ID next to its name, email, role and status.
   deactivation still revokes access (sign-in denies inactive accounts and every
   request re-checks the account). No interleaving may replace a binding or put one
   subject on two accounts.
-- **FR-007**: The command MUST validate the subject (non-empty, at most 255
-  characters, no leading or trailing whitespace) and the issuer (absolute `https`
+- **FR-007**: The command MUST validate the subject (non-empty, at most 255 bytes in
+  UTF-8, no leading or trailing whitespace as Unicode `White_Space` defines it, the
+  set Rust's `str::trim` removes) and the issuer (absolute `https`
   URL, or `http` for a loopback host, with no query or fragment) without
   normalizing either value, and MUST store the subject byte for byte with its case.
   When `HORAE_OIDC_ISSUER` is set and non-empty in the command's environment, the
