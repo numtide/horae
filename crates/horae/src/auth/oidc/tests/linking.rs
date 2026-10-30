@@ -3,12 +3,28 @@ use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use tokio::{task::JoinSet, time::timeout};
 
+const ISSUER: &str = "https://id.example.com";
+
+pub(super) fn identity(
+    issuer: &str,
+    subject: &str,
+    email: Option<String>,
+    email_verified: bool,
+) -> Identity {
+    Identity {
+        issuer: issuer.into(),
+        subject: subject.into(),
+        email,
+        email_verified,
+    }
+}
+
 async fn account(pool: &PgPool) -> (Uuid, String) {
     let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
     (ids.user_id, format!("{}@test.com", ids.user_id))
 }
 
-async fn wait_for_links(pool: &PgPool, count: i64) {
+pub(super) async fn wait_for_links(pool: &PgPool, count: i64) {
     timeout(std::time::Duration::from_secs(10), async {
         loop {
             let waiting = sqlx::query_scalar!(
@@ -39,11 +55,7 @@ async fn concurrent_links(pool: &PgPool, subjects: [&str; 2]) {
     let mut attempts = JoinSet::new();
     for subject in subjects {
         let db = pool.clone();
-        let identity = Identity {
-            subject: subject.into(),
-            email: Some(email.clone()),
-            email_verified: true,
-        };
+        let identity = identity(ISSUER, subject, Some(email.clone()), true);
         attempts.spawn(async move {
             let user = resolve_user(&db, &identity).await.unwrap();
             (identity.subject, user)
@@ -98,16 +110,9 @@ async fn deactivation_during_first_link_denies_login(pool: PgPool) {
     let mut attempts = JoinSet::new();
     let db = pool.clone();
     attempts.spawn(async move {
-        resolve_user(
-            &db,
-            &Identity {
-                subject: "new-subject".into(),
-                email: Some(email),
-                email_verified: true,
-            },
-        )
-        .await
-        .unwrap()
+        resolve_user(&db, &identity(ISSUER, "new-subject", Some(email), true))
+            .await
+            .unwrap()
     });
     wait_for_links(&pool, 1).await;
     blocker.commit().await.unwrap();
@@ -126,11 +131,7 @@ async fn deactivation_during_first_link_denies_login(pool: PgPool) {
 async fn existing_subject_wins_over_another_accounts_email(pool: PgPool) {
     let (id, email) = account(&pool).await;
     let (_, other_email) = account(&pool).await;
-    let mut identity = Identity {
-        subject: "linked-subject".into(),
-        email: Some(email),
-        email_verified: true,
-    };
+    let mut identity = identity(ISSUER, "linked-subject", Some(email), true);
     assert_eq!(
         resolve_user(&pool, &identity).await.unwrap().unwrap().id,
         id
@@ -145,10 +146,113 @@ async fn existing_subject_wins_over_another_accounts_email(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn unverified_email_cannot_link_an_account(pool: PgPool) {
     let (_, email) = account(&pool).await;
-    let identity = Identity {
-        subject: "unverified-subject".into(),
-        email: Some(email),
-        email_verified: false,
-    };
+    let identity = identity(ISSUER, "unverified-subject", Some(email), false);
     assert!(resolve_user(&pool, &identity).await.unwrap().is_none());
+}
+
+async fn binding(pool: &PgPool, id: Uuid) -> (Option<String>, Option<String>) {
+    let row = sqlx::query!(
+        "SELECT oidc_issuer, oidc_subject FROM users WHERE id = $1",
+        id
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    (row.oidc_issuer, row.oidc_subject)
+}
+
+async fn bind(pool: &PgPool, id: Uuid, issuer: Option<&str>, subject: &str) {
+    sqlx::query!(
+        "UPDATE users SET oidc_issuer = $2, oidc_subject = $3 WHERE id = $1",
+        id,
+        issuer,
+        subject
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn sign_in_resolves_only_the_issuer_and_subject_pair(pool: PgPool) {
+    let (id, _) = account(&pool).await;
+    bind(&pool, id, Some(ISSUER), "pair-subject").await;
+
+    let same = identity(ISSUER, "pair-subject", None, false);
+    assert_eq!(resolve_user(&pool, &same).await.unwrap().unwrap().id, id);
+    // The same subject from another issuer is a different person.
+    let other = identity("https://other.example", "pair-subject", None, false);
+    assert!(resolve_user(&pool, &other).await.unwrap().is_none());
+    // Issuers compare exactly: a trailing slash is another issuer.
+    let slash = identity("https://id.example.com/", "pair-subject", None, false);
+    assert!(resolve_user(&pool, &slash).await.unwrap().is_none());
+    assert_eq!(
+        binding(&pool, id).await,
+        (Some(ISSUER.into()), Some("pair-subject".into()))
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn verified_email_binding_records_the_tokens_issuer(pool: PgPool) {
+    let (id, email) = account(&pool).await;
+    let first = identity(
+        "https://id.example.com/",
+        "email-subject",
+        Some(email),
+        true,
+    );
+    assert_eq!(resolve_user(&pool, &first).await.unwrap().unwrap().id, id);
+    assert_eq!(
+        binding(&pool, id).await,
+        (
+            Some("https://id.example.com/".into()),
+            Some("email-subject".into())
+        )
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn legacy_binding_is_denied_without_adopting_an_issuer(pool: PgPool) {
+    let (id, email) = account(&pool).await;
+    bind(&pool, id, None, "legacy-subject").await;
+
+    // Neither its own subject nor its verified email signs the account in.
+    for email in [None, Some(email)] {
+        let token = identity(ISSUER, "legacy-subject", email, true);
+        assert!(resolve_user(&pool, &token).await.unwrap().is_none());
+    }
+    assert_eq!(
+        binding(&pool, id).await,
+        (None, Some("legacy-subject".into()))
+    );
+
+    // After the operator records the issuer, the pair signs in.
+    crate::auth::oidc::link::link(&pool, id, ISSUER, "legacy-subject")
+        .await
+        .unwrap();
+    let token = identity(ISSUER, "legacy-subject", None, false);
+    assert_eq!(resolve_user(&pool, &token).await.unwrap().unwrap().id, id);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn held_subject_with_another_accounts_verified_email_changes_nothing(pool: PgPool) {
+    for holder_issuer in [None, Some("https://other.example")] {
+        let (holder, _) = account(&pool).await;
+        let (unbound, unbound_email) = account(&pool).await;
+        let subject = format!("held-{holder}");
+        bind(&pool, holder, holder_issuer, &subject).await;
+
+        // The pair misses, the email names an unbound account, and binding it
+        // would put one subject on two accounts. The existing error path denies.
+        let token = identity(ISSUER, &subject, Some(unbound_email), true);
+        let error = resolve_user(&pool, &token)
+            .await
+            .expect_err("the unique subject must refuse the second account");
+        assert!(!format!("{error:#}").contains(&subject), "{error:#}");
+        assert_eq!(binding(&pool, unbound).await, (None, None));
+        assert_eq!(
+            binding(&pool, holder).await,
+            (holder_issuer.map(Into::into), Some(subject.clone()))
+        );
+    }
 }

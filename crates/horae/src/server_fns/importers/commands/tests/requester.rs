@@ -256,7 +256,7 @@ async fn legacy_content(pool: &PgPool) -> serde_json::Value {
             (SELECT jsonb_agg(to_jsonb(j) - 'original_requester_id' ORDER BY id) FROM horae_jobs j),
             (SELECT jsonb_agg(to_jsonb(u) ORDER BY job_id) FROM horae_job_uploads u),
             (SELECT jsonb_agg(to_jsonb(c) ORDER BY id) FROM horae_job_report_error_chunks c),
-            (SELECT jsonb_agg(to_jsonb(u) ORDER BY id) FROM users u)
+            (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer' ORDER BY id) FROM users u)
         ) AS "content!""#
     )
     .fetch_one(pool)
@@ -301,6 +301,14 @@ async fn requester_migration_preserves_unknown_authors_in_all_job_states(pool: P
     sqlx::migrate!("./migrations").run(&pool).await.unwrap();
     sqlx::migrate!("./migrations").run(&pool).await.unwrap();
     assert_eq!(legacy_content(&pool).await, before);
+    // The issuer column added later is compared on its own: never backfilled.
+    let issuers = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM users WHERE oidc_issuer IS NOT NULL"#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(issuers, 0);
     for id in jobs {
         assert_eq!(requester(&pool, id).await, None);
     }

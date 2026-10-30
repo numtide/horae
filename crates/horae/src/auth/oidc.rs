@@ -7,6 +7,8 @@
 //! first OIDC login *links* the subject to a user matched by verified email — it
 //! never auto-provisions. Deactivated users are denied at sign-in.
 
+pub mod link;
+
 use axum::extract::Query;
 use axum::response::{Html, IntoResponse, Redirect};
 
@@ -157,6 +159,8 @@ pub async fn callback(session: Session, Query(params): Query<CallbackParams>) ->
 
 /// The verified identity claims we act on.
 struct Identity {
+    /// The token's `iss`, spelled exactly as the provider sent it.
+    issuer: String,
     subject: String,
     email: Option<String>,
     email_verified: bool,
@@ -213,7 +217,7 @@ fn resolve_identity(
 
 /// Resolve a verified identity to the account that may receive a session.
 async fn resolve_user(db: &sqlx::PgPool, identity: &Identity) -> anyhow::Result<Option<User>> {
-    let by_subject = fetch_by_subject(db, &identity.subject).await?;
+    let by_subject = fetch_by_identity(db, identity).await?;
     // Only an as-yet-unlinked account may be claimed by a verified email — a
     // first-login bootstrap. This prevents a different subject with a matching
     // email from silently rebinding an already-linked account.
@@ -251,7 +255,7 @@ async fn resolve_user(db: &sqlx::PgPool, identity: &Identity) -> anyhow::Result<
     if link_subject {
         let linked = sqlx::query_as!(
             User,
-            r#"UPDATE users SET oidc_subject = $1
+            r#"UPDATE users SET oidc_subject = $1, oidc_issuer = $3
                WHERE id = $2 AND oidc_subject IS NULL AND active
                RETURNING id, org_id, email, name, oidc_subject,
                          org_role as "org_role: OrgRole",
@@ -259,15 +263,16 @@ async fn resolve_user(db: &sqlx::PgPool, identity: &Identity) -> anyhow::Result<
                          created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
             identity.subject,
             user.id,
+            identity.issuer,
         )
         .fetch_optional(db)
         .await?;
         if linked.is_some() {
             return Ok(linked);
         }
-        // A concurrent callback may have linked the row. Only the same subject
+        // A concurrent callback may have linked the row. Only the same identity
         // winning that same active account is allowed to receive a session.
-        return Ok(fetch_by_subject(db, &identity.subject)
+        return Ok(fetch_by_identity(db, identity)
             .await?
             .filter(|current| current.id == user.id && current.active));
     }
@@ -315,16 +320,19 @@ fn candidate(u: &crate::models::User) -> Candidate {
     }
 }
 
-/// The user already linked to this OIDC subject, if any.
-async fn fetch_by_subject(db: &sqlx::PgPool, subject: &str) -> anyhow::Result<Option<User>> {
+/// The user already linked to this issuer and subject, if any. A subject is
+/// only stable within its issuer, and a legacy binding with no recorded issuer
+/// matches nothing until an operator records it (`horae user link-oidc`).
+async fn fetch_by_identity(db: &sqlx::PgPool, identity: &Identity) -> anyhow::Result<Option<User>> {
     let user = sqlx::query_as!(
         User,
         r#"SELECT id, org_id, email, name, oidc_subject,
                   org_role as "org_role: OrgRole",
                   cost_rate_cents, billable_rate_cents, active,
                   created_at as "created_at: chrono::DateTime<chrono::Utc>"
-           FROM users WHERE oidc_subject = $1"#,
-        subject,
+           FROM users WHERE oidc_issuer = $1 AND oidc_subject = $2"#,
+        identity.issuer,
+        identity.subject,
     )
     .fetch_optional(db)
     .await?;
@@ -412,6 +420,8 @@ fn exchange_and_verify(
     let claims = id_token.claims(&verifier, &Nonce::new(nonce.to_string()))?;
 
     Ok(Identity {
+        // `as_str` keeps the original spelling; `url().as_str()` would normalize it.
+        issuer: claims.issuer().as_str().to_string(),
         subject: claims.subject().as_str().to_string(),
         email: claims.email().map(|e| e.as_str().to_string()),
         email_verified: claims.email_verified().unwrap_or(false),
@@ -496,6 +506,7 @@ fn discover_client(cfg: &OidcConfig) -> anyhow::Result<CoreClient> {
 mod tests {
     use super::*;
 
+    mod link;
     mod linking;
 
     fn active(id: Uuid) -> Candidate {

@@ -1,25 +1,30 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT name, email, org_role::text as role, active FROM users ORDER BY name ASC",
+  "query": "SELECT id, name, email, org_role::text as role, active FROM users ORDER BY name ASC",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
         "name": "name",
         "type_info": "Text"
       },
       {
-        "ordinal": 1,
+        "ordinal": 2,
         "name": "email",
         "type_info": "Text"
       },
       {
-        "ordinal": 2,
+        "ordinal": 3,
         "name": "role",
         "type_info": "Text"
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "active",
         "type_info": "Bool"
       }
@@ -30,9 +35,10 @@
     "nullable": [
       false,
       false,
+      false,
       null,
       false
     ]
   },
-  "hash": "bef6af879976aa28d8e5ec46e1e83ffec509da4b028d038fe130e6ebe9893548"
+  "hash": "7b0deda46433258294b0e509d92fd282df8ff6b4427831201d5452d5bfe5a2d3"
 }

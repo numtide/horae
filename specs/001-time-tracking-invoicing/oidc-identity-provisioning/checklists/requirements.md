@@ -1,0 +1,42 @@
+# Specification Quality Checklist: Operator-provisioned OIDC identity binding
+
+**Purpose**: Validate specification completeness and quality before proceeding to planning
+**Created**: 2026-10-30
+**Feature**: [spec.md](../spec.md)
+
+## Content Quality
+
+- [x] No implementation details (languages, frameworks, APIs)
+- [x] Focused on user value and business needs
+- [x] Written for non-technical stakeholders
+- [x] All mandatory sections completed
+
+## Requirement Completeness
+
+- [x] No [NEEDS CLARIFICATION] markers remain
+- [x] Requirements are testable and unambiguous
+- [x] Success criteria are measurable
+- [x] Success criteria are technology-agnostic (no implementation details)
+- [x] All acceptance scenarios are defined
+- [x] Edge cases are identified
+- [x] Scope is clearly bounded
+- [x] Dependencies and assumptions identified
+
+## Feature Readiness
+
+- [x] All functional requirements have clear acceptance criteria
+- [x] User scenarios cover primary flows
+- [x] Feature meets measurable outcomes defined in Success Criteria
+- [x] No implementation details leak into specification
+
+## Notes
+
+- The command name, its flags and the OIDC claim names (`iss`, `sub`,
+  `email_verified`) are the operator-facing contract approved by the owner, not
+  implementation choices, so they stay in the spec. Storage, modules and queries are
+  left to the plan.
+- This checklist measures spec readiness only. "Feature meets measurable outcomes"
+  means each success criterion is stated so it can be met and tested; it is not a
+  claim that the implementation exists or succeeds.
+- Validation pass 1: all items pass. No clarification markers were needed; the owner
+  had already fixed scope, authority and the rejection rules.

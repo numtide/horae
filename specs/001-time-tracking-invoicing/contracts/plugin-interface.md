@@ -258,7 +258,8 @@ no elevated role attributes, role memberships, database/schema creation rights,
 relation ownership, or data-write grants. Read grants are limited to the `public`
 business tables: organizations, users, clients, projects, tasks, project_tasks,
 assignments, time_entries, approvals, invoices, and invoice_line_items. The
-`users.oidc_subject` column is excluded: do not grant table-wide SELECT on users.
+`users.oidc_subject` and `users.oidc_issuer` columns are excluded: do not grant
+table-wide SELECT on users.
 Session tables, Harvest credentials, audit logs, import provenance, and other
 non-business relations are not readable. Publicly updatable `pg_settings` is a
 session-configuration exception, not an application-data write capability.

@@ -63,7 +63,8 @@ pub(super) async fn validate_connection(connection: &mut sqlx::PgConnection) -> 
                     AND NOT (n.nspname = 'public' AND c.relkind IN ('r','p') AND c.relname = ANY($1))
                     AND has_any_column_privilege(c.oid, 'SELECT'))
             ELSE false END
-        ) OR has_column_privilege('public.users', 'oidc_subject', 'SELECT') AS "unsafe!""#,
+        ) OR has_column_privilege('public.users', 'oidc_subject', 'SELECT')
+          OR has_column_privilege('public.users', 'oidc_issuer', 'SELECT') AS "unsafe!""#,
         &[
             "organizations", "users", "clients", "projects", "tasks", "project_tasks",
             "assignments", "time_entries", "approvals", "invoices", "invoice_line_items"
@@ -142,6 +143,46 @@ pub(super) mod tests {
                 .to_string()
                 .contains("unapproved database function")
         );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn reader_cannot_read_either_oidc_identity_column(pool: sqlx::PgPool) {
+        let reader = Reader::new(&pool).await;
+        let name = reader.name.clone();
+        // The documented column grant on users is accepted.
+        sqlx::raw_sql(&format!(
+            "GRANT SELECT (id, org_id, email, name, org_role, active) ON public.users TO {name}"
+        ))
+        .execute(&pool)
+        .await
+        .unwrap();
+        let mut connection = reader.pool.acquire().await.unwrap();
+        let mut results = vec![("documented", validate_connection(&mut connection).await)];
+        // Identifiers come only from this fixed list.
+        for column in ["oidc_issuer", "oidc_subject"] {
+            sqlx::raw_sql(&format!(
+                "GRANT SELECT ({column}) ON public.users TO {name}"
+            ))
+            .execute(&pool)
+            .await
+            .unwrap();
+            results.push((column, validate_connection(&mut connection).await));
+            sqlx::raw_sql(&format!(
+                "REVOKE SELECT ({column}) ON public.users FROM {name}"
+            ))
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        drop(connection);
+        reader.finish().await;
+        let mut results = results.into_iter();
+        let (_, documented) = results.next().unwrap();
+        documented.unwrap();
+        for (column, result) in results {
+            let error = result.expect_err(column).to_string();
+            assert!(error.contains("non-business data"), "{column}: {error}");
+        }
     }
 
     #[sqlx::test(migrations = "./migrations")]
