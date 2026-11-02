@@ -6,6 +6,7 @@ pub mod card;
 pub mod combobox;
 pub mod controls;
 pub mod date_picker;
+pub mod debounce;
 pub mod form;
 pub mod icons;
 pub mod layout;
