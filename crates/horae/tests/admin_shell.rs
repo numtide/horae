@@ -646,6 +646,7 @@ async fn switching_sections_keeps_the_workspace_and_reads_the_session_once() {
         settle(&mut dom);
         let html = dioxus::ssr::render(&dom);
         assert!(html.contains(panel), "{panel}: {html}");
+        assert!(html.contains("Test workspace"), "{panel}: {html}");
         assert!(!html.contains("Loading"), "{html}");
     }
     assert_eq!(probe.me_requests.get(), 1);
@@ -661,12 +662,16 @@ async fn a_session_refresh_keeps_the_open_panel_until_the_answer_arrives() {
     let reply = probe.request();
     dom.in_scope(scope, || session.refresh());
     settle(&mut dom);
-    assert!(dioxus::ssr::render(&dom).contains("Administrative panel"));
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Administrative panel"), "{html}");
+    assert!(html.contains("Test workspace"), "{html}");
     reply
         .send(Ok(User(OrgRole::Admin)))
         .unwrap_or_else(|_| panic!("refresh request dropped"));
     settle(&mut dom);
-    assert!(dioxus::ssr::render(&dom).contains("Administrative panel"));
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Administrative panel"), "{html}");
+    assert!(html.contains("Test workspace"), "{html}");
     assert_eq!(probe.me_requests.get(), 2);
     assert_eq!(probe.canonical_requests.get(), 2);
     assert_eq!(probe.panel_mounts.get(), 1);
