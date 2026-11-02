@@ -331,7 +331,8 @@ fn main() -> anyhow::Result<()> {
                     // the session layer so the session is populated; the session
                     // layer stays outermost.
                     .layer(axum::middleware::from_fn(auth::login_redirect_guard))
-                    .layer(session_layer);
+                    .layer(session_layer)
+                    .layer(compression_layer());
 
                 let listener = tokio::net::TcpListener::bind(&addr).await?;
                 let worker = jobs::spawn(state::global_state().await);
@@ -393,6 +394,115 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = interrupt => {},
         _ = terminate => {},
+    }
+}
+
+/// Gzip every response the client accepts it for. Hashed static assets also
+/// have build-time `.br` siblings (`pre_compress` in Dioxus.toml), which the
+/// Dioxus file service serves with a `Content-Encoding` this layer leaves
+/// alone; brotli is not done on the fly because its default quality is far
+/// too slow for a multi-megabyte WASM bundle.
+#[cfg(feature = "server")]
+fn compression_layer() -> tower_http::compression::CompressionLayer {
+    tower_http::compression::CompressionLayer::new()
+}
+
+#[cfg(all(test, feature = "server"))]
+mod compression_tests {
+    use std::time::Duration;
+
+    use axum::{
+        Router,
+        body::Body,
+        http::{Request, Response, header},
+        response::Html,
+        routing::get,
+    };
+    use futures_util::StreamExt;
+    use tokio::sync::mpsc;
+    use tower::{Layer, ServiceExt};
+
+    fn gzip_request(uri: &str) -> Request<Body> {
+        Request::get(uri)
+            .header(header::ACCEPT_ENCODING, "gzip")
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn html_is_gzipped_when_accepted() {
+        let router = Router::new()
+            .route("/", get(|| async { Html("<p>Loading…</p>".repeat(100)) }))
+            .layer(super::compression_layer());
+
+        let response = router.oneshot(gzip_request("/")).await.unwrap();
+
+        assert_eq!(response.headers()[header::CONTENT_ENCODING], "gzip");
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&body[..2], &[0x1f, 0x8b]);
+    }
+
+    #[tokio::test]
+    async fn streamed_csv_keeps_streaming_and_failures_still_abort() {
+        let (send, receive) = mpsc::unbounded_channel::<Result<String, std::io::Error>>();
+        let mut body = Some(Body::from_stream(tokio_stream_from(receive)));
+        let export = tower::service_fn(move |_: Request<Body>| {
+            let response = Response::builder()
+                .header(header::CONTENT_TYPE, "text/csv; charset=utf-8")
+                .body(body.take().unwrap());
+            async move { response }
+        });
+        let response = super::compression_layer()
+            .layer(export)
+            .oneshot(gzip_request("/export.csv"))
+            .await
+            .unwrap();
+        assert_eq!(response.headers()[header::CONTENT_ENCODING], "gzip");
+        let mut frames = Body::new(response.into_body()).into_data_stream();
+
+        // Compressed bytes must reach the client while the export is still
+        // running, not only after the whole file has been produced.
+        let mut seed = 1u64;
+        let rows: String = (0..20_000)
+            .map(|row| {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                format!("{row},{seed},Project {}\n", seed % 97)
+            })
+            .collect();
+        for chunk in rows.as_bytes().chunks(64 * 1024) {
+            send.send(Ok(String::from_utf8(chunk.to_vec()).unwrap()))
+                .unwrap();
+        }
+        let first = tokio::time::timeout(Duration::from_secs(5), frames.next())
+            .await
+            .expect("compressed bytes before the export finished")
+            .unwrap()
+            .unwrap();
+        assert!(!first.is_empty());
+
+        // A failing export must still interrupt the response rather than end
+        // as a well-formed (silently truncated) gzip file.
+        send.send(Err(std::io::Error::other("export failed")))
+            .unwrap();
+        drop(send);
+        let mut failed = false;
+        while let Some(frame) = frames.next().await {
+            if frame.is_err() {
+                failed = true;
+                break;
+            }
+        }
+        assert!(failed, "the body error must reach the client");
+    }
+
+    fn tokio_stream_from<T>(
+        receive: mpsc::UnboundedReceiver<T>,
+    ) -> impl futures_util::Stream<Item = T> {
+        futures_util::stream::unfold(receive, |mut receive| async move {
+            receive.recv().await.map(|item| (item, receive))
+        })
     }
 }
 
