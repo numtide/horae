@@ -4,7 +4,7 @@ use horae_core::permissions::catalog::Permission;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::{PermissionStorageError, configure_administration, load_person_permissions};
+use super::{PermissionStorageError, ReadIsolation, begin_lock_only_read, load_person_permissions};
 use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage, PersonSummary};
 use crate::models::permission_editor::PermissionRequester;
 
@@ -30,8 +30,7 @@ pub(crate) async fn read(
     activity: PeopleActivity,
     after: Option<&PeopleCursor>,
 ) -> Result<PeoplePage, DirectoryError> {
-    let mut tx = pool.begin().await?;
-    configure_administration(&mut tx).await?;
+    let mut tx = begin_lock_only_read(pool, ReadIsolation::ReadCommitted).await?;
     let policy = sqlx::query_scalar!(
         "SELECT permission_policy_version FROM organizations WHERE id=$1 FOR SHARE",
         org_id

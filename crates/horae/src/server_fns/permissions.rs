@@ -2,7 +2,7 @@
 
 use horae_core::permissions::catalog::{Permission, PermissionSelection, StoredPermissionError};
 use serde::{Deserialize, de::IntoDeserializer};
-use sqlx::PgConnection;
+use sqlx::{PgConnection, PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::models::permissions::{PermissionSource, PermissionTemplate, PersonPermissions};
@@ -29,18 +29,71 @@ pub(super) async fn configure_administration(
     configure_transaction_limits(connection).await
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum ReadIsolation {
+    ReadCommitted,
+    RepeatableRead,
+}
+
+/// Begin a read whose only writes are `FOR SHARE` authority locks, with the
+/// isolation named in `BEGIN` itself rather than a separate `SET TRANSACTION`.
+/// READ WRITE is what lets those locks be taken; callers must not write data.
+pub(crate) async fn begin_lock_only_read(
+    pool: &PgPool,
+    isolation: ReadIsolation,
+) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
+    let begin = match isolation {
+        ReadIsolation::ReadCommitted => "BEGIN ISOLATION LEVEL READ COMMITTED, READ WRITE",
+        ReadIsolation::RepeatableRead => "BEGIN ISOLATION LEVEL REPEATABLE READ, READ WRITE",
+    };
+    let mut tx = pool.begin_with(begin).await?;
+    configure_limits(&mut tx, Commit::LockOnly).await?;
+    Ok(tx)
+}
+
 /// Set local limits only after the caller selects its transaction isolation.
 pub(super) async fn configure_transaction_limits(
     connection: &mut PgConnection,
 ) -> Result<(), sqlx::Error> {
+    configure_limits(connection, Commit::Durable).await
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Commit {
+    Durable,
+    LockOnly,
+}
+
+async fn configure_limits(
+    connection: &mut PgConnection,
+    commit: Commit,
+) -> Result<(), sqlx::Error> {
+    // `current_setting` instead of `pg_settings`, which materializes every GUC
+    // on each call. Millisecond settings always display with a unit Postgres
+    // also accepts as interval input (ms, s, min, h, d), or as a bare 0.
+    //
+    // A lock-only read commits without waiting for its WAL flush. Its FOR
+    // SHARE locks give it an xid, so a synchronous commit costs an fsync even
+    // though nothing durable was written. Locks are held and released exactly
+    // as before, and commit visibility does not depend on the flush, so
+    // concurrent access changes still wait for, or invalidate, the read. A
+    // crash can only lose the commit record of a transaction that changed no
+    // data, and its locks die with the server either way.
     sqlx::query!(
-        "SELECT set_config(name,
-            (CASE WHEN setting::bigint = 0 THEN limits.milliseconds
-             ELSE LEAST(setting::bigint, limits.milliseconds) END)::text, true)
-         FROM pg_settings
-         JOIN (VALUES ('statement_timeout', 5000::bigint),
-                      ('idle_in_transaction_session_timeout', 10000::bigint))
-              AS limits(setting_name, milliseconds) ON name = limits.setting_name"
+        "SELECT set_config(name, value, true)
+         FROM (
+           SELECT limits.name,
+             (CASE WHEN current.milliseconds = 0 THEN limits.milliseconds
+              ELSE LEAST(current.milliseconds, limits.milliseconds) END)::text AS value
+           FROM (VALUES ('statement_timeout', 5000::bigint),
+                        ('idle_in_transaction_session_timeout', 10000::bigint))
+                AS limits(name, milliseconds)
+           CROSS JOIN LATERAL (SELECT (extract(epoch FROM current_setting(limits.name)::interval)
+                                       * 1000)::bigint AS milliseconds) current
+           UNION ALL
+           SELECT 'synchronous_commit', 'off' WHERE $1
+         ) settings",
+        commit == Commit::LockOnly,
     )
     .fetch_all(connection)
     .await?;
@@ -189,3 +242,7 @@ mod project_management_tests;
 #[cfg(test)]
 #[path = "permissions/tests/own.rs"]
 mod own_tests;
+
+#[cfg(test)]
+#[path = "permissions/tests/transaction.rs"]
+mod transaction_tests;

@@ -7,7 +7,7 @@ use uuid::Uuid;
 use super::{ServerFnError, conflict, forbidden, server_err};
 use crate::models::permissions::PersonPermissions;
 use crate::server_fns::permissions::{
-    configure_administration, configure_transaction_limits, load_person_permissions,
+    ReadIsolation, begin_lock_only_read, load_person_permissions,
 };
 
 const SNAPSHOT_ATTEMPTS: usize = 3;
@@ -37,8 +37,7 @@ impl<'a> ReadAccess<'a> {
         org_id: Uuid,
         actor_id: Uuid,
     ) -> Result<Option<Self>, ServerFnError> {
-        let mut tx = pool.begin().await.map_err(server_err)?;
-        configure_administration(&mut tx)
+        let tx = begin_lock_only_read(pool, ReadIsolation::ReadCommitted)
             .await
             .map_err(server_err)?;
         match Self::authorize(tx, org_id, actor_id).await {
@@ -60,12 +59,7 @@ impl<'a> ReadAccess<'a> {
         actor_id: Uuid,
     ) -> Result<Option<Self>, ServerFnError> {
         for _ in 0..SNAPSHOT_ATTEMPTS {
-            let mut tx = pool.begin().await.map_err(server_err)?;
-            sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ WRITE")
-                .execute(&mut *tx)
-                .await
-                .map_err(server_err)?;
-            configure_transaction_limits(&mut tx)
+            let tx = begin_lock_only_read(pool, ReadIsolation::RepeatableRead)
                 .await
                 .map_err(server_err)?;
             match Self::authorize(tx, org_id, actor_id).await {
