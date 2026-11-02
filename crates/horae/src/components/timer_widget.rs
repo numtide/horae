@@ -61,7 +61,11 @@ pub fn use_running_timer() -> RunningTimer {
 /// every page (Harvest-style), not just the timesheet.
 #[component]
 pub fn TimerWidget() -> Element {
+    let mut timer = use_running_timer();
+    let timer_resource = timer.entry;
+
     // A 1s tick re-renders this component so the running display counts up.
+    // Idle, there is nothing to count, so the tick does not re-render.
     let mut tick = use_signal(|| 0u64);
     let _tick = *tick.read();
     use_hook(|| {
@@ -71,13 +75,13 @@ pub fn TimerWidget() -> Element {
                 gloo_timers::future::TimeoutFuture::new(1_000).await;
                 #[cfg(feature = "server")]
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                tick += 1;
+                if matches!(&*timer_resource.peek(), Some(Ok(Some(_)))) {
+                    tick += 1;
+                }
             }
         });
     });
 
-    let mut timer = use_running_timer();
-    let timer_resource = timer.entry;
     let projects = use_resource(|| async move { server_fns::list_tracking_projects().await });
 
     let mut picking = use_signal(|| false);
