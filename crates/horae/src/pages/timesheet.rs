@@ -251,10 +251,11 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> E
         else {
             return rsx! { div { class: "alert alert-danger", "This week is outside the supported date range." } };
         };
-        // Keys reset component state only inside a dynamic fragment. A route
-        // change must discard the previous person's resources and drafts.
+        // Keys reset component state only inside a dynamic fragment. Another
+        // person or week must discard the previous resources and drafts; a new
+        // day, view or span within the same week keeps the loaded week.
         rsx! {
-            for key in [format!("{view}:{date}:{span}:{user}")] {
+            for key in [format!("{user}:{start}")] {
                 TimesheetContent { key: "{key}", view, date, span, start, subject, requester }
             }
         }
@@ -921,7 +922,16 @@ fn TimesheetContent(
     let busy = use_memo(move || {
         pending_action() || add_saving() || removing_row() || !saving_cells.read().is_empty()
     });
-    let dirty = !cell_drafts.read().is_empty()
+    let draft_rows = use_memo(move || {
+        draft_rows(
+            &cell_drafts.read(),
+            week_start(),
+            &week_entries.read(),
+            &pending_rows.read(),
+        )
+    });
+    let has_drafts = use_memo(move || !cell_drafts.read().is_empty());
+    let dirty = has_drafts()
         || add_open().is_some()
         || addrow_open()
         || !pending_rows.read().is_empty()
@@ -929,10 +939,11 @@ fn TimesheetContent(
     let week_actions = WeekActions {
         commit: commit_cell,
         remove_row,
-        removing_row: removing_row.into(),
+        removing_row,
         add_row: open_add_row,
         drafts: cell_drafts,
-        saving: saving_cells.into(),
+        draft_rows,
+        saving: saving_cells,
         tracking,
         busy,
         policy,
@@ -1148,7 +1159,7 @@ fn TimesheetContent(
             } else {
             {loaded(&*current_sheet.read(), |_| match current_mode {
                     ViewMode::Week => rsx! {
-                        {render_week_view(&week_entries.read(), &daily_totals.read(), ws, today, &project_names.read(), &task_names.read(), &pending_rows.read(), week_actions)}
+                        WeekGrid { entries: week_entries, daily_totals, week_start: ws, today, project_names, task_names, pending: pending_rows, actions: week_actions }
                         div { class: "ts-submit-bar",
                             if all_submitted_or_approved {
                                 span { class: "badge badge-success", "Submitted" }
@@ -1219,39 +1230,7 @@ fn TimesheetContent(
                             project: add_project, task: add_task, options: modal_tracking(),
                             disabled: add_saving(),
                         }
-                        div { class: "ts-modal-row",
-                            input {
-                                class: "form-input ts-modal-notes",
-                                placeholder: "Notes (optional)",
-                                value: "{add_notes}",
-                                disabled: add_saving(),
-                                oninput: move |e| add_notes.set(e.value()),
-                            }
-                            input {
-                                class: "form-input ts-modal-duration",
-                                "aria-label": "Duration",
-                                placeholder: "0:00",
-                                value: "{add_duration}",
-                                disabled: add_saving(),
-                                oninput: move |e| add_duration.set(e.value()),
-                            }
-                        }
-                        input {
-                            class: "form-input",
-                            "aria-label": "Start time",
-                            placeholder: "Start time, e.g. 9:00 (optional)",
-                            disabled: add_saving(),
-                            value: add_start().map(|m| horae_core::time_of_day::format(m as u16)).unwrap_or_default(),
-                            oninput: move |e| {
-                                let v = e.value();
-                                let v = v.trim();
-                                if v.is_empty() {
-                                    add_start.set(None);
-                                } else if let Some(m) = horae_core::time_of_day::parse(v) {
-                                    add_start.set(Some(i32::from(m)));
-                                }
-                            },
-                        }
+                        EntryFields { notes: add_notes, duration: add_duration, start: add_start, disabled: add_saving() }
                         if let Some(err) = &*add_error.read() {
                             div { class: "ts-modal-error", role: "alert", "{err}" }
                         }
@@ -1411,6 +1390,52 @@ fn TimesheetContent(
     }
 }
 
+/// The entry dialog's text fields. They read their signals here, not in the
+/// page, so a keystroke re-renders these inputs instead of the whole timesheet.
+#[component]
+fn EntryFields(
+    notes: Signal<String>,
+    duration: Signal<String>,
+    start: Signal<Option<i32>>,
+    disabled: bool,
+) -> Element {
+    rsx! {
+        div { class: "ts-modal-row",
+            input {
+                class: "form-input ts-modal-notes",
+                placeholder: "Notes (optional)",
+                value: "{notes}",
+                disabled,
+                oninput: move |e| notes.set(e.value()),
+            }
+            input {
+                class: "form-input ts-modal-duration",
+                "aria-label": "Duration",
+                placeholder: "0:00",
+                value: "{duration}",
+                disabled,
+                oninput: move |e| duration.set(e.value()),
+            }
+        }
+        input {
+            class: "form-input",
+            "aria-label": "Start time",
+            placeholder: "Start time, e.g. 9:00 (optional)",
+            disabled,
+            value: start().map(|m| horae_core::time_of_day::format(m as u16)).unwrap_or_default(),
+            oninput: move |e| {
+                let v = e.value();
+                let v = v.trim();
+                if v.is_empty() {
+                    start.set(None);
+                } else if let Some(m) = horae_core::time_of_day::parse(v) {
+                    start.set(Some(i32::from(m)));
+                }
+            },
+        }
+    }
+}
+
 /// Label lookups shared by the calendar renderer.
 struct CalLabels<'a> {
     projects: &'a HashMap<Uuid, String>,
@@ -1538,6 +1563,18 @@ struct CalDrag {
 }
 
 impl CalDrag {
+    /// The pointer and column after the pointer reaches `minute` over `column`,
+    /// or `None` when the drag would not change. Move follows the pointer across
+    /// days; Reorder tracks the column so a drop on another day snaps back.
+    fn follow(&self, minute: i32, column: usize) -> Option<(i32, usize)> {
+        let day = if matches!(self.kind, DragKind::Move | DragKind::Reorder) {
+            column
+        } else {
+            self.day
+        };
+        ((minute, day) != (self.cur_min, self.day)).then_some((minute, day))
+    }
+
     /// Move: the entry's new start, following the pointer while keeping the grab
     /// offset, clamped into the day. Shared by the commit and the live preview so
     /// the two can't drift.
@@ -1776,18 +1813,19 @@ fn render_calendar_view(
                                 move |e: MouseEvent| {
                                     if busy || (!can_create && cal_drag.read().is_none()) { return; }
                                     let m = cal_y_to_min(e.element_coordinates().y);
-                                    if cal_drag.read().is_some() {
-                                        cal_drag.with_mut(|d| {
-                                            if let Some(d) = d {
-                                                d.cur_min = m;
-                                                // Move follows the pointer across days;
-                                                // Reorder tracks the column so a drop on
-                                                // another day snaps back.
-                                                if matches!(d.kind, DragKind::Move | DragKind::Reorder) {
-                                                    d.day = i;
+                                    if cal_drag.peek().is_some() {
+                                        // Writing only real changes keeps a mousemove
+                                        // within one snap step from re-rendering the
+                                        // whole calendar.
+                                        let next = cal_drag.peek().as_ref().and_then(|d| d.follow(m, i));
+                                        if let Some((cur_min, day)) = next {
+                                            cal_drag.with_mut(|d| {
+                                                if let Some(d) = d {
+                                                    d.cur_min = cur_min;
+                                                    d.day = day;
                                                 }
-                                            }
-                                        });
+                                            });
+                                        }
                                     } else {
                                         // Track the free slot under the cursor for the
                                         // "+ Add time" hint; hide it over a block.
@@ -1915,6 +1953,7 @@ fn render_calendar_view(
                                 };
                                 rsx! {
                                 div {
+                                    key: "{ev.entry.id}",
                                     class: "{ev_class}",
                                     title: "{lock_title}",
                                     style: "top: {top_px}px; height: {height_px}px; left: calc(4px + {ev.lane} * (100% - 8px) / {ev.lanes}); width: calc((100% - 8px) / {ev.lanes} - 2px); right: auto;",
@@ -2082,7 +2121,7 @@ fn render_day_view(
                             let can_start = !busy && tracking::eligible(tracking, entry.project_id, entry.task_id);
                             let can_stop = !busy && tracking::stoppable(tracking, entry, context.map(|context| context.expected_requester.user_id));
                             rsx! {
-                                div { class: "ts-day-entry",
+                                div { key: "{entry.id}", class: "ts-day-entry",
                                     div { class: "ts-day-entry-main",
                                         div { class: "ts-day-entry-project", "{proj}" }
                                         div { class: "ts-day-entry-task", "{task}" }
@@ -2146,18 +2185,101 @@ fn discard_row_drafts(drafts: &mut HashMap<CellKey, String>, row: (Uuid, Uuid), 
     });
 }
 
+/// The rows holding an unsaved draft in the week starting `start` that neither
+/// an entry nor a pending row already shows. A draft in a visible row leaves
+/// this unchanged, so the first keystroke there does not re-render the grid.
+fn draft_rows(
+    drafts: &HashMap<CellKey, String>,
+    start: NaiveDate,
+    entries: &[VisibleTimeEntry],
+    pending: &[(Uuid, Uuid)],
+) -> Vec<(Uuid, Uuid)> {
+    let mut rows: Vec<_> = drafts
+        .keys()
+        .filter(|&&(_, _, day)| (0..7).contains(&(day - start).num_days()))
+        .map(|&(project, task, _)| (project, task))
+        .filter(|row| {
+            !pending.contains(row)
+                && !entries
+                    .iter()
+                    .any(|entry| (entry.project_id, entry.task_id) == *row)
+        })
+        .collect();
+    rows.sort_unstable();
+    rows.dedup();
+    rows
+}
+
 /// The actions the editable week grid dispatches back to the page.
-#[derive(Clone, Copy)]
+///
+/// Every field keeps its identity across page renders, so the grid's props
+/// compare equal and a page re-render skips the grid. Plain signals, not
+/// `ReadSignal`: `Signal::into` boxes a new handle on each call.
+#[derive(Clone, Copy, PartialEq)]
 struct WeekActions {
     commit: Callback<CellEdit>,
     remove_row: Callback<(Uuid, Uuid)>,
-    removing_row: ReadSignal<bool>,
+    removing_row: Signal<bool>,
     add_row: Callback<()>,
     drafts: Signal<HashMap<CellKey, String>>,
-    saving: ReadSignal<HashSet<CellKey>>,
+    /// `draft_rows` of `drafts`: the grid reads this rather than `drafts`, so a
+    /// keystroke in a visible row re-renders only its own cell.
+    draft_rows: Memo<Vec<(Uuid, Uuid)>>,
+    saving: Signal<HashSet<CellKey>>,
     tracking: Memo<Vec<crate::models::scoped_time::TimesheetTrackingOption>>,
     busy: Memo<bool>,
     policy: Memo<Option<TimesheetPolicy>>,
+}
+
+/// One editable week-grid cell. It reads its own draft and saving state, so
+/// typing re-renders this cell rather than the grid.
+#[component]
+fn WeekCell(
+    cell: CellKey,
+    existing: Option<Uuid>,
+    saved: String,
+    editable: bool,
+    input_class: String,
+    label: String,
+    mut actions: WeekActions,
+) -> Element {
+    let (project_id, task_id, day) = cell;
+    let draft = use_memo(use_reactive!(|(cell,)| actions
+        .drafts
+        .read()
+        .get(&cell)
+        .cloned()));
+    let saving = use_memo(use_reactive!(|(cell,)| actions
+        .saving
+        .read()
+        .contains(&cell)));
+    let value = draft().unwrap_or_else(|| saved.clone());
+    rsx! {
+        div { class: "ts-cell",
+            input {
+                class: "{input_class}",
+                r#type: "text",
+                value: "{value}",
+                disabled: !editable || (actions.removing_row)() || saving(),
+                aria_label: "{label}",
+                placeholder: "\u{2013}",
+                oninput: move |event| {
+                    let input = event.value();
+                    if input == saved {
+                        actions.drafts.write().remove(&cell);
+                    } else {
+                        actions.drafts.write().insert(cell, input);
+                    }
+                },
+                onblur: move |_| {
+                    let input = actions.drafts.read().get(&cell).cloned();
+                    if let Some(input) = input {
+                        actions.commit.call(CellEdit { project_id, task_id, day, existing, input });
+                    }
+                },
+            }
+        }
+    }
 }
 
 /// A week grid row's per-day minutes and the entry ids behind each day, so a cell
@@ -2167,6 +2289,31 @@ struct WeekActions {
 struct RowAgg {
     mins: [i32; 7],
     ids: [Vec<Uuid>; 7],
+}
+
+/// The week grid as its own component: its props are signals, so a page
+/// re-render (such as the editor state changing on a first keystroke) skips it.
+#[component]
+fn WeekGrid(
+    entries: Memo<Vec<VisibleTimeEntry>>,
+    daily_totals: Memo<Vec<i32>>,
+    week_start: NaiveDate,
+    today: NaiveDate,
+    project_names: Memo<HashMap<Uuid, String>>,
+    task_names: Memo<HashMap<Uuid, String>>,
+    pending: Signal<Vec<(Uuid, Uuid)>>,
+    actions: WeekActions,
+) -> Element {
+    render_week_view(
+        &entries.read(),
+        &daily_totals.read(),
+        week_start,
+        today,
+        &project_names.read(),
+        &task_names.read(),
+        &pending.read(),
+        actions,
+    )
 }
 
 #[expect(
@@ -2181,7 +2328,7 @@ fn render_week_view(
     project_names: &HashMap<Uuid, String>,
     task_names: &HashMap<Uuid, String>,
     pending: &[(Uuid, Uuid)],
-    mut actions: WeekActions,
+    actions: WeekActions,
 ) -> Element {
     // Group by (project_id, task_id), tracking per-day minutes and entry ids,
     // preserving first-seen order. Rows added via "Add row" (no entries yet)
@@ -2202,17 +2349,10 @@ fn render_week_view(
         row.mins[offset as usize] += entry.minutes;
         row.ids[offset as usize].push(entry.id);
     }
-    for key in pending {
-        if !row_map.contains_key(key) {
-            row_keys.push(*key);
-            row_map.insert(*key, RowAgg::default());
-        }
-    }
-    for &(project, task, day) in actions.drafts.read().keys() {
-        let key = (project, task);
-        if (0..7).contains(&(day - week_start).num_days()) && !row_map.contains_key(&key) {
+    for &key in pending.iter().chain(actions.draft_rows.read().iter()) {
+        if let std::collections::hash_map::Entry::Vacant(row) = row_map.entry(key) {
             row_keys.push(key);
-            row_map.insert(key, RowAgg::default());
+            row.insert(RowAgg::default());
         }
     }
 
@@ -2266,7 +2406,7 @@ fn render_week_view(
                         let eligible = tracking::eligible(&actions.tracking.read(), pid, tid);
                         let row_editable = entries.iter().filter(|entry| entry.project_id == pid && entry.task_id == tid).all(|entry| tracking::editable((actions.policy)(), &actions.tracking.read(), entry));
                         rsx! {
-                            div { class: "ts-row ts-body",
+                            div { key: "{pid}:{tid}", class: "ts-row ts-body",
                                 div { class: "ts-project",
                                     button { class: "ts-project-icon", "aria-label": "Task", "▤" }
                                     div {
@@ -2288,39 +2428,22 @@ fn render_week_view(
                                                 Some(id) => entries.iter().find(|entry| entry.id == id).is_some_and(|entry| tracking::editable((actions.policy)(), &actions.tracking.read(), entry)),
                                             };
                                             let saved = if mins > 0 { format_hhmm(mins.into()) } else { String::new() };
-                                            let cell_key = (pid, tid, day);
-                                            let val = actions.drafts.read().get(&cell_key).cloned().unwrap_or_else(|| saved.clone());
-                                            let icls = value_cell_class("ts-cell-input", mins, today_off, i);
                                             rsx! {
-                                                div { class: "ts-cell",
-                                                    input {
-                                                        class: "{icls}",
-                                                        r#type: "text",
-                                                        value: "{val}",
-                                                        disabled: !editable || (actions.removing_row)() || actions.saving.read().contains(&cell_key),
-                                                        aria_label: "Hours for {proj}, {task}, {day}",
-                                                        placeholder: "\u{2013}",
-                                                        oninput: move |event| {
-                                                            let input = event.value();
-                                                            if input == saved {
-                                                                actions.drafts.write().remove(&cell_key);
-                                                            } else {
-                                                                actions.drafts.write().insert(cell_key, input);
-                                                            }
-                                                        },
-                                                        onblur: move |_| {
-                                                            let input = actions.drafts.read().get(&cell_key).cloned();
-                                                            if let Some(input) = input {
-                                                                actions.commit.call(CellEdit { project_id: pid, task_id: tid, day, existing, input });
-                                                            }
-                                                        },
-                                                    }
+                                                WeekCell {
+                                                    key: "{day}",
+                                                    cell: (pid, tid, day),
+                                                    existing,
+                                                    saved,
+                                                    editable,
+                                                    input_class: value_cell_class("ts-cell-input", mins, today_off, i),
+                                                    label: "Hours for {proj}, {task}, {day}",
+                                                    actions,
                                                 }
                                             }
                                         } else {
                                             let cls = value_cell_class("ts-cell-box", mins, today_off, i);
                                             rsx! {
-                                                div { class: "ts-cell",
+                                                div { key: "{i}", class: "ts-cell",
                                                     div { class: "{cls}", title: "Multiple entries — edit in Day view", "{format_hhmm(mins.into())}" }
                                                 }
                                             }
@@ -2494,6 +2617,28 @@ mod tests {
             CalSpan::WorkWeek.visible_days(0, Weekday::Wed),
             vec![0, 1, 2, 5, 6]
         );
+    }
+
+    #[test]
+    fn drag_follows_only_real_pointer_changes() {
+        let drag = |kind| CalDrag {
+            kind,
+            day: 1,
+            start_min: 540,
+            cur_min: 600,
+            grab_min: 540,
+            entry: None,
+            orig_dur: 60,
+            orig_day: 1,
+        };
+        // Same snapped minute and column: nothing to write.
+        assert_eq!(drag(DragKind::Move).follow(600, 1), None);
+        assert_eq!(drag(DragKind::Move).follow(615, 1), Some((615, 1)));
+        assert_eq!(drag(DragKind::Move).follow(600, 3), Some((600, 3)));
+        assert_eq!(drag(DragKind::Reorder).follow(600, 3), Some((600, 3)));
+        // Create and Resize stay on their own column.
+        assert_eq!(drag(DragKind::Create).follow(600, 3), None);
+        assert_eq!(drag(DragKind::Resize).follow(630, 3), Some((630, 1)));
     }
 
     #[test]
