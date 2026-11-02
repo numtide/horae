@@ -21,6 +21,8 @@ pub mod badge;
 pub mod combobox;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
+#[path = "../src/components/debounce.rs"]
+pub mod debounce;
 #[path = "../src/components/form.rs"]
 pub mod form;
 #[path = "../src/components/icons.rs"]
@@ -34,7 +36,7 @@ pub mod table;
 #[path = "../src/components/toast.rs"]
 pub mod toast;
 mod components {
-    pub use super::{badge, combobox, controls, form, icons, menu, modal, table, toast};
+    pub use super::{badge, combobox, controls, debounce, form, icons, menu, modal, table, toast};
 }
 #[path = "../src/models/assignment.rs"]
 mod assignment;
