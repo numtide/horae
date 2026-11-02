@@ -121,11 +121,13 @@ fn LegacyReports() -> Element {
     let month_start = today.with_day(1).unwrap_or(today);
 
     // Typing a date edits one segment at a time, and each edit is a valid date,
-    // so the reports follow the fields once typing pauses.
+    // so the reports load once typing pauses. Until then they show as loading:
+    // a table for other dates must not sit beside the typed ones.
     let mut from_input = use_signal(move || month_start.to_string());
     let mut to_input = use_signal(move || today.to_string());
     let from_date = use_debounced(from_input, SEARCH_DEBOUNCE);
     let to_date = use_debounced(to_input, SEARCH_DEBOUNCE);
+    let dates_settled = use_memo(move || from_date() == from_input() && to_date() == to_input());
     let mut group_by = use_signal(|| "project".to_string());
     let mut client_filter = use_signal(String::new);
     let mut project_filter = use_signal(String::new);
@@ -149,12 +151,13 @@ fn LegacyReports() -> Element {
         project: project_filter.into(),
         user: user_filter.into(),
         tag: tag_filter.into(),
+        dates_settled: dates_settled.into(),
     };
 
     // The export must match what the tables show, so the active filters ride
     // along in the query string; unset ones are left out and mean "all".
     let export_query = {
-        let mut q = format!("from={}&to={}", from_date.read(), to_date.read());
+        let mut q = format!("from={}&to={}", from_input.read(), to_input.read());
         for (name, value) in [
             ("client_id", client_filter.read().clone()),
             ("project_id", project_filter.read().clone()),
@@ -344,6 +347,8 @@ struct LegacyFilters {
     project: ReadSignal<String>,
     user: ReadSignal<String>,
     tag: ReadSignal<String>,
+    /// False while the typed dates are ahead of `from`/`to`.
+    dates_settled: ReadSignal<bool>,
 }
 
 impl LegacyFilters {
@@ -378,7 +383,7 @@ fn LegacyTimeReport(filters: LegacyFilters, group_by: ReadSignal<String>) -> Ele
         async move { server_fns::report_time(f, t, g, cl, pr, us, tag).await }
     });
     rsx! {
-        if summary.state()() != UseResourceState::Ready {
+        if summary.state()() != UseResourceState::Ready || !(filters.dates_settled)() {
             p { role: "status", "Loading report…" }
         } else if matches!(&*summary.read(), Some(Err(_))) {
             div { class: "alert alert-danger", role: "alert", "Could not load report. "
@@ -452,7 +457,7 @@ fn LegacyDetailedReport(filters: LegacyFilters) -> Element {
         async move { server_fns::report_detailed(f, t, cl, pr, us, tag).await }
     });
     rsx! {
-        if detailed.state()() != UseResourceState::Ready {
+        if detailed.state()() != UseResourceState::Ready || !(filters.dates_settled)() {
             p { role: "status", "Loading detailed report…" }
         } else if matches!(&*detailed.read(), Some(Err(_))) {
             div { class: "alert alert-danger", role: "alert", "Could not load detailed report. "
