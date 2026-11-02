@@ -7,7 +7,6 @@ use super::{loaded, run_action};
 use crate::components::badge::Badge;
 use crate::components::combobox::{ComboOption, Combobox};
 use crate::components::controls::Checkbox;
-use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuDivider, MenuItem};
 use crate::components::modal::Modal;
@@ -400,23 +399,50 @@ impl ProjectCatalog {
     }
 }
 
-/// The search box. It owns the typed text so that typing re-renders only this
-/// field; the list reads a debounced copy and filters once typing pauses.
-#[component]
-fn ProjectSearch(text: Signal<String>) -> Element {
-    rsx! {
-        div { class: "proj-search flex items-center gap-2 py-2 px-3 bg-secondary border rounded-btn",
-            span { class: "text-faint flex-none", aria_hidden: "true", "⌕" }
-            input {
-                class: "proj-search-input",
-                r#type: "text",
-                placeholder: "Search by project or client",
-                aria_label: "Search by project or client",
-                value: "{text}",
-                oninput: move |e| text.set(e.value()),
-            }
+/// The client-side filters over a loaded list. `tagged` is `None` for all tags,
+/// otherwise the projects carrying the selected tag (empty until tags load).
+#[derive(Clone, Copy)]
+struct ProjectFilters {
+    query: ReadSignal<String>,
+    /// "active" | "budgeted" (has a budget) | "archived" (inactive).
+    scope: ReadSignal<String>,
+    client: ReadSignal<String>,
+    tagged: ReadSignal<Option<BTreeSet<Uuid>>>,
+}
+
+/// The catalog for `overview` and the indices of its rows that pass `filters`,
+/// in display order. The catalog is built on the first render only: callers
+/// remount for a new overview (see `ProjectList`). A filter change rescans the
+/// prepared rows without re-sorting them or lowercasing every name.
+fn use_project_list(
+    overview: &ProjectOverview,
+    filters: ProjectFilters,
+) -> (Rc<ProjectCatalog>, Memo<Vec<usize>>) {
+    let catalog = use_hook(|| Rc::new(ProjectCatalog::new(overview)));
+    let visible = use_memo({
+        let catalog = catalog.clone();
+        move || {
+            let query = filters.query.read().to_lowercase();
+            let (scope, client, tagged) = (
+                filters.scope.read(),
+                filters.client.read(),
+                filters.tagged.read(),
+            );
+            catalog
+                .rows
+                .iter()
+                .enumerate()
+                .filter(|(_, row)| {
+                    row.matches(&query, &scope, &client)
+                        && tagged
+                            .as_ref()
+                            .is_none_or(|ids| ids.contains(&row.project.id))
+                })
+                .map(|(index, _)| index)
+                .collect()
         }
-    }
+    });
+    (catalog, visible)
 }
 
 #[derive(Clone)]
@@ -536,21 +562,13 @@ fn ProjectListContent(
 
     // Filters over the loaded list (client-side; the design's status/client
     // dropdowns and search all narrow the same set).
-    let mut search_text = use_signal(String::new);
-    let query = use_debounced(search_text, SEARCH_DEBOUNCE);
+    let mut query = use_signal(String::new);
     // Status scope: "active" | "budgeted" (has a budget) | "archived" (inactive).
     let mut scope = use_signal(|| "active".to_string());
     let mut client_filter =
         use_signal(|| initial_client.map(|id| id.to_string()).unwrap_or_default());
     let mut tag_filter = use_signal(|| None::<Uuid>);
     let mut selected = use_signal(BTreeSet::<Uuid>::new);
-    // A new search narrows the list, so it drops the selection like the other filters.
-    use_effect(move || {
-        query.read();
-        if !selected.peek().is_empty() {
-            selected.write().clear();
-        }
-    });
     let mut bulk_action = use_signal(|| None::<BulkProjectAction>);
     let mut bulk_busy = use_signal(|| false);
     let mut bulk_error = use_signal(|| None::<String>);
@@ -562,9 +580,25 @@ fn ProjectListContent(
     let can_import = overview.can_import;
     let can_create = overview.can_create;
     let is_manager = overview.can_change_legacy_status;
-    // ProjectList remounts this content for every loaded overview, so the
-    // catalog is built once per load.
-    let catalog = use_hook(|| Rc::new(ProjectCatalog::new(&overview)));
+    let tagged = use_memo(move || {
+        tag_filter().map(|tag| {
+            let tags = tags_res.read();
+            let ready = tags_res.state()() == UseResourceState::Ready;
+            match tags.as_ref().filter(|_| ready) {
+                Some(Ok(links)) => matching_tag_projects(links, Some(tag)),
+                _ => BTreeSet::new(),
+            }
+        })
+    });
+    let (catalog, visible) = use_project_list(
+        &overview,
+        ProjectFilters {
+            query: query.into(),
+            scope: scope.into(),
+            client: client_filter.into(),
+            tagged: tagged.into(),
+        },
+    );
     let spend_ready = spend_res.state()() == UseResourceState::Ready
         && budget_res.state()() == UseResourceState::Ready
         && matches!(&*spend_res.read(), Some(Ok(_)))
@@ -595,34 +629,6 @@ fn ProjectListContent(
             .unwrap_or_else(|| "Selected tag unavailable".into()),
         None => "All tags".into(),
     };
-    // Indices into the catalog rows that pass every filter, in display order.
-    let visible = use_memo({
-        let catalog = catalog.clone();
-        move || {
-            let query = query.read().to_lowercase();
-            let (scope, client, tag) = (scope.read(), client_filter.read(), tag_filter());
-            let tagged = tag.map(|tag| {
-                let tags = tags_res.read();
-                let ready = tags_res.state()() == UseResourceState::Ready;
-                match tags.as_ref().filter(|_| ready) {
-                    Some(Ok(links)) => matching_tag_projects(links, Some(tag)),
-                    _ => BTreeSet::new(),
-                }
-            });
-            catalog
-                .rows
-                .iter()
-                .enumerate()
-                .filter(|(_, row)| {
-                    row.matches(&query, &scope, &client)
-                        && tagged
-                            .as_ref()
-                            .is_none_or(|ids| ids.contains(&row.project.id))
-                })
-                .map(|(index, _)| index)
-                .collect::<Vec<_>>()
-        }
-    });
     let selection: Vec<(Uuid, String)> = visible
         .read()
         .iter()
@@ -747,7 +753,17 @@ fn ProjectListContent(
                         onclick: move |_| export_open.set(true),
                         "Export"
                     }
-                    ProjectSearch { text: search_text }
+                    div { class: "proj-search flex items-center gap-2 py-2 px-3 bg-secondary border rounded-btn",
+                        span { class: "text-faint flex-none", aria_hidden: "true", "⌕" }
+                        input {
+                            class: "proj-search-input",
+                            r#type: "text",
+                            placeholder: "Search by project or client",
+                            aria_label: "Search by project or client",
+                            value: "{query}",
+                            oninput: move |e| { selected.write().clear(); query.set(e.value()); },
+                        }
+                    }
                 }
             }
 
@@ -881,7 +897,7 @@ fn ProjectListContent(
                                         class: "btn btn-secondary",
                                         onclick: move |_| {
                                             selected.write().clear();
-                                            search_text.set(String::new());
+                                            query.set(String::new());
                                             client_filter.set(String::new());
                                             tag_filter.set(None);
                                             scope.set("active".to_string());
@@ -1520,10 +1536,9 @@ fn restore_detail_focus(target: &'static str) {
 
 #[cfg(test)]
 mod list_tests {
-    use std::{any::Any, cell::Cell};
+    use std::{any::Any, cell::RefCell};
 
     use super::*;
-    use crate::components::debounce::tests::settle;
     use crate::models::permission_editor::PermissionRequester;
     use crate::models::project::{ProjectOverviewClient, ProjectOverviewRow};
 
@@ -1603,24 +1618,50 @@ mod list_tests {
         assert_eq!(found(""), ["Website", "Acme migration", "Payroll"]);
     }
 
-    #[tokio::test]
-    async fn typing_a_search_renders_the_list_once_after_typing_pauses() {
+    /// Per render: the catalog's address and the visible project names.
+    type RenderLog = Rc<RefCell<Vec<(usize, Vec<String>)>>>;
+
+    #[test]
+    fn typing_a_search_renders_the_list_once_per_keystroke_without_rebuilding_it() {
         use dioxus::dioxus_core::Mutation;
         use dioxus::html::{SerializedFormData, SerializedHtmlEventConverter};
 
         dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
-        // The list wiring of ProjectListContent: it reads only the debounced query.
-        fn list(renders: Rc<Cell<u32>>) -> Element {
-            renders.set(renders.get() + 1);
-            let text = use_signal(String::new);
-            let query = use_debounced(text, SEARCH_DEBOUNCE);
+        // The list wiring of ProjectListContent around the production hook.
+        fn list(log: RenderLog) -> Element {
+            let mut query = use_signal(String::new);
+            let scope = use_signal(|| "active".to_string());
+            let client = use_signal(String::new);
+            let tagged = use_signal(|| None::<BTreeSet<Uuid>>);
+            let overview = use_hook(|| {
+                overview(vec![
+                    row((1, "Acme"), "Website", None),
+                    row((1, "Acme"), "Web shop", None),
+                    row((2, "Globex"), "Payroll", None),
+                ])
+            });
+            let (catalog, visible) = use_project_list(
+                &overview,
+                ProjectFilters {
+                    query: query.into(),
+                    scope: scope.into(),
+                    client: client.into(),
+                    tagged: tagged.into(),
+                },
+            );
+            let names = visible
+                .read()
+                .iter()
+                .map(|&index| catalog.rows[index].project.name.clone())
+                .collect();
+            log.borrow_mut()
+                .push((Rc::as_ptr(&catalog) as usize, names));
             rsx! {
-                ProjectSearch { text }
-                p { "Results for {query}" }
+                input { value: "{query}", oninput: move |event| query.set(event.value()) }
             }
         }
-        let renders = Rc::new(Cell::new(0));
-        let mut dom = VirtualDom::new_with_props(list, renders.clone());
+        let log = RenderLog::default();
+        let mut dom = VirtualDom::new_with_props(list, log.clone());
         let input = dom
             .rebuild_to_vec()
             .edits
@@ -1630,7 +1671,7 @@ mod list_tests {
                 _ => None,
             })
             .unwrap();
-        for value in ["a", "ac", "acm", "acme"] {
+        for value in ["w", "we", "web", "webs"] {
             dom.runtime().handle_event(
                 "input",
                 Event::new(
@@ -1644,15 +1685,24 @@ mod list_tests {
             );
             dom.render_immediate_to_vec();
         }
-        assert_eq!(renders.get(), 1, "keystrokes must not re-render the list");
-        assert!(dioxus::ssr::render(&dom).contains("value=\"acme\""));
-        settle(&mut dom).await;
-        assert_eq!(
-            renders.get(),
-            2,
-            "the list renders once for the settled search"
+        let log = log.borrow();
+        assert_eq!(log.len(), 5, "one render to mount, then one per keystroke");
+        assert!(
+            log.iter().all(|(catalog, _)| *catalog == log[0].0),
+            "typing must not rebuild the catalog"
         );
-        assert!(dioxus::ssr::render(&dom).contains("Results for acme"));
+        let visible: Vec<_> = log.iter().map(|(_, names)| names.join(", ")).collect();
+        // Each keystroke's own render already shows its filtered rows.
+        assert_eq!(
+            visible,
+            [
+                "Web shop, Website, Payroll",
+                "Web shop, Website",
+                "Web shop, Website",
+                "Web shop, Website",
+                "Website",
+            ]
+        );
     }
 }
 
