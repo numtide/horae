@@ -22,6 +22,8 @@ pub(super) fn GroupedTimeReport(
     requester: PermissionRequester,
     from: Signal<String>,
     to: Signal<String>,
+    /// Whether typing in the date fields has paused; nothing loads until then.
+    dates_settled: ReadSignal<bool>,
     active_projects_only: Signal<bool>,
     billability: Signal<TimeReportBillability>,
     mut dimension: Signal<TimeReportGrouping>,
@@ -39,8 +41,13 @@ pub(super) fn GroupedTimeReport(
             context(),
             active_projects_only(),
             billability(),
+            dates_settled(),
         );
         let result = async {
+            if !key.7 {
+                // Never shown: the settled key will not match this one.
+                return Err("Waiting for the dates.");
+            }
             let (date_from, date_to) = period(&key.2, &key.3)?;
             let mut query = TimeReportGroupQuery {
                 date_from,
@@ -78,6 +85,7 @@ pub(super) fn GroupedTimeReport(
         context(),
         active_projects_only(),
         billability(),
+        true,
     );
     let response = page.read();
     let current = response.as_ref().filter(|(requested, _)| *requested == key);
