@@ -46,25 +46,29 @@ pub(crate) async fn manager(
     actor_id: Uuid,
 ) -> Result<Transaction<'_, Postgres>, ServerFnError> {
     for _ in 0..MAX_ATTEMPTS {
-        let mut tx = pool.begin().await.map_err(database_error)?;
-        sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ WRITE")
-            .execute(&mut *tx)
+        let mut tx = pool
+            .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ WRITE")
             .await
             .map_err(database_error)?;
+        // Every caller only reads after the `FOR SHARE` authority locks, so
+        // this transaction's only writes are lock markers. Its commit need not
+        // wait for the WAL flush: the locks are held and released exactly as
+        // before, and a crash can only lose the commit record of a transaction
+        // that changed no data. The setting is local and ends with the commit.
+        // The materialized CTE reads the inherited lock_timeout before it is
+        // bounded, for restoring after authorization.
         let previous_timeout = sqlx::query_scalar!(
-            "SELECT setting::bigint AS \"timeout!\" FROM pg_settings WHERE name='lock_timeout'"
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(database_error)?;
-        let bounded_timeout = if previous_timeout == 0 {
-            5000
-        } else {
-            previous_timeout.min(5000)
-        };
-        sqlx::query!(
-            "SELECT set_config('lock_timeout', $1, true)",
-            format!("{bounded_timeout}ms")
+            r#"WITH previous AS MATERIALIZED (
+                 SELECT current_setting('lock_timeout') AS setting,
+                   (extract(epoch FROM current_setting('lock_timeout')::interval) * 1000)::bigint
+                     AS milliseconds
+               )
+               SELECT setting AS "setting!"
+               FROM previous,
+                 LATERAL set_config('lock_timeout',
+                   (CASE WHEN milliseconds = 0 THEN 5000 ELSE LEAST(milliseconds, 5000) END)::text,
+                   true) bounded,
+                 LATERAL set_config('synchronous_commit', 'off', true) asynchronous"#
         )
         .fetch_one(&mut *tx)
         .await
@@ -73,7 +77,7 @@ pub(crate) async fn manager(
             Ok(true) => {
                 sqlx::query!(
                     "SELECT set_config('lock_timeout', $1, true)",
-                    format!("{previous_timeout}ms")
+                    previous_timeout
                 )
                 .fetch_one(&mut *tx)
                 .await

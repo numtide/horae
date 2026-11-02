@@ -433,3 +433,40 @@ async fn legacy_readers_preserve_inherited_connection_settings(pool: PgPool) {
     }
     reader_pool.close().await;
 }
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn manager_commits_asynchronously_only_inside_its_snapshot(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let reader_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with((*pool.connect_options()).clone())
+        .await
+        .unwrap();
+    for inherited in ["0", "250ms", "7s"] {
+        sqlx::query!("SELECT set_config('lock_timeout', $1, false)", inherited)
+            .fetch_one(&reader_pool)
+            .await
+            .unwrap();
+        let mut tx = manager(&reader_pool, fixture.ids.org_id, fixture.ids.user_id)
+            .await
+            .unwrap();
+        let inside = sqlx::query!("SELECT current_setting('transaction_isolation') AS \"isolation!\", current_setting('transaction_read_only') AS \"read_only!\", current_setting('lock_timeout') AS \"timeout!\", current_setting('synchronous_commit') AS \"commit!\"").fetch_one(&mut *tx).await.unwrap();
+        assert_eq!(
+            (
+                inside.isolation.as_str(),
+                inside.read_only.as_str(),
+                inside.timeout.as_str(),
+                inside.commit.as_str()
+            ),
+            ("repeatable read", "off", inherited, "off")
+        );
+        tx.commit().await.unwrap();
+        let after = sqlx::query!("SELECT current_setting('lock_timeout') AS \"timeout!\", current_setting('synchronous_commit') AS \"commit!\"").fetch_one(&reader_pool).await.unwrap();
+        assert_eq!(
+            (after.timeout.as_str(), after.commit.as_str()),
+            (inherited, "on")
+        );
+    }
+    reader_pool.close().await;
+}
