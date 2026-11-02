@@ -17,6 +17,8 @@ pub mod avatar;
 pub mod controls;
 #[path = "../src/components/date_picker.rs"]
 pub mod date_picker;
+#[path = "../src/components/debounce.rs"]
+pub mod debounce;
 #[path = "../src/components/form.rs"]
 pub mod form;
 #[path = "../src/components/icons.rs"]
@@ -26,7 +28,7 @@ pub mod modal;
 #[path = "../src/components/select_field.rs"]
 pub mod select_field;
 mod components {
-    pub use super::{avatar, controls, date_picker, form, icons, modal, select_field};
+    pub use super::{avatar, controls, date_picker, debounce, form, icons, modal, select_field};
 }
 #[path = "../src/models/people.rs"]
 pub mod people;

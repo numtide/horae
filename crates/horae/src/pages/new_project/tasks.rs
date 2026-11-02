@@ -8,6 +8,7 @@ use horae_core::types::ProjectType;
 use uuid::Uuid;
 
 use crate::components::controls::Checkbox;
+use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::Input;
 use crate::components::icons::NavIcon;
 use crate::components::modal::Modal;
@@ -33,15 +34,17 @@ pub(super) fn Tasks(
     let mut query = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
     let mut editing_access = use_signal(|| None::<Uuid>);
+    let searched = use_debounced(query, SEARCH_DEBOUNCE);
     let mut results = use_resource(move || {
-        let query = query();
+        let query = searched();
         async move {
             let mut search = CreationSearch::default();
             search.tasks.query = query;
             super::catalog::options(editor_context, search).await
         }
     });
-    let pending = results.state()() != UseResourceState::Ready;
+    // Results for an earlier query cannot decide whether a typed name exists.
+    let pending = results.state()() != UseResourceState::Ready || *searched.read() != *query.read();
     let search_ready = !pending && matches!(&*results.read(), Some(Ok(_)));
     let choices = results
         .read()
@@ -81,7 +84,9 @@ pub(super) fn Tasks(
         query.set(String::new());
     });
     let add_named = use_callback(move |_| {
-        if results.state()() != UseResourceState::Ready || !matches!(&*results.read(), Some(Ok(_)))
+        if results.state()() != UseResourceState::Ready
+            || !matches!(&*results.read(), Some(Ok(_)))
+            || *searched.peek() != *query.peek()
         {
             return;
         }
