@@ -50,8 +50,10 @@ pub(super) fn PermissionEditorDialog(
     let mut locked = use_signal(|| false);
     let mut dirty = use_signal(|| false);
     let mut confirming_discard = use_signal(|| false);
-    let mut recovery = use_resource(move || async move {
-        let _ = person();
+    // The identity keys this tab's recovery storage. It is checked once per mount
+    // and on reload; opening or closing a person re-reads only the storage, which
+    // a save in this dialog may have written (a rejected save stays recoverable).
+    let mut identity = use_resource(move || async move {
         let user = server_fns::get_me().await.map_err(|error| {
             if matches!(
                 error,
@@ -66,11 +68,23 @@ pub(super) fn PermissionEditorDialog(
             }
             .to_owned()
         })?;
-        PendingPermission::load(crate::models::permission_editor::PermissionRequester {
+        Ok::<_, String>(PermissionRequester {
             org_id: user.org_id,
             user_id: user.id,
         })
-        .await
+    });
+    let mut recovery = use_resource(move || {
+        let _ = person();
+        // A reloading identity still holds the previous value; wait for the fresh one.
+        let identity = (identity.state()() == UseResourceState::Ready)
+            .then(|| identity.read().clone())
+            .flatten();
+        async move {
+            match identity? {
+                Ok(requester) => Some(PendingPermission::load(requester).await),
+                Err(message) => Some(Err(message)),
+            }
+        }
     });
     let mut editor = use_resource(move || async move {
         match person() {
@@ -95,12 +109,15 @@ pub(super) fn PermissionEditorDialog(
             dirty.set(false);
             generation.set(Uuid::now_v7());
             editor.restart();
+            identity.restart();
             recovery.restart();
         }
     });
     let form_generation = generation();
-    let recovery_ready = recovery.state()() == UseResourceState::Ready;
-    let recovering = recovery_ready && matches!(&*recovery.read(), Some(Ok(Some(_))));
+    // `None` until the identity has loaded and this tab's storage has been read.
+    let checked = recovery.read().clone().flatten();
+    let recovery_ready = recovery.state()() == UseResourceState::Ready && checked.is_some();
+    let recovering = recovery_ready && matches!(&checked, Some(Ok(Some(_))));
     let ready = recovery_ready && (recovering || editor.state()() == UseResourceState::Ready);
     let pending = locked() || !ready;
     let change_person = use_callback(move |next: Option<(Uuid, PermissionRequester)>| {
@@ -150,7 +167,7 @@ pub(super) fn PermissionEditorDialog(
                     else if ready && dirty() { "dirty" } else { "clean" },
                 if !ready {
                     p { role: "status", class: "text-sm text-secondary", "Loading permissions…" }
-                } else if let Some(Ok(Some(request))) = &*recovery.read() {
+                } else if let Some(Ok(Some(request))) = &checked {
                     RecoveryForm { key: "recovery-{form_generation}", request: request.clone(), locked,
                         on_finished: move |changed: Option<bool>| {
                             locked.set(false);
@@ -159,7 +176,7 @@ pub(super) fn PermissionEditorDialog(
                             if let Some(changed) = changed { on_saved.call(changed); }
                         },
                     }
-                } else if let Some(Err(message)) = &*recovery.read() {
+                } else if let Some(Err(message)) = &checked {
                     p { role: "alert", class: "text-danger text-sm", "{message}" }
                     button { id: RELOAD_BUTTON, r#type: "button", class: "btn btn-secondary mt-4",
                         onclick: move |_| reload.call(()), "Retry recovery check"
