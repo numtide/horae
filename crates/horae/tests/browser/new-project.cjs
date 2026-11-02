@@ -1261,6 +1261,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await page.locator('input[type="date"]').last().fill(entryDate);
     const reportTag = page.getByRole('combobox', { name: 'Project tag', exact: true });
     await expect(reportTag).toBeVisible();
+    // The dates load once typing pauses, so wait for that report, not only idle requests.
+    await expect(page.getByText('Loading report…', { exact: true })).toHaveCount(0);
     await readsFinished(page);
     let releaseReport;
     await page.route('**/api/report_time*', async route => {
