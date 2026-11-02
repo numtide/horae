@@ -29,12 +29,14 @@ pub mod icons;
 pub mod menu;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
+#[path = "../src/components/session.rs"]
+pub mod session;
 #[path = "../src/components/table.rs"]
 pub mod table;
 #[path = "../src/components/toast.rs"]
 pub mod toast;
 mod components {
-    pub use super::{badge, combobox, controls, form, icons, menu, modal, table, toast};
+    pub use super::{badge, combobox, controls, form, icons, menu, modal, session, table, toast};
 }
 #[path = "../src/models/assignment.rs"]
 mod assignment;
@@ -48,6 +50,8 @@ mod edit_return;
 pub mod invoice;
 #[path = "../src/pages/invoices.rs"]
 mod invoices;
+#[path = "../src/models/own_permissions.rs"]
+pub mod own_permissions;
 #[path = "../src/models/permission_editor.rs"]
 pub mod permission_editor;
 #[path = "../src/models/project.rs"]
@@ -64,7 +68,8 @@ pub mod task;
 pub mod user;
 mod models {
     pub use super::{
-        client, invoice, permission_editor, project, project_creation, project_managers,
+        client, invoice, own_permissions, permission_editor, project, project_creation,
+        project_managers, user,
     };
     pub use super::{
         client::Client,
@@ -135,6 +140,8 @@ fn app(probe: Probe) -> Element {
         .clone()
         .unwrap_or_else(|| format!("/invoices/{}", Uuid::from_u128(1)));
     use_context_provider(|| probe);
+    // AppLayout provides the session above every page.
+    session::use_session_provider();
     rsx! {
         HistoryProvider {
             history: move |_| Rc::new(MemoryHistory::with_initial_path(initial_path.clone())) as Rc<dyn History>,
@@ -886,6 +893,11 @@ mod server_fns {
             name: format!("User-{id}"),
             org_role: role,
         }
+    }
+
+    pub async fn get_my_permissions()
+    -> Result<Option<super::own_permissions::OwnPermissions>, ServerFnError> {
+        Ok(None)
     }
 
     pub async fn get_me() -> Result<CurrentUser, ServerFnError> {

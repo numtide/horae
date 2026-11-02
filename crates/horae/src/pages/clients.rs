@@ -6,6 +6,7 @@ use super::is_admin;
 use crate::components::badge::Badge;
 use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuItem};
+use crate::components::session::use_session;
 use crate::components::toast::{Toast, ToastContainer};
 use crate::models::permission_editor::PermissionRequester;
 use crate::route::Route;
@@ -95,7 +96,7 @@ pub fn ClientList() -> Element {
         )?;
         Ok::<_, ServerFnError>(overview)
     });
-    let me = use_resource(|| async move { server_fns::get_me().await });
+    let me = use_session().me;
     use_effect(move || {
         if clients.state()() != UseResourceState::Ready {
             return;

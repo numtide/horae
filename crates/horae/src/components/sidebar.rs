@@ -4,18 +4,18 @@ use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use crate::components::avatar::Avatar;
 use crate::components::icons::NavIcon;
 use crate::components::logo::HoraeMark;
+use crate::components::session::{Session, use_session};
 use crate::components::timer_widget::TimerWidget;
 use crate::models::own_permissions::OwnPermissions;
 use crate::pages::timesheet::{Anchor, CalSpan, ViewMode};
 use crate::route::Route;
-use crate::server_fns;
 
 /// The left rail: brand, a start-timer action, grouped navigation with an active
 /// state, and a footer showing the signed-in user. `collapsed` is owned by
 /// `AppLayout` so the shell can narrow the content area in step with the rail.
 #[component]
 pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Element {
-    let own = use_resource(server_fns::get_my_permissions);
+    let own = use_session().permissions;
     let clients = own.state()() == UseResourceState::Ready && shows_clients(own.read().as_ref());
     rsx! {
         aside { id: "app-navigation", class: "app-sidebar", aria_label: "Navigation",
@@ -56,7 +56,7 @@ pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Elemen
 
             div { class: "sidebar-spacer" }
 
-            SidebarUser { own, on_navigate }
+            SidebarUser { on_navigate }
         }
     }
 }
@@ -82,11 +82,11 @@ fn SideLink(to: Route, icon: String, label: String, on_navigate: EventHandler<()
 /// (settings, an admin section for admins, and sign out). Falls back to a
 /// placeholder until `get_me` resolves (or when not authenticated).
 #[component]
-fn SidebarUser(
-    mut own: Resource<Result<Option<OwnPermissions>, ServerFnError>>,
-    on_navigate: EventHandler<()>,
-) -> Element {
-    let me = use_resource(|| async move { server_fns::get_me().await });
+fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
+    let Session {
+        me,
+        permissions: mut own,
+    } = use_session();
     let mut open = use_signal(|| false);
 
     let user = me.read();

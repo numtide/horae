@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use super::{loaded, run_action};
 use crate::components::badge::Badge;
 use crate::components::form::{FormCard, FormGroup, Input, Select};
+use crate::components::session::use_session;
 use crate::components::table::DataTable;
 use crate::models::{permission_editor::PermissionRequester, task::TaskRateEdit};
 use crate::server_fns;
@@ -12,7 +13,8 @@ mod permission_editor;
 
 #[component]
 pub fn AdminUsers() -> Element {
-    let mut own = use_resource(server_fns::get_my_permissions);
+    let session = use_session();
+    let own = session.permissions;
     let mut notice = use_signal(|| None::<String>);
     let on_saved = use_callback(move |changed: bool| {
         notice.set(Some(
@@ -23,9 +25,16 @@ pub fn AdminUsers() -> Element {
             }
             .into(),
         ));
-        own.restart();
+        // The save may have changed the user's own access, which the rail and
+        // the admin navigation render from too.
+        session.refresh();
     });
-    if own.state()() != UseResourceState::Ready {
+    // The permissions are shared with the rail, which refreshes them when its
+    // account menu opens; keep a resolved answer meanwhile so the directory does
+    // not remount and lose its filter and page. A retry after a failure shows as
+    // pending rather than repeating the old error.
+    let resolved = matches!(&*own.read(), Some(Ok(_)));
+    if !resolved && own.state()() != UseResourceState::Ready {
         return rsx! { p { role: "status", "Loading people access…" } };
     }
     let content = match &*own.read() {
@@ -49,7 +58,7 @@ pub fn AdminUsers() -> Element {
         }
         _ => rsx! {
             p { class: "alert alert-danger", role: "alert", "People access is unavailable. Sign in again or retry." }
-            button { r#type: "button", class: "btn btn-secondary", onclick: move |_| own.restart(), "Retry" }
+            button { r#type: "button", class: "btn btn-secondary", onclick: move |_| session.refresh(), "Retry" }
             PermissionRecovery { on_saved }
         },
     };
@@ -68,7 +77,7 @@ pub(crate) fn PermissionRecovery(on_saved: EventHandler<bool>) -> Element {
 
 #[component]
 fn LegacyAdminUsers() -> Element {
-    let requester = use_resource(server_fns::get_me);
+    let requester = use_session().me;
     let mut users = use_resource(|| async move { server_fns::list_users(true).await });
     let tasks = use_resource(|| async move { server_fns::list_tasks().await });
 

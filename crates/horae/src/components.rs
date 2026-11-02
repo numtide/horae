@@ -16,6 +16,7 @@ pub mod nav;
 pub mod permission_description;
 pub mod project_task_picker;
 pub mod select_field;
+pub mod session;
 pub mod sidebar;
 pub mod table;
 pub mod theme;
