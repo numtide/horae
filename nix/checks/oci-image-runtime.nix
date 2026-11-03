@@ -104,6 +104,11 @@ pkgs.testers.nixosTest {
         ).lower()
         assert "content-encoding: br" in headers, f"WASM not sent as brotli: {headers}"
         assert "vary: accept-encoding" in headers, f"Brotli WASM lacks Vary: {headers}"
+        headers = machine.succeed(
+            f"curl -fsS -o /dev/null -D - http://127.0.0.1:3000/assets/{wasm}"
+        ).lower()
+        assert "content-encoding" not in headers, f"WASM encoded without br: {headers}"
+        assert "vary: accept-encoding" in headers, f"Plain WASM lacks Vary: {headers}"
         machine.succeed(f"podman image unmount {image}")
 
         # No authentication bypass: the dev login form is absent, and posting

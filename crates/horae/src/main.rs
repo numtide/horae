@@ -417,40 +417,50 @@ fn with_compression(router: axum::Router) -> axum::Router {
 #[cfg(feature = "server")]
 fn compression_layer()
 -> tower_http::compression::CompressionLayer<impl tower_http::compression::Predicate> {
-    use tower_http::compression::{
-        CompressionLayer, DefaultPredicate, Predicate, predicate::NotForContentType,
-    };
-    CompressionLayer::new().compress_when(
-        DefaultPredicate::new()
-            // Browsers get the precompressed `.br`; gzipping megabytes per
-            // request for the rest is not worth the CPU.
-            .and(NotForContentType::const_new("application/wasm"))
-            // Already compressed formats.
-            .and(NotForContentType::const_new("application/pdf"))
-            .and(NotForContentType::const_new(
-                "application/vnd.openxmlformats-",
-            ))
-            .and(NotForContentType::const_new("application/zip"))
-            .and(NotForContentType::const_new("font/woff2")),
-    )
+    use axum::http::header::CONTENT_TYPE;
+    use tower_http::compression::{CompressionLayer, DefaultPredicate, Predicate};
+
+    const SENT_AS_IS: [&str; 5] = [
+        // Browsers get the precompressed `.br`; gzipping megabytes per request
+        // for the rest is not worth the CPU.
+        "application/wasm",
+        // Already compressed formats.
+        "application/pdf",
+        "application/vnd.openxmlformats-",
+        "application/zip",
+        "font/woff2",
+    ];
+    CompressionLayer::new().compress_when(DefaultPredicate::new().and(
+        |_, _, headers: &axum::http::HeaderMap, _: &axum::http::Extensions| {
+            let content_type = headers
+                .get(CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            !SENT_AS_IS
+                .iter()
+                .any(|prefix| content_type.starts_with(prefix))
+        },
+    ))
 }
 
-/// The Dioxus file service sends precompressed assets, cached as immutable,
-/// without `Vary: Accept-Encoding`; a shared cache could then hand brotli to a
-/// client that cannot decode it. The compression layer only adds `Vary` to the
-/// responses it compresses itself.
+/// Every response varies by encoding: the Dioxus file service picks a
+/// precompressed `.br` or the plain file by `Accept-Encoding` and caches either
+/// as immutable, yet sends no `Vary`, and the compression layer only adds it to
+/// responses its predicate allows. Without it a shared cache could hand
+/// brotli, or a year of uncompressed WASM, to every client.
 #[cfg(feature = "server")]
 async fn vary_on_encoding(mut response: axum::response::Response) -> axum::response::Response {
-    use axum::http::header::{ACCEPT_ENCODING, CONTENT_ENCODING, VARY};
+    use axum::http::header::{ACCEPT_ENCODING, VARY};
     let headers = response.headers_mut();
     let varies = headers.get_all(VARY).iter().any(|value| {
         value.to_str().is_ok_and(|value| {
-            value
-                .split(',')
-                .any(|name| name.trim().eq_ignore_ascii_case("accept-encoding"))
+            value.split(',').any(|name| {
+                name.trim().eq_ignore_ascii_case("accept-encoding") || name.trim() == "*"
+            })
         })
     });
-    if headers.contains_key(CONTENT_ENCODING) && !varies {
+    if !varies {
         headers.append(VARY, ACCEPT_ENCODING.into());
     }
     response
@@ -482,6 +492,11 @@ mod compression_tests {
             .unwrap()
     }
 
+    fn assert_varies_once<B>(response: &Response<B>) {
+        let vary: Vec<_> = response.headers().get_all(header::VARY).iter().collect();
+        assert_eq!(vary, ["accept-encoding"]);
+    }
+
     #[tokio::test]
     async fn html_is_gzipped_when_accepted() {
         let router = super::with_compression(
@@ -491,7 +506,7 @@ mod compression_tests {
         let response = router.oneshot(gzip_request("/")).await.unwrap();
 
         assert_eq!(response.headers()[header::CONTENT_ENCODING], "gzip");
-        assert_eq!(response.headers()[header::VARY], "accept-encoding");
+        assert_varies_once(&response);
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .unwrap();
@@ -516,10 +531,25 @@ mod compression_tests {
             .await
             .unwrap();
         assert_eq!(brotli.headers()[header::CONTENT_ENCODING], "br");
-        assert_eq!(brotli.headers()[header::VARY], "accept-encoding");
+        assert_varies_once(&brotli);
 
-        let plain = router.oneshot(gzip_request("/app.wasm")).await.unwrap();
+        // The identity variant is cached as immutable too, so it must vary.
+        let plain = router
+            .clone()
+            .oneshot(gzip_request("/app.wasm"))
+            .await
+            .unwrap();
         assert!(!plain.headers().contains_key(header::CONTENT_ENCODING));
+        assert_varies_once(&plain);
+
+        let mut revalidation = request("/app.wasm", "br");
+        revalidation.headers_mut().insert(
+            header::IF_MODIFIED_SINCE,
+            plain.headers()[header::LAST_MODIFIED].clone(),
+        );
+        let not_modified = router.clone().oneshot(revalidation).await.unwrap();
+        assert_eq!(not_modified.status(), axum::http::StatusCode::NOT_MODIFIED);
+        assert_varies_once(&not_modified);
         let body = axum::body::to_bytes(plain.into_body(), usize::MAX)
             .await
             .unwrap();
@@ -533,6 +563,7 @@ mod compression_tests {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/zip",
             "font/woff2",
+            "Application/PDF",
         ] {
             let router =
                 super::with_compression(Router::new().route(
@@ -546,6 +577,7 @@ mod compression_tests {
                 !response.headers().contains_key(header::CONTENT_ENCODING),
                 "{content_type} was compressed"
             );
+            assert_varies_once(&response);
         }
     }
 
