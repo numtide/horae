@@ -759,6 +759,32 @@ fn TimesheetContent(
     let mut cell_drafts = use_signal(HashMap::<CellKey, String>::new);
     let mut saving_cells = use_signal(HashSet::<CellKey>::new);
 
+    // A day, view or span change keeps the loaded week but leaves the editor:
+    // the navigation guard has already asked to discard unsaved changes, so
+    // drop them as the remount on these changes used to.
+    use_effect(use_reactive!(|(view, date, span)| {
+        let _ = (view, date, span);
+        let (mut drag, mut hint) = (cal_drag, add_hint);
+        if !cell_drafts.peek().is_empty() {
+            cell_drafts.write().clear();
+        }
+        if !pending_rows.peek().is_empty() {
+            pending_rows.write().clear();
+        }
+        if *addrow_open.peek() {
+            addrow_open.set(false);
+        }
+        if add_open.peek().is_some() {
+            add_open.set(None);
+        }
+        if drag.peek().is_some() {
+            drag.set(None);
+        }
+        if hint.peek().is_some() {
+            hint.set(None);
+        }
+    }));
+
     // Commit a grid cell: create, update, or clear the entry behind it, then
     // reload. Notes, billability, and the start time of an update are preserved.
     let commit_cell = use_callback(move |edit: CellEdit| {
@@ -922,7 +948,7 @@ fn TimesheetContent(
     let busy = use_memo(move || {
         pending_action() || add_saving() || removing_row() || !saving_cells.read().is_empty()
     });
-    let draft_rows = use_memo(move || {
+    let hidden_draft_rows = use_memo(move || {
         draft_rows(
             &cell_drafts.read(),
             week_start(),
@@ -942,7 +968,7 @@ fn TimesheetContent(
         removing_row,
         add_row: open_add_row,
         drafts: cell_drafts,
-        draft_rows,
+        draft_rows: hidden_draft_rows,
         saving: saving_cells,
         tracking,
         busy,
