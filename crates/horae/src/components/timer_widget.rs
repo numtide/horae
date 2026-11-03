@@ -78,7 +78,24 @@ pub fn TimerWidget() -> Element {
 
     let mut timer = use_running_timer();
     let timer_resource = timer.entry;
-    let projects = use_resource(|| async move { server_fns::list_tracking_projects().await });
+    // The catalogs only name a running timer and fill the picker, so an idle
+    // rail never fetches them. Once wanted they stay loaded.
+    let mut catalogs_wanted = use_signal(|| false);
+    let mut projects = use_resource(move || {
+        let wanted = catalogs_wanted();
+        async move {
+            if !wanted {
+                return Ok(Vec::new());
+            }
+            server_fns::list_tracking_projects().await
+        }
+    });
+    use_effect(move || {
+        let running = matches!(&*timer_resource.read(), Some(Ok(Some(_))));
+        if running && !*catalogs_wanted.peek() {
+            catalogs_wanted.set(true);
+        }
+    });
 
     let mut picking = use_signal(|| false);
     let mut selected_project = use_signal(String::new);
@@ -88,7 +105,27 @@ pub fn TimerWidget() -> Element {
     let mut saving = use_signal(|| false);
 
     // Task names are shared by the running label and the project-scoped picker.
-    let all_tasks = use_resource(|| async move { server_fns::list_tracking_tasks().await });
+    let mut all_tasks = use_resource(move || {
+        let wanted = catalogs_wanted();
+        async move {
+            if !wanted {
+                return Ok(Vec::new());
+            }
+            server_fns::list_tracking_tasks().await
+        }
+    });
+
+    // The rail outlives project management pages: re-read the names on every
+    // open so a newly created or enabled task is offered without a reload.
+    let open_picker = move |_| {
+        if catalogs_wanted() {
+            projects.restart();
+            all_tasks.restart();
+        } else {
+            catalogs_wanted.set(true);
+        }
+        picking.set(true);
+    };
 
     // Only resource changes rebuild these lookups, not the one-second tick.
     let project_names = use_memo(move || -> HashMap<Uuid, String> {
@@ -225,7 +262,7 @@ pub fn TimerWidget() -> Element {
             } else {
                 button {
                     class: "sidebar-timer",
-                    onclick: move |_| picking.set(true),
+                    onclick: open_picker,
                     span { class: "sidebar-timer-icon" }
                     span { class: "sidebar-timer-label", "Start timer" }
                 }

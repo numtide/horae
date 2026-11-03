@@ -9,17 +9,11 @@ use crate::server_fns;
 pub fn ProjectTaskPicker(
     mut project: Signal<String>,
     mut task: Signal<String>,
-    mut projects: Resource<Result<Vec<Project>, ServerFnError>>,
-    mut tasks: Resource<Result<Vec<Task>, ServerFnError>>,
+    projects: Resource<Result<Vec<Project>, ServerFnError>>,
+    tasks: Resource<Result<Vec<Task>, ServerFnError>>,
     #[props(default = false)] disabled: bool,
 ) -> Element {
     let contexts = use_resource(|| async move { server_fns::list_time_entry_contexts().await });
-    // The sidebar outlives project management pages: refresh names on opening
-    // the picker so a newly created/enabled task is visible without a reload.
-    use_effect(move || {
-        projects.restart();
-        tasks.restart();
-    });
     use_effect(move || {
         if disabled {
             return;
