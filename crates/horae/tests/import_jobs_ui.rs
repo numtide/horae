@@ -1362,6 +1362,20 @@ fn environment_client_and_missing_key_read_as_locked() {
     assert!(html.contains("ignored while they are set"), "{html}");
     assert!(!html.contains("data-testid=\"save-harvest-client\""));
     assert!(!html.contains("data-testid=\"replace-harvest-secret\""));
+    assert!(!html.contains("also needs HORAE_HARVEST_REDIRECT_URL"));
+
+    let probe = Probe::default();
+    *probe.client.borrow_mut() = ClientSettings {
+        source: ClientSource::Environment,
+        client_id: Some("env-app".into()),
+        secret_set: true,
+        secret_readable: true,
+        ..key_only()
+    };
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-api");
+    ui.click("setup-harvest-oauth");
+    assert!(ui.html().contains("also needs HORAE_HARVEST_REDIRECT_URL"));
 
     let probe = Probe::default();
     let mut ui = Ui::start(&probe);

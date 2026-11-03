@@ -54,8 +54,8 @@
 
 - [X] T021 Regenerate `.sqlx/` (touch + `cargo sqlx prepare --workspace -- --features server --all-targets`) and verify with an offline test build
 - [X] T022 [P] Document the page option in `README.md` and `.env.example`
-- [ ] T023 Run `cargo clippy -p horae --features server --all-targets -- -D warnings`, `cargo check -p horae --features web --target wasm32-unknown-unknown`, `nix fmt`, full `cargo test -p horae --features server` and `cargo test -p horae-core`
-- [ ] T024 Live browser check of the OAuth app view (Playwright MCP's own tab) against a local server on the disposable database
+- [X] T023 Run `cargo clippy -p horae --features server --all-targets -- -D warnings`, `cargo check -p horae --features web --target wasm32-unknown-unknown`, `nix fmt`, full `cargo test -p horae --features server` and `cargo test -p horae-core`
+- [X] T024 Live browser check of the OAuth app view (Playwright MCP's own tab) against a local server on the disposable database
 - [ ] T025 Run relevant nix checks (`clippy`, `treefmt`, `sqlx-prepare`), push, open a PR against `master`, stop the disposable PostgreSQL
 
 ## Dependencies

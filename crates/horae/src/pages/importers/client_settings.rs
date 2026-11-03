@@ -191,6 +191,8 @@ pub(super) fn HarvestOAuthApp(
                         p { class: "form-hint",
                             if current.redirect_from_environment {
                                 "Set by HORAE_HARVEST_REDIRECT_URL. Register it in Harvest exactly as shown."
+                            } else if environment {
+                                "The environment client also needs HORAE_HARVEST_REDIRECT_URL. Ask the operator to set it to this address."
                             } else {
                                 "Paste this into Harvest first. It must match exactly, or the callback is rejected."
                             }
