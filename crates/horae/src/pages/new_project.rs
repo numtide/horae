@@ -28,6 +28,9 @@ mod draft;
 mod edit_return;
 #[path = "new_project/invoice_defaults.rs"]
 mod invoice_defaults;
+#[cfg(test)]
+#[path = "new_project/picker_tests.rs"]
+mod picker_tests;
 #[path = "new_project/protected.rs"]
 mod protected;
 #[path = "new_project/session.rs"]
@@ -54,28 +57,40 @@ pub fn NewProject(#[props(default)] client_context: Option<String>) -> Element {
     let mut initial = use_resource(move || {
         let client_context = client_context.clone();
         async move {
-            let mut options =
-                server_fns::project_creation_options(CreationSearch::default()).await?;
-            let draft = server_fns::load_project_draft().await?;
+            // The linked client is looked up alongside the draft; a restored
+            // draft discards it.
+            let linked_client = async {
+                let Some(context) = client_context else {
+                    return Ok(None);
+                };
+                let id = context
+                    .parse::<Uuid>()
+                    .map_err(|_| ServerFnError::new("Invalid client link."))?;
+                let client = server_fns::project_creation_client(id)
+                    .await?
+                    .filter(|client| client.active)
+                    .ok_or_else(|| {
+                        ServerFnError::new("This client is unavailable for a new project.")
+                    })?;
+                Ok::<_, ServerFnError>(Some(client))
+            };
+            let (defaults, draft, linked_client) = futures_util::join!(
+                server_fns::project_creation_options(CreationSearch::default()),
+                server_fns::load_project_draft(),
+                linked_client,
+            );
+            let defaults = defaults?;
+            let draft = draft?;
+            let mut options = defaults.clone();
             // Restoring any saved draft takes precedence, even over an invalid link.
             let client_context = if draft.is_none() {
-                if let Some(context) = client_context {
-                    let id = context
-                        .parse::<Uuid>()
-                        .map_err(|_| ServerFnError::new("Invalid client link."))?;
-                    let client = server_fns::project_creation_client(id)
-                        .await?
-                        .filter(|client| client.active)
-                        .ok_or_else(|| {
-                            ServerFnError::new("This client is unavailable for a new project.")
-                        })?;
+                linked_client?.map(|client| {
+                    let id = client.id;
                     if !options.clients.iter().any(|item| item.id == id) {
                         options.clients.push(client);
                     }
-                    Some(id)
-                } else {
-                    None
-                }
+                    id
+                })
             } else {
                 None
             };
@@ -113,15 +128,15 @@ pub fn NewProject(#[props(default)] client_context: Option<String>) -> Element {
                     options.people.extend(selected.people);
                 }
             }
-            Ok::<_, ServerFnError>((options, draft, client_context))
+            Ok::<_, ServerFnError>((defaults, options, draft, client_context))
         }
     });
     if initial.state()() != UseResourceState::Ready {
         return rsx! { p { role: "status", "Loading project settings…" } };
     }
     match &*initial.read() {
-        Some(Ok((options, draft, client_context))) => rsx! {
-            ProjectEditor { options: options.clone(), draft: draft.clone(), client_context: *client_context, on_reload: move |_| initial.restart() }
+        Some(Ok((defaults, options, draft, client_context))) => rsx! {
+            ProjectEditor { defaults: defaults.clone(), options: options.clone(), draft: draft.clone(), client_context: *client_context, on_reload: move |_| initial.restart() }
         },
         Some(Err(error)) => rsx! {
             h1 { class: "text-4xl font-semibold text-strong", "New project" }
@@ -168,8 +183,9 @@ fn ProjectEditLoader(id: Uuid, exit: Route) -> Element {
     let mut unavailable = use_signal(|| false);
     let mut initial = use_resource(use_reactive!(|id| async move {
         let project = server_fns::load_project_editor(id).await?;
-        let mut options =
+        let defaults =
             catalog::options(editor_context(&project), CreationSearch::default()).await?;
+        let mut options = defaults.clone();
         if let Some(access) = &project.access {
             options.can_edit_private_settings =
                 access.private_notes == ProjectFieldAccess::Editable;
@@ -186,7 +202,7 @@ fn ProjectEditLoader(id: Uuid, exit: Route) -> Element {
             options.people.retain(|existing| existing.id != person.id);
             options.people.push(person.clone());
         }
-        Ok::<_, ServerFnError>((options, project))
+        Ok::<_, ServerFnError>((defaults, options, project))
     }));
     let invalidate = use_callback(move |expected: Uuid| {
         if expected != *generation.peek() {
@@ -218,12 +234,12 @@ fn ProjectEditLoader(id: Uuid, exit: Route) -> Element {
         return rsx! { p { role: "status", "Loading project…" } };
     }
     match &*initial.read() {
-        Some(Ok((options, project))) if project.id == id => {
+        Some(Ok((defaults, options, project))) if project.id == id => {
             let key = format!("{}-{}", editor_key(project), generation());
             rsx! {
                 ProjectEditor {
                     key: "{key}",
-                    options: options.clone(), draft: None, existing: Some(project.clone()),
+                    defaults: defaults.clone(), options: options.clone(), draft: None, existing: Some(project.clone()),
                     generation: generation(), on_unavailable: invalidate,
                     on_reload: reload, exit: exit.clone(),
                 }
@@ -269,6 +285,8 @@ fn editor_key(project: &EditableProject) -> String {
 
 #[component]
 fn ProjectEditor(
+    /// The unfiltered catalog as loaded, which pickers show for an empty search.
+    defaults: CreationOptions,
     options: CreationOptions,
     draft: Option<ProjectDraft>,
     #[props(default)] client_context: Option<Uuid>,
@@ -289,14 +307,15 @@ fn ProjectEditor(
     let existing = use_signal(|| existing);
     let editing = existing.read().is_some();
     let editor_context = existing.read().as_ref().and_then(editor_context);
-    let mut state = use_signal(|| DraftState::new(draft));
+    let mut state = use_signal(|| DraftState::new(draft, client_context));
     let form = use_signal(|| {
         existing.peek().as_ref().map_or_else(
-            || state.peek().initial_form(client_context),
+            || state.peek().saved.clone(),
             |project| project.form.clone(),
         )
     });
     let options = use_signal(|| options);
+    let defaults = use_signal(|| defaults);
     let archived_tasks = use_signal(|| {
         existing
             .peek()
@@ -662,17 +681,17 @@ fn ProjectEditor(
                         class: "border-0 p-0 m-0 min-w-0",
                         disabled: locked,
                         aria_label: "Project settings",
-                        Basics { form, options, editing, editor_context, notes_access, on_edit, invalid_field: invalid_field(), error_message: error() }
+                        Basics { form, options, defaults, editing, editor_context, notes_access, on_edit, invalid_field: invalid_field(), error_message: error() }
                         Visibility { form, legacy: existing.read().as_ref().is_some_and(|project| !project.configured) }
                         Billing { form, options, billable_access, on_edit, invalid_field: invalid_field(), error_message: error() }
                         Tasks {
-                            form, options, editor_context, billable_access, on_edit, archived_ids: archived_tasks,
+                            form, options, defaults, editor_context, billable_access, on_edit, archived_ids: archived_tasks,
                             retained_ids: existing.read().as_ref().filter(|project| project.access.is_some()).map(|project| project.form.tasks.iter().map(|task| task.id).collect()).unwrap_or_default(),
                             inactive_ids: existing.read().as_ref().map(|project| project.inactive_task_ids.clone()).unwrap_or_default(),
                             invalid_field: invalid_field(), error_message: error(),
                         }
                         Team {
-                            form, managers, options, editor_context, billable_access, cost_access, on_edit,
+                            form, managers, options, defaults, editor_context, billable_access, cost_access, on_edit,
                             busy: catalog_busy,
                             retained_managers: existing.read().as_ref().and_then(|project| project.access.as_ref()).map(|access| access.managers.managers.clone()).unwrap_or_default(),
                             inactive_ids: existing.read().as_ref().map(|project| project.inactive_user_ids.clone()).unwrap_or_default(),

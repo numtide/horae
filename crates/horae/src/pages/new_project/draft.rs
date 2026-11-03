@@ -21,15 +21,9 @@ pub(super) struct DraftState {
 }
 
 impl DraftState {
-    pub fn initial_form(&self, client_context: Option<Uuid>) -> ProjectForm {
-        let mut form = self.saved.clone();
-        if self.saved_at.is_none() {
-            form.client_id = client_context;
-        }
-        form
-    }
-
-    pub fn new(draft: Option<ProjectDraft>) -> Self {
+    /// A client link prefills only a new form, and is its baseline: loading the
+    /// page must not save a draft the user never edited.
+    pub fn new(draft: Option<ProjectDraft>, client_context: Option<Uuid>) -> Self {
         match draft {
             Some(draft) => Self {
                 id: draft.id,
@@ -42,7 +36,10 @@ impl DraftState {
                 id: Uuid::now_v7(),
                 revision: 0,
                 saved_at: None,
-                saved: ProjectForm::default(),
+                saved: ProjectForm {
+                    client_id: client_context,
+                    ..Default::default()
+                },
                 pending: None,
             },
         }
@@ -90,14 +87,15 @@ mod tests {
 
     #[test]
     fn context_prefills_only_a_new_form_without_fixing_its_currency() {
-        let state = DraftState::new(None);
         let client = Uuid::now_v7();
-        let form = state.initial_form(Some(client));
+        let mut state = DraftState::new(None, Some(client));
+        let mut form = state.saved.clone();
         assert_eq!(form.client_id, Some(client));
         assert_eq!(form.currency, None);
-        assert_eq!(state.saved, ProjectForm::default());
-        assert!(state.is_dirty(&form));
-        assert_eq!(state.initial_form(None), ProjectForm::default());
+        assert!(!state.is_dirty(&form), "a prefill alone is not saved");
+        form.name = "Edited".into();
+        assert_eq!(state.request(&form).form.client_id, Some(client));
+        assert_eq!(DraftState::new(None, None).saved, ProjectForm::default());
     }
 
     #[test]
@@ -115,9 +113,9 @@ mod tests {
                     ..Default::default()
                 },
             };
-            let state = DraftState::new(Some(draft.clone()));
-            assert_eq!(state.initial_form(Some(context)), draft.form);
-            assert!(!state.is_dirty(&state.initial_form(Some(context))));
+            let state = DraftState::new(Some(draft.clone()), Some(context));
+            assert_eq!(state.saved, draft.form);
+            assert!(!state.is_dirty(&draft.form));
             assert_eq!(state.id, draft.id);
             assert_eq!(state.revision, draft.revision);
         }
@@ -125,7 +123,7 @@ mod tests {
 
     #[test]
     fn an_empty_form_is_not_reported_as_saved() {
-        let state = DraftState::new(None);
+        let state = DraftState::new(None, None);
         assert!(state.saved_at.is_none());
         assert_eq!(state.revision, 0);
         assert!(!state.is_dirty(&ProjectForm::default()));
@@ -133,7 +131,7 @@ mod tests {
 
     #[test]
     fn a_retry_keeps_the_unacknowledged_payload_and_revision() {
-        let mut state = DraftState::new(None);
+        let mut state = DraftState::new(None, None);
         let first = ProjectForm {
             name: "First edit".into(),
             ..Default::default()
@@ -157,7 +155,7 @@ mod tests {
 
     #[test]
     fn a_mismatched_acknowledgement_does_not_lose_pending_input() {
-        let mut state = DraftState::new(None);
+        let mut state = DraftState::new(None, None);
         let form = ProjectForm {
             name: "Keep me".into(),
             ..Default::default()
@@ -180,7 +178,7 @@ mod tests {
 
     #[test]
     fn a_validation_rejection_allows_corrected_input_at_the_same_revision() {
-        let mut state = DraftState::new(None);
+        let mut state = DraftState::new(None, None);
         let bad = ProjectForm {
             name: "Invalid input".into(),
             ..Default::default()
@@ -207,7 +205,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        let state = DraftState::new(Some(draft.clone()));
+        let state = DraftState::new(Some(draft.clone()), None);
         assert_eq!(state.id, draft.id);
         assert_eq!(state.revision, 7);
         assert_eq!(state.saved_at, Some(draft.saved_at));

@@ -267,7 +267,10 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       return route.fulfill({ response });
     });
     try {
+      // Reopening shows the loaded catalog at once; only a search waits.
       await screen.getByLabel('Client', { exact: true }).click();
+      await expect(clientPicker.getByRole('option', { name: 'Acme Corp', exact: true })).toBeEnabled();
+      await clientSearch.fill('Acme');
       await expect(clientPicker.getByRole('status')).toHaveText('Loading choices…');
       await expect.poll(() => !!releaseClients).toBe(true);
       assert.equal(await clientPicker.getByRole('option').evaluateAll(options => options.length > 0 && options.every(option => option.disabled)), true);

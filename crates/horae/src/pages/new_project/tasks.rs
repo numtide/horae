@@ -20,6 +20,7 @@ use crate::models::project_creation::{
 pub(super) fn Tasks(
     mut form: Signal<ProjectForm>,
     mut options: Signal<CreationOptions>,
+    defaults: Signal<CreationOptions>,
     #[props(default)] editor_context: Option<ProjectEditorContext>,
     billable_access: ProjectFieldAccess,
     on_edit: EventHandler<ProtectedProjectField>,
@@ -36,6 +37,9 @@ pub(super) fn Tasks(
     let mut results = use_resource(move || {
         let query = query();
         async move {
+            if query.is_empty() {
+                return Ok(defaults.peek().clone());
+            }
             let mut search = CreationSearch::default();
             search.tasks.query = query;
             super::catalog::options(editor_context, search).await

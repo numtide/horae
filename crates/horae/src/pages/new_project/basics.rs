@@ -19,6 +19,7 @@ use crate::models::project_creation::ProtectedProjectField;
 pub(super) fn Basics(
     mut form: Signal<ProjectForm>,
     mut options: Signal<CreationOptions>,
+    defaults: Signal<CreationOptions>,
     #[props(default)] editing: bool,
     #[props(default)] editor_context: Option<ProjectEditorContext>,
     notes_access: ProjectFieldAccess,
@@ -40,6 +41,9 @@ pub(super) fn Basics(
     let clients = use_resource(move || {
         let query = client_query();
         async move {
+            if query.is_empty() {
+                return Ok(defaults.peek().clone());
+            }
             let mut search = CreationSearch::default();
             search.clients.query = query;
             super::catalog::options(editor_context, search).await

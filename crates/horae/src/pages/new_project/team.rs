@@ -45,6 +45,7 @@ pub(super) fn Team(
     mut form: Signal<ProjectForm>,
     mut managers: Signal<Option<ProjectManagerSelection>>,
     mut options: Signal<CreationOptions>,
+    defaults: Signal<CreationOptions>,
     mut busy: Signal<bool>,
     #[props(default)] editor_context: Option<ProjectEditorContext>,
     billable_access: ProjectFieldAccess,
@@ -88,7 +89,7 @@ pub(super) fn Team(
     let mut error = use_signal(|| None::<String>);
     let mut people = use_resource(move || {
         let query = query();
-        async move { super::catalog::people(editor_context, query).await }
+        async move { super::catalog::people(editor_context, query, defaults).await }
     });
     let pending = people.state()() != UseResourceState::Ready;
     let choices = people
