@@ -22,13 +22,18 @@ fn typing_in_another_cell_survives_a_save_refresh() {
     let committed = Rc::new(RefCell::new(Vec::<CellEdit>::new()));
     let mut dom = VirtualDom::new_with_props(
         |Harness { ready, committed }: Harness| {
+            let start: NaiveDate = "2026-09-07".parse().unwrap();
+            let drafts = use_signal(HashMap::new);
             let actions = WeekActions {
                 commit: use_callback(move |edit: CellEdit| committed.borrow_mut().push(edit)),
                 remove_row: use_callback(|_: (Uuid, Uuid)| {}),
-                removing_row: use_signal(|| false).into(),
+                removing_row: use_signal(|| false),
                 add_row: use_callback(|()| {}),
-                drafts: use_signal(HashMap::new),
-                saving: use_signal(HashSet::new).into(),
+                drafts,
+                draft_rows: use_memo(move || {
+                    draft_rows(&drafts.read(), start, &[], &[(Uuid::nil(), Uuid::nil())])
+                }),
+                saving: use_signal(HashSet::new),
                 tracking: use_memo(|| {
                     vec![crate::models::scoped_time::TimesheetTrackingOption {
                         project_id: Uuid::nil(),
@@ -44,7 +49,6 @@ fn typing_in_another_cell_survives_a_save_refresh() {
             if !ready.get() {
                 return rsx! { div { "Loading timesheet…" } };
             }
-            let start = "2026-09-07".parse().unwrap();
             render_week_view(
                 &[],
                 &[0; 7],
@@ -116,6 +120,152 @@ fn typing_in_another_cell_survives_a_save_refresh() {
         committed.borrow()[0].day,
         "2026-09-08".parse::<NaiveDate>().unwrap()
     );
+}
+
+#[test]
+fn typing_in_a_cell_renders_only_that_cell() {
+    use dioxus::dioxus_core::Mutation;
+    use dioxus::html::{SerializedFormData, SerializedHtmlEventConverter};
+
+    dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+    type Seen = Rc<RefCell<Vec<WeekActions>>>;
+    let renders = Rc::new(Cell::new(0u32));
+    let seen: Seen = Rc::default();
+    let mut dom = VirtualDom::new_with_props(
+        |(renders, seen): (Rc<Cell<u32>>, Seen)| {
+            renders.set(renders.get() + 1);
+            let start: NaiveDate = "2026-09-07".parse().unwrap();
+            let drafts = use_signal(HashMap::new);
+            let actions = WeekActions {
+                commit: use_callback(|_: CellEdit| {}),
+                remove_row: use_callback(|_: (Uuid, Uuid)| {}),
+                removing_row: use_signal(|| false),
+                add_row: use_callback(|()| {}),
+                drafts,
+                draft_rows: use_memo(move || {
+                    draft_rows(&drafts.read(), start, &[], &[(Uuid::nil(), Uuid::nil())])
+                }),
+                saving: use_signal(HashSet::new),
+                tracking: use_memo(|| {
+                    vec![crate::models::scoped_time::TimesheetTrackingOption {
+                        project_id: Uuid::nil(),
+                        project_name: "Project".into(),
+                        task_id: Uuid::nil(),
+                        task_name: "Task".into(),
+                        billable: true,
+                    }]
+                }),
+                busy: use_memo(|| false),
+                policy: use_memo(|| Some(TimesheetPolicy::Scoped)),
+            };
+            seen.borrow_mut().push(actions);
+            render_week_view(
+                &[],
+                &[0; 7],
+                start,
+                start,
+                &HashMap::new(),
+                &HashMap::new(),
+                &[(Uuid::nil(), Uuid::nil())],
+                actions,
+            )
+        },
+        (renders.clone(), seen.clone()),
+    );
+    let initial = dom.rebuild_to_vec();
+    let cell = initial
+        .edits
+        .iter()
+        .find_map(|edit| match edit {
+            Mutation::NewEventListener { name, id } if name == "input" => Some(*id),
+            _ => None,
+        })
+        .unwrap();
+    let mut type_value = |value: &str| {
+        dom.runtime().handle_event(
+            "input",
+            Event::new(
+                Rc::new(PlatformEventData::new(Box::new(SerializedFormData::new(
+                    value.into(),
+                    vec![],
+                )))) as Rc<dyn Any>,
+                true,
+            ),
+            cell,
+        );
+        dom.render_immediate_to_vec();
+    };
+    // The row is already visible, so not even its first draft re-renders the grid.
+    let before = renders.get();
+    for value in ["1", "1:", "1:3", "1:30"] {
+        type_value(value);
+    }
+    assert_eq!(
+        renders.get(),
+        before,
+        "keystrokes must not re-render the grid"
+    );
+    assert!(dioxus::ssr::render(&dom).contains("value=\"1:30\""));
+
+    // A page re-render rebuilds the actions; they must still compare equal,
+    // or WeekGrid and every WeekCell would re-render with the page.
+    dom.mark_dirty(ScopeId::APP);
+    dom.render_immediate_to_vec();
+    let seen = seen.borrow();
+    assert!(seen.len() >= 2);
+    assert!(seen[seen.len() - 1] == seen[seen.len() - 2]);
+}
+
+#[test]
+fn draft_rows_lists_only_rows_nothing_else_shows_this_week() {
+    let start: NaiveDate = "2026-09-07".parse().unwrap();
+    let (shown, pending, hidden) = (
+        (Uuid::now_v7(), Uuid::now_v7()),
+        (Uuid::now_v7(), Uuid::now_v7()),
+        (Uuid::now_v7(), Uuid::now_v7()),
+    );
+    let drafts = HashMap::from([
+        ((shown.0, shown.1, start), "0:30".into()),
+        ((pending.0, pending.1, start), "1:00".into()),
+        ((hidden.0, hidden.1, start), "2:00".into()),
+        (
+            (hidden.0, hidden.1, start + Duration::days(1)),
+            "3:00".into(),
+        ),
+        (
+            (hidden.0, Uuid::now_v7(), start + Duration::days(7)),
+            "4:00".into(),
+        ),
+    ]);
+    // An entry shows its row whatever its day; the other fields do not matter.
+    let entry = VisibleTimeEntry {
+        id: Uuid::now_v7(),
+        user_id: Uuid::nil(),
+        user_name: "Person".into(),
+        project_id: shown.0,
+        project_name: "Project".into(),
+        task_id: shown.1,
+        task_name: "Task".into(),
+        client_id: Uuid::nil(),
+        client_name: "Client".into(),
+        spent_date: start + Duration::days(3),
+        minutes: 60,
+        rounded_minutes: None,
+        notes: None,
+        billable: true,
+        is_running: false,
+        started_at: None,
+        start_minute: None,
+        sort_order: 0,
+        state: horae_core::types::EntryState::Open,
+        created_at: chrono::Utc::now(),
+    };
+    let rows = draft_rows(&drafts, start, std::slice::from_ref(&entry), &[pending]);
+    assert_eq!(rows, vec![hidden]);
+    // Without the entry, the shown row's draft makes it a draft row too.
+    let mut expected = vec![shown, hidden];
+    expected.sort_unstable();
+    assert_eq!(draft_rows(&drafts, start, &[], &[pending]), expected);
 }
 
 #[test]
