@@ -494,7 +494,7 @@ async fn returning_to_a_week_still_loading_keeps_it_on_screen() {
 }
 
 #[tokio::test]
-async fn a_reload_after_a_save_keeps_the_sheet_and_its_total() {
+async fn a_reload_after_a_save_keeps_the_sheet_and_the_saved_value() {
     let mut page = week_a(ViewMode::Week);
     let (saturday, sunday) = {
         let mut cells = page
@@ -511,7 +511,7 @@ async fn a_reload_after_a_save_keeps_the_sheet_and_its_total() {
     };
     let input = |value: &str| Box::new(SerializedFormData::new(value.into(), vec![]));
     // A draft on Saturday, then Sunday saved, which reloads the week.
-    page.fire("input", saturday.0, input("1:00"), true);
+    page.fire("input", saturday.0, input("0:45"), true);
     withhold(monday());
     page.fire("input", sunday.0, input("2:00"), true);
     page.fire("blur", sunday.1, Box::new(SerializedFocusData {}), false);
@@ -519,8 +519,12 @@ async fn a_reload_after_a_save_keeps_the_sheet_and_its_total() {
     let html = page.html();
     assert!(!html.contains("Loading timesheet"), "{html}");
     assert!(html.contains("Old week project"), "{html}");
-    assert!(html.contains("1:00 this week"), "{html}");
+    assert!(html.contains("this week"), "{html}");
     assert!(html.contains("aria-busy=\"true\""), "{html}");
+    // The saved value stays until the reload brings it, and the page waits
+    // for that reload rather than reading as unsaved.
+    assert!(html.contains("value=\"2:00\""), "{html}");
+    assert!(html.contains("data-editor-state=\"pending\""), "{html}");
     // The reload makes Saturday inert, which blurs it: the draft waits.
     page.fire("blur", saturday.1, Box::new(SerializedFocusData {}), false);
     assert_eq!(COMMANDS.with_borrow(Vec::len), 1);
@@ -538,15 +542,53 @@ async fn a_reload_after_a_save_keeps_the_sheet_and_its_total() {
     page.settle();
     let html = page.html();
     assert!(html.contains("3:00 this week"), "{html}");
-    assert!(html.contains("value=\"1:00\""), "{html}");
+    assert!(html.contains("value=\"2:00\""), "{html}");
+    assert!(html.contains("value=\"0:45\""), "{html}");
+    assert!(html.contains("data-editor-state=\"dirty\""), "{html}");
     assert!(!html.contains("aria-busy=\"true\""), "{html}");
+}
+
+#[tokio::test]
+async fn an_added_row_survives_the_reload_after_its_first_save() {
+    let loaded = || {
+        let mut page = Page::open();
+        // Another task than the tracking choice, so adding that choice adds a row.
+        let other = VisibleTimeEntry {
+            task_id: Uuid::from_u128(4),
+            ..entry(monday(), 60, "Old week project")
+        };
+        release(monday(), vec![other]);
+        page.settle();
+        page
+    };
+    let open_add_row = find_click(loaded, |html| html.contains("Add a row"));
+    let adding = || {
+        let mut page = loaded();
+        page.click(open_add_row);
+        page
+    };
+    let cells = |html: &str| html.matches("ts-cell-input").count();
+    let rows = cells(&adding().html());
+    let add_row = find_click(adding, |html| cells(html) > rows);
+    let mut page = adding();
+    page.click(add_row);
+    let added = cells(&page.html());
+    withhold(monday());
+    // The added row's cells are the newest.
+    page.type_into_last_cell("2:00");
+    assert_eq!(COMMANDS.with_borrow(Vec::len), 1);
+    let html = page.html();
+    assert!(html.contains("aria-busy=\"true\""), "{html}");
+    assert_eq!(cells(&html), added, "{html}");
+    assert!(html.contains("value=\"2:00\""), "{html}");
 }
 
 #[tokio::test]
 async fn day_and_calendar_views_hold_the_last_week_too() {
     for view in [ViewMode::Day, ViewMode::Calendar] {
         let mut page = week_a(view);
-        page.go_to(next_week());
+        // Another weekday: the held view must keep its own day, Monday.
+        page.go_to(next_week() + chrono::Duration::days(2));
         let html = page.html();
         assert!(!html.contains("Loading timesheet"), "{view}: {html}");
         assert!(html.contains("Old week project"), "{view}: {html}");

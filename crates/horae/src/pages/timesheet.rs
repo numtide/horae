@@ -362,20 +362,31 @@ fn TimesheetContent(
     // Resources retain their previous value during a refresh. Do not render
     // those rows or derive totals until the complete new window is admitted;
     // a held week is display only, as every write needs the current context.
+    let mut unadmitted = use_signal(Unadmitted::default);
     let entries = use_memo(move || {
-        if held().is_some() {
-            return admitted
+        let mut entries = if held().is_some() {
+            admitted
                 .read()
                 .as_ref()
                 .map(|(.., page)| page.entries.clone())
-                .unwrap_or_default();
+                .unwrap_or_default()
+        } else {
+            current_sheet
+                .read()
+                .as_ref()
+                .and_then(|result| result.as_ref().ok())
+                .map(|page| page.entries.clone())
+                .unwrap_or_default()
+        };
+        let moves = &unadmitted.read().moves;
+        for entry in &mut entries {
+            if let Some(&(spent_date, start_minute, minutes)) = moves.get(&entry.id) {
+                entry.spent_date = spent_date;
+                entry.start_minute = Some(start_minute);
+                entry.minutes = minutes;
+            }
         }
-        current_sheet
-            .read()
-            .as_ref()
-            .and_then(|result| result.as_ref().ok())
-            .map(|page| page.entries.clone())
-            .unwrap_or_default()
+        entries
     });
     // The week the content shows: the held one until the new one is admitted.
     let shown_start = use_memo(move || held().map_or(week_start(), |(start, _)| start));
@@ -629,9 +640,24 @@ fn TimesheetContent(
         let mut commit = move |command: TimesheetCommand| {
             pending_action.set(true);
             let mut timer = running_timer;
+            let moved = match &command {
+                TimesheetCommand::Reschedule {
+                    entry_id,
+                    spent_date,
+                    start_minute,
+                    minutes,
+                } => Some((*entry_id, (*spent_date, *start_minute, *minutes))),
+                _ => None,
+            };
             spawn(async move {
                 match server_fns::apply_timesheet_command(context, command).await {
-                    Ok(()) => grid_error.set(None),
+                    Ok(()) => {
+                        grid_error.set(None);
+                        // The block stays where it was dropped until the reload lands.
+                        if let Some((entry_id, to)) = moved {
+                            unadmitted.write().moves.insert(entry_id, to);
+                        }
+                    }
                     Err(e) => grid_error.set(Some(format!("Could not change entry: {e}"))),
                 }
                 timer.refresh();
@@ -809,6 +835,31 @@ fn TimesheetContent(
     // unmount it before this cell has emitted blur/change.
     let mut cell_drafts = use_signal(HashMap::<CellKey, String>::new);
     let mut saving_cells = use_signal(HashSet::<CellKey>::new);
+    // A save's own reload brings its result; once that is admitted, or fails,
+    // the sheet shows the saves and their stand-ins go. Following the resource
+    // state catches a reload whose page compares equal to the last one.
+    use_effect(move || {
+        if sheet.state() != UseResourceState::Ready
+            || current_sheet.read().is_none()
+            || unadmitted.peek().is_empty()
+        {
+            return;
+        }
+        let settled = std::mem::take(&mut *unadmitted.write());
+        if !settled.drafts.is_empty() {
+            let mut drafts = cell_drafts.write();
+            for (key, input) in &settled.drafts {
+                if drafts.get(key) == Some(input) {
+                    drafts.remove(key);
+                }
+            }
+        }
+        if !settled.rows.is_empty() {
+            pending_rows
+                .write()
+                .retain(|row| !settled.rows.contains(row));
+        }
+    });
 
     // A day, view, span or week change leaves the editor: the navigation
     // guard has already asked to discard unsaved changes, and a pending save
@@ -821,6 +872,9 @@ fn TimesheetContent(
         }
         if !pending_rows.peek().is_empty() {
             pending_rows.write().clear();
+        }
+        if !unadmitted.peek().is_empty() {
+            unadmitted.set(Unadmitted::default());
         }
         if *addrow_open.peek() {
             addrow_open.set(false);
@@ -915,15 +969,12 @@ fn TimesheetContent(
             .await;
             match res {
                 Ok(()) => {
-                    let mut drafts = cell_drafts.write();
-                    if drafts.get(&key) == Some(&edit.input) {
-                        drafts.remove(&key);
-                    }
+                    let mut settling = unadmitted.write();
+                    settling.drafts.push((key, edit.input));
                     if fields.minutes > 0 {
-                        pending_rows
-                            .write()
-                            .retain(|row| *row != (edit.project_id, edit.task_id));
+                        settling.rows.push((edit.project_id, edit.task_id));
                     }
+                    drop(settling);
                     grid_error.set(None);
                     timer.refresh();
                 }
@@ -1006,7 +1057,13 @@ fn TimesheetContent(
     });
 
     let busy = use_memo(move || {
-        pending_action() || add_saving() || removing_row() || !saving_cells.read().is_empty()
+        // A saved cell waits for its reload, so leaving cannot lose it, but
+        // it is not editable and should not read as unsaved either.
+        pending_action()
+            || add_saving()
+            || removing_row()
+            || !saving_cells.read().is_empty()
+            || !unadmitted.read().drafts.is_empty()
     });
     let hidden_draft_rows = use_memo(move || {
         draft_rows(
@@ -2288,6 +2345,24 @@ struct CellEdit {
 }
 
 type CellKey = (Uuid, Uuid, NaiveDate);
+
+/// Saves the server accepted whose reload is not admitted yet. They stay on
+/// screen until it is, instead of flashing back to the held sheet.
+#[derive(Default)]
+struct Unadmitted {
+    /// Saved cell inputs, still shown as their drafts.
+    drafts: Vec<(CellKey, String)>,
+    /// Added rows whose first entry was saved.
+    rows: Vec<(Uuid, Uuid)>,
+    /// Rescheduled entries: their new date, start minute and minutes.
+    moves: HashMap<Uuid, (NaiveDate, i32, i32)>,
+}
+
+impl Unadmitted {
+    fn is_empty(&self) -> bool {
+        self.drafts.is_empty() && self.rows.is_empty() && self.moves.is_empty()
+    }
+}
 
 fn discard_row_drafts(drafts: &mut HashMap<CellKey, String>, row: (Uuid, Uuid), start: NaiveDate) {
     drafts.retain(|&(project, task, day), _| {
