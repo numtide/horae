@@ -229,6 +229,9 @@ pub fn TimerWidget() -> Element {
             } else {
                 button {
                     class: "sidebar-timer",
+                    // The collapsed rail hides the label, leaving only the icon.
+                    "aria-label": "Start timer",
+                    title: "Start timer",
                     onclick: move |_| picking.set(true),
                     span { class: "sidebar-timer-icon" }
                     span { class: "sidebar-timer-label", "Start timer" }

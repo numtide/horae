@@ -664,8 +664,14 @@ h1, h2, h3, h4, h5, h6 {
 .app-shell.collapsed .sidebar-user-caret { display: none; }
 .app-shell.collapsed .sidebar-brand { flex-direction: column; gap: var(--space-2); }
 .app-shell.collapsed .sidebar-collapse { margin-left: 0; }
-.app-shell.collapsed .nav-item,
-.app-shell.collapsed .sidebar-timer { justify-content: center; padding: var(--space-2); }
+.app-shell.collapsed .nav-item { justify-content: center; padding: var(--space-2); }
+/* Collapsed idle timer: the same 44px chip as the running one, with the icon
+   back in the flex flow so it centres once the label is hidden. */
+.app-shell.collapsed .sidebar-timer {
+  width: 44px; height: 44px; margin: 0 auto; padding: 0;
+  border-radius: 11px;
+}
+.app-shell.collapsed .sidebar-timer-icon { position: relative; left: auto; top: auto; transform: none; }
 /* Collapsed: the kit's 44px chip — stop square above the elapsed time, with the
    live dot in the corner. Seconds are dropped because h:mm:ss does not fit 44px
    and was overflowing the rail. */
