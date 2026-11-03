@@ -163,4 +163,8 @@ mod server_fns {
     pub async fn get_me() -> Result<user_model::CurrentUser, ServerFnError> {
         std::future::pending().await
     }
+
+    pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
+        panic!("only week-based pages read the week start")
+    }
 }

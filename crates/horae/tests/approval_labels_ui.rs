@@ -72,6 +72,7 @@ struct Probe {
     /// Overrides the count returned by bulk approval.
     approved: Option<usize>,
     directory_reads: Rc<Cell<usize>>,
+    week_start_reads: Rc<Cell<usize>>,
     requests: Rc<RefCell<Vec<String>>>,
     actions: Rc<RefCell<Vec<Vec<String>>>>,
     /// The page's router and scope, captured on its first list request.
@@ -219,6 +220,37 @@ async fn approval_names_render_from_rows_without_directory_and_escape_markup() {
     assert!(!html.contains(&probe.rows[0].approval.user_id.to_string()));
     assert!(html.contains("1:30"));
     assert!(probe.actions.borrow().is_empty());
+}
+
+/// The page under a session that outlives it, as AppLayout's does across navigations.
+fn remountable(probe: Probe) -> Element {
+    let path = format!("/approvals?week={}", probe.week);
+    use_context_provider(|| probe);
+    session::use_session_provider();
+    let shown = use_context_provider(|| Signal::new(true));
+    rsx! {
+        if shown() {
+            HistoryProvider {
+                history: move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
+                Router::<route::Route> {}
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn returning_to_approvals_reuses_the_session_week_start() {
+    let probe = manager(vec![row("Ada")]);
+    let mut dom = VirtualDom::new_with_props(remountable, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let mut shown = dom.in_scope(ScopeId::APP, consume_context::<Signal<bool>>);
+    for visible in [false, true] {
+        dom.in_scope(ScopeId::APP, || shown.set(visible));
+        settle(&mut dom);
+    }
+    assert!(html(&dom).contains("Ada"));
+    assert_eq!(probe.week_start_reads.get(), 1);
 }
 
 #[tokio::test]
@@ -523,6 +555,7 @@ pub mod server_fns {
 
     pub async fn get_week_start() -> Result<Weekday, ServerFnError> {
         let probe = use_context::<Probe>();
+        probe.week_start_reads.set(probe.week_start_reads.get() + 1);
         match probe.week_start_error {
             Some(error) => Err(ServerFnError::new(error)),
             None if probe.sunday => Ok(Weekday::Sun),

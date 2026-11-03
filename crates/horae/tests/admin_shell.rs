@@ -283,6 +283,10 @@ mod server_fns {
         }
     }
 
+    pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
+        Ok(chrono::Weekday::Mon)
+    }
+
     pub async fn get_my_permissions() -> Result<Option<OwnPermissions>, ServerFnError> {
         let probe = consume_context::<Probe>();
         probe

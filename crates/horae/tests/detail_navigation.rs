@@ -900,6 +900,10 @@ mod server_fns {
         Ok(None)
     }
 
+    pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
+        Ok(chrono::Weekday::Mon)
+    }
+
     pub async fn get_me() -> Result<CurrentUser, ServerFnError> {
         Ok(user(
             300,
