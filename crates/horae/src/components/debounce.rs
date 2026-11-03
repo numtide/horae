@@ -28,7 +28,9 @@ pub fn use_debounced<T: Clone + PartialEq + 'static>(
             })));
         }
     });
-    settled.into()
+    // Converting a signal boxes a new handle each time, and handles compare by
+    // identity: convert once so props holding the result stay equal.
+    use_hook(|| settled.into())
 }
 
 async fn sleep(delay: Duration) {
@@ -97,6 +99,28 @@ pub(crate) mod tests {
         }
         settle(&mut dom).await;
         assert_eq!(*probe.rendered.borrow(), ["", "des"]);
+    }
+
+    #[test]
+    fn a_re_render_returns_the_same_handle() {
+        type Handles = Rc<RefCell<Vec<ReadSignal<String>>>>;
+        let handles = Handles::default();
+        let mut dom = VirtualDom::new_with_props(
+            |handles: Handles| {
+                let source = use_signal(String::new);
+                handles
+                    .borrow_mut()
+                    .push(use_debounced(source, SEARCH_DEBOUNCE));
+                rsx! {}
+            },
+            handles.clone(),
+        );
+        dom.rebuild_in_place();
+        dom.mark_dirty(ScopeId::APP);
+        dom.render_immediate_to_vec();
+        let handles = handles.borrow();
+        assert_eq!(handles.len(), 2);
+        assert!(handles[0] == handles[1]);
     }
 
     #[tokio::test]
