@@ -147,11 +147,11 @@ fn LegacyReports() -> Element {
     let filters = LegacyFilters {
         from: from_date,
         to: to_date,
-        client: client_filter.into(),
-        project: project_filter.into(),
-        user: user_filter.into(),
-        tag: tag_filter.into(),
-        dates_settled: dates_settled.into(),
+        client: client_filter,
+        project: project_filter,
+        user: user_filter,
+        tag: tag_filter,
+        dates_settled,
     };
 
     // The export must match what the tables show, so the active filters ride
@@ -343,12 +343,12 @@ fn LegacyReports() -> Element {
 struct LegacyFilters {
     from: ReadSignal<String>,
     to: ReadSignal<String>,
-    client: ReadSignal<String>,
-    project: ReadSignal<String>,
-    user: ReadSignal<String>,
-    tag: ReadSignal<String>,
+    client: Signal<String>,
+    project: Signal<String>,
+    user: Signal<String>,
+    tag: Signal<String>,
     /// False while the typed dates are ahead of `from`/`to`.
-    dates_settled: ReadSignal<bool>,
+    dates_settled: Memo<bool>,
 }
 
 impl LegacyFilters {
@@ -376,7 +376,7 @@ impl LegacyFilters {
 }
 
 #[component]
-fn LegacyTimeReport(filters: LegacyFilters, group_by: ReadSignal<String>) -> Element {
+fn LegacyTimeReport(filters: LegacyFilters, group_by: Signal<String>) -> Element {
     let mut summary = use_resource(move || {
         let (f, t, cl, pr, us, tag) = filters.read();
         let g = group_by.read().clone();
@@ -614,5 +614,49 @@ mod tests {
         rows[0].cost_cents = Some(50);
         rows[1].cost_cents = Some(75);
         assert_eq!(cost(&rows), [money(125, "EUR")]);
+    }
+
+    #[test]
+    fn a_page_re_render_leaves_the_report_tab_alone() {
+        thread_local! {
+            static TAB_RENDERS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+        }
+        // Takes the props LegacyTimeReport takes, without its server calls.
+        #[component]
+        fn Tab(filters: LegacyFilters, group_by: Signal<String>) -> Element {
+            TAB_RENDERS.with(|renders| renders.set(renders.get() + 1));
+            rsx! {}
+        }
+        // The filter wiring of LegacyReports.
+        fn page() -> Element {
+            let from_input = use_signal(|| "2026-09-01".to_string());
+            let to_input = use_signal(|| "2026-09-30".to_string());
+            let from_date = use_debounced(from_input, SEARCH_DEBOUNCE);
+            let to_date = use_debounced(to_input, SEARCH_DEBOUNCE);
+            let filters = LegacyFilters {
+                from: from_date,
+                to: to_date,
+                client: use_signal(String::new),
+                project: use_signal(String::new),
+                user: use_signal(String::new),
+                tag: use_signal(String::new),
+                dates_settled: use_memo(move || {
+                    from_date() == from_input() && to_date() == to_input()
+                }),
+            };
+            let group_by = use_signal(|| "project".to_string());
+            rsx! { Tab { filters, group_by } }
+        }
+
+        let mut dom = VirtualDom::new(page);
+        dom.rebuild_in_place();
+        assert_eq!(TAB_RENDERS.get(), 1);
+        dom.mark_dirty(ScopeId::APP);
+        dom.render_immediate_to_vec();
+        assert_eq!(
+            TAB_RENDERS.get(),
+            1,
+            "equal props must not re-render the tab"
+        );
     }
 }

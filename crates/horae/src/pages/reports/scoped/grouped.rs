@@ -23,7 +23,7 @@ pub(super) fn GroupedTimeReport(
     from: Signal<String>,
     to: Signal<String>,
     /// Whether typing in the date fields has paused; nothing loads until then.
-    dates_settled: ReadSignal<bool>,
+    dates_settled: Memo<bool>,
     active_projects_only: Signal<bool>,
     billability: Signal<TimeReportBillability>,
     mut dimension: Signal<TimeReportGrouping>,
