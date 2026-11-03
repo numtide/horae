@@ -1492,7 +1492,10 @@ tbody tr:hover { background: var(--color-row-hover); }
   color: var(--color-text-secondary); cursor: pointer; font-size: var(--font-size-base);
   text-decoration: none;
 }
-.ts-pager-btn:hover { color: var(--color-text); background: var(--color-bg-tertiary); }
+/* The global a:hover underline would otherwise win on the approvals links. */
+.ts-pager-btn:hover:not(:disabled) {
+  color: var(--color-text); background: var(--color-bg-tertiary); text-decoration: none;
+}
 .ts-pager-btn.prev { border-right: 1px solid var(--color-border); }
 .ts-pager-btn.next { border-left: 1px solid var(--color-border); }
 /* The label doubles as the date picker's trigger, so it is a button wearing the
