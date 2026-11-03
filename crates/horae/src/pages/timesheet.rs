@@ -14,7 +14,7 @@ use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::modal::Modal;
 use crate::components::no_tracking::{NoTrackingHint, no_tracking_message};
-use crate::components::session::use_session;
+use crate::components::session::{use_session, use_week_start};
 use crate::components::timer_widget::use_running_timer;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::scoped_time::{
@@ -237,7 +237,7 @@ impl CalSpan {
 
 #[component]
 pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> Element {
-    let config = use_resource(server_fns::get_week_start);
+    let config = use_week_start();
     // Keep the requester pinned across selected-person/date/view remounts.
     let requester = use_signal(|| None::<PermissionRequester>);
     // The last week's write context, so the next week can start loading its

@@ -126,7 +126,8 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await page.unroute('**/api/project_creation_client*');
     await page.getByRole('button', { name: 'Retry', exact: true }).click();
     await expect(page.locator('#np-client')).toContainText('Acme Corp');
-    await expect(page.locator('.np-page header').getByRole('status')).toContainText('Draft saved at');
+    // The prefilled client alone is not an edit, so no draft is written.
+    await expect(page.locator('.np-page header').getByRole('status')).toHaveText('No draft saved yet');
     await page.locator('.np-page').getByRole('button', { name: 'Discard draft', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Discard draft', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects`);

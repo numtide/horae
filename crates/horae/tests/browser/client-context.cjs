@@ -45,6 +45,22 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       await expect(editor.locator('#np-name')).toBeVisible();
       await discard();
     }
+    // Opening an editor loads its catalog once and writes no draft before an edit.
+    for (const path of ['/projects/new', `/projects/new/client/${acme}`, `/projects/${acmeProject}/edit`]) {
+      const catalogCalls = [];
+      const onRequest = request => {
+        const name = new URL(request.url()).pathname;
+        if (/^\/api\/(project_creation_options|project_editor_catalog)\d*$/.test(name)) catalogCalls.push(name);
+      };
+      page.on('request', onRequest);
+      await page.goto(`${base}${path}`);
+      await expect(editor.locator('#np-name')).toBeVisible();
+      // Outlast the 600 ms autosave debounce and any picker requests after mount.
+      await page.waitForTimeout(1500);
+      page.off('request', onRequest);
+      assert.equal(catalogCalls.length, 1, `${path} loads the catalog once: ${catalogCalls}`);
+      assert.equal(draft(), '', `${path} saves no draft on load`);
+    }
     await page.goto(`${base}/projects`);
     await expect(page.locator(`a.proj-namelink[href="/projects/${acmeProject}"]`)).toBeVisible();
     await expect(page.locator(`a.proj-namelink[href="/projects/${techProject}"]`)).toBeVisible();

@@ -2,12 +2,13 @@ use dioxus::prelude::*;
 use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
 use crate::components::permission_description::permission_description;
+use crate::components::session::use_session;
 use crate::models::own_permissions::OwnPermissions;
-use crate::server_fns;
 
 #[component]
 pub(super) fn OwnPermissionSection() -> Element {
-    let mut permissions = use_resource(server_fns::get_my_permissions);
+    // Refreshing the shared copy also updates the rail and every other reader.
+    let mut permissions = use_session().permissions;
     let pending = permissions.state()() != UseResourceState::Ready;
     rsx! {
         section { class: "mt-6 mb-6 wrap-anywhere", aria_labelledby: "own-permissions-title",
