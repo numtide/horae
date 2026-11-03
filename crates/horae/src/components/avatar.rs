@@ -20,7 +20,7 @@ pub fn Avatar(
     rsx! {
         span { class: "{class}", "aria-label": "{initials}",
             if image_url.is_empty() {
-                "{initials}"
+                span { class: "avatar-initials", "{initials}" }
             } else {
                 img { src: "{image_url}", alt: "{initials}" }
             }

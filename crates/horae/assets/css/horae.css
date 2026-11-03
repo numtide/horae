@@ -404,16 +404,15 @@ h1, h2, h3, h4, h5, h6 {
 .sidebar-timer-wrap { position: relative; margin-bottom: var(--space-6); }
 .sidebar-timer {
   position: relative; width: 100%;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center; gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
   background: var(--color-primary); color: var(--color-on-primary);
   border: none; border-radius: var(--radius-btn); font: inherit; font-size: var(--font-size-sm); font-weight: 700;
   cursor: pointer; text-decoration: none;
 }
 .sidebar-timer:hover { background: var(--color-primary-hover); color: var(--color-on-primary); box-shadow: var(--glow-primary); text-decoration: none; }
-/* Icon pinned left so the label stays optically centered in the button. */
 .sidebar-timer-icon {
-  position: absolute; left: var(--space-4); top: 50%; transform: translateY(-50%);
+  position: relative;
   width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
   border: 2px solid var(--color-on-primary);
 }
@@ -664,8 +663,13 @@ h1, h2, h3, h4, h5, h6 {
 .app-shell.collapsed .sidebar-user-caret { display: none; }
 .app-shell.collapsed .sidebar-brand { flex-direction: column; gap: var(--space-2); }
 .app-shell.collapsed .sidebar-collapse { margin-left: 0; }
-.app-shell.collapsed .nav-item,
-.app-shell.collapsed .sidebar-timer { justify-content: center; padding: var(--space-2); }
+.app-shell.collapsed .nav-item { justify-content: center; padding: var(--space-2); }
+/* Collapsed idle timer: the same 44px chip as the running one; with the label
+   hidden, the icon is all that is left to centre. */
+.app-shell.collapsed .sidebar-timer {
+  width: 44px; height: 44px; margin: 0 auto; padding: 0;
+  border-radius: 11px;
+}
 /* Collapsed: the kit's 44px chip — stop square above the elapsed time, with the
    live dot in the corner. Seconds are dropped because h:mm:ss does not fit 44px
    and was overflowing the rail. */
@@ -934,6 +938,7 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: var(--ring-soft);
 }
 .form-hint { font-size: var(--font-size-xs); color: var(--color-text-muted); margin-top: var(--space-1); }
+.no-tracking-hint { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-muted); }
 
 /* Numeric inputs use mono and drop the native spinner (design: "switch to mono") */
 .form-input[type="number"] {
@@ -1102,6 +1107,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   border: 1px solid transparent;
 }
 .alert-danger  { background: var(--color-danger-bg);  color: var(--color-danger-fg);  border-color: var(--color-danger-line); }
+.alert-warning { background: var(--color-warning-bg); color: var(--color-warning-fg); border-color: var(--color-warning-line); }
 
 /* Buttons — extra shapes */
 /* `.btn` also rides on links, which the element-level rules above don't reach. */
@@ -1229,6 +1235,12 @@ tbody tr:hover { background: var(--color-row-hover); }
   line-height: 1; flex-shrink: 0; overflow: hidden;
 }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
+/* Initials are capitals, which have no descenders, so centring the line box
+   leaves the ink high (Newsreader's ascent outweighs its descent). Trimming the
+   box to cap height and baseline centres the letters themselves. text-box only
+   applies to block containers, hence the span; without support it is simply
+   the line-height: 1 box as before. */
+.avatar-initials { display: block; text-box: trim-both cap alphabetic; }
 .avatar-sm { width: 26px; height: 26px; font-size: var(--font-size-xs); }
 .avatar-lg { width: 52px; height: 52px; font-size: var(--font-size-xl); }
 .avatar-empty {
@@ -1468,7 +1480,10 @@ tbody tr:hover { background: var(--color-row-hover); }
    The week grid: a project column + 7 day columns + total + a delete column.
    Day cells look like read-only inputs; today/weekend/empty are colour-coded. */
 .ts-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-6); }
-.ts-saved { margin-left: auto; font-size: 13px; color: var(--color-text-muted); }
+/* The title takes the free space, so the view tabs stay at the right edge
+   while the week total is briefly absent during a reload. */
+.ts-header > .page-title { flex: 1 0 auto; }
+.ts-saved { font-size: 13px; color: var(--color-text-muted); }
 
 .ts-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-5); }
 .ts-toolbar > .menu-anchor { max-width: 100%; }
@@ -1482,7 +1497,8 @@ tbody tr:hover { background: var(--color-row-hover); }
   border: none; border-radius: var(--radius-lg);
   font-size: var(--font-size-2xl); font-weight: 600; line-height: 0; cursor: pointer;
 }
-.ts-add:hover { background: var(--color-primary-hover); }
+.ts-add:hover:not(:disabled) { background: var(--color-primary-hover); }
+.ts-add:disabled { opacity: 0.5; }
 .ts-pager {
   display: flex; align-items: center; overflow: hidden;
   background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
@@ -1515,6 +1531,18 @@ tbody tr:hover { background: var(--color-row-hover); }
 /* The calendar's day-span dropdown sits beside the pager; give its trigger the
    same height and text size as the pager and add button so the row lines up. */
 .ts-toolbar .menu-anchor > .btn { height: 46px; padding: 0 var(--space-4); font-size: var(--font-size-sm); }
+/* Where title, total and tabs cannot share a row, give the tabs one of their
+   own; plain wrapping would let them climb beside the title whenever the
+   total is absent. The header's width, not the viewport's, decides, because
+   the rail beside it is resizable. One row needs about 460px in the brand
+   fonts and noticeably more in fallback fonts, hence the margin. The header is
+   the container (it holds nothing fixed-position, which a container would
+   trap), so the rule works through its children: the title's basis leaves
+   room for the total (up to 124px) but never for the tabs. */
+.ts-header { container: ts-header / inline-size; }
+@container ts-header (max-width: 640px) {
+  .ts-header > .page-title { flex-basis: calc(100% - 140px); }
+}
 @media (max-width: 480px) {
   .ts-pager-label { flex: 1; flex-wrap: wrap; justify-content: center; gap: 0 var(--space-1); min-width: 0; padding: 0 var(--space-2); }
   .ts-pager-range { font-size: var(--font-size-xs); }

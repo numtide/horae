@@ -5,6 +5,7 @@
 //! non-admins with `FORBIDDEN` (FR-001) and use named status codes.
 
 use super::*;
+use horae_core::importers::harvest::client::ClientSettings;
 use horae_core::importers::harvest::types::{ConnectionStatus, ImportMode, SyncScope};
 
 mod csv_upload;
@@ -22,7 +23,7 @@ mod authorization_tests;
 #[server]
 pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
     let admin = require_admin().await?;
-    let cfg = harvest_config().await?;
+    let cfg = harvest_config(admin.org_id).await?;
     let current = harvest_connection_status().await?;
 
     // A random, session-bound nonce validated on the callback (CSRF, FR-022).
@@ -56,13 +57,95 @@ pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
 pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
-    crate::importers::harvest::account_switch::status(
+    let configured = crate::importers::harvest::client_settings::resolve(
         &state.db,
+        &state.harvest,
         admin.org_id,
-        state.harvest.is_some(),
     )
     .await
-    .map_err(server_err)
+    .map_err(server_err)?
+    .is_some();
+    crate::importers::harvest::account_switch::status(&state.db, admin.org_id, configured)
+        .await
+        .map_err(server_err)
+}
+
+/// The organization's Harvest OAuth client as administrators may see it:
+/// never the secret (contracts/client-settings.md).
+#[dioxus_fullstack::post("/api/import/harvest/client")]
+pub async fn harvest_client_settings() -> Result<ClientSettings, ServerFnError> {
+    let admin = require_admin().await?;
+    let state = crate::state::global_state().await;
+    crate::importers::harvest::client_settings::view(&state.db, &state.harvest, admin.org_id)
+        .await
+        .map_err(server_err)
+}
+
+/// Save or replace the stored client. A blank secret keeps the stored one for
+/// the same client ID; a different client ID disconnects Harvest, which an
+/// existing connection allows only with `confirm_disconnect`.
+#[dioxus_fullstack::post("/api/import/harvest/client/save")]
+pub async fn save_harvest_client(
+    client_id: String,
+    client_secret: Option<String>,
+    redirect_url: String,
+    confirm_disconnect: bool,
+) -> Result<ClientSettings, ServerFnError> {
+    let admin = require_admin().await?;
+    let state = crate::state::global_state().await;
+    crate::importers::harvest::client_settings::save(
+        &state.db,
+        &state.harvest,
+        admin.org_id,
+        admin.id,
+        &client_id,
+        client_secret.as_deref(),
+        &redirect_url,
+        confirm_disconnect,
+    )
+    .await
+    .map_err(map_client_error)?;
+    harvest_client_settings().await
+}
+
+/// Remove the stored client. Disconnecting an existing connection requires
+/// `confirm_disconnect`, so a page that never showed the warning cannot.
+#[dioxus_fullstack::post("/api/import/harvest/client/remove")]
+pub async fn remove_harvest_client(
+    confirm_disconnect: bool,
+) -> Result<ClientSettings, ServerFnError> {
+    let admin = require_admin().await?;
+    let state = crate::state::global_state().await;
+    crate::importers::harvest::client_settings::remove(
+        &state.db,
+        &state.harvest,
+        admin.org_id,
+        admin.id,
+        confirm_disconnect,
+    )
+    .await
+    .map_err(map_client_error)?;
+    harvest_client_settings().await
+}
+
+#[cfg(feature = "server")]
+fn map_client_error(error: anyhow::Error) -> ServerFnError {
+    use crate::importers::harvest::client_settings::ClientError;
+    match error.downcast_ref::<ClientError>() {
+        Some(invalid @ ClientError::Invalid(_)) => err(BAD_REQUEST, invalid),
+        Some(refused) => err(CONFLICT, refused),
+        None if matches!(
+            error.downcast_ref::<crate::importers::harvest::ApiImportError>(),
+            Some(crate::importers::harvest::ApiImportError::Busy)
+        ) =>
+        {
+            err(
+                CONFLICT,
+                "Finish or cancel the active Harvest import before changing the OAuth client",
+            )
+        }
+        None => map_connection_error(error),
+    }
 }
 
 /// Explicit confirmation of the exact connection inspected by an administrator.
@@ -138,9 +221,7 @@ pub async fn start_harvest_api_import(
     let state = crate::state::global_state().await;
     let payload = crate::jobs::JobPayload::HarvestApi { mode, sync };
     let key = submission_key("api").await?;
-    if state.harvest.is_none() {
-        return Err(err(NOT_FOUND, "Harvest is not configured"));
-    }
+    harvest_config(admin.org_id).await?;
     commands::start_api(
         &state.db,
         admin.org_id,
@@ -287,14 +368,14 @@ fn map_enqueue_error(error: anyhow::Error) -> ServerFnError {
     }
 }
 
-/// The configured Harvest settings, or a clear error when the importer's API
-/// source is not configured on this deployment.
+/// The organization's effective Harvest client, or a clear error when neither
+/// the environment nor a stored client supplies one.
 #[cfg(feature = "server")]
-async fn harvest_config() -> Result<crate::config::HarvestConfig, ServerFnError> {
-    crate::state::global_state()
+async fn harvest_config(org_id: uuid::Uuid) -> Result<crate::config::HarvestConfig, ServerFnError> {
+    let state = crate::state::global_state().await;
+    crate::importers::harvest::client_settings::resolve(&state.db, &state.harvest, org_id)
         .await
-        .harvest
-        .clone()
+        .map_err(server_err)?
         .ok_or_else(|| {
             err(
                 NOT_FOUND,

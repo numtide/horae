@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO audit_log (id, org_id, actor_user_id, action, entity_type, entity_id, data)\n         VALUES ($1, $2, $3, $4, 'harvest_oauth_client', $5, $6)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9515351611e6aa7d184a0e81a1afdf34262df5bebe96ed7edf740a6e63a21660"
+}

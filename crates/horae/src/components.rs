@@ -14,6 +14,7 @@ pub mod logo;
 pub mod menu;
 pub mod modal;
 pub mod nav;
+pub mod no_tracking;
 pub mod permission_description;
 pub mod project_task_picker;
 pub mod select_field;
