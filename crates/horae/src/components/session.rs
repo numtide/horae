@@ -27,6 +27,15 @@ impl Session {
     pub fn refresh(mut self) {
         self.me.restart();
         self.permissions.restart();
+        self.retry_failed_week_start();
+    }
+
+    /// The week start never changes during a visit, so only a failed read is
+    /// worth repeating; without this one error would last until a reload.
+    fn retry_failed_week_start(mut self) {
+        if matches!(*self.week_start.peek(), Some(Err(_))) {
+            self.week_start.restart();
+        }
     }
 }
 
@@ -60,17 +69,17 @@ pub fn use_session() -> Session {
     use_context::<Session>()
 }
 
-/// The organization's first day of the week, fetched once on first use.
+/// The organization's first day of the week, fetched on first use and kept,
+/// unless it failed: then each new reader tries again.
 pub fn use_week_start() -> Resource<Result<chrono::Weekday, ServerFnError>> {
-    let Session {
-        week_start,
-        mut week_start_wanted,
-        ..
-    } = use_session();
+    let session = use_session();
+    let mut wanted = session.week_start_wanted;
     use_hook(|| {
-        if !*week_start_wanted.peek() {
-            week_start_wanted.set(true);
+        if !*wanted.peek() {
+            wanted.set(true);
+        } else {
+            session.retry_failed_week_start();
         }
     });
-    week_start
+    session.week_start
 }
