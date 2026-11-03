@@ -238,6 +238,9 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> E
     let config = use_resource(server_fns::get_week_start);
     // Keep the requester pinned across selected-person/date/view remounts.
     let requester = use_signal(|| None::<PermissionRequester>);
+    // The last week's write context, so the next week can start loading its
+    // tracking choices without waiting for its sheet.
+    let last_context = use_signal(|| None::<TimesheetWriteContext>);
     let subject = if user.is_empty() {
         None
     } else if let Ok(id) = user.parse::<Uuid>() {
@@ -256,7 +259,7 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> E
         // day, view or span within the same week keeps the loaded week.
         rsx! {
             for key in [format!("{user}:{start}")] {
-                TimesheetContent { key: "{key}", view, date, span, start, subject, requester }
+                TimesheetContent { key: "{key}", view, date, span, start, subject, requester, last_context }
             }
         }
     })
@@ -270,6 +273,7 @@ fn TimesheetContent(
     start: NaiveDate,
     subject: Option<Uuid>,
     mut requester: Signal<Option<PermissionRequester>>,
+    mut last_context: Signal<Option<TimesheetWriteContext>>,
 ) -> Element {
     let today = chrono::Utc::now().date_naive();
     // View, week, selected day and calendar span all derive from the URL
@@ -353,8 +357,20 @@ fn TimesheetContent(
             })
     });
     let policy = use_memo(move || context().map(|context| context.expected_policy));
+    use_effect(move || {
+        if let Some(context) = context()
+            && *last_context.peek() != Some(context)
+        {
+            last_context.set(Some(context));
+        }
+    });
+    // Choices depend on the person, not the week. Starting them with the
+    // previous week's context loads them beside the sheet; if the sheet then
+    // reports another context, this changes and they load again for it.
+    let choices_context =
+        use_memo(move || tracking_context(context(), *last_context.read(), subject));
     let mut tracking_page = use_resource(move || {
-        let expected = context();
+        let expected = choices_context();
         async move {
             let result = match expected {
                 Some(context) => server_fns::load_timesheet_tracking(context).await,
@@ -782,6 +798,9 @@ fn TimesheetContent(
         }
         if hint.peek().is_some() {
             hint.set(None);
+        }
+        if grid_error.peek().is_some() {
+            grid_error.set(None);
         }
     }));
 
@@ -1414,6 +1433,19 @@ fn TimesheetContent(
             }
         }
     }
+}
+
+/// The context to load tracking choices for: the current sheet's once known,
+/// otherwise the last week's when it belongs to the same person. The server
+/// still checks the context; this only decides when the request can start.
+fn tracking_context(
+    current: Option<TimesheetWriteContext>,
+    last: Option<TimesheetWriteContext>,
+    subject: Option<Uuid>,
+) -> Option<TimesheetWriteContext> {
+    current.or_else(|| {
+        last.filter(|last| subject.unwrap_or(last.expected_requester.user_id) == last.subject_id)
+    })
 }
 
 /// The entry dialog's text fields. They read their signals here, not in the
@@ -2643,6 +2675,39 @@ mod tests {
             CalSpan::WorkWeek.visible_days(0, Weekday::Wed),
             vec![0, 1, 2, 5, 6]
         );
+    }
+
+    #[test]
+    fn tracking_starts_with_the_last_context_only_for_the_same_person() {
+        let me = Uuid::now_v7();
+        let other = Uuid::now_v7();
+        let context = |subject_id| TimesheetWriteContext {
+            expected_requester: PermissionRequester {
+                org_id: Uuid::nil(),
+                user_id: me,
+            },
+            subject_id,
+            expected_policy: TimesheetPolicy::Scoped,
+        };
+        // Own sheet: the last own context starts the request early.
+        assert_eq!(
+            tracking_context(None, Some(context(me)), None),
+            Some(context(me))
+        );
+        // The same selected person.
+        assert_eq!(
+            tracking_context(None, Some(context(other)), Some(other)),
+            Some(context(other))
+        );
+        // Another person, in either direction, waits for its own sheet.
+        assert_eq!(tracking_context(None, Some(context(other)), None), None);
+        assert_eq!(tracking_context(None, Some(context(me)), Some(other)), None);
+        // The current sheet's context always wins.
+        assert_eq!(
+            tracking_context(Some(context(other)), Some(context(me)), Some(other)),
+            Some(context(other))
+        );
+        assert_eq!(tracking_context(None, None, None), None);
     }
 
     #[test]
