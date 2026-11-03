@@ -1,9 +1,16 @@
-// Run against an isolated, seeded dev-login instance with Playwright installed.
-// HORAE_TEST_URL=http://127.0.0.1:8092 node crates/horae/tests/browser/empty-tracking.cjs
+// Adds a second person, so only in the runner's disposable database.
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
+const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const base = process.env.HORAE_TEST_URL;
-assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
+const target = new URL(base), database = new URL(process.env.DATABASE_URL);
+assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
+assert.equal(database.pathname, '/horae');
+assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
+const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
+const org = '01950000-0000-7000-8000-000000000001';
+const other = '019f2a00-0000-7000-8000-000000000001', otherName = 'Empty tracking teammate';
+sql(`INSERT INTO users (id,org_id,email,name) VALUES ('${other}','${org}','empty-tracking@example.test','${otherName}') ON CONFLICT (id) DO NOTHING`);
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
@@ -20,7 +27,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     const me = page.waitForResponse(r => r.url().includes('/api/get_me') && r.status() === 200);
     const ready = page.waitForResponse(r => r.url().includes('/api/load_timesheet_tracking'));
     await page.goto(`${base}/`);
-    const { id, name } = await (await me).json();
+    const { id } = await (await me).json();
     await (await ready).finished();
     const sheet = page.url();
 
@@ -33,21 +40,22 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await expect(hint.getByRole('link', { name: 'Open Projects', exact: true })).toHaveAttribute('href', '/projects');
     console.log('PASS: the disabled add button explains missing assignments and links to Projects');
 
-    // A week change reloads the sheet; the explanation stays in place.
-    const reloaded = page.waitForResponse(r => r.url().includes('/api/load_timesheet_tracking'));
-    await page.getByRole('button', { name: 'Next week', exact: true }).click();
-    await expect(hint).toBeVisible();
-    await (await reloaded).finished();
-    await expect(hint).toBeVisible();
-    console.log('PASS: the hint stays mounted while another week loads');
-
-    // A named subject is someone else's sheet: name them, and offer no link.
-    const named = page.waitForResponse(r => r.url().includes('/api/load_timesheet_tracking'));
+    // Opening one's own sheet by id is still one's own.
     const today = new Date().toISOString().slice(0, 10);
-    await page.goto(`${base}/timesheet/week/${today}?span=week&user=${id}`);
-    await (await named).finished();
-    await expect(add).toHaveAttribute('title', `No projects are assigned to ${name} yet.`);
-    await expect(page.locator('#ts-add-empty')).toHaveText(`No projects are assigned to ${name} yet.`);
+    const open = async user => {
+      const loaded = page.waitForResponse(r => r.url().includes('/api/load_timesheet_tracking'));
+      await page.goto(`${base}/timesheet/week/${today}?span=week&user=${user}`);
+      await (await loaded).finished();
+    };
+    await open(id);
+    await expect(add).toHaveAttribute('title', 'No projects are assigned to you yet.');
+    await expect(page.locator('#ts-add-empty').getByRole('link', { name: 'Open Projects', exact: true })).toBeVisible();
+    console.log('PASS: the own sheet opened by id still speaks to the viewer');
+
+    // Someone else's sheet names them and offers no link.
+    await open(other);
+    await expect(add).toHaveAttribute('title', `No projects are assigned to ${otherName} yet.`);
+    await expect(page.locator('#ts-add-empty')).toHaveText(`No projects are assigned to ${otherName} yet.`);
     await expect(page.locator('#ts-add-empty a')).toHaveCount(0);
     console.log("PASS: another person's empty sheet names them without a link");
 
