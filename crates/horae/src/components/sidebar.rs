@@ -15,8 +15,8 @@ use crate::route::Route;
 /// `AppLayout` so the shell can narrow the content area in step with the rail.
 #[component]
 pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Element {
-    let own = use_session().permissions;
-    let clients = own.state()() == UseResourceState::Ready && shows_clients(own.read().as_ref());
+    // A refresh keeps the last answer, so the rail does not flicker while it runs.
+    let clients = shows_clients(use_session().permissions.read().as_ref());
     rsx! {
         aside { id: "app-navigation", class: "app-sidebar", aria_label: "Navigation",
             div { class: "sidebar-brand",
@@ -83,10 +83,11 @@ fn SideLink(to: Route, icon: String, label: String, on_navigate: EventHandler<()
 /// placeholder until `get_me` resolves (or when not authenticated).
 #[component]
 fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
+    let session = use_session();
     let Session {
         me,
-        permissions: mut own,
-    } = use_session();
+        permissions: own,
+    } = session;
     let mut open = use_signal(|| false);
 
     let user = me.read();
@@ -106,26 +107,21 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
             false,
         ),
     };
-    let (people, tasks, administrator, role) =
-        match (own.state()() == UseResourceState::Ready, &*own.read()) {
-            (true, Some(Ok(None))) => (is_admin, false, is_admin, legacy_role),
-            (true, Some(Ok(Some(access))))
-                if access.catalog_version == PERMISSION_CATALOG_VERSION =>
-            {
-                (
-                    access.grants.contains(&Permission::PeopleReadAll)
-                        || access.grants.contains(&Permission::PeopleReadManaged),
-                    access.grants.contains(&Permission::TaskReadAll),
-                    access.is_administrator,
-                    if access.is_administrator {
-                        "Administrator".into()
-                    } else {
-                        String::new()
-                    },
-                )
-            }
-            _ => (false, false, false, String::new()),
-        };
+    let (people, tasks, administrator, role) = match &*own.read() {
+        Some(Ok(None)) => (is_admin, false, is_admin, legacy_role),
+        Some(Ok(Some(access))) if access.catalog_version == PERMISSION_CATALOG_VERSION => (
+            access.grants.contains(&Permission::PeopleReadAll)
+                || access.grants.contains(&Permission::PeopleReadManaged),
+            access.grants.contains(&Permission::TaskReadAll),
+            access.is_administrator,
+            if access.is_administrator {
+                "Administrator".into()
+            } else {
+                String::new()
+            },
+        ),
+        _ => (false, false, false, String::new()),
+    };
     let role_class = if administrator {
         "badge badge-info badge-sm"
     } else {
@@ -184,7 +180,7 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                 "aria-haspopup": "menu",
                 "aria-expanded": "{open()}",
                 onclick: move |_| {
-                    if !open() { own.restart(); }
+                    if !open() { session.refresh(); }
                     open.set(!open());
                 },
                 Avatar { initials: "{marks}" }
