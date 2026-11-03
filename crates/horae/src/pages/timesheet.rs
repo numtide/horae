@@ -13,7 +13,8 @@ use crate::components::controls::Segmented;
 use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::modal::Modal;
-use crate::components::session::use_week_start;
+use crate::components::no_tracking::{NoTrackingHint, no_tracking_message};
+use crate::components::session::{use_session, use_week_start};
 use crate::components::timer_widget::use_running_timer;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::scoped_time::{
@@ -398,6 +399,20 @@ fn TimesheetContent(
             .cloned()
             .unwrap_or_default()
     });
+    // Loaded and empty, as opposed to still loading or failed (which has its
+    // own retry alert): only then does the disabled add button need a reason.
+    let nothing_to_track =
+        matches!(current_tracking.read().as_ref(), Some(Ok(options)) if options.is_empty());
+    // Another person's sheet names them; one's own (also when opened by its
+    // id) says "you".
+    let assignee = match &*current_sheet.read() {
+        Some(Ok(page)) if page.subject.id != page.requester.user_id => {
+            Some(page.subject.name.clone())
+        }
+        _ => None,
+    };
+    let empty_message = no_tracking_message(assignee.as_deref());
+    let session = use_session();
     let mut pending_action = use_signal(|| false);
 
     // Lookups and grid data are memoized so they rebuild only when their
@@ -1078,9 +1093,14 @@ fn TimesheetContent(
                 button {
                     class: "ts-add",
                     "aria-label": "Add entry",
+                    title: if nothing_to_track { "{empty_message}" },
+                    "aria-describedby": if nothing_to_track { "ts-add-empty" },
                     disabled: busy() || tracking.read().is_empty(),
                     onclick: move |_| open_add.call(add_default_date),
                     "+"
+                }
+                if nothing_to_track {
+                    NoTrackingHint { id: "ts-add-empty", assignee: assignee.clone(), can_manage: session.can_create_projects() }
                 }
                 // The pager's own label is the date picker's trigger. The popover
                 // is a sibling of .ts-pager, which clips its children to keep the

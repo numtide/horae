@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 
 use crate::models::own_permissions::OwnPermissions;
 use crate::models::user::CurrentUser;
@@ -35,6 +36,19 @@ impl Session {
     fn retry_failed_week_start(mut self) {
         if matches!(*self.week_start.peek(), Some(Err(_))) {
             self.week_start.restart();
+        }
+    }
+
+    /// Whether to offer project creation, by the same rule the projects page
+    /// uses: the canonical grant, or manager and above under legacy roles.
+    pub fn can_create_projects(&self) -> bool {
+        match &*self.permissions.read() {
+            Some(Ok(Some(access))) => {
+                access.catalog_version == PERMISSION_CATALOG_VERSION
+                    && access.grants.contains(&Permission::ProjectCreateAll)
+            }
+            Some(Ok(None)) => matches!(&*self.me.read(), Some(Ok(me)) if me.is_manager_or_above()),
+            _ => false,
         }
     }
 }
