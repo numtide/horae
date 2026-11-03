@@ -404,16 +404,15 @@ h1, h2, h3, h4, h5, h6 {
 .sidebar-timer-wrap { position: relative; margin-bottom: var(--space-6); }
 .sidebar-timer {
   position: relative; width: 100%;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center; gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
   background: var(--color-primary); color: var(--color-on-primary);
   border: none; border-radius: var(--radius-btn); font: inherit; font-size: var(--font-size-sm); font-weight: 700;
   cursor: pointer; text-decoration: none;
 }
 .sidebar-timer:hover { background: var(--color-primary-hover); color: var(--color-on-primary); box-shadow: var(--glow-primary); text-decoration: none; }
-/* Icon pinned left so the label stays optically centered in the button. */
 .sidebar-timer-icon {
-  position: absolute; left: var(--space-4); top: 50%; transform: translateY(-50%);
+  position: relative;
   width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
   border: 2px solid var(--color-on-primary);
 }
@@ -665,13 +664,12 @@ h1, h2, h3, h4, h5, h6 {
 .app-shell.collapsed .sidebar-brand { flex-direction: column; gap: var(--space-2); }
 .app-shell.collapsed .sidebar-collapse { margin-left: 0; }
 .app-shell.collapsed .nav-item { justify-content: center; padding: var(--space-2); }
-/* Collapsed idle timer: the same 44px chip as the running one, with the icon
-   back in the flex flow so it centres once the label is hidden. */
+/* Collapsed idle timer: the same 44px chip as the running one; with the label
+   hidden, the icon is all that is left to centre. */
 .app-shell.collapsed .sidebar-timer {
   width: 44px; height: 44px; margin: 0 auto; padding: 0;
   border-radius: 11px;
 }
-.app-shell.collapsed .sidebar-timer-icon { position: relative; left: auto; top: auto; transform: none; }
 /* Collapsed: the kit's 44px chip — stop square above the elapsed time, with the
    live dot in the corner. Seconds are dropped because h:mm:ss does not fit 44px
    and was overflowing the rail. */

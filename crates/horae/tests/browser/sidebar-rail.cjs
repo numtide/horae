@@ -27,6 +27,14 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     const timer = sidebar.getByRole('button', { name: 'Start timer', exact: true });
     await expect(timer).toBeVisible();
     const expanded = await box(timer);
+    // Expanded, the icon sits beside the label and the pair is centred together.
+    const pair = await timer.evaluate(el => {
+      const icon = el.querySelector('.sidebar-timer-icon').getBoundingClientRect();
+      const label = el.querySelector('.sidebar-timer-label').getBoundingClientRect();
+      const button = el.getBoundingClientRect();
+      return { gap: label.left - icon.right, offset: (icon.left + label.right) / 2 - (button.left + button.width / 2) };
+    });
+    assert.ok(Math.abs(pair.gap - 8) < 0.5 && Math.abs(pair.offset) < 0.5, JSON.stringify(pair));
 
     await sidebar.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
     await expect(sidebar).toHaveCSS('width', '68px');
