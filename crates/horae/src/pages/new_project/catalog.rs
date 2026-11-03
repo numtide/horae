@@ -1,4 +1,4 @@
-use dioxus::prelude::ServerFnError;
+use dioxus::prelude::{ReadableExt, ServerFnError, Signal};
 
 use crate::models::people::PeopleCursor;
 use crate::models::project_creation::{
@@ -52,7 +52,17 @@ pub(super) struct PeoplePage {
 pub(super) async fn people(
     context: Option<ProjectEditorContext>,
     query: String,
+    defaults: Signal<CreationOptions>,
 ) -> Result<PeoplePage, ServerFnError> {
+    // Creation defaults already hold the first page; edits list people separately.
+    if context.is_none() && query.is_empty() {
+        let defaults = defaults.peek();
+        return Ok(PeoplePage {
+            people: defaults.people.clone(),
+            more_people: defaults.more_people,
+            next_after: None,
+        });
+    }
     people_page(context, query, None, 0).await
 }
 
