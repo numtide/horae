@@ -1528,13 +1528,15 @@ tbody tr:hover { background: var(--color-row-hover); }
    same height and text size as the pager and add button so the row lines up. */
 .ts-toolbar .menu-anchor > .btn { height: 46px; padding: 0 var(--space-4); font-size: var(--font-size-sm); }
 /* Where title, total and tabs cannot share a row, give the tabs one of their
-   own; wrapping instead would let them climb beside the title whenever the
+   own; plain wrapping would let them climb beside the title whenever the
    total is absent. The header's width, not the viewport's, decides, because
-   the rail beside it is resizable. One row needs about 460px. */
-[data-editor-kind="timesheet"] { container-type: inline-size; }
-@container (max-width: 500px) {
-  .ts-header { display: grid; grid-template-columns: 1fr auto; }
-  .ts-header > .segmented { grid-column: 1 / -1; justify-self: start; }
+   the rail beside it is resizable; one row needs about 460px. The header is
+   the container (it holds nothing fixed-position, which a container would
+   trap), so the rule works through its children: the title's basis leaves
+   room for the total (up to 124px) but never for the tabs. */
+.ts-header { container: ts-header / inline-size; }
+@container ts-header (max-width: 500px) {
+  .ts-header > .page-title { flex-basis: calc(100% - 140px); }
 }
 @media (max-width: 480px) {
   .ts-pager-label { flex: 1; flex-wrap: wrap; justify-content: center; gap: 0 var(--space-1); min-width: 0; padding: 0 var(--space-2); }
