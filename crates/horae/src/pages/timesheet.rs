@@ -375,7 +375,7 @@ fn TimesheetContent(
             .unwrap_or_default()
     });
     // The week the content shows: the held one until the new one is admitted.
-    let shown_start = use_memo(move || held().map_or_else(|| week_start(), |(start, _)| start));
+    let shown_start = use_memo(move || held().map_or(week_start(), |(start, _)| start));
     let context = use_memo(move || {
         current_sheet
             .read()
