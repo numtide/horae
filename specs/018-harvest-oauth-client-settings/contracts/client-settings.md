@@ -6,7 +6,7 @@ All three are Dioxus server functions under the session layer. Callers who are n
 
 `POST /api/import/harvest/client`. Returns the view from [data-model.md](../data-model.md). It never includes a secret, ciphertext or key.
 
-## `save_harvest_client(client_id, client_secret: Option<String>, redirect_url: String) -> HarvestClientSettings`
+## `save_harvest_client(client_id, client_secret: Option<String>, redirect_url: String, confirm_disconnect: bool) -> HarvestClientSettings`
 
 `POST /api/import/harvest/client/save`. A blank `client_secret` (`None` or empty) keeps the stored secret, which is allowed only for an unchanged, readable client ID.
 
@@ -17,12 +17,13 @@ All three are Dioxus server functions under the session layer. Callers who are n
 | Environment client in effect | `CONFLICT`: "configured by the environment" |
 | Harvest import queued, running, or holding the import lock | `CONFLICT`: "Finish or cancel the active Harvest import …" |
 | Administrator lost authority after the wait | `FORBIDDEN` |
+| The change would delete an existing connection's tokens and `confirm_disconnect` is false | `CONFLICT`: `DISCONNECT_UNCONFIRMED`; nothing changes, and the page shows the warning and retries with the flag |
 
 On success, the secret is sealed and the row upserted. Tokens are deleted when the client ID changed. `connection_revision` is bumped, an audit row is written, and the new view is returned.
 
-## `remove_harvest_client() -> HarvestClientSettings`
+## `remove_harvest_client(confirm_disconnect: bool) -> HarvestClientSettings`
 
-`POST /api/import/harvest/client/remove`. Has the same refusals as save, except input validation. Deletes the row and any tokens (the binding is kept), bumps the revision and writes an audit row. Removing when no row exists returns the view unchanged and writes nothing.
+`POST /api/import/harvest/client/remove`. Has the same refusals as save, except input validation and the missing encryption key: a client whose secret no longer opens can still be removed. Deletes the row and any tokens (the binding is kept), bumps the revision and writes an audit row. Removing when no row exists returns the view unchanged and writes nothing.
 
 ## Effects on existing endpoints
 

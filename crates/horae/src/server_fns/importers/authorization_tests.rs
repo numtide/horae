@@ -498,9 +498,9 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             ("harvest_client_settings", json!({})),
             (
                 "save_harvest_client",
-                json!({"client_id":"x","client_secret":"y","redirect_url":"http://localhost/auth/harvest/callback"}),
+                json!({"client_id":"x","client_secret":"y","redirect_url":"http://localhost/auth/harvest/callback","confirm_disconnect":true}),
             ),
-            ("remove_harvest_client", json!({})),
+            ("remove_harvest_client", json!({"confirm_disconnect":true})),
         ] {
             let response = api.call(name, body, cookie, true).await;
             let status = response.status();
@@ -524,9 +524,9 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     for (name, body) in [
         (
             "save_harvest_client",
-            json!({"client_id":"x","client_secret":"y","redirect_url":"http://localhost/auth/harvest/callback"}),
+            json!({"client_id":"x","client_secret":"y","redirect_url":"http://localhost/auth/harvest/callback","confirm_disconnect":true}),
         ),
-        ("remove_harvest_client", json!({})),
+        ("remove_harvest_client", json!({"confirm_disconnect":true})),
     ] {
         let response = api.call(name, body, Some(&admin), false).await;
         let status = response.status();

@@ -24,7 +24,7 @@
 
 ## 5. Redirect URL source
 
-- **Decision**: The page shows `HORAE_HARVEST_REDIRECT_URL` when it is set. Otherwise it shows `window.location.origin + "/auth/harvest/callback"`, read with `document::eval`, which the page already uses for focus. It submits that value with the save. The server validates it as absolute `http`/`https`, without credentials, query or fragment, with the exact path `/auth/harvest/callback`.
+- **Decision**: The page shows `HORAE_HARVEST_REDIRECT_URL` when it is set. Otherwise it shows `window.location.origin + "/auth/harvest/callback"`, read with `document::eval`, which the page already uses for focus. It submits that value with the save. The server validates it as absolute `https` (plain `http` only for `localhost`, `127.0.0.1` and `[::1]`), without credentials, query or fragment, with an optional numeric port and the exact path `/auth/harvest/callback`.
 - **Rationale**: The design shows the URI read-only with Copy. The admin's browser origin is the public address Harvest will redirect that browser to. Reading it server-side from `Host` would trust a header behind proxies.
 
 ## 6. Audit

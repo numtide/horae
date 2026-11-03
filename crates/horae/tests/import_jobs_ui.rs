@@ -10,7 +10,9 @@ use dioxus::html::{FileData, SerializedFileData, SerializedFormObject};
 use dioxus::prelude::*;
 use dioxus_html::SerializedHtmlEventConverter;
 use futures_util::FutureExt;
-use horae_core::importers::harvest::client::{ClientSettings, ClientSource};
+use horae_core::importers::harvest::client::{
+    ClientSettings, ClientSource, DISCONNECT_UNCONFIRMED,
+};
 use horae_core::importers::harvest::types::{
     ConnectionStatus, ImportMode, ImportReport, SourceKind, SyncScope,
 };
@@ -37,7 +39,7 @@ type ChangeResponse = oneshot::Receiver<Result<(), ServerFnError>>;
 type ConnectionResponse = oneshot::Receiver<Result<ConnectionStatus, ServerFnError>>;
 type ConnectResponse = oneshot::Receiver<Result<String, ServerFnError>>;
 type ApiSubmission = (ImportMode, SyncScope, Option<i64>);
-type ClientSave = (String, Option<String>, String);
+type ClientSave = (String, Option<String>, String, bool);
 
 #[derive(Clone, Default)]
 struct Probe {
@@ -933,27 +935,53 @@ mod server_fns {
         Ok(consume_context::<Probe>().client.borrow().clone())
     }
 
+    /// The server refuses an unconfirmed change that would delete tokens.
+    fn unconfirmed() -> ServerFnError {
+        ServerFnError::ServerError {
+            message: DISCONNECT_UNCONFIRMED.into(),
+            code: 409,
+            details: None,
+        }
+    }
+
     pub async fn save_harvest_client(
         client_id: String,
         client_secret: Option<String>,
         redirect_url: String,
+        confirm_disconnect: bool,
     ) -> Result<ClientSettings, ServerFnError> {
         let probe = consume_context::<Probe>();
         let mut client = probe.client.borrow_mut();
+        let disconnects = client.client_id.as_ref().is_some_and(|id| *id != client_id)
+            && probe.connection.borrow().connected;
+        if disconnects && !confirm_disconnect {
+            return Err(unconfirmed());
+        }
+        if disconnects {
+            probe.connection.borrow_mut().connected = false;
+        }
         client.source = ClientSource::Stored;
         client.client_id = Some(client_id.clone());
         client.secret_set = true;
         client.secret_readable = true;
         client.redirect_url = Some(redirect_url.clone());
-        probe
-            .client_saves
-            .borrow_mut()
-            .push((client_id, client_secret, redirect_url));
+        probe.client_saves.borrow_mut().push((
+            client_id,
+            client_secret,
+            redirect_url,
+            confirm_disconnect,
+        ));
         Ok(client.clone())
     }
 
-    pub async fn remove_harvest_client() -> Result<ClientSettings, ServerFnError> {
+    pub async fn remove_harvest_client(
+        confirm_disconnect: bool,
+    ) -> Result<ClientSettings, ServerFnError> {
         let probe = consume_context::<Probe>();
+        if probe.connection.borrow().connected && !confirm_disconnect {
+            return Err(unconfirmed());
+        }
+        probe.connection.borrow_mut().connected = false;
         *probe.client_removes.borrow_mut() += 1;
         let mut client = probe.client.borrow_mut();
         *client = ClientSettings {
@@ -1261,7 +1289,8 @@ fn unconfigured_importer_saves_an_oauth_app_and_never_shows_its_secret() {
         &[(
             "1234.pt.app".to_owned(),
             Some("very-secret".to_owned()),
-            "/auth/harvest/callback".to_owned()
+            "/auth/harvest/callback".to_owned(),
+            false
         )]
     );
     let html = ui.html();
@@ -1295,7 +1324,8 @@ fn a_blank_secret_keeps_the_stored_one() {
         &[(
             "app".to_owned(),
             None,
-            "https://horae.example/auth/harvest/callback".to_owned()
+            "https://horae.example/auth/harvest/callback".to_owned(),
+            false
         )]
     );
 }
@@ -1329,12 +1359,88 @@ fn changes_that_disconnect_harvest_ask_first() {
     assert!(ui.html().contains("disconnects Harvest"), "{}", ui.html());
     ui.click("confirm-harvest-client-change");
     assert_eq!(probe.client_saves.borrow().len(), 1);
+    assert!(
+        probe.client_saves.borrow()[0].3,
+        "the save carries the confirmation"
+    );
 
+    // Harvest is reconnected elsewhere while this page still believes it is
+    // disconnected: the server refuses, and the page asks before retrying.
+    probe.connection.borrow_mut().connected = true;
     ui.click("remove-harvest-client");
     assert_eq!(*probe.client_removes.borrow(), 0);
+    assert!(
+        ui.html()
+            .contains("Removing the OAuth app disconnects Harvest"),
+        "{}",
+        ui.html()
+    );
     ui.click("confirm-harvest-client-change");
     assert_eq!(*probe.client_removes.borrow(), 1);
     assert!(ui.html().contains("Not configured"));
+}
+
+#[test]
+fn rendered_page_never_contains_the_client_secret() {
+    let probe = Probe::default();
+    *probe.client.borrow_mut() = key_only();
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-api");
+    ui.click("setup-harvest-oauth");
+    ui.type_into("harvest-client-id", "app");
+    ui.type_into("harvest-client-secret", "rendered-secret");
+    probe.connection.borrow_mut().configured = true;
+    ui.click("save-harvest-client");
+    assert!(!ui.html().contains("rendered-secret"), "{}", ui.html());
+
+    // Reopening the view, and replacing the secret, start from an empty field.
+    ui.click("harvest-oauth-back");
+    ui.click("harvest-oauth-app");
+    assert!(!ui.html().contains("rendered-secret"), "{}", ui.html());
+    ui.click("replace-harvest-secret");
+    assert!(!ui.html().contains("rendered-secret"), "{}", ui.html());
+}
+
+#[test]
+fn a_stored_client_without_a_redirect_url_asks_to_be_saved_again() {
+    let probe = Probe::default();
+    *probe.client.borrow_mut() = ClientSettings {
+        source: ClientSource::Stored,
+        client_id: Some("app".into()),
+        secret_set: true,
+        secret_readable: true,
+        ..key_only()
+    };
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-api");
+    ui.click("setup-harvest-oauth");
+    let html = ui.html();
+    assert!(html.contains("Redirect URL needed"), "{html}");
+    ui.click("save-harvest-client");
+    assert_eq!(probe.client_saves.borrow()[0].2, "/auth/harvest/callback");
+    assert!(!ui.html().contains("Redirect URL needed"));
+}
+
+#[test]
+fn a_client_can_be_removed_without_the_encryption_key() {
+    let probe = Probe::default();
+    *probe.client.borrow_mut() = ClientSettings {
+        source: ClientSource::Stored,
+        client_id: Some("app".into()),
+        secret_set: true,
+        redirect_url: Some("https://horae.example/auth/harvest/callback".into()),
+        ..ClientSettings::default()
+    };
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-api");
+    ui.click("setup-harvest-oauth");
+    let html = ui.html();
+    assert!(
+        !html.contains("data-testid=\"save-harvest-client\""),
+        "{html}"
+    );
+    ui.click("remove-harvest-client");
+    assert_eq!(*probe.client_removes.borrow(), 1);
 }
 
 #[test]

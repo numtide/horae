@@ -53,7 +53,8 @@ async fn save_client(
     id: &str,
     secret: Option<&str>,
 ) -> anyhow::Result<()> {
-    save(pool, deployment, org, org, id, secret, URL).await
+    // The page confirms any disconnect before it sends this.
+    save(pool, deployment, org, org, id, secret, URL, true).await
 }
 
 async fn connect(pool: &PgPool, org: Uuid) {
@@ -159,7 +160,9 @@ async fn environment_client_wins_and_locks_the_stored_one(pool: PgPool) {
         save_client(&pool, &deployment, org, "new-id", Some("new"))
             .await
             .unwrap_err(),
-        remove(&pool, &deployment, org, org).await.unwrap_err(),
+        remove(&pool, &deployment, org, org, true)
+            .await
+            .unwrap_err(),
     ] {
         assert!(
             matches!(client_error(&error), Some(ClientError::Environment)),
@@ -191,6 +194,7 @@ async fn environment_redirect_url_wins_over_the_stored_client(pool: PgPool) {
         "stored-id",
         Some("s"),
         "ignored",
+        false,
     )
     .await
     .unwrap();
@@ -316,14 +320,14 @@ async fn new_client_id_disconnects_but_keeps_the_account_binding(pool: PgPool) {
 async fn removal_disconnects_and_unconfigures(pool: PgPool) {
     let org = organization(&pool).await;
     let deployment = key_only();
-    remove(&pool, &deployment, org, org).await.unwrap();
+    remove(&pool, &deployment, org, org, false).await.unwrap();
     assert_eq!(revision(&pool, org).await, 0);
 
     save_client(&pool, &deployment, org, "stored-id", Some("s"))
         .await
         .unwrap();
     connect(&pool, org).await;
-    remove(&pool, &deployment, org, org).await.unwrap();
+    remove(&pool, &deployment, org, org, true).await.unwrap();
 
     assert!(resolve(&pool, &deployment, org).await.unwrap().is_none());
     let status = account_switch::status(&pool, org, true).await.unwrap();
@@ -375,7 +379,9 @@ async fn active_imports_and_the_import_lock_refuse_changes(pool: PgPool) {
         save_client(&pool, &deployment, org, "other", Some("s"))
             .await
             .unwrap_err(),
-        remove(&pool, &deployment, org, org).await.unwrap_err(),
+        remove(&pool, &deployment, org, org, true)
+            .await
+            .unwrap_err(),
     ] {
         assert!(error.to_string().contains("Finish or cancel"), "{error}");
     }
@@ -443,7 +449,7 @@ async fn authorization_started_before_a_change_cannot_store_tokens(pool: PgPool)
 async fn only_an_active_administrator_of_the_organization_may_change_it(pool: PgPool) {
     let org = organization(&pool).await;
     let other = organization(&pool).await;
-    let error = save(&pool, &key_only(), org, other, "id", Some("s"), URL)
+    let error = save(&pool, &key_only(), org, other, "id", Some("s"), URL, false)
         .await
         .unwrap_err();
     assert!(matches!(
@@ -456,5 +462,134 @@ async fn only_an_active_administrator_of_the_organization_may_change_it(pool: Pg
             .unwrap()
             .client_id
             .is_none()
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn disconnecting_needs_the_callers_confirmation(pool: PgPool) {
+    let org = organization(&pool).await;
+    let deployment = key_only();
+    save(&pool, &deployment, org, org, "first", Some("s"), URL, false)
+        .await
+        .unwrap();
+    // Without a connection there is nothing to confirm.
+    save(
+        &pool,
+        &deployment,
+        org,
+        org,
+        "second",
+        Some("s"),
+        URL,
+        false,
+    )
+    .await
+    .unwrap();
+    connect(&pool, org).await;
+    let before = revision(&pool, org).await;
+
+    // A page loaded before the connection existed never showed the warning.
+    for error in [
+        save(&pool, &deployment, org, org, "third", Some("s"), URL, false)
+            .await
+            .unwrap_err(),
+        remove(&pool, &deployment, org, org, false)
+            .await
+            .unwrap_err(),
+    ] {
+        assert!(
+            matches!(
+                client_error(&error),
+                Some(ClientError::DisconnectUnconfirmed)
+            ),
+            "{error}"
+        );
+    }
+    assert_eq!(revision(&pool, org).await, before);
+    assert!(credentials::load(&pool, org, KEY).await.unwrap().is_some());
+    assert_eq!(
+        resolve(&pool, &deployment, org)
+            .await
+            .unwrap()
+            .unwrap()
+            .client_id,
+        "second"
+    );
+
+    // Keeping the client ID never disconnects, so it needs no confirmation.
+    save(
+        &pool,
+        &deployment,
+        org,
+        org,
+        "second",
+        Some("rotated"),
+        URL,
+        false,
+    )
+    .await
+    .unwrap();
+    assert!(credentials::load(&pool, org, KEY).await.unwrap().is_some());
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_client_can_be_removed_without_the_encryption_key(pool: PgPool) {
+    let org = organization(&pool).await;
+    save_client(&pool, &key_only(), org, "stored-id", Some("s"))
+        .await
+        .unwrap();
+    let no_key = HarvestDeployment::default();
+    assert!(view(&pool, &no_key, org).await.unwrap().source == ClientSource::Stored);
+    remove(&pool, &no_key, org, org, false).await.unwrap();
+    assert_eq!(
+        view(&pool, &no_key, org).await.unwrap().source,
+        ClientSource::None
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_client_saved_under_the_environment_redirect_url_asks_for_its_own(pool: PgPool) {
+    let org = organization(&pool).await;
+    let with_redirect = HarvestDeployment {
+        redirect_url: Some("https://env.example.com/auth/harvest/callback".into()),
+        ..key_only()
+    };
+    save(
+        &pool,
+        &with_redirect,
+        org,
+        org,
+        "stored-id",
+        Some("s"),
+        "",
+        false,
+    )
+    .await
+    .unwrap();
+    assert!(
+        !view(&pool, &with_redirect, org)
+            .await
+            .unwrap()
+            .needs_redirect()
+    );
+
+    // The variable is unset later: the client stops resolving, and says why.
+    assert!(resolve(&pool, &key_only(), org).await.unwrap().is_none());
+    assert!(
+        view(&pool, &key_only(), org)
+            .await
+            .unwrap()
+            .needs_redirect()
+    );
+    save_client(&pool, &key_only(), org, "stored-id", None)
+        .await
+        .unwrap();
+    assert_eq!(
+        resolve(&pool, &key_only(), org)
+            .await
+            .unwrap()
+            .unwrap()
+            .redirect_url,
+        URL
     );
 }

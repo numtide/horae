@@ -4,7 +4,7 @@
 
 use dioxus::prelude::*;
 use horae_core::importers::harvest::client::{
-    CALLBACK_PATH, ClientSettings, ClientSource, save_disconnects,
+    CALLBACK_PATH, ClientSettings, ClientSource, DISCONNECT_UNCONFIRMED, save_disconnects,
 };
 
 use crate::server_fns;
@@ -72,7 +72,8 @@ pub(super) fn HarvestOAuthApp(
                 Change::Remove => true,
                 Change::Save => save_disconnects(current.client_id.as_deref(), &id),
             };
-        if disconnects && *confirming.peek() != Some(change) {
+        let confirmed = *confirming.peek() == Some(change);
+        if disconnects && !confirmed {
             confirming.set(Some(change));
             return;
         }
@@ -83,9 +84,9 @@ pub(super) fn HarvestOAuthApp(
             Change::Save => {
                 let entered = secret.peek().clone();
                 let new_secret = (!entered.trim().is_empty()).then_some(entered);
-                server_fns::save_harvest_client(id, new_secret, redirect(&current)).await
+                server_fns::save_harvest_client(id, new_secret, redirect(&current), confirmed).await
             }
-            Change::Remove => server_fns::remove_harvest_client().await,
+            Change::Remove => server_fns::remove_harvest_client(confirmed).await,
         };
         busy.set(false);
         match result {
@@ -93,6 +94,11 @@ pub(super) fn HarvestOAuthApp(
                 secret.set(String::new());
                 replacing.set(false);
                 settings.restart();
+                on_changed.call(());
+            }
+            // Harvest was connected after this page loaded: ask now.
+            Err(failure) if failure.to_string().contains(DISCONNECT_UNCONFIRMED) => {
+                confirming.set(Some(change));
                 on_changed.call(());
             }
             Err(failure) => error.set(Some(failure.to_string())),
@@ -118,8 +124,11 @@ pub(super) fn HarvestOAuthApp(
     let environment = current.source == ClientSource::Environment;
     let (tone, status) = match current.source {
         ClientSource::Environment => ("badge-success", "Configured by the environment"),
-        ClientSource::Stored if current.secret_readable => ("badge-success", "Configured"),
-        ClientSource::Stored => ("badge-warning", "Secret unreadable"),
+        ClientSource::Stored if !current.secret_readable => ("badge-warning", "Secret unreadable"),
+        ClientSource::Stored if current.needs_redirect() => {
+            ("badge-warning", "Redirect URL needed")
+        }
+        ClientSource::Stored => ("badge-success", "Configured"),
         ClientSource::None => ("badge-neutral", "Not configured"),
     };
     let redirect_url = redirect(&current);
@@ -195,6 +204,13 @@ pub(super) fn HarvestOAuthApp(
                                 "The environment client also needs HORAE_HARVEST_REDIRECT_URL. Ask the operator to set it to this address."
                             } else {
                                 "Paste this into Harvest first. It must match exactly, or the callback is rejected."
+                            }
+                        }
+                        if current.needs_redirect() {
+                            div { class: "alert alert-warning mt-3 mb-0", role: "status",
+                                "Redirect URL needed. This client was saved while "
+                                code { "HORAE_HARVEST_REDIRECT_URL" }
+                                " supplied it, and that is no longer set. Save again to store the address above."
                             }
                         }
                     }
@@ -283,15 +299,19 @@ pub(super) fn HarvestOAuthApp(
                     if let Some(failure) = error() {
                         div { class: "alert alert-danger mb-0", role: "alert", "{failure}" }
                     }
-                    if editable {
+                    // Removing needs no encryption key, so a client whose
+                    // secret no longer opens can still be removed.
+                    if editable || current.source == ClientSource::Stored {
                         div { class: "flex items-center gap-3 flex-wrap",
-                            button {
-                                r#type: "button",
-                                class: "btn btn-primary",
-                                "data-testid": "save-harvest-client".to_owned(),
-                                disabled: busy(),
-                                onclick: move |_| submit(Change::Save, save_current.clone()),
-                                if busy() { "Saving…" } else { "Save credentials" }
+                            if editable {
+                                button {
+                                    r#type: "button",
+                                    class: "btn btn-primary",
+                                    "data-testid": "save-harvest-client".to_owned(),
+                                    disabled: busy(),
+                                    onclick: move |_| submit(Change::Save, save_current.clone()),
+                                    if busy() { "Saving…" } else { "Save credentials" }
+                                }
                             }
                             if current.source == ClientSource::Stored {
                                 button {

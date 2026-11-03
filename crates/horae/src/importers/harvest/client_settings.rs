@@ -30,6 +30,10 @@ pub enum ClientError {
         "The Harvest OAuth client is configured by the environment (HORAE_HARVEST_CLIENT_ID and HORAE_HARVEST_CLIENT_SECRET)"
     )]
     Environment,
+    /// The change would delete the tokens of a connection the caller did not
+    /// confirm disconnecting, for example from a page loaded before it existed.
+    #[error("{}", rules::DISCONNECT_UNCONFIRMED)]
+    DisconnectUnconfirmed,
     #[error(transparent)]
     Invalid(#[from] InvalidClient),
 }
@@ -126,7 +130,12 @@ pub async fn view<'e, E: sqlx::PgExecutor<'e>>(
 }
 
 /// Save or replace the organization's client. A blank secret keeps the stored
-/// one for the same client ID; a different client ID disconnects Harvest.
+/// one for the same client ID; a different client ID disconnects Harvest,
+/// which only a caller passing `confirm_disconnect` may do.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "mirrors the save request's fields"
+)]
 pub async fn save(
     pool: &PgPool,
     deployment: &HarvestDeployment,
@@ -135,8 +144,13 @@ pub async fn save(
     client_id: &str,
     client_secret: Option<&str>,
     redirect_url: &str,
+    confirm_disconnect: bool,
 ) -> anyhow::Result<()> {
-    let key = writable(deployment)?;
+    stored_in_effect(deployment)?;
+    let key = deployment
+        .encryption_key_hex
+        .as_deref()
+        .ok_or(ClientError::NoEncryptionKey)?;
     change(pool, org_id, actor_id, async |tx| {
         let existing = stored(&mut **tx, org_id).await?;
         let input = rules::validate_save(
@@ -159,7 +173,7 @@ pub async fn save(
             existing.as_ref().map(|row| row.client_id.as_str()),
             &input.client_id,
         );
-        let disconnected = disconnects && delete_tokens(tx, org_id).await?;
+        let disconnected = disconnects && delete_tokens(tx, org_id, confirm_disconnect).await?;
         let id = sqlx::query_scalar!(
             r#"INSERT INTO harvest_oauth_clients
                  (id, org_id, client_id, client_secret_enc, redirect_url, updated_by)
@@ -193,20 +207,23 @@ pub async fn save(
     .await
 }
 
-/// Remove the organization's stored client, disconnecting Harvest. Removing
-/// a client that does not exist changes nothing.
+/// Remove the organization's stored client, disconnecting Harvest when
+/// `confirm_disconnect` allows it. Removing a client that does not exist
+/// changes nothing. It needs no encryption key, so a client whose secret no
+/// longer opens can still be removed.
 pub async fn remove(
     pool: &PgPool,
     deployment: &HarvestDeployment,
     org_id: Uuid,
     actor_id: Uuid,
+    confirm_disconnect: bool,
 ) -> anyhow::Result<()> {
-    writable(deployment)?;
+    stored_in_effect(deployment)?;
     change(pool, org_id, actor_id, async |tx| {
         let Some(row) = stored(&mut **tx, org_id).await? else {
             return Ok(());
         };
-        let disconnected = delete_tokens(tx, org_id).await?;
+        let disconnected = delete_tokens(tx, org_id, confirm_disconnect).await?;
         sqlx::query!(
             "DELETE FROM harvest_oauth_clients WHERE org_id = $1",
             org_id
@@ -227,15 +244,12 @@ pub async fn remove(
     .await
 }
 
-/// The key to seal with, once the stored client is the one in effect.
-fn writable(deployment: &HarvestDeployment) -> Result<&str, ClientError> {
-    if deployment.client.is_some() {
-        return Err(ClientError::Environment);
+/// The stored client may change only while the environment does not override it.
+fn stored_in_effect(deployment: &HarvestDeployment) -> Result<(), ClientError> {
+    match deployment.client {
+        Some(_) => Err(ClientError::Environment),
+        None => Ok(()),
     }
-    deployment
-        .encryption_key_hex
-        .as_deref()
-        .ok_or(ClientError::NoEncryptionKey)
 }
 
 type Tx<'c> = sqlx::Transaction<'c, sqlx::Postgres>;
@@ -273,12 +287,17 @@ async fn change(
 }
 
 /// Disconnect as `credentials::disconnect` does: tokens go, the account
-/// binding stays. Returns whether a connection existed.
-async fn delete_tokens(tx: &mut Tx<'_>, org_id: Uuid) -> anyhow::Result<bool> {
+/// binding stays. Returns whether a connection existed. Deleting tokens the
+/// caller did not confirm fails, which rolls the whole change back.
+async fn delete_tokens(tx: &mut Tx<'_>, org_id: Uuid, confirmed: bool) -> anyhow::Result<bool> {
     let deleted = sqlx::query!("DELETE FROM harvest_credentials WHERE org_id = $1", org_id)
         .execute(&mut **tx)
         .await?;
-    Ok(deleted.rows_affected() > 0)
+    let disconnected = deleted.rows_affected() > 0;
+    if disconnected && !confirmed {
+        return Err(ClientError::DisconnectUnconfirmed.into());
+    }
+    Ok(disconnected)
 }
 
 /// Fence OAuth attempts started under the previous client and audit the change.

@@ -82,12 +82,14 @@ pub async fn harvest_client_settings() -> Result<ClientSettings, ServerFnError> 
 }
 
 /// Save or replace the stored client. A blank secret keeps the stored one for
-/// the same client ID; a different client ID disconnects Harvest.
+/// the same client ID; a different client ID disconnects Harvest, which an
+/// existing connection allows only with `confirm_disconnect`.
 #[dioxus_fullstack::post("/api/import/harvest/client/save")]
 pub async fn save_harvest_client(
     client_id: String,
     client_secret: Option<String>,
     redirect_url: String,
+    confirm_disconnect: bool,
 ) -> Result<ClientSettings, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
@@ -99,15 +101,19 @@ pub async fn save_harvest_client(
         &client_id,
         client_secret.as_deref(),
         &redirect_url,
+        confirm_disconnect,
     )
     .await
     .map_err(map_client_error)?;
     harvest_client_settings().await
 }
 
-/// Remove the stored client, disconnecting Harvest.
+/// Remove the stored client. Disconnecting an existing connection requires
+/// `confirm_disconnect`, so a page that never showed the warning cannot.
 #[dioxus_fullstack::post("/api/import/harvest/client/remove")]
-pub async fn remove_harvest_client() -> Result<ClientSettings, ServerFnError> {
+pub async fn remove_harvest_client(
+    confirm_disconnect: bool,
+) -> Result<ClientSettings, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
     crate::importers::harvest::client_settings::remove(
@@ -115,6 +121,7 @@ pub async fn remove_harvest_client() -> Result<ClientSettings, ServerFnError> {
         &state.harvest,
         admin.org_id,
         admin.id,
+        confirm_disconnect,
     )
     .await
     .map_err(map_client_error)?;

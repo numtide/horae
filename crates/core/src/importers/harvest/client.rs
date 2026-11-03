@@ -7,6 +7,11 @@ use serde::{Deserialize, Serialize};
 /// The only path Harvest may redirect back to (`/auth/harvest/callback`).
 pub const CALLBACK_PATH: &str = "/auth/harvest/callback";
 
+/// The server's refusal of a change that would disconnect Harvest without the
+/// caller's confirmation; the page answers it by asking for confirmation.
+pub const DISCONNECT_UNCONFIRMED: &str =
+    "This change disconnects Harvest. Review the warning and confirm to continue.";
+
 /// Where the client the importer uses comes from.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientSource {
@@ -40,6 +45,12 @@ impl ClientSettings {
     pub fn editable(&self) -> bool {
         self.encryption_key_set && self.source != ClientSource::Environment
     }
+
+    /// A client saved while `HORAE_HARVEST_REDIRECT_URL` was set stores no
+    /// redirect URL of its own; once that variable is unset it needs a save.
+    pub fn needs_redirect(&self) -> bool {
+        self.source == ClientSource::Stored && self.redirect_url.is_none()
+    }
 }
 
 /// A save request after trimming. `client_secret: None` keeps the stored one.
@@ -65,7 +76,9 @@ pub enum InvalidClient {
     Secret,
     #[error("Enter the client secret again: a new client ID needs its own secret")]
     SecretRequired,
-    #[error("The redirect URL must be an http(s) address ending in {CALLBACK_PATH}")]
+    #[error(
+        "The redirect URL must be an https address (http only for localhost) ending in {CALLBACK_PATH}"
+    )]
     RedirectUrl,
 }
 
@@ -116,22 +129,41 @@ pub fn save_disconnects(existing: Option<&str>, client_id: &str) -> bool {
     existing.is_some_and(|current| current != client_id)
 }
 
-/// `http(s)://host[:port]/auth/harvest/callback`, with no user info, query or
+/// `https://host[:port]/auth/harvest/callback`, with no user info, query or
 /// fragment: anything else would send the authorization code elsewhere.
+/// Plain `http` is accepted only for a loopback host, where the code never
+/// crosses the network.
 fn valid_redirect_url(url: &str) -> bool {
-    let Some(rest) = url
-        .strip_prefix("https://")
-        .or_else(|| url.strip_prefix("http://"))
-    else {
-        return false;
+    let (rest, secure) = match url.strip_prefix("https://") {
+        Some(rest) => (rest, true),
+        None => match url.strip_prefix("http://") {
+            Some(rest) => (rest, false),
+            None => return false,
+        },
     };
     let Some(authority) = rest.strip_suffix(CALLBACK_PATH) else {
         return false;
     };
-    !authority.is_empty()
+    // The host is everything before an optional `:port`; IPv6 is bracketed.
+    let (host, port) = match authority.strip_prefix('[') {
+        Some(inner) => match inner.split_once(']') {
+            Some((address, port)) => (&authority[..address.len() + 2], port),
+            None => return false,
+        },
+        None => authority
+            .find(':')
+            .map_or((authority, ""), |colon| authority.split_at(colon)),
+    };
+    let port_ok = port.is_empty()
+        || port
+            .strip_prefix(':')
+            .is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()));
+    !host.is_empty()
+        && port_ok
         && url.len() <= 2048
         && !authority.contains(['/', '@', '?', '#', '\\'])
         && !url.contains(char::is_whitespace)
+        && (secure || matches!(host, "localhost" | "127.0.0.1" | "[::1]"))
 }
 
 #[cfg(test)]
@@ -203,7 +235,11 @@ mod tests {
     fn redirect_url_must_be_the_harvest_callback_on_a_plain_origin() {
         for url in [
             URL,
+            "https://horae.example.com:8443/auth/harvest/callback",
             "http://localhost:8080/auth/harvest/callback",
+            "http://localhost/auth/harvest/callback",
+            "http://127.0.0.1:8080/auth/harvest/callback",
+            "http://[::1]:8080/auth/harvest/callback",
             "https://[::1]:8443/auth/harvest/callback",
         ] {
             assert!(
@@ -221,6 +257,15 @@ mod tests {
             "https://user@horae.example.com/auth/harvest/callback",
             "https://horae.example.com/auth/harvest",
             "https://horae.example.com /auth/harvest/callback",
+            // Plain http leaves loopback only for an explicit loopback host.
+            "http://horae.example.com/auth/harvest/callback",
+            "http://10.0.0.5:8080/auth/harvest/callback",
+            "http://localhost.example.com/auth/harvest/callback",
+            "http://127.0.0.1.example.com/auth/harvest/callback",
+            "http://[::2]/auth/harvest/callback",
+            "https://horae.example.com:/auth/harvest/callback",
+            "https://horae.example.com:x/auth/harvest/callback",
+            "https://[::1/auth/harvest/callback",
         ] {
             assert_eq!(
                 validate_save("id", Some("s"), url, false, None),
@@ -241,6 +286,20 @@ mod tests {
         assert!(!save_disconnects(None, "id"));
         assert!(!save_disconnects(Some("id"), "id"));
         assert!(save_disconnects(Some("id"), "other"));
+    }
+
+    #[test]
+    fn only_a_stored_client_without_any_redirect_url_needs_one() {
+        let mut settings = ClientSettings {
+            source: ClientSource::Stored,
+            ..Default::default()
+        };
+        assert!(settings.needs_redirect());
+        settings.redirect_url = Some(URL.into());
+        assert!(!settings.needs_redirect());
+        settings.redirect_url = None;
+        settings.source = ClientSource::Environment;
+        assert!(!settings.needs_redirect());
     }
 
     #[test]

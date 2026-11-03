@@ -125,8 +125,8 @@ impl JobPolicy {
 }
 
 /// The Harvest client one request uses: the environment's settings, completed
-/// by the organization's stored client.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// by the organization's stored client. Its `Debug` hides the secret and key.
+#[derive(Clone)]
 pub struct HarvestConfig {
     pub client_id: String,
     pub client_secret: String,
@@ -144,19 +144,58 @@ pub struct HarvestConfig {
 /// `HORAE_HARVEST_ENC_KEY`. Each is optional; the importer's API source is
 /// available when these and the organization's stored client together supply
 /// a client, a redirect URL and the key.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct HarvestDeployment {
     /// The client ID and secret, set only when both variables are.
     pub client: Option<HarvestClient>,
     pub redirect_url: Option<String>,
-    /// Seals tokens and the stored client secret. Never stored.
+    /// Seals tokens and the stored client secret. Never stored or serialized.
+    #[serde(skip_serializing, default)]
     pub encryption_key_hex: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct HarvestClient {
     pub client_id: String,
+    #[serde(skip_serializing, default)]
     pub client_secret: String,
+}
+
+/// Stands in for a secret in `Debug` output, so one `{:?}` of the
+/// configuration cannot leak it into a log.
+const REDACTED: &str = "[redacted]";
+
+impl std::fmt::Debug for HarvestConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HarvestConfig")
+            .field("client_id", &self.client_id)
+            .field("client_secret", &REDACTED)
+            .field("redirect_url", &self.redirect_url)
+            .field("encryption_key_hex", &REDACTED)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for HarvestDeployment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HarvestDeployment")
+            .field("client", &self.client)
+            .field("redirect_url", &self.redirect_url)
+            .field(
+                "encryption_key_hex",
+                &self.encryption_key_hex.as_ref().map(|_| REDACTED),
+            )
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for HarvestClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HarvestClient")
+            .field("client_id", &self.client_id)
+            .field("client_secret", &REDACTED)
+            .finish()
+    }
 }
 
 /// Tests configure the whole client through the environment.
@@ -300,6 +339,28 @@ mod tests {
     use super::check_dev_login_bind;
 
     mod environment;
+
+    #[test]
+    fn harvest_secrets_stay_out_of_debug_and_serialized_configuration() {
+        let effective = super::HarvestConfig {
+            client_id: "client-id".into(),
+            client_secret: "client-secret".into(),
+            redirect_url: "https://horae.example/auth/harvest/callback".into(),
+            encryption_key_hex: "encryption-key".into(),
+        };
+        let deployment = super::HarvestDeployment::from(effective.clone());
+        for rendered in [
+            format!("{effective:?}"),
+            format!("{deployment:?}"),
+            serde_json::to_string(&deployment).unwrap(),
+        ] {
+            assert!(rendered.contains("client-id"), "{rendered}");
+            assert!(
+                !rendered.contains("client-secret") && !rendered.contains("encryption-key"),
+                "{rendered}"
+            );
+        }
+    }
 
     #[test]
     fn dev_login_is_allowed_on_loopback() {

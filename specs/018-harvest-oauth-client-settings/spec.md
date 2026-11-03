@@ -98,7 +98,7 @@ An administrator on a deployment without the encryption key learns why the form 
 - The encryption key changes after a client was stored: the stored secret can no longer be opened. The page says so and asks for the secret to be entered again; the API import is unavailable until then. Connecting never sends an unreadable or empty secret.
 - A save sends a new client ID without a new secret: refused, because a secret belongs to one client. The secret may be left blank only to keep the current one for the same client ID.
 - Blank or whitespace-only client ID or secret, or overly long values: refused with a clear message.
-- A redirect URL that is not an absolute `http` or `https` address ending in the Harvest callback path: refused, since Harvest would reject the authorization or send the code elsewhere.
+- A redirect URL that is not an absolute `https` address ending in the Harvest callback path: refused, since Harvest would reject the authorization or send the code elsewhere. Plain `http` is accepted only for `localhost`, `127.0.0.1` and `[::1]`, so the authorization code never crosses a network unencrypted.
 - Two administrators save at the same time: each save is applied whole; the last one wins and no mix of the two is stored.
 - A non-administrator, a signed-out visitor, or an administrator of another organization calls the settings actions directly: refused as forbidden or unauthenticated, and nothing about the stored client is revealed.
 - The environment supplies the client but not the redirect URL: the API import stays not configured, as today, and the page names the missing redirect URL setting. A stored client, including its redirect URL, is ignored while the environment client is set.
@@ -115,14 +115,14 @@ An administrator on a deployment without the encryption key learns why the form 
 - **FR-006**: The client the importer uses (connect, callback, token refresh, queued and running imports) MUST be resolved when it is needed, so saving, replacing or removing it takes effect without a restart.
 - **FR-007**: The client secret MUST be stored only in sealed form, with the same authenticated encryption and deployment key that protect the stored Harvest tokens. The key MUST NOT be stored by the system.
 - **FR-008**: The client secret MUST NOT be returned by any response, rendered on any page, or written to logs. Responses MUST show only whether a secret is set.
-- **FR-009**: When the encryption key is not configured, the system MUST refuse to store a client and the page MUST explain which setting the operator must provide.
-- **FR-010**: When the stored secret cannot be opened with the current key, the system MUST treat the API import as not configured and the page MUST ask for the secret again.
+- **FR-009**: When the encryption key is not configured, the system MUST refuse to store a client and the page MUST explain which setting the operator must provide. Removing a stored client MUST still be possible.
+- **FR-010**: When the stored secret cannot be opened with the current key, the system MUST treat the API import as not configured and the page MUST ask for the secret again. When a stored client has no redirect URL of its own because the environment supplied one that is no longer set, the page MUST say so and ask for a new save.
 - **FR-011**: Saving a different client ID, or removing the client, MUST disconnect Harvest as the existing Disconnect does: tokens removed; account binding, history, reports and imported data retained. Replacing only the secret, or saving again with an unchanged client ID, MUST keep the connection.
-- **FR-012**: The page MUST warn before a save or removal that will disconnect Harvest.
+- **FR-012**: The page MUST warn before a save or removal that will disconnect Harvest, and the system MUST refuse such a change unless the request confirms it, so a page loaded before Harvest was connected cannot disconnect it unwarned.
 - **FR-013**: Every change MUST be refused, without effect, while a Harvest import for the organization is queued or running.
 - **FR-014**: Every change MUST invalidate Harvest authorizations started before it, so their callbacks cannot store credentials.
 - **FR-015**: Each change MUST record who made it and when, in the organization's audit trail, without the secret.
-- **FR-016**: Input MUST be validated: client ID and secret non-blank and of bounded length; redirect URL absolute `http`/`https` ending in the Harvest callback path; a new client ID requires a new secret.
+- **FR-016**: Input MUST be validated: client ID and secret non-blank and of bounded length; redirect URL absolute `https` (or `http` for `localhost`, `127.0.0.1` and `[::1]` only) ending in the Harvest callback path; a new client ID requires a new secret.
 - **FR-017**: CSV import MUST remain available whether or not a client is configured.
 
 ### Key Entities

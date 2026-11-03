@@ -46,7 +46,7 @@ It never carries a secret. `editable = encryption_key_set && source != Environme
 
 - `client_id`: 1–255 characters, no whitespace.
 - `client_secret`: when present, 1–1024 characters with no surrounding whitespace. Required when no row exists, when the client ID changes, or when the stored secret is unreadable.
-- `redirect_url`: required unless the environment sets one (then ignored and stored as `NULL`). Absolute `http`/`https`, a host, no user info, query or fragment, path exactly `/auth/harvest/callback`.
+- `redirect_url`: required unless the environment sets one (then ignored and stored as `NULL`). Absolute `https` (plain `http` only for `localhost`, `127.0.0.1`, `[::1]`), a host with an optional numeric port, no user info, query or fragment, path exactly `/auth/harvest/callback`.
 - Disconnects when a row exists and `client_id` differs, and always on removal (when tokens exist).
 
 ## State transitions (per organization)
