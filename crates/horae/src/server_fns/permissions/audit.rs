@@ -5,7 +5,10 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::{PermissionStorageError, ReadIsolation, begin_lock_only_read, load_person_permissions};
+use super::{
+    PermissionStorageError, ReadIsolation, begin_lock_only_read_async_commit,
+    load_person_permissions,
+};
 use crate::models::permission_audit::{
     AuditCursor, AuditEntry, AuditPage, HistoricalSource, PersonSnapshot,
 };
@@ -217,7 +220,7 @@ async fn begin_read(
     org_id: Uuid,
     requester: Uuid,
 ) -> Result<Transaction<'_, Postgres>, AuditReadError> {
-    let mut tx = begin_lock_only_read(pool, ReadIsolation::ReadCommitted).await?;
+    let mut tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
     let policy = sqlx::query_scalar!(
         "SELECT permission_policy_version FROM organizations WHERE id = $1 FOR SHARE",
         org_id

@@ -40,6 +40,9 @@ async fn authorize(
 
 /// Use session-derived IDs. Materialize and commit before external/client waits.
 /// This preserves the legacy manager boundary, not canonical grant enforcement.
+///
+/// No INSERT/UPDATE/DELETE/nextval on the returned transaction: it commits
+/// asynchronously. Writes belong in their own transaction.
 pub(crate) async fn manager(
     pool: &PgPool,
     org_id: Uuid,

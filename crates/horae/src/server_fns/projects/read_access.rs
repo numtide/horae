@@ -7,13 +7,16 @@ use uuid::Uuid;
 use super::{ServerFnError, conflict, forbidden, server_err};
 use crate::models::permissions::PersonPermissions;
 use crate::server_fns::permissions::{
-    ReadIsolation, begin_lock_only_read, load_person_permissions,
+    ReadIsolation, begin_lock_only_read_async_commit, load_person_permissions,
 };
 
 const SNAPSHOT_ATTEMPTS: usize = 3;
 const ACCESS_CHANGED: &str = "Access changed while reading. Please try again.";
 
 pub(crate) struct ReadAccess<'a> {
+    /// No INSERT/UPDATE/DELETE/nextval: commits asynchronously (see
+    /// `begin_lock_only_read_async_commit`). Writes belong in their own
+    /// transaction.
     pub tx: Transaction<'a, Postgres>,
     pub permissions: Option<PersonPermissions>,
 }
@@ -37,7 +40,7 @@ impl<'a> ReadAccess<'a> {
         org_id: Uuid,
         actor_id: Uuid,
     ) -> Result<Option<Self>, ServerFnError> {
-        let tx = begin_lock_only_read(pool, ReadIsolation::ReadCommitted)
+        let tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted)
             .await
             .map_err(server_err)?;
         match Self::authorize(tx, org_id, actor_id).await {
@@ -59,7 +62,7 @@ impl<'a> ReadAccess<'a> {
         actor_id: Uuid,
     ) -> Result<Option<Self>, ServerFnError> {
         for _ in 0..SNAPSHOT_ATTEMPTS {
-            let tx = begin_lock_only_read(pool, ReadIsolation::RepeatableRead)
+            let tx = begin_lock_only_read_async_commit(pool, ReadIsolation::RepeatableRead)
                 .await
                 .map_err(server_err)?;
             match Self::authorize(tx, org_id, actor_id).await {

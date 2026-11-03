@@ -37,8 +37,12 @@ pub(crate) enum ReadIsolation {
 
 /// Begin a read whose only writes are `FOR SHARE` authority locks, with the
 /// isolation named in `BEGIN` itself rather than a separate `SET TRANSACTION`.
-/// READ WRITE is what lets those locks be taken; callers must not write data.
-pub(crate) async fn begin_lock_only_read(
+///
+/// No INSERT/UPDATE/DELETE/nextval: this transaction commits asynchronously.
+/// READ WRITE is what lets the locks be taken (READ ONLY rejects `FOR SHARE`),
+/// so Postgres cannot reject a write here; a data write would still commit,
+/// but could be lost on a server crash shortly after its commit returned.
+pub(crate) async fn begin_lock_only_read_async_commit(
     pool: &PgPool,
     isolation: ReadIsolation,
 ) -> Result<Transaction<'static, Postgres>, sqlx::Error> {

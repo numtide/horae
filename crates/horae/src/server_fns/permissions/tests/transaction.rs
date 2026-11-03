@@ -86,7 +86,9 @@ async fn lock_only_reads_bound_limits_and_commit_asynchronously(
                 (ReadIsolation::ReadCommitted, "read committed"),
                 (ReadIsolation::RepeatableRead, "repeatable read"),
             ] {
-                let mut tx = begin_lock_only_read(&pool, isolation).await.unwrap();
+                let mut tx = begin_lock_only_read_async_commit(&pool, isolation)
+                    .await
+                    .unwrap();
                 assert_eq!(
                     shown(&mut tx, "transaction_isolation").await,
                     shown_isolation
