@@ -38,6 +38,28 @@ async fn single_connection(
         .unwrap()
 }
 
+/// The server's own default, then `on` forced for the session, so the
+/// asynchronous/durable difference is proven even where the server default is
+/// already `off` (the CI cluster runs with `synchronous_commit=off`).
+const COMMIT_DEFAULTS: [Option<&str>; 2] = [None, Some("on")];
+
+/// Apply `forced` at session level and return the connection's commit default,
+/// read before any transaction begins.
+async fn commit_default(pool: &PgPool, forced: Option<&str>) -> String {
+    let mut conn = pool.acquire().await.unwrap();
+    if let Some(value) = forced {
+        sqlx::query(&format!("SET synchronous_commit = {value}"))
+            .execute(&mut *conn)
+            .await
+            .unwrap();
+    }
+    let default = shown(&mut conn, "synchronous_commit").await;
+    if let Some(value) = forced {
+        assert_eq!(default, value);
+    }
+    default
+}
+
 async fn assert_limits(connection: &mut PgConnection, default: &str, statement: &str, idle: &str) {
     assert_eq!(
         shown(connection, "statement_timeout").await,
@@ -56,60 +78,68 @@ async fn lock_only_reads_bound_limits_and_commit_asynchronously(
     pool_opts: PgPoolOptions,
     connect_opts: PgConnectOptions,
 ) {
-    for (default, statement, idle) in CASES {
-        let pool = single_connection(&pool_opts, &connect_opts, default).await;
-        for (isolation, shown_isolation) in [
-            (ReadIsolation::ReadCommitted, "read committed"),
-            (ReadIsolation::RepeatableRead, "repeatable read"),
-        ] {
-            let mut tx = begin_lock_only_read(&pool, isolation).await.unwrap();
-            assert_eq!(
-                shown(&mut tx, "transaction_isolation").await,
-                shown_isolation
-            );
-            assert_eq!(shown(&mut tx, "transaction_read_only").await, "off");
-            assert_limits(&mut tx, default, statement, idle).await;
-            assert_eq!(shown(&mut tx, "synchronous_commit").await, "off");
-            tx.commit().await.unwrap();
+    for forced in COMMIT_DEFAULTS {
+        for (default, statement, idle) in CASES {
+            let pool = single_connection(&pool_opts, &connect_opts, default).await;
+            let commit = commit_default(&pool, forced).await;
+            for (isolation, shown_isolation) in [
+                (ReadIsolation::ReadCommitted, "read committed"),
+                (ReadIsolation::RepeatableRead, "repeatable read"),
+            ] {
+                let mut tx = begin_lock_only_read(&pool, isolation).await.unwrap();
+                assert_eq!(
+                    shown(&mut tx, "transaction_isolation").await,
+                    shown_isolation
+                );
+                assert_eq!(shown(&mut tx, "transaction_read_only").await, "off");
+                assert_limits(&mut tx, default, statement, idle).await;
+                assert_eq!(shown(&mut tx, "synchronous_commit").await, "off");
+                tx.commit().await.unwrap();
 
-            // Every setting is transaction-local: after COMMIT the same pooled
-            // connection is back to its defaults.
-            let mut conn = pool.acquire().await.unwrap();
-            assert_limits(&mut conn, default, default, default).await;
-            assert_eq!(shown(&mut conn, "synchronous_commit").await, "on");
+                // Every setting is transaction-local: after COMMIT the same
+                // pooled connection is back to its defaults.
+                let mut conn = pool.acquire().await.unwrap();
+                assert_limits(&mut conn, default, default, default).await;
+                assert_eq!(shown(&mut conn, "synchronous_commit").await, commit);
+            }
+            pool.close().await;
         }
-        pool.close().await;
     }
 }
 
-/// Transactions that may write data keep synchronous commits.
+/// Transactions that may write data never set the commit mode locally: they
+/// keep the connection's default, durable unless the server says otherwise.
 #[sqlx::test(migrations = "./migrations")]
 async fn administration_transactions_bound_limits_and_commit_durably(
     pool_opts: PgPoolOptions,
     connect_opts: PgConnectOptions,
 ) {
-    for (default, statement, idle) in CASES {
-        let pool = single_connection(&pool_opts, &connect_opts, default).await;
-        let mut tx = pool.begin().await.unwrap();
-        configure_administration(&mut tx).await.unwrap();
-        assert_eq!(
-            shown(&mut tx, "transaction_isolation").await,
-            "read committed"
-        );
-        assert_limits(&mut tx, default, statement, idle).await;
-        assert_eq!(shown(&mut tx, "synchronous_commit").await, "on");
-        tx.commit().await.unwrap();
+    for forced in COMMIT_DEFAULTS {
+        for (default, statement, idle) in CASES {
+            let pool = single_connection(&pool_opts, &connect_opts, default).await;
+            let commit = commit_default(&pool, forced).await;
+            let mut tx = pool.begin().await.unwrap();
+            configure_administration(&mut tx).await.unwrap();
+            assert_eq!(
+                shown(&mut tx, "transaction_isolation").await,
+                "read committed"
+            );
+            assert_limits(&mut tx, default, statement, idle).await;
+            assert_eq!(shown(&mut tx, "synchronous_commit").await, commit);
+            tx.commit().await.unwrap();
 
-        let mut tx = pool.begin().await.unwrap();
-        configure_transaction_limits(&mut tx).await.unwrap();
-        assert_limits(&mut tx, default, statement, idle).await;
-        assert_eq!(shown(&mut tx, "synchronous_commit").await, "on");
-        tx.commit().await.unwrap();
+            let mut tx = pool.begin().await.unwrap();
+            configure_transaction_limits(&mut tx).await.unwrap();
+            assert_limits(&mut tx, default, statement, idle).await;
+            assert_eq!(shown(&mut tx, "synchronous_commit").await, commit);
+            tx.commit().await.unwrap();
 
-        let mut conn = pool.acquire().await.unwrap();
-        assert_limits(&mut conn, default, default, default).await;
-        // `close` waits for every checked-out connection.
-        drop(conn);
-        pool.close().await;
+            let mut conn = pool.acquire().await.unwrap();
+            assert_limits(&mut conn, default, default, default).await;
+            assert_eq!(shown(&mut conn, "synchronous_commit").await, commit);
+            // `close` waits for every checked-out connection.
+            drop(conn);
+            pool.close().await;
+        }
     }
 }

@@ -443,30 +443,49 @@ async fn manager_commits_asynchronously_only_inside_its_snapshot(pool: PgPool) {
         .connect_with((*pool.connect_options()).clone())
         .await
         .unwrap();
-    for inherited in ["0", "250ms", "7s"] {
-        sqlx::query!("SELECT set_config('lock_timeout', $1, false)", inherited)
+    // The server's own commit default first, then `on` forced for the session,
+    // so the difference is proven even where the server runs with
+    // `synchronous_commit=off` (the CI cluster does). The single connection
+    // keeps the session setting, hence this order.
+    for forced in [false, true] {
+        if forced {
+            sqlx::query("SET synchronous_commit = on")
+                .execute(&reader_pool)
+                .await
+                .unwrap();
+        }
+        let commit = sqlx::query_scalar::<_, String>("SHOW synchronous_commit")
             .fetch_one(&reader_pool)
             .await
             .unwrap();
-        let mut tx = manager(&reader_pool, fixture.ids.org_id, fixture.ids.user_id)
-            .await
-            .unwrap();
-        let inside = sqlx::query!("SELECT current_setting('transaction_isolation') AS \"isolation!\", current_setting('transaction_read_only') AS \"read_only!\", current_setting('lock_timeout') AS \"timeout!\", current_setting('synchronous_commit') AS \"commit!\"").fetch_one(&mut *tx).await.unwrap();
-        assert_eq!(
-            (
-                inside.isolation.as_str(),
-                inside.read_only.as_str(),
-                inside.timeout.as_str(),
-                inside.commit.as_str()
-            ),
-            ("repeatable read", "off", inherited, "off")
-        );
-        tx.commit().await.unwrap();
-        let after = sqlx::query!("SELECT current_setting('lock_timeout') AS \"timeout!\", current_setting('synchronous_commit') AS \"commit!\"").fetch_one(&reader_pool).await.unwrap();
-        assert_eq!(
-            (after.timeout.as_str(), after.commit.as_str()),
-            (inherited, "on")
-        );
+        if forced {
+            assert_eq!(commit, "on");
+        }
+        for inherited in ["0", "250ms", "7s"] {
+            sqlx::query!("SELECT set_config('lock_timeout', $1, false)", inherited)
+                .fetch_one(&reader_pool)
+                .await
+                .unwrap();
+            let mut tx = manager(&reader_pool, fixture.ids.org_id, fixture.ids.user_id)
+                .await
+                .unwrap();
+            let inside = sqlx::query!("SELECT current_setting('transaction_isolation') AS \"isolation!\", current_setting('transaction_read_only') AS \"read_only!\", current_setting('lock_timeout') AS \"timeout!\", current_setting('synchronous_commit') AS \"commit!\"").fetch_one(&mut *tx).await.unwrap();
+            assert_eq!(
+                (
+                    inside.isolation.as_str(),
+                    inside.read_only.as_str(),
+                    inside.timeout.as_str(),
+                    inside.commit.as_str()
+                ),
+                ("repeatable read", "off", inherited, "off")
+            );
+            tx.commit().await.unwrap();
+            let after = sqlx::query!("SELECT current_setting('lock_timeout') AS \"timeout!\", current_setting('synchronous_commit') AS \"commit!\"").fetch_one(&reader_pool).await.unwrap();
+            assert_eq!(
+                (after.timeout.as_str(), after.commit.as_str()),
+                (inherited, commit.as_str())
+            );
+        }
     }
     reader_pool.close().await;
 }
