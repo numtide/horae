@@ -22,8 +22,8 @@ Decisions made before specification by the requester, recorded here as answered:
 
 Decisions this specification makes within that scope:
 
-- Q: Is the redirect URL editable? → A: When the deployment sets the redirect URL in the environment, that value is shown read-only. Otherwise the administrator saves it with the client; the form proposes the address of the Horae instance the administrator is using, followed by the Harvest callback path, and the administrator can correct it.
-- Q: What happens to an existing connection when the client changes or is removed? → A: Harvest tokens belong to the client that issued them. Changing the client ID or removing the client therefore disconnects Harvest exactly like the existing Disconnect action: tokens are removed, and the account binding, history and imported data are retained, so only the original account can be reconnected. Replacing only the secret, or only the redirect URL, keeps the connection.
+- Q: Is the redirect URL editable? → A: No, it is shown read-only with a copy action, as in the importer design. When the deployment sets it in the environment, that value is shown. Otherwise it is the address of the Horae instance the administrator is using, followed by the Harvest callback path, and it is saved with the client so the server uses the same value.
+- Q: What happens to an existing connection when the client changes or is removed? → A: Harvest tokens belong to the client that issued them. Changing the client ID or removing the client therefore disconnects Harvest exactly like the existing Disconnect action: tokens are removed, and the account binding, history and imported data are retained, so only the original account can be reconnected. Replacing only the secret keeps the connection.
 - Q: What about imports and authorizations in progress? → A: Any change to the stored client is refused while a Harvest import is queued or running, with the same "finish or cancel the active import" guidance Change account uses. Any change also invalidates an authorization that was started before it, so a callback arriving afterwards cannot complete with a different client.
 - Q: Is the stored client per organization or per deployment? → A: Per organization, like the Harvest connection it serves. The environment client, when present, applies to every organization.
 
@@ -31,7 +31,7 @@ Decisions this specification makes within that scope:
 
 ### User Story 1 - Configure Harvest from the importer (Priority: P1)
 
-An administrator of a deployment that has the encryption key but no Harvest client in the environment enters the client ID, secret and redirect URL on the importer page, saves, and can connect Harvest straight away, without a restart.
+An administrator of a deployment that has the encryption key but no Harvest client in the environment copies the redirect URL into Harvest, enters the client ID and secret on the importer page, saves, and can connect Harvest straight away, without a restart.
 
 **Why this priority**: This is the feature: setting up the Harvest API import without editing the deployment.
 
@@ -39,7 +39,7 @@ An administrator of a deployment that has the encryption key but no Harvest clie
 
 **Acceptance Scenarios**:
 
-1. **Given** no client in the environment and none stored, **When** an administrator opens the Harvest importer, **Then** the page shows the client as not configured and offers a form for the client ID, secret and redirect URL, proposing the redirect URL of the current Horae address.
+1. **Given** no client in the environment and none stored, **When** an administrator opens the Harvest importer, **Then** the page shows the client as not configured and offers a form for the client ID and secret, and shows the redirect URL to register at Harvest, built from the current Horae address.
 1. **Given** that form is filled in, **When** the administrator saves, **Then** the page shows the client ID, that a secret is set, and the redirect URL, and Connect Harvest becomes available without a restart.
 1. **Given** a saved client, **When** the administrator connects Harvest, **Then** authorization and token exchange use the saved client ID, secret and redirect URL.
 1. **Given** a saved client, **When** the importer is reloaded or another administrator opens it, **Then** the secret is never shown or sent to the browser; only "set" is shown.
@@ -72,7 +72,7 @@ An administrator rotates the secret, switches to a different OAuth client, or re
 
 **Acceptance Scenarios**:
 
-1. **Given** a connected stored client, **When** the administrator replaces only the secret or the redirect URL, **Then** the connection, account binding and history are unchanged.
+1. **Given** a connected stored client, **When** the administrator replaces only the secret, **Then** the connection, account binding and history are unchanged.
 1. **Given** a connected stored client, **When** the administrator saves a different client ID, **Then** the page warns first that Harvest will be disconnected; after saving, tokens are removed and the account binding, history and imported data remain.
 1. **Given** a stored client, **When** the administrator removes it, **Then** the page warns first; after removal the API import shows as not configured, Harvest is disconnected as above, and CSV import remains available.
 1. **Given** a Harvest import is queued or running, **When** the administrator tries to save or remove the client, **Then** the change is refused with guidance to finish or cancel the import first, and nothing changes.
@@ -101,23 +101,23 @@ An administrator on a deployment without the encryption key learns why the form 
 - A redirect URL that is not an absolute `http` or `https` address ending in the Harvest callback path: refused, since Harvest would reject the authorization or send the code elsewhere.
 - Two administrators save at the same time: each save is applied whole; the last one wins and no mix of the two is stored.
 - A non-administrator, a signed-out visitor, or an administrator of another organization calls the settings actions directly: refused as forbidden or unauthenticated, and nothing about the stored client is revealed.
-- The environment supplies the client but not the redirect URL: the stored redirect URL is used if one exists; otherwise the API import is not configured and the page asks for a redirect URL.
+- The environment supplies the client but not the redirect URL: the stored redirect URL is used if one exists; otherwise the API import is not configured until the client is saved from the page, which stores the redirect URL shown there.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST let an administrator save, replace and remove an organization's Harvest OAuth client (client ID, client secret, redirect URL) from the Harvest importer page.
+- **FR-001**: The system MUST let an administrator save, replace and remove an organization's Harvest OAuth client (client ID and client secret, saved with the redirect URL shown) from the Harvest importer page.
 - **FR-002**: Only active administrators of the organization MAY read the client settings or change them; all other callers MUST be refused as forbidden (or unauthenticated when signed out), and authority MUST be rechecked when the change is written.
 - **FR-003**: When both the client ID and the client secret are set in the environment, the system MUST use them, MUST show the client as configured by the environment, read-only, and MUST refuse changes to the stored client for that organization while it is ignored.
 - **FR-004**: When the environment does not set both, the system MUST use the organization's stored client. A partial environment client MUST be ignored.
-- **FR-005**: The redirect URL from the environment, when set, MUST take precedence and be shown read-only; otherwise the stored redirect URL MUST be used. The form MUST propose the current Horae address followed by the Harvest callback path.
+- **FR-005**: The redirect URL from the environment, when set, MUST take precedence and be shown read-only; otherwise the stored redirect URL MUST be used. Otherwise the page MUST show the current Horae address followed by the Harvest callback path, read-only and copyable, and MUST save that value with the client.
 - **FR-006**: The client the importer uses (connect, callback, token refresh, queued and running imports) MUST be resolved when it is needed, so saving, replacing or removing it takes effect without a restart.
 - **FR-007**: The client secret MUST be stored only in sealed form, with the same authenticated encryption and deployment key that protect the stored Harvest tokens. The key MUST NOT be stored by the system.
 - **FR-008**: The client secret MUST NOT be returned by any response, rendered on any page, or written to logs. Responses MUST show only whether a secret is set.
 - **FR-009**: When the encryption key is not configured, the system MUST refuse to store a client and the page MUST explain which setting the operator must provide.
 - **FR-010**: When the stored secret cannot be opened with the current key, the system MUST treat the API import as not configured and the page MUST ask for the secret again.
-- **FR-011**: Saving a different client ID, or removing the client, MUST disconnect Harvest as the existing Disconnect does: tokens removed; account binding, history, reports and imported data retained. Replacing only the secret or redirect URL MUST keep the connection.
+- **FR-011**: Saving a different client ID, or removing the client, MUST disconnect Harvest as the existing Disconnect does: tokens removed; account binding, history, reports and imported data retained. Replacing only the secret, or saving again with an unchanged client ID, MUST keep the connection.
 - **FR-012**: The page MUST warn before a save or removal that will disconnect Harvest.
 - **FR-013**: Every change MUST be refused, without effect, while a Harvest import for the organization is queued or running.
 - **FR-014**: Every change MUST invalidate Harvest authorizations started before it, so their callbacks cannot store credentials.
@@ -147,4 +147,4 @@ An administrator on a deployment without the encryption key learns why the form 
 - Harvest keeps issued tokens valid when the secret of the same client is rotated, so a secret-only change does not need a reconnect. If Harvest rejects a refresh, the existing reconnect flow applies.
 - The organization's audit trail is the existing audit log; there is no page for it yet, so recording the change there is sufficient.
 - The command-line import commands talk to the running server and are unaffected; they need no client settings of their own.
-- No separate public-URL setting exists; the proposed redirect URL comes from the address the administrator is using, and the administrator confirms it.
+- No separate public-URL setting exists; the shown redirect URL comes from the address the administrator is using. Deployments reached under several addresses can pin it with the existing environment setting.
