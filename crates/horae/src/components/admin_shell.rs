@@ -1,6 +1,9 @@
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 
+use crate::components::session::use_session;
+use crate::models::own_permissions::OwnPermissions;
+use crate::models::user::CurrentUser;
 use crate::pages::timesheet::{Anchor, CalSpan, ViewMode};
 use crate::route::Route;
 use crate::server_fns;
@@ -13,7 +16,7 @@ enum Section {
     Importers,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct WorkspaceAccess {
     people: bool,
     tasks: bool,
@@ -32,6 +35,50 @@ impl WorkspaceAccess {
     }
 }
 
+/// Which workspace sections to offer, from the shared session; `None` until both
+/// halves have loaded and `Err` when access cannot be determined. These are
+/// navigation hints; every reader/command authorizes afresh.
+fn workspace_access(
+    section: Section,
+    own: Option<&Result<Option<OwnPermissions>, ServerFnError>>,
+    me: Option<&Result<CurrentUser, ServerFnError>>,
+) -> Option<Result<WorkspaceAccess, ()>> {
+    let (own, me) = (own?, me?);
+    let Ok(me) = me else {
+        return Some(Err(()));
+    };
+    let legacy_admin = me.is_admin();
+    let own = match own {
+        Ok(Some(own)) if own.catalog_version != PERMISSION_CATALOG_VERSION => Err(()),
+        Ok(own) => Ok(own.as_ref()),
+        Err(_) => Err(()),
+    };
+    // Importers stays reachable for legacy admins when permission state is unavailable.
+    if section == Section::Importers && own.is_err() {
+        return Some(Ok(WorkspaceAccess {
+            people: false,
+            tasks: false,
+            audit: false,
+            importers: legacy_admin,
+        }));
+    }
+    Some(own.map(|own| match own {
+        Some(own) => WorkspaceAccess {
+            people: own.grants.contains(&Permission::PeopleReadAll)
+                || own.grants.contains(&Permission::PeopleReadManaged),
+            tasks: own.grants.contains(&Permission::TaskReadAll),
+            audit: own.is_administrator,
+            importers: legacy_admin,
+        },
+        None => WorkspaceAccess {
+            people: legacy_admin,
+            tasks: false,
+            audit: false,
+            importers: legacy_admin,
+        },
+    }))
+}
+
 /// The admin area shell: a secondary sub-navigation (Workspace / Data) beside the
 /// active admin panel, rendered through an `Outlet`. Layered inside `AppLayout`,
 /// so the main rail stays put and this owns only the content panel (per the
@@ -48,60 +95,25 @@ pub fn AdminShell() -> Element {
         Route::PermissionAudit {} => Section::Audit,
         _ => Section::Importers,
     };
-    let mut me = use_resource(use_reactive!(|section| async move {
-        let access: Result<WorkspaceAccess, ServerFnError> = async {
-            let own = server_fns::get_my_permissions().await.and_then(|own| {
-                if own
-                    .as_ref()
-                    .is_some_and(|own| own.catalog_version != PERMISSION_CATALOG_VERSION)
-                {
-                    Err(ServerFnError::new("Unsupported permission catalog"))
-                } else {
-                    Ok(own)
-                }
-            });
-            let legacy_admin = server_fns::get_me().await?.is_admin();
-            if section == Section::Importers && own.is_err() {
-                return Ok(WorkspaceAccess {
-                    people: false,
-                    tasks: false,
-                    audit: false,
-                    importers: legacy_admin,
-                });
-            }
-            // These are navigation hints; every reader/command authorizes afresh.
-            Ok(match own? {
-                Some(own) => WorkspaceAccess {
-                    people: own.grants.contains(&Permission::PeopleReadAll)
-                        || own.grants.contains(&Permission::PeopleReadManaged),
-                    tasks: own.grants.contains(&Permission::TaskReadAll),
-                    audit: own.is_administrator,
-                    importers: legacy_admin,
-                },
-                None => WorkspaceAccess {
-                    people: legacy_admin,
-                    tasks: false,
-                    audit: false,
-                    importers: legacy_admin,
-                },
-            })
+    let session = use_session();
+    // Mount the workspace and its outlet once the session has loaded. A refresh
+    // keeps a resolved answer until the new one arrives, so switching sections
+    // or re-reading permissions never unmounts the open panel; server functions
+    // still independently enforce access to every operation. A retry after a
+    // failure shows as pending rather than repeating the old error.
+    let refreshing = session.me.state()() != UseResourceState::Ready
+        || session.permissions.state()() != UseResourceState::Ready;
+    let access = workspace_access(
+        section,
+        session.permissions.read().as_ref(),
+        session.me.read().as_ref(),
+    )
+    .filter(|access| access.is_ok() || !refreshing);
+    match access {
+        Some(Ok(access)) if access.allows(section) => {
+            rsx! { AdminWorkspace { access } }
         }
-        .await;
-        (section, access)
-    }));
-
-    // Mount the workspace and its outlet only after authorization resolves.
-    // Server functions still independently enforce access to every operation.
-    let response = me.read();
-    let current = response
-        .as_ref()
-        .filter(|(requested, _)| *requested == section)
-        .map(|(_, result)| result);
-    match (current, me.state()() == UseResourceState::Ready) {
-        (Some(Ok(access)), true) if access.allows(section) => {
-            rsx! { AdminWorkspace { access: *access } }
-        }
-        (Some(Ok(_)), true) => rsx! {
+        Some(Ok(_)) => rsx! {
             div { class: "card flex flex-col items-start gap-3 max-w-md",
                 h1 { class: "page-title", "Access unavailable" }
                 p { class: "text-secondary", "Your account cannot view this workspace section." }
@@ -111,9 +123,9 @@ pub fn AdminShell() -> Element {
                     "Back to Timesheet"
                 }
             }
-            if section == Section::People { crate::pages::admin::PermissionRecovery { on_saved: move |_| me.restart() } }
+            if section == Section::People { crate::pages::admin::PermissionRecovery { on_saved: move |_| session.refresh() } }
         },
-        (Some(Err(_)), true) => rsx! {
+        Some(Err(())) => rsx! {
             div { class: "card flex flex-col items-start gap-3 max-w-md",
                 div { class: "alert alert-danger", role: "alert",
                     "Could not verify workspace access. Sign in again or retry."
@@ -121,13 +133,13 @@ pub fn AdminShell() -> Element {
                 button {
                     class: "btn btn-secondary",
                     r#type: "button",
-                    onclick: move |_| me.restart(),
+                    onclick: move |_| session.refresh(),
                     "Retry"
                 }
             }
-            if section == Section::People { crate::pages::admin::PermissionRecovery { on_saved: move |_| me.restart() } }
+            if section == Section::People { crate::pages::admin::PermissionRecovery { on_saved: move |_| session.refresh() } }
         },
-        _ => rsx! {
+        None => rsx! {
             div { class: "text-muted text-sm", role: "status", "Loading…" }
         },
     }
@@ -197,5 +209,111 @@ fn AdmLink(to: Route, label: String) -> Element {
     let active = crate::route::route_is_active(&to);
     rsx! {
         Link { to, class: if active { "adm-link active" } else { "adm-link" }, "{label}" }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use horae_core::types::OrgRole;
+    use uuid::Uuid;
+
+    use super::*;
+
+    fn user(org_role: OrgRole) -> Result<CurrentUser, ServerFnError> {
+        Ok(CurrentUser {
+            id: Uuid::nil(),
+            org_id: Uuid::nil(),
+            email: "a@example.com".into(),
+            name: "A".into(),
+            org_role,
+        })
+    }
+
+    fn canonical(
+        grants: Vec<Permission>,
+        is_administrator: bool,
+        catalog_version: u32,
+    ) -> Result<Option<OwnPermissions>, ServerFnError> {
+        Ok(Some(OwnPermissions {
+            catalog_version,
+            grants,
+            is_administrator,
+            access_revision: 1,
+            person_revision: 1,
+            managed_person_ids: Vec::new(),
+            managed_project_ids: Vec::new(),
+        }))
+    }
+
+    fn access(people: bool, tasks: bool, audit: bool, importers: bool) -> WorkspaceAccess {
+        WorkspaceAccess {
+            people,
+            tasks,
+            audit,
+            importers,
+        }
+    }
+
+    #[test]
+    fn waits_for_both_halves_of_the_session() {
+        let admin = user(OrgRole::Admin);
+        let own = Ok(None);
+        assert_eq!(workspace_access(Section::People, None, Some(&admin)), None);
+        assert_eq!(workspace_access(Section::People, Some(&own), None), None);
+    }
+
+    #[test]
+    fn policy_zero_follows_the_legacy_role() {
+        let own = Ok(None);
+        let admin = user(OrgRole::Admin);
+        let manager = user(OrgRole::Manager);
+        assert_eq!(
+            workspace_access(Section::People, Some(&own), Some(&admin)),
+            Some(Ok(access(true, false, false, true)))
+        );
+        assert_eq!(
+            workspace_access(Section::People, Some(&own), Some(&manager)),
+            Some(Ok(access(false, false, false, false)))
+        );
+    }
+
+    #[test]
+    fn canonical_grants_choose_the_sections() {
+        let member = user(OrgRole::Member);
+        let own = canonical(
+            vec![Permission::PeopleReadManaged, Permission::TaskReadAll],
+            true,
+            PERMISSION_CATALOG_VERSION,
+        );
+        assert_eq!(
+            workspace_access(Section::Tasks, Some(&own), Some(&member)),
+            Some(Ok(access(true, true, true, false)))
+        );
+    }
+
+    #[test]
+    fn unknown_or_failed_state_fails_closed_except_importers_for_admins() {
+        let admin = user(OrgRole::Admin);
+        let newer = canonical(
+            vec![Permission::PeopleReadAll],
+            true,
+            PERMISSION_CATALOG_VERSION + 1,
+        );
+        let failed = Err(ServerFnError::new("unavailable"));
+        for own in [&newer, &failed] {
+            assert_eq!(
+                workspace_access(Section::People, Some(own), Some(&admin)),
+                Some(Err(()))
+            );
+            assert_eq!(
+                workspace_access(Section::Importers, Some(own), Some(&admin)),
+                Some(Ok(access(false, false, false, true)))
+            );
+        }
+        let no_identity = Err(ServerFnError::new("unauthorized"));
+        assert_eq!(
+            workspace_access(Section::Importers, Some(&Ok(None)), Some(&no_identity)),
+            Some(Err(()))
+        );
     }
 }

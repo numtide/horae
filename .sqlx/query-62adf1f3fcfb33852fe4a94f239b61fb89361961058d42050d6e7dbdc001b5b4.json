@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO projects (id, org_id, client_id, name, currency, rate_cents)\n         VALUES ($1, $2, $3, $4, 'EUR', 12345)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "62adf1f3fcfb33852fe4a94f239b61fb89361961058d42050d6e7dbdc001b5b4"
+}

@@ -11,6 +11,7 @@ use std::rc::Rc;
 use dioxus::core::Mutation;
 use dioxus::history::MemoryHistory;
 use dioxus::prelude::*;
+use dioxus::router::Navigator;
 use dioxus::router::components::HistoryProvider;
 use dioxus_html::SerializedHtmlEventConverter;
 use futures_util::FutureExt;
@@ -20,6 +21,18 @@ use tokio::sync::oneshot;
 
 #[path = "../src/components/admin_shell.rs"]
 mod admin_shell;
+#[path = "../src/models/own_permissions.rs"]
+pub mod own_permissions_model;
+#[path = "../src/components/session.rs"]
+pub mod session;
+#[path = "../src/models/user.rs"]
+pub mod user_model;
+mod components {
+    pub use super::session;
+}
+mod models {
+    pub use super::{own_permissions_model as own_permissions, user_model as user};
+}
 
 type AuthResponse = Result<User, ServerFnError>;
 
@@ -42,7 +55,10 @@ struct Probe {
     own_error: bool,
     future_catalog: bool,
     canonical_requests: Rc<Cell<usize>>,
+    me_requests: Rc<Cell<usize>>,
     canonical: Option<(bool, Vec<Permission>)>,
+    /// The People panel's router and scope, and the shared session it sees.
+    panel: Rc<Cell<Option<(Navigator, ScopeId, session::Session)>>>,
 }
 
 impl Probe {
@@ -64,6 +80,8 @@ fn app(probe: Probe) -> Element {
         "/admin/users"
     };
     use_context_provider(|| probe);
+    // AppLayout provides the session above every admin route.
+    session::use_session_provider();
     rsx! {
         HistoryProvider {
             history: move |_| Rc::new(MemoryHistory::with_initial_path(path)) as Rc<dyn History>,
@@ -236,11 +254,33 @@ async fn retry_waits_for_fresh_authorization_then_recovers() {
 
 mod server_fns {
     use super::*;
+    use own_permissions_model::OwnPermissions;
+    use user_model::CurrentUser;
 
-    pub struct OwnPermissions {
-        pub catalog_version: u32,
-        pub is_administrator: bool,
-        pub grants: Vec<Permission>,
+    fn own(
+        catalog_version: u32,
+        is_administrator: bool,
+        grants: Vec<Permission>,
+    ) -> OwnPermissions {
+        OwnPermissions {
+            catalog_version,
+            grants,
+            is_administrator,
+            access_revision: 1,
+            person_revision: 1,
+            managed_person_ids: Vec::new(),
+            managed_project_ids: Vec::new(),
+        }
+    }
+
+    fn current(User(org_role): User) -> CurrentUser {
+        CurrentUser {
+            id: uuid::Uuid::nil(),
+            org_id: uuid::Uuid::nil(),
+            email: "admin@example.test".into(),
+            name: "Admin".into(),
+            org_role,
+        }
     }
 
     pub async fn get_my_permissions() -> Result<Option<OwnPermissions>, ServerFnError> {
@@ -252,12 +292,12 @@ mod server_fns {
             return Err(ServerFnError::new("private projection error"));
         }
         if let Some((is_administrator, grants)) = probe.canonical.clone() {
-            return Ok(Some(OwnPermissions {
-                catalog_version: horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION
+            return Ok(Some(own(
+                horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION
                     + u32::from(probe.future_catalog),
                 is_administrator,
                 grants,
-            }));
+            )));
         }
         if !probe.audit {
             return Ok(None);
@@ -271,24 +311,29 @@ mod server_fns {
             .await
             .expect("resolve canonical authorization")
             .map(|user| {
-                Some(OwnPermissions {
-                    catalog_version: horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION,
-                    is_administrator: user.is_admin(),
-                    grants: vec![],
-                })
+                Some(own(
+                    horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION,
+                    user.is_admin(),
+                    vec![],
+                ))
             })
     }
 
-    pub async fn get_me() -> AuthResponse {
-        if consume_context::<Probe>().audit {
-            return Ok(User(OrgRole::Member));
+    pub async fn get_me() -> Result<CurrentUser, ServerFnError> {
+        let probe = consume_context::<Probe>();
+        probe.me_requests.set(probe.me_requests.get() + 1);
+        if probe.audit {
+            return Ok(current(User(OrgRole::Member)));
         }
-        let response = consume_context::<Probe>()
+        let response = probe
             .responses
             .borrow_mut()
             .pop_front()
             .expect("unexpected auth request");
-        response.await.expect("test must resolve the auth request")
+        response
+            .await
+            .expect("test must resolve the auth request")
+            .map(current)
     }
 
     pub async fn get_org_name() -> Result<String, ServerFnError> {
@@ -372,6 +417,11 @@ mod route {
         use_hook(|| {
             let probe = consume_context::<Probe>();
             probe.panel_mounts.set(probe.panel_mounts.get() + 1);
+            probe.panel.set(Some((
+                navigator(),
+                dioxus::core::current_scope_id(),
+                consume_context::<super::session::Session>(),
+            )));
         });
         rsx! { "Administrative panel" }
     }
@@ -388,6 +438,13 @@ mod route {
 
     #[component]
     fn TaskCatalog() -> Element {
+        use_hook(|| {
+            consume_context::<Probe>().panel.set(Some((
+                navigator(),
+                dioxus::core::current_scope_id(),
+                consume_context::<super::session::Session>(),
+            )));
+        });
         rsx! { "Task catalog panel" }
     }
 }
@@ -554,4 +611,69 @@ async fn failed_or_future_people_projection_keeps_only_recovery() {
         assert!(html.contains("Recovery available"));
         assert!(!html.contains("private projection error"));
     }
+}
+
+fn people_and_tasks_admin() -> (Probe, VirtualDom) {
+    let probe = Probe {
+        canonical: Some((
+            true,
+            vec![Permission::PeopleReadAll, Permission::TaskReadAll],
+        )),
+        ..Probe::default()
+    };
+    let reply = probe.request();
+    let mut dom = start(&probe);
+    reply
+        .send(Ok(User(OrgRole::Admin)))
+        .unwrap_or_else(|_| panic!("identity request dropped"));
+    settle(&mut dom);
+    assert!(dioxus::ssr::render(&dom).contains("Administrative panel"));
+    (probe, dom)
+}
+
+#[tokio::test]
+async fn switching_sections_keeps_the_workspace_and_reads_the_session_once() {
+    let (probe, mut dom) = people_and_tasks_admin();
+    for (to, panel) in [
+        (route::Route::TaskCatalog {}, "Task catalog panel"),
+        (route::Route::AdminUsers {}, "Administrative panel"),
+    ] {
+        // Navigate from whichever panel is open; the previous one has unmounted.
+        let (navigator, scope, _) = probe.panel.get().expect("a panel is mounted");
+        dom.in_scope(scope, || {
+            navigator.push(to);
+        });
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(html.contains(panel), "{panel}: {html}");
+        assert!(html.contains("Test workspace"), "{panel}: {html}");
+        assert!(!html.contains("Loading"), "{html}");
+    }
+    assert_eq!(probe.me_requests.get(), 1);
+    assert_eq!(probe.canonical_requests.get(), 1);
+    // The workspace header stayed mounted across both section changes.
+    assert_eq!(probe.org_requests.get(), 1);
+}
+
+#[tokio::test]
+async fn a_session_refresh_keeps_the_open_panel_until_the_answer_arrives() {
+    let (probe, mut dom) = people_and_tasks_admin();
+    let (_, scope, session) = probe.panel.get().expect("the People panel mounted");
+    let reply = probe.request();
+    dom.in_scope(scope, || session.refresh());
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Administrative panel"), "{html}");
+    assert!(html.contains("Test workspace"), "{html}");
+    reply
+        .send(Ok(User(OrgRole::Admin)))
+        .unwrap_or_else(|_| panic!("refresh request dropped"));
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Administrative panel"), "{html}");
+    assert!(html.contains("Test workspace"), "{html}");
+    assert_eq!(probe.me_requests.get(), 2);
+    assert_eq!(probe.canonical_requests.get(), 2);
+    assert_eq!(probe.panel_mounts.get(), 1);
+    assert_eq!(probe.org_requests.get(), 1);
 }

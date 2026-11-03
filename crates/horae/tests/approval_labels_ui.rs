@@ -24,12 +24,19 @@ pub mod avatar;
 pub mod badge;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
+#[path = "../src/models/own_permissions.rs"]
+pub mod own_permissions_model;
+#[path = "../src/components/session.rs"]
+pub mod session;
 #[path = "../src/components/table.rs"]
 pub mod table;
 #[path = "../src/models/user.rs"]
 pub mod user_model;
 mod components {
-    pub use super::{avatar, badge, controls, table};
+    pub use super::{avatar, badge, controls, session, table};
+}
+mod models {
+    pub use super::{own_permissions_model as own_permissions, user_model as user};
 }
 #[path = "../src/pages/approvals.rs"]
 mod approvals;
@@ -50,6 +57,8 @@ mod route {
 struct Probe {
     rows: Vec<approval_model::ApprovalSummary>,
     manager: bool,
+    /// The session user never resolves.
+    me_pending: bool,
     pending: bool,
     error: Option<String>,
     /// The `?week=` the page is opened with.
@@ -87,6 +96,8 @@ fn loaded<T>(
 fn app(probe: Probe) -> Element {
     let path = format!("/approvals?week={}", probe.week);
     use_context_provider(|| probe);
+    // AppLayout provides the session above every page.
+    session::use_session_provider();
     rsx! {
         HistoryProvider {
             history: move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
@@ -452,6 +463,22 @@ async fn no_list_is_requested_without_manager_access_or_a_week_start() {
     assert!(unconfigured.requests.borrow().is_empty());
 }
 
+#[tokio::test]
+async fn a_pending_session_user_shows_loading_not_a_denial() {
+    let probe = Probe {
+        me_pending: true,
+        ..manager(vec![row("A")])
+    };
+    let (dom, _) = render(&probe);
+    let html = html(&dom);
+    assert!(html.contains("Loading"), "{html}");
+    assert!(
+        !html.contains("Manager or admin access is required"),
+        "{html}"
+    );
+    assert!(probe.requests.borrow().is_empty());
+}
+
 // T-U9
 #[tokio::test]
 async fn bulk_approval_reports_the_servers_count_for_its_week_only() {
@@ -471,8 +498,16 @@ async fn bulk_approval_reports_the_servers_count_for_its_week_only() {
 pub mod server_fns {
     use super::*;
 
+    pub async fn get_my_permissions()
+    -> Result<Option<own_permissions_model::OwnPermissions>, ServerFnError> {
+        Ok(None)
+    }
+
     pub async fn get_me() -> Result<user_model::CurrentUser, ServerFnError> {
         let probe = use_context::<Probe>();
+        if probe.me_pending {
+            std::future::pending::<()>().await;
+        }
         Ok(user_model::CurrentUser {
             id: Uuid::now_v7(),
             org_id: Uuid::now_v7(),

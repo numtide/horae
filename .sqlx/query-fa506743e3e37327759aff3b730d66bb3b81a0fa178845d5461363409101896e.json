@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT set_config(name, value, true)\n         FROM (\n           SELECT limits.name,\n             (CASE WHEN current.milliseconds = 0 THEN limits.milliseconds\n              ELSE LEAST(current.milliseconds, limits.milliseconds) END)::text AS value\n           FROM (VALUES ('statement_timeout', 5000::bigint),\n                        ('idle_in_transaction_session_timeout', 10000::bigint))\n                AS limits(name, milliseconds)\n           CROSS JOIN LATERAL (SELECT (extract(epoch FROM current_setting(limits.name)::interval)\n                                       * 1000)::bigint AS milliseconds) current\n           UNION ALL\n           SELECT 'synchronous_commit', 'off' WHERE $1\n         ) settings",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "set_config",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "fa506743e3e37327759aff3b730d66bb3b81a0fa178845d5461363409101896e"
+}
