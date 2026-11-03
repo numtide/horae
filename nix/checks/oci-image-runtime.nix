@@ -89,11 +89,21 @@ pkgs.testers.nixosTest {
             served = machine.succeed(f"curl -fsS http://127.0.0.1:3000/assets/{asset} | sha256sum").split()[0]
             bundled = machine.succeed(f"sha256sum {public}/{asset}").split()[0]
             assert served == bundled, f"Asset {asset} served differently"
+        wasm = next(a for a in assets if a.endswith(".wasm"))
         wasm_type = machine.succeed(
             "curl -fsS -o /dev/null -w '%{content_type}' "
-            f"http://127.0.0.1:3000/assets/{next(a for a in assets if a.endswith('.wasm'))}"
+            f"http://127.0.0.1:3000/assets/{wasm}"
         )
         assert wasm_type == "application/wasm", f"WASM content type: {wasm_type}"
+
+        # Browsers get the build-time brotli file, marked as varying by
+        # encoding so a shared cache never hands it to a client without br.
+        headers = machine.succeed(
+            "curl -fsS -o /dev/null -D - -H 'Accept-Encoding: br' "
+            f"http://127.0.0.1:3000/assets/{wasm}"
+        ).lower()
+        assert "content-encoding: br" in headers, f"WASM not sent as brotli: {headers}"
+        assert "vary: accept-encoding" in headers, f"Brotli WASM lacks Vary: {headers}"
         machine.succeed(f"podman image unmount {image}")
 
         # No authentication bypass: the dev login form is absent, and posting
