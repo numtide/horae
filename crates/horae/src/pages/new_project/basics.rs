@@ -41,7 +41,7 @@ pub(super) fn Basics(
     let clients = use_resource(move || {
         let query = client_query();
         // Subscribes to the defaults only while they are shown, so an inline create appears.
-        let unfiltered = query.is_empty().then(|| defaults());
+        let unfiltered = query.is_empty().then(|| defaults.cloned());
         async move {
             if let Some(unfiltered) = unfiltered {
                 return Ok(unfiltered);
