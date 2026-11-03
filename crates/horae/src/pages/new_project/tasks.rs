@@ -8,6 +8,7 @@ use horae_core::types::ProjectType;
 use uuid::Uuid;
 
 use crate::components::controls::Checkbox;
+use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::Input;
 use crate::components::icons::NavIcon;
 use crate::components::modal::Modal;
@@ -33,21 +34,31 @@ pub(super) fn Tasks(
     let mut query = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
     let mut editing_access = use_signal(|| None::<Uuid>);
+    // Enter pressed before the search for the typed name finished.
+    let mut queued_enter = use_signal(|| false);
+    let searched = use_debounced(query, SEARCH_DEBOUNCE);
     let mut results = use_resource(move || {
-        let query = query();
+        let query = searched();
         async move {
             let mut search = CreationSearch::default();
-            search.tasks.query = query;
-            super::catalog::options(editor_context, search).await
+            search.tasks.query = query.clone();
+            (query, super::catalog::options(editor_context, search).await)
         }
     });
-    let pending = results.state()() != UseResourceState::Ready;
-    let search_ready = !pending && matches!(&*results.read(), Some(Ok(_)));
+    // Results for an earlier query cannot decide whether a typed name exists. The
+    // search restarts only after the debounced query catches up, so the results
+    // carry the query they answer.
+    let current = move || {
+        results.state()() == UseResourceState::Ready
+            && matches!(&*results.read(), Some((searched, _)) if *searched == *query.read())
+    };
+    let pending = !current();
+    let search_ready = !pending && matches!(&*results.read(), Some((_, Ok(_))));
     let choices = results
         .read()
         .as_ref()
         .filter(|_| !pending)
-        .and_then(|result| result.as_ref().ok())
+        .and_then(|(_, result)| result.as_ref().ok())
         .map(|result| result.tasks.clone())
         .unwrap_or_default();
     let add = use_callback(move |source: TaskSource| {
@@ -81,8 +92,11 @@ pub(super) fn Tasks(
         query.set(String::new());
     });
     let add_named = use_callback(move |_| {
-        if results.state()() != UseResourceState::Ready || !matches!(&*results.read(), Some(Ok(_)))
-        {
+        if !current() {
+            queued_enter.set(true);
+            return;
+        }
+        if !matches!(&*results.read(), Some((_, Ok(_)))) {
             return;
         }
         let name = query.read().trim().to_string();
@@ -93,7 +107,7 @@ pub(super) fn Tasks(
         let existing = results
             .read()
             .as_ref()
-            .and_then(|result| result.as_ref().ok())
+            .and_then(|(_, result)| result.as_ref().ok())
             .and_then(|result| {
                 result
                     .tasks
@@ -109,6 +123,12 @@ pub(super) fn Tasks(
             add.call(TaskSource::Existing { task_id: id });
         } else {
             add.call(TaskSource::New { name });
+        }
+    });
+    use_effect(move || {
+        if queued_enter() && current() {
+            queued_enter.set(false);
+            add_named.call(());
         }
     });
     let billable_project = form.read().project_type != ProjectType::NonBillable;
@@ -143,7 +163,7 @@ pub(super) fn Tasks(
                 div { class: "flex flex-wrap items-center gap-3", aria_busy: pending,
                     div { class: "input-group flex-1 basis-assignment-picker min-w-0 h-10 px-3 gap-2",
                         span { class: "flex items-center text-label", aria_hidden: "true", "+" }
-                        input { class: "input-group-field p-0", id: "np-task-search", aria_label: "Find or create a task", value: query(), placeholder: "Add a task and press Enter", oninput: move |event| query.set(event.value()), onkeydown: move |event| { if event.key() == Key::Enter { event.prevent_default(); add_named.call(()); } } }
+                        input { class: "input-group-field p-0", id: "np-task-search", aria_label: "Find or create a task", value: query(), placeholder: "Add a task and press Enter", oninput: move |event| { queued_enter.set(false); query.set(event.value()); }, onkeydown: move |event| { if event.key() == Key::Enter { event.prevent_default(); add_named.call(()); } } }
                     }
                     button { r#type: "button", class: "btn btn-secondary", disabled: !search_ready || query.read().trim().is_empty(), onclick: move |_| {
                         add_named.call(());
@@ -167,12 +187,12 @@ pub(super) fn Tasks(
                     p { class: "text-sm text-subtle m-0", role: "status", "Searching tasks…" }
                 } else {
                     match &*results.read() {
-                        Some(Err(problem)) => rsx! {
+                        Some((_, Err(problem))) => rsx! {
                             p { class: "text-sm text-danger", role: "alert", "Could not search tasks: {problem}" }
                             button { r#type: "button", class: "btn btn-secondary btn-sm", onclick: move |_| results.restart(), "Retry task search" }
                         },
-                        Some(Ok(result)) if result.tasks.is_empty() && !query.read().trim().is_empty() => rsx! { p { class: "text-sm text-subtle m-0", role: "status", "No matching tasks. Add this name as a new task." } },
-                        Some(Ok(result)) if result.more_tasks => rsx! { p { class: "form-hint", "Showing 50 matches. Refine the name to find another task." } },
+                        Some((_, Ok(result))) if result.tasks.is_empty() && !query.read().trim().is_empty() => rsx! { p { class: "text-sm text-subtle m-0", role: "status", "No matching tasks. Add this name as a new task." } },
+                        Some((_, Ok(result))) if result.more_tasks => rsx! { p { class: "form-hint", "Showing 50 matches. Refine the name to find another task." } },
                         _ => rsx! {},
                     }
                 }
