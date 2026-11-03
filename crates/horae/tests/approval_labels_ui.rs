@@ -65,6 +65,8 @@ struct Probe {
     week: String,
     sunday: bool,
     week_start_error: Option<String>,
+    /// Only the first week-start read fails.
+    week_start_fails_once: bool,
     /// Weeks whose list request never completes.
     pending_weeks: Vec<String>,
     /// Approve actions never complete.
@@ -72,6 +74,7 @@ struct Probe {
     /// Overrides the count returned by bulk approval.
     approved: Option<usize>,
     directory_reads: Rc<Cell<usize>>,
+    week_start_reads: Rc<Cell<usize>>,
     requests: Rc<RefCell<Vec<String>>>,
     actions: Rc<RefCell<Vec<Vec<String>>>>,
     /// The page's router and scope, captured on its first list request.
@@ -219,6 +222,79 @@ async fn approval_names_render_from_rows_without_directory_and_escape_markup() {
     assert!(!html.contains(&probe.rows[0].approval.user_id.to_string()));
     assert!(html.contains("1:30"));
     assert!(probe.actions.borrow().is_empty());
+}
+
+/// The page under a session that outlives it, as AppLayout's does across navigations.
+fn remountable(probe: Probe) -> Element {
+    let path = format!("/approvals?week={}", probe.week);
+    use_context_provider(|| probe);
+    session::use_session_provider();
+    let shown = use_context_provider(|| Signal::new(true));
+    rsx! {
+        if shown() {
+            HistoryProvider {
+                history: move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
+                Router::<route::Route> {}
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn returning_to_approvals_reuses_the_session_week_start() {
+    let probe = manager(vec![row("Ada")]);
+    let mut dom = VirtualDom::new_with_props(remountable, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let mut shown = dom.in_scope(ScopeId::APP, consume_context::<Signal<bool>>);
+    for visible in [false, true] {
+        dom.in_scope(ScopeId::APP, || shown.set(visible));
+        settle(&mut dom);
+    }
+    assert!(html(&dom).contains("Ada"));
+    assert_eq!(probe.week_start_reads.get(), 1);
+}
+
+#[tokio::test]
+async fn a_failed_week_start_is_retried_when_approvals_is_opened_again() {
+    let probe = Probe {
+        week_start_fails_once: true,
+        ..manager(vec![row("Ada")])
+    };
+    let mut dom = VirtualDom::new_with_props(remountable, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    assert!(html(&dom).contains("Week start blip"));
+
+    let mut shown = dom.in_scope(ScopeId::APP, consume_context::<Signal<bool>>);
+    for visible in [false, true] {
+        dom.in_scope(ScopeId::APP, || shown.set(visible));
+        settle(&mut dom);
+    }
+    let html = html(&dom);
+    assert!(
+        html.contains("Ada") && !html.contains("Week start blip"),
+        "{html}"
+    );
+    assert_eq!(probe.week_start_reads.get(), 2);
+}
+
+#[tokio::test]
+async fn a_session_refresh_retries_a_failed_week_start_only() {
+    let probe = Probe {
+        week_start_fails_once: true,
+        ..manager(vec![row("Ada")])
+    };
+    let mut dom = VirtualDom::new_with_props(remountable, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let session = dom.in_scope(ScopeId::APP, consume_context::<session::Session>);
+    for _ in 0..2 {
+        dom.in_scope(ScopeId::APP, || session.refresh());
+        settle(&mut dom);
+    }
+    assert!(html(&dom).contains("Ada"));
+    assert_eq!(probe.week_start_reads.get(), 2);
 }
 
 #[tokio::test]
@@ -523,6 +599,10 @@ pub mod server_fns {
 
     pub async fn get_week_start() -> Result<Weekday, ServerFnError> {
         let probe = use_context::<Probe>();
+        probe.week_start_reads.set(probe.week_start_reads.get() + 1);
+        if probe.week_start_fails_once && probe.week_start_reads.get() == 1 {
+            return Err(ServerFnError::new("Week start blip"));
+        }
         match probe.week_start_error {
             Some(error) => Err(ServerFnError::new(error)),
             None if probe.sunday => Ok(Weekday::Sun),

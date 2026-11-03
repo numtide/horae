@@ -87,6 +87,7 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
     let Session {
         me,
         permissions: own,
+        ..
     } = session;
     let mut open = use_signal(|| false);
 

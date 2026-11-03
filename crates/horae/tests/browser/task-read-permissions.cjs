@@ -36,9 +36,11 @@ assert.equal(sql(`SELECT count(*) FROM time_entries WHERE user_id='${actor.id}' 
   const openPicker = async () => {
     const response = identities();
     await page.locator('.sidebar-timer-wrap').getByRole('button', { name: 'Start timer', exact: true }).click();
-    rateFree(await (await response).json());
+    const rows = await (await response).json();
+    rateFree(rows);
     await popover.getByRole('combobox', { name: 'Project', exact: true }).selectOption(project);
     await expect(popover.getByRole('combobox', { name: 'Task', exact: true }).locator('option')).toHaveText(['Select task…', 'Enabled scoped task']);
+    return rows;
   };
   try {
     sql(`BEGIN;
@@ -86,15 +88,13 @@ assert.equal(sql(`SELECT count(*) FROM time_entries WHERE user_id='${actor.id}' 
     sql(`BEGIN; UPDATE organizations SET access_revision=access_revision+1 WHERE id='${org}';
       UPDATE person_permission_states SET grants=${array([...floor, 'task_read_all', 'billable_rate_read_managed', 'billable_rate_read_all'])}, revision=revision+1
         WHERE user_id='${actor.id}' AND org_id='${org}'; COMMIT;`);
-    const expanded = identities();
-    await page.reload();
-    const catalogIdentities = await (await expanded).json();
-    assert.ok(catalogIdentities.some(row => row.id === unlinked));
-    rateFree(catalogIdentities);
+    // An idle rail reads the catalog only when the picker opens, so wait for
+    // hydration rather than for that read before clicking.
+    await page.reload({ waitUntil: 'networkidle' });
+    assert.ok((await openPicker()).some(row => row.id === unlinked));
     const catalog = await context.request.get(`${base}/harvest/v2/tasks/${unlinked}`);
     assert.equal(catalog.status(), 200);
     assert.equal((await catalog.json()).default_hourly_rate, 678.9);
-    await openPicker();
     await expect(page.locator('.sidebar-resize')).toHaveCSS('pointer-events', 'none');
     await popover.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(popover).toHaveCount(0);
