@@ -15,6 +15,7 @@
 //! Everything here is free of I/O dependencies; the HTTP pull, OAuth, credential
 //! encryption, and database writes live in the server crate.
 
+pub mod client;
 pub mod convert;
 pub mod keys;
 pub mod types;

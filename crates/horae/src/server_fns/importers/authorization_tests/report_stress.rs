@@ -36,7 +36,7 @@ async fn large_report_streams_over_http_without_buffering_the_archive(pool: PgPo
         pool.clone(),
         Arc::new(crate::plugin::PluginRegistry::empty()),
         None,
-        None,
+        Default::default(),
         Default::default(),
         None,
     )

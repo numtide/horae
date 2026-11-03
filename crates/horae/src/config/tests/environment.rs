@@ -148,7 +148,9 @@ fn environment_probe() {
             assert!(!config.dev_login);
             assert_eq!(config.secure_cookies, mode == "secure");
             assert!(config.oidc.is_none());
-            assert!(config.harvest.is_none());
+            assert!(config.harvest.client.is_none());
+            assert!(config.harvest.redirect_url.is_none());
+            assert!(config.harvest.encryption_key_hex.is_none());
             assert!(config.plugin_database_url.is_none());
             assert!(config.mail.is_none());
         }
@@ -168,17 +170,21 @@ fn environment_probe() {
             );
             assert!(oidc.additional_audiences.is_empty());
             assert_eq!(oidc.button_label, DEFAULT_OIDC_BUTTON_LABEL);
-            let harvest = config
-                .harvest
+            let harvest = &config.harvest;
+            let client = harvest
+                .client
                 .as_ref()
-                .expect("example supplies all four Harvest settings");
-            assert_eq!(harvest.client_id, "test-client");
-            assert_eq!(harvest.client_secret, "test-secret");
+                .expect("example supplies the Harvest client");
+            assert_eq!(client.client_id, "test-client");
+            assert_eq!(client.client_secret, "test-secret");
             assert_eq!(
-                harvest.redirect_url,
-                "https://horae.example.test/auth/harvest/callback"
+                harvest.redirect_url.as_deref(),
+                Some("https://horae.example.test/auth/harvest/callback")
             );
-            assert_eq!(harvest.encryption_key_hex.len(), 64);
+            assert_eq!(
+                harvest.encryption_key_hex.as_ref().map(String::len),
+                Some(64)
+            );
         }
         "job-policy" => {
             let requested: i32 = std::env::var("HORAE_JOB_MAX_ATTEMPTS")

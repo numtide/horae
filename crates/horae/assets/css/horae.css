@@ -1102,6 +1102,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   border: 1px solid transparent;
 }
 .alert-danger  { background: var(--color-danger-bg);  color: var(--color-danger-fg);  border-color: var(--color-danger-line); }
+.alert-warning { background: var(--color-warning-bg); color: var(--color-warning-fg); border-color: var(--color-warning-line); }
 
 /* Buttons — extra shapes */
 /* `.btn` also rides on links, which the element-level rules above don't reach. */

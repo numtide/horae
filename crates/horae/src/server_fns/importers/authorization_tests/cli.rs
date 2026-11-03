@@ -171,7 +171,14 @@ pub(super) async fn exercise(
             owner.org_id,
             Uuid::parse_str(id).unwrap(),
             format!("{}@test.com", owner.user_id),
-            state.harvest.as_ref().unwrap(),
+            &crate::importers::harvest::client_settings::resolve(
+                pool,
+                &state.harvest,
+                owner.org_id,
+            )
+            .await
+            .unwrap()
+            .unwrap(),
             mode,
         )
         .await;

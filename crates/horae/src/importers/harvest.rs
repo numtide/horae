@@ -11,6 +11,7 @@
 pub mod account_switch;
 pub mod api_source;
 pub mod apply;
+pub mod client_settings;
 pub mod credentials;
 pub mod csv_source;
 pub mod oauth;
@@ -534,10 +535,6 @@ async fn complete_connect(
     attempt: &OAuthAttempt,
 ) -> anyhow::Result<()> {
     let state = crate::state::global_state().await;
-    let cfg = state
-        .harvest
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("Harvest importer is not configured"))?;
 
     // Only an authenticated admin may land a connection on their org.
     let user_id = crate::auth::session::get_session_user_id(session)
@@ -553,6 +550,11 @@ async fn complete_connect(
     if user.role != "admin" || user_id != attempt.user_id || user.org_id != attempt.org_id {
         anyhow::bail!("admin access required to connect Harvest");
     }
+    // A client change after the attempt started bumps the connection revision,
+    // which is checked below and again when the tokens are stored.
+    let cfg = client_settings::resolve(&state.db, &state.harvest, user.org_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Harvest importer is not configured"))?;
     let current = account_switch::status(&state.db, user.org_id, true).await?;
     anyhow::ensure!(
         attempt.version

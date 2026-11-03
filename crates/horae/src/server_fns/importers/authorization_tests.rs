@@ -55,6 +55,24 @@ mod user_directory;
 #[cfg(target_os = "linux")]
 mod report_stress;
 
+// The HTTP matrix runs under an environment client, which refuses every change
+// before the disconnect check, so the unconfirmed refusal is mapped here.
+#[test]
+fn an_unconfirmed_disconnect_is_a_conflict() {
+    let error = map_client_error(
+        crate::importers::harvest::client_settings::ClientError::DisconnectUnconfirmed.into(),
+    );
+    assert!(
+        matches!(
+            &error,
+            ServerFnError::ServerError { code, message, .. }
+                if *code == CONFLICT
+                    && message == horae_core::importers::harvest::client::DISCONNECT_UNCONFIRMED
+        ),
+        "{error:?}"
+    );
+}
+
 #[test]
 fn request_bound_import_endpoints_are_not_registered() {
     let legacy: Vec<_> = ServerFunction::collect()
@@ -142,6 +160,9 @@ impl Api {
                 "list_harvest_import_jobs" => Some("/api/import/harvest/history"),
                 "cancel_harvest_import_job" => Some("/api/import/harvest/cancel"),
                 "retry_harvest_import_job" => Some("/api/import/harvest/retry"),
+                "harvest_client_settings" => Some("/api/import/harvest/client"),
+                "save_harvest_client" => Some("/api/import/harvest/client/save"),
+                "remove_harvest_client" => Some("/api/import/harvest/client/remove"),
                 _ => None,
             };
             let routes = ServerFunction::collect();
@@ -222,12 +243,13 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         pool.clone(),
         Arc::new(crate::plugin::PluginRegistry::empty()),
         None,
-        Some(crate::config::HarvestConfig {
+        crate::config::HarvestConfig {
             client_id: "test".into(),
             client_secret: "test".into(),
             redirect_url: "http://localhost/auth/harvest/callback".into(),
             encryption_key_hex: "11".repeat(32),
-        }),
+        }
+        .into(),
         Default::default(),
         None,
     )
@@ -491,6 +513,12 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             ("list_harvest_import_jobs", json!({"before":null})),
             ("cancel_harvest_import_job", json!({"job_id":target})),
             ("retry_harvest_import_job", json!({"job_id":target})),
+            ("harvest_client_settings", json!({})),
+            (
+                "save_harvest_client",
+                json!({"client_id":"x","client_secret":"y","redirect_url":"http://localhost/auth/harvest/callback","confirm_disconnect":true}),
+            ),
+            ("remove_harvest_client", json!({"confirm_disconnect":true})),
         ] {
             let response = api.call(name, body, cookie, true).await;
             let status = response.status();
@@ -504,6 +532,29 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             .unwrap()
             .is_empty()
     );
+    // The environment client is shown locked, and nothing secret is returned.
+    let client = api.json("harvest_client_settings", json!({}), &admin).await;
+    assert_eq!(client["source"], "Environment");
+    assert_eq!(client["client_id"], "test");
+    assert_eq!(client["secret_set"], true);
+    assert!(client.get("client_secret").is_none(), "{client}");
+    assert!(!client.to_string().contains(&"11".repeat(32)), "{client}");
+    for (name, body) in [
+        (
+            "save_harvest_client",
+            json!({"client_id":"x","client_secret":"y","redirect_url":"http://localhost/auth/harvest/callback","confirm_disconnect":true}),
+        ),
+        ("remove_harvest_client", json!({"confirm_disconnect":true})),
+    ] {
+        let response = api.call(name, body, Some(&admin), false).await;
+        let status = response.status();
+        let text = response.text().await.unwrap();
+        assert_eq!(status, StatusCode::CONFLICT, "{name}: {text}");
+        assert!(
+            text.contains("configured by the environment"),
+            "{name}: {text}"
+        );
+    }
     assert_eq!(
         api.call(
             "start_harvest_api_import",
