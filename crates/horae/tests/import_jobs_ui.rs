@@ -10,6 +10,7 @@ use dioxus::html::{FileData, SerializedFileData, SerializedFormObject};
 use dioxus::prelude::*;
 use dioxus_html::SerializedHtmlEventConverter;
 use futures_util::FutureExt;
+use horae_core::importers::harvest::client::{ClientSettings, ClientSource};
 use horae_core::importers::harvest::types::{
     ConnectionStatus, ImportMode, ImportReport, SourceKind, SyncScope,
 };
@@ -36,6 +37,7 @@ type ChangeResponse = oneshot::Receiver<Result<(), ServerFnError>>;
 type ConnectionResponse = oneshot::Receiver<Result<ConnectionStatus, ServerFnError>>;
 type ConnectResponse = oneshot::Receiver<Result<String, ServerFnError>>;
 type ApiSubmission = (ImportMode, SyncScope, Option<i64>);
+type ClientSave = (String, Option<String>, String);
 
 #[derive(Clone, Default)]
 struct Probe {
@@ -57,6 +59,9 @@ struct Probe {
     csv_submissions: Rc<RefCell<Vec<(ImportMode, String)>>>,
     api_submissions: Rc<RefCell<Vec<ApiSubmission>>>,
     action_responses: Rc<RefCell<VecDeque<oneshot::Receiver<ActionResponse>>>>,
+    client: Rc<RefCell<ClientSettings>>,
+    client_saves: Rc<RefCell<Vec<ClientSave>>>,
+    client_removes: Rc<RefCell<usize>>,
 }
 
 impl Probe {
@@ -137,6 +142,17 @@ impl Ui {
 
     fn html(&self) -> String {
         dioxus::ssr::render(&self.dom)
+    }
+
+    fn type_into(&mut self, name: &str, value: &str) {
+        let id = self.targets[name];
+        let data = SerializedFormData::new(value.into(), vec![]);
+        let event = Event::new(
+            Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>,
+            true,
+        );
+        self.dom.runtime().handle_event("input", event, id);
+        self.settle();
     }
 
     fn cancel_dialog(&mut self) {
@@ -913,6 +929,40 @@ fn stale_confirmation_keeps_the_dialog_and_shows_the_error() {
 mod server_fns {
     use super::*;
 
+    pub async fn harvest_client_settings() -> Result<ClientSettings, ServerFnError> {
+        Ok(consume_context::<Probe>().client.borrow().clone())
+    }
+
+    pub async fn save_harvest_client(
+        client_id: String,
+        client_secret: Option<String>,
+        redirect_url: String,
+    ) -> Result<ClientSettings, ServerFnError> {
+        let probe = consume_context::<Probe>();
+        let mut client = probe.client.borrow_mut();
+        client.source = ClientSource::Stored;
+        client.client_id = Some(client_id.clone());
+        client.secret_set = true;
+        client.secret_readable = true;
+        client.redirect_url = Some(redirect_url.clone());
+        probe
+            .client_saves
+            .borrow_mut()
+            .push((client_id, client_secret, redirect_url));
+        Ok(client.clone())
+    }
+
+    pub async fn remove_harvest_client() -> Result<ClientSettings, ServerFnError> {
+        let probe = consume_context::<Probe>();
+        *probe.client_removes.borrow_mut() += 1;
+        let mut client = probe.client.borrow_mut();
+        *client = ClientSettings {
+            encryption_key_set: client.encryption_key_set,
+            ..ClientSettings::default()
+        };
+        Ok(client.clone())
+    }
+
     pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnError> {
         let probe = consume_context::<Probe>();
         let response = probe.connection_response.borrow_mut().take();
@@ -1064,7 +1114,7 @@ fn connection_picker_distinguishes_loading_unavailable_and_unconfigured() {
     ui.click("choose-api");
     assert!(ui.html().contains("Could not check Harvest connection"));
     ui.click("refresh-connection");
-    assert!(ui.html().contains("Deployment setup required"));
+    assert!(ui.html().contains("Set up the Harvest OAuth app"));
     assert!(!ui.html().contains("Connect Harvest</button>"));
 }
 
@@ -1177,4 +1227,147 @@ fn pending_connect_is_single_submission_and_failure_keeps_a_recovery_action() {
     assert!(ui.html().contains("Could not start Harvest connection"));
     assert!(ui.html().contains("Connect Harvest"));
     assert!(ui.html().contains("<summary>Details</summary>"));
+}
+
+fn key_only() -> ClientSettings {
+    ClientSettings {
+        encryption_key_set: true,
+        ..ClientSettings::default()
+    }
+}
+
+#[test]
+fn unconfigured_importer_saves_an_oauth_app_and_never_shows_its_secret() {
+    let probe = Probe::default();
+    *probe.client.borrow_mut() = key_only();
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-api");
+    ui.click("setup-harvest-oauth");
+    let html = ui.html();
+    assert!(
+        html.contains("Harvest OAuth app") && html.contains("Not configured"),
+        "{html}"
+    );
+    assert!(html.contains("/auth/harvest/callback"), "{html}");
+    assert!(!html.contains("Import history"));
+
+    ui.type_into("harvest-client-id", " 1234.pt.app ");
+    ui.type_into("harvest-client-secret", "very-secret");
+    probe.connection.borrow_mut().configured = true;
+    ui.click("save-harvest-client");
+
+    assert_eq!(
+        &*probe.client_saves.borrow(),
+        &[(
+            "1234.pt.app".to_owned(),
+            Some("very-secret".to_owned()),
+            "/auth/harvest/callback".to_owned()
+        )]
+    );
+    let html = ui.html();
+    assert!(
+        html.contains("Configured") && html.contains("Replace secret"),
+        "{html}"
+    );
+    assert!(!html.contains("very-secret"), "{html}");
+    ui.click("harvest-oauth-back");
+    assert!(ui.html().contains("Connect Harvest"), "{}", ui.html());
+}
+
+#[test]
+fn a_blank_secret_keeps_the_stored_one() {
+    let probe = Probe::default();
+    *probe.client.borrow_mut() = ClientSettings {
+        source: ClientSource::Stored,
+        client_id: Some("app".into()),
+        secret_set: true,
+        secret_readable: true,
+        redirect_url: Some("https://horae.example/auth/harvest/callback".into()),
+        ..key_only()
+    };
+    probe.connection.borrow_mut().configured = true;
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-api");
+    ui.click("harvest-oauth-app");
+    ui.click("save-harvest-client");
+    assert_eq!(
+        &*probe.client_saves.borrow(),
+        &[(
+            "app".to_owned(),
+            None,
+            "https://horae.example/auth/harvest/callback".to_owned()
+        )]
+    );
+}
+
+#[test]
+fn changes_that_disconnect_harvest_ask_first() {
+    let probe = Probe::default();
+    *probe.client.borrow_mut() = ClientSettings {
+        source: ClientSource::Stored,
+        client_id: Some("first".into()),
+        secret_set: true,
+        secret_readable: true,
+        redirect_url: Some("https://horae.example/auth/harvest/callback".into()),
+        ..key_only()
+    };
+    *probe.connection.borrow_mut() = ConnectionStatus {
+        configured: true,
+        connected: true,
+        account_id: Some("account-A".into()),
+        ..ConnectionStatus::default()
+    };
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-api");
+    ui.click("harvest-oauth-app");
+
+    ui.type_into("harvest-client-id", "second");
+    ui.click("replace-harvest-secret");
+    ui.type_into("harvest-client-secret", "s2");
+    ui.click("save-harvest-client");
+    assert!(probe.client_saves.borrow().is_empty());
+    assert!(ui.html().contains("disconnects Harvest"), "{}", ui.html());
+    ui.click("confirm-harvest-client-change");
+    assert_eq!(probe.client_saves.borrow().len(), 1);
+
+    ui.click("remove-harvest-client");
+    assert_eq!(*probe.client_removes.borrow(), 0);
+    ui.click("confirm-harvest-client-change");
+    assert_eq!(*probe.client_removes.borrow(), 1);
+    assert!(ui.html().contains("Not configured"));
+}
+
+#[test]
+fn environment_client_and_missing_key_read_as_locked() {
+    let probe = Probe::default();
+    *probe.client.borrow_mut() = ClientSettings {
+        source: ClientSource::Environment,
+        client_id: Some("env-app".into()),
+        secret_set: true,
+        secret_readable: true,
+        redirect_url: Some("https://env.example/auth/harvest/callback".into()),
+        redirect_from_environment: true,
+        stored_ignored: true,
+        ..key_only()
+    };
+    probe.connection.borrow_mut().configured = true;
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-api");
+    ui.click("harvest-oauth-app");
+    let html = ui.html();
+    assert!(
+        html.contains("Configured by the environment") && html.contains("env-app"),
+        "{html}"
+    );
+    assert!(html.contains("ignored while they are set"), "{html}");
+    assert!(!html.contains("data-testid=\"save-harvest-client\""));
+    assert!(!html.contains("data-testid=\"replace-harvest-secret\""));
+
+    let probe = Probe::default();
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-api");
+    ui.click("setup-harvest-oauth");
+    let html = ui.html();
+    assert!(html.contains("HORAE_HARVEST_ENC_KEY"), "{html}");
+    assert!(!html.contains("data-testid=\"save-harvest-client\""));
 }

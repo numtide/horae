@@ -7,9 +7,10 @@ A disposable PostgreSQL with `CREATEDB` and migrations applied, and `DATABASE_UR
 ## Automated validation
 
 ```sh
-cargo test -p horae-core harvest                                  # validation + disconnect rule
-cargo test -p horae --features server client_settings             # precedence, sealing, no key, change rules
-cargo test -p horae --features server job_endpoints_enforce_session_role_and_organization  # HTTP matrix
+cargo test -p horae-core client                                              # validation + disconnect rule
+cargo test -p horae --features server --bin horae client_settings            # precedence, sealing, no key, change rules
+cargo test -p horae --features server --bin horae job_endpoints_enforce_session_role_and_organization  # HTTP matrix
+cargo test -p horae --features server --test import_jobs_ui                  # rendered OAuth app view
 ```
 
 Expected: all pass. The HTTP matrix asserts that members and managers get `FORBIDDEN` on all three endpoints, that no response body contains the environment secret, and that saves are refused while the environment client is set.

@@ -11,16 +11,20 @@ use horae_core::importers::harvest::types::{
 use crate::components::toast::{Toast, ToastContainer};
 use crate::server_fns;
 
+#[path = "importers/client_settings.rs"]
+mod client_settings;
 #[path = "importers/presentation.rs"]
 mod presentation;
 
 /// Which import source the admin is working with. `Picker` is the landing list;
-/// choosing a source drills into its flow.
+/// choosing a source drills into its flow. `OAuthApp` is the Harvest client
+/// setup, reached from the API flow.
 #[derive(Clone, Copy, PartialEq)]
 enum Source {
     Picker,
     Api,
     Csv,
+    OAuthApp,
 }
 
 /// A CSV the admin has selected but not yet imported.
@@ -338,6 +342,30 @@ pub fn HarvestImport() -> Element {
         ),
         Source::Api => ("Import from Harvest", IMPORT_SUB),
         Source::Csv => ("Import from CSV", IMPORT_SUB),
+        // The OAuth app view replaces the import flow, reports and history.
+        Source::OAuthApp => {
+            return rsx! {
+                div { class: "himp-page min-w-0",
+                    div { class: "page-header",
+                        h1 { class: "page-title", "Harvest OAuth app" }
+                    }
+                    p { class: "text-secondary text-sm mb-6",
+                        "Credentials for the Harvest app this workspace authenticates against. Stored once, used for every connection."
+                    }
+                    client_settings::HarvestOAuthApp {
+                        connected: matches!(&conn, Conn::Ready(s) if s.connected),
+                        back_label: "← Back to Harvest",
+                        onback: move |_| source.set(Source::Api),
+                        on_changed: move |_| {
+                            connection_error.set(None);
+                            report.set(None);
+                            run_origin.set(None);
+                            status.restart();
+                        },
+                    }
+                }
+            };
+        }
     };
 
     rsx! {
@@ -443,6 +471,7 @@ pub fn HarvestImport() -> Element {
                     connection: conn.clone(), manage_open, busy: action_pending,
                     onconnect: connect, ondisconnect: disconnect,
                     onrefresh: move |_| { connection_error.set(None); status.restart(); },
+                    onoauth: move |_| source.set(Source::OAuthApp),
                     on_changed: move |_| { status.restart(); run_origin.set(None); },
                 }
                 if let Some((message, detail)) = connection_error.read().as_ref() {
@@ -771,6 +800,7 @@ fn ConnectionChip(
     onconnect: EventHandler<MouseEvent>,
     ondisconnect: EventHandler<MouseEvent>,
     onrefresh: EventHandler<MouseEvent>,
+    onoauth: EventHandler<MouseEvent>,
     on_changed: EventHandler<()>,
 ) -> Element {
     let loaded = match &connection {
@@ -819,7 +849,10 @@ fn ConnectionChip(
                     }
                 },
                 Conn::Ready(s) if !s.configured => rsx! {
-                    p { class: "text-sm text-secondary mt-4", "Deployment setup required. Ask the deployment administrator to configure Harvest OAuth, or use CSV import." }
+                    p { class: "text-sm text-secondary mt-4", "Set up the Harvest OAuth app before connecting, or use CSV import." }
+                    button { r#type: "button", class: "btn btn-primary mt-4", "data-testid": "setup-harvest-oauth".to_owned(),
+                        disabled: busy(), onclick: move |e| onoauth.call(e), "Set up OAuth app"
+                    }
                 },
                 Conn::Ready(s) => rsx! {
                     if !s.connected || s.token_expired {
@@ -838,6 +871,11 @@ fn ConnectionChip(
             if !matches!(connection, Conn::Loading) {
                 button { r#type: "button", class: "btn btn-ghost btn-sm mt-4", "data-testid": "refresh-connection".to_owned(),
                     disabled: busy(), onclick: move |e| onrefresh.call(e), "Check connection again"
+                }
+            }
+            if loaded.is_some_and(|s| s.configured) {
+                button { r#type: "button", class: "btn btn-ghost btn-sm mt-4", "data-testid": "harvest-oauth-app".to_owned(),
+                    disabled: busy(), onclick: move |e| onoauth.call(e), "OAuth app credentials"
                 }
             }
             div { id: "harvest-connection-management",

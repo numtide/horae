@@ -11,9 +11,9 @@ pub struct AppState {
     pub plugins: Arc<PluginRegistry>,
     /// OIDC provider settings, `None` when running with `DEV_LOGIN` / no OIDC.
     pub oidc: Option<crate::config::OidcConfig>,
-    /// Harvest importer settings, `None` when the importer's API source is not
-    /// configured.
-    pub harvest: Option<crate::config::HarvestConfig>,
+    /// Harvest settings from the environment. Resolve the client a request uses
+    /// with `importers::harvest::client_settings::resolve`.
+    pub harvest: crate::config::HarvestDeployment,
     pub job_policy: crate::config::JobPolicy,
     pub mail: Option<crate::config::MailConfig>,
 }
@@ -24,7 +24,7 @@ impl AppState {
             db,
             plugins,
             oidc: None,
-            harvest: None,
+            harvest: Default::default(),
             job_policy: crate::config::JobPolicy::default(),
             mail: None,
         }
@@ -35,7 +35,7 @@ impl AppState {
         self
     }
 
-    pub fn with_harvest(mut self, harvest: Option<crate::config::HarvestConfig>) -> Self {
+    pub fn with_harvest(mut self, harvest: crate::config::HarvestDeployment) -> Self {
         self.harvest = harvest;
         self
     }
@@ -61,7 +61,7 @@ pub async fn init_state(
     pool: sqlx::PgPool,
     plugins: Arc<PluginRegistry>,
     oidc: Option<crate::config::OidcConfig>,
-    harvest: Option<crate::config::HarvestConfig>,
+    harvest: crate::config::HarvestDeployment,
     job_policy: crate::config::JobPolicy,
     mail: Option<crate::config::MailConfig>,
 ) {

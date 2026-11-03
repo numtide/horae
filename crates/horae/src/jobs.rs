@@ -830,7 +830,13 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
         let payload = decode_payload(job.payload.clone())?;
         match &payload {
             JobPayload::HarvestApi { mode, sync } => {
-                let cfg = state.harvest.clone().context("Harvest is not configured")?;
+                let cfg = crate::importers::harvest::client_settings::resolve(
+                    &state.db,
+                    &state.harvest,
+                    job.org_id,
+                )
+                .await?
+                .context("Harvest is not configured")?;
                 let currency = sqlx::query_scalar!(
                     "SELECT default_currency FROM organizations WHERE id = $1",
                     job.org_id

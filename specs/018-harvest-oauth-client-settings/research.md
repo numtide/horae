@@ -8,7 +8,7 @@
 
 ## 2. Precedence
 
-- **Decision**: The client ID and secret come from the environment as a pair when both are set; otherwise from the stored row. The redirect URL comes from the environment if set, otherwise from the stored row. The key is environment only. The effective client exists only when all four parts are present and the stored secret decrypts.
+- **Decision**: The client ID and secret come from the environment as a pair when both are set; otherwise from the stored row. The redirect URL comes from the environment if set, otherwise from the stored row, but only while the stored client is in effect: an environment client ignores the stored row entirely. The key is environment only. The effective client exists only when all four parts are present and the stored secret decrypts.
 - **Rationale**: Matches the requester's rule and today's "partial environment means unconfigured" behaviour for the pair. A deployment that sets only `HORAE_HARVEST_REDIRECT_URL` and the key gets a fixed callback with a page-managed client.
 
 ## 3. Sealing

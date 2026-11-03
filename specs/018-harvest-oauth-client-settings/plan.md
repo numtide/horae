@@ -12,7 +12,7 @@ Store one Harvest OAuth client per organization, with the secret sealed by the e
 - One additive migration: `harvest_oauth_clients` (UUIDv7 PK, unique `org_id` FK, client ID, sealed secret, redirect URL, `updated_by`, timestamps with the shared `set_updated_at` trigger).
 - Reuse `credentials::{encrypt, decrypt, authorize_change}`, `account_switch::gate`, `lock_import`/`release_import`, the existing audit log table and `require_admin`.
 - Validation and the "does this save disconnect?" rule are pure and live in `horae-core` beside `ConnectionStatus`.
-- Tests: core unit tests for validation; `#[sqlx::test]` integration tests for precedence, sealing, no key, unreadable secret, disconnect-on-change, active-import refusal, OAuth revision fencing and change without restart; the existing real-session HTTP matrix for administrator-only access and secret-free responses. The importer page has no browser test today; its design checks do not cover it, so the UI is checked in a live browser instead.
+- Tests: core unit tests for validation; `#[sqlx::test]` integration tests for precedence, sealing, no key, unreadable secret, disconnect-on-change, active-import refusal, OAuth revision fencing and change without restart; the existing real-session HTTP matrix for administrator-only access and secret-free responses. The importer page's rendered-UI tests (`crates/horae/tests/import_jobs_ui.rs`) cover the OAuth app view; the browser design checks do not include the importer, so it is also checked once in a live browser.
 - Scale: one row per organization, read once per connect, status, enqueue or job execution. One primary-key query; no cache.
 
 ## Constitution Check

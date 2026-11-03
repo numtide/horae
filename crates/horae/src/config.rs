@@ -18,10 +18,9 @@ pub struct AppConfig {
     /// Mark session cookies `Secure` (send only over HTTPS). Set `HORAE_SECURE_COOKIES=1`
     /// in production, where TLS is terminated in front of (or by) the app.
     pub secure_cookies: bool,
-    /// Harvest OAuth2 + token-encryption settings. `Some` only when the client id,
-    /// secret, redirect URL, and encryption key are all set; the importer's API
-    /// source is available exactly when this is present.
-    pub harvest: Option<HarvestConfig>,
+    /// Harvest settings from the environment. An organization's stored OAuth
+    /// client fills in what is missing; see `importers::harvest::client_settings`.
+    pub harvest: HarvestDeployment,
     /// Execution limits copied into newly enqueued jobs.
     pub job_policy: JobPolicy,
     /// Optional budget email transport; no process is started when absent.
@@ -125,9 +124,8 @@ impl JobPolicy {
     }
 }
 
-/// Harvest importer configuration, read from `HORAE_HARVEST_CLIENT_ID`,
-/// `HORAE_HARVEST_CLIENT_SECRET`, `HORAE_HARVEST_REDIRECT_URL`, and
-/// `HORAE_HARVEST_ENC_KEY`.
+/// The Harvest client one request uses: the environment's settings, completed
+/// by the organization's stored client.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HarvestConfig {
     pub client_id: String,
@@ -139,6 +137,41 @@ pub struct HarvestConfig {
     /// tokens at rest. Rotating it makes existing tokens undecryptable — recovery
     /// is to reconnect (data-model.md).
     pub encryption_key_hex: String,
+}
+
+/// Harvest settings read from `HORAE_HARVEST_CLIENT_ID`,
+/// `HORAE_HARVEST_CLIENT_SECRET`, `HORAE_HARVEST_REDIRECT_URL`, and
+/// `HORAE_HARVEST_ENC_KEY`. Each is optional; the importer's API source is
+/// available when these and the organization's stored client together supply
+/// a client, a redirect URL and the key.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct HarvestDeployment {
+    /// The client ID and secret, set only when both variables are.
+    pub client: Option<HarvestClient>,
+    pub redirect_url: Option<String>,
+    /// Seals tokens and the stored client secret. Never stored.
+    pub encryption_key_hex: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarvestClient {
+    pub client_id: String,
+    pub client_secret: String,
+}
+
+/// Tests configure the whole client through the environment.
+#[cfg(test)]
+impl From<HarvestConfig> for HarvestDeployment {
+    fn from(cfg: HarvestConfig) -> Self {
+        Self {
+            client: Some(HarvestClient {
+                client_id: cfg.client_id,
+                client_secret: cfg.client_secret,
+            }),
+            redirect_url: Some(cfg.redirect_url),
+            encryption_key_hex: Some(cfg.encryption_key_hex),
+        }
+    }
 }
 
 /// OIDC provider configuration, read from `HORAE_OIDC_ISSUER`,
@@ -179,7 +212,7 @@ impl AppConfig {
             secure_cookies: std::env::var("HORAE_SECURE_COOKIES")
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false),
-            harvest: HarvestConfig::from_env(),
+            harvest: HarvestDeployment::from_env(),
             job_policy: JobPolicy::from_env()?,
             mail: MailConfig::parse(
                 non_empty("HORAE_SENDMAIL_PATH").as_deref(),
@@ -189,17 +222,20 @@ impl AppConfig {
     }
 }
 
-impl HarvestConfig {
-    /// Returns `Some` only when all four Harvest env vars are present; a partial
-    /// configuration is treated as "Harvest not configured" so deployments that
-    /// do not use the importer need set none of them.
-    fn from_env() -> Option<Self> {
-        Some(Self {
-            client_id: non_empty("HORAE_HARVEST_CLIENT_ID")?,
-            client_secret: non_empty("HORAE_HARVEST_CLIENT_SECRET")?,
-            redirect_url: non_empty("HORAE_HARVEST_REDIRECT_URL")?,
-            encryption_key_hex: non_empty("HORAE_HARVEST_ENC_KEY")?,
-        })
+impl HarvestDeployment {
+    /// A client ID without its secret (or the reverse) is ignored, as a partial
+    /// configuration always was.
+    fn from_env() -> Self {
+        Self {
+            client: non_empty("HORAE_HARVEST_CLIENT_ID")
+                .zip(non_empty("HORAE_HARVEST_CLIENT_SECRET"))
+                .map(|(client_id, client_secret)| HarvestClient {
+                    client_id,
+                    client_secret,
+                }),
+            redirect_url: non_empty("HORAE_HARVEST_REDIRECT_URL"),
+            encryption_key_hex: non_empty("HORAE_HARVEST_ENC_KEY"),
+        }
     }
 }
 

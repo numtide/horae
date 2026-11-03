@@ -161,6 +161,10 @@ Harvest import has a separate set of optional credentials:
 `HORAE_HARVEST_REDIRECT_URL`, and `HORAE_HARVEST_ENC_KEY`. See the
 [importer setup](specs/004-harvest-importer/quickstart.md) for its callback and
 token-encryption requirements; OIDC settings do not configure Harvest access.
+With only `HORAE_HARVEST_ENC_KEY` set, an administrator can save the OAuth
+client from Import → Harvest → OAuth app instead; its secret is sealed with
+that key. A client ID and secret set in the environment take precedence and
+show there as locked.
 
 ### Budget alert email (optional)
 

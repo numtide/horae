@@ -101,7 +101,7 @@ An administrator on a deployment without the encryption key learns why the form 
 - A redirect URL that is not an absolute `http` or `https` address ending in the Harvest callback path: refused, since Harvest would reject the authorization or send the code elsewhere.
 - Two administrators save at the same time: each save is applied whole; the last one wins and no mix of the two is stored.
 - A non-administrator, a signed-out visitor, or an administrator of another organization calls the settings actions directly: refused as forbidden or unauthenticated, and nothing about the stored client is revealed.
-- The environment supplies the client but not the redirect URL: the stored redirect URL is used if one exists; otherwise the API import is not configured until the client is saved from the page, which stores the redirect URL shown there.
+- The environment supplies the client but not the redirect URL: the API import stays not configured, as today, and the page names the missing redirect URL setting. A stored client, including its redirect URL, is ignored while the environment client is set.
 
 ## Requirements *(mandatory)*
 
