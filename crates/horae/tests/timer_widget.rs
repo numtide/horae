@@ -53,6 +53,9 @@ struct Server {
     project_reads: Rc<Cell<usize>>,
     task_reads: Rc<Cell<usize>>,
     starts: Rc<Cell<usize>>,
+    picker_saw_empty: Rc<Cell<bool>>,
+    /// Catalog reads never answer.
+    catalogs_hang: Rc<Cell<bool>>,
 }
 
 impl Server {
@@ -172,6 +175,22 @@ async fn an_idle_timer_loads_the_catalogs_only_when_the_picker_opens() {
 }
 
 #[tokio::test]
+async fn a_first_open_shows_loading_until_the_catalogs_answer() {
+    dioxus_html::set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
+    let probe = Probe::default();
+    probe.server.catalogs_hang.set(true);
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    let edits = dom.rebuild_to_vec().edits;
+    settle(&mut dom);
+    click(&mut dom, click_listeners(edits)[0]);
+    assert_eq!(probe.server.catalog_reads(), (1, 1));
+    assert!(
+        !probe.server.picker_saw_empty.get(),
+        "an unanswered catalog must not look like an empty one"
+    );
+}
+
+#[tokio::test]
 async fn starting_from_the_picker_refreshes_the_timer_and_its_followers() {
     dioxus_html::set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
     let probe = Probe::default();
@@ -286,6 +305,9 @@ mod server_fns {
     pub async fn list_tracking_projects() -> Result<Vec<NamedRecord>, ServerFnError> {
         let server = consume_context::<Server>();
         server.project_reads.set(server.project_reads.get() + 1);
+        if server.catalogs_hang.get() {
+            std::future::pending::<()>().await;
+        }
         consume_context::<Sources>()
             .projects
             .read()
@@ -296,6 +318,9 @@ mod server_fns {
     pub async fn list_tracking_tasks() -> Result<Vec<NamedRecord>, ServerFnError> {
         let server = consume_context::<Server>();
         server.task_reads.set(server.task_reads.get() + 1);
+        if server.catalogs_hang.get() {
+            std::future::pending::<()>().await;
+        }
         consume_context::<Sources>()
             .tasks
             .read()
@@ -336,6 +361,12 @@ mod components {
                 project.set(PROJECT.to_string());
                 task.set(TASK.to_string());
             });
+            // The fixtures are never empty, so an empty list is a placeholder
+            // shown as if it were the catalog.
+            let empty = |list: Option<&Result<Vec<NamedRecord>, _>>| matches!(list, Some(Ok(list)) if list.is_empty());
+            if empty(projects.read().as_ref()) || empty(tasks.read().as_ref()) {
+                consume_context::<Server>().picker_saw_empty.set(true);
+            }
             rsx! {}
         }
     }

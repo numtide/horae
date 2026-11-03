@@ -85,7 +85,7 @@ pub fn TimerWidget() -> Element {
         let wanted = catalogs_wanted();
         async move {
             if !wanted {
-                return Ok(Vec::new());
+                std::future::pending::<()>().await;
             }
             server_fns::list_tracking_projects().await
         }
@@ -109,7 +109,7 @@ pub fn TimerWidget() -> Element {
         let wanted = catalogs_wanted();
         async move {
             if !wanted {
-                return Ok(Vec::new());
+                std::future::pending::<()>().await;
             }
             server_fns::list_tracking_tasks().await
         }
