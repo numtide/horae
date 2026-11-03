@@ -45,6 +45,33 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await expect(sidebar).toHaveCSS('width', '264px');
     assert.deepEqual(await box(timer), expanded);
     console.log('PASS: collapsed idle timer is a centred 44px chip; expanded timer unchanged');
+
+    // Initials are trimmed to cap height and baseline, so the letters (not the
+    // font's taller-than-deep line box) sit in the middle of the circle.
+    const initials = async avatar => avatar.evaluate(el => {
+      const circle = el.getBoundingClientRect(), text = el.querySelector('.avatar-initials').getBoundingClientRect();
+      return {
+        initials: el.textContent, size: circle.width, fontSize: parseFloat(getComputedStyle(el).fontSize),
+        height: text.height, dy: text.y + text.height / 2 - (circle.y + circle.height / 2), dx: text.x + text.width / 2 - (circle.x + circle.width / 2),
+      };
+    });
+    const checkInitials = found => {
+      assert.ok(Math.abs(found.dx) < 1 && Math.abs(found.dy) < 1, JSON.stringify(found));
+      // Untrimmed, line-height: 1 makes the box one em tall; caps are well short of that.
+      assert.ok(found.height < found.fontSize * 0.85, JSON.stringify(found));
+    };
+    checkInitials(await initials(sidebar.locator('.sidebar-footer .avatar')));
+    await page.goto(`${base}/components`);
+    const gallery = page.locator('.avatar:not(.avatar-empty)').filter({ hasText: 'LE' });
+    await expect(gallery).toHaveCount(3);
+    const sizes = [];
+    for (const avatar of await gallery.all()) {
+      const found = await initials(avatar);
+      checkInitials(found);
+      sizes.push(found.size);
+    }
+    assert.deepEqual(sizes, [26, 34, 52]);
+    console.log('PASS: avatar initials are centred on their cap height at every size');
     assert.deepEqual(errors, []);
   } catch (error) {
     console.error({ url: page.url(), errors });

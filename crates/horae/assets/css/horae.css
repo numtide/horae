@@ -1235,6 +1235,12 @@ tbody tr:hover { background: var(--color-row-hover); }
   line-height: 1; flex-shrink: 0; overflow: hidden;
 }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
+/* Initials are capitals, which have no descenders, so centring the line box
+   leaves the ink high (Newsreader's ascent outweighs its descent). Trimming the
+   box to cap height and baseline centres the letters themselves. text-box only
+   applies to block containers, hence the span; without support it is simply
+   the line-height: 1 box as before. */
+.avatar-initials { display: block; text-box: trim-both cap alphabetic; }
 .avatar-sm { width: 26px; height: 26px; font-size: var(--font-size-xs); }
 .avatar-lg { width: 52px; height: 52px; font-size: var(--font-size-xl); }
 .avatar-empty {
