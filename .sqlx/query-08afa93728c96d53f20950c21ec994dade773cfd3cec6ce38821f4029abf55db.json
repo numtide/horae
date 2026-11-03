@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT current_setting('lock_timeout') AS \"timeout!\", current_setting('synchronous_commit') AS \"commit!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "timeout!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "commit!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "08afa93728c96d53f20950c21ec994dade773cfd3cec6ce38821f4029abf55db"
+}

@@ -5,7 +5,10 @@ use horae_core::types::EntryState;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::{PermissionStorageError, configure_administration, load_person_permissions};
+use super::{
+    PermissionStorageError, ReadIsolation, begin_lock_only_read_async_commit,
+    load_person_permissions,
+};
 use crate::models::people::PeopleCursor;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::scoped_time::{
@@ -52,8 +55,7 @@ async fn begin_sheet_read(
     ),
     TimeReadError,
 > {
-    let mut tx = pool.begin().await?;
-    configure_administration(&mut tx).await?;
+    let mut tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
     let policy = sqlx::query_scalar!(
         "SELECT permission_policy_version FROM organizations WHERE id=$1 FOR SHARE",
         org_id

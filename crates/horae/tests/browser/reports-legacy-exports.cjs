@@ -84,8 +84,9 @@ assert.equal(sql(`SELECT (SELECT count(*) FROM clients WHERE id IN (${fixtureIds
     await page.waitForURL(url => !url.pathname.startsWith('/auth/'));
     await page.goto(`${base}/reports`);
 
-    // Resolves once both the Time and Detailed reports for these filters have arrived.
-    const loaded = state => Promise.all(['report_time', 'report_detailed'].map(name => page.waitForResponse(response => {
+    // Resolves once the visible Time report for these filters has arrived; the
+    // Detailed report loads when its tab opens.
+    const loaded = state => Promise.all(['report_time'].map(name => page.waitForResponse(response => {
       if (!new URL(response.url()).pathname.startsWith(`/api/${name}`) || !response.ok()) return false;
       try {
         const args = JSON.parse(response.request().postData() || '{}');

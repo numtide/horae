@@ -5,7 +5,10 @@ use uuid::Uuid;
 
 use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
-use super::{PermissionStorageError, load_person_permissions};
+use super::{
+    PermissionStorageError, ReadIsolation, begin_lock_only_read_async_commit,
+    load_person_permissions,
+};
 use crate::models::own_permissions::OwnPermissions;
 
 #[derive(Debug, thiserror::Error)]
@@ -26,10 +29,7 @@ pub(crate) async fn read(
     org_id: Uuid,
     actor_id: Uuid,
 ) -> Result<Option<OwnPermissions>, OwnPermissionsError> {
-    let mut tx = pool.begin().await?;
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-        .execute(&mut *tx)
-        .await?;
+    let mut tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
     let organization = sqlx::query!(
         "SELECT permission_policy_version, access_revision FROM organizations WHERE id = $1 FOR SHARE",
         org_id

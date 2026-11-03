@@ -328,10 +328,11 @@ fn main() -> anyhow::Result<()> {
                     )
                     .merge(harvest::router(pool.clone()))
                     // Redirect signed-out page loads to /auth/login. Layered inside
-                    // the session layer so the session is populated; the session
-                    // layer stays outermost.
+                    // the session layer so the session is populated.
                     .layer(axum::middleware::from_fn(auth::login_redirect_guard))
                     .layer(session_layer);
+                // Compression wraps everything, sessions included.
+                let router = with_compression(router);
 
                 let listener = tokio::net::TcpListener::bind(&addr).await?;
                 let worker = jobs::spawn(state::global_state().await);
@@ -393,6 +394,253 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = interrupt => {},
         _ = terminate => {},
+    }
+}
+
+/// Response compression for the whole server; see [`compression_layer`] and
+/// [`vary_on_encoding`].
+#[cfg(feature = "server")]
+fn with_compression(router: axum::Router) -> axum::Router {
+    router
+        .layer(compression_layer())
+        .layer(axum::middleware::map_response(vary_on_encoding))
+}
+
+/// Gzip responses the client accepts it for. Hashed static assets also have
+/// build-time `.br` siblings (`pre_compress` in Dioxus.toml), which the Dioxus
+/// file service serves with a `Content-Encoding` this layer leaves alone;
+/// brotli is not done on the fly because its default quality is far too slow
+/// for a multi-megabyte WASM bundle.
+///
+/// Deflate buffers its output, so if streaming SSR is enabled later its early
+/// chunks would reach the browser late.
+#[cfg(feature = "server")]
+fn compression_layer()
+-> tower_http::compression::CompressionLayer<impl tower_http::compression::Predicate> {
+    use axum::http::header::CONTENT_TYPE;
+    use tower_http::compression::{CompressionLayer, DefaultPredicate, Predicate};
+
+    const SENT_AS_IS: [&str; 5] = [
+        // Browsers get the precompressed `.br`; gzipping megabytes per request
+        // for the rest is not worth the CPU.
+        "application/wasm",
+        // Already compressed formats.
+        "application/pdf",
+        "application/vnd.openxmlformats-",
+        "application/zip",
+        "font/woff2",
+    ];
+    CompressionLayer::new().compress_when(DefaultPredicate::new().and(
+        |_, _, headers: &axum::http::HeaderMap, _: &axum::http::Extensions| {
+            let content_type = headers
+                .get(CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            !SENT_AS_IS
+                .iter()
+                .any(|prefix| content_type.starts_with(prefix))
+        },
+    ))
+}
+
+/// Every response varies by encoding: the Dioxus file service picks a
+/// precompressed `.br` or the plain file by `Accept-Encoding` and caches either
+/// as immutable, yet sends no `Vary`, and the compression layer only adds it to
+/// responses its predicate allows. Without it a shared cache could hand
+/// brotli, or a year of uncompressed WASM, to every client.
+#[cfg(feature = "server")]
+async fn vary_on_encoding(mut response: axum::response::Response) -> axum::response::Response {
+    use axum::http::header::{ACCEPT_ENCODING, VARY};
+    let headers = response.headers_mut();
+    let varies = headers.get_all(VARY).iter().any(|value| {
+        value.to_str().is_ok_and(|value| {
+            value.split(',').any(|name| {
+                name.trim().eq_ignore_ascii_case("accept-encoding") || name.trim() == "*"
+            })
+        })
+    });
+    if !varies {
+        headers.append(VARY, ACCEPT_ENCODING.into());
+    }
+    response
+}
+
+#[cfg(all(test, feature = "server"))]
+mod compression_tests {
+    use std::time::Duration;
+
+    use axum::{
+        Router,
+        body::Body,
+        http::{Request, Response, header},
+        response::Html,
+        routing::get,
+    };
+    use futures_util::StreamExt;
+    use tokio::sync::mpsc;
+    use tower::{Layer, ServiceExt};
+
+    fn gzip_request(uri: &str) -> Request<Body> {
+        request(uri, "gzip")
+    }
+
+    fn request(uri: &str, accept_encoding: &str) -> Request<Body> {
+        Request::get(uri)
+            .header(header::ACCEPT_ENCODING, accept_encoding)
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    fn assert_varies_once<B>(response: &Response<B>) {
+        let vary: Vec<_> = response.headers().get_all(header::VARY).iter().collect();
+        assert_eq!(vary, ["accept-encoding"]);
+    }
+
+    #[tokio::test]
+    async fn html_is_gzipped_when_accepted() {
+        let router = super::with_compression(
+            Router::new().route("/", get(|| async { Html("<p>Loading…</p>".repeat(100)) })),
+        );
+
+        let response = router.oneshot(gzip_request("/")).await.unwrap();
+
+        assert_eq!(response.headers()[header::CONTENT_ENCODING], "gzip");
+        assert_varies_once(&response);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&body[..2], &[0x1f, 0x8b]);
+    }
+
+    #[tokio::test]
+    async fn precompressed_wasm_varies_and_is_not_gzipped_per_request() {
+        // The same file service Dioxus uses for the public directory.
+        let dir = tempfile::tempdir().unwrap();
+        let wasm = dir.path().join("app.wasm");
+        std::fs::write(&wasm, vec![0u8; 4096]).unwrap();
+        std::fs::write(dir.path().join("app.wasm.br"), b"brotli bytes").unwrap();
+        let router = super::with_compression(Router::new().route_service(
+            "/app.wasm",
+            tower_http::services::ServeFile::new(&wasm).precompressed_br(),
+        ));
+
+        let brotli = router
+            .clone()
+            .oneshot(request("/app.wasm", "br, gzip"))
+            .await
+            .unwrap();
+        assert_eq!(brotli.headers()[header::CONTENT_ENCODING], "br");
+        assert_varies_once(&brotli);
+
+        // The identity variant is cached as immutable too, so it must vary.
+        let plain = router
+            .clone()
+            .oneshot(gzip_request("/app.wasm"))
+            .await
+            .unwrap();
+        assert!(!plain.headers().contains_key(header::CONTENT_ENCODING));
+        assert_varies_once(&plain);
+
+        let mut revalidation = request("/app.wasm", "br");
+        revalidation.headers_mut().insert(
+            header::IF_MODIFIED_SINCE,
+            plain.headers()[header::LAST_MODIFIED].clone(),
+        );
+        let not_modified = router.clone().oneshot(revalidation).await.unwrap();
+        assert_eq!(not_modified.status(), axum::http::StatusCode::NOT_MODIFIED);
+        assert_varies_once(&not_modified);
+        let body = axum::body::to_bytes(plain.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(body.len(), 4096);
+    }
+
+    #[tokio::test]
+    async fn already_compressed_formats_are_sent_as_is() {
+        for content_type in [
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/zip",
+            "font/woff2",
+            "Application/PDF",
+        ] {
+            let router =
+                super::with_compression(Router::new().route(
+                    "/file",
+                    get(move || async move {
+                        ([(header::CONTENT_TYPE, content_type)], vec![b'x'; 4096])
+                    }),
+                ));
+            let response = router.oneshot(gzip_request("/file")).await.unwrap();
+            assert!(
+                !response.headers().contains_key(header::CONTENT_ENCODING),
+                "{content_type} was compressed"
+            );
+            assert_varies_once(&response);
+        }
+    }
+
+    #[tokio::test]
+    async fn streamed_csv_keeps_streaming_and_failures_still_abort() {
+        let (send, receive) = mpsc::unbounded_channel::<Result<String, std::io::Error>>();
+        let mut body = Some(Body::from_stream(tokio_stream_from(receive)));
+        let export = tower::service_fn(move |_: Request<Body>| {
+            let response = Response::builder()
+                .header(header::CONTENT_TYPE, "text/csv; charset=utf-8")
+                .body(body.take().unwrap());
+            async move { response }
+        });
+        let response = super::compression_layer()
+            .layer(export)
+            .oneshot(gzip_request("/export.csv"))
+            .await
+            .unwrap();
+        assert_eq!(response.headers()[header::CONTENT_ENCODING], "gzip");
+        let mut frames = Body::new(response.into_body()).into_data_stream();
+
+        // Compressed bytes must reach the client while the export is still
+        // running, not only after the whole file has been produced.
+        let mut seed = 1u64;
+        let rows: String = (0..20_000)
+            .map(|row| {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                format!("{row},{seed},Project {}\n", seed % 97)
+            })
+            .collect();
+        for chunk in rows.as_bytes().chunks(64 * 1024) {
+            send.send(Ok(String::from_utf8(chunk.to_vec()).unwrap()))
+                .unwrap();
+        }
+        let first = tokio::time::timeout(Duration::from_secs(5), frames.next())
+            .await
+            .expect("compressed bytes before the export finished")
+            .unwrap()
+            .unwrap();
+        assert!(!first.is_empty());
+
+        // A failing export must still interrupt the response rather than end
+        // as a well-formed (silently truncated) gzip file.
+        send.send(Err(std::io::Error::other("export failed")))
+            .unwrap();
+        drop(send);
+        let mut failed = false;
+        while let Some(frame) = frames.next().await {
+            if frame.is_err() {
+                failed = true;
+                break;
+            }
+        }
+        assert!(failed, "the body error must reach the client");
+    }
+
+    fn tokio_stream_from<T>(
+        receive: mpsc::UnboundedReceiver<T>,
+    ) -> impl futures_util::Stream<Item = T> {
+        futures_util::stream::unfold(receive, |mut receive| async move {
+            receive.recv().await.map(|item| (item, receive))
+        })
+        .fuse()
     }
 }
 

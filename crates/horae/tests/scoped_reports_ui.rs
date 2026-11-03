@@ -62,6 +62,8 @@ pub mod badge;
 #[allow(dead_code)]
 #[path = "../src/components/controls.rs"]
 pub mod controls;
+#[path = "../src/components/debounce.rs"]
+pub mod debounce;
 #[allow(dead_code)]
 #[path = "../src/components/form.rs"]
 pub mod form;
@@ -70,7 +72,7 @@ pub mod icons;
 #[path = "../src/components/table.rs"]
 pub mod table;
 mod components {
-    pub use super::{badge, controls, form, icons, table};
+    pub use super::{badge, controls, debounce, form, icons, table};
 }
 #[path = "../src/pages/reports.rs"]
 mod reports;
@@ -184,7 +186,9 @@ async fn legacy_catalogs_wait_for_explicit_authenticated_legacy_access() {
     assert!(probe.legacy_reads.borrow().is_empty());
     own.send(Ok(access(TimeReportPolicy::Legacy))).unwrap();
     settle(&mut dom);
-    assert_eq!(probe.legacy_reads.borrow().len(), 6);
+    // Catalogs and the visible Time tab; Detailed time loads when opened.
+    assert_eq!(probe.legacy_reads.borrow().len(), 5);
+    assert!(!probe.legacy_reads.borrow().contains(&"detailed"));
     assert!(dioxus::ssr::render(&dom).contains("Export CSV"));
     assert_eq!(probe.identity_reads.get(), 0);
     assert!(probe.queries.borrow().is_empty());
@@ -261,6 +265,13 @@ fn input(dom: &mut VirtualDom, name: &str, value: &str) {
         "input",
         Box::new(SerializedFormData::new(value.into(), vec![])),
     );
+}
+
+/// Types into a date field and lets the pause before reports load elapse.
+async fn type_date(dom: &mut VirtualDom, name: &str, value: &str) {
+    input(dom, name, value);
+    tokio::time::sleep(debounce::SEARCH_DEBOUNCE * 2).await;
+    settle(dom);
 }
 
 fn select_billability(dom: &mut VirtualDom, value: &str) {
@@ -638,7 +649,7 @@ async fn individual_reports_use_the_documented_tabs_and_bind_grouped_downloads()
             assert!(!html.contains(&format!("id=\"report-group-{tab}\"")));
         }
         let changed = queue(&probe.groups);
-        input(&mut dom, "report-to", "2099-12-31");
+        type_date(&mut dom, "report-to", "2099-12-31").await;
         assert_no_results(&dom);
         changed
             .send(Ok(grouped(allowed, "Updated period")))
@@ -829,7 +840,7 @@ async fn nested_breakdowns_bind_all_contexts_and_discard_late_or_mismatched_page
         let late = queue(&probe.groups);
         click(&mut dom, "report-expanded-next");
         let parent_response = queue(&probe.groups);
-        input(&mut dom, "report-to", "2099-12-31");
+        type_date(&mut dom, "report-to", "2099-12-31").await;
         assert_no_results(&dom);
         let _ = late.send(Ok(leaf));
         settle(&mut dom);
@@ -951,7 +962,7 @@ async fn grouped_navigation_hides_stale_rows_and_rejects_changed_identity() {
     settle(&mut dom);
     assert_no_results(&dom);
     assert!(dioxus::ssr::render(&dom).contains("Your session changed"));
-    input(&mut dom, "report-from", "");
+    type_date(&mut dom, "report-from", "").await;
     assert_eq!(probe.group_queries.borrow().len(), 3);
     assert_no_results(&dom);
     assert!(probe.legacy_reads.borrow().is_empty());
@@ -985,7 +996,7 @@ async fn grouped_period_changes_preserve_dimension_reset_cursor_and_replace_read
     settle(&mut dom);
     assert!(probe.group_queries.borrow().last().unwrap().after.is_some());
     let changed = queue(&probe.groups);
-    input(&mut dom, "report-to", "2099-12-31");
+    type_date(&mut dom, "report-to", "2099-12-31").await;
     assert_no_results(&dom);
     let query = probe.group_queries.borrow().last().unwrap().clone();
     assert_eq!(query.date_to.to_string(), "2099-12-31");
@@ -1079,7 +1090,7 @@ async fn date_changes_reset_paging_hide_stale_results_and_do_not_fetch_invalid_r
     settle(&mut dom);
     let pending = queue(&probe.reports);
     click(&mut dom, "report-next");
-    input(&mut dom, "report-from", "");
+    type_date(&mut dom, "report-from", "").await;
     assert_no_results(&dom);
     assert_eq!(probe.queries.borrow().len(), 2);
     assert!(dioxus::ssr::render(&dom).contains("Enter a valid start date"));
@@ -1088,11 +1099,11 @@ async fn date_changes_reset_paging_hide_stale_results_and_do_not_fetch_invalid_r
     settle(&mut dom);
     assert_no_results(&dom);
 
-    input(&mut dom, "report-from", "2099-12-31");
+    type_date(&mut dom, "report-from", "2099-12-31").await;
     assert_eq!(probe.queries.borrow().len(), 2);
     assert!(dioxus::ssr::render(&dom).contains("end date must be on or after"));
     let corrected = queue(&probe.reports);
-    input(&mut dom, "report-to", "2099-12-31");
+    type_date(&mut dom, "report-to", "2099-12-31").await;
     assert_no_results(&dom);
     let query = probe.queries.borrow().last().unwrap().clone();
     assert_eq!(query.date_from, query.date_to);

@@ -6,6 +6,7 @@ use std::{
 };
 
 use axum::{body::Body, http::StatusCode};
+use futures_util::StreamExt;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 const MAX_EXPORTS: usize = 2;
@@ -129,10 +130,14 @@ impl ExportPermit {
                 return Err(StatusCode::GATEWAY_TIMEOUT);
             }
         };
-        Ok(Body::from_stream(futures_util::stream::unfold(
-            (Some(data), permit),
-            |(data, permit)| async move { data.map(|data| (Ok::<_, Infallible>(data), (None, permit))) },
-        )))
+        // Fused because `unfold` panics if polled after its end, which the
+        // response compression layer does.
+        Ok(Body::from_stream(
+            futures_util::stream::unfold((Some(data), permit), |(data, permit)| async move {
+                data.map(|data| (Ok::<_, Infallible>(data), (None, permit)))
+            })
+            .fuse(),
+        ))
     }
 }
 
@@ -167,6 +172,49 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(axum::body::to_bytes(body, 1024).await.unwrap(), "document");
+    }
+
+    #[tokio::test]
+    async fn compressed_export_reads_to_the_end() {
+        use tower::{Layer, ServiceExt};
+
+        let slots = Arc::new(Semaphore::new(1));
+        let document = b"Date,Project,Hours\n".repeat(100);
+        let length = document.len() as u32;
+        let mut body = Some(
+            ExportPermit::from_slots(&slots)
+                .unwrap()
+                .render(move || Ok(document))
+                .await
+                .unwrap(),
+        );
+        // The gzip encoder polls its source again after the end of the body.
+        let export = tower::service_fn(move |_: axum::http::Request<Body>| {
+            let response = axum::http::Response::builder()
+                .header(axum::http::header::CONTENT_TYPE, "text/csv")
+                .body(body.take().unwrap());
+            async move { response }
+        });
+        let request = axum::http::Request::get("/export.csv")
+            .header(axum::http::header::ACCEPT_ENCODING, "gzip")
+            .body(Body::empty())
+            .unwrap();
+        let response = tower_http::compression::CompressionLayer::new()
+            .layer(export)
+            .oneshot(request)
+            .await
+            .unwrap();
+        assert_eq!(
+            response.headers()[axum::http::header::CONTENT_ENCODING],
+            "gzip"
+        );
+
+        let compressed = axum::body::to_bytes(Body::new(response.into_body()), usize::MAX)
+            .await
+            .unwrap();
+        // A complete gzip member ends with the uncompressed length (ISIZE).
+        let trailer: [u8; 4] = compressed[compressed.len() - 4..].try_into().unwrap();
+        assert_eq!(u32::from_le_bytes(trailer), length);
     }
 
     #[tokio::test]
