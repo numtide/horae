@@ -17,7 +17,9 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await page.locator('.ts-header .ts-saved').waitFor();
     // While a week reloads the total is not rendered; the view tabs must not
     // move into its place. Detaching the total reproduces that frame.
-    for (const width of [1440, 390]) {
+    // Includes widths where the header wraps beside the expanded rail (769) and
+    // without it (520-650), not just the phone and desktop extremes.
+    for (const width of [1440, 1024, 769, 650, 600, 520, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
       const tabs = () => page.locator('.ts-header .segmented').evaluate(el => {
         const r = el.getBoundingClientRect();
