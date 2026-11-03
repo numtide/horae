@@ -55,6 +55,24 @@ mod user_directory;
 #[cfg(target_os = "linux")]
 mod report_stress;
 
+// The HTTP matrix runs under an environment client, which refuses every change
+// before the disconnect check, so the unconfirmed refusal is mapped here.
+#[test]
+fn an_unconfirmed_disconnect_is_a_conflict() {
+    let error = map_client_error(
+        crate::importers::harvest::client_settings::ClientError::DisconnectUnconfirmed.into(),
+    );
+    assert!(
+        matches!(
+            &error,
+            ServerFnError::ServerError { code, message, .. }
+                if *code == CONFLICT
+                    && message == horae_core::importers::harvest::client::DISCONNECT_UNCONFIRMED
+        ),
+        "{error:?}"
+    );
+}
+
 #[test]
 fn request_bound_import_endpoints_are_not_registered() {
     let legacy: Vec<_> = ServerFunction::collect()

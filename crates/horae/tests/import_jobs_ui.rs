@@ -939,7 +939,7 @@ mod server_fns {
     fn unconfirmed() -> ServerFnError {
         ServerFnError::ServerError {
             message: DISCONNECT_UNCONFIRMED.into(),
-            code: 409,
+            code: axum::http::StatusCode::CONFLICT.as_u16(),
             details: None,
         }
     }
@@ -1389,8 +1389,14 @@ fn rendered_page_never_contains_the_client_secret() {
     ui.click("setup-harvest-oauth");
     ui.type_into("harvest-client-id", "app");
     ui.type_into("harvest-client-secret", "rendered-secret");
+    // The typed secret is in the form, so the checks below can fail.
+    assert!(ui.html().contains("rendered-secret"), "{}", ui.html());
     probe.connection.borrow_mut().configured = true;
     ui.click("save-harvest-client");
+    assert_eq!(
+        probe.client_saves.borrow()[0].1.as_deref(),
+        Some("rendered-secret")
+    );
     assert!(!ui.html().contains("rendered-secret"), "{}", ui.html());
 
     // Reopening the view, and replacing the secret, start from an empty field.
