@@ -16,13 +16,17 @@ use tokio::sync::oneshot;
 
 #[path = "../src/components/permission_description.rs"]
 pub mod permission_description;
+#[path = "../src/components/session.rs"]
+pub mod session;
 mod components {
-    pub use super::permission_description;
+    pub use super::{permission_description, session};
 }
 #[path = "../src/models/own_permissions.rs"]
 pub mod own_permissions_model;
+#[path = "../src/models/user.rs"]
+pub mod user_model;
 mod models {
-    pub use super::own_permissions_model as own_permissions;
+    pub use super::{own_permissions_model as own_permissions, user_model as user};
 }
 #[path = "../src/pages/settings/own_permissions.rs"]
 mod own_permissions;
@@ -45,6 +49,8 @@ impl Probe {
 
 fn app(probe: Probe) -> Element {
     use_context_provider(|| probe);
+    // The app shell's provider: the section must share its read, not add one.
+    session::use_session_provider();
     rsx! { own_permissions::OwnPermissionSection {} }
 }
 
@@ -152,5 +158,9 @@ mod server_fns {
             .pop_front()
             .expect("unexpected read");
         response.await.expect("response sender dropped")
+    }
+
+    pub async fn get_me() -> Result<user_model::CurrentUser, ServerFnError> {
+        std::future::pending().await
     }
 }
