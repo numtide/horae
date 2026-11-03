@@ -19,7 +19,7 @@ use crate::models::project_creation::ProtectedProjectField;
 pub(super) fn Basics(
     mut form: Signal<ProjectForm>,
     mut options: Signal<CreationOptions>,
-    defaults: Signal<CreationOptions>,
+    mut defaults: Signal<CreationOptions>,
     #[props(default)] editing: bool,
     #[props(default)] editor_context: Option<ProjectEditorContext>,
     notes_access: ProjectFieldAccess,
@@ -40,9 +40,11 @@ pub(super) fn Basics(
     let mut tag_error = use_signal(|| None::<&'static str>);
     let clients = use_resource(move || {
         let query = client_query();
+        // Subscribes to the defaults only while they are shown, so an inline create appears.
+        let unfiltered = query.is_empty().then(|| defaults());
         async move {
-            if query.is_empty() {
-                return Ok(defaults.peek().clone());
+            if let Some(unfiltered) = unfiltered {
+                return Ok(unfiltered);
             }
             let mut search = CreationSearch::default();
             search.clients.query = query;
@@ -256,6 +258,9 @@ pub(super) fn Basics(
         NewClientDialog { open: client_open(), currency: options.read().organization_currency.clone(), on_dismiss: move |_| client_open.set(false),
             on_created: move |client: CreationClient| {
                 form.write().client_id = Some(client.id);
+                let mut unfiltered = defaults.write();
+                unfiltered.clients.push(client.clone());
+                unfiltered.clients.sort_by_cached_key(|client| client.name.to_lowercase());
                 options.write().clients.push(client);
                 client_open.set(false);
             }

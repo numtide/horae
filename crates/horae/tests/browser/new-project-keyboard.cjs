@@ -382,6 +382,15 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await expect(screen.locator('#np-client')).toContainText('Keyboard-created client');
     await saved();
     await readsFinished();
+    // The unfiltered client list includes the client created here, also once deselected.
+    await screen.locator('#np-client').click();
+    await page.getByRole('option', { name: 'Acme Corp', exact: true }).click();
+    await expect(screen.locator('#np-client')).toContainText('Acme Corp');
+    await screen.locator('#np-client').click();
+    await page.getByRole('option', { name: 'Keyboard-created client', exact: true }).click();
+    await expect(screen.locator('#np-client')).toContainText('Keyboard-created client');
+    await saved();
+    await readsFinished();
     // Exercise configured-mail controls without running or claiming a delivery.
     await page.route('**/api/project_creation_options*', async route => {
       const response = await route.fetch();
