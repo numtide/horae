@@ -42,6 +42,15 @@ pub mod select_field;
 mod components {
     pub use super::{controls, date_picker, menu, modal, select_field};
 
+    /// The shell's week start, without the rest of the session.
+    pub mod session {
+        use dioxus::prelude::*;
+
+        pub fn use_week_start() -> Resource<Result<chrono::Weekday, ServerFnError>> {
+            use_resource(crate::server_fns::get_week_start)
+        }
+    }
+
     /// The shell's shared timer, without the rail that renders it.
     pub mod timer_widget {
         use dioxus::prelude::*;
