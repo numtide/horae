@@ -1530,12 +1530,13 @@ tbody tr:hover { background: var(--color-row-hover); }
 /* Where title, total and tabs cannot share a row, give the tabs one of their
    own; plain wrapping would let them climb beside the title whenever the
    total is absent. The header's width, not the viewport's, decides, because
-   the rail beside it is resizable; one row needs about 460px. The header is
+   the rail beside it is resizable. One row needs about 460px in the brand
+   fonts and noticeably more in fallback fonts, hence the margin. The header is
    the container (it holds nothing fixed-position, which a container would
    trap), so the rule works through its children: the title's basis leaves
    room for the total (up to 124px) but never for the tabs. */
 .ts-header { container: ts-header / inline-size; }
-@container ts-header (max-width: 500px) {
+@container ts-header (max-width: 640px) {
   .ts-header > .page-title { flex-basis: calc(100% - 140px); }
 }
 @media (max-width: 480px) {

@@ -24,9 +24,9 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     // While a week reloads the total is not rendered; the view tabs must not
     // move into its place. Detaching the total reproduces that frame. The
     // widths include the expanded rail (769), the band where the header wraps
-    // without it, and headers just either side of the 500px layout switch.
+    // without it, and headers just either side of the 640px layout switch.
     const sizes = [1440, 1024, 769, 650, 600, 520, 390, 320].map(width => ({ width }));
-    sizes.push({ header: 505 }, { header: 495 });
+    sizes.push({ header: 645 }, { header: 635 });
     for (const size of sizes) {
       let width = size.width;
       if (size.header) {
