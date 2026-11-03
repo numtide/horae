@@ -4,7 +4,9 @@ use dioxus::prelude::*;
 use tracing::error;
 use uuid::Uuid;
 
+use crate::components::no_tracking::NoTrackingHint;
 use crate::components::project_task_picker::ProjectTaskPicker;
+use crate::components::session::use_session;
 use crate::server_fns;
 
 /// The running timer, owned by the app shell so everything that can change it
@@ -82,6 +84,7 @@ pub fn TimerWidget() -> Element {
         });
     });
 
+    let session = use_session();
     let projects = use_resource(|| async move { server_fns::list_tracking_projects().await });
 
     let mut picking = use_signal(|| false);
@@ -120,6 +123,9 @@ pub fn TimerWidget() -> Element {
         .cloned()
         .flatten();
     let is_running = current_timer.is_some();
+    // An empty catalog gets an explanation in place of a picker with nothing
+    // in it, so Start cannot be pressed with nothing selectable.
+    let nothing_to_track = matches!(&*projects.read(), Some(Ok(ps)) if ps.is_empty());
 
     // Elapsed = time since it started, plus any minutes already banked on the entry.
     let (hours, minutes, seconds) = match current_timer
@@ -248,21 +254,31 @@ pub fn TimerWidget() -> Element {
                                 "×"
                             }
                         }
-                        div { class: "sidebar-timer-pop-body",
-                            label { class: "form-label", "Project / Task" }
-                            ProjectTaskPicker { project: selected_project, task: selected_task, projects, tasks: all_tasks }
-                            textarea {
-                                class: "form-input form-textarea",
-                                placeholder: "Notes (optional)",
-                                value: "{notes}",
-                                oninput: move |e| notes.set(e.value()),
+                        if nothing_to_track {
+                            div { class: "sidebar-timer-pop-body",
+                                NoTrackingHint {
+                                    id: "sidebar-timer-empty",
+                                    can_create: session.can_create_projects(),
+                                    on_follow: move |_| picking.set(false),
+                                }
                             }
-                            div { class: "sidebar-timer-form-actions",
-                                button { class: "btn btn-primary", disabled: saving(), onclick: handle_start, "Start timer" }
-                                button {
-                                    class: "btn btn-ghost",
-                                    onclick: move |_| picking.set(false),
-                                    "Cancel"
+                        } else {
+                            div { class: "sidebar-timer-pop-body",
+                                label { class: "form-label", "Project / Task" }
+                                ProjectTaskPicker { project: selected_project, task: selected_task, projects, tasks: all_tasks }
+                                textarea {
+                                    class: "form-input form-textarea",
+                                    placeholder: "Notes (optional)",
+                                    value: "{notes}",
+                                    oninput: move |e| notes.set(e.value()),
+                                }
+                                div { class: "sidebar-timer-form-actions",
+                                    button { class: "btn btn-primary", disabled: saving(), onclick: handle_start, "Start timer" }
+                                    button {
+                                        class: "btn btn-ghost",
+                                        onclick: move |_| picking.set(false),
+                                        "Cancel"
+                                    }
                                 }
                             }
                         }

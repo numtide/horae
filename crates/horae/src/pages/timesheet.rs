@@ -13,6 +13,8 @@ use crate::components::controls::Segmented;
 use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::modal::Modal;
+use crate::components::no_tracking::NoTrackingHint;
+use crate::components::session::use_session;
 use crate::components::timer_widget::use_running_timer;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::scoped_time::{
@@ -381,6 +383,11 @@ fn TimesheetContent(
             .cloned()
             .unwrap_or_default()
     });
+    // Loaded and empty, as opposed to still loading or failed (which has its
+    // own retry alert): only then does the disabled add button need a reason.
+    let nothing_to_track =
+        matches!(current_tracking.read().as_ref(), Some(Ok(options)) if options.is_empty());
+    let session = use_session();
     let mut pending_action = use_signal(|| false);
 
     // Lookups and grid data are memoized so they rebuild only when their
@@ -1058,9 +1065,14 @@ fn TimesheetContent(
                 button {
                     class: "ts-add",
                     "aria-label": "Add entry",
+                    title: if nothing_to_track { "No projects to track yet" },
+                    "aria-describedby": if nothing_to_track { "ts-add-empty" },
                     disabled: busy() || tracking.read().is_empty(),
                     onclick: move |_| open_add.call(add_default_date),
                     "+"
+                }
+                if nothing_to_track {
+                    NoTrackingHint { id: "ts-add-empty", can_create: session.can_create_projects() }
                 }
                 // The pager's own label is the date picker's trigger. The popover
                 // is a sibling of .ts-pager, which clips its children to keep the

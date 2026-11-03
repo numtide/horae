@@ -206,6 +206,34 @@ mod server_fns {
 }
 
 mod components {
+    pub mod no_tracking {
+        use super::super::*;
+
+        #[component]
+        pub fn NoTrackingHint(
+            id: String,
+            can_create: bool,
+            #[props(default)] on_follow: EventHandler<()>,
+        ) -> Element {
+            rsx! {}
+        }
+    }
+
+    pub mod session {
+        #[derive(Clone, Copy)]
+        pub struct Session;
+
+        impl Session {
+            pub fn can_create_projects(&self) -> bool {
+                false
+            }
+        }
+
+        pub fn use_session() -> Session {
+            Session
+        }
+    }
+
     pub mod project_task_picker {
         use super::super::*;
 

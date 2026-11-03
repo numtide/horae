@@ -940,6 +940,7 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: var(--ring-soft);
 }
 .form-hint { font-size: var(--font-size-xs); color: var(--color-text-muted); margin-top: var(--space-1); }
+.no-tracking-hint { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-muted); }
 
 /* Numeric inputs use mono and drop the native spinner (design: "switch to mono") */
 .form-input[type="number"] {
@@ -1491,7 +1492,8 @@ tbody tr:hover { background: var(--color-row-hover); }
   border: none; border-radius: var(--radius-lg);
   font-size: var(--font-size-2xl); font-weight: 600; line-height: 0; cursor: pointer;
 }
-.ts-add:hover { background: var(--color-primary-hover); }
+.ts-add:hover:not(:disabled) { background: var(--color-primary-hover); }
+.ts-add:disabled { opacity: 0.5; }
 .ts-pager {
   display: flex; align-items: center; overflow: hidden;
   background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
