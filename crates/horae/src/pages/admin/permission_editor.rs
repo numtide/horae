@@ -50,35 +50,56 @@ pub(super) fn PermissionEditorDialog(
     let mut locked = use_signal(|| false);
     let mut dirty = use_signal(|| false);
     let mut confirming_discard = use_signal(|| false);
-    // The identity keys this tab's recovery storage. It is checked once per mount
-    // and on reload; opening or closing a person re-reads only the storage, which
-    // a save in this dialog may have written (a rejected save stays recoverable).
-    let mut identity = use_resource(move || async move {
-        let user = server_fns::get_me().await.map_err(|error| {
-            if matches!(
-                error,
-                ServerFnError::ServerError {
-                    code: UNAUTHORIZED,
-                    ..
+    // Counts how often a person has been opened; closing leaves it unchanged. The
+    // tally lives in a hook because `use_memo` swaps in each render's closure.
+    let mut opens = use_hook(|| CopyValue::new((false, 0_u32)));
+    let opened = use_memo(move || {
+        let open = person().is_some();
+        let (was_open, count) = &mut *opens.write();
+        if open && !*was_open {
+            *count += 1;
+        }
+        *was_open = open;
+        *count
+    });
+    // The identity keys this tab's recovery storage, so it is checked on mount,
+    // whenever a person is opened (another tab may have switched the user) and on
+    // reload. Closing re-reads only the storage, which a save in this dialog may
+    // have written (a rejected save stays recoverable). Each answer carries the
+    // open it was fetched for, so the storage is never read with an older one.
+    let mut identity = use_resource(move || {
+        let opened = opened();
+        async move {
+            let user = server_fns::get_me().await.map_err(|error| {
+                if matches!(
+                    error,
+                    ServerFnError::ServerError {
+                        code: UNAUTHORIZED,
+                        ..
+                    }
+                ) {
+                    "Sign in again to check this tab's permission recovery request."
+                } else {
+                    "Cannot check the current session. Retry before editing permissions."
                 }
-            ) {
-                "Sign in again to check this tab's permission recovery request."
-            } else {
-                "Cannot check the current session. Retry before editing permissions."
-            }
-            .to_owned()
-        })?;
-        Ok::<_, String>(PermissionRequester {
-            org_id: user.org_id,
-            user_id: user.id,
-        })
+                .to_owned()
+            });
+            let requester = user.map(|user| PermissionRequester {
+                org_id: user.org_id,
+                user_id: user.id,
+            });
+            (opened, requester)
+        }
     });
     let mut recovery = use_resource(move || {
         let _ = person();
+        let opened = opened();
         // A reloading identity still holds the previous value; wait for the fresh one.
         let identity = (identity.state()() == UseResourceState::Ready)
             .then(|| identity.read().clone())
-            .flatten();
+            .flatten()
+            .filter(|(fetched_for, _)| *fetched_for == opened)
+            .map(|(_, requester)| requester);
         async move {
             match identity? {
                 Ok(requester) => Some(PendingPermission::load(requester).await),

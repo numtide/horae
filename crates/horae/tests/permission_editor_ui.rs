@@ -910,13 +910,32 @@ async fn clean_dismissal_needs_no_confirmation() {
 }
 
 #[tokio::test]
-async fn opening_and_closing_a_person_checks_the_session_once_per_mount() {
+async fn closing_a_person_does_not_recheck_the_session() {
     let probe = Probe::new();
     let mut ui = Ui::new(probe.clone());
     assert!(ui.html().contains("Review changes"));
     ui.dismiss("permission-editor-close");
     ui.navigation_state("clean");
     assert_eq!(*probe.identity_reads.borrow(), 1);
+}
+
+#[tokio::test]
+async fn opening_a_person_rechecks_the_session() {
+    let mut probe = Probe::new();
+    probe.directory = Some(true);
+    directory_reply(&probe)
+        .send(Ok(directory_page(&probe, true)))
+        .unwrap();
+    let mut ui = Ui::new(probe.clone());
+    assert_eq!(*probe.identity_reads.borrow(), 1);
+    for reads in [2, 3] {
+        ui.click(&format!("people-permissions-{}", probe.editor.user_id));
+        assert!(ui.html().contains("Review changes"));
+        assert_eq!(*probe.identity_reads.borrow(), reads);
+        ui.dismiss("permission-editor-close");
+        assert!(!ui.html().contains("Review changes"));
+        assert_eq!(*probe.identity_reads.borrow(), reads);
+    }
 }
 
 #[tokio::test]

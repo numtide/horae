@@ -9,8 +9,9 @@ use crate::server_fns;
 ///
 /// This is a display copy: every server function authorizes afresh, so a stale
 /// value can only show or hide UI, never grant access. Code that binds browser
-/// storage to the identity (invoice and permission recovery) calls `get_me`
-/// itself instead, because a user switched in another tab would not be seen here.
+/// storage to the identity calls `get_me` itself instead, because this copy would
+/// not see a user switched in another tab: invoice recovery on each gate mount,
+/// permission recovery on each editor mount and whenever a person is opened.
 #[derive(Clone, Copy)]
 pub struct Session {
     pub me: Resource<Result<CurrentUser, ServerFnError>>,
