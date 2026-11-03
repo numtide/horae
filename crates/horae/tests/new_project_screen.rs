@@ -17,6 +17,8 @@ pub mod avatar;
 pub mod controls;
 #[path = "../src/components/date_picker.rs"]
 pub mod date_picker;
+#[path = "../src/components/debounce.rs"]
+pub mod debounce;
 #[path = "../src/components/form.rs"]
 pub mod form;
 #[path = "../src/components/icons.rs"]
@@ -26,7 +28,7 @@ pub mod modal;
 #[path = "../src/components/select_field.rs"]
 pub mod select_field;
 mod components {
-    pub use super::{avatar, controls, date_picker, form, icons, modal, select_field};
+    pub use super::{avatar, controls, date_picker, debounce, form, icons, modal, select_field};
 }
 #[path = "../src/models/people.rs"]
 pub mod people;
@@ -1411,6 +1413,56 @@ async fn assignment_controls_reuse_searchable_picker_and_compact_task_entry() {
         );
     }
     assert!(!html.contains("Search teammates</label>"));
+}
+
+#[tokio::test]
+async fn enter_before_the_task_search_settles_adds_the_typed_task_once() {
+    use dioxus::html::SerializedKeyboardData;
+    use project_creation::CreationTask;
+    let mut probe = Probe::default();
+    probe.options.tasks.push(CreationTask {
+        id: Uuid::now_v7(),
+        name: "Release preparation".into(),
+        billable: true,
+        default_rate_cents: None,
+        default_rate_currency: None,
+    });
+    let mut dom = VirtualDom::new_with_props(app, probe);
+    dom.rebuild_in_place();
+    settle(&mut dom);
+
+    // Enter lands inside the debounce window, before the search for the name runs.
+    input(&mut dom, "np-task-search", "release preparation");
+    let id = target(&dom, dom.base_scope().root_node(), "np-task-search").unwrap();
+    let enter = SerializedKeyboardData::new(
+        Key::Enter,
+        Code::Enter,
+        Location::Standard,
+        false,
+        Modifiers::empty(),
+        false,
+    );
+    dom.runtime().handle_event(
+        "keydown",
+        Event::new(
+            Rc::new(PlatformEventData::new(Box::new(enter))) as Rc<dyn std::any::Any>,
+            true,
+        ),
+        id,
+    );
+    settle(&mut dom);
+    assert!(!dioxus::ssr::render(&dom).contains("Remove task"));
+
+    tokio::time::sleep(components::debounce::SEARCH_DEBOUNCE * 2).await;
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    // The catalog task, matched by name, not a new lowercase one.
+    assert_eq!(
+        html.matches("Remove task Release preparation").count(),
+        1,
+        "{html}"
+    );
+    assert!(!html.contains("Remove task release preparation"));
 }
 
 #[tokio::test]

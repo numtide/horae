@@ -8,6 +8,7 @@ use horae_core::money::{Withheld, sum_by_currency};
 
 use super::loaded;
 use crate::components::badge::Badge;
+use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::{FormGroup, Input};
 use crate::components::table::DataTable;
 use crate::server_fns;
@@ -62,7 +63,7 @@ fn FilterSelect(
                 oninput: move |e| onselect.call(e.value()),
                 option { value: "", "{all_label}" }
                 for (v, name) in options.iter() {
-                    option { value: "{v}", "{name}" }
+                    option { key: "{v}", value: "{v}", "{name}" }
                 }
             }
         }
@@ -119,8 +120,14 @@ fn LegacyReports() -> Element {
     let today = chrono::Utc::now().date_naive();
     let month_start = today.with_day(1).unwrap_or(today);
 
-    let mut from_date = use_signal(move || month_start.to_string());
-    let mut to_date = use_signal(move || today.to_string());
+    // Typing a date edits one segment at a time, and each edit is a valid date,
+    // so the reports load once typing pauses. Until then they show as loading:
+    // a table for other dates must not sit beside the typed ones.
+    let mut from_input = use_signal(move || month_start.to_string());
+    let mut to_input = use_signal(move || today.to_string());
+    let from_date = use_debounced(from_input, SEARCH_DEBOUNCE);
+    let to_date = use_debounced(to_input, SEARCH_DEBOUNCE);
+    let dates_settled = use_memo(move || from_date() == from_input() && to_date() == to_input());
     let mut group_by = use_signal(|| "project".to_string());
     let mut client_filter = use_signal(String::new);
     let mut project_filter = use_signal(String::new);
@@ -137,36 +144,20 @@ fn LegacyReports() -> Element {
         async move { server_fns::list_projects(c, false).await }
     });
 
-    // Read the signals inside each resource so a filter change re-loads.
-    let mut summary = use_resource(move || {
-        let (f, t, g) = (
-            from_date.read().clone(),
-            to_date.read().clone(),
-            group_by.read().clone(),
-        );
-        let (cl, pr, us) = (
-            opt(client_filter.read().clone()),
-            opt(project_filter.read().clone()),
-            opt(user_filter.read().clone()),
-        );
-        let tag = opt(tag_filter());
-        async move { server_fns::report_time(f, t, g, cl, pr, us, tag).await }
-    });
-    let mut detailed = use_resource(move || {
-        let (f, t) = (from_date.read().clone(), to_date.read().clone());
-        let (cl, pr, us) = (
-            opt(client_filter.read().clone()),
-            opt(project_filter.read().clone()),
-            opt(user_filter.read().clone()),
-        );
-        let tag = opt(tag_filter());
-        async move { server_fns::report_detailed(f, t, cl, pr, us, tag).await }
-    });
+    let filters = LegacyFilters {
+        from: from_date,
+        to: to_date,
+        client: client_filter,
+        project: project_filter,
+        user: user_filter,
+        tag: tag_filter,
+        dates_settled,
+    };
 
     // The export must match what the tables show, so the active filters ride
     // along in the query string; unset ones are left out and mean "all".
     let export_query = {
-        let mut q = format!("from={}&to={}", from_date.read(), to_date.read());
+        let mut q = format!("from={}&to={}", from_input.read(), to_input.read());
         for (name, value) in [
             ("client_id", client_filter.read().clone()),
             ("project_id", project_filter.read().clone()),
@@ -245,8 +236,8 @@ fn LegacyReports() -> Element {
                                 kind: "date",
                                 id: "report-filter-from",
                                 class: "min-w-0 max-w-full min-h-control px-1 sm:px-3",
-                                value: "{from_date}",
-                                oninput: move |e: FormEvent| from_date.set(e.value()),
+                                value: "{from_input}",
+                                oninput: move |e: FormEvent| from_input.set(e.value()),
                             }
                         }
                     }
@@ -256,8 +247,8 @@ fn LegacyReports() -> Element {
                                 kind: "date",
                                 id: "report-filter-to",
                                 class: "min-w-0 max-w-full min-h-control px-1 sm:px-3",
-                                value: "{to_date}",
-                                oninput: move |e: FormEvent| to_date.set(e.value()),
+                                value: "{to_input}",
+                                oninput: move |e: FormEvent| to_input.set(e.value()),
                             }
                         }
                     }
@@ -310,7 +301,7 @@ fn LegacyReports() -> Element {
                                     if !tag_filter().is_empty() && !tag_options.iter().any(|(id, _)| *id == tag_filter()) {
                                         option { value: tag_filter(), disabled: true, "Selected tag unavailable" }
                                     }
-                                    for (id, name) in tag_options { option { value: "{id}", "{name}" } }
+                                    for (id, name) in tag_options { option { key: "{id}", value: "{id}", "{name}" } }
                                 }
                             }
                         }
@@ -337,132 +328,193 @@ fn LegacyReports() -> Element {
                 }
             }
 
+            // Only the visible tab is mounted, so a filter change loads one report.
             if tab == "time" {
-                if summary.state()() != UseResourceState::Ready {
-                    p { role: "status", "Loading report…" }
-                } else if matches!(&*summary.read(), Some(Err(_))) {
-                    div { class: "alert alert-danger", role: "alert", "Could not load report. "
-                        button { class: "btn btn-secondary btn-sm", onclick: move |_| summary.restart(), "Retry report" }
-                    }
-                } else {
-                {loaded(&*summary.read(), |rows| {
-                        if rows.is_empty() {
-                            return rsx! {
-                                div { class: "card p-8 text-center",
-                                    p { class: "text-muted", "No time tracked in this range." }
-                                }
-                            };
-                        }
-                        let grand_total: i64 = rows.iter().map(|r| r.total_minutes).sum();
-                        let grand_rounded: i64 = rows.iter().map(|r| r.rounded_minutes).sum();
-                        let grand_billable: i64 = rows.iter().map(|r| r.billable_minutes).sum();
-                        let grand_bill_amount = money_totals(rows, |r| Some(r.billable_cents), |r| &r.currency);
-                        let grand_cost_amount = money_totals(rows, |r| r.cost_cents, |r| &r.cost_currency);
-                        rsx! {
-                            DataTable {
-                                table {
-                                    thead {
-                                        tr {
-                                            th { "Group" }
-                                            th { class: "text-right", "Total hours" }
-                                            th { class: "text-right", "Rounded" }
-                                            th { class: "text-right", "Billable hrs" }
-                                            th { class: "text-right", "Billable amount" }
-                                            th { class: "text-right", "Cost" }
-                                        }
-                                    }
-                                    tbody {
-                                        for row in rows.iter() {
-                                            tr { key: "{row.group_id}:{row.currency}",
-                                                td { "{row.label}" }
-                                                td { class: "text-mono text-right", "{hours(row.total_minutes)}" }
-                                                td { class: "text-mono text-right", "{hours(row.rounded_minutes)}" }
-                                                td { class: "text-mono text-right", "{hours(row.billable_minutes)}" }
-                                                td { class: "text-mono text-right", "{money(row.billable_cents, &row.currency)}" }
-                                                td { class: "text-mono text-right",
-                                                    {row.cost_cents.map(|cents| money(cents, &row.cost_currency)).unwrap_or_else(|| "Restricted".into())}
-                                                }
-                                            }
-                                        }
-                                        tr { class: "report-total-row",
-                                            td { "Total" }
-                                            td { class: "text-mono text-right", "{hours(grand_total)}" }
-                                            td { class: "text-mono text-right", "{hours(grand_rounded)}" }
-                                            td { class: "text-mono text-right", "{hours(grand_billable)}" }
-                                            td { class: "text-mono text-right",
-                                                for line in grand_bill_amount { div { "{line}" } }
-                                            }
-                                            td { class: "text-mono text-right",
-                                                for line in grand_cost_amount { div { "{line}" } }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                })}
-                }
+                LegacyTimeReport { filters, group_by }
+            } else {
+                LegacyDetailedReport { filters }
             }
+        }
+    }
+}
 
-            if tab == "detailed" {
-                if detailed.state()() != UseResourceState::Ready {
-                    p { role: "status", "Loading detailed report…" }
-                } else if matches!(&*detailed.read(), Some(Err(_))) {
-                    div { class: "alert alert-danger", role: "alert", "Could not load detailed report. "
-                        button { class: "btn btn-secondary btn-sm", onclick: move |_| detailed.restart(), "Retry detailed report" }
-                    }
-                } else {
-                {loaded(&*detailed.read(), |entries| {
-                    if entries.is_empty() {
-                        return rsx! {
-                            div { class: "card p-8 text-center",
-                                p { class: "text-muted", "No entries in this range." }
+/// The legacy filters both report tabs share; "" means all.
+#[derive(Clone, Copy, PartialEq)]
+struct LegacyFilters {
+    from: ReadSignal<String>,
+    to: ReadSignal<String>,
+    client: Signal<String>,
+    project: Signal<String>,
+    user: Signal<String>,
+    tag: Signal<String>,
+    /// False while the typed dates are ahead of `from`/`to`.
+    dates_settled: Memo<bool>,
+}
+
+impl LegacyFilters {
+    /// (from, to, client, project, user, tag), read so a change re-loads.
+    #[allow(clippy::type_complexity)]
+    fn read(
+        &self,
+    ) -> (
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ) {
+        (
+            self.from.read().clone(),
+            self.to.read().clone(),
+            opt(self.client.read().clone()),
+            opt(self.project.read().clone()),
+            opt(self.user.read().clone()),
+            opt(self.tag.read().clone()),
+        )
+    }
+}
+
+#[component]
+fn LegacyTimeReport(filters: LegacyFilters, group_by: Signal<String>) -> Element {
+    let mut summary = use_resource(move || {
+        let (f, t, cl, pr, us, tag) = filters.read();
+        let g = group_by.read().clone();
+        async move { server_fns::report_time(f, t, g, cl, pr, us, tag).await }
+    });
+    rsx! {
+        if summary.state()() != UseResourceState::Ready || !(filters.dates_settled)() {
+            p { role: "status", "Loading report…" }
+        } else if matches!(&*summary.read(), Some(Err(_))) {
+            div { class: "alert alert-danger", role: "alert", "Could not load report. "
+                button { class: "btn btn-secondary btn-sm", onclick: move |_| summary.restart(), "Retry report" }
+            }
+        } else {
+            {loaded(&*summary.read(), |rows| {
+                if rows.is_empty() {
+                    return rsx! {
+                        div { class: "card p-8 text-center",
+                            p { class: "text-muted", "No time tracked in this range." }
+                        }
+                    };
+                }
+                let grand_total: i64 = rows.iter().map(|r| r.total_minutes).sum();
+                let grand_rounded: i64 = rows.iter().map(|r| r.rounded_minutes).sum();
+                let grand_billable: i64 = rows.iter().map(|r| r.billable_minutes).sum();
+                let grand_bill_amount = money_totals(rows, |r| Some(r.billable_cents), |r| &r.currency);
+                let grand_cost_amount = money_totals(rows, |r| r.cost_cents, |r| &r.cost_currency);
+                rsx! {
+                    DataTable {
+                        table {
+                            thead {
+                                tr {
+                                    th { "Group" }
+                                    th { class: "text-right", "Total hours" }
+                                    th { class: "text-right", "Rounded" }
+                                    th { class: "text-right", "Billable hrs" }
+                                    th { class: "text-right", "Billable amount" }
+                                    th { class: "text-right", "Cost" }
+                                }
                             }
-                        };
-                    }
-                    rsx! {
-                        DataTable {
-                            table {
-                                thead {
-                                    tr {
-                                        th { "Date" }
-                                        th { "Project" }
-                                        th { "Task" }
-                                        th { "Teammate" }
-                                        th { class: "text-right", "Hours" }
-                                        th { class: "text-right", "Rounded" }
-                                        th { class: "text-center", "Billable" }
-                                        th { "Notes" }
+                            tbody {
+                                for row in rows.iter() {
+                                    tr { key: "{row.group_id}:{row.currency}",
+                                        td { "{row.label}" }
+                                        td { class: "text-mono text-right", "{hours(row.total_minutes)}" }
+                                        td { class: "text-mono text-right", "{hours(row.rounded_minutes)}" }
+                                        td { class: "text-mono text-right", "{hours(row.billable_minutes)}" }
+                                        td { class: "text-mono text-right", "{money(row.billable_cents, &row.currency)}" }
+                                        td { class: "text-mono text-right",
+                                            {row.cost_cents.map(|cents| money(cents, &row.cost_currency)).unwrap_or_else(|| "Restricted".into())}
+                                        }
                                     }
                                 }
-                                tbody {
-                                    for (i, e) in entries.iter().enumerate() {
-                                        tr { key: "{i}",
-                                            td { class: "text-mono", "{e.spent_date}" }
-                                            td { "{e.project_name}" }
-                                            td { "{e.task_name}" }
-                                            td { "{e.user_name}" }
-                                            td { class: "text-mono text-right", "{hours(e.minutes as i64)}" }
-                                            td { class: "text-mono text-right",
-                                                "{hours(e.rounded_minutes.unwrap_or(e.minutes) as i64)}"
-                                            }
-                                            td { class: "text-center",
-                                                if e.billable {
-                                                    Badge { variant: "success", "Yes" }
-                                                } else {
-                                                    Badge { variant: "neutral", "No" }
-                                                }
-                                            }
-                                            td { "{e.notes.as_deref().unwrap_or(\"\u{2014}\")}" }
-                                        }
+                                tr { class: "report-total-row",
+                                    td { "Total" }
+                                    td { class: "text-mono text-right", "{hours(grand_total)}" }
+                                    td { class: "text-mono text-right", "{hours(grand_rounded)}" }
+                                    td { class: "text-mono text-right", "{hours(grand_billable)}" }
+                                    td { class: "text-mono text-right",
+                                        for line in grand_bill_amount { div { "{line}" } }
+                                    }
+                                    td { class: "text-mono text-right",
+                                        for line in grand_cost_amount { div { "{line}" } }
                                     }
                                 }
                             }
                         }
                     }
-                })}
                 }
+            })}
+        }
+    }
+}
+
+#[component]
+fn LegacyDetailedReport(filters: LegacyFilters) -> Element {
+    let mut detailed = use_resource(move || {
+        let (f, t, cl, pr, us, tag) = filters.read();
+        async move { server_fns::report_detailed(f, t, cl, pr, us, tag).await }
+    });
+    rsx! {
+        if detailed.state()() != UseResourceState::Ready || !(filters.dates_settled)() {
+            p { role: "status", "Loading detailed report…" }
+        } else if matches!(&*detailed.read(), Some(Err(_))) {
+            div { class: "alert alert-danger", role: "alert", "Could not load detailed report. "
+                button { class: "btn btn-secondary btn-sm", onclick: move |_| detailed.restart(), "Retry detailed report" }
             }
+        } else {
+            {loaded(&*detailed.read(), |entries| {
+                if entries.is_empty() {
+                    return rsx! {
+                        div { class: "card p-8 text-center",
+                            p { class: "text-muted", "No entries in this range." }
+                        }
+                    };
+                }
+                rsx! {
+                    DataTable {
+                        table {
+                            thead {
+                                tr {
+                                    th { "Date" }
+                                    th { "Project" }
+                                    th { "Task" }
+                                    th { "Teammate" }
+                                    th { class: "text-right", "Hours" }
+                                    th { class: "text-right", "Rounded" }
+                                    th { class: "text-center", "Billable" }
+                                    th { "Notes" }
+                                }
+                            }
+                            tbody {
+                                // The rows carry no entry ID and are replaced
+                                // wholesale on every load; they hold no state.
+                                for (i, e) in entries.iter().enumerate() {
+                                    tr { key: "{i}",
+                                        td { class: "text-mono", "{e.spent_date}" }
+                                        td { "{e.project_name}" }
+                                        td { "{e.task_name}" }
+                                        td { "{e.user_name}" }
+                                        td { class: "text-mono text-right", "{hours(e.minutes as i64)}" }
+                                        td { class: "text-mono text-right",
+                                            "{hours(e.rounded_minutes.unwrap_or(e.minutes) as i64)}"
+                                        }
+                                        td { class: "text-center",
+                                            if e.billable {
+                                                Badge { variant: "success", "Yes" }
+                                            } else {
+                                                Badge { variant: "neutral", "No" }
+                                            }
+                                        }
+                                        td { "{e.notes.as_deref().unwrap_or(\"\u{2014}\")}" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            })}
         }
     }
 }
@@ -562,5 +614,49 @@ mod tests {
         rows[0].cost_cents = Some(50);
         rows[1].cost_cents = Some(75);
         assert_eq!(cost(&rows), [money(125, "EUR")]);
+    }
+
+    #[test]
+    fn a_page_re_render_leaves_the_report_tab_alone() {
+        thread_local! {
+            static TAB_RENDERS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+        }
+        // Takes the props LegacyTimeReport takes, without its server calls.
+        #[component]
+        fn Tab(filters: LegacyFilters, group_by: Signal<String>) -> Element {
+            TAB_RENDERS.with(|renders| renders.set(renders.get() + 1));
+            rsx! {}
+        }
+        // The filter wiring of LegacyReports.
+        fn page() -> Element {
+            let from_input = use_signal(|| "2026-09-01".to_string());
+            let to_input = use_signal(|| "2026-09-30".to_string());
+            let from_date = use_debounced(from_input, SEARCH_DEBOUNCE);
+            let to_date = use_debounced(to_input, SEARCH_DEBOUNCE);
+            let filters = LegacyFilters {
+                from: from_date,
+                to: to_date,
+                client: use_signal(String::new),
+                project: use_signal(String::new),
+                user: use_signal(String::new),
+                tag: use_signal(String::new),
+                dates_settled: use_memo(move || {
+                    from_date() == from_input() && to_date() == to_input()
+                }),
+            };
+            let group_by = use_signal(|| "project".to_string());
+            rsx! { Tab { filters, group_by } }
+        }
+
+        let mut dom = VirtualDom::new(page);
+        dom.rebuild_in_place();
+        assert_eq!(TAB_RENDERS.get(), 1);
+        dom.mark_dirty(ScopeId::APP);
+        dom.render_immediate_to_vec();
+        assert_eq!(
+            TAB_RENDERS.get(),
+            1,
+            "equal props must not re-render the tab"
+        );
     }
 }

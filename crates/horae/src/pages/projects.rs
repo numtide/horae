@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use std::collections::{BTreeSet, HashMap};
+use std::rc::Rc;
 use uuid::Uuid;
 
 use super::{loaded, run_action};
@@ -278,25 +279,170 @@ mod budget_display_tests {
     }
 }
 
-fn matches_project_filters(
-    project: &Project,
-    query: &str,
-    scope: &str,
-    client: &str,
-    client_names: &HashMap<Uuid, String>,
-) -> bool {
-    let scope_matches = match scope {
-        "budgeted" => project.active && project.budget_kind != BudgetKind::None,
-        "archived" => !project.active,
-        _ => project.active,
-    };
-    scope_matches
-        && (client.is_empty() || project.client_id.to_string() == client)
-        && (query.is_empty()
-            || project.name.to_lowercase().contains(query)
-            || client_names
-                .get(&project.client_id)
-                .is_some_and(|name| name.to_lowercase().contains(query)))
+/// One loaded project with the lowercase keys search and ordering compare.
+struct ListedProject {
+    project: Project,
+    /// "[code] name", as rows and confirmations show it.
+    label: String,
+    name_key: String,
+    client_name: Option<String>,
+    client_key: String,
+}
+
+impl ListedProject {
+    /// `query` is already lowercase.
+    fn matches(&self, query: &str, scope: &str, client: &str) -> bool {
+        let project = &self.project;
+        let scope_matches = match scope {
+            "budgeted" => project.active && project.budget_kind != BudgetKind::None,
+            "archived" => !project.active,
+            _ => project.active,
+        };
+        scope_matches
+            && (client.is_empty() || project.client_id.to_string() == client)
+            && (query.is_empty()
+                || self.name_key.contains(query)
+                || self.client_key.contains(query))
+    }
+}
+
+/// Everything the list derives from one overview, built once per load so that
+/// typing and selecting neither re-sort the rows nor lowercase every name.
+struct ProjectCatalog {
+    /// Grouped by client identity, ordered by client name then project name;
+    /// the ID keeps same-named clients apart.
+    rows: Vec<ListedProject>,
+    editable: BTreeSet<Uuid>,
+    active_count: usize,
+    budgeted_count: usize,
+    archived_count: usize,
+    /// Client filter choices, grouped Active / Archived.
+    client_options: Vec<ComboOption>,
+}
+
+impl ProjectCatalog {
+    fn new(overview: &ProjectOverview) -> Self {
+        let client_names: HashMap<Uuid, &str> = overview
+            .projects
+            .iter()
+            .filter_map(|row| row.client.as_ref())
+            .map(|client| (client.id, client.name.as_str()))
+            .collect();
+        let mut rows: Vec<ListedProject> = overview
+            .projects
+            .iter()
+            .map(|row| {
+                let project = row.project.clone();
+                let client_name = client_names
+                    .get(&project.client_id)
+                    .map(|name| name.to_string());
+                ListedProject {
+                    label: match &project.code {
+                        Some(code) => format!("[{code}] {}", project.name),
+                        None => project.name.clone(),
+                    },
+                    name_key: project.name.to_lowercase(),
+                    client_key: client_name.as_deref().unwrap_or_default().to_lowercase(),
+                    client_name,
+                    project,
+                }
+            })
+            .collect();
+        rows.sort_by(|a, b| {
+            (&a.client_key, a.project.client_id, &a.name_key).cmp(&(
+                &b.client_key,
+                b.project.client_id,
+                &b.name_key,
+            ))
+        });
+
+        let mut seen_clients = BTreeSet::new();
+        let mut clients: Vec<_> = overview
+            .projects
+            .iter()
+            .filter_map(|row| row.client.as_ref())
+            .filter(|client| seen_clients.insert(client.id))
+            .collect();
+        clients
+            .sort_by_cached_key(|client| (!client.active, client.name.to_lowercase(), client.id));
+        let client_options = clients
+            .into_iter()
+            .map(|client| {
+                ComboOption::grouped(
+                    client.id.to_string(),
+                    client.name.clone(),
+                    if client.active {
+                        "Active clients"
+                    } else {
+                        "Archived clients"
+                    },
+                )
+            })
+            .collect();
+
+        let projects = || overview.projects.iter().map(|row| &row.project);
+        Self {
+            editable: overview
+                .projects
+                .iter()
+                .filter(|row| row.can_edit)
+                .map(|row| row.project.id)
+                .collect(),
+            active_count: projects().filter(|p| p.active).count(),
+            budgeted_count: projects()
+                .filter(|p| p.active && p.budget_kind != BudgetKind::None)
+                .count(),
+            archived_count: projects().filter(|p| !p.active).count(),
+            rows,
+            client_options,
+        }
+    }
+}
+
+/// The client-side filters over a loaded list. `tagged` is `None` for all tags,
+/// otherwise the projects carrying the selected tag (empty until tags load).
+#[derive(Clone, Copy)]
+struct ProjectFilters {
+    query: Signal<String>,
+    /// "active" | "budgeted" (has a budget) | "archived" (inactive).
+    scope: Signal<String>,
+    client: Signal<String>,
+    tagged: Memo<Option<BTreeSet<Uuid>>>,
+}
+
+/// The catalog for `overview` and the indices of its rows that pass `filters`,
+/// in display order. The catalog is built on the first render only: callers
+/// remount for a new overview (see `ProjectList`). A filter change rescans the
+/// prepared rows without re-sorting them or lowercasing every name.
+fn use_project_list(
+    overview: &ProjectOverview,
+    filters: ProjectFilters,
+) -> (Rc<ProjectCatalog>, Memo<Vec<usize>>) {
+    let catalog = use_hook(|| Rc::new(ProjectCatalog::new(overview)));
+    let visible = use_memo({
+        let catalog = catalog.clone();
+        move || {
+            let query = filters.query.read().to_lowercase();
+            let (scope, client, tagged) = (
+                filters.scope.read(),
+                filters.client.read(),
+                filters.tagged.read(),
+            );
+            catalog
+                .rows
+                .iter()
+                .enumerate()
+                .filter(|(_, row)| {
+                    row.matches(&query, &scope, &client)
+                        && tagged
+                            .as_ref()
+                            .is_none_or(|ids| ids.contains(&row.project.id))
+                })
+                .map(|(index, _)| index)
+                .collect()
+        }
+    });
+    (catalog, visible)
 }
 
 #[derive(Clone)]
@@ -434,76 +580,61 @@ fn ProjectListContent(
     let can_import = overview.can_import;
     let can_create = overview.can_create;
     let is_manager = overview.can_change_legacy_status;
-    let editable: BTreeSet<Uuid> = overview
-        .projects
-        .iter()
-        .filter(|row| row.can_edit)
-        .map(|row| row.project.id)
-        .collect();
+    let tagged = use_memo(move || {
+        tag_filter().map(|tag| {
+            let tags = tags_res.read();
+            let ready = tags_res.state()() == UseResourceState::Ready;
+            match tags.as_ref().filter(|_| ready) {
+                Some(Ok(links)) => matching_tag_projects(links, Some(tag)),
+                _ => BTreeSet::new(),
+            }
+        })
+    });
+    let (catalog, visible) = use_project_list(
+        &overview,
+        ProjectFilters {
+            query,
+            scope,
+            client: client_filter,
+            tagged,
+        },
+    );
     let spend_ready = spend_res.state()() == UseResourceState::Ready
         && budget_res.state()() == UseResourceState::Ready
         && matches!(&*spend_res.read(), Some(Ok(_)))
         && matches!(&*budget_res.read(), Some(Ok(_)));
 
-    let client_names: HashMap<Uuid, String> = overview
-        .projects
-        .iter()
-        .filter_map(|row| row.client.as_ref())
-        .map(|client| (client.id, client.name.clone()))
-        .collect();
-    let query_lower = query().to_lowercase();
     // Resources retain their previous value while a restart is pending.
     let projects_loading = projects.state()() != UseResourceState::Ready;
     let tags_ready =
         tags_res.state()() == UseResourceState::Ready && matches!(&*tags_res.read(), Some(Ok(_)));
-    let tags = tags_res.read();
-    let tag_links = tags.as_ref().and_then(|result| result.as_ref().ok());
-    let tag_projects = matching_tag_projects(
-        tag_links.map(Vec::as_slice).unwrap_or_default(),
-        tag_filter(),
-    );
-    let mut tag_options = Vec::new();
-    let mut seen_tags = BTreeSet::new();
-    for tag in tag_links.into_iter().flatten() {
-        if seen_tags.insert(tag.tag_id) {
-            tag_options.push((tag.tag_id, tag.name.clone()));
-        }
-    }
+    let tag_options = use_memo(move || {
+        let mut seen_tags = BTreeSet::new();
+        tags_res
+            .read()
+            .as_ref()
+            .and_then(|result| result.as_ref().ok())
+            .into_iter()
+            .flatten()
+            .filter(|tag| seen_tags.insert(tag.tag_id))
+            .map(|tag| (tag.tag_id, tag.name.clone()))
+            .collect::<Vec<_>>()
+    });
     let tag_label = match tag_filter() {
         Some(id) => tag_options
+            .read()
             .iter()
             .find(|(tag, _)| *tag == id)
             .map(|(_, name)| format!("Tag: {name}"))
             .unwrap_or_else(|| "Selected tag unavailable".into()),
         None => "All tags".into(),
     };
-    let visible: Vec<Project> = projects
-        .read()
-        .as_ref()
-        .and_then(|result| result.as_ref().ok())
-        .map(|overview| &overview.projects)
-        .into_iter()
-        .filter(|_| !projects_loading)
-        .flatten()
-        .map(|row| &row.project)
-        .filter(|p| {
-            matches_project_filters(p, &query_lower, &scope(), &client_filter(), &client_names)
-                && (tag_filter().is_none() || (tags_ready && tag_projects.contains(&p.id)))
-        })
-        .cloned()
-        .collect();
     let selection: Vec<(Uuid, String)> = visible
+        .read()
         .iter()
-        .filter(|p| selected.read().contains(&p.id))
-        .map(|p| {
-            (
-                p.id,
-                match &p.code {
-                    Some(code) => format!("[{code}] {}", p.name),
-                    None => p.name.clone(),
-                },
-            )
-        })
+        .map(|&index| &catalog.rows[index])
+        .filter(|row| selected.read().contains(&row.project.id))
+        .map(|row| (row.project.id, row.label.clone()))
         .collect();
     let selected_count = selection.len();
     let bulk_label = if scope() == "archived" {
@@ -531,64 +662,35 @@ fn ProjectListContent(
         "Archive"
     };
     // Missing/withheld money is not a zero. Empty authorized projects have explicit totals.
-    let spend_map: HashMap<Uuid, (i64, Option<i64>)> = match &*spend_res.read() {
+    let spend_map = use_memo(move || match &*spend_res.read() {
         Some(Ok(v)) => v
             .iter()
             .map(|s| (s.project_id, (s.spent_minutes, s.spent_cents)))
             .collect(),
-        _ => HashMap::new(),
-    };
-    let mut budget_map: HashMap<Uuid, ProjectBudgetOverview> = HashMap::new();
-    if spend_ready && let Some(Ok(rows)) = &*budget_res.read() {
-        for row in rows {
-            budget_map.insert(row.project_id, row.clone());
+        _ => HashMap::<Uuid, (i64, Option<i64>)>::new(),
+    });
+    let budget_map = use_memo(move || {
+        let ready = spend_res.state()() == UseResourceState::Ready
+            && budget_res.state()() == UseResourceState::Ready
+            && matches!(&*spend_res.read(), Some(Ok(_)));
+        match &*budget_res.read() {
+            Some(Ok(rows)) if ready => rows
+                .iter()
+                .map(|row| (row.project_id, row.clone()))
+                .collect(),
+            _ => HashMap::<Uuid, ProjectBudgetOverview>::new(),
         }
-    }
-    let (active_count, budgeted_count, archived_count) = match &*projects.read() {
-        Some(Ok(list)) => (
-            list.projects
-                .iter()
-                .filter(|row| row.project.active)
-                .count(),
-            list.projects
-                .iter()
-                .filter(|row| row.project.active && row.project.budget_kind != BudgetKind::None)
-                .count(),
-            list.projects
-                .iter()
-                .filter(|row| !row.project.active)
-                .count(),
-        ),
-        _ => (0, 0, 0),
-    };
+    });
+    let (active_count, budgeted_count, archived_count) = (
+        catalog.active_count,
+        catalog.budgeted_count,
+        catalog.archived_count,
+    );
     let scope_label = match scope().as_str() {
         "budgeted" => format!("Budgeted projects ({budgeted_count})"),
         "archived" => format!("Archived projects ({archived_count})"),
         _ => format!("Active projects ({active_count})"),
     };
-    // Client options for the filter combobox, grouped Active / Archived.
-    let mut seen_clients = BTreeSet::new();
-    let mut clients: Vec<_> = overview
-        .projects
-        .iter()
-        .filter_map(|row| row.client.as_ref())
-        .filter(|client| seen_clients.insert(client.id))
-        .collect();
-    clients.sort_by_key(|client| (!client.active, client.name.to_lowercase(), client.id));
-    let client_options: Vec<ComboOption> = clients
-        .into_iter()
-        .map(|client| {
-            ComboOption::grouped(
-                client.id.to_string(),
-                client.name.clone(),
-                if client.active {
-                    "Active clients"
-                } else {
-                    "Archived clients"
-                },
-            )
-        })
-        .collect();
 
     let denied = |error: &ServerFnError| {
         matches!(
@@ -684,10 +786,10 @@ fn ProjectListContent(
                     }
                 }
                 div { class: "flex-1" }
-                if !tag_options.is_empty() || tag_filter().is_some() {
+                if !tag_options.read().is_empty() || tag_filter().is_some() {
                     Menu { id: "project-tag-menu", label: tag_label, trigger_class: "text-sm px-4",
                         MenuItem { selected: tag_filter().is_none(), onclick: move |_| { selected.write().clear(); tag_filter.set(None); }, "All tags" }
-                        for (tag_id, tag_name) in tag_options {
+                        for (tag_id, tag_name) in tag_options() {
                             MenuItem { key: "{tag_id}", selected: tag_filter() == Some(tag_id), disabled: !tags_ready,
                                 onclick: move |_| { selected.write().clear(); tag_filter.set(Some(tag_id)); }, "{tag_name}"
                             }
@@ -696,7 +798,7 @@ fn ProjectListContent(
                 }
                 Combobox {
                     trigger_class: "text-sm px-4",
-                    options: client_options,
+                    options: catalog.client_options.clone(),
                     value: client_filter(),
                     placeholder: "All clients",
                     all_label: "All clients",
@@ -748,24 +850,16 @@ fn ProjectListContent(
             } else {
             {loaded(&*projects.read(), |overview| {
                     let list = &overview.projects;
-                    let visible_ids: BTreeSet<Uuid> = visible.iter().map(|p| p.id).collect();
+                    let visible = visible.read();
+                    let visible_ids: BTreeSet<Uuid> = visible.iter().map(|&index| catalog.rows[index].project.id).collect();
                     let all_selected = !visible_ids.is_empty() && selected_count == visible_ids.len();
-                    let mut items = visible.clone();
-                    // Group by client identity, ordered by client name then project
-                    // name; the ID keeps same-named clients apart.
-                    items.sort_by(|a, b| {
-                        let an = client_names.get(&a.client_id).cloned().unwrap_or_default();
-                        let bn = client_names.get(&b.client_id).cloned().unwrap_or_default();
-                        an.to_lowercase()
-                            .cmp(&bn.to_lowercase())
-                            .then_with(|| a.client_id.cmp(&b.client_id))
-                            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-                    });
-                    let mut groups: Vec<(Uuid, Option<String>, Vec<Project>)> = Vec::new();
-                    for p in items {
+                    // The catalog is already in display order, so consecutive rows
+                    // of one client form its group.
+                    let mut groups: Vec<(Uuid, Option<&str>, Vec<&ListedProject>)> = Vec::new();
+                    for row in visible.iter().map(|&index| &catalog.rows[index]) {
                         match groups.last_mut() {
-                            Some((id, _, v)) if *id == p.client_id => v.push(p),
-                            _ => groups.push((p.client_id, client_names.get(&p.client_id).cloned(), vec![p])),
+                            Some((id, _, v)) if *id == row.project.client_id => v.push(row),
+                            _ => groups.push((row.project.client_id, row.client_name.as_deref(), vec![row])),
                         }
                     }
                     // Client Detail admits every legacy reader to their organization's
@@ -838,23 +932,23 @@ fn ProjectListContent(
                                 }
                                 for (client_id, client_name, group) in groups {
                                     div { key: "grp-{client_id}", class: "proj-group py-3 px-5 text-sm font-semibold text-primary",
-                                        if let Some(name) = client_name.as_ref().filter(|_| link_clients) {
+                                        if let Some(name) = client_name.filter(|_| link_clients) {
                                             Link { to: Route::ClientDetail { id: client_id }, "{name}" }
-                                        } else if let Some(name) = client_name.as_ref() {
+                                        } else if let Some(name) = client_name {
                                             "{name}"
                                         } else {
                                             "Unknown client"
                                         }
                                     }
-                                    for p in group {
+                                    for row in group {
                                         {
-                                            let (sm, sc) = spend_map.get(&p.id).copied().unwrap_or((0, None));
-                                            let budget_config = budget_map.get(&p.id);
-                                            let rs = budget_config.and_then(configured_row_spend).unwrap_or_else(|| row_spend(&p, sm, sc));
-                                            let pname = match &p.code {
-                                                Some(c) => format!("[{c}] {}", p.name),
-                                                None => p.name.clone(),
-                                            };
+                                            let p = &row.project;
+                                            let id = p.id;
+                                            let (sm, sc) = spend_map.read().get(&id).copied().unwrap_or((0, None));
+                                            let budgets = budget_map.read();
+                                            let budget_config = budgets.get(&id);
+                                            let rs = budget_config.and_then(configured_row_spend).unwrap_or_else(|| row_spend(p, sm, sc));
+                                            let pname = &row.label;
                                             rsx! {
                                             div { class: "proj-row grid items-center py-4 px-5 text-sm", key: "{p.id}",
                                             if is_manager {
@@ -864,7 +958,7 @@ fn ProjectListContent(
                                                         label: "Select {pname}", disabled: bulk_busy(),
                                                         onclick: move |_| {
                                                             let mut ids = selected.write();
-                                                            if !ids.remove(&p.id) { ids.insert(p.id); }
+                                                            if !ids.remove(&id) { ids.insert(id); }
                                                         },
                                                     }
                                                 }
@@ -941,9 +1035,9 @@ fn ProjectListContent(
                                                 }
                                             }
                                             div { class: "flex justify-end",
-                                                if editable.contains(&p.id) || is_manager {
+                                                if catalog.editable.contains(&p.id) || is_manager {
                                                     Menu { id: "project-actions-{p.id}", label: "Actions", align_right: true,
-                                                        if editable.contains(&p.id) {
+                                                        if catalog.editable.contains(&p.id) {
                                                         MenuItem {
                                                             onclick: {
                                                                 let id = p.id;
@@ -1438,6 +1532,178 @@ fn restore_detail_focus(target: &'static str) {
             }}
         }});",
     ));
+}
+
+#[cfg(test)]
+mod list_tests {
+    use std::{any::Any, cell::RefCell};
+
+    use super::*;
+    use crate::models::permission_editor::PermissionRequester;
+    use crate::models::project::{ProjectOverviewClient, ProjectOverviewRow};
+
+    fn row(client: (u128, &str), name: &str, code: Option<&str>) -> ProjectOverviewRow {
+        ProjectOverviewRow {
+            project: Project {
+                id: Uuid::now_v7(),
+                org_id: Uuid::nil(),
+                client_id: Uuid::from_u128(client.0),
+                code: code.map(Into::into),
+                name: name.into(),
+                project_type: ProjectType::TimeAndMaterials,
+                currency: "EUR".into(),
+                rate_cents: None,
+                starts_on: None,
+                ends_on: None,
+                budget_kind: BudgetKind::None,
+                budget_amount_cents: None,
+                budget_minutes: None,
+                active: true,
+                created_at: chrono::Utc::now(),
+            },
+            client: Some(ProjectOverviewClient {
+                id: Uuid::from_u128(client.0),
+                name: client.1.into(),
+                active: true,
+            }),
+            can_edit: false,
+        }
+    }
+
+    fn overview(projects: Vec<ProjectOverviewRow>) -> ProjectOverview {
+        ProjectOverview {
+            requester: PermissionRequester {
+                org_id: Uuid::nil(),
+                user_id: Uuid::nil(),
+            },
+            canonical_permissions: true,
+            can_create: false,
+            can_import: false,
+            can_change_legacy_status: false,
+            projects,
+        }
+    }
+
+    #[test]
+    fn catalog_groups_by_client_and_orders_names_case_insensitively() {
+        let catalog = ProjectCatalog::new(&overview(vec![
+            row((2, "beta"), "zeta", None),
+            row((1, "Alpha"), "Mobile", Some("M1")),
+            row((3, "Beta"), "Apps", None),
+            row((1, "Alpha"), "api", None),
+            row((2, "beta"), "Web", None),
+        ]));
+        let order: Vec<_> = catalog.rows.iter().map(|row| row.label.as_str()).collect();
+        // Same-named clients stay apart, ordered by ID.
+        assert_eq!(order, ["api", "[M1] Mobile", "Web", "zeta", "Apps"]);
+    }
+
+    #[test]
+    fn search_matches_project_or_client_names_ignoring_case() {
+        let catalog = ProjectCatalog::new(&overview(vec![
+            row((1, "Acme Corp"), "Website", None),
+            row((2, "Globex"), "Acme migration", None),
+            row((3, "Initech"), "Payroll", None),
+        ]));
+        let found = |query: &str| -> Vec<&str> {
+            catalog
+                .rows
+                .iter()
+                .filter(|row| row.matches(query, "active", ""))
+                .map(|row| row.project.name.as_str())
+                .collect()
+        };
+        assert_eq!(found("acme"), ["Website", "Acme migration"]);
+        assert_eq!(found("pay"), ["Payroll"]);
+        assert_eq!(found(""), ["Website", "Acme migration", "Payroll"]);
+    }
+
+    /// Per render: the catalog's address and the visible project names.
+    type RenderLog = Rc<RefCell<Vec<(usize, Vec<String>)>>>;
+
+    #[test]
+    fn typing_a_search_renders_the_list_once_per_keystroke_without_rebuilding_it() {
+        use dioxus::dioxus_core::Mutation;
+        use dioxus::html::{SerializedFormData, SerializedHtmlEventConverter};
+
+        dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+        // The list wiring of ProjectListContent around the production hook.
+        fn list(log: RenderLog) -> Element {
+            let mut query = use_signal(String::new);
+            let scope = use_signal(|| "active".to_string());
+            let client = use_signal(String::new);
+            let tagged = use_memo(|| None::<BTreeSet<Uuid>>);
+            let overview = use_hook(|| {
+                overview(vec![
+                    row((1, "Acme"), "Website", None),
+                    row((1, "Acme"), "Web shop", None),
+                    row((2, "Globex"), "Payroll", None),
+                ])
+            });
+            let (catalog, visible) = use_project_list(
+                &overview,
+                ProjectFilters {
+                    query,
+                    scope,
+                    client,
+                    tagged,
+                },
+            );
+            let names = visible
+                .read()
+                .iter()
+                .map(|&index| catalog.rows[index].project.name.clone())
+                .collect();
+            log.borrow_mut()
+                .push((Rc::as_ptr(&catalog) as usize, names));
+            rsx! {
+                input { value: "{query}", oninput: move |event| query.set(event.value()) }
+            }
+        }
+        let log = RenderLog::default();
+        let mut dom = VirtualDom::new_with_props(list, log.clone());
+        let input = dom
+            .rebuild_to_vec()
+            .edits
+            .iter()
+            .find_map(|edit| match edit {
+                Mutation::NewEventListener { name, id } if name == "input" => Some(*id),
+                _ => None,
+            })
+            .unwrap();
+        for value in ["w", "we", "web", "webs"] {
+            dom.runtime().handle_event(
+                "input",
+                Event::new(
+                    Rc::new(PlatformEventData::new(Box::new(SerializedFormData::new(
+                        value.into(),
+                        vec![],
+                    )))) as Rc<dyn Any>,
+                    true,
+                ),
+                input,
+            );
+            dom.render_immediate_to_vec();
+        }
+        let log = log.borrow();
+        assert_eq!(log.len(), 5, "one render to mount, then one per keystroke");
+        assert!(
+            log.iter().all(|(catalog, _)| *catalog == log[0].0),
+            "typing must not rebuild the catalog"
+        );
+        let visible: Vec<_> = log.iter().map(|(_, names)| names.join(", ")).collect();
+        // Each keystroke's own render already shows its filtered rows.
+        assert_eq!(
+            visible,
+            [
+                "Web shop, Website, Payroll",
+                "Web shop, Website",
+                "Web shop, Website",
+                "Web shop, Website",
+                "Website",
+            ]
+        );
+    }
 }
 
 fn matching_tag_projects(links: &[ProjectTagLink], selected: Option<Uuid>) -> BTreeSet<Uuid> {

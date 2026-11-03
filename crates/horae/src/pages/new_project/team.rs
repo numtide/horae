@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::components::avatar::{Avatar, first_initial};
 use crate::components::controls::Checkbox;
+use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::Input;
 use crate::components::icons::NavIcon;
 use crate::components::select_field::SelectField;
@@ -86,11 +87,12 @@ pub(super) fn Team(
     });
     let query = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
+    let searched = use_debounced(query, SEARCH_DEBOUNCE);
     let mut people = use_resource(move || {
-        let query = query();
+        let query = searched();
         async move { super::catalog::people(editor_context, query).await }
     });
-    let pending = people.state()() != UseResourceState::Ready;
+    let pending = people.state()() != UseResourceState::Ready || *searched.read() != *query.read();
     let choices = people
         .read()
         .as_ref()
