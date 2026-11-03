@@ -200,22 +200,9 @@ async fn begin_active_time_write(
 ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
     let mut tx = pool.begin().await.map_err(server_err)?;
     // Bound the activity check independently of pooled connection defaults.
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE")
-        .execute(&mut *tx)
+    super::permissions::configure_administration(&mut tx)
         .await
         .map_err(server_err)?;
-    sqlx::query!(
-        "SELECT set_config(name,
-            (CASE WHEN setting::bigint = 0 THEN limits.milliseconds
-             ELSE LEAST(setting::bigint, limits.milliseconds) END)::text, true)
-         FROM pg_settings
-         JOIN (VALUES ('statement_timeout', 5000::bigint),
-                      ('idle_in_transaction_session_timeout', 10000::bigint))
-              AS limits(setting_name, milliseconds) ON name = limits.setting_name"
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .map_err(server_err)?;
     // Routing only: recheck the same tenant and activity after the organization gate.
     let org_id = sqlx::query_scalar!("SELECT org_id FROM users WHERE id=$1", user_id)
         .fetch_optional(&mut *tx)

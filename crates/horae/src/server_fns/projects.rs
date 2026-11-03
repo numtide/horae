@@ -571,6 +571,11 @@ pub(super) async fn spend_in_transaction(
     // without settings. Attached invoice amounts take priority over live rates.
     // The joins cannot multiply rows: project
     // tasks, assignments, and invoice lines each have a unique pair key.
+    //
+    // Entries are summed per project inside a MATERIALIZED CTE so the scan runs
+    // once. Left inlined, a low estimate for `visible` (stale or missing
+    // statistics) put the whole entry join on the inner side of a nested loop,
+    // re-running it once per visible project: seconds instead of milliseconds.
     sqlx::query_as!(
         ProjectSpend,
         r#"WITH visible AS (
@@ -589,9 +594,9 @@ pub(super) async fn spend_in_transaction(
                AND CASE WHEN $3 THEN COALESCE(legacy.can_view_progress, false)
                ELSE $4 OR ($5 AND management.id IS NOT NULL)
                  OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members')='project_members') END
-           ), entries AS (
-             SELECT p.id AS project_id, te.minutes,
-               CASE WHEN p.can_view_money AND te.billable
+           ), spent AS MATERIALIZED (
+             SELECT p.id AS project_id, SUM(te.minutes) AS minutes,
+               SUM(CASE WHEN p.can_view_money AND te.billable
                  AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable'
                    AND COALESCE(pt.billable, t.billable_default)))
                THEN COALESCE(line.amount_cents, line_amount_cents(
@@ -601,7 +606,7 @@ pub(super) async fn spend_in_transaction(
                    CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
                  ) END, 0),
                  effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)
-               )) END AS amount_cents
+               )) END) AS amount_cents
            FROM visible p
            JOIN time_entries te ON te.project_id=p.id AND te.org_id=p.org_id
            JOIN clients c ON c.id = p.client_id AND c.org_id=te.org_id
@@ -614,12 +619,12 @@ pub(super) async fn spend_in_transaction(
            JOIN users u ON u.id = te.user_id AND u.org_id=te.org_id
            JOIN organizations o ON o.id = te.org_id
            WHERE te.invoice_id IS NULL OR invoice.id IS NOT NULL
+           GROUP BY p.id
            )
            SELECT p.id AS "project_id!",
-             COALESCE(SUM(e.minutes),0)::bigint AS "spent_minutes!",
-             CASE WHEN p.can_view_money THEN COALESCE(SUM(e.amount_cents),0)::bigint END AS "spent_cents?"
-           FROM visible p LEFT JOIN entries e ON e.project_id=p.id
-           GROUP BY p.id,p.can_view_money
+             COALESCE(s.minutes,0)::bigint AS "spent_minutes!",
+             CASE WHEN p.can_view_money THEN COALESCE(s.amount_cents,0)::bigint END AS "spent_cents?"
+           FROM visible p LEFT JOIN spent s ON s.project_id=p.id
            ORDER BY p.id"#,
         org_id,
         viewer_id,
