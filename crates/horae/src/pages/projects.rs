@@ -403,11 +403,11 @@ impl ProjectCatalog {
 /// otherwise the projects carrying the selected tag (empty until tags load).
 #[derive(Clone, Copy)]
 struct ProjectFilters {
-    query: ReadSignal<String>,
+    query: Signal<String>,
     /// "active" | "budgeted" (has a budget) | "archived" (inactive).
-    scope: ReadSignal<String>,
-    client: ReadSignal<String>,
-    tagged: ReadSignal<Option<BTreeSet<Uuid>>>,
+    scope: Signal<String>,
+    client: Signal<String>,
+    tagged: Memo<Option<BTreeSet<Uuid>>>,
 }
 
 /// The catalog for `overview` and the indices of its rows that pass `filters`,
@@ -593,10 +593,10 @@ fn ProjectListContent(
     let (catalog, visible) = use_project_list(
         &overview,
         ProjectFilters {
-            query: query.into(),
-            scope: scope.into(),
-            client: client_filter.into(),
-            tagged: tagged.into(),
+            query,
+            scope,
+            client: client_filter,
+            tagged,
         },
     );
     let spend_ready = spend_res.state()() == UseResourceState::Ready
@@ -1632,7 +1632,7 @@ mod list_tests {
             let mut query = use_signal(String::new);
             let scope = use_signal(|| "active".to_string());
             let client = use_signal(String::new);
-            let tagged = use_signal(|| None::<BTreeSet<Uuid>>);
+            let tagged = use_memo(|| None::<BTreeSet<Uuid>>);
             let overview = use_hook(|| {
                 overview(vec![
                     row((1, "Acme"), "Website", None),
@@ -1643,10 +1643,10 @@ mod list_tests {
             let (catalog, visible) = use_project_list(
                 &overview,
                 ProjectFilters {
-                    query: query.into(),
-                    scope: scope.into(),
-                    client: client.into(),
-                    tagged: tagged.into(),
+                    query,
+                    scope,
+                    client,
+                    tagged,
                 },
             );
             let names = visible
