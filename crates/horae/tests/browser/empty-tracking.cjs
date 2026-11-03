@@ -10,43 +10,65 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = [];
   page.on('pageerror', error => errors.push({ message: error.message, stack: error.stack, url: page.url() }));
+  const catalogs = /\/api\/(list_tracking_projects|load_timesheet_tracking)/;
   try {
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
-    // An organization with nothing assigned yet: both catalogs answer empty.
-    await page.route(/\/api\/(list_tracking_projects|load_timesheet_tracking)/, route => route.fulfill({ json: [] }));
+    // Nothing assigned to the viewer: both catalogs answer empty.
+    await page.route(catalogs, route => route.fulfill({ json: [] }));
+    const me = page.waitForResponse(r => r.url().includes('/api/get_me') && r.status() === 200);
     const ready = page.waitForResponse(r => r.url().includes('/api/load_timesheet_tracking'));
     await page.goto(`${base}/`);
+    const { id, name } = await (await me).json();
     await (await ready).finished();
+    const sheet = page.url();
 
     const add = page.getByRole('button', { name: 'Add entry', exact: true });
     await expect(add).toBeDisabled();
-    await expect(add).toHaveAttribute('title', 'No projects to track yet');
+    await expect(add).toHaveAttribute('title', 'No projects are assigned to you yet.');
     const hint = page.locator(`#${await add.getAttribute('aria-describedby')}`);
-    await expect(hint).toBeVisible();
-    await expect(hint).toContainText('No projects to track yet.');
-    // The dev admin may create projects, so the hint leads there.
-    await expect(hint.getByRole('link', { name: 'Create a project', exact: true })).toHaveAttribute('href', '/projects/new');
-    console.log('PASS: the disabled add button explains an empty catalog and links to project creation');
+    await expect(hint).toHaveText(/^No projects are assigned to you yet\./);
+    // The dev admin manages projects, so the hint leads to them.
+    await expect(hint.getByRole('link', { name: 'Open Projects', exact: true })).toHaveAttribute('href', '/projects');
+    console.log('PASS: the disabled add button explains missing assignments and links to Projects');
 
+    // A week change reloads the sheet; the explanation stays in place.
+    const reloaded = page.waitForResponse(r => r.url().includes('/api/load_timesheet_tracking'));
+    await page.getByRole('button', { name: 'Next week', exact: true }).click();
+    await expect(hint).toBeVisible();
+    await (await reloaded).finished();
+    await expect(hint).toBeVisible();
+    console.log('PASS: the hint stays mounted while another week loads');
+
+    // A named subject is someone else's sheet: name them, and offer no link.
+    const named = page.waitForResponse(r => r.url().includes('/api/load_timesheet_tracking'));
+    const today = new Date().toISOString().slice(0, 10);
+    await page.goto(`${base}/timesheet/week/${today}?span=week&user=${id}`);
+    await (await named).finished();
+    await expect(add).toHaveAttribute('title', `No projects are assigned to ${name} yet.`);
+    await expect(page.locator('#ts-add-empty')).toHaveText(`No projects are assigned to ${name} yet.`);
+    await expect(page.locator('#ts-add-empty a')).toHaveCount(0);
+    console.log("PASS: another person's empty sheet names them without a link");
+
+    const own = page.waitForResponse(r => r.url().includes('/api/list_tracking_projects'));
+    await page.goto(sheet);
+    await (await own).finished();
     const sidebar = page.locator('.app-sidebar');
     await sidebar.getByRole('button', { name: 'Start timer', exact: true }).click();
     const popover = sidebar.locator('.sidebar-timer-pop');
-    await expect(popover).toBeVisible();
-    await expect(popover).toContainText('No projects to track yet.');
-    await expect(popover.getByRole('link', { name: 'Create a project', exact: true })).toBeVisible();
+    await expect(popover).toContainText('No projects are assigned to you yet.');
     // Nothing to pick, so there is no picker and no way to start.
     await expect(popover.locator('select, input, textarea')).toHaveCount(0);
     await expect(popover.getByRole('button', { name: 'Start timer', exact: true })).toHaveCount(0);
-    await popover.getByRole('link', { name: 'Create a project', exact: true }).click();
-    await expect(page).toHaveURL(`${base}/projects/new`);
+    await popover.getByRole('link', { name: 'Open Projects', exact: true }).click();
+    await expect(page).toHaveURL(`${base}/projects`);
     await expect(popover).toHaveCount(0);
     console.log('PASS: the timer popover shows the empty state instead of an empty picker');
 
-    await page.unroute(/\/api\/(list_tracking_projects|load_timesheet_tracking)/);
+    await page.unroute(catalogs);
     const loaded = page.waitForResponse(r => r.url().includes('/api/load_timesheet_tracking') && r.status() === 200);
-    await page.goto(`${base}/`);
+    await page.goto(sheet);
     await (await loaded).finished();
     await expect(add).toBeEnabled();
     await expect(add).not.toHaveAttribute('title', /./);

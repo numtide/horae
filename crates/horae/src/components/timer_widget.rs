@@ -126,6 +126,8 @@ pub fn TimerWidget() -> Element {
     // An empty catalog gets an explanation in place of a picker with nothing
     // in it, so Start cannot be pressed with nothing selectable.
     let nothing_to_track = matches!(&*projects.read(), Some(Ok(ps)) if ps.is_empty());
+    // Until the catalog answers, an empty picker would only flip to the hint.
+    let catalog_pending = projects.read().is_none();
 
     // Elapsed = time since it started, plus any minutes already banked on the entry.
     let (hours, minutes, seconds) = match current_timer
@@ -254,11 +256,15 @@ pub fn TimerWidget() -> Element {
                                 "×"
                             }
                         }
-                        if nothing_to_track {
+                        if catalog_pending {
+                            div { class: "sidebar-timer-pop-body",
+                                p { class: "no-tracking-hint", "Loading projects…" }
+                            }
+                        } else if nothing_to_track {
                             div { class: "sidebar-timer-pop-body",
                                 NoTrackingHint {
                                     id: "sidebar-timer-empty",
-                                    can_create: session.can_create_projects(),
+                                    can_manage: session.can_create_projects(),
                                     on_follow: move |_| picking.set(false),
                                 }
                             }

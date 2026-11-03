@@ -212,7 +212,8 @@ mod components {
         #[component]
         pub fn NoTrackingHint(
             id: String,
-            can_create: bool,
+            #[props(default)] assignee: Option<String>,
+            can_manage: bool,
             #[props(default)] on_follow: EventHandler<()>,
         ) -> Element {
             rsx! {}

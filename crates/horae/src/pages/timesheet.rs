@@ -13,7 +13,7 @@ use crate::components::controls::Segmented;
 use crate::components::date_picker::DatePicker;
 use crate::components::menu::{Menu, MenuItem};
 use crate::components::modal::Modal;
-use crate::components::no_tracking::NoTrackingHint;
+use crate::components::no_tracking::{NoTrackingHint, no_tracking_message};
 use crate::components::session::use_session;
 use crate::components::timer_widget::use_running_timer;
 use crate::models::permission_editor::PermissionRequester;
@@ -383,10 +383,30 @@ fn TimesheetContent(
             .cloned()
             .unwrap_or_default()
     });
-    // Loaded and empty, as opposed to still loading or failed (which has its
-    // own retry alert): only then does the disabled add button need a reason.
-    let nothing_to_track =
-        matches!(current_tracking.read().as_ref(), Some(Ok(options)) if options.is_empty());
+    // The subject whose settled catalog was empty, as opposed to loading or
+    // failed (which has its own retry alert): only then does the disabled add
+    // button need a reason. A week change drops the context for a moment, so
+    // keep the last answer through it rather than flicker the hint, but never
+    // show it for a different person.
+    let mut empty_for = use_signal(|| None::<(Uuid, String)>);
+    use_effect(move || {
+        let (Some(context), Some(result)) = (context(), current_tracking()) else {
+            return;
+        };
+        let name = match &*current_sheet.peek() {
+            Some(Ok(page)) => page.subject.name.clone(),
+            _ => String::new(),
+        };
+        let empty = matches!(result, Ok(options) if options.is_empty());
+        empty_for.set(empty.then_some((context.subject_id, name)));
+    });
+    let empty_subject = empty_for()
+        .filter(|(id, _)| context().is_none_or(|context| context.subject_id == *id))
+        .map(|(_, name)| name);
+    let nothing_to_track = empty_subject.is_some();
+    // Another person's sheet names them; one's own says "you".
+    let assignee = empty_subject.filter(|_| subject.is_some());
+    let empty_message = no_tracking_message(assignee.as_deref());
     let session = use_session();
     let mut pending_action = use_signal(|| false);
 
@@ -1065,14 +1085,14 @@ fn TimesheetContent(
                 button {
                     class: "ts-add",
                     "aria-label": "Add entry",
-                    title: if nothing_to_track { "No projects to track yet" },
+                    title: if nothing_to_track { "{empty_message}" },
                     "aria-describedby": if nothing_to_track { "ts-add-empty" },
                     disabled: busy() || tracking.read().is_empty(),
                     onclick: move |_| open_add.call(add_default_date),
                     "+"
                 }
                 if nothing_to_track {
-                    NoTrackingHint { id: "ts-add-empty", can_create: session.can_create_projects() }
+                    NoTrackingHint { id: "ts-add-empty", assignee: assignee.clone(), can_manage: session.can_create_projects() }
                 }
                 // The pager's own label is the date picker's trigger. The popover
                 // is a sibling of .ts-pager, which clips its children to keep the
