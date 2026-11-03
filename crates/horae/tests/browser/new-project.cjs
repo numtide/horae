@@ -441,7 +441,11 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     const addTask = tasksSection.getByRole('button', { name: 'Add task', exact: true });
     await readsFinished(page);
     let releaseTasks;
+    let heldTasks = false;
     await page.route('**/api/project_creation_options*', async route => {
+      // Hold only the search for the typed name; the cleared search after adding runs freely.
+      if (heldTasks) return route.continue();
+      heldTasks = true;
       const response = await route.fetch();
       await new Promise(resolve => { releaseTasks = resolve; });
       return route.fulfill({ response });
@@ -452,13 +456,12 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
       await expect.poll(() => !!releaseTasks).toBe(true);
       await expect(addTask).toBeDisabled();
       await expect(tasksSection.getByRole('button', { name: 'Design', exact: true })).toHaveCount(0);
+      // Enter waits for the search of the typed name, then adds that task once.
       await taskSearch.press('Enter');
       await expect(tasksSection.getByRole('button', { name: 'Remove task Development', exact: true })).toHaveCount(0);
       releaseTasks();
-      await expect(addTask).toBeEnabled();
-      await page.unroute('**/api/project_creation_options*');
-      await taskSearch.press('Enter');
       await expect(tasksSection.getByRole('button', { name: 'Remove task Development', exact: true })).toHaveCount(1);
+      await expect(taskSearch).toHaveValue('');
       await readsFinished(page);
     } finally {
       releaseTasks?.();
@@ -1264,6 +1267,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await page.locator('input[type="date"]').last().fill(entryDate);
     const reportTag = page.getByRole('combobox', { name: 'Project tag', exact: true });
     await expect(reportTag).toBeVisible();
+    // The dates load once typing pauses, so wait for that report, not only idle requests.
+    await expect(page.getByText('Loading report…', { exact: true })).toHaveCount(0);
     await readsFinished(page);
     let releaseReport;
     await page.route('**/api/report_time*', async route => {

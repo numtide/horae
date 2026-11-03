@@ -4,6 +4,7 @@ use horae_core::duration::format_hours2 as hours;
 
 use crate::components::badge::Badge;
 use crate::components::controls::Checkbox;
+use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::{FormGroup, Input, Select};
 use crate::components::table::DataTable;
 use crate::models::permission_editor::PermissionRequester;
@@ -109,6 +110,14 @@ pub(super) fn ScopedReports(
     let today = chrono::Utc::now().date_naive();
     let mut from = use_signal(move || today.with_day(1).unwrap_or(today).to_string());
     let mut to = use_signal(move || today.to_string());
+    // Each typed date segment is a valid date, so reports load once typing
+    // pauses. Keys still use the typed dates: validation and hiding earlier
+    // results stay immediate, and only the request waits.
+    let (settled_from, settled_to) = (
+        use_debounced(from, SEARCH_DEBOUNCE),
+        use_debounced(to, SEARCH_DEBOUNCE),
+    );
+    let dates_settled = use_memo(move || settled_from() == from() && settled_to() == to());
     let mut show_groups = use_signal(|| false);
     let mut active_projects_only = use_signal(|| false);
     let mut billability = use_signal(|| TimeReportBillability::All);
@@ -126,9 +135,11 @@ pub(super) fn ScopedReports(
             show_groups(),
             active_projects_only(),
             billability(),
+            dates_settled(),
         );
         let result = async {
-            if key.4 {
+            // An unsettled key never matches the rendered one, so this is never shown.
+            if key.4 || !key.7 {
                 return Ok(None);
             }
             let (date_from, date_to) = period(&key.0, &key.1)?;
@@ -167,6 +178,7 @@ pub(super) fn ScopedReports(
         show_groups(),
         active_projects_only(),
         billability(),
+        true,
     );
     let dates = period(&key.0, &key.1);
     let response = page.read();
@@ -260,7 +272,7 @@ pub(super) fn ScopedReports(
             p { id: "report-date-error", class: "alert alert-danger", role: "alert", "{message}" }
         } else if show_groups() {
             grouped::GroupedTimeReport {
-                requester, from, to, active_projects_only, billability, dimension: group_dimension, cursors: group_cursors, context: group_context,
+                requester, from, to, dates_settled, active_projects_only, billability, dimension: group_dimension, cursors: group_cursors, context: group_context,
                 on_detail: move |selected| { selection.set(selected); cursors.set(vec![None]); show_groups.set(false); }
             }
         } else if !ready {

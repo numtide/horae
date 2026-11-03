@@ -4,6 +4,11 @@ default_platform = "fullstack"
 out_dir = "dist"
 asset_dir = "assets"
 
+[web]
+# Release builds write a brotli `.br` beside each asset; the server sends it
+# to clients that accept br instead of compressing the WASM per request.
+pre_compress = true
+
 [web.app]
 title = "Horae — Time Tracking"
 

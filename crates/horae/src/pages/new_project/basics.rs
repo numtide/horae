@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use horae_core::project::PROJECT_CURRENCIES;
 use uuid::Uuid;
 
+use crate::components::debounce::{SEARCH_DEBOUNCE, use_debounced};
 use crate::components::form::{FormGroup, Input, Select, Textarea};
 use crate::components::modal::Modal;
 use crate::components::select_field::SelectField;
@@ -38,8 +39,9 @@ pub(super) fn Basics(
     let mut client_open = use_signal(|| false);
     let mut tag_input = use_signal(String::new);
     let mut tag_error = use_signal(|| None::<&'static str>);
+    let searched_client = use_debounced(client_query, SEARCH_DEBOUNCE);
     let clients = use_resource(move || {
-        let query = client_query();
+        let query = searched_client();
         // Subscribes to the defaults only while they are shown, so an inline create appears.
         let unfiltered = query.is_empty().then(|| defaults.cloned());
         async move {
@@ -51,7 +53,8 @@ pub(super) fn Basics(
             super::catalog::options(editor_context, search).await
         }
     });
-    let clients_pending = clients.state()() != UseResourceState::Ready;
+    let clients_pending = clients.state()() != UseResourceState::Ready
+        || *searched_client.read() != *client_query.read();
     let selected = form.read().client_id;
     let catalog = options.read();
     let client_results = clients.read();

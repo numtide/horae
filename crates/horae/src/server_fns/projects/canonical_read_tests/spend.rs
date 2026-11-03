@@ -272,3 +272,137 @@ async fn canonical_shared_progress_and_report_permissions_do_not_open_ordinary_m
         "report-only amount: {payload}"
     );
 }
+
+/// Exact (minutes, cents) per project for the shapes the grouped query has to
+/// get right at once: an invoiced entry (its line amount wins over the live
+/// rate), money the viewer may not see, a project without entries, and an entry
+/// whose invoice is missing from the organization. The foreign key keeps
+/// `invoice_id` pointing at a real invoice, so "missing" is an invoice of
+/// another organization, which the org-scoped join cannot see.
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn spend_totals_are_exact_for_invoiced_hidden_empty_and_missing_invoice_entries(
+    pool: PgPool,
+) {
+    // One 60-minute entry at 12345 cents an hour on the managed project.
+    let ids = tracked(
+        &pool,
+        OrgRole::Member,
+        &[
+            Permission::ProjectReadAll,
+            Permission::BillableRateReadManaged,
+        ],
+    )
+    .await;
+    designate(&pool, &ids).await;
+    let hidden = add_project(&pool, &ids).await;
+    let empty = add_project(&pool, &ids).await;
+    designate(
+        &pool,
+        &SeedIds {
+            project_id: empty,
+            ..ids
+        },
+    )
+    .await;
+    add_entry(&pool, &ids, hidden, 60, None).await;
+
+    let invoice = add_invoice(&pool, ids.org_id, ids.client_id).await;
+    let invoiced = add_entry(&pool, &ids, ids.project_id, 30, Some(invoice)).await;
+    sqlx::query!(
+        "INSERT INTO invoice_line_items (id, invoice_id, time_entry_id, description, minutes, rate_cents, amount_cents)
+         VALUES ($1, $2, $3, 'Invoiced time', 30, 1998, 999)",
+        Uuid::now_v7(),
+        invoice,
+        invoiced,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let foreign = seed(&pool, OrgRole::Admin).await;
+    let missing = add_invoice(&pool, foreign.org_id, foreign.client_id).await;
+    add_entry(&pool, &ids, ids.project_id, 45, Some(missing)).await;
+
+    let totals: std::collections::BTreeMap<_, _> =
+        fetch_project_spend(&pool, ids.org_id, ids.user_id)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|row| (row.project_id, (row.spent_minutes, row.spent_cents)))
+            .collect();
+    assert_eq!(
+        totals,
+        std::collections::BTreeMap::from([
+            // 60 live + 30 invoiced; the missing-invoice entry counts neither
+            // minutes nor money.
+            (ids.project_id, (90, Some(12345 + 999))),
+            (hidden, (60, None)),
+            (empty, (0, Some(0))),
+        ])
+    );
+}
+
+async fn add_project(pool: &PgPool, ids: &SeedIds) -> Uuid {
+    let id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO projects (id, org_id, client_id, name, currency, rate_cents)
+         VALUES ($1, $2, $3, $4, 'EUR', 12345)",
+        id,
+        ids.org_id,
+        ids.client_id,
+        format!("Project {id}"),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    id
+}
+
+async fn add_entry(
+    pool: &PgPool,
+    ids: &SeedIds,
+    project_id: Uuid,
+    minutes: i32,
+    invoice_id: Option<Uuid>,
+) -> Uuid {
+    let id = Uuid::now_v7();
+    let state = if invoice_id.is_some() {
+        EntryState::Invoiced
+    } else {
+        EntryState::Open
+    };
+    sqlx::query!(
+        "INSERT INTO time_entries
+           (id, org_id, user_id, project_id, task_id, spent_date, minutes, billable, state, invoice_id)
+         VALUES ($1, $2, $3, $4, $5, '2026-09-07', $6, true, $7, $8)",
+        id,
+        ids.org_id,
+        ids.user_id,
+        project_id,
+        ids.task_id,
+        minutes,
+        state as EntryState,
+        invoice_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    id
+}
+
+async fn add_invoice(pool: &PgPool, org_id: Uuid, client_id: Uuid) -> Uuid {
+    let id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents)
+         VALUES ($1, $2, $3, $4, 'sent', '2026-09-07', '2026-10-07', 'EUR', 999)",
+        id,
+        org_id,
+        client_id,
+        format!("SPEND-{id}"),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    id
+}
