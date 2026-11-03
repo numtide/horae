@@ -63,7 +63,7 @@ const other = '019f2a00-0000-7000-8000-000000000001', otherName = 'Empty trackin
     await page.unroute(/\/api\/load_timesheet_page/);
     console.log("PASS: another person's empty sheet names them without a link");
 
-    const own = page.waitForResponse(r => r.url().includes('/api/list_tracking_projects'));
+    const own = page.waitForResponse(r => r.url().includes('/api/load_timesheet_tracking'));
     await page.goto(sheet);
     await (await own).finished();
     const sidebar = page.locator('.app-sidebar');

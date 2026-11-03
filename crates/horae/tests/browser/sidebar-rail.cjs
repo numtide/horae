@@ -19,7 +19,7 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
     // A client-side read means the app has hydrated and the rail handles clicks.
-    const ready = page.waitForResponse(r => r.url().includes('/api/list_tracking_projects') && r.status() === 200);
+    const ready = page.waitForResponse(r => r.url().includes('/api/load_timesheet_tracking') && r.status() === 200);
     await page.reload();
     await (await ready).finished();
     const sidebar = page.locator('.app-sidebar');
