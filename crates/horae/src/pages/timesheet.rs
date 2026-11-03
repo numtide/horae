@@ -799,6 +799,9 @@ fn TimesheetContent(
         if hint.peek().is_some() {
             hint.set(None);
         }
+        if grid_error.peek().is_some() {
+            grid_error.set(None);
+        }
     }));
 
     // Commit a grid cell: create, update, or clear the entry behind it, then
