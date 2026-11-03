@@ -16,7 +16,8 @@ use crate::components::modal::Modal;
 use crate::components::timer_widget::use_running_timer;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::scoped_time::{
-    TimesheetCommand, TimesheetEntryInput, TimesheetPolicy, TimesheetWriteContext, VisibleTimeEntry,
+    TimesheetCommand, TimesheetEntryInput, TimesheetPage, TimesheetPolicy, TimesheetWriteContext,
+    VisibleTimeEntry,
 };
 use crate::route::Route;
 use crate::server_fns;
@@ -255,10 +256,11 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> E
             return rsx! { div { class: "alert alert-danger", "This week is outside the supported date range." } };
         };
         // Keys reset component state only inside a dynamic fragment. Another
-        // person or week must discard the previous resources and drafts; a new
-        // day, view or span within the same week keeps the loaded week.
+        // person must discard the previous resources and drafts. Another week
+        // keeps the page mounted, so the last week stays on screen while the
+        // next one loads; TimesheetContent resets its week-scoped state itself.
         rsx! {
-            for key in [format!("{user}:{start}")] {
+            for key in [user.clone()] {
                 TimesheetContent { key: "{key}", view, date, span, start, subject, requester, last_context }
             }
         }
@@ -335,9 +337,35 @@ fn TimesheetContent(
             requester.set(Some(page.requester));
         }
     });
+    // The last admitted week and day. While another week loads, it stays on
+    // screen, inert, instead of a loading placeholder.
+    let mut admitted = use_signal(|| None::<(NaiveDate, Anchor, TimesheetPage)>);
+    use_effect(use_reactive!(|(date,)| {
+        if let Some(Ok(page)) = current_sheet.read().as_ref() {
+            admitted.set(Some((week_start(), date, page.clone())));
+        }
+    }));
+    let held = use_memo(move || {
+        if current_sheet.read().is_some() {
+            return None;
+        }
+        admitted
+            .read()
+            .as_ref()
+            .filter(|(start, ..)| *start != week_start())
+            .map(|(start, date, _)| (*start, *date))
+    });
     // Resources retain their previous value during a refresh. Do not render
-    // those rows or derive totals until the complete new window is admitted.
+    // those rows or derive totals until the complete new window is admitted;
+    // a held week is display only, as every write needs the current context.
     let entries = use_memo(move || {
+        if held().is_some() {
+            return admitted
+                .read()
+                .as_ref()
+                .map(|(.., page)| page.entries.clone())
+                .unwrap_or_default();
+        }
         current_sheet
             .read()
             .as_ref()
@@ -345,6 +373,8 @@ fn TimesheetContent(
             .map(|page| page.entries.clone())
             .unwrap_or_default()
     });
+    // The week the content shows: the held one until the new one is admitted.
+    let shown_start = use_memo(move || held().map_or_else(|| week_start(), |(start, _)| start));
     let context = use_memo(move || {
         current_sheet
             .read()
@@ -444,7 +474,7 @@ fn TimesheetContent(
 
     // Entries for the visible week, grouped by weekday, with per-day totals.
     let week_entries = use_memo(move || -> Vec<VisibleTimeEntry> {
-        let ws = week_start();
+        let ws = shown_start();
         let we = ws + Duration::days(6);
         entries
             .read()
@@ -454,7 +484,7 @@ fn TimesheetContent(
             .collect()
     });
     let by_day = use_memo(move || -> [Vec<VisibleTimeEntry>; 7] {
-        let ws = week_start();
+        let ws = shown_start();
         let mut by_day: [Vec<VisibleTimeEntry>; 7] = Default::default();
         for entry in week_entries.read().iter() {
             let offset = (entry.spent_date - ws).num_days();
@@ -775,12 +805,12 @@ fn TimesheetContent(
     let mut cell_drafts = use_signal(HashMap::<CellKey, String>::new);
     let mut saving_cells = use_signal(HashSet::<CellKey>::new);
 
-    // A day, view or span change keeps the loaded week but leaves the editor:
-    // the navigation guard has already asked to discard unsaved changes, so
-    // drop them as the remount on these changes used to.
+    // A day, view, span or week change leaves the editor: the navigation
+    // guard has already asked to discard unsaved changes, and a pending save
+    // blocks it, so drop them as a remount would.
     use_effect(use_reactive!(|(view, date, span)| {
         let _ = (view, date, span);
-        let (mut drag, mut hint) = (cal_drag, add_hint);
+        let (mut drag, mut hint, mut submit_status) = (cal_drag, add_hint, submit_status);
         if !cell_drafts.peek().is_empty() {
             cell_drafts.write().clear();
         }
@@ -801,6 +831,9 @@ fn TimesheetContent(
         }
         if grid_error.peek().is_some() {
             grid_error.set(None);
+        }
+        if submit_status.peek().is_some() {
+            submit_status.set(None);
         }
     }));
 
@@ -1018,7 +1051,12 @@ fn TimesheetContent(
     });
 
     let current_mode = *view_mode.read();
-    let sel_offset = *selected_day_offset.read();
+    // The content follows the held week, while the header and pager already
+    // name the requested one.
+    let shown_ws = shown_start();
+    let sel_offset = held().map_or(*selected_day_offset.read(), |(start, date)| {
+        (date.0 - start).num_days()
+    });
     // The pager moves a single day in Day view and in the Calendar's single-day
     // span; otherwise it moves a whole week (like Harvest).
     let day_paged = current_mode == ViewMode::Day
@@ -1050,7 +1088,7 @@ fn TimesheetContent(
             // Header: title + last-saved + view toggle
             div { class: "ts-header",
                 h1 { class: "page-title", "Timesheet" }
-                if matches!(&*current_sheet.read(), Some(Ok(_))) {
+                if held().is_some() || matches!(&*current_sheet.read(), Some(Ok(_))) {
                     span { class: "ts-saved", "{format_hhmm(week_total.into())} this week" }
                 }
                 Segmented {
@@ -1167,7 +1205,9 @@ fn TimesheetContent(
                 }
             }
 
-            if let Some(Ok(page)) = current_sheet.read().as_ref() {
+            if let Some(page) = current_sheet.read().as_ref().and_then(|result| result.as_ref().ok())
+                .or(held().and(admitted.read().as_ref().map(|(.., page)| page)))
+            {
                 if page.policy == TimesheetPolicy::Scoped {
                     people::PersonPicker {
                         requester: page.requester, selected: page.subject.clone(), disabled: busy(),
@@ -1194,7 +1234,7 @@ fn TimesheetContent(
             }
 
             // Content
-            if current_sheet.read().is_none() {
+            if current_sheet.read().is_none() && held().is_none() {
                 div { class: "text-muted text-sm", role: "status", "Loading timesheet…" }
             } else if let Some(Err(error)) = current_sheet.read().as_ref() {
                 div { class: "alert alert-danger", role: "alert",
@@ -1202,9 +1242,13 @@ fn TimesheetContent(
                     button { class: "btn btn-secondary btn-sm", onclick: move |_| sheet.restart(), "Retry" }
                 }
             } else {
-            {loaded(&*current_sheet.read(), |_| match current_mode {
+                div {
+                    class: "ts-content",
+                    inert: held().map(|_| "true"),
+                    "aria-busy": held().map(|_| "true"),
+                    match current_mode {
                     ViewMode::Week => rsx! {
-                        WeekGrid { entries: week_entries, daily_totals, week_start: ws, today, project_names, task_names, pending: pending_rows, actions: week_actions }
+                        WeekGrid { entries: week_entries, daily_totals, week_start: shown_ws, today, project_names, task_names, pending: pending_rows, actions: week_actions }
                         div { class: "ts-submit-bar",
                             if all_submitted_or_approved {
                                 span { class: "badge badge-success", "Submitted" }
@@ -1245,15 +1289,16 @@ fn TimesheetContent(
                         }
                     },
                     ViewMode::Day => rsx! {
-                        {render_day_view(&by_day.read(), &daily_totals.read(), ws, sel_offset, select_day, &project_names.read(), &task_names.read(), open_edit, start_entry, stop_entry, &tracking.read(), busy(), context())}
+                        {render_day_view(&by_day.read(), &daily_totals.read(), shown_ws, sel_offset, select_day, &project_names.read(), &task_names.read(), open_edit, start_entry, stop_entry, &tracking.read(), busy(), context())}
                     },
                     ViewMode::Calendar => rsx! {
                         {
-                            let visible = span.visible_days(*selected_day_offset.read() as usize, ws.weekday());
-                            render_calendar_view(&by_day.read(), &daily_totals.read(), &visible, ws, today, &CalLabels { projects: &project_names.read(), tasks: &task_names.read(), clients: &project_client.read() }, cal_drag, add_hint, drag_commit, &tracking.read(), busy(), policy())
+                            let visible = span.visible_days(sel_offset as usize, shown_ws.weekday());
+                            render_calendar_view(&by_day.read(), &daily_totals.read(), &visible, shown_ws, today, &CalLabels { projects: &project_names.read(), tasks: &task_names.read(), clients: &project_client.read() }, cal_drag, add_hint, drag_commit, &tracking.read(), busy(), policy())
                         }
                     },
-                })}
+                    }
+                }
             }
 
             // Add–entry modal (opened by "+" or by clicking a calendar day).
@@ -2322,6 +2367,10 @@ fn WeekCell(
                 aria_label: "{label}",
                 placeholder: "\u{2013}",
                 oninput: move |event| {
+                    // As if disabled: a held week's cells must not leave drafts.
+                    if !editable {
+                        return;
+                    }
                     let input = event.value();
                     if input == saved {
                         actions.drafts.write().remove(&cell);
