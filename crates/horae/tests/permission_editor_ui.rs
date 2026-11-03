@@ -79,6 +79,7 @@ struct Probe {
     storage: Rc<RefCell<HashMap<String, String>>>,
     storage_failure: Rc<RefCell<Option<String>>>,
     identity_replies: Rc<RefCell<VecDeque<IdentityReply>>>,
+    identity_reads: Rc<RefCell<usize>>,
     subject_replies: Rc<RefCell<VecDeque<SubjectsReply>>>,
     subject_cursors: Rc<RefCell<Vec<Option<Uuid>>>>,
     loaded_ids: Rc<RefCell<Vec<Uuid>>>,
@@ -123,6 +124,7 @@ impl Probe {
             storage: Default::default(),
             storage_failure: Default::default(),
             identity_replies: Default::default(),
+            identity_reads: Default::default(),
             subject_replies: Default::default(),
             subject_cursors: Default::default(),
             loaded_ids: Default::default(),
@@ -904,6 +906,35 @@ async fn clean_dismissal_needs_no_confirmation() {
         ui.navigation_state("clean");
         assert!(!ui.html().contains("Example person"));
         assert!(probe.saves.borrow().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn closing_a_person_does_not_recheck_the_session() {
+    let probe = Probe::new();
+    let mut ui = Ui::new(probe.clone());
+    assert!(ui.html().contains("Review changes"));
+    ui.dismiss("permission-editor-close");
+    ui.navigation_state("clean");
+    assert_eq!(*probe.identity_reads.borrow(), 1);
+}
+
+#[tokio::test]
+async fn opening_a_person_rechecks_the_session() {
+    let mut probe = Probe::new();
+    probe.directory = Some(true);
+    directory_reply(&probe)
+        .send(Ok(directory_page(&probe, true)))
+        .unwrap();
+    let mut ui = Ui::new(probe.clone());
+    assert_eq!(*probe.identity_reads.borrow(), 1);
+    for reads in [2, 3] {
+        ui.click(&format!("people-permissions-{}", probe.editor.user_id));
+        assert!(ui.html().contains("Review changes"));
+        assert_eq!(*probe.identity_reads.borrow(), reads);
+        ui.dismiss("permission-editor-close");
+        assert!(!ui.html().contains("Review changes"));
+        assert_eq!(*probe.identity_reads.borrow(), reads);
     }
 }
 
@@ -1853,6 +1884,7 @@ mod server_fns {
     }
     pub async fn get_me() -> Result<CurrentUser, ServerFnError> {
         let probe = use_context::<Probe>();
+        *probe.identity_reads.borrow_mut() += 1;
         let reply = probe.identity_replies.borrow_mut().pop_front();
         let requester = match reply {
             Some(reply) => reply.await.expect("identity reply dropped")?,

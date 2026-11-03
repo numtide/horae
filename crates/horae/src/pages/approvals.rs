@@ -8,6 +8,7 @@ use super::{is_manager, loaded};
 use crate::components::avatar::{Avatar, first_initial};
 use crate::components::badge::Badge;
 use crate::components::controls::Segmented;
+use crate::components::session::use_session;
 use crate::components::table::DataTable;
 use crate::route::Route;
 use crate::server_fns;
@@ -96,7 +97,7 @@ fn spawn_action(
 
 #[component]
 pub fn Approvals(week: String) -> Element {
-    let me = use_resource(|| async move { server_fns::get_me().await });
+    let me = use_session().me;
     let first_day = use_resource(|| async move { server_fns::get_week_start().await });
     let mut status_label = use_signal(|| "Pending".to_string());
     let refresh = use_signal(|| 0u32);
@@ -141,7 +142,10 @@ pub fn Approvals(week: String) -> Element {
                 h1 { class: "page-title", "Approvals" }
             }
 
-            if !is_manager {
+            // Until the session user resolves, nobody is known to lack access.
+            if me.read().is_none() {
+                div { class: "text-muted text-sm", role: "status", "Loading…" }
+            } else if !is_manager {
                 div { class: "card p-8 text-center",
                     p { class: "text-muted", "Manager or admin access is required to review approvals." }
                 }

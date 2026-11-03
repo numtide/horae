@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 
+use crate::components::session::use_session_provider;
 use crate::components::sidebar::Sidebar;
 use crate::components::timer_widget::use_running_timer_provider;
 
@@ -15,6 +16,8 @@ pub fn AppLayout() -> Element {
     // The running timer is shared from here: the rail below renders it, and the
     // pages in the Outlet can start one and have the rail follow.
     use_running_timer_provider();
+    // Who is signed in and what they may do, read by the rail and most pages.
+    use_session_provider();
 
     // Owned here (not in the sidebar) so the shell class can narrow the content
     // area together with the rail, and the edge handle can resize it.
