@@ -225,6 +225,7 @@ fn draft_rows_lists_only_rows_nothing_else_shows_this_week() {
         (Uuid::now_v7(), Uuid::now_v7()),
     );
     let drafts = HashMap::from([
+        ((shown.0, shown.1, start), "0:30".into()),
         ((pending.0, pending.1, start), "1:00".into()),
         ((hidden.0, hidden.1, start), "2:00".into()),
         (
@@ -236,10 +237,35 @@ fn draft_rows_lists_only_rows_nothing_else_shows_this_week() {
             "4:00".into(),
         ),
     ]);
-    // Entries are matched by row; their other fields do not matter here.
-    let rows = draft_rows(&drafts, start, &[], &[pending]);
+    // An entry shows its row whatever its day; the other fields do not matter.
+    let entry = VisibleTimeEntry {
+        id: Uuid::now_v7(),
+        user_id: Uuid::nil(),
+        user_name: "Person".into(),
+        project_id: shown.0,
+        project_name: "Project".into(),
+        task_id: shown.1,
+        task_name: "Task".into(),
+        client_id: Uuid::nil(),
+        client_name: "Client".into(),
+        spent_date: start + Duration::days(3),
+        minutes: 60,
+        rounded_minutes: None,
+        notes: None,
+        billable: true,
+        is_running: false,
+        started_at: None,
+        start_minute: None,
+        sort_order: 0,
+        state: horae_core::types::EntryState::Open,
+        created_at: chrono::Utc::now(),
+    };
+    let rows = draft_rows(&drafts, start, std::slice::from_ref(&entry), &[pending]);
     assert_eq!(rows, vec![hidden]);
-    assert!(draft_rows(&HashMap::new(), start, &[], &[shown]).is_empty());
+    // Without the entry, the shown row's draft makes it a draft row too.
+    let mut expected = vec![shown, hidden];
+    expected.sort_unstable();
+    assert_eq!(draft_rows(&drafts, start, &[], &[pending]), expected);
 }
 
 #[test]
