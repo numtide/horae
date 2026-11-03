@@ -338,14 +338,18 @@ fn TimesheetContent(
             requester.set(Some(page.requester));
         }
     });
-    // The last admitted week and day. While another week loads, it stays on
-    // screen, inert, instead of a loading placeholder.
+    // The last admitted week and day. While the sheet reloads, for another
+    // week or for this one after a save, it stays on screen, inert, instead of
+    // a loading placeholder. A failed load drops it, so Retry cannot bring back
+    // a week the pager no longer names.
     let mut admitted = use_signal(|| None::<(NaiveDate, Anchor, TimesheetPage)>);
-    use_effect(use_reactive!(|(date,)| {
-        if let Some(Ok(page)) = current_sheet.read().as_ref() {
-            admitted.set(Some((week_start(), date, page.clone())));
+    use_effect(use_reactive!(
+        |(date,)| match current_sheet.read().as_ref() {
+            Some(Ok(page)) => admitted.set(Some((week_start(), date, page.clone()))),
+            Some(Err(_)) if admitted.peek().is_some() => admitted.set(None),
+            _ => {}
         }
-    }));
+    ));
     let held = use_memo(move || {
         if current_sheet.read().is_some() {
             return None;
@@ -353,7 +357,6 @@ fn TimesheetContent(
         admitted
             .read()
             .as_ref()
-            .filter(|(start, ..)| *start != week_start())
             .map(|(start, date, _)| (*start, *date))
     });
     // Resources retain their previous value during a refresh. Do not render
@@ -799,6 +802,7 @@ fn TimesheetContent(
     let mut pending_rows = use_signal(Vec::<(Uuid, Uuid)>::new);
     let mut removing_row = use_signal(|| false);
     let mut addrow_open = use_signal(|| false);
+    let mut picker_open = use_signal(|| false);
     let mut addrow_project = use_signal(String::new);
     let mut addrow_task = use_signal(String::new);
     // Keep keystrokes outside the refreshable grid: another cell's save may
@@ -820,6 +824,9 @@ fn TimesheetContent(
         }
         if *addrow_open.peek() {
             addrow_open.set(false);
+        }
+        if *picker_open.peek() {
+            picker_open.set(false);
         }
         if add_open.peek().is_some() {
             add_open.set(None);
@@ -1071,7 +1078,6 @@ fn TimesheetContent(
         ws
     };
 
-    let mut picker_open = use_signal(|| false);
     // Pager stepping. Moving the anchor date across the week edge rolls the week
     // automatically.
     let step = use_callback(move |forward: bool| {
@@ -2380,6 +2386,10 @@ fn WeekCell(
                     }
                 },
                 onblur: move |_| {
+                    // An inert, reloading grid drops focus; keep the draft for later.
+                    if !editable {
+                        return;
+                    }
                     let input = actions.drafts.read().get(&cell).cloned();
                     if let Some(input) = input {
                         actions.commit.call(CellEdit { project_id, task_id, day, existing, input });

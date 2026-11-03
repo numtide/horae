@@ -5,7 +5,7 @@
 
 use std::any::Any;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use chrono::{Datelike, NaiveDate, Weekday};
@@ -133,6 +133,13 @@ thread_local! {
     static WEEKS: RefCell<HashMap<NaiveDate, TimesheetPage>> = RefCell::default();
     static RELEASED: Rc<Notify> = Rc::default();
     static COMMANDS: RefCell<Vec<TimesheetCommand>> = RefCell::default();
+    /// Weeks whose next load fails once.
+    static FAILING: RefCell<HashSet<NaiveDate>> = RefCell::default();
+}
+
+/// Keep the week's next load waiting until it is released again.
+fn withhold(start: NaiveDate) {
+    WEEKS.with_borrow_mut(|weeks| weeks.remove(&start));
 }
 
 fn release(start: NaiveDate, entries: Vec<VisibleTimeEntry>) {
@@ -166,6 +173,9 @@ mod server_fns {
     pub async fn load_timesheet_page(
         query: TimesheetQuery,
     ) -> Result<TimesheetPage, ServerFnError> {
+        if FAILING.with_borrow_mut(|failing| failing.remove(&query.date_from)) {
+            return Err(ServerFnError::new("week unavailable"));
+        }
         let released = RELEASED.with(Rc::clone);
         loop {
             let notified = released.notified();
@@ -197,7 +207,7 @@ mod server_fns {
     }
 
     pub async fn submit_week(_: String, _: TimesheetWriteContext) -> Result<(), ServerFnError> {
-        panic!("this test must not submit a week")
+        Err(ServerFnError::new("submission refused"))
     }
 
     pub async fn list_timesheet_people(
@@ -239,11 +249,17 @@ fn monday() -> NaiveDate {
 
 type DateSlot = Rc<RefCell<Option<Signal<Anchor>>>>;
 
-fn app(slot: DateSlot) -> Element {
+#[derive(Clone)]
+struct AppProps {
+    view: ViewMode,
+    slot: DateSlot,
+}
+
+fn app(AppProps { view, slot }: AppProps) -> Element {
     components::timer_widget::use_running_timer_provider();
     let date = use_signal(|| Anchor(monday()));
     *slot.borrow_mut() = Some(date);
-    rsx! { Timesheet { view: ViewMode::Week, date: date(), span: CalSpan::Week, user: String::new() } }
+    rsx! { Timesheet { view, date: date(), span: CalSpan::Week, user: String::new() } }
 }
 
 struct Page {
@@ -254,9 +270,19 @@ struct Page {
 
 impl Page {
     fn open() -> Self {
+        Self::open_in(ViewMode::Week)
+    }
+
+    fn open_in(view: ViewMode) -> Self {
         dioxus::html::set_event_converter(Box::new(SerializedHtmlEventConverter));
         let slot = DateSlot::default();
-        let mut dom = VirtualDom::new_with_props(app, slot.clone());
+        let mut dom = VirtualDom::new_with_props(
+            app,
+            AppProps {
+                view,
+                slot: slot.clone(),
+            },
+        );
         let edits = dom.rebuild_to_vec().edits;
         let date = slot.borrow().unwrap();
         let mut page = Self {
@@ -317,6 +343,19 @@ impl Page {
         self.settle();
     }
 
+    fn click(&mut self, nth: usize) {
+        let id = self.clicks()[nth];
+        self.fire("click", id, Box::new(SerializedMouseData::default()), true);
+    }
+
+    fn clicks(&self) -> Vec<ElementId> {
+        self.listeners
+            .iter()
+            .filter(|(name, _)| name == "click")
+            .map(|(_, id)| *id)
+            .collect()
+    }
+
     fn type_into_last_cell(&mut self, value: &str) {
         let (input, blur) = (self.last("input"), self.last("blur"));
         self.fire(
@@ -331,6 +370,31 @@ impl Page {
 
 fn next_week() -> NaiveDate {
     monday() + chrono::Duration::days(7)
+}
+
+/// The click target that makes `shows` true, found by clicking each one on a
+/// fresh page built by `setup`. Mutations name listeners by element id only,
+/// and the same setup always creates them in the same order.
+fn find_click(setup: impl Fn() -> Page, shows: impl Fn(&str) -> bool) -> usize {
+    let count = setup().clicks().len();
+    let found = (0..count).find(|&nth| {
+        let mut page = setup();
+        // Some targets navigate, which needs a router this harness lacks.
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            page.click(nth);
+            shows(&page.html())
+        }))
+        .unwrap_or(false)
+    });
+    COMMANDS.with_borrow_mut(Vec::clear);
+    found.expect("no click target shows it")
+}
+
+fn week_a(view: ViewMode) -> Page {
+    let mut page = Page::open_in(view);
+    release(monday(), vec![entry(monday(), 60, "Old week project")]);
+    page.settle();
+    page
 }
 
 #[tokio::test]
@@ -398,15 +462,168 @@ async fn the_inert_old_week_cannot_commit() {
     page.settle();
     page.go_to(next_week());
     assert!(page.html().contains("inert"));
+    // Focus leaving an inert cell blurs it: that must neither keep a draft nor
+    // ask for a save the held week cannot make.
     page.type_into_last_cell("2:00");
-    assert!(
-        COMMANDS.with_borrow(Vec::is_empty),
-        "the old week must not be saved"
-    );
-    // Nor may the attempt leave a draft or an error for the new week.
+    let html = page.html();
+    assert!(!html.contains("value=\"2:00\""), "{html}");
+    assert!(!html.contains("role=\"alert\""), "{html}");
     release(next_week(), Vec::new());
     page.settle();
     let html = page.html();
     assert!(html.contains("data-editor-state=\"clean\""), "{html}");
     assert!(!html.contains("role=\"alert\""), "{html}");
+}
+
+#[tokio::test]
+async fn returning_to_a_week_still_loading_keeps_it_on_screen() {
+    let mut page = week_a(ViewMode::Week);
+    page.go_to(next_week());
+    withhold(monday());
+    page.go_to(monday());
+    let html = page.html();
+    assert!(!html.contains("Loading timesheet"), "{html}");
+    assert!(html.contains("Old week project"), "{html}");
+    assert!(html.contains("inert"), "{html}");
+
+    release(monday(), vec![entry(monday(), 60, "Old week project")]);
+    page.settle();
+    let html = page.html();
+    assert!(html.contains("Old week project"), "{html}");
+    assert!(!html.contains("inert"), "{html}");
+}
+
+#[tokio::test]
+async fn a_reload_after_a_save_keeps_the_sheet_and_its_total() {
+    let mut page = week_a(ViewMode::Week);
+    let (saturday, sunday) = {
+        let mut cells = page
+            .listeners
+            .iter()
+            .rev()
+            .filter(|(name, _)| name == "input" || name == "blur")
+            .map(|(_, id)| *id);
+        // Each cell listens for blur, then input; newest first.
+        let mut next = || (cells.next().unwrap(), cells.next().unwrap());
+        let (sunday_input, sunday_blur) = next();
+        let (saturday_input, saturday_blur) = next();
+        ((saturday_input, saturday_blur), (sunday_input, sunday_blur))
+    };
+    let input = |value: &str| Box::new(SerializedFormData::new(value.into(), vec![]));
+    // A draft on Saturday, then Sunday saved, which reloads the week.
+    page.fire("input", saturday.0, input("1:00"), true);
+    withhold(monday());
+    page.fire("input", sunday.0, input("2:00"), true);
+    page.fire("blur", sunday.1, Box::new(SerializedFocusData {}), false);
+    assert_eq!(COMMANDS.with_borrow(Vec::len), 1);
+    let html = page.html();
+    assert!(!html.contains("Loading timesheet"), "{html}");
+    assert!(html.contains("Old week project"), "{html}");
+    assert!(html.contains("1:00 this week"), "{html}");
+    assert!(html.contains("aria-busy=\"true\""), "{html}");
+    // The reload makes Saturday inert, which blurs it: the draft waits.
+    page.fire("blur", saturday.1, Box::new(SerializedFocusData {}), false);
+    assert_eq!(COMMANDS.with_borrow(Vec::len), 1);
+    assert!(!page.html().contains("role=\"alert\""));
+
+    let sunday_entry = entry(
+        monday() + chrono::Duration::days(6),
+        120,
+        "Old week project",
+    );
+    release(
+        monday(),
+        vec![entry(monday(), 60, "Old week project"), sunday_entry],
+    );
+    page.settle();
+    let html = page.html();
+    assert!(html.contains("3:00 this week"), "{html}");
+    assert!(html.contains("value=\"1:00\""), "{html}");
+    assert!(!html.contains("aria-busy=\"true\""), "{html}");
+}
+
+#[tokio::test]
+async fn day_and_calendar_views_hold_the_last_week_too() {
+    for view in [ViewMode::Day, ViewMode::Calendar] {
+        let mut page = week_a(view);
+        page.go_to(next_week());
+        let html = page.html();
+        assert!(!html.contains("Loading timesheet"), "{view}: {html}");
+        assert!(html.contains("Old week project"), "{view}: {html}");
+        assert!(html.contains("inert"), "{view}: {html}");
+    }
+}
+
+#[tokio::test]
+async fn retrying_a_failed_week_does_not_bring_back_the_last_one() {
+    let failed = || {
+        let mut page = week_a(ViewMode::Week);
+        FAILING.with_borrow_mut(|failing| failing.insert(next_week()));
+        page.go_to(next_week());
+        page
+    };
+    let html = failed().html();
+    assert!(html.contains("week unavailable"), "{html}");
+    assert!(!html.contains("Old week project"), "{html}");
+
+    let retry = find_click(failed, |html| !html.contains("week unavailable"));
+    let mut page = failed();
+    page.click(retry);
+    let html = page.html();
+    assert!(html.contains("Loading timesheet"), "{html}");
+    assert!(!html.contains("Old week project"), "{html}");
+    assert!(!html.contains("inert"), "{html}");
+}
+
+#[tokio::test]
+async fn a_week_change_closes_the_add_row_dialog_picker_and_submit_error() {
+    let loaded = || {
+        let mut page = Page::open();
+        // Another task than the tracking choice, so adding that choice adds a row.
+        let other = VisibleTimeEntry {
+            task_id: Uuid::from_u128(4),
+            ..entry(monday(), 60, "Old week project")
+        };
+        release(monday(), vec![other]);
+        page.settle();
+        page
+    };
+    let submit = find_click(loaded, |html| html.contains("submission refused"));
+    let submitted = || {
+        let mut page = loaded();
+        page.click(submit);
+        page
+    };
+    let open_add_row = find_click(submitted, |html| html.contains("Add a row"));
+    let adding = || {
+        let mut page = submitted();
+        page.click(open_add_row);
+        page
+    };
+    let cells = |html: &str| html.matches("ts-cell-input").count();
+    let rows = cells(&adding().html());
+    let add_row = find_click(adding, |html| cells(html) > rows);
+    let added = || {
+        let mut page = adding();
+        page.click(add_row);
+        page.click(open_add_row);
+        page
+    };
+    let picker = find_click(added, |html| html.contains("dp-pop"));
+    let mut page = added();
+    page.click(picker);
+    let html = page.html();
+    for open in ["submission refused", "Add a row", "dp-pop"] {
+        assert!(html.contains(open), "{open} is not open: {html}");
+    }
+    assert!(cells(&html) > rows, "{html}");
+
+    page.go_to(next_week());
+    release(next_week(), Vec::new());
+    page.settle();
+    let html = page.html();
+    for stale in ["submission refused", "Add a row", "dp-pop", "ts-cell-input"] {
+        assert!(!html.contains(stale), "{stale} survived: {html}");
+    }
+    assert!(html.contains("data-editor-state=\"clean\""), "{html}");
 }
