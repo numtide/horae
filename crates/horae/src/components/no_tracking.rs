@@ -56,10 +56,16 @@ mod tests {
     #[test]
     fn names_whose_assignments_are_missing() {
         let own = render(None);
-        assert!(own.contains("No projects are assigned to you yet."), "{own}");
+        assert!(
+            own.contains("No projects are assigned to you yet."),
+            "{own}"
+        );
         assert!(!own.contains("<a"), "{own}");
 
         let other = render(Some("Ada Lovelace"));
-        assert!(other.contains("No projects are assigned to Ada Lovelace yet."), "{other}");
+        assert!(
+            other.contains("No projects are assigned to Ada Lovelace yet."),
+            "{other}"
+        );
     }
 }
