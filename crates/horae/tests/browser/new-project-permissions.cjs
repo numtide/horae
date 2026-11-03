@@ -124,6 +124,11 @@ const name = 'Permission fixture project';
       await visit('/projects');
       await expect.poll(() => endpoints.has('list_project_budget_progress')).toBe(true);
       await readsFinished();
+      // The rail reads the tracking catalog only when its timer picker opens.
+      await page.locator('.sidebar-timer-wrap').getByRole('button', { name: 'Start timer', exact: true }).click();
+      await expect.poll(() => endpoints.has('list_tracking_projects')).toBe(true);
+      await page.locator('.sidebar-timer-pop').getByRole('button', { name: 'Cancel', exact: true }).click();
+      await readsFinished();
       await expect(page.getByRole('link', { name: 'New project', exact: true })).toHaveCount(scenario.rates ? 1 : 0);
       const projects = await json('list_projects', { client_id: null, include_inactive: true });
       const project = projects.find(item => item.id === projectId);
