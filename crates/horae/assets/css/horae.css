@@ -1484,9 +1484,13 @@ tbody tr:hover { background: var(--color-row-hover); }
   display: flex; align-items: center; overflow: hidden;
   background: var(--color-bg-secondary); border: 1px solid var(--color-border); border-radius: var(--radius-lg);
 }
+/* Approvals renders the arrows as links, which do not centre their glyph the
+   way buttons do. */
 .ts-pager-btn {
+  display: inline-flex; align-items: center; justify-content: center;
   width: 42px; height: 44px; flex-shrink: 0; background: transparent; border: none;
   color: var(--color-text-secondary); cursor: pointer; font-size: var(--font-size-base);
+  text-decoration: none;
 }
 .ts-pager-btn:hover { color: var(--color-text); background: var(--color-bg-tertiary); }
 .ts-pager-btn.prev { border-right: 1px solid var(--color-border); }
