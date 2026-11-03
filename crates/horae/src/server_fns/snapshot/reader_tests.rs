@@ -489,3 +489,41 @@ async fn manager_commits_asynchronously_only_inside_its_snapshot(pool: PgPool) {
     }
     reader_pool.close().await;
 }
+
+/// With no inherited lock_timeout, the organization `FOR SHARE` gives up after
+/// the 5 s bound (55P03) instead of waiting for the holder. `manager` reports
+/// that as an internal error, so the bound shows as the wait ending while the
+/// blocker still holds the row.
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn manager_bounds_its_authority_lock_wait(pool: PgPool) {
+    let fixture = Fixture::new(&pool).await;
+    let mut hold = pool.begin().await.unwrap();
+    sqlx::query!(
+        "UPDATE organizations SET access_revision=access_revision+1 WHERE id=$1",
+        fixture.ids.org_id
+    )
+    .execute(&mut *hold)
+    .await
+    .unwrap();
+    let started = std::time::Instant::now();
+    let result = manager(&pool, fixture.ids.org_id, fixture.ids.user_id)
+        .await
+        .map(|_| ());
+    let waited = started.elapsed();
+    assert!(
+        matches!(
+            result,
+            Err(ServerFnError::ServerError {
+                code: super::super::INTERNAL_ERROR,
+                ..
+            })
+        ),
+        "{result:?}"
+    );
+    assert!(
+        (Duration::from_millis(4900)..Duration::from_secs(8)).contains(&waited),
+        "{waited:?}"
+    );
+    hold.rollback().await.unwrap();
+}
