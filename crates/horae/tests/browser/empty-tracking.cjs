@@ -1,16 +1,13 @@
-// Adds a second person, so only in the runner's disposable database.
+// Run against an isolated, seeded dev-login instance with Playwright installed.
+// HORAE_TEST_URL=http://127.0.0.1:8092 node crates/horae/tests/browser/empty-tracking.cjs
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
-const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const base = process.env.HORAE_TEST_URL;
-const target = new URL(base), database = new URL(process.env.DATABASE_URL);
-assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
-assert.equal(database.pathname, '/horae');
-assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
-const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const org = '01950000-0000-7000-8000-000000000001';
+assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
+// Another person, presented by rewriting the admin's own sheet: whether the
+// admin may read someone else's sheet depends on permission state that other
+// suites change, and this suite is about the hint, not that authorization.
 const other = '019f2a00-0000-7000-8000-000000000001', otherName = 'Empty tracking teammate';
-sql(`INSERT INTO users (id,org_id,email,name) VALUES ('${other}','${org}','empty-tracking@example.test','${otherName}') ON CONFLICT (id) DO NOTHING`);
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
@@ -53,10 +50,17 @@ sql(`INSERT INTO users (id,org_id,email,name) VALUES ('${other}','${org}','empty
     console.log('PASS: the own sheet opened by id still speaks to the viewer');
 
     // Someone else's sheet names them and offers no link.
+    await page.route(/\/api\/load_timesheet_page/, async route => {
+      const request = route.request();
+      const response = await route.fetch({ postData: request.postData().replaceAll(other, id) });
+      const data = await response.json();
+      await route.fulfill({ response, json: { ...data, subject: { id: other, name: otherName }, entries: [], next_after: null } });
+    });
     await open(other);
     await expect(add).toHaveAttribute('title', `No projects are assigned to ${otherName} yet.`);
     await expect(page.locator('#ts-add-empty')).toHaveText(`No projects are assigned to ${otherName} yet.`);
     await expect(page.locator('#ts-add-empty a')).toHaveCount(0);
+    await page.unroute(/\/api\/load_timesheet_page/);
     console.log("PASS: another person's empty sheet names them without a link");
 
     const own = page.waitForResponse(r => r.url().includes('/api/list_tracking_projects'));

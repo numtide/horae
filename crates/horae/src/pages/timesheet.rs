@@ -406,7 +406,9 @@ fn TimesheetContent(
     // Another person's sheet names them; one's own (also when opened by its
     // id) says "you".
     let assignee = match &*current_sheet.read() {
-        Some(Ok(page)) if page.subject.id != page.requester.user_id => Some(page.subject.name.clone()),
+        Some(Ok(page)) if page.subject.id != page.requester.user_id => {
+            Some(page.subject.name.clone())
+        }
         _ => None,
     };
     let empty_message = no_tracking_message(assignee.as_deref());
