@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
-use dioxus::html::geometry::PixelsVector2D;
 use dioxus::prelude::*;
 use uuid::Uuid;
 
@@ -24,6 +23,7 @@ use crate::models::scoped_time::{
 use crate::route::Route;
 use crate::server_fns;
 
+mod calendar;
 mod data;
 mod people;
 mod tracking;
@@ -660,10 +660,9 @@ fn TimesheetContent(
 
     // Calendar drag: the slot/entry being manipulated, committed on release.
     let cal_drag = use_signal(|| None::<CalDrag>);
-
-    // The free calendar slot the cursor is over: (column, snapped minute). Drives
-    // the cursor-following "+ Add time" hint.
-    let add_hint = use_signal(|| None::<(usize, i32)>);
+    // Read here instead of the drag itself, so a drag step re-renders only the
+    // calendar.
+    let dragging = use_memo(move || cal_drag.read().is_some());
     let drag_commit = use_callback(move |d: CalDrag| {
         let ws = *week_start.read();
         let clamp = |start: i32, dur: i32| {
@@ -914,7 +913,7 @@ fn TimesheetContent(
     // blocks it, so drop them as a remount would.
     use_effect(use_reactive!(|(view, date, span)| {
         let _ = (view, date, span);
-        let (mut drag, mut hint, mut submit_status) = (cal_drag, add_hint, submit_status);
+        let (mut drag, mut submit_status) = (cal_drag, submit_status);
         if !cell_drafts.peek().is_empty() {
             cell_drafts.write().clear();
         }
@@ -935,9 +934,6 @@ fn TimesheetContent(
         }
         if drag.peek().is_some() {
             drag.set(None);
-        }
-        if hint.peek().is_some() {
-            hint.set(None);
         }
         if grid_error.peek().is_some() {
             grid_error.set(None);
@@ -1126,7 +1122,7 @@ fn TimesheetContent(
         || add_open().is_some()
         || addrow_open()
         || !pending_rows.read().is_empty()
-        || cal_drag.read().is_some();
+        || dragging();
     let week_actions = WeekActions {
         commit: commit_cell,
         remove_row,
@@ -1424,9 +1420,11 @@ fn TimesheetContent(
                         {render_day_view(&by_day.read(), &daily_totals.read(), shown_ws, sel_offset, select_day, &project_names.read(), &task_names.read(), open_edit, start_entry, stop_entry, &tracking.read(), busy(), context())}
                     },
                     ViewMode::Calendar => rsx! {
-                        {
-                            let visible = span.visible_days(sel_offset as usize, shown_ws.weekday());
-                            render_calendar_view(&by_day.read(), &daily_totals.read(), &visible, shown_ws, today, &CalLabels { projects: &project_names.read(), tasks: &task_names.read(), clients: &project_client.read() }, cal_drag, add_hint, drag_commit, &tracking.read(), busy(), policy())
+                        calendar::CalendarView {
+                            by_day, daily_totals,
+                            visible_days: span.visible_days(sel_offset as usize, shown_ws.weekday()),
+                            week_start: shown_ws, today, project_names, task_names, project_client,
+                            cal_drag, drag_commit, tracking, busy, policy,
                         }
                     },
                     }
@@ -1671,35 +1669,6 @@ fn EntryFields(
     }
 }
 
-/// Label lookups shared by the calendar renderer.
-struct CalLabels<'a> {
-    projects: &'a HashMap<Uuid, String>,
-    tasks: &'a HashMap<Uuid, String>,
-    /// project_id -> authorized client name.
-    clients: &'a HashMap<Uuid, String>,
-}
-
-/// A calendar event's pre-computed placement and labels, plus the entry it came
-/// from so a click can open it for editing.
-struct CalEvent {
-    top: i32,
-    height: i32,
-    /// True when the entry has a start time (positioned at its hour); false when
-    /// untimed (stacked from the top of the day).
-    timed: bool,
-    /// Column and column-count for laying overlapping timed blocks side by side.
-    lane: i32,
-    lanes: i32,
-    project: String,
-    task: String,
-    duration: String,
-    /// Start–end clock label (e.g. "9:00–10:30") for timed entries; empty when
-    /// untimed.
-    time_label: String,
-    client: String,
-    entry: VisibleTimeEntry,
-}
-
 /// Calendar grid pixels per hour.
 const CAL_HOUR: i32 = 48;
 
@@ -1850,445 +1819,6 @@ fn untimed_ordered(day: &[VisibleTimeEntry]) -> Vec<VisibleTimeEntry> {
             .then(b.created_at.cmp(&a.created_at))
     });
     u
-}
-
-#[expect(
-    clippy::too_many_arguments,
-    reason = "view renderer takes the week's data, display maps, and the add/edit/drag actions"
-)]
-fn render_calendar_view(
-    by_day: &[Vec<VisibleTimeEntry>; 7],
-    daily_totals: &[i32],
-    visible_days: &[usize],
-    week_start: NaiveDate,
-    today: NaiveDate,
-    labels: &CalLabels,
-    mut cal_drag: Signal<Option<CalDrag>>,
-    mut add_hint: Signal<Option<(usize, i32)>>,
-    drag_commit: Callback<CalDrag>,
-    tracking: &[crate::models::scoped_time::TimesheetTrackingOption],
-    busy: bool,
-    policy: Option<TimesheetPolicy>,
-) -> Element {
-    let can_create = !busy && !tracking.is_empty();
-    let today_off = today_offset(today, week_start);
-    let col_class = |i: usize| {
-        day_col_class(
-            "ts-cal-col",
-            today_off,
-            i,
-            (week_start + Duration::days(i as i64)).weekday(),
-        )
-    };
-    let head_class = |i: usize| {
-        day_col_class(
-            "ts-cal-dayhead",
-            today_off,
-            i,
-            (week_start + Duration::days(i as i64)).weekday(),
-        )
-    };
-
-    // Place entries: timed ones (with a start time) at their hour; untimed ones
-    // stacked from the top of the day by cumulative duration (Harvest does the
-    // same for duration-only entries). Track the latest bottom so the grid is
-    // tall enough to show every block.
-    let mut day_events: Vec<Vec<CalEvent>> = Vec::with_capacity(7);
-    // Per-column occupied minute ranges, so the "+ Add time" hint hides over
-    // existing blocks and a click there edits instead of adding.
-    let mut occupied: Vec<Vec<(i32, i32)>> = Vec::with_capacity(7);
-    for day in by_day.iter() {
-        // Lay out timed entries side by side where they overlap: greedily assign
-        // each a lane, then give every entry in an overlap cluster the same
-        // column count so none is hidden (SC-005). Keyed by index into `day`.
-        let (lane_of, lanes_of) = timed_lanes(day);
-
-        // Untimed blocks stack from the top in reorder-aware order; precompute
-        // each one's top so the render loop can stay in the entries' own order.
-        let mut untimed_top: HashMap<Uuid, i32> = HashMap::new();
-        let mut cum = 0i32;
-        for e in untimed_ordered(day) {
-            untimed_top.insert(e.id, cum);
-            cum += e.minutes;
-        }
-        let mut evs = Vec::new();
-        let mut occ: Vec<(i32, i32)> = Vec::new();
-        for (idx, e) in day.iter().enumerate() {
-            let (top_min, timed, lane, lanes) = match e.start_minute {
-                Some(sm) => (sm, true, lane_of[idx], lanes_of[idx].max(1)),
-                None => (untimed_top.get(&e.id).copied().unwrap_or(0), false, 0, 1),
-            };
-            occ.push((top_min, top_min + e.minutes));
-            let client = labels
-                .clients
-                .get(&e.project_id)
-                .cloned()
-                .unwrap_or_default();
-            let time_label = match e.start_minute {
-                Some(sm) => cal_time_label(sm, sm + e.minutes),
-                None => String::new(),
-            };
-            evs.push(CalEvent {
-                top: top_min * CAL_HOUR / 60,
-                height: (e.minutes * CAL_HOUR / 60).max(20),
-                timed,
-                lane,
-                lanes,
-                project: labels
-                    .projects
-                    .get(&e.project_id)
-                    .cloned()
-                    .unwrap_or_else(|| "Untitled".into()),
-                task: labels.tasks.get(&e.task_id).cloned().unwrap_or_default(),
-                duration: format_hhmm(e.minutes.into()),
-                time_label,
-                client,
-                entry: e.clone(),
-            });
-        }
-        day_events.push(evs);
-        occupied.push(occ);
-    }
-    // Show the full 24-hour day (the scroll container clips it); the grid scrolls
-    // vertically and, on mount, jumps to the earliest block across the visible
-    // days — or to the working hours (7am) when the range is empty.
-    let max_hours = 24;
-    let first_min = visible_days
-        .iter()
-        .flat_map(|&i| occupied.get(i).into_iter().flatten())
-        .map(|&(s, _)| s)
-        .min()
-        .unwrap_or(7 * 60);
-    let scroll_px = (first_min - 30).max(0) * CAL_HOUR / 60;
-
-    // The grid spans a variable number of days; size the columns to match and
-    // sum only the visible days for the header total.
-    let n = visible_days.len().max(1);
-    let shown_total: i32 = visible_days.iter().map(|&i| daily_totals[i]).sum();
-    let total_label = if n == 1 { "Day total" } else { "Week total" };
-    let grid_style = format!(
-        "grid-template-columns: 56px repeat({n}, 1fr) 100px; min-width: {}px;",
-        156 + n * 106
-    );
-
-    rsx! {
-        div { class: "ts-cal",
-            div {
-                class: "ts-cal-scroll",
-                // Open on the earliest block (or the working hours), not midnight.
-                onmounted: move |evt: MountedEvent| {
-                    spawn(async move {
-                        let _ = evt
-                            .data()
-                            .scroll(
-                                PixelsVector2D::new(0.0, f64::from(scroll_px)),
-                                ScrollBehavior::Instant,
-                            )
-                            .await;
-                    });
-                },
-                div { class: "ts-cal-head", style: "{grid_style}",
-                    span {}
-                    for i in visible_days.iter().copied() {
-                        {
-                            let d = week_start + Duration::days(i as i64);
-                            rsx! {
-                                div { class: "{head_class(i)}",
-                                    div { class: "ts-cal-dayname", "{d.format(\"%a\")} {d.day()}" }
-                                    div { class: "ts-cal-daytotal", "{format_hhmm(daily_totals[i].into())}" }
-                                }
-                            }
-                        }
-                    }
-                    div { class: "ts-cal-weektot",
-                        div { class: "ts-cal-weektot-label", "{total_label}" }
-                        div { class: "ts-cal-weektot-value", "{format_hhmm(shown_total.into())}" }
-                    }
-                }
-
-                div {
-                    class: if cal_drag.read().is_some() { "ts-cal-grid dragging" } else { "ts-cal-grid" },
-                    style: "{grid_style}",
-                    onmouseleave: move |_| {
-                        if cal_drag.read().is_some() {
-                            cal_drag.set(None);
-                        }
-                        if add_hint.read().is_some() {
-                            add_hint.set(None);
-                        }
-                    },
-                    div { class: "ts-cal-rail",
-                        for h in 0..max_hours {
-                            div { class: "ts-cal-hour",
-                                span { class: "ts-cal-hour-label", "{h + 1}hr" }
-                            }
-                        }
-                    }
-                    for i in visible_days.iter().copied() {
-                        div {
-                            class: "{col_class(i)}",
-                            // Press-drag on an empty column draws a slot; release
-                            // opens the entry form (a plain click has no start).
-                            onmousedown: move |e: MouseEvent| {
-                                if !can_create { return; }
-                                let m = cal_y_to_min(e.element_coordinates().y);
-                                cal_drag.set(Some(CalDrag {
-                                    kind: DragKind::Create,
-                                    day: i,
-                                    start_min: m,
-                                    cur_min: m,
-                                    grab_min: m,
-                                    entry: None,
-                                    orig_dur: 0,
-                                    orig_day: i,
-                                }));
-                            },
-                            onmousemove: {
-                                let occ = occupied[i].clone();
-                                move |e: MouseEvent| {
-                                    if busy || (!can_create && cal_drag.read().is_none()) { return; }
-                                    let m = cal_y_to_min(e.element_coordinates().y);
-                                    if cal_drag.peek().is_some() {
-                                        // Writing only real changes keeps a mousemove
-                                        // within one snap step from re-rendering the
-                                        // whole calendar.
-                                        let next = cal_drag.peek().as_ref().and_then(|d| d.follow(m, i));
-                                        if let Some((cur_min, day)) = next {
-                                            cal_drag.with_mut(|d| {
-                                                if let Some(d) = d {
-                                                    d.cur_min = cur_min;
-                                                    d.day = day;
-                                                }
-                                            });
-                                        }
-                                    } else {
-                                        // Track the free slot under the cursor for the
-                                        // "+ Add time" hint; hide it over a block.
-                                        let free = !occ.iter().any(|&(lo, hi)| m >= lo && m < hi);
-                                        let next = free.then_some((i, m));
-                                        if *add_hint.read() != next {
-                                            add_hint.set(next);
-                                        }
-                                    }
-                                }
-                            },
-                            onmouseup: move |_| {
-                                let drag = cal_drag.read().clone();
-                                if let Some(d) = drag {
-                                    cal_drag.set(None);
-                                    drag_commit.call(d);
-                                }
-                            },
-                            if let Some(d) = cal_drag.read().clone().filter(|d| d.day == i && d.kind == DragKind::Create) {
-                                {
-                                    let a = d.start_min.min(d.cur_min);
-                                    let top = a * CAL_HOUR / 60;
-                                    let h = ((d.cur_min - d.start_min).abs() * CAL_HOUR / 60).max(2);
-                                    rsx! {
-                                        div { class: "ts-cal-ghost", style: "top: {top}px; height: {h}px;" }
-                                    }
-                                }
-                            }
-                            // While reordering/moving an untimed block, a ghost of it
-                            // follows the cursor in the hovered column for feedback.
-                            if let Some(entry) = cal_drag
-                                .read()
-                                .clone()
-                                .filter(|d| d.day == i && d.kind == DragKind::Reorder)
-                                .and_then(|d| d.entry.map(|e| (e, d.cur_min)))
-                            {
-                                {
-                                    let (e, cur) = entry;
-                                    let h = (e.minutes * CAL_HOUR / 60).max(20);
-                                    let top = (cur * CAL_HOUR / 60 - h / 2).max(0);
-                                    let name = labels
-                                        .projects
-                                        .get(&e.project_id)
-                                        .cloned()
-                                        .unwrap_or_default();
-                                    rsx! {
-                                        div { class: "ts-cal-ghost drag", style: "top: {top}px; height: {h}px;", "{name}" }
-                                    }
-                                }
-                            }
-                            // Cursor-following "+ Add time" over a free slot; a click
-                            // there seeds a timed entry at that hour (drag_commit).
-                            if let Some(top) = cal_drag
-                                .read()
-                                .is_none()
-                                .then(|| *add_hint.read())
-                                .flatten()
-                                .filter(|&(hd, _)| hd == i)
-                                .map(|(_, m)| m * CAL_HOUR / 60)
-                            {
-                                div { class: "ts-cal-add-hint", style: "top: {top}px;", "+ Add time" }
-                            }
-                            for ev in day_events[i].iter() {
-                                {
-                                // Live preview: while this entry is being moved or
-                                // resized in its own column, drive its box from the
-                                // in-progress drag so you can see it grow/shrink and
-                                // read its new time (Create has its own ghost above).
-                                let live = cal_drag.read().as_ref().and_then(|d| {
-                                    if d.entry.as_ref().map(|e| e.id) != Some(ev.entry.id) {
-                                        return None;
-                                    }
-                                    match d.kind {
-                                        DragKind::Resize => Some((d.start_min, d.resize_end())),
-                                        DragKind::Move if d.day == i => {
-                                            let s = d.move_start();
-                                            Some((s, s + d.orig_dur))
-                                        }
-                                        _ => None,
-                                    }
-                                });
-                                let (top_px, height_px, time_label) = match live {
-                                    Some((s, e)) => (
-                                        s * CAL_HOUR / 60,
-                                        ((e - s) * CAL_HOUR / 60).max(20),
-                                        cal_time_label(s, e),
-                                    ),
-                                    None => (ev.top, ev.height, ev.time_label.clone()),
-                                };
-                                // Dim the untimed block being reordered — its ghost
-                                // follows the cursor instead.
-                                let reordering = cal_drag.read().as_ref().is_some_and(|d| {
-                                    d.kind == DragKind::Reorder
-                                        && d.entry.as_ref().map(|e| e.id) == Some(ev.entry.id)
-                                });
-                                let base = if reordering {
-                                    "ts-cal-event dragging"
-                                } else if live.is_some() {
-                                    "ts-cal-event timed live"
-                                } else if ev.timed {
-                                    "ts-cal-event timed"
-                                } else {
-                                    "ts-cal-event"
-                                };
-                                // Locked entries (submitted/approved/invoiced) can't be
-                                // dragged; mark them and explain why on hover.
-                                let locked = busy || !tracking::editable(policy, tracking, &ev.entry);
-                                let ev_class = if locked {
-                                    format!("{base} locked")
-                                } else {
-                                    base.to_string()
-                                };
-                                let lock_title = match ev.entry.state {
-                                    horae_core::types::EntryState::Submitted => {
-                                        "Submitted for approval — can't be moved"
-                                    }
-                                    horae_core::types::EntryState::Approved => {
-                                        "Approved — can't be moved"
-                                    }
-                                    horae_core::types::EntryState::Invoiced => {
-                                        "Invoiced — can't be moved"
-                                    }
-                                    horae_core::types::EntryState::Open if locked => "Not currently editable",
-                                    horae_core::types::EntryState::Open => "",
-                                };
-                                rsx! {
-                                div {
-                                    key: "{ev.entry.id}",
-                                    class: "{ev_class}",
-                                    title: "{lock_title}",
-                                    style: "top: {top_px}px; height: {height_px}px; left: calc(4px + {ev.lane} * (100% - 8px) / {ev.lanes}); width: calc((100% - 8px) / {ev.lanes} - 2px); right: auto;",
-                                    // Over a block there's no free slot — clear the
-                                    // "+ Add time" hint (the column's mousemove can't
-                                    // fire while the block captures the pointer).
-                                    onmouseenter: move |_| {
-                                        if add_hint.read().is_some() {
-                                            add_hint.set(None);
-                                        }
-                                    },
-                                    // Pressing a timed entry starts a move drag (its
-                                    // body); a plain click with no move opens it for
-                                    // editing. Untimed entries just open for editing.
-                                    onmousedown: {
-                                        let entry = ev.entry.clone();
-                                        let timed = ev.timed;
-                                        let start = ev.entry.start_minute.unwrap_or(0);
-                                        let dur = ev.entry.minutes;
-                                        move |e: MouseEvent| {
-                                            e.stop_propagation();
-                                            if locked { return; }
-                                            if timed {
-                                                let off =
-                                                    (e.element_coordinates().y * 60.0 / CAL_HOUR as f64) as i32;
-                                                let g = start + off;
-                                                cal_drag.set(Some(CalDrag {
-                                                    kind: DragKind::Move,
-                                                    day: i,
-                                                    start_min: start,
-                                                    cur_min: g,
-                                                    grab_min: g,
-                                                    entry: Some(entry.clone()),
-                                                    orig_dur: dur,
-                                                    orig_day: i,
-                                                }));
-                                            } else {
-                                                // Untimed: drag to reorder within the
-                                                // day's stack; cur_min tracks the drop.
-                                                let m = cal_y_to_min(e.element_coordinates().y);
-                                                cal_drag.set(Some(CalDrag {
-                                                    kind: DragKind::Reorder,
-                                                    day: i,
-                                                    start_min: 0,
-                                                    cur_min: m,
-                                                    grab_min: m,
-                                                    entry: Some(entry.clone()),
-                                                    orig_dur: dur,
-                                                    orig_day: i,
-                                                }));
-                                            }
-                                        }
-                                    },
-                                    div { class: "ts-cal-ev-project",
-                                        span { class: "ts-cal-ev-name", "{ev.project}" }
-                                        span { class: "ts-cal-ev-dur", "{ev.duration}" }
-                                    }
-                                    if ev.timed {
-                                        div { class: "ts-cal-ev-time", "{time_label}" }
-                                    }
-                                    if !ev.task.is_empty() {
-                                        div { class: "ts-cal-ev-task", "{ev.task}" }
-                                    }
-                                    if !ev.client.is_empty() {
-                                        div { class: "ts-cal-ev-client", "{ev.client}" }
-                                    }
-                                    if ev.timed && !locked {
-                                        div {
-                                            class: "ts-cal-resize",
-                                            onmousedown: {
-                                                let entry = ev.entry.clone();
-                                                let start = ev.entry.start_minute.unwrap_or(0);
-                                                let dur = ev.entry.minutes;
-                                                move |e: MouseEvent| {
-                                                    e.stop_propagation();
-                                                    cal_drag.set(Some(CalDrag {
-                                                        kind: DragKind::Resize,
-                                                        day: i,
-                                                        start_min: start,
-                                                        cur_min: start + dur,
-                                                        grab_min: start + dur,
-                                                        entry: Some(entry.clone()),
-                                                        orig_dur: dur,
-                                                        orig_day: i,
-                                                    }));
-                                                }
-                                            },
-                                        }
-                                    }
-                                }
-                                }
-                                }
-                            }
-                        }
-                    }
-                    div { class: "ts-cal-tail" }
-                }
-            }
-        }
-    }
 }
 
 #[expect(

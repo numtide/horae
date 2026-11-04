@@ -23,12 +23,12 @@ problem they fix.
 
 ## 1. Subscriptions in the wrong scope
 
-- **`pages/timesheet.rs` `render_calendar_view`.** It is a plain `fn` called from
+- ~~**`pages/timesheet.rs` `render_calendar_view`.** It is a plain `fn` called from
   `TimesheetContent`, and it reads `add_hint` and `cal_drag`. Every mouse move or drag
   step therefore re-renders the whole page, including both `Modal`s, which re-render
-  anyway because they take `children`.
-  Fix: make it `#[component] CalendarView` with `add_hint` inside it, and
-  `use_memo(move || cal_drag.read().is_some())` for the page's `dirty`.
+  anyway because they take `children`.~~
+  Fixed in #329: `pages/timesheet/calendar.rs` `CalendarView` owns `add_hint` and
+  memoizes its layout, and the page reads only a `dragging` memo for `dirty`.
 - **`pages/importers.rs` `HarvestImport` poll loop.** It calls
   `job_progress.set(Some(job))` every second, unconditionally, and the history rows
   read `job_progress`.

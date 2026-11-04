@@ -57,5 +57,5 @@ reason = "settings/own_permissions.rs permission_content links to /admin/audit; 
 "crates/horae/src/pages/settings/own_permissions.rs" = 1
 
 ["dioxus/render-helper"]
-reason = "timesheet.rs render_calendar_view, render_day_view and render_week_view; splitting them into components is horae-application.md section 1."
-"crates/horae/src/pages/timesheet.rs" = 3
+reason = "timesheet.rs render_day_view and render_week_view; split each into a component as CalendarView was (#329)."
+"crates/horae/src/pages/timesheet.rs" = 2
