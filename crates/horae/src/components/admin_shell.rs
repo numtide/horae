@@ -84,7 +84,7 @@ fn workspace_access(
 /// so the main rail stays put and this owns only the content panel (per the
 /// design's admin settings shell). Each section has its own access boundary.
 ///
-/// Only sections with a real destination are listed — People, Tasks,
+/// Only sections with a real destination are listed — Team, Tasks,
 /// Importers (Harvest), and the permission audit log. Other sections are deferred
 /// until they have a backend.
 #[component]
@@ -181,7 +181,7 @@ fn AdminWorkspace(access: WorkspaceAccess) -> Element {
                     if access.people || access.tasks {
                         div { class: "adm-group-label", "Workspace" }
                         nav { class: "flex flex-col gap-1 mb-5",
-                            if access.people { AdmLink { to: Route::AdminUsers {}, label: "People" } }
+                            if access.people { AdmLink { to: Route::AdminUsers {}, label: "Team" } }
                             if access.tasks { AdmLink { to: Route::TaskCatalog {}, label: "Tasks" } }
                         }
                     }

@@ -85,6 +85,12 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
       return { label: getComputedStyle(row.querySelector('.nav-item-label')).display, width: r.width, cx: r.x + r.width / 2, paths: row.querySelector('svg').childElementCount };
     }));
     assert.equal(glyphs.length, 7, JSON.stringify(glyphs));
+    // With labels hidden, each row still has an accessible name and a tooltip.
+    for (const name of ['Timesheet', 'Team', 'Clients', 'Projects', 'Invoices', 'Approvals', 'Reports']) {
+      const link = sidebar.getByRole('link', { name, exact: true });
+      await expect(link).toBeVisible();
+      await expect(link).toHaveAttribute('title', name);
+    }
     for (const glyph of glyphs) assert.ok(glyph.label === 'none' && glyph.width === 15 && glyph.paths > 0 && Math.abs(glyph.cx - chip.cx) < 0.5, JSON.stringify({ chip, glyph }));
 
     // The toggle keeps one label in both states.

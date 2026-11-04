@@ -63,7 +63,10 @@ fn SideLink(to: Route, icon: String, label: String, on_navigate: EventHandler<()
     // timesheet's /timesheet/<view>/<date>) stays highlighted on any view/day.
     let active = crate::route::route_is_active(&to);
     rsx! {
+        // The collapsed rail hides the label, so the link carries its own name.
         Link { to, class: if active { "nav-item active" } else { "nav-item" },
+            title: "{label}",
+            "aria-label": "{label}",
             onclick: move |_| on_navigate.call(()),
             span { class: "nav-item-icon", NavIcon { name: icon } }
             span { class: "nav-item-label", "{label}" }
