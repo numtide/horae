@@ -1275,7 +1275,12 @@ fn TimesheetContent(
                                 }
                                 span { class: if day_paged { "ts-pager-face reserve" } else { "ts-pager-face" },
                                     span { class: "text-faint", "▦" }
-                                    span { class: "cur", if is_this_week { "This week" } else { "Week" } }
+                                    // "Week" keeps the room "This week" takes, so leaving the current
+                                    // week does not narrow the pager either.
+                                    span { class: "cur ts-pager-faces",
+                                        span { class: if is_this_week { "ts-pager-face" } else { "ts-pager-face reserve" }, "This week" }
+                                        span { class: if is_this_week { "ts-pager-face reserve" } else { "ts-pager-face" }, "Week" }
+                                    }
                                     span { class: "ts-pager-range", "{range_label}" }
                                 }
                             }
