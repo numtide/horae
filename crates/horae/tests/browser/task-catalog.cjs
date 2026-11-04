@@ -46,7 +46,11 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     const row = page.getByRole('row').filter({ hasText: 'Catalog browser task' });
     await expect(row).toContainText('USD 80.00');
     await expect(row.getByRole('cell', { name: 'USD 80.00', exact: true })).toHaveCSS('white-space', 'nowrap');
-    await expect(page.locator('.adm-nav')).not.toContainText('People');
+    await expect(page.locator('.adm-nav')).not.toContainText('Team');
+    // Task reads without people or client reads: Organize offers Projects and Tasks only.
+    const organize = page.locator('.app-sidebar .sidebar-section').filter({ hasText: 'Organize' }).locator('+ .sidebar-group .nav-item-label');
+    await expect(organize).toHaveText(['Projects', 'Tasks']);
+    await expect(page.locator('.app-sidebar a.nav-item.active')).toHaveText('Tasks');
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 900 });
       await page.evaluate(theme => document.documentElement.setAttribute('data-theme', theme), width === 1440 ? 'dark' : 'light');

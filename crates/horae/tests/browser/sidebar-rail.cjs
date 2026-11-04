@@ -23,6 +23,37 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await page.reload();
     await (await ready).finished();
     const sidebar = page.locator('.app-sidebar');
+    // Harvest's sections and order. The seed runs policy zero, which grants a
+    // legacy admin Team and Clients but not Tasks (task-catalog.cjs covers Tasks).
+    const sections = () => sidebar.evaluate(el => [...el.querySelectorAll('.sidebar-section')].map(section => [
+      section.textContent,
+      [...section.nextElementSibling.querySelectorAll('.nav-item-label')].map(label => label.textContent),
+    ]));
+    await expect.poll(sections).toEqual([
+      ['Track', ['Timesheet']],
+      ['Organize', ['Team', 'Clients', 'Projects']],
+      ['Bill', ['Invoices']],
+      ['Review', ['Approvals', 'Reports']],
+    ]);
+    await sidebar.locator('.sidebar-footer').click();
+    const menu = sidebar.locator('.sidebar-menu');
+    await expect(menu.getByRole('link', { name: 'Importers', exact: true })).toBeVisible();
+    for (const moved of ['People', 'Team', 'Tasks']) await expect(menu.getByRole('link', { name: moved, exact: true })).toHaveCount(0);
+    await sidebar.locator('.sidebar-footer').click();
+    await expect(menu).toHaveCount(0);
+    await sidebar.getByRole('link', { name: 'Team', exact: true }).click();
+    await page.waitForURL(`${base}/admin/users`);
+    await expect(sidebar.locator('a.nav-item.active')).toHaveText('Team');
+    // Every row, the user footer included, fits a laptop-height screen without scrolling the rail.
+    await page.setViewportSize({ width: 1440, height: 800 });
+    const fits = await sidebar.evaluate(el => {
+      const foot = el.querySelector('.sidebar-footer').getBoundingClientRect();
+      return { bottom: foot.bottom, height: innerHeight, overflow: el.scrollHeight - el.clientHeight };
+    });
+    assert.ok(fits.bottom <= fits.height && fits.overflow <= 0, JSON.stringify(fits));
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    console.log('PASS: rail lists Harvest sections in order and Team/Tasks left the user menu');
+
     // Named by aria-label, so it stays findable once the collapsed rail hides the label.
     const timer = sidebar.getByRole('button', { name: 'Start timer', exact: true });
     await expect(timer).toBeVisible();
@@ -47,6 +78,20 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     const collapse = await box(sidebar.locator('.sidebar-collapse'));
     for (const other of [icon, mark, collapse]) assert.ok(Math.abs(other.cx - chip.cx) < 0.5, JSON.stringify({ chip, other }));
     assert.ok(Math.abs(icon.cy - chip.cy) < 0.5, JSON.stringify({ chip, icon }));
+    // Icon-only rows: section headers and labels hide, every glyph draws in the chip's column.
+    await expect(sidebar.locator('.sidebar-section').first()).toBeHidden();
+    const glyphs = await sidebar.locator('a.nav-item').evaluateAll(rows => rows.map(row => {
+      const r = row.querySelector('svg').getBoundingClientRect();
+      return { label: getComputedStyle(row.querySelector('.nav-item-label')).display, width: r.width, cx: r.x + r.width / 2, paths: row.querySelector('svg').childElementCount };
+    }));
+    assert.equal(glyphs.length, 7, JSON.stringify(glyphs));
+    // With labels hidden, each row still has an accessible name and a tooltip.
+    for (const name of ['Timesheet', 'Team', 'Clients', 'Projects', 'Invoices', 'Approvals', 'Reports']) {
+      const link = sidebar.getByRole('link', { name, exact: true });
+      await expect(link).toBeVisible();
+      await expect(link).toHaveAttribute('title', name);
+    }
+    for (const glyph of glyphs) assert.ok(glyph.label === 'none' && glyph.width === 15 && glyph.paths > 0 && Math.abs(glyph.cx - chip.cx) < 0.5, JSON.stringify({ chip, glyph }));
 
     // The toggle keeps one label in both states.
     await sidebar.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
