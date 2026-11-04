@@ -96,3 +96,9 @@ impl AccessScope {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod properties;
+
+#[cfg(kani)]
+mod proofs;

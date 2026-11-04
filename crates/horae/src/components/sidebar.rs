@@ -431,4 +431,43 @@ mod tests {
             "newer catalog"
         );
     }
+
+    /// A stale or newer catalog never shows more rows than no grants at all,
+    /// whatever its grants and whether the person is a legacy admin.
+    #[test]
+    fn other_catalog_versions_never_open_a_gated_row() {
+        let gated = [
+            Permission::PeopleReadAll,
+            Permission::PeopleReadManaged,
+            Permission::ClientReadAll,
+            Permission::TaskReadAll,
+        ];
+        let versions = [
+            0,
+            PERMISSION_CATALOG_VERSION - 1,
+            PERMISSION_CATALOG_VERSION + 1,
+            u32::MAX,
+        ];
+        for version in versions {
+            for mask in 0..1u8 << gated.len() {
+                let grants: Vec<_> = (0..gated.len())
+                    .filter(|i| mask >> i & 1 == 1)
+                    .map(|i| gated[i])
+                    .collect();
+                for is_administrator in [false, true] {
+                    let own = OwnPermissions {
+                        is_administrator,
+                        ..canonical(grants.clone(), version)
+                    };
+                    for is_admin in [false, true] {
+                        assert_eq!(
+                            access(Ok(Some(own.clone())), is_admin),
+                            NavAccess::default(),
+                            "version {version}, grants {mask:#06b}"
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
