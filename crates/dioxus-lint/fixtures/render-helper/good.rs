@@ -12,3 +12,8 @@ fn Calendar(drag: Signal<Option<u32>>) -> Element {
 fn render_label(minutes: i64) -> String {
     format!("{minutes} min")
 }
+
+#[dioxus::prelude::component]
+fn render_badge(label: String) -> Element {
+    rsx! { "{label}" }
+}

@@ -1,18 +1,61 @@
-# Violations of the dioxus-best-practices skill that predate the check, per rule.
-# The check fails when a count goes up (a new violation) or down (lower it here).
+# Violations of the dioxus-best-practices skill that predate the check, per rule and file.
+# The check fails when a file's count goes up (a new violation) or down (lower it here).
 
 ["dioxus/inline-callback-prop"]
-count = 176
 reason = "Predates the check; mostly house Input, Checkbox and MenuItem props. Hoist into use_callback when touching a row or measuring a page."
+"crates/horae/src/components/admin_shell.rs" = 2
+"crates/horae/src/components/no_tracking.rs" = 1
+"crates/horae/src/components/sidebar.rs" = 3
+"crates/horae/src/components/timer_widget.rs" = 1
+"crates/horae/src/pages/admin.rs" = 4
+"crates/horae/src/pages/admin/permission_editor.rs" = 10
+"crates/horae/src/pages/admin/permission_editor/recovery.rs" = 1
+"crates/horae/src/pages/admin/permission_editor/templates.rs" = 2
+"crates/horae/src/pages/approvals.rs" = 1
+"crates/horae/src/pages/clients.rs" = 9
+"crates/horae/src/pages/clients/detail.rs" = 4
+"crates/horae/src/pages/clients/form.rs" = 6
+"crates/horae/src/pages/clients/status.rs" = 1
+"crates/horae/src/pages/gallery.rs" = 11
+"crates/horae/src/pages/importers.rs" = 9
+"crates/horae/src/pages/invoices.rs" = 2
+"crates/horae/src/pages/invoices/defaults_form.rs" = 7
+"crates/horae/src/pages/invoices/editing.rs" = 3
+"crates/horae/src/pages/invoices/preparation.rs" = 6
+"crates/horae/src/pages/invoices/preparation/fees.rs" = 3
+"crates/horae/src/pages/new_project.rs" = 3
+"crates/horae/src/pages/new_project/basics.rs" = 11
+"crates/horae/src/pages/new_project/billing.rs" = 13
+"crates/horae/src/pages/new_project/date_field.rs" = 1
+"crates/horae/src/pages/new_project/invoice_defaults.rs" = 7
+"crates/horae/src/pages/new_project/tasks.rs" = 6
+"crates/horae/src/pages/new_project/team.rs" = 6
+"crates/horae/src/pages/projects.rs" = 17
+"crates/horae/src/pages/reports.rs" = 6
+"crates/horae/src/pages/reports/scoped.rs" = 5
+"crates/horae/src/pages/settings.rs" = 1
+"crates/horae/src/pages/tasks.rs" = 2
+"crates/horae/src/pages/tasks/editor.rs" = 5
+"crates/horae/src/pages/timesheet.rs" = 8
+"crates/horae/src/pages/timesheet/people.rs" = 1
+"crates/horae/src/pages/timesheet/tracking.rs" = 2
 
 ["dioxus/resource-gate"]
-count = 17
 reason = "Predates the check; each needs its own first-load gate and aria-busy fix (horae-application.md section 3), one per PR."
+"crates/horae/src/pages/admin/permission_editor/subjects.rs" = 1
+"crates/horae/src/pages/admin/permission_editor/templates.rs" = 1
+"crates/horae/src/pages/clients.rs" = 1
+"crates/horae/src/pages/clients/detail.rs" = 4
+"crates/horae/src/pages/clients/form.rs" = 1
+"crates/horae/src/pages/invoices.rs" = 1
+"crates/horae/src/pages/new_project.rs" = 2
+"crates/horae/src/pages/projects.rs" = 3
+"crates/horae/src/pages/reports.rs" = 3
 
 ["dioxus/internal-href"]
-count = 1
 reason = "settings/own_permissions.rs permission_content links to /admin/audit; a Link needs a router, and its unit tests render it with bare ssr::render_element, so the fix comes with a test harness change."
+"crates/horae/src/pages/settings/own_permissions.rs" = 1
 
 ["dioxus/render-helper"]
-count = 3
 reason = "timesheet.rs render_calendar_view, render_day_view and render_week_view; splitting them into components is horae-application.md section 1."
+"crates/horae/src/pages/timesheet.rs" = 3

@@ -1,11 +1,16 @@
 //! Ratcheted checks for the rules in `.agents/skills/dioxus-best-practices/SKILL.md`.
 //!
 //! `rsx!` bodies are parsed with `dioxus-rsx`, the parser the `rsx!` macro itself uses,
-//! and the Rust around them with `syn`. Each rule has a count in `baseline.toml`; the
-//! check fails when a count moves either way, so new violations are caught and fixed
-//! ones lower the baseline.
+//! and the Rust around them with `syn`. Each rule has a count per file in `baseline.toml`;
+//! the check fails when a file's count moves either way, so new violations are caught and
+//! fixed ones lower the baseline.
+//!
+//! Known gaps: `resource-gate` sees only `state()` compared with `UseResourceState::Ready`
+//! (directly, through a `let`, or joined by `||`), not a `match` on the state, `pending()`
+//! or a gate inside a helper fn. `render-helper` sees only free `fn render_*` returning
+//! `Element`, not methods, closures or helpers with other names.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -20,9 +25,8 @@ struct Rule {
     id: &'static str,
     /// The `## ` heading in SKILL.md this rule enforces.
     section: &'static str,
-    /// The Dioxus 0.7.9 file (relative to `packages/`) and symbol in `references/source-evidence.md`.
+    /// The Dioxus 0.7.9 file (relative to `packages/`) behind the rule, as cited in the skill.
     evidence_file: &'static str,
-    evidence_symbol: &'static str,
     why: &'static str,
     fix: &'static str,
     /// Enforced by `disallowed-methods` in `clippy.toml` rather than by this checker.
@@ -34,8 +38,7 @@ const RULES: &[Rule] = &[
         id: "dioxus/inline-callback-prop",
         section: "Props: what compares equal",
         evidence_file: "core/src/events.rs",
-        evidence_symbol: "impl PartialEq for Callback",
-        why: "an inline closure is a new Callback on every parent render, so the child's props never compare equal and it re-renders every time",
+        why: "an inline closure is a new Callback on every parent render, so the child's props never compare equal and it re-renders every time (for a component that takes `children`, which never compare equal anyway, the gain is the per-render allocation)",
         fix: "hoist it into `let on_x = use_callback(move |v| …);` and pass `on_x`",
         clippy: false,
     },
@@ -43,7 +46,6 @@ const RULES: &[Rule] = &[
         id: "dioxus/callback-new-in-render",
         section: "Props: what compares equal",
         evidence_file: "core/src/events.rs",
-        evidence_symbol: "Callback::new",
         why: "it allocates a new owned callback on every render, kept until the component unmounts, and it never compares equal",
         fix: "use `use_callback`",
         clippy: true,
@@ -52,7 +54,6 @@ const RULES: &[Rule] = &[
         id: "dioxus/resource-gate",
         section: "Resources and loading",
         evidence_file: "hooks/src/use_resource.rs",
-        evidence_symbol: "restart",
         why: "restart() sets Pending but keeps the old value, so gating on state() != Ready unmounts the subtree and drops its local state on every reload",
         fix: "gate only the first load with `r.read().is_none()`, and show the stale data with `aria-busy` while a reload runs",
         clippy: false,
@@ -61,7 +62,6 @@ const RULES: &[Rule] = &[
         id: "dioxus/render-helper",
         section: "Subscriptions",
         evidence_file: "signals/src",
-        evidence_symbol: "reads subscribe the running scope",
         why: "a plain fn's signal reads subscribe the component that calls it, so every change re-renders the whole caller",
         fix: "make the helper a `#[component]` so its reads subscribe only itself",
         clippy: false,
@@ -70,7 +70,6 @@ const RULES: &[Rule] = &[
         id: "dioxus/internal-href",
         section: "Events, links, effects",
         evidence_file: "router/src/components/link.rs",
-        evidence_symbol: "Link",
         why: "a plain `a { href }` is a full page load, which restarts the WASM app and loses the shared session",
         fix: "use `Link { to: Route::… }`",
         clippy: false,
@@ -89,13 +88,15 @@ struct Finding {
 #[derive(Default)]
 struct Checker {
     findings: Vec<Finding>,
+    errors: Vec<syn::Error>,
     /// Inside a fn that returns `Element`.
     in_render: bool,
     /// Closures between the current point and the enclosing fn body.
     closure_depth: usize,
-    /// Locals of the current fn bound to a resource state comparison, such as
-    /// `let ready = r.state()() == UseResourceState::Ready;`, with whether they mean "not ready".
-    state_flags: Vec<(String, bool)>,
+    /// Locals in scope, innermost last. `Some(not_ready)` when the local is bound to a
+    /// resource state comparison such as `let ready = r.state()() == UseResourceState::Ready;`;
+    /// `None` for any other binding, which shadows an earlier one of the same name.
+    state_flags: Vec<(String, Option<bool>)>,
 }
 
 impl Checker {
@@ -122,7 +123,12 @@ impl Checker {
             .iter()
             .rev()
             .find(|(n, _)| *n == name)
-            .map(|(_, not_ready)| *not_ready)
+            .and_then(|(_, not_ready)| *not_ready)
+    }
+
+    /// `dioxus-rsx` keeps expressions as tokens until asked; one that does not parse fails the check.
+    fn parsed<T>(&mut self, result: syn::Result<T>) -> Option<T> {
+        result.map_err(|e| self.errors.push(e)).ok()
     }
 
     fn push(&mut self, rule: &'static str, span: Span) {
@@ -144,18 +150,15 @@ impl Checker {
                 }
                 BodyNode::Component(component) => {
                     for field in &component.fields {
-                        if let AttributeName::BuiltIn(name) = &field.name
-                            && name.to_string().starts_with("on")
-                            && is_closure(&field.value)
-                        {
-                            self.push("dioxus/inline-callback-prop", name.span());
+                        if self.is_closure(&field.value) {
+                            self.push("dioxus/inline-callback-prop", field.name.span());
                         }
                     }
                     self.attributes(&component.fields);
                     self.nodes(&component.children.roots);
                 }
                 BodyNode::RawExpr(raw) => {
-                    if let Ok(expr) = raw.expr.as_expr() {
+                    if let Some(expr) = self.parsed(raw.expr.as_expr()) {
                         self.visit_expr(&expr);
                     }
                 }
@@ -189,14 +192,14 @@ impl Checker {
         for attribute in attributes {
             match &attribute.value {
                 AttributeValue::EventTokens(closure) => {
-                    if let Ok(body) = closure.body.as_expr() {
+                    if let Some(body) = self.parsed(closure.body.as_expr()) {
                         self.closure_depth += 1;
                         self.visit_expr(&body);
                         self.closure_depth -= 1;
                     }
                 }
                 AttributeValue::AttrExpr(expr) => {
-                    if let Ok(expr) = expr.as_expr() {
+                    if let Some(expr) = self.parsed(expr.as_expr()) {
                         self.visit_expr(&expr);
                     }
                 }
@@ -205,12 +208,22 @@ impl Checker {
             }
         }
     }
+
+    fn is_closure(&mut self, value: &AttributeValue) -> bool {
+        match value {
+            AttributeValue::EventTokens(_) => true,
+            AttributeValue::AttrExpr(expr) => {
+                self.parsed(expr.as_expr()).is_some_and(|e| is_closure(&e))
+            }
+            _ => false,
+        }
+    }
 }
 
 impl<'ast> Visit<'ast> for Checker {
     fn visit_item_fn(&mut self, item: &'ast syn::ItemFn) {
         let render = returns_element(&item.sig.output);
-        let component = item.attrs.iter().any(|a| a.path().is_ident("component"));
+        let component = item.attrs.iter().any(|a| last_is(a.path(), "component"));
         if render && !component && item.sig.ident.to_string().starts_with("render_") {
             self.push("dioxus/render-helper", item.sig.ident.span());
         }
@@ -224,14 +237,23 @@ impl<'ast> Visit<'ast> for Checker {
         (self.in_render, self.closure_depth, self.state_flags) = saved;
     }
 
+    fn visit_block(&mut self, block: &'ast syn::Block) {
+        let scope = self.state_flags.len();
+        visit::visit_block(self, block);
+        self.state_flags.truncate(scope);
+    }
+
     fn visit_local(&mut self, local: &'ast syn::Local) {
-        if let syn::Pat::Ident(name) = &local.pat
-            && let Some(init) = &local.init
-            && let Some(not_ready) = state_comparison(&init.expr)
-        {
+        // Visit first: the initializer sees the previous binding, as in `let ready = ready || …;`.
+        visit::visit_local(self, local);
+        let pat = match &local.pat {
+            syn::Pat::Type(typed) => &*typed.pat,
+            pat => pat,
+        };
+        if let syn::Pat::Ident(name) = pat {
+            let not_ready = (local.init.as_ref()).and_then(|init| state_comparison(&init.expr));
             self.state_flags.push((name.ident.to_string(), not_ready));
         }
-        visit::visit_local(self, local);
     }
 
     fn visit_expr_closure(&mut self, closure: &'ast syn::ExprClosure) {
@@ -252,23 +274,28 @@ impl<'ast> Visit<'ast> for Checker {
     }
 
     fn visit_macro(&mut self, mac: &'ast syn::Macro) {
-        if mac.path.is_ident("rsx")
-            && let Ok(body) = syn::parse2::<CallBody>(mac.tokens.clone())
+        if last_is(&mac.path, "rsx")
+            && let Some(body) = self.parsed(syn::parse2::<CallBody>(mac.tokens.clone()))
         {
             self.nodes(&body.body.roots);
         }
     }
 }
 
+/// Matches `rsx` as well as `dioxus::prelude::rsx`.
+fn last_is(path: &syn::Path, name: &str) -> bool {
+    path.segments.last().is_some_and(|s| s.ident == name)
+}
+
 fn returns_element(output: &ReturnType) -> bool {
     matches!(output, ReturnType::Type(_, ty)
-        if matches!(&**ty, Type::Path(p) if p.path.segments.last().is_some_and(|s| s.ident == "Element")))
+        if matches!(&**ty, Type::Path(p) if last_is(&p.path, "Element")))
 }
 
 fn returns_rsx(block: &syn::Block) -> bool {
     block.stmts.iter().any(|stmt| {
         matches!(stmt, Stmt::Expr(Expr::Return(ret), _)
-            if matches!(ret.expr.as_deref(), Some(Expr::Macro(m)) if m.mac.path.is_ident("rsx")))
+            if matches!(ret.expr.as_deref(), Some(Expr::Macro(m)) if last_is(&m.mac.path, "rsx")))
     })
 }
 
@@ -304,10 +331,15 @@ fn is_ready(expr: &Expr) -> bool {
     names.ends_with(&["UseResourceState".into(), "Ready".into()])
 }
 
-fn is_closure(value: &AttributeValue) -> bool {
-    match value {
-        AttributeValue::EventTokens(_) => true,
-        AttributeValue::AttrExpr(expr) => matches!(expr.as_expr(), Ok(Expr::Closure(_))),
+/// A closure, also inside parentheses or as the tail of a block such as
+/// `{ let id = row.id; move |_| … }`.
+fn is_closure(expr: &Expr) -> bool {
+    match expr {
+        Expr::Closure(_) => true,
+        Expr::Paren(p) => is_closure(&p.expr),
+        Expr::Block(b) => {
+            matches!(b.block.stmts.last(), Some(Stmt::Expr(tail, None)) if is_closure(tail))
+        }
         _ => false,
     }
 }
@@ -339,7 +371,14 @@ fn check_source(src: &str) -> syn::Result<Vec<Finding>> {
     let file = syn::parse_file(src)?;
     let mut checker = Checker::default();
     checker.visit_file(&file);
-    Ok(checker.findings)
+    let mut errors = checker.errors.into_iter();
+    match errors.next() {
+        Some(mut first) => {
+            first.extend(errors);
+            Err(first)
+        }
+        None => Ok(checker.findings),
+    }
 }
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
@@ -354,11 +393,13 @@ fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
     Ok(())
 }
 
+/// A `["rule"]` table: a `reason`, then `"path" = count` for each file with violations
+/// that predate the check.
 #[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Allowance {
-    count: usize,
     reason: String,
+    #[serde(flatten)]
+    files: BTreeMap<String, usize>,
 }
 
 fn load_baseline(path: &Path) -> Result<BTreeMap<String, Allowance>, String> {
@@ -397,7 +438,8 @@ fn main() -> ExitCode {
     }
     files.sort();
 
-    let mut found: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    // rule -> file -> lines
+    let mut found: BTreeMap<&str, BTreeMap<String, Vec<usize>>> = BTreeMap::new();
     for path in &files {
         let shown = path
             .strip_prefix(&root)
@@ -414,50 +456,59 @@ fn main() -> ExitCode {
         match check_source(&src) {
             Ok(findings) => {
                 for f in findings {
-                    found
-                        .entry(f.rule)
-                        .or_default()
-                        .push(format!("{shown}:{}", f.line));
+                    let files = found.entry(f.rule).or_default();
+                    files.entry(shown.clone()).or_default().push(f.line);
                 }
             }
-            Err(e) => {
-                eprintln!("{shown}: does not parse: {e}");
+            Err(errors) => {
+                for e in errors {
+                    eprintln!("{shown}:{}: does not parse: {e}", e.span().start().line);
+                }
                 return ExitCode::FAILURE;
             }
         }
     }
 
     let mut ok = true;
+    let (no_sites, no_allowance) = (BTreeMap::new(), BTreeMap::new());
     for rule in RULES.iter().filter(|r| !r.clippy) {
-        let sites = found.get(rule.id).map(Vec::as_slice).unwrap_or_default();
-        let allowed = baseline.get(rule.id).map_or(0, |a| a.count);
-        if sites.len() > allowed {
-            ok = false;
-            eprintln!(
-                "{}: {} found, baseline allows {allowed}. One of these is new:",
-                rule.id,
-                sites.len()
-            );
-            for site in sites {
-                eprintln!("  {site}: {}", rule.id);
+        let sites = found.get(rule.id).unwrap_or(&no_sites);
+        let allowed = baseline.get(rule.id).map_or(&no_allowance, |a| &a.files);
+        let mut rose = false;
+        for file in sites.keys().chain(allowed.keys()).collect::<BTreeSet<_>>() {
+            let lines = sites.get(file).map(Vec::as_slice).unwrap_or_default();
+            let allows = allowed.get(file).copied().unwrap_or(0);
+            if lines.len() > allows {
+                rose = true;
+                eprintln!(
+                    "{}: {file}: {} found, baseline allows {allows}. One of these is new:",
+                    rule.id,
+                    lines.len()
+                );
+                for line in lines {
+                    eprintln!("  {file}:{line}: {}", rule.id);
+                }
+            } else if lines.len() < allows {
+                ok = false;
+                let n = lines.len();
+                eprintln!(
+                    "{}: {file}: {n} found, baseline allows {allows}. Lower it in crates/dioxus-lint/baseline.toml to {n} (at 0, remove the line).",
+                    rule.id
+                );
             }
+        }
+        if rose {
+            ok = false;
             eprintln!("  why: {}", rule.why);
             eprintln!("  fix: {}", rule.fix);
             eprintln!(
-                "  see: .agents/skills/dioxus-best-practices/SKILL.md \"{}\" (dioxus 0.7.9 {} `{}`)\n",
-                rule.section, rule.evidence_file, rule.evidence_symbol
+                "  see: .agents/skills/dioxus-best-practices/SKILL.md \"{}\" (dioxus 0.7.9 {})\n",
+                rule.section, rule.evidence_file
             );
-        } else if sites.len() < allowed {
-            ok = false;
-            eprintln!(
-                "{}: {} found, baseline allows {allowed}. Lower `count` in crates/dioxus-lint/baseline.toml to {}.",
-                rule.id,
-                sites.len(),
-                sites.len()
-            );
-        } else {
-            println!("{}: {} (baseline {allowed})", rule.id, sites.len());
         }
+        let total: usize = sites.values().map(Vec::len).sum();
+        let allowed: usize = allowed.values().sum();
+        println!("{}: {total} (baseline {allowed})", rule.id);
     }
     if ok {
         ExitCode::SUCCESS
@@ -506,6 +557,12 @@ mod tests {
             let good = check_source(&good).unwrap();
             assert_eq!(good, vec![], "{}: good.rs is flagged", rule.id);
         }
+    }
+
+    #[test]
+    fn rsx_that_does_not_parse_fails() {
+        let src = "fn Page() -> Element { rsx! { Row { on_pick: move |_| } } }";
+        assert!(check_source(src).is_err());
     }
 
     #[test]

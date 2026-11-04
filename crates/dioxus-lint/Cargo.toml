@@ -6,8 +6,9 @@ license = "MIT"
 publish = false
 
 [dependencies]
-# Pinned to the Dioxus version in Cargo.lock, so rsx! bodies parse exactly as the app's do.
-dioxus-rsx = "=0.7.9"
+# Resolves to the same Cargo.lock entry as the app's Dioxus, so rsx! bodies parse as the
+# app's do. When `cargo update` moves Dioxus, re-verify the skill's rules (SKILL.md Overview).
+dioxus-rsx = "0.7.9"
 proc-macro2 = { version = "1", features = ["span-locations"] }
 serde = { version = "1", features = ["derive"] }
 syn = { version = "2", features = ["full", "visit"] }

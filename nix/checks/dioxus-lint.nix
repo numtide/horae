@@ -1,7 +1,9 @@
 { perSystem, ... }:
-perSystem.self.default.overrideAttrs (old: {
+perSystem.self.default.overrideAttrs (_old: {
   pname = "horae-dioxus-lint";
-  cargoArtifacts = old.passthru.checkArtifacts;
+  # The crate's few dependencies build faster than the workspace artifacts unpack, and
+  # alone they resolve different features, so the shared artifacts would not be reused.
+  cargoArtifacts = null;
 
   # The package source drops Markdown; the self-test checks each rule against the skill.
   DIOXUS_SKILL_DIR = ../../.agents/skills/dioxus-best-practices;

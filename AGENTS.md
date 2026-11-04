@@ -79,9 +79,9 @@ nix fmt                                         # treefmt: rustfmt, taplo, nixpk
 cargo run -p horae-dioxus-lint                  # Dioxus rules ratchet (or: nix build .#checks.x86_64-linux.dioxus-lint)
 ```
 
-`crates/dioxus-lint` enforces the `dioxus-best-practices` skill: it parses every `rsx!` with `dioxus-rsx` and fails when a rule's count differs from `crates/dioxus-lint/baseline.toml`, either up (a new violation: fix it) or down (lower the count). `clippy.toml` bans `Callback::new`/`EventHandler::new` in favour of `use_callback`. `cargo test -p horae-dioxus-lint` runs its fixtures and checks every rule against a SKILL.md heading.
+`crates/dioxus-lint` enforces the `dioxus-best-practices` skill: it parses every `rsx!` with `dioxus-rsx` and fails when a file's count for a rule differs from `crates/dioxus-lint/baseline.toml`, either up (a new violation: fix it) or down (lower the count). `clippy.toml` bans `Callback::new`/`EventHandler::new` in favour of `use_callback`. `cargo test -p horae-dioxus-lint` runs its fixtures and checks every rule against a SKILL.md heading.
 
-Integration tests (`crates/horae/tests/integration.rs`) use `#[sqlx::test]` — each spins up a throwaway database, so the DB role needs `CREATEDB` — and are marked `#[serial]`. `nix build` builds the package; `nix flake check` runs the whole suite against a PostgreSQL started inside the build sandbox (`nix/checks/tests.nix`), plus clippy, formatting, the `.sqlx` cache check, and the NixOS e2e tests.
+Integration tests (`crates/horae/tests/integration.rs`) use `#[sqlx::test]` — each spins up a throwaway database, so the DB role needs `CREATEDB` — and are marked `#[serial]`. `nix build` builds the package; `nix flake check` runs the whole suite against a PostgreSQL started inside the build sandbox (`nix/checks/tests.nix`), plus clippy, formatting, the `.sqlx` cache check, the Dioxus rules ratchet, and the NixOS e2e tests.
 
 ### sqlx query cache
 
