@@ -159,8 +159,9 @@ assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A
       const refreshed = page.waitForResponse(r => r.url().includes('/api/load_timesheet_page') && r.status() === 200);
       await modal.getByRole('button', { name: 'Save entry', exact: true }).click();
       await expect(modal).toBeHidden();
-      // Refresh invalidates tracking options, so the opener is temporarily disabled.
-      await expect(page.locator('#app-main')).toBeFocused();
+      // The sheet held through the refresh keeps the opener enabled, so focus
+      // returns to it rather than falling back to the main region.
+      await expect(trigger).toBeFocused();
       await (await refreshed).finished();
       await visit('/timesheet/day/2027-10-04', 'load_timesheet_page');
       const row = page.locator('.ts-day-entry').filter({ hasText: notes });

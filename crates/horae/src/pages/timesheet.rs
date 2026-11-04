@@ -443,17 +443,41 @@ fn TimesheetContent(
             .cloned()
             .unwrap_or_default()
     });
+    // A held sheet has no context, so no choices: the toolbar keeps the last
+    // admitted ones instead, so the add button and its hint hold still while
+    // the sheet reloads. Its actions still need the current choices.
+    let mut admitted_tracking = use_signal(|| None);
+    use_effect(move || {
+        if let Some(result) = current_tracking()
+            && admitted_tracking.peek().as_ref() != Some(&result)
+        {
+            admitted_tracking.set(Some(result));
+        }
+    });
+    let toolbar_tracking = use_memo(move || {
+        if held().is_some() {
+            admitted_tracking()
+        } else {
+            current_tracking()
+        }
+    });
     // Loaded and empty, as opposed to still loading or failed (which has its
     // own retry alert): only then does the disabled add button need a reason.
     let nothing_to_track =
-        matches!(current_tracking.read().as_ref(), Some(Ok(options)) if options.is_empty());
+        matches!(toolbar_tracking.read().as_ref(), Some(Ok(options)) if options.is_empty());
+    let can_add =
+        matches!(toolbar_tracking.read().as_ref(), Some(Ok(options)) if !options.is_empty());
     // Another person's sheet names them; one's own (also when opened by its
     // id) says "you".
-    let assignee = match &*current_sheet.read() {
-        Some(Ok(page)) if page.subject.id != page.requester.user_id => {
-            Some(page.subject.name.clone())
-        }
-        _ => None,
+    let assignee = {
+        let current = current_sheet.read();
+        let admitted = admitted.read();
+        current
+            .as_ref()
+            .and_then(|result| result.as_ref().ok())
+            .or(held().and(admitted.as_ref().map(|(.., page)| page)))
+            .filter(|page| page.subject.id != page.requester.user_id)
+            .map(|page| page.subject.name.clone())
     };
     let empty_message = no_tracking_message(assignee.as_deref());
     let session = use_session();
@@ -664,16 +688,20 @@ fn TimesheetContent(
                 } => Some((*entry_id, (*spent_date, *start_minute, *minutes))),
                 _ => None,
             };
+            // The block stays where it was dropped while the move is sent and
+            // until its reload lands; a refusal puts it back.
+            if let Some((entry_id, to)) = moved {
+                unadmitted.write().moves.insert(entry_id, to);
+            }
             spawn(async move {
                 match server_fns::apply_timesheet_command(context, command).await {
-                    Ok(()) => {
-                        grid_error.set(None);
-                        // The block stays where it was dropped until the reload lands.
-                        if let Some((entry_id, to)) = moved {
-                            unadmitted.write().moves.insert(entry_id, to);
+                    Ok(()) => grid_error.set(None),
+                    Err(e) => {
+                        grid_error.set(Some(format!("Could not change entry: {e}")));
+                        if let Some((entry_id, _)) = moved {
+                            unadmitted.write().moves.remove(&entry_id);
                         }
                     }
-                    Err(e) => grid_error.set(Some(format!("Could not change entry: {e}"))),
                 }
                 timer.refresh();
                 pending_action.set(false);
@@ -852,11 +880,14 @@ fn TimesheetContent(
     let mut saving_cells = use_signal(HashSet::<CellKey>::new);
     // A save's own reload brings its result; once that is admitted, or fails,
     // the sheet shows the saves and their stand-ins go. Following the resource
-    // state catches a reload whose page compares equal to the last one.
+    // state catches a reload whose page compares equal to the last one. A
+    // reload that lands while a calendar change is still being sent predates
+    // it; that change's own reload follows.
     use_effect(move || {
         if sheet.state() != UseResourceState::Ready
             || current_sheet.read().is_none()
             || unadmitted.peek().is_empty()
+            || *pending_action.peek()
         {
             return;
         }
@@ -1196,7 +1227,7 @@ fn TimesheetContent(
                     "aria-label": "Add entry",
                     title: if nothing_to_track { "{empty_message}" },
                     "aria-describedby": if nothing_to_track { "ts-add-empty" },
-                    disabled: busy() || tracking.read().is_empty(),
+                    disabled: busy() || !can_add,
                     onclick: move |_| open_add.call(add_default_date),
                     "+"
                 }

@@ -4,7 +4,7 @@
 //! change can be observed while the next week is still loading.
 
 use std::any::Any;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
@@ -37,14 +37,29 @@ pub mod date_picker;
 pub mod menu;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
+#[path = "../src/components/no_tracking.rs"]
+pub mod no_tracking;
 #[path = "../src/components/select_field.rs"]
 pub mod select_field;
 mod components {
-    pub use super::{controls, date_picker, menu, modal, select_field};
+    pub use super::{controls, date_picker, menu, modal, no_tracking, select_field};
 
-    /// The shell's week start, without the rest of the session.
+    /// The shell's week start and a viewer who cannot manage projects, without
+    /// the rest of the session.
     pub mod session {
         use dioxus::prelude::*;
+
+        pub struct Session;
+
+        impl Session {
+            pub fn can_create_projects(&self) -> bool {
+                false
+            }
+        }
+
+        pub fn use_session() -> Session {
+            Session
+        }
 
         pub fn use_week_start() -> Resource<Result<chrono::Weekday, ServerFnError>> {
             use_resource(crate::server_fns::get_week_start)
@@ -100,7 +115,7 @@ mod pages {
 }
 use pages::timesheet;
 
-/// The one route the page links to.
+/// The routes the page links to.
 mod route {
     use super::timesheet::{Anchor, CalSpan, Timesheet, ViewMode};
     use dioxus::prelude::*;
@@ -114,6 +129,13 @@ mod route {
             span: CalSpan,
             user: String,
         },
+        #[route("/projects")]
+        ProjectList {},
+    }
+
+    #[component]
+    fn ProjectList() -> Element {
+        rsx! {}
     }
 }
 
@@ -135,6 +157,16 @@ thread_local! {
     static COMMANDS: RefCell<Vec<TimesheetCommand>> = RefCell::default();
     /// Weeks whose next load fails once.
     static FAILING: RefCell<HashSet<NaiveDate>> = RefCell::default();
+    /// While set, commands are recorded but stay in flight.
+    static HOLD_COMMANDS: Cell<bool> = const { Cell::new(false) };
+    /// While set, the viewer has no projects to track.
+    static NO_TRACKING: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Answer the commands held in flight.
+fn let_commands_through() {
+    HOLD_COMMANDS.set(false);
+    RELEASED.with(|released| released.notify_waiters());
 }
 
 /// Keep the week's next load waiting until it is released again.
@@ -189,6 +221,9 @@ mod server_fns {
     pub async fn load_timesheet_tracking(
         _: TimesheetWriteContext,
     ) -> Result<Vec<TimesheetTrackingOption>, ServerFnError> {
+        if NO_TRACKING.get() {
+            return Ok(Vec::new());
+        }
         Ok(vec![TimesheetTrackingOption {
             project_id: PROJECT,
             project_name: "Project".into(),
@@ -203,7 +238,14 @@ mod server_fns {
         command: TimesheetCommand,
     ) -> Result<(), ServerFnError> {
         COMMANDS.with_borrow_mut(|commands| commands.push(command));
-        Ok(())
+        let released = RELEASED.with(Rc::clone);
+        loop {
+            let notified = released.notified();
+            if !HOLD_COMMANDS.get() {
+                return Ok(());
+            }
+            notified.await;
+        }
     }
 
     pub async fn submit_week(_: String, _: TimesheetWriteContext) -> Result<(), ServerFnError> {
@@ -344,16 +386,32 @@ impl Page {
     }
 
     fn click(&mut self, nth: usize) {
-        let id = self.clicks()[nth];
+        let id = self.ids("click")[nth];
         self.fire("click", id, Box::new(SerializedMouseData::default()), true);
     }
 
-    fn clicks(&self) -> Vec<ElementId> {
+    /// Every element listening for `name`, in the order they were created.
+    fn ids(&self, name: &str) -> Vec<ElementId> {
         self.listeners
             .iter()
-            .filter(|(name, _)| name == "click")
+            .filter(|(listener, _)| listener == name)
             .map(|(_, id)| *id)
             .collect()
+    }
+
+    /// A mouse event `y` px down its target, as a calendar column reads it.
+    fn mouse(&mut self, name: &str, id: ElementId, y: f64) {
+        use dioxus::html::geometry::{
+            ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint,
+        };
+        let at = Coordinates::new(
+            ScreenPoint::zero(),
+            ClientPoint::zero(),
+            ElementPoint::new(0.0, y),
+            PagePoint::zero(),
+        );
+        let data = SerializedMouseData::new(None, Default::default(), at, Default::default());
+        self.fire(name, id, Box::new(data), true);
     }
 
     fn type_into_last_cell(&mut self, value: &str) {
@@ -376,18 +434,28 @@ fn next_week() -> NaiveDate {
 /// fresh page built by `setup`. Mutations name listeners by element id only,
 /// and the same setup always creates them in the same order.
 fn find_click(setup: impl Fn() -> Page, shows: impl Fn(&str) -> bool) -> usize {
-    let count = setup().clicks().len();
+    find_target(setup, "click", |page, nth| page.click(nth), shows)
+}
+
+/// The same search for any listener, with `act` doing what a target needs.
+fn find_target(
+    setup: impl Fn() -> Page,
+    name: &str,
+    act: impl Fn(&mut Page, usize),
+    shows: impl Fn(&str) -> bool,
+) -> usize {
+    let count = setup().ids(name).len();
     let found = (0..count).find(|&nth| {
         let mut page = setup();
         // Some targets navigate, which needs a router this harness lacks.
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            page.click(nth);
+            act(&mut page, nth);
             shows(&page.html())
         }))
         .unwrap_or(false)
     });
     COMMANDS.with_borrow_mut(Vec::clear);
-    found.expect("no click target shows it")
+    found.unwrap_or_else(|| panic!("no {name} target shows it"))
 }
 
 fn week_a(view: ViewMode) -> Page {
@@ -513,7 +581,7 @@ async fn a_reload_after_a_save_keeps_the_sheet_and_the_saved_value() {
     // A draft on Saturday, then Sunday saved, which reloads the week.
     page.fire("input", saturday.0, input("0:45"), true);
     withhold(monday());
-    page.fire("input", sunday.0, input("2:00"), true);
+    page.fire("input", sunday.0, input("1:07"), true);
     page.fire("blur", sunday.1, Box::new(SerializedFocusData {}), false);
     assert_eq!(COMMANDS.with_borrow(Vec::len), 1);
     let html = page.html();
@@ -523,26 +591,25 @@ async fn a_reload_after_a_save_keeps_the_sheet_and_the_saved_value() {
     assert!(html.contains("aria-busy=\"true\""), "{html}");
     // The saved value stays until the reload brings it, and the page waits
     // for that reload rather than reading as unsaved.
-    assert!(html.contains("value=\"2:00\""), "{html}");
+    assert!(html.contains("value=\"1:07\""), "{html}");
     assert!(html.contains("data-editor-state=\"pending\""), "{html}");
     // The reload makes Saturday inert, which blurs it: the draft waits.
     page.fire("blur", saturday.1, Box::new(SerializedFocusData {}), false);
     assert_eq!(COMMANDS.with_borrow(Vec::len), 1);
     assert!(!page.html().contains("role=\"alert\""));
 
-    let sunday_entry = entry(
-        monday() + chrono::Duration::days(6),
-        120,
-        "Old week project",
-    );
+    // The server stores what it rounds the input to, not the input itself.
+    let sunday_entry = entry(monday() + chrono::Duration::days(6), 75, "Old week project");
     release(
         monday(),
         vec![entry(monday(), 60, "Old week project"), sunday_entry],
     );
     page.settle();
     let html = page.html();
-    assert!(html.contains("3:00 this week"), "{html}");
-    assert!(html.contains("value=\"2:00\""), "{html}");
+    assert!(html.contains("2:15 this week"), "{html}");
+    // The stored value replaces the saved draft, which would otherwise still read 1:07.
+    assert!(html.contains("value=\"1:15\""), "{html}");
+    assert!(!html.contains("value=\"1:07\""), "{html}");
     assert!(html.contains("value=\"0:45\""), "{html}");
     assert!(html.contains("data-editor-state=\"dirty\""), "{html}");
     assert!(!html.contains("aria-busy=\"true\""), "{html}");
@@ -668,4 +735,102 @@ async fn a_week_change_closes_the_add_row_dialog_picker_and_submit_error() {
         assert!(!html.contains(stale), "{stale} survived: {html}");
     }
     assert!(html.contains("data-editor-state=\"clean\""), "{html}");
+}
+
+#[tokio::test]
+async fn a_dropped_block_stays_put_while_its_move_is_sent() {
+    let timed = VisibleTimeEntry {
+        start_minute: Some(180),
+        ..entry(monday(), 60, "Old week project")
+    };
+    let loaded = || {
+        let mut page = Page::open_in(ViewMode::Calendar);
+        release(monday(), vec![timed.clone()]);
+        page.settle();
+        page
+    };
+    // Pressing the block and letting go without moving opens it for editing.
+    let block = find_target(
+        loaded,
+        "mousedown",
+        |page, nth| {
+            let (down, up) = (page.ids("mousedown")[nth], page.ids("mouseup")[0]);
+            page.mouse("mousedown", down, 0.0);
+            page.mouse("mouseup", up, 0.0);
+        },
+        |html| html.contains("Edit time entry"),
+    );
+    let mut page = loaded();
+    assert!(page.html().contains("3:00–4:00"));
+    HOLD_COMMANDS.set(true);
+    // Grab the block at its top and drop it on Tuesday at 5:00.
+    let tuesday = (page.ids("mousemove")[1], page.ids("mouseup")[1]);
+    page.mouse("mousedown", page.ids("mousedown")[block], 0.0);
+    page.mouse("mousemove", tuesday.0, f64::from(5 * 48));
+    page.mouse("mouseup", tuesday.1, f64::from(5 * 48));
+    let command = COMMANDS.with_borrow(|commands| commands.last().cloned());
+    assert_eq!(
+        command,
+        Some(TimesheetCommand::Reschedule {
+            entry_id: timed.id,
+            spent_date: monday() + chrono::Duration::days(1),
+            start_minute: 300,
+            minutes: 60,
+        })
+    );
+    let html = page.html();
+    assert!(html.contains("5:00–6:00"), "{html}");
+    assert!(!html.contains("3:00–4:00"), "{html}");
+
+    // Its reload brings the stored move; the block does not jump back on the way.
+    withhold(monday());
+    let_commands_through();
+    page.settle();
+    let html = page.html();
+    assert!(html.contains("aria-busy=\"true\""), "{html}");
+    assert!(html.contains("5:00–6:00"), "{html}");
+    release(
+        monday(),
+        vec![VisibleTimeEntry {
+            spent_date: monday() + chrono::Duration::days(1),
+            start_minute: Some(300),
+            ..timed.clone()
+        }],
+    );
+    page.settle();
+    let html = page.html();
+    assert!(html.contains("5:00–6:00"), "{html}");
+    assert!(!html.contains("aria-busy=\"true\""), "{html}");
+}
+
+#[tokio::test]
+async fn the_toolbar_keeps_the_last_choices_while_the_sheet_reloads() {
+    let add_button = |html: &str| {
+        let start = html.find("class=\"ts-add\"").expect("the add button");
+        html[start..]
+            .split('>')
+            .next()
+            .unwrap_or_default()
+            .to_string()
+    };
+    // With choices, the add button stays as it was through a week change.
+    let mut page = week_a(ViewMode::Week);
+    assert!(!add_button(&page.html()).contains("disabled"));
+    page.go_to(next_week());
+    let html = page.html();
+    assert!(html.contains("inert"), "{html}");
+    assert!(!add_button(&html).contains("disabled"), "{html}");
+
+    // Without, so does the reason beside the disabled button.
+    NO_TRACKING.set(true);
+    let hint = "No projects are assigned to you yet.";
+    let mut page = week_a(ViewMode::Week);
+    let html = page.html();
+    assert!(html.contains(hint), "{html}");
+    assert!(add_button(&html).contains("disabled"), "{html}");
+    page.go_to(next_week());
+    let html = page.html();
+    assert!(html.contains("inert"), "{html}");
+    assert!(html.contains(hint), "{html}");
+    assert!(add_button(&html).contains("disabled"), "{html}");
 }

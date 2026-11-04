@@ -1681,10 +1681,11 @@ tbody tr:hover { background: var(--color-row-hover); }
 /* Column template + min-width are set inline (see grid_style) to match the
    visible day count, so only `display: grid` lives here. */
 .ts-cal-head,
+.ts-cal-grid { display: grid; }
 /* A drag across the grid must not select its text: the sheet stays mounted
    through the reload, so a selection would outlive the drag and turn the next
    press into a native text drag that never reaches the calendar. */
-.ts-cal-grid { display: grid; user-select: none; }
+.ts-cal-grid { user-select: none; }
 .ts-cal-head {
   position: sticky; top: 0; z-index: 5; background: var(--color-bg);
   border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-3); margin-bottom: var(--space-1);
