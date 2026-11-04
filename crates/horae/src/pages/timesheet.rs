@@ -445,7 +445,8 @@ fn TimesheetContent(
     });
     // A held sheet has no context, so no choices: the toolbar keeps the last
     // admitted ones instead, so the add button and its hint hold still while
-    // the sheet reloads. Its actions still need the current choices.
+    // the sheet reloads. Its actions still need the current choices. Keeping
+    // them across reloads is safe only because a person change remounts this.
     let mut admitted_tracking = use_signal(|| None);
     use_effect(move || {
         if let Some(result) = current_tracking()
@@ -624,7 +625,8 @@ fn TimesheetContent(
     // Open the modal to create a new entry for `date`, defaulting the selects to
     // the first project/task.
     let open_add = use_callback(move |date: NaiveDate| {
-        if pending_action() {
+        // A held sheet's '+' only looks as it did: it has nothing to add to.
+        if pending_action() || held().is_some() {
             return;
         }
         let Some(first) = tracking.read().first().cloned() else {
@@ -1227,6 +1229,9 @@ fn TimesheetContent(
                     "aria-label": "Add entry",
                     title: if nothing_to_track { "{empty_message}" },
                     "aria-describedby": if nothing_to_track { "ts-add-empty" },
+                    // Not `disabled` while held: that would drop the focus a
+                    // closing dialog returns here and restyle it for the reload.
+                    "aria-disabled": if held().is_some() { "true" },
                     disabled: busy() || !can_add,
                     onclick: move |_| open_add.call(add_default_date),
                     "+"

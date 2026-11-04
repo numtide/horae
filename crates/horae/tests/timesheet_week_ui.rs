@@ -161,6 +161,8 @@ thread_local! {
     static HOLD_COMMANDS: Cell<bool> = const { Cell::new(false) };
     /// While set, the viewer has no projects to track.
     static NO_TRACKING: Cell<bool> = const { Cell::new(false) };
+    /// While set, every command is refused.
+    static FAIL_COMMANDS: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Answer the commands held in flight.
@@ -238,6 +240,9 @@ mod server_fns {
         command: TimesheetCommand,
     ) -> Result<(), ServerFnError> {
         COMMANDS.with_borrow_mut(|commands| commands.push(command));
+        if FAIL_COMMANDS.get() {
+            return Err(ServerFnError::new("refused"));
+        }
         let released = RELEASED.with(Rc::clone);
         loop {
             let notified = released.notified();
@@ -737,8 +742,8 @@ async fn a_week_change_closes_the_add_row_dialog_picker_and_submit_error() {
     assert!(html.contains("data-editor-state=\"clean\""), "{html}");
 }
 
-#[tokio::test]
-async fn a_dropped_block_stays_put_while_its_move_is_sent() {
+/// A calendar with one block, Monday 3:00–4:00, and which press grabs it.
+fn calendar_with_a_block() -> (Page, usize, VisibleTimeEntry) {
     let timed = VisibleTimeEntry {
         start_minute: Some(180),
         ..entry(monday(), 60, "Old week project")
@@ -760,14 +765,24 @@ async fn a_dropped_block_stays_put_while_its_move_is_sent() {
         },
         |html| html.contains("Edit time entry"),
     );
-    let mut page = loaded();
+    let page = loaded();
     assert!(page.html().contains("3:00–4:00"));
-    HOLD_COMMANDS.set(true);
-    // Grab the block at its top and drop it on Tuesday at 5:00.
+    (page, block, timed)
+}
+
+/// Grab the block at its top and drop it on Tuesday at 5:00.
+fn drop_on_tuesday_at_five(page: &mut Page, block: usize) {
     let tuesday = (page.ids("mousemove")[1], page.ids("mouseup")[1]);
     page.mouse("mousedown", page.ids("mousedown")[block], 0.0);
     page.mouse("mousemove", tuesday.0, f64::from(5 * 48));
     page.mouse("mouseup", tuesday.1, f64::from(5 * 48));
+}
+
+#[tokio::test]
+async fn a_dropped_block_stays_put_while_its_move_is_sent() {
+    let (mut page, block, timed) = calendar_with_a_block();
+    HOLD_COMMANDS.set(true);
+    drop_on_tuesday_at_five(&mut page, block);
     let command = COMMANDS.with_borrow(|commands| commands.last().cloned());
     assert_eq!(
         command,
@@ -804,33 +819,82 @@ async fn a_dropped_block_stays_put_while_its_move_is_sent() {
 }
 
 #[tokio::test]
+async fn a_refused_move_puts_the_block_back() {
+    let (mut page, block, _) = calendar_with_a_block();
+    FAIL_COMMANDS.set(true);
+    withhold(monday());
+    drop_on_tuesday_at_five(&mut page, block);
+    // The refusal reloads the sheet; while that is held, the block is home.
+    let html = page.html();
+    assert!(html.contains("aria-busy=\"true\""), "{html}");
+    assert!(html.contains("Could not change entry"), "{html}");
+    assert!(html.contains("3:00–4:00"), "{html}");
+    assert!(!html.contains("5:00–6:00"), "{html}");
+}
+
+#[tokio::test]
+async fn an_unrelated_reload_during_a_move_keeps_the_block_put() {
+    let (mut page, block, _) = calendar_with_a_block();
+    HOLD_COMMANDS.set(true);
+    drop_on_tuesday_at_five(&mut page, block);
+    // The rail's timer changes while the move is still being sent: that
+    // reload lands with the sheet from before the move.
+    let mut timer = page
+        .dom
+        .in_scope(ScopeId::APP, components::timer_widget::use_running_timer);
+    page.dom.in_scope(ScopeId::APP, || timer.refresh());
+    page.settle();
+    let html = page.html();
+    assert!(!html.contains("aria-busy=\"true\""), "{html}");
+    assert!(html.contains("5:00–6:00"), "{html}");
+    assert!(!html.contains("3:00–4:00"), "{html}");
+}
+
+#[tokio::test]
 async fn the_toolbar_keeps_the_last_choices_while_the_sheet_reloads() {
-    let add_button = |html: &str| {
+    // The add button's attribute names, so `disabled` and `aria-disabled`
+    // can be told apart.
+    let add_button = |html: &str| -> Vec<String> {
         let start = html.find("class=\"ts-add\"").expect("the add button");
-        html[start..]
-            .split('>')
-            .next()
-            .unwrap_or_default()
-            .to_string()
+        let tag = html[start..].split('>').next().unwrap_or_default();
+        tag.split_whitespace()
+            .map(|attribute| attribute.split('=').next().unwrap_or_default().to_string())
+            .collect()
     };
-    // With choices, the add button stays as it was through a week change.
+    let has = |html: &str, name: &str| add_button(html).iter().any(|a| a == name);
+
+    // With choices, the add button keeps its look and focus through a week
+    // change, but says it is unavailable until the new week is admitted.
     let mut page = week_a(ViewMode::Week);
-    assert!(!add_button(&page.html()).contains("disabled"));
+    let html = page.html();
+    assert!(
+        !has(&html, "disabled") && !has(&html, "aria-disabled"),
+        "{html}"
+    );
     page.go_to(next_week());
     let html = page.html();
     assert!(html.contains("inert"), "{html}");
-    assert!(!add_button(&html).contains("disabled"), "{html}");
+    assert!(!has(&html, "disabled"), "{html}");
+    assert!(html.contains("aria-disabled=\"true\""), "{html}");
+    release(next_week(), Vec::new());
+    page.settle();
+    let html = page.html();
+    assert!(
+        !has(&html, "disabled") && !has(&html, "aria-disabled"),
+        "{html}"
+    );
 
     // Without, so does the reason beside the disabled button.
     NO_TRACKING.set(true);
+    withhold(next_week());
     let hint = "No projects are assigned to you yet.";
     let mut page = week_a(ViewMode::Week);
     let html = page.html();
     assert!(html.contains(hint), "{html}");
-    assert!(add_button(&html).contains("disabled"), "{html}");
+    assert!(has(&html, "disabled"), "{html}");
     page.go_to(next_week());
     let html = page.html();
     assert!(html.contains("inert"), "{html}");
     assert!(html.contains(hint), "{html}");
-    assert!(add_button(&html).contains("disabled"), "{html}");
+    assert!(has(&html, "disabled"), "{html}");
 }
