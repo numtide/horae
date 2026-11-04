@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use chrono::{Datelike, NaiveDate, Weekday};
-use dioxus::dioxus_core::{ElementId, Mutation};
+use dioxus::dioxus_core::{ElementId, Mutation, TemplateAttribute, TemplateNode};
 use dioxus::html::{
     PlatformEventData, SerializedFocusData, SerializedFormData, SerializedHtmlEventConverter,
     SerializedMouseData,
@@ -435,6 +435,27 @@ impl Page {
         );
         let data = SerializedMouseData::new(None, Default::default(), at, Default::default());
         self.fire(name, id, Box::new(data), true);
+    }
+
+    /// How often the calendar has rendered, found as the scope whose root is
+    /// `div.ts-cal`.
+    fn calendar_renders(&self) -> usize {
+        let calendar = (0..1000).map(ScopeId).find(|&id| {
+            self.dom
+                .get_scope(id)
+                .and_then(|scope| scope.try_root_node())
+                .is_some_and(|node| {
+                    matches!(
+                        node.template.roots.first(),
+                        Some(TemplateNode::Element { attrs, .. }) if attrs.iter().any(|attr| matches!(
+                            attr,
+                            TemplateAttribute::Static { name: "class", value: "ts-cal", .. }
+                        ))
+                    )
+                })
+        });
+        let calendar = calendar.expect("the calendar is mounted");
+        self.dom.in_scope(calendar, dioxus::dioxus_core::generation)
     }
 
     fn type_into_last_cell(&mut self, value: &str) {
@@ -892,6 +913,25 @@ async fn hovering_and_dragging_in_the_calendar_leave_the_page_alone() {
     }
     assert!(page.html().contains("7:00–8:00"), "{}", page.html());
     assert_eq!(page_renders(), before, "dragging re-rendered the page");
+}
+
+#[tokio::test]
+async fn the_calendar_stays_put_while_the_page_re_renders_around_it() {
+    let (mut page, _, _) = calendar_with_a_block();
+    let (page_before, calendar_before) = (menu::RENDERS.get(), page.calendar_renders());
+    // Opening the entry dialog re-renders the page, not the calendar's props.
+    // The "+" button is the first click target the page creates.
+    page.click(0);
+    assert!(page.html().contains("New time entry"));
+    assert!(
+        menu::RENDERS.get() > page_before,
+        "the page did not re-render"
+    );
+    assert_eq!(
+        page.calendar_renders(),
+        calendar_before,
+        "the calendar re-rendered with its parent"
+    );
 }
 
 #[tokio::test]
