@@ -34,7 +34,25 @@ pub mod controls;
 #[path = "../src/components/date_picker.rs"]
 pub mod date_picker;
 #[path = "../src/components/menu.rs"]
-pub mod menu;
+mod real_menu;
+/// The real menu, counting its renders. It takes children, so it renders
+/// whenever the toolbar does, and so whenever the page does.
+pub mod menu {
+    use dioxus::prelude::*;
+    use std::cell::Cell;
+
+    pub use super::real_menu::MenuItem;
+
+    thread_local! {
+        pub static RENDERS: Cell<usize> = const { Cell::new(0) };
+    }
+
+    #[component]
+    pub fn Menu(id: String, label: String, children: Element) -> Element {
+        RENDERS.set(RENDERS.get() + 1);
+        rsx! { super::real_menu::Menu { id, label, {children} } }
+    }
+}
 #[path = "../src/components/modal.rs"]
 pub mod modal;
 #[path = "../src/components/no_tracking.rs"]
@@ -848,6 +866,32 @@ async fn an_unrelated_reload_during_a_move_keeps_the_block_put() {
     assert!(!html.contains("aria-busy=\"true\""), "{html}");
     assert!(html.contains("5:00–6:00"), "{html}");
     assert!(!html.contains("3:00–4:00"), "{html}");
+}
+
+#[tokio::test]
+async fn hovering_and_dragging_in_the_calendar_leave_the_page_alone() {
+    let (mut page, block, _) = calendar_with_a_block();
+    let page_renders = || menu::RENDERS.get();
+    let monday_column = page.ids("mousemove")[0];
+
+    // Each snap step over a free slot moves the "+ Add time" hint.
+    let before = page_renders();
+    for hour in [8, 9, 10] {
+        page.mouse("mousemove", monday_column, f64::from(hour * 48));
+    }
+    let html = page.html();
+    assert!(html.contains("+ Add time"), "{html}");
+    assert_eq!(page_renders(), before, "hovering re-rendered the page");
+
+    // Starting a drag marks the page dirty once; its steps do not.
+    page.mouse("mousedown", page.ids("mousedown")[block], 0.0);
+    assert!(page.html().contains("data-editor-state=\"dirty\""));
+    let before = page_renders();
+    for hour in [5, 6, 7] {
+        page.mouse("mousemove", monday_column, f64::from(hour * 48));
+    }
+    assert!(page.html().contains("7:00–8:00"), "{}", page.html());
+    assert_eq!(page_renders(), before, "dragging re-rendered the page");
 }
 
 #[tokio::test]
