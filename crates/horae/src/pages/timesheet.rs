@@ -18,7 +18,8 @@ use crate::components::session::{use_session, use_week_start};
 use crate::components::timer_widget::use_running_timer;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::scoped_time::{
-    TimesheetCommand, TimesheetEntryInput, TimesheetPolicy, TimesheetWriteContext, VisibleTimeEntry,
+    TimesheetCommand, TimesheetEntryInput, TimesheetPage, TimesheetPolicy, TimesheetWriteContext,
+    VisibleTimeEntry,
 };
 use crate::route::Route;
 use crate::server_fns;
@@ -257,10 +258,11 @@ pub fn Timesheet(view: ViewMode, date: Anchor, span: CalSpan, user: String) -> E
             return rsx! { div { class: "alert alert-danger", "This week is outside the supported date range." } };
         };
         // Keys reset component state only inside a dynamic fragment. Another
-        // person or week must discard the previous resources and drafts; a new
-        // day, view or span within the same week keeps the loaded week.
+        // person must discard the previous resources and drafts. Another week
+        // keeps the page mounted, so the last week stays on screen while the
+        // next one loads; TimesheetContent resets its week-scoped state itself.
         rsx! {
-            for key in [format!("{user}:{start}")] {
+            for key in [user.clone()] {
                 TimesheetContent { key: "{key}", view, date, span, start, subject, requester, last_context }
             }
         }
@@ -337,16 +339,58 @@ fn TimesheetContent(
             requester.set(Some(page.requester));
         }
     });
-    // Resources retain their previous value during a refresh. Do not render
-    // those rows or derive totals until the complete new window is admitted.
-    let entries = use_memo(move || {
-        current_sheet
+    // The last admitted week and day. While the sheet reloads, for another
+    // week or for this one after a save, it stays on screen, inert, instead of
+    // a loading placeholder. A failed load drops it, so Retry cannot bring back
+    // a week the pager no longer names.
+    let mut admitted = use_signal(|| None::<(NaiveDate, Anchor, TimesheetPage)>);
+    use_effect(use_reactive!(
+        |(date,)| match current_sheet.read().as_ref() {
+            Some(Ok(page)) => admitted.set(Some((week_start(), date, page.clone()))),
+            Some(Err(_)) if admitted.peek().is_some() => admitted.set(None),
+            _ => {}
+        }
+    ));
+    let held = use_memo(move || {
+        if current_sheet.read().is_some() {
+            return None;
+        }
+        admitted
             .read()
             .as_ref()
-            .and_then(|result| result.as_ref().ok())
-            .map(|page| page.entries.clone())
-            .unwrap_or_default()
+            .map(|(start, date, _)| (*start, *date))
     });
+    // Resources retain their previous value during a refresh. Do not render
+    // those rows or derive totals until the complete new window is admitted;
+    // a held week is display only, as every write needs the current context.
+    let mut unadmitted = use_signal(Unadmitted::default);
+    let entries = use_memo(move || {
+        let mut entries = if held().is_some() {
+            admitted
+                .read()
+                .as_ref()
+                .map(|(.., page)| page.entries.clone())
+                .unwrap_or_default()
+        } else {
+            current_sheet
+                .read()
+                .as_ref()
+                .and_then(|result| result.as_ref().ok())
+                .map(|page| page.entries.clone())
+                .unwrap_or_default()
+        };
+        let moves = &unadmitted.read().moves;
+        for entry in &mut entries {
+            if let Some(&(spent_date, start_minute, minutes)) = moves.get(&entry.id) {
+                entry.spent_date = spent_date;
+                entry.start_minute = Some(start_minute);
+                entry.minutes = minutes;
+            }
+        }
+        entries
+    });
+    // The week the content shows: the held one until the new one is admitted.
+    let shown_start = use_memo(move || held().map_or(week_start(), |(start, _)| start));
     let context = use_memo(move || {
         current_sheet
             .read()
@@ -399,17 +443,42 @@ fn TimesheetContent(
             .cloned()
             .unwrap_or_default()
     });
+    // A held sheet has no context, so no choices: the toolbar keeps the last
+    // admitted ones instead, so the add button and its hint hold still while
+    // the sheet reloads. Its actions still need the current choices. Keeping
+    // them across reloads is safe only because a person change remounts this.
+    let mut admitted_tracking = use_signal(|| None);
+    use_effect(move || {
+        if let Some(result) = current_tracking()
+            && admitted_tracking.peek().as_ref() != Some(&result)
+        {
+            admitted_tracking.set(Some(result));
+        }
+    });
+    let toolbar_tracking = use_memo(move || {
+        if held().is_some() {
+            admitted_tracking()
+        } else {
+            current_tracking()
+        }
+    });
     // Loaded and empty, as opposed to still loading or failed (which has its
     // own retry alert): only then does the disabled add button need a reason.
     let nothing_to_track =
-        matches!(current_tracking.read().as_ref(), Some(Ok(options)) if options.is_empty());
+        matches!(toolbar_tracking.read().as_ref(), Some(Ok(options)) if options.is_empty());
+    let can_add =
+        matches!(toolbar_tracking.read().as_ref(), Some(Ok(options)) if !options.is_empty());
     // Another person's sheet names them; one's own (also when opened by its
     // id) says "you".
-    let assignee = match &*current_sheet.read() {
-        Some(Ok(page)) if page.subject.id != page.requester.user_id => {
-            Some(page.subject.name.clone())
-        }
-        _ => None,
+    let assignee = {
+        let current = current_sheet.read();
+        let admitted = admitted.read();
+        current
+            .as_ref()
+            .and_then(|result| result.as_ref().ok())
+            .or(held().and(admitted.as_ref().map(|(.., page)| page)))
+            .filter(|page| page.subject.id != page.requester.user_id)
+            .map(|page| page.subject.name.clone())
     };
     let empty_message = no_tracking_message(assignee.as_deref());
     let session = use_session();
@@ -460,7 +529,7 @@ fn TimesheetContent(
 
     // Entries for the visible week, grouped by weekday, with per-day totals.
     let week_entries = use_memo(move || -> Vec<VisibleTimeEntry> {
-        let ws = week_start();
+        let ws = shown_start();
         let we = ws + Duration::days(6);
         entries
             .read()
@@ -470,7 +539,7 @@ fn TimesheetContent(
             .collect()
     });
     let by_day = use_memo(move || -> [Vec<VisibleTimeEntry>; 7] {
-        let ws = week_start();
+        let ws = shown_start();
         let mut by_day: [Vec<VisibleTimeEntry>; 7] = Default::default();
         for entry in week_entries.read().iter() {
             let offset = (entry.spent_date - ws).num_days();
@@ -556,7 +625,8 @@ fn TimesheetContent(
     // Open the modal to create a new entry for `date`, defaulting the selects to
     // the first project/task.
     let open_add = use_callback(move |date: NaiveDate| {
-        if pending_action() {
+        // A held sheet's '+' only looks as it did: it has nothing to add to.
+        if pending_action() || held().is_some() {
             return;
         }
         let Some(first) = tracking.read().first().cloned() else {
@@ -611,10 +681,29 @@ fn TimesheetContent(
         let mut commit = move |command: TimesheetCommand| {
             pending_action.set(true);
             let mut timer = running_timer;
+            let moved = match &command {
+                TimesheetCommand::Reschedule {
+                    entry_id,
+                    spent_date,
+                    start_minute,
+                    minutes,
+                } => Some((*entry_id, (*spent_date, *start_minute, *minutes))),
+                _ => None,
+            };
+            // The block stays where it was dropped while the move is sent and
+            // until its reload lands; a refusal puts it back.
+            if let Some((entry_id, to)) = moved {
+                unadmitted.write().moves.insert(entry_id, to);
+            }
             spawn(async move {
                 match server_fns::apply_timesheet_command(context, command).await {
                     Ok(()) => grid_error.set(None),
-                    Err(e) => grid_error.set(Some(format!("Could not change entry: {e}"))),
+                    Err(e) => {
+                        grid_error.set(Some(format!("Could not change entry: {e}")));
+                        if let Some((entry_id, _)) = moved {
+                            unadmitted.write().moves.remove(&entry_id);
+                        }
+                    }
                 }
                 timer.refresh();
                 pending_action.set(false);
@@ -784,27 +873,62 @@ fn TimesheetContent(
     let mut pending_rows = use_signal(Vec::<(Uuid, Uuid)>::new);
     let mut removing_row = use_signal(|| false);
     let mut addrow_open = use_signal(|| false);
+    let mut picker_open = use_signal(|| false);
     let mut addrow_project = use_signal(String::new);
     let mut addrow_task = use_signal(String::new);
     // Keep keystrokes outside the refreshable grid: another cell's save may
     // unmount it before this cell has emitted blur/change.
     let mut cell_drafts = use_signal(HashMap::<CellKey, String>::new);
     let mut saving_cells = use_signal(HashSet::<CellKey>::new);
+    // A save's own reload brings its result; once that is admitted, or fails,
+    // the sheet shows the saves and their stand-ins go. Following the resource
+    // state catches a reload whose page compares equal to the last one. A
+    // reload that lands while a calendar change is still being sent predates
+    // it; that change's own reload follows.
+    use_effect(move || {
+        if sheet.state() != UseResourceState::Ready
+            || current_sheet.read().is_none()
+            || unadmitted.peek().is_empty()
+            || *pending_action.peek()
+        {
+            return;
+        }
+        let settled = std::mem::take(&mut *unadmitted.write());
+        if !settled.drafts.is_empty() {
+            let mut drafts = cell_drafts.write();
+            for (key, input) in &settled.drafts {
+                if drafts.get(key) == Some(input) {
+                    drafts.remove(key);
+                }
+            }
+        }
+        if !settled.rows.is_empty() {
+            pending_rows
+                .write()
+                .retain(|row| !settled.rows.contains(row));
+        }
+    });
 
-    // A day, view or span change keeps the loaded week but leaves the editor:
-    // the navigation guard has already asked to discard unsaved changes, so
-    // drop them as the remount on these changes used to.
+    // A day, view, span or week change leaves the editor: the navigation
+    // guard has already asked to discard unsaved changes, and a pending save
+    // blocks it, so drop them as a remount would.
     use_effect(use_reactive!(|(view, date, span)| {
         let _ = (view, date, span);
-        let (mut drag, mut hint) = (cal_drag, add_hint);
+        let (mut drag, mut hint, mut submit_status) = (cal_drag, add_hint, submit_status);
         if !cell_drafts.peek().is_empty() {
             cell_drafts.write().clear();
         }
         if !pending_rows.peek().is_empty() {
             pending_rows.write().clear();
         }
+        if !unadmitted.peek().is_empty() {
+            unadmitted.set(Unadmitted::default());
+        }
         if *addrow_open.peek() {
             addrow_open.set(false);
+        }
+        if *picker_open.peek() {
+            picker_open.set(false);
         }
         if add_open.peek().is_some() {
             add_open.set(None);
@@ -817,6 +941,9 @@ fn TimesheetContent(
         }
         if grid_error.peek().is_some() {
             grid_error.set(None);
+        }
+        if submit_status.peek().is_some() {
+            submit_status.set(None);
         }
     }));
 
@@ -890,15 +1017,12 @@ fn TimesheetContent(
             .await;
             match res {
                 Ok(()) => {
-                    let mut drafts = cell_drafts.write();
-                    if drafts.get(&key) == Some(&edit.input) {
-                        drafts.remove(&key);
-                    }
+                    let mut settling = unadmitted.write();
+                    settling.drafts.push((key, edit.input));
                     if fields.minutes > 0 {
-                        pending_rows
-                            .write()
-                            .retain(|row| *row != (edit.project_id, edit.task_id));
+                        settling.rows.push((edit.project_id, edit.task_id));
                     }
+                    drop(settling);
                     grid_error.set(None);
                     timer.refresh();
                 }
@@ -981,7 +1105,13 @@ fn TimesheetContent(
     });
 
     let busy = use_memo(move || {
-        pending_action() || add_saving() || removing_row() || !saving_cells.read().is_empty()
+        // A saved cell waits for its reload, so leaving cannot lose it, but
+        // it is not editable and should not read as unsaved either.
+        pending_action()
+            || add_saving()
+            || removing_row()
+            || !saving_cells.read().is_empty()
+            || !unadmitted.read().drafts.is_empty()
     });
     let hidden_draft_rows = use_memo(move || {
         draft_rows(
@@ -1034,7 +1164,12 @@ fn TimesheetContent(
     });
 
     let current_mode = *view_mode.read();
-    let sel_offset = *selected_day_offset.read();
+    // The content follows the held week, while the header and pager already
+    // name the requested one.
+    let shown_ws = shown_start();
+    let sel_offset = held().map_or(*selected_day_offset.read(), |(start, date)| {
+        (date.0 - start).num_days()
+    });
     // The pager moves a single day in Day view and in the Calendar's single-day
     // span; otherwise it moves a whole week (like Harvest).
     let day_paged = current_mode == ViewMode::Day
@@ -1048,7 +1183,6 @@ fn TimesheetContent(
         ws
     };
 
-    let mut picker_open = use_signal(|| false);
     // Pager stepping. Moving the anchor date across the week edge rolls the week
     // automatically.
     let step = use_callback(move |forward: bool| {
@@ -1066,7 +1200,7 @@ fn TimesheetContent(
             // Header: title + last-saved + view toggle
             div { class: "ts-header",
                 h1 { class: "page-title", "Timesheet" }
-                if matches!(&*current_sheet.read(), Some(Ok(_))) {
+                if held().is_some() || matches!(&*current_sheet.read(), Some(Ok(_))) {
                     span { class: "ts-saved", "{format_hhmm(week_total.into())} this week" }
                 }
                 Segmented {
@@ -1095,7 +1229,10 @@ fn TimesheetContent(
                     "aria-label": "Add entry",
                     title: if nothing_to_track { "{empty_message}" },
                     "aria-describedby": if nothing_to_track { "ts-add-empty" },
-                    disabled: busy() || tracking.read().is_empty(),
+                    // Not `disabled` while held: that would drop the focus a
+                    // closing dialog returns here and restyle it for the reload.
+                    "aria-disabled": if held().is_some() { "true" },
+                    disabled: busy() || !can_add,
                     onclick: move |_| open_add.call(add_default_date),
                     "+"
                 }
@@ -1188,7 +1325,9 @@ fn TimesheetContent(
                 }
             }
 
-            if let Some(Ok(page)) = current_sheet.read().as_ref() {
+            if let Some(page) = current_sheet.read().as_ref().and_then(|result| result.as_ref().ok())
+                .or(held().and(admitted.read().as_ref().map(|(.., page)| page)))
+            {
                 if page.policy == TimesheetPolicy::Scoped {
                     people::PersonPicker {
                         requester: page.requester, selected: page.subject.clone(), disabled: busy(),
@@ -1215,7 +1354,7 @@ fn TimesheetContent(
             }
 
             // Content
-            if current_sheet.read().is_none() {
+            if current_sheet.read().is_none() && held().is_none() {
                 div { class: "text-muted text-sm", role: "status", "Loading timesheet…" }
             } else if let Some(Err(error)) = current_sheet.read().as_ref() {
                 div { class: "alert alert-danger", role: "alert",
@@ -1223,9 +1362,13 @@ fn TimesheetContent(
                     button { class: "btn btn-secondary btn-sm", onclick: move |_| sheet.restart(), "Retry" }
                 }
             } else {
-            {loaded(&*current_sheet.read(), |_| match current_mode {
+                div {
+                    class: "ts-content",
+                    inert: held().map(|_| "true"),
+                    "aria-busy": held().map(|_| "true"),
+                    match current_mode {
                     ViewMode::Week => rsx! {
-                        WeekGrid { entries: week_entries, daily_totals, week_start: ws, today, project_names, task_names, pending: pending_rows, actions: week_actions }
+                        WeekGrid { entries: week_entries, daily_totals, week_start: shown_ws, today, project_names, task_names, pending: pending_rows, actions: week_actions }
                         div { class: "ts-submit-bar",
                             if all_submitted_or_approved {
                                 span { class: "badge badge-success", "Submitted" }
@@ -1266,15 +1409,16 @@ fn TimesheetContent(
                         }
                     },
                     ViewMode::Day => rsx! {
-                        {render_day_view(&by_day.read(), &daily_totals.read(), ws, sel_offset, select_day, &project_names.read(), &task_names.read(), open_edit, start_entry, stop_entry, &tracking.read(), busy(), context())}
+                        {render_day_view(&by_day.read(), &daily_totals.read(), shown_ws, sel_offset, select_day, &project_names.read(), &task_names.read(), open_edit, start_entry, stop_entry, &tracking.read(), busy(), context())}
                     },
                     ViewMode::Calendar => rsx! {
                         {
-                            let visible = span.visible_days(*selected_day_offset.read() as usize, ws.weekday());
-                            render_calendar_view(&by_day.read(), &daily_totals.read(), &visible, ws, today, &CalLabels { projects: &project_names.read(), tasks: &task_names.read(), clients: &project_client.read() }, cal_drag, add_hint, drag_commit, &tracking.read(), busy(), policy())
+                            let visible = span.visible_days(sel_offset as usize, shown_ws.weekday());
+                            render_calendar_view(&by_day.read(), &daily_totals.read(), &visible, shown_ws, today, &CalLabels { projects: &project_names.read(), tasks: &task_names.read(), clients: &project_client.read() }, cal_drag, add_hint, drag_commit, &tracking.read(), busy(), policy())
                         }
                     },
-                })}
+                    }
+                }
             }
 
             // Add–entry modal (opened by "+" or by clicking a calendar day).
@@ -2258,6 +2402,24 @@ struct CellEdit {
 
 type CellKey = (Uuid, Uuid, NaiveDate);
 
+/// Saves the server accepted whose reload is not admitted yet. They stay on
+/// screen until it is, instead of flashing back to the held sheet.
+#[derive(Default)]
+struct Unadmitted {
+    /// Saved cell inputs, still shown as their drafts.
+    drafts: Vec<(CellKey, String)>,
+    /// Added rows whose first entry was saved.
+    rows: Vec<(Uuid, Uuid)>,
+    /// Rescheduled entries: their new date, start minute and minutes.
+    moves: HashMap<Uuid, (NaiveDate, i32, i32)>,
+}
+
+impl Unadmitted {
+    fn is_empty(&self) -> bool {
+        self.drafts.is_empty() && self.rows.is_empty() && self.moves.is_empty()
+    }
+}
+
 fn discard_row_drafts(drafts: &mut HashMap<CellKey, String>, row: (Uuid, Uuid), start: NaiveDate) {
     drafts.retain(|&(project, task, day), _| {
         (project, task) != row || !(0..7).contains(&(day - start).num_days())
@@ -2343,6 +2505,10 @@ fn WeekCell(
                 aria_label: "{label}",
                 placeholder: "\u{2013}",
                 oninput: move |event| {
+                    // As if disabled: a held week's cells must not leave drafts.
+                    if !editable {
+                        return;
+                    }
                     let input = event.value();
                     if input == saved {
                         actions.drafts.write().remove(&cell);
@@ -2351,6 +2517,10 @@ fn WeekCell(
                     }
                 },
                 onblur: move |_| {
+                    // An inert, reloading grid drops focus; keep the draft for later.
+                    if !editable {
+                        return;
+                    }
                     let input = actions.drafts.read().get(&cell).cloned();
                     if let Some(input) = input {
                         actions.commit.call(CellEdit { project_id, task_id, day, existing, input });

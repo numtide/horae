@@ -72,14 +72,19 @@ function assignPerson() {
   const row = page.locator('.ts-day-entry').filter({ hasText: 'Delegated seed' });
   const dialog = page.getByRole('dialog', { name: /Edit time entry/ });
   const fixtureMinutes = () => Number(sql(`SELECT minutes FROM time_entries WHERE id='${entry}'`));
+  // Every command reloads the sheet, which keeps the previous one on screen,
+  // inert, until it arrives: act again only once it has.
   const mutation = async (operation, action) => {
     const response = page.waitForResponse(r => r.url().includes('/api/apply_timesheet_command'));
+    const reloaded = sheetResponse();
     await action();
     const result = await response;
     assert.equal(result.status(), 200, await result.text());
     assert.equal(requests.at(-1).command.operation, operation);
     assert.deepEqual(requests.at(-1).context, expectedContext(actor));
+    await reloaded;
     await settled();
+    await expect(page.locator('.ts-content[aria-busy="true"]')).toHaveCount(0);
   };
   try {
     sql(`BEGIN;

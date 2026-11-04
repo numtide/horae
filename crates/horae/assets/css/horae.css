@@ -1487,6 +1487,9 @@ tbody tr:hover { background: var(--color-row-hover); }
 
 .ts-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-5); }
 .ts-toolbar > .menu-anchor { max-width: 100%; }
+/* The last loaded sheet stays on screen while the sheet reloads; dim it only
+   if the load is slow enough to notice, and restore it at once. */
+.ts-content[aria-busy="true"] { opacity: 0.6; transition: opacity 150ms ease 150ms; }
 .ts-add {
   width: 46px; height: 46px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -1679,6 +1682,10 @@ tbody tr:hover { background: var(--color-row-hover); }
    visible day count, so only `display: grid` lives here. */
 .ts-cal-head,
 .ts-cal-grid { display: grid; }
+/* A drag across the grid must not select its text: the sheet stays mounted
+   through the reload, so a selection would outlive the drag and turn the next
+   press into a native text drag that never reaches the calendar. */
+.ts-cal-grid { user-select: none; }
 .ts-cal-head {
   position: sticky; top: 0; z-index: 5; background: var(--color-bg);
   border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-3); margin-bottom: var(--space-1);
