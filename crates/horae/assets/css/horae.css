@@ -1487,9 +1487,10 @@ tbody tr:hover { background: var(--color-row-hover); }
 
 .ts-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4); margin-bottom: var(--space-5); }
 .ts-toolbar > .menu-anchor { max-width: 100%; }
-/* The last loaded sheet stays on screen while the sheet reloads; dim it only
+/* The last loaded sheet or project list stays on screen while it reloads; dim it only
    if the load is slow enough to notice, and restore it at once. */
-.ts-content[aria-busy="true"] { opacity: 0.6; transition: opacity 150ms ease 150ms; }
+.ts-content[aria-busy="true"],
+.proj-content[aria-busy="true"] { opacity: 0.6; transition: opacity 150ms ease 150ms; }
 .ts-add {
   width: 46px; height: 46px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;

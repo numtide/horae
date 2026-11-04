@@ -3,7 +3,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
 use uuid::Uuid;
 
-use super::{loaded, run_action};
+use super::run_action;
 use crate::components::badge::Badge;
 use crate::components::combobox::{ComboOption, Combobox};
 use crate::components::controls::Checkbox;
@@ -280,6 +280,7 @@ mod budget_display_tests {
 }
 
 /// One loaded project with the lowercase keys search and ordering compare.
+#[derive(PartialEq)]
 struct ListedProject {
     project: Project,
     /// "[code] name", as rows and confirmations show it.
@@ -308,6 +309,7 @@ impl ListedProject {
 
 /// Everything the list derives from one overview, built once per load so that
 /// typing and selecting neither re-sort the rows nor lowercase every name.
+#[derive(PartialEq)]
 struct ProjectCatalog {
     /// Grouped by client identity, ordered by client name then project name;
     /// the ID keeps same-named clients apart.
@@ -411,38 +413,38 @@ struct ProjectFilters {
 }
 
 /// The catalog for `overview` and the indices of its rows that pass `filters`,
-/// in display order. The catalog is built on the first render only: callers
-/// remount for a new overview (see `ProjectList`). A filter change rescans the
+/// in display order. The catalog is rebuilt only when a reload admits a new
+/// overview, so filters and selection survive it. A filter change rescans the
 /// prepared rows without re-sorting them or lowercasing every name.
 fn use_project_list(
     overview: &ProjectOverview,
     filters: ProjectFilters,
 ) -> (Rc<ProjectCatalog>, Memo<Vec<usize>>) {
-    let catalog = use_hook(|| Rc::new(ProjectCatalog::new(overview)));
-    let visible = use_memo({
-        let catalog = catalog.clone();
-        move || {
-            let query = filters.query.read().to_lowercase();
-            let (scope, client, tagged) = (
-                filters.scope.read(),
-                filters.client.read(),
-                filters.tagged.read(),
-            );
-            catalog
-                .rows
-                .iter()
-                .enumerate()
-                .filter(|(_, row)| {
-                    row.matches(&query, &scope, &client)
-                        && tagged
-                            .as_ref()
-                            .is_none_or(|ids| ids.contains(&row.project.id))
-                })
-                .map(|(index, _)| index)
-                .collect()
-        }
+    let catalog = use_memo(use_reactive((overview,), |(overview,)| {
+        Rc::new(ProjectCatalog::new(&overview))
+    }));
+    let visible = use_memo(move || {
+        let catalog = catalog.read();
+        let query = filters.query.read().to_lowercase();
+        let (scope, client, tagged) = (
+            filters.scope.read(),
+            filters.client.read(),
+            filters.tagged.read(),
+        );
+        catalog
+            .rows
+            .iter()
+            .enumerate()
+            .filter(|(_, row)| {
+                row.matches(&query, &scope, &client)
+                    && tagged
+                        .as_ref()
+                        .is_none_or(|ids| ids.contains(&row.project.id))
+            })
+            .map(|(index, _)| index)
+            .collect()
     });
-    (catalog, visible)
+    (catalog(), visible)
 }
 
 #[derive(Clone)]
@@ -495,39 +497,46 @@ fn restore_project_list_focus() {
 #[component]
 pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
     let mut binding = use_signal(|| None::<(PermissionRequester, bool)>);
-    let mut generation = use_signal(Uuid::now_v7);
+    // The last overview admitted under `binding`. It stays on screen while a
+    // reload runs or after one fails, so the content below keeps its filters
+    // and selection. A denied or changed requester drops it, and the content
+    // remounts with fresh auxiliary reads once access is admitted again.
+    let mut admitted = use_signal(|| None::<ProjectOverview>);
     let bulk_success = use_signal(|| None::<String>);
     let mut projects = use_resource(move || async move {
         let expected = *binding.peek();
-        let response =
-            server_fns::get_project_overview(expected.map(|(requester, _)| requester)).await?;
+        let response = match server_fns::get_project_overview(
+            expected.map(|(requester, _)| requester),
+        )
+        .await
+        {
+            Ok(response) => response,
+            Err(error) => {
+                if access_denied(&error) {
+                    admitted.set(None);
+                }
+                return Err(error);
+            }
+        };
         let current = (response.requester, response.canonical_permissions);
         if expected.is_some_and(|expected| expected != current) {
+            admitted.set(None);
             return Err(ServerFnError::new(
                 "Your session or project policy changed. Reload this page to continue.",
             ));
         }
         binding.set(Some(current));
-        generation.set(Uuid::now_v7());
-        Ok(response)
+        admitted.set(Some(response));
+        Ok(())
     });
-    if projects.state()() != UseResourceState::Ready {
+    if let Some(overview) = admitted() {
         return rsx! {
-            div { class: "page-header mb-5",
-                onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
-                h1 { id: "project-list-heading", tabindex: "-1", class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" }
-            }
-            if let Some(message) = bulk_success() {
-                div { class: "alert alert-success", role: "status", "{message}" }
-            }
-            p { class: "text-sm text-secondary", role: "status", "Loading projects…" }
+            ProjectListContent { overview, projects, admitted, bulk_success, initial_client }
         };
     }
-    match &*projects.read() {
-        Some(Ok(overview)) => rsx! {
-            ProjectListContent { key: "{generation}", overview: overview.clone(), projects, bulk_success, initial_client }
-        },
-        _ => rsx! {
+    // Nothing is admitted: the first load, an access refresh or a refused read.
+    match (&*projects.read(), projects.state()()) {
+        (Some(Err(_)), UseResourceState::Ready) => rsx! {
             div { class: "page-header mb-5", h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" } }
             if let Some(message) = bulk_success() {
                 div { class: "alert alert-success", role: "status", "{message}" }
@@ -538,14 +547,38 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
                 onclick: move |_| projects.restart(), "Retry access"
             }
         },
+        _ => rsx! {
+            div { class: "page-header mb-5",
+                onmounted: move |_| { if bulk_success.peek().is_some() { restore_project_list_focus(); } },
+                h1 { id: "project-list-heading", tabindex: "-1", class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" }
+            }
+            if let Some(message) = bulk_success() {
+                div { class: "alert alert-success", role: "status", "{message}" }
+            }
+            p { class: "text-sm text-secondary", role: "status", "Loading projects…" }
+        },
     }
+}
+
+const UNAUTHORIZED: u16 = 401;
+const FORBIDDEN: u16 = 403;
+
+fn access_denied(error: &ServerFnError) -> bool {
+    matches!(
+        error,
+        ServerFnError::ServerError {
+            code: UNAUTHORIZED | FORBIDDEN,
+            ..
+        }
+    )
 }
 
 #[component]
 fn ProjectListContent(
     initial_client: Option<Uuid>,
     overview: ProjectOverview,
-    mut projects: Resource<Result<ProjectOverview, ServerFnError>>,
+    mut projects: Resource<Result<(), ServerFnError>>,
+    mut admitted: Signal<Option<ProjectOverview>>,
     mut bulk_success: Signal<Option<String>>,
 ) -> Element {
     let requester = overview.requester;
@@ -604,7 +637,7 @@ fn ProjectListContent(
         && matches!(&*spend_res.read(), Some(Ok(_)))
         && matches!(&*budget_res.read(), Some(Ok(_)));
 
-    // Resources retain their previous value while a restart is pending.
+    // A reload keeps `overview`, the last admitted list, on screen until it settles.
     let projects_loading = projects.state()() != UseResourceState::Ready;
     let tags_ready =
         tags_res.state()() == UseResourceState::Ready && matches!(&*tags_res.read(), Some(Ok(_)));
@@ -692,23 +725,18 @@ fn ProjectListContent(
         _ => format!("Active projects ({active_count})"),
     };
 
-    let denied = |error: &ServerFnError| {
-        matches!(
-            error,
-            ServerFnError::ServerError {
-                code: 401 | 403,
-                ..
-            }
-        )
-    };
-    if matches!(&*tags_res.read(), Some(Err(error)) if denied(error))
-        || matches!(&*spend_res.read(), Some(Err(error)) if denied(error))
-        || matches!(&*budget_res.read(), Some(Err(error)) if denied(error))
+    if matches!(&*tags_res.read(), Some(Err(error)) if access_denied(error))
+        || matches!(&*spend_res.read(), Some(Err(error)) if access_denied(error))
+        || matches!(&*budget_res.read(), Some(Err(error)) if access_denied(error))
     {
         return rsx! {
             div { class: "page-header mb-5", h1 { class: "page-title text-4xl font-semibold text-strong tracking-tight", "Projects" } }
             div { class: "alert alert-danger", role: "alert", "Your session or project access changed. Refresh access before continuing." }
-            button { id: "projects-refresh-access", r#type: "button", class: "btn btn-secondary", onclick: move |_| projects.restart(), "Refresh access" }
+            // Dropping the admitted list remounts this content, and so its
+            // auxiliary reads, only once the reload admits access again.
+            button { id: "projects-refresh-access", r#type: "button", class: "btn btn-secondary",
+                onclick: move |_| { admitted.set(None); projects.restart(); }, "Refresh access"
+            }
         };
     }
 
@@ -749,6 +777,7 @@ fn ProjectListContent(
                         Link { to: Route::HarvestImport {}, class: "btn btn-secondary py-2 px-4", "Import" }
                     }
                     button {
+                        r#type: "button",
                         class: "btn btn-secondary py-2 px-4",
                         onclick: move |_| export_open.set(true),
                         "Export"
@@ -833,9 +862,7 @@ fn ProjectListContent(
             }
             if tag_filter().is_some() && !tags_ready {
                 p { class: "text-sm text-secondary", role: "status", "Tagged projects are unavailable until tags finish loading." }
-            } else if projects_loading {
-                p { class: "text-sm text-secondary", aria_busy: "true", "Loading projects…" }
-            } else if matches!(&*projects.read(), Some(Err(_))) {
+            } else if !projects_loading && matches!(&*projects.read(), Some(Err(_))) {
                 div { class: "alert alert-danger", role: "alert",
                     "Could not load projects. Retry to refresh the list. "
                     button { r#type: "button", class: "btn btn-secondary btn-sm",
@@ -848,7 +875,11 @@ fn ProjectListContent(
                     }
                 }
             } else {
-            {loaded(&*projects.read(), |overview| {
+            div {
+                class: "proj-content",
+                inert: projects_loading.then_some("true"),
+                "aria-busy": projects_loading.then_some("true"),
+                {
                     let list = &overview.projects;
                     let visible = visible.read();
                     let visible_ids: BTreeSet<Uuid> = visible.iter().map(|&index| catalog.rows[index].project.id).collect();
@@ -879,7 +910,7 @@ fn ProjectListContent(
                                         }
                                     }
                                     div { class: "flex flex-wrap items-center justify-center gap-3 mt-1",
-                                        if is_manager {
+                                        if can_create {
                                             Link {
                                                 to: Route::NewProject {},
                                                 class: "btn btn-primary py-3 px-5",
@@ -1081,7 +1112,8 @@ fn ProjectListContent(
                             }
                         }
                     }
-            })}
+                }
+            }
             }
 
             Modal {
@@ -1149,23 +1181,27 @@ fn ProjectListContent(
                         requester.user_id,
                     );
                     rsx! {
-                        div { id: "export-projects-title", class: "modal-title", "Export projects" }
+                        h2 { id: "export-projects-title", class: "modal-title m-0", "Export projects" }
                         div { class: "modal-body",
-                            div { class: "modal-label", "Which projects?" }
-                            div { class: "seg-row",
+                            div { id: "export-projects-scope", class: "modal-label", "Which projects?" }
+                            div { class: "seg-row", role: "group", aria_labelledby: "export-projects-scope",
                                 for (val , lbl) in [("active", "Active"), ("budgeted", "Budgeted"), ("archived", "Archived")] {
                                     button {
+                                        r#type: "button",
                                         class: if export_scope() == val { "seg-btn selected" } else { "seg-btn" },
+                                        "aria-pressed": export_scope() == val,
                                         onclick: move |_| export_scope.set(val.to_string()),
                                         "{lbl}"
                                     }
                                 }
                             }
-                            div { class: "modal-label", "Format" }
-                            div { class: "seg-row",
+                            div { id: "export-projects-format", class: "modal-label", "Format" }
+                            div { class: "seg-row", role: "group", aria_labelledby: "export-projects-format",
                                 for (val , lbl) in [("csv", "CSV"), ("xlsx", "Excel")] {
                                     button {
+                                        r#type: "button",
                                         class: if export_fmt() == val { "seg-btn selected" } else { "seg-btn" },
+                                        "aria-pressed": export_fmt() == val,
                                         onclick: move |_| export_fmt.set(val.to_string()),
                                         "{lbl}"
                                     }
@@ -1179,6 +1215,7 @@ fn ProjectListContent(
                                     "Export projects"
                                 }
                                 button {
+                                    r#type: "button",
                                     class: "btn btn-secondary",
                                     onclick: move |_| export_open.set(false),
                                     "Cancel"
