@@ -1527,6 +1527,9 @@ tbody tr:hover { background: var(--color-row-hover); }
 }
 .ts-pager-label:hover { background: var(--color-bg-tertiary); }
 .ts-pager-label .cur { font-weight: 600; }
+.ts-pager-faces { display: grid; min-width: 0; }
+.ts-pager-face { grid-area: 1 / 1; display: flex; align-items: center; justify-content: center; gap: var(--space-2); }
+.ts-pager-face.reserve { visibility: hidden; }
 .ts-pager-range { font-family: var(--font-family-mono); font-size: 13px; color: var(--color-text-secondary); }
 /* The calendar's day-span dropdown sits beside the pager; give its trigger the
    same height and text size as the pager and add button so the row lines up. */
@@ -1544,7 +1547,8 @@ tbody tr:hover { background: var(--color-row-hover); }
   .ts-header > .page-title { flex-basis: calc(100% - 140px); }
 }
 @media (max-width: 480px) {
-  .ts-pager-label { flex: 1; flex-wrap: wrap; justify-content: center; gap: 0 var(--space-1); min-width: 0; padding: 0 var(--space-2); }
+  .ts-pager-label { flex: 1; justify-content: center; min-width: 0; padding: 0 var(--space-2); }
+  .ts-pager-face { flex-wrap: wrap; gap: 0 var(--space-1); }
   .ts-pager-range { font-size: var(--font-size-xs); }
   .ts-toolbar .dp { max-width: calc(100vw - 2 * var(--app-pad)); }
   .ts-toolbar .menu-anchor:has(.ts-pager) { flex-basis: 100%; }

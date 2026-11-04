@@ -1259,18 +1259,30 @@ fn TimesheetContent(
                                 let next = !picker_open();
                                 picker_open.set(next);
                             },
-                            span { class: "text-faint", "▦" }
-                            if day_paged {
-                                {
-                                    let d = ws + Duration::days((*selected_day_offset.read()).clamp(0, 6));
-                                    rsx! {
-                                        span { class: "cur", if d == today { "Today" } else { "{d.format(\"%A\")}" } }
-                                        span { class: "ts-pager-range", "{d.format(\"%d %b %Y\")}" }
+                            // Both labels share one grid cell and the other view's is only
+                            // hidden, so the pager is as wide in Day view as in Week, never
+                            // narrower than its picker, and holds still as the weekday changes.
+                            span { class: "ts-pager-faces",
+                                span { class: if day_paged { "ts-pager-face" } else { "ts-pager-face reserve" },
+                                    span { class: "text-faint", "▦" }
+                                    {
+                                        let d = ws + Duration::days((*selected_day_offset.read()).clamp(0, 6));
+                                        rsx! {
+                                            span { class: "cur", if d == today { "Today" } else { "{d.format(\"%A\")}" } }
+                                            span { class: "ts-pager-range", "{d.format(\"%d %b %Y\")}" }
+                                        }
                                     }
                                 }
-                            } else {
-                                span { class: "cur", if is_this_week { "This week" } else { "Week" } }
-                                span { class: "ts-pager-range", "{range_label}" }
+                                span { class: if day_paged { "ts-pager-face reserve" } else { "ts-pager-face" },
+                                    span { class: "text-faint", "▦" }
+                                    // "Week" keeps the room "This week" takes, so leaving the current
+                                    // week does not narrow the pager either.
+                                    span { class: "cur ts-pager-faces",
+                                        span { class: if is_this_week { "ts-pager-face" } else { "ts-pager-face reserve" }, "This week" }
+                                        span { class: if is_this_week { "ts-pager-face reserve" } else { "ts-pager-face" }, "Week" }
+                                    }
+                                    span { class: "ts-pager-range", "{range_label}" }
+                                }
                             }
                         }
                         button {
