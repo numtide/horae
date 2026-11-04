@@ -291,52 +291,377 @@ async fn overview_refresh_rejects_changed_account_organization_or_policy_without
     }
 }
 
-fn target(dom: &VirtualDom, vnode: &VNode, name: &str) -> Option<dioxus::core::ElementId> {
+/// A legacy manager's overview: three "Alpha" projects and "Gamma" under Acme,
+/// and "Alpha four" under Beta Corp.
+fn managed_overview() -> project::ProjectOverview {
+    let template = overview().projects.remove(0);
+    let row = |project: u128, client: u128, name: &str, client_name: &str| {
+        let mut row = template.clone();
+        row.project.id = Uuid::from_u128(project);
+        row.project.client_id = Uuid::from_u128(client);
+        row.project.name = name.into();
+        row.client = Some(project::ProjectOverviewClient {
+            id: Uuid::from_u128(client),
+            name: client_name.into(),
+            active: true,
+        });
+        row
+    };
+    project::ProjectOverview {
+        canonical_permissions: false,
+        can_change_legacy_status: true,
+        projects: vec![
+            row(61, 41, "Alpha one", "Acme"),
+            row(62, 41, "Alpha two", "Acme"),
+            row(63, 41, "Alpha three", "Acme"),
+            row(64, 41, "Gamma", "Acme"),
+            row(65, 42, "Alpha four", "Beta Corp"),
+        ],
+        ..overview()
+    }
+}
+
+/// Holds the next overview read until the returned sender answers it.
+fn hold_overview(
+    probe: &Probe,
+) -> oneshot::Sender<Result<project::ProjectOverview, ServerFnError>> {
+    let (send, receive) = oneshot::channel();
+    *probe.overview_response.borrow_mut() = Some(receive);
+    send
+}
+
+/// Whether the bulk Actions trigger is rendered disabled.
+fn bulk_disabled(html: &str) -> bool {
+    let id = position(html, "id=\"project-bulk-menu-trigger\"");
+    let start = html[..id].rfind('<').unwrap();
+    let end = id + html[id..].find('>').unwrap();
+    html[start..end].contains(" disabled")
+}
+
+fn checked(html: &str, project: &str) -> bool {
+    html.contains(&format!(
+        "aria-label=\"Select {project}\" aria-checked=\"true\""
+    ))
+}
+
+#[tokio::test]
+async fn project_actions_keep_filters_selection_and_the_list_mounted() {
+    let probe = Probe {
+        initial_path: Some("/projects".into()),
+        allow_project_activity: true,
+        ..Probe::default()
+    };
+    *probe.overview.borrow_mut() = Some(managed_overview());
+    let mut dom = mount(&probe);
+    type_into(&mut dom, "Search by project or client", "alpha");
+    press(&mut dom, By::Text("All clients▾"), false);
+    press(&mut dom, By::Text("Acme"), false);
+    for project in ["Alpha one", "Alpha two", "Alpha three"] {
+        press(&mut dom, By::Label(&format!("Select {project}")), false);
+    }
+    let filtered = |html: &str| {
+        html.contains("value=\"alpha\"")
+            && html.contains("Acme<span class=\"ml-2 text-faint\">▾")
+            && !html.contains("Alpha four")
+            && !html.contains("Gamma")
+    };
+    let html = dioxus::ssr::render(&dom);
+    assert!(filtered(&html), "{html}");
+    assert!(
+        checked(&html, "Alpha two") && checked(&html, "Alpha three"),
+        "{html}"
+    );
+
+    // A row action: the reload keeps the stale list on screen, marked busy.
+    let reload = hold_overview(&probe);
+    press(&mut dom, By::Text("Archive"), false);
+    assert_eq!(
+        *probe.project_status_changes.borrow(),
+        [(vec![Uuid::from_u128(61)], false)]
+    );
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        !html.contains("Loading projects") && html.contains("aria-busy=\"true\""),
+        "{html}"
+    );
+    assert!(
+        filtered(&html) && html.contains("Select Alpha one"),
+        "{html}"
+    );
+    assert!(
+        bulk_disabled(&html),
+        "a held list takes no bulk action: {html}"
+    );
+    reload
+        .send(Ok(probe.overview.borrow().clone().unwrap()))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        filtered(&html) && !html.contains("Select Alpha one"),
+        "{html}"
+    );
+    assert!(
+        checked(&html, "Alpha two") && checked(&html, "Alpha three"),
+        "{html}"
+    );
+    assert!(
+        !html.contains("aria-busy=\"true\"") && !bulk_disabled(&html),
+        "{html}"
+    );
+
+    // A bulk action over part of the selection.
+    press(&mut dom, By::Label("Select Alpha three"), false);
+    let reload = hold_overview(&probe);
+    press(&mut dom, By::Text("Archive projects"), false);
+    press(&mut dom, By::Text("Archive projects"), true);
+    assert_eq!(
+        probe.project_status_changes.borrow()[1],
+        (vec![Uuid::from_u128(62)], false)
+    );
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        !html.contains("Loading projects") && filtered(&html),
+        "{html}"
+    );
+    reload
+        .send(Ok(probe.overview.borrow().clone().unwrap()))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Archived 1 project"), "{html}");
+    assert!(
+        filtered(&html) && html.contains("Select Alpha three"),
+        "{html}"
+    );
+    assert!(!html.contains("Select Alpha two"), "{html}");
+
+    // A failed reload shows its error beside the filters it kept.
+    press(&mut dom, By::Label("Select Alpha three"), false);
+    let reload = hold_overview(&probe);
+    press(&mut dom, By::Text("Archive"), false);
+    reload
+        .send(Err(ServerFnError::ServerError {
+            code: 500,
+            message: "unavailable".into(),
+            details: None,
+        }))
+        .unwrap();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        html.contains("Could not load projects") && filtered(&html),
+        "{html}"
+    );
+    assert!(!html.contains("Project access is unavailable"), "{html}");
+    assert!(
+        html.contains("1 project selected") && bulk_disabled(&html),
+        "hidden rows take no bulk action: {html}"
+    );
+    press(&mut dom, By::Text("Retry"), false);
+    let html = dioxus::ssr::render(&dom);
+    assert!(
+        filtered(&html) && html.contains("No projects match your filters"),
+        "{html}"
+    );
+
+    // ProjectListContent starts three auxiliary reads each time it mounts.
+    assert_eq!(probe.auxiliary_requesters.borrow().len(), 3);
+}
+
+#[tokio::test]
+async fn denied_or_changed_reloads_drop_the_list_with_its_filters_and_selection() {
+    for change in ["denied", "requester", "policy"] {
+        let probe = Probe {
+            initial_path: Some("/projects".into()),
+            allow_project_activity: true,
+            ..Probe::default()
+        };
+        *probe.overview.borrow_mut() = Some(managed_overview());
+        let mut dom = mount(&probe);
+        type_into(&mut dom, "Search by project or client", "alpha");
+        press(&mut dom, By::Text("All clients▾"), false);
+        press(&mut dom, By::Text("Acme"), false);
+        press(&mut dom, By::Label("Select Alpha two"), false);
+        assert!(checked(&dioxus::ssr::render(&dom), "Alpha two"));
+
+        let reload = hold_overview(&probe);
+        press(&mut dom, By::Text("Archive"), false);
+        let mut changed = probe.overview.borrow().clone().unwrap();
+        reload
+            .send(match change {
+                "denied" => Err(ServerFnError::ServerError {
+                    code: 403,
+                    message: "requester changed".into(),
+                    details: None,
+                }),
+                "requester" => {
+                    changed.requester.user_id = Uuid::now_v7();
+                    Ok(changed)
+                }
+                _ => {
+                    changed.canonical_permissions = true;
+                    Ok(changed)
+                }
+            })
+            .unwrap();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(
+            html.contains("Project access is unavailable"),
+            "{change}: {html}"
+        );
+        assert!(
+            !html.contains("Alpha") && !html.contains("value=\"alpha\""),
+            "{change}: {html}"
+        );
+
+        // Retry access reloads under the original binding and mounts a new list.
+        click(&mut dom, "projects-retry-access");
+        let html = dioxus::ssr::render(&dom);
+        assert!(
+            html.contains("value=\"\"") && html.contains("All clients<span"),
+            "{change}: {html}"
+        );
+        assert!(
+            html.contains("Alpha four") && !checked(&html, "Alpha two"),
+            "{change}: {html}"
+        );
+        assert_eq!(
+            probe.overview_requests.borrow().last(),
+            Some(&Some(managed_overview().requester)),
+            "{change}"
+        );
+        assert_eq!(
+            probe.auxiliary_requesters.borrow().len(),
+            6,
+            "{change}: one remount"
+        );
+    }
+}
+
+/// What identifies an event target: its `id`, its `aria-label`, or its whole text.
+#[derive(Clone, Copy)]
+enum By<'a> {
+    Id(&'a str),
+    Label(&'a str),
+    Text(&'a str),
+}
+
+/// The text a template node renders, including its mounted children.
+fn node_text(dom: &VirtualDom, vnode: &VNode, node: &dioxus::core::TemplateNode) -> String {
+    use dioxus::core::{DynamicNode, TemplateNode};
+    match node {
+        TemplateNode::Text { text } => text.to_string(),
+        TemplateNode::Element { children, .. } => children
+            .iter()
+            .map(|child| node_text(dom, vnode, child))
+            .collect(),
+        TemplateNode::Dynamic { id } => match &vnode.dynamic_nodes[*id] {
+            DynamicNode::Text(text) => text.value.clone(),
+            DynamicNode::Fragment(nodes) => {
+                nodes.iter().map(|node| vnode_text(dom, node)).collect()
+            }
+            DynamicNode::Component(component) => component
+                .mounted_scope(*id, vnode, dom)
+                .and_then(|scope| scope.try_root_node())
+                .map(|node| vnode_text(dom, node))
+                .unwrap_or_default(),
+            DynamicNode::Placeholder(_) => String::new(),
+        },
+    }
+}
+
+fn vnode_text(dom: &VirtualDom, vnode: &VNode) -> String {
+    vnode
+        .template
+        .roots
+        .iter()
+        .map(|root| node_text(dom, vnode, root))
+        .collect()
+}
+
+/// Every mounted element matching `by`, in document order.
+fn targets(dom: &VirtualDom, vnode: &VNode, by: By, found: &mut Vec<dioxus::core::ElementId>) {
     use dioxus::core::{AttributeValue, DynamicNode, TemplateAttribute, TemplateNode};
-    for (index, path) in vnode.template.attr_paths.iter().enumerate() {
+    'paths: for (index, path) in vnode.template.attr_paths.iter().enumerate() {
         let mut node = &vnode.template.roots[usize::from(path[0])];
         for child in &path[1..] {
             let TemplateNode::Element { children, .. } = node else {
-                return None;
+                continue 'paths;
             };
             node = &children[usize::from(*child)];
         }
-        let static_id = matches!(node, TemplateNode::Element { attrs, .. }
-            if attrs.iter().any(|attr| matches!(attr, TemplateAttribute::Static { name:"id", value, .. } if *value == name)));
-        let dynamic_id = vnode.dynamic_attrs[index].iter().any(|attr| {
-            attr.name == "id" && matches!(&attr.value, AttributeValue::Text(value) if value == name)
-        });
-        if static_id || dynamic_id {
-            return vnode.mounted_dynamic_attribute(index, dom);
+        let matched = match by {
+            By::Text(name) => node_text(dom, vnode, node).trim() == name,
+            By::Id(name) | By::Label(name) => {
+                let key = if matches!(by, By::Id(_)) {
+                    "id"
+                } else {
+                    "aria-label"
+                };
+                let static_attr = matches!(node, TemplateNode::Element { attrs, .. }
+                    if attrs.iter().any(|attr| matches!(attr, TemplateAttribute::Static { name: attr, value, .. } if *attr == key && *value == name)));
+                static_attr
+                    || vnode.dynamic_attrs[index].iter().any(|attr| {
+                        attr.name == key
+                            && matches!(&attr.value, AttributeValue::Text(value) if value == name)
+                    })
+            }
+        };
+        if matched {
+            found.extend(vnode.mounted_dynamic_attribute(index, dom));
         }
     }
     for (index, node) in vnode.dynamic_nodes.iter().enumerate() {
-        let found = match node {
-            DynamicNode::Component(component) => component
-                .mounted_scope(index, vnode, dom)
-                .and_then(|scope| scope.try_root_node())
-                .and_then(|node| target(dom, node, name)),
-            DynamicNode::Fragment(nodes) => nodes.iter().find_map(|node| target(dom, node, name)),
-            _ => None,
-        };
-        if found.is_some() {
-            return found;
+        match node {
+            DynamicNode::Component(component) => {
+                if let Some(node) = component
+                    .mounted_scope(index, vnode, dom)
+                    .and_then(|scope| scope.try_root_node())
+                {
+                    targets(dom, node, by, found);
+                }
+            }
+            DynamicNode::Fragment(nodes) => {
+                for node in nodes {
+                    targets(dom, node, by, found);
+                }
+            }
+            _ => {}
         }
     }
-    None
 }
 
-pub(super) fn click(dom: &mut VirtualDom, name: &str) {
+/// Dispatch `name` to the first element matching `by`, or the last with `last`
+/// (a dialog's button follows the menu item of the same name).
+fn fire(dom: &mut VirtualDom, by: By, last: bool, name: &str, data: PlatformEventData) {
     set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
-    let id = target(dom, dom.base_scope().root_node(), name).expect("missing event target");
+    let mut found = Vec::new();
+    targets(dom, dom.base_scope().root_node(), by, &mut found);
+    let id = if last { found.last() } else { found.first() };
+    let id = *id.unwrap_or_else(|| panic!("missing event target: {}", dioxus::ssr::render(dom)));
     dom.runtime().handle_event(
-        "click",
-        Event::new(
-            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default()))
-                as Rc<dyn std::any::Any>,
-            true,
-        ),
+        name,
+        Event::new(Rc::new(data) as Rc<dyn std::any::Any>, true),
         id,
     );
     settle(dom);
+}
+
+fn press(dom: &mut VirtualDom, by: By, last: bool) {
+    let data = PlatformEventData::new(Box::<SerializedMouseData>::default());
+    fire(dom, by, last, "click", data);
+}
+
+pub(super) fn click(dom: &mut VirtualDom, name: &str) {
+    press(dom, By::Id(name), false);
+}
+
+fn type_into(dom: &mut VirtualDom, label: &str, value: &str) {
+    let data = PlatformEventData::new(Box::new(dioxus_html::SerializedFormData::new(
+        value.into(),
+        vec![],
+    )));
+    fire(dom, By::Label(label), false, "input", data);
 }

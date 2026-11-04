@@ -61,23 +61,26 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
         await expect(dialog).not.toBeVisible();
         await expect(page.getByRole('status').filter({ hasText: 'Archived 2 projects' })).toBeVisible();
         if (scenario.startsWith('pending')) {
+          // The previous list stays on screen, inert and busy, until the reload lands.
           await expect.poll(() => !!release).toBe(true);
-          await expect(page.getByText('Loading projects…', { exact: true })).toBeVisible();
-          await expect(page.getByRole('checkbox')).toHaveCount(0);
-          await expect(page.locator('.proj-row')).toHaveCount(0);
-          await expect(scope).toHaveCount(0);
-          await expect(page.locator('#project-list-heading')).toBeFocused();
+          await expect(page.getByText('Loading projects…', { exact: true })).toHaveCount(0);
+          const held = page.locator('.proj-content[aria-busy="true"][inert]');
+          await expect(held.locator('.proj-row')).toHaveCount(2);
+          await expect(page.locator('.proj-content:not([inert]) .proj-row')).toHaveCount(0);
+          await expect(scope).toBeFocused();
+          await expect(trigger).toBeDisabled();
           if (scenario === 'pending-navigation') await page.getByRole('link', { name: 'Timesheet', exact: true }).focus();
           release();
         }
         if (scenario === 'failure') {
-          const alert = page.getByRole('alert').filter({ hasText: 'Project access is unavailable' });
+          const alert = page.getByRole('alert').filter({ hasText: 'Could not load projects' });
           await expect(alert).toBeVisible();
           await expect(page.getByRole('checkbox')).toHaveCount(0);
           await expect(page.locator('.proj-row')).toHaveCount(0);
-          await expect(page.locator('#projects-retry-access')).toBeFocused();
+          await expect(scope).toBeFocused();
+          await expect(trigger).toBeDisabled();
           failRefresh = false;
-          await page.getByRole('button', { name: 'Retry access', exact: true }).click();
+          await alert.getByRole('button', { name: 'Retry', exact: true }).click();
           await expect(alert).not.toBeVisible();
         }
         if (scenario === 'pending-navigation') {

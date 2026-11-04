@@ -93,6 +93,8 @@ mod overview_tests;
 type ClientDetailsResponse = Result<client::ClientDetails, ServerFnError>;
 type ClientInvoicesResponse = Result<Vec<invoice::Invoice>, ServerFnError>;
 type ClientProjectsResponse = Result<Vec<project::Project>, ServerFnError>;
+/// The projects one status change touched, and the status it set.
+type ProjectStatusChange = (Vec<Uuid>, bool);
 type ProjectSpendResponse = Result<Vec<server_fns::ProjectSpend>, ServerFnError>;
 
 #[derive(Clone, Default)]
@@ -102,6 +104,10 @@ struct Probe {
     /// Opt-in for tests that refresh Clients through a status change; every
     /// other navigation mutation stays fail-fast.
     allow_client_activity: bool,
+    /// Opt-in for tests that archive or restore from the project list; each
+    /// change is recorded and applied to `overview`.
+    allow_project_activity: bool,
+    project_status_changes: Rc<RefCell<Vec<ProjectStatusChange>>>,
     client_overview_requests: Rc<RefCell<Vec<Option<permission_editor::PermissionRequester>>>>,
     client_overview_response: DeferredResponse<client::ClientOverview>,
     client_view_requests: Rc<RefCell<Vec<Option<permission_editor::PermissionRequester>>>>,
@@ -846,15 +852,16 @@ fn loaded<T>(
     }
 }
 
-// Mirrors the production helper only for tests that opt into client activity.
+// Mirrors the production helper only for tests that opt into client or project activity.
 fn run_action<O: 'static, T: 'static>(
     future: impl std::future::Future<Output = Result<O, ServerFnError>> + 'static,
     mut resource: Resource<T>,
     mut error: Signal<Option<String>>,
     on_ok: impl FnOnce() + 'static,
 ) {
+    let probe = consume_context::<Probe>();
     assert!(
-        consume_context::<Probe>().allow_client_activity,
+        probe.allow_client_activity || probe.allow_project_activity,
         "navigation must not trigger a mutation"
     );
     spawn(async move {
@@ -1213,19 +1220,38 @@ mod server_fns {
             .push(_expected);
         Ok(Vec::new())
     }
+    fn change_project_status(ids: Vec<String>, active: bool) -> Vec<Project> {
+        let probe = consume_context::<Probe>();
+        assert!(probe.allow_project_activity, "unexpected mutation");
+        let ids: Vec<Uuid> = ids.iter().map(|id| Uuid::parse_str(id).unwrap()).collect();
+        probe
+            .project_status_changes
+            .borrow_mut()
+            .push((ids.clone(), active));
+        let mut overview = probe.overview.borrow_mut();
+        let rows = &mut overview.as_mut().expect("a loaded overview").projects;
+        rows.iter_mut()
+            .filter(|row| ids.contains(&row.project.id))
+            .map(|row| {
+                row.project.active = active;
+                row.project.clone()
+            })
+            .collect()
+    }
     pub async fn set_project_active(
-        _id: String,
-        _active: bool,
+        id: String,
+        active: bool,
         _expected: Option<permission_editor::PermissionRequester>,
     ) -> Result<(), ServerFnError> {
-        panic!("unexpected mutation");
+        change_project_status(vec![id], active);
+        Ok(())
     }
     pub async fn set_projects_active(
-        _ids: Vec<String>,
-        _active: bool,
+        ids: Vec<String>,
+        active: bool,
         _expected: Option<permission_editor::PermissionRequester>,
     ) -> Result<Vec<Project>, ServerFnError> {
-        panic!("unexpected mutation");
+        Ok(change_project_status(ids, active))
     }
     pub async fn get_invoice(id: String) -> Result<InvoiceDetailView, ServerFnError> {
         let id = Uuid::parse_str(&id).unwrap();

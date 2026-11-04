@@ -49,7 +49,7 @@ reason = "Predates the check; each needs its own first-load gate and aria-busy f
 "crates/horae/src/pages/clients/form.rs" = 1
 "crates/horae/src/pages/invoices.rs" = 1
 "crates/horae/src/pages/new_project.rs" = 2
-"crates/horae/src/pages/projects.rs" = 3
+"crates/horae/src/pages/projects.rs" = 1
 "crates/horae/src/pages/reports.rs" = 3
 
 ["dioxus/internal-href"]

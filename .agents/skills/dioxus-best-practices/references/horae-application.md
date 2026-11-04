@@ -62,18 +62,17 @@ problem they fix.
 
 ## 3. Resources and loading
 
-- **Unmount on restart: `pages/projects.rs` `ProjectList`.**
-  `if projects.state()() != UseResourceState::Ready { return … }` unmounts
-  `ProjectListContent`, and with it the search, scope, client, tag and selection
-  signals, after every row or bulk action that calls `projects.restart()`. The
-  `projects_loading` and `Some(Err(_))` branches inside `ProjectListContent` can never
-  run. The gate is only half of it: `ProjectListContent` is keyed on `generation`,
-  which the resource sets on **every** successful load, so the content remounts
-  anyway. The key is deliberate (#270): it drops state built under an earlier
-  requester or permission policy.
-  Fix: gate on `projects.read().is_none()`, keep the content mounted with
-  `aria-busy`, **and** bump `generation` only when `binding` changes, not on every
-  load.
+- **Worked example (fixed): `pages/projects.rs` `ProjectList`.** It used to gate on
+  `state() != Ready` and key `ProjectListContent` on a `generation` that the
+  resource set on every successful load, so every reload remounted the content and
+  dropped its filters and selection. Now it keeps the last admitted overview in a
+  signal and renders the content while one is held. A reload shows the stale list
+  `inert` with `aria-busy`, and a failed reload shows its error beside the kept
+  filters, with bulk actions disabled in both cases. The #270 identity and policy
+  reset no longer comes from a key: a 401/403 reload, a reload answering for
+  another requester or policy, or "Refresh access" clears the held overview, and
+  the content remounts with fresh auxiliary reads once access is admitted again.
+  The catalog is a memo over that signal.
 - **Unmount on restart: `pages/clients/detail.rs` `ClientDetailContent`.**
   `ClientProjects` and `ClientInvoices` render only when `ready`, so each
   `details.restart()` remounts them and refetches their data. `ClientProjects` also
