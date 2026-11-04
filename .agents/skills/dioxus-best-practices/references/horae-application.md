@@ -62,13 +62,17 @@ problem they fix.
 
 ## 3. Resources and loading
 
-- **Worked example (fixed): `pages/projects.rs` `ProjectList`.** It keeps the last
-  admitted overview in a signal and renders `ProjectListContent` while one is held,
-  so a reload shows the stale list `inert` with `aria-busy` and a failed reload
-  shows its error beside the kept filters. A denied or changed requester clears the
-  held overview, which remounts the content with fresh auxiliary reads (the #270
-  reset). The catalog follows the overview prop through
-  `use_memo(use_reactive(..))`.
+- **Worked example (fixed): `pages/projects.rs` `ProjectList`.** It used to gate on
+  `state() != Ready` and key `ProjectListContent` on a `generation` that the
+  resource set on every successful load, so every reload remounted the content and
+  dropped its filters and selection. Now it keeps the last admitted overview in a
+  signal and renders the content while one is held. A reload shows the stale list
+  `inert` with `aria-busy`, and a failed reload shows its error beside the kept
+  filters, with bulk actions disabled in both cases. The #270 identity and policy
+  reset no longer comes from a key: a 401/403 reload, a reload answering for
+  another requester or policy, or "Refresh access" clears the held overview, and
+  the content remounts with fresh auxiliary reads once access is admitted again.
+  The catalog is a memo over that signal.
 - **Unmount on restart: `pages/clients/detail.rs` `ClientDetailContent`.**
   `ClientProjects` and `ClientInvoices` render only when `ready`, so each
   `details.restart()` remounts them and refetches their data. `ClientProjects` also

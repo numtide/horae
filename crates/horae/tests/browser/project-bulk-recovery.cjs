@@ -68,6 +68,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
           await expect(held.locator('.proj-row')).toHaveCount(2);
           await expect(page.locator('.proj-content:not([inert]) .proj-row')).toHaveCount(0);
           await expect(scope).toBeFocused();
+          await expect(trigger).toBeDisabled();
           if (scenario === 'pending-navigation') await page.getByRole('link', { name: 'Timesheet', exact: true }).focus();
           release();
         }
@@ -77,6 +78,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
           await expect(page.getByRole('checkbox')).toHaveCount(0);
           await expect(page.locator('.proj-row')).toHaveCount(0);
           await expect(scope).toBeFocused();
+          await expect(trigger).toBeDisabled();
           failRefresh = false;
           await alert.getByRole('button', { name: 'Retry', exact: true }).click();
           await expect(alert).not.toBeVisible();

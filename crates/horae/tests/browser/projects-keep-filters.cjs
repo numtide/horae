@@ -107,6 +107,7 @@ const rows = [
         rows: document.querySelectorAll('.proj-row').length,
         busy: document.querySelector('.proj-content')?.getAttribute('aria-busy') === 'true',
         loadingText: document.body.innerText.includes('Loading projects'),
+        bulkDisabled: document.getElementById('project-bulk-menu-trigger')?.disabled,
       }));
       hold = null;
       release();
@@ -141,26 +142,31 @@ const rows = [
       await page.locator('#bulk-projects-dialog').getByRole('button', { name: 'Archive projects' }).click();
     }, () => expect(page.getByRole('status').filter({ hasText: 'Archived 1 project' })).toBeVisible());
 
+    await setChecked('Alpha three', true);
     failOverview = true;
     await measure('failed reload', () => rowMenu(3, 'Archive'),
       () => expect(page.getByRole('alert').filter({ hasText: /Could not load projects|Project access is unavailable/ })).toBeVisible());
     const failedAlert = await page.getByRole('alert').filter({ hasText: /Could not load projects|Project access is unavailable/ }).textContent();
+    // The failed reload hides the selected row, so no bulk action may apply to it.
+    const bulkAfterFailure = await page.locator('#project-bulk-menu-trigger').isDisabled().catch(() => null);
     failOverview = false;
     await page.getByRole('button', { name: /^Retry( access)?$/ }).click();
     await expect(page.getByText(/No projects match your filters|Visible|Alpha four/).first()).toBeVisible();
 
-    console.log(JSON.stringify({ results, afterRow, failedAlert }, null, 2));
+    console.log(JSON.stringify({ results, afterRow, failedAlert, bulkAfterFailure }, null, 2));
 
     for (const [label, result] of Object.entries(results)) {
       assert.equal(result.remounts, 0, `${label}: the list remounted`);
       assert.equal(result.loading, 0, `${label}: "Loading projects…" replaced the list`);
       assert.equal(result.auxReads, 0, `${label}: tags, spend and budget were refetched`);
       assert.ok(result.rows > 0 && result.busy && !result.loadingText, `${label}: stale list not kept busy`);
+      assert.equal(result.bulkDisabled, true, `${label}: bulk actions stay enabled over a held list`);
       assert.equal(result.search, 'alpha', `${label}: search lost`);
       assert.equal(result.client, 'Acme', `${label}: client filter lost`);
     }
     assert.deepEqual(afterRow, { two: 'true', three: 'true' }, 'selection lost after a row action');
     assert.match(failedAlert, /Could not load projects/);
+    assert.equal(bulkAfterFailure, true, 'bulk actions stay enabled over rows a failed reload hid');
     await expect(page.getByText('No projects match your filters')).toBeVisible();
     assert.equal(await search.inputValue(), 'alpha');
     assert.deepEqual(errors, []);

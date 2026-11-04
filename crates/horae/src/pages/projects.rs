@@ -309,7 +309,7 @@ impl ListedProject {
 
 /// Everything the list derives from one overview, built once per load so that
 /// typing and selecting neither re-sort the rows nor lowercase every name.
-#[derive(PartialEq)]
+#[derive(Default, PartialEq)]
 struct ProjectCatalog {
     /// Grouped by client identity, ordered by client name then project name;
     /// the ID keeps same-named clients apart.
@@ -412,17 +412,24 @@ struct ProjectFilters {
     tagged: Memo<Option<BTreeSet<Uuid>>>,
 }
 
-/// The catalog for `overview` and the indices of its rows that pass `filters`,
-/// in display order. The catalog is rebuilt only when a reload admits a new
-/// overview, so filters and selection survive it. A filter change rescans the
-/// prepared rows without re-sorting them or lowercasing every name.
+/// The catalog for the admitted overview and the indices of its rows that pass
+/// `filters`, in display order. The catalog is rebuilt only when a reload admits
+/// a new overview, so filters and selection survive it. A filter change rescans
+/// the prepared rows without re-sorting them or lowercasing every name.
 fn use_project_list(
-    overview: &ProjectOverview,
+    admitted: Signal<Option<ProjectOverview>>,
     filters: ProjectFilters,
 ) -> (Rc<ProjectCatalog>, Memo<Vec<usize>>) {
-    let catalog = use_memo(use_reactive((overview,), |(overview,)| {
-        Rc::new(ProjectCatalog::new(&overview))
-    }));
+    // Empty only for the render in which a dropped overview unmounts the list.
+    let catalog = use_memo(move || {
+        Rc::new(
+            admitted
+                .read()
+                .as_ref()
+                .map(ProjectCatalog::new)
+                .unwrap_or_default(),
+        )
+    });
     let visible = use_memo(move || {
         let catalog = catalog.read();
         let query = filters.query.read().to_lowercase();
@@ -624,7 +631,7 @@ fn ProjectListContent(
         })
     });
     let (catalog, visible) = use_project_list(
-        &overview,
+        admitted,
         ProjectFilters {
             query,
             scope,
@@ -639,6 +646,9 @@ fn ProjectListContent(
 
     // A reload keeps `overview`, the last admitted list, on screen until it settles.
     let projects_loading = projects.state()() != UseResourceState::Ready;
+    // Bulk actions apply only to rows on screen and current: not to a held
+    // list while it reloads, nor to rows a failed reload has hidden.
+    let bulk_locked = bulk_busy() || projects_loading || matches!(&*projects.read(), Some(Err(_)));
     let tags_ready =
         tags_res.state()() == UseResourceState::Ready && matches!(&*tags_res.read(), Some(Ok(_)));
     let tag_options = use_memo(move || {
@@ -753,15 +763,15 @@ fn ProjectListContent(
                         Menu {
                             id: "project-bulk-menu", label: "⚡ Actions", align_right: true,
                             trigger_class: "text-sm py-2 px-4",
-                            disabled: selected_count == 0 || bulk_busy(),
+                            disabled: selected_count == 0 || bulk_locked,
                             div { class: "px-3 pt-1 pb-2 text-xs uppercase text-label", "{selection_label}" }
                             if selected_count > 100 {
                                 p { class: "px-3 text-sm text-secondary", "Select at most 100 projects" }
                             }
                             MenuItem {
-                                disabled: selected_count == 0 || selected_count > 100 || bulk_busy(),
+                                disabled: selected_count == 0 || selected_count > 100 || bulk_locked,
                                 onclick: move |_| {
-                                    if selection.is_empty() || selection.len() > 100 || bulk_busy() { return; }
+                                    if selection.is_empty() || selection.len() > 100 || bulk_locked { return; }
                                     bulk_error.set(None);
                                     bulk_success.set(None);
                                     bulk_action.set(Some(BulkProjectAction {
@@ -1670,15 +1680,15 @@ mod list_tests {
             let scope = use_signal(|| "active".to_string());
             let client = use_signal(String::new);
             let tagged = use_memo(|| None::<BTreeSet<Uuid>>);
-            let overview = use_hook(|| {
-                overview(vec![
+            let admitted = use_signal(|| {
+                Some(overview(vec![
                     row((1, "Acme"), "Website", None),
                     row((1, "Acme"), "Web shop", None),
                     row((2, "Globex"), "Payroll", None),
-                ])
+                ]))
             });
             let (catalog, visible) = use_project_list(
-                &overview,
+                admitted,
                 ProjectFilters {
                     query,
                     scope,

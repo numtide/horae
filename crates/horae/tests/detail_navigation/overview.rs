@@ -330,6 +330,14 @@ fn hold_overview(
     send
 }
 
+/// Whether the bulk Actions trigger is rendered disabled.
+fn bulk_disabled(html: &str) -> bool {
+    let id = position(html, "id=\"project-bulk-menu-trigger\"");
+    let start = html[..id].rfind('<').unwrap();
+    let end = id + html[id..].find('>').unwrap();
+    html[start..end].contains(" disabled")
+}
+
 fn checked(html: &str, project: &str) -> bool {
     html.contains(&format!(
         "aria-label=\"Select {project}\" aria-checked=\"true\""
@@ -380,6 +388,10 @@ async fn project_actions_keep_filters_selection_and_the_list_mounted() {
         filtered(&html) && html.contains("Select Alpha one"),
         "{html}"
     );
+    assert!(
+        bulk_disabled(&html),
+        "a held list takes no bulk action: {html}"
+    );
     reload
         .send(Ok(probe.overview.borrow().clone().unwrap()))
         .unwrap();
@@ -393,7 +405,10 @@ async fn project_actions_keep_filters_selection_and_the_list_mounted() {
         checked(&html, "Alpha two") && checked(&html, "Alpha three"),
         "{html}"
     );
-    assert!(!html.contains("aria-busy=\"true\""), "{html}");
+    assert!(
+        !html.contains("aria-busy=\"true\"") && !bulk_disabled(&html),
+        "{html}"
+    );
 
     // A bulk action over part of the selection.
     press(&mut dom, By::Label("Select Alpha three"), false);
@@ -439,6 +454,10 @@ async fn project_actions_keep_filters_selection_and_the_list_mounted() {
         "{html}"
     );
     assert!(!html.contains("Project access is unavailable"), "{html}");
+    assert!(
+        html.contains("1 project selected") && bulk_disabled(&html),
+        "hidden rows take no bulk action: {html}"
+    );
     press(&mut dom, By::Text("Retry"), false);
     let html = dioxus::ssr::render(&dom);
     assert!(
@@ -448,6 +467,77 @@ async fn project_actions_keep_filters_selection_and_the_list_mounted() {
 
     // ProjectListContent starts three auxiliary reads each time it mounts.
     assert_eq!(probe.auxiliary_requesters.borrow().len(), 3);
+}
+
+#[tokio::test]
+async fn denied_or_changed_reloads_drop_the_list_with_its_filters_and_selection() {
+    for change in ["denied", "requester", "policy"] {
+        let probe = Probe {
+            initial_path: Some("/projects".into()),
+            allow_project_activity: true,
+            ..Probe::default()
+        };
+        *probe.overview.borrow_mut() = Some(managed_overview());
+        let mut dom = mount(&probe);
+        type_into(&mut dom, "Search by project or client", "alpha");
+        press(&mut dom, By::Text("All clients▾"), false);
+        press(&mut dom, By::Text("Acme"), false);
+        press(&mut dom, By::Label("Select Alpha two"), false);
+        assert!(checked(&dioxus::ssr::render(&dom), "Alpha two"));
+
+        let reload = hold_overview(&probe);
+        press(&mut dom, By::Text("Archive"), false);
+        let mut changed = probe.overview.borrow().clone().unwrap();
+        reload
+            .send(match change {
+                "denied" => Err(ServerFnError::ServerError {
+                    code: 403,
+                    message: "requester changed".into(),
+                    details: None,
+                }),
+                "requester" => {
+                    changed.requester.user_id = Uuid::now_v7();
+                    Ok(changed)
+                }
+                _ => {
+                    changed.canonical_permissions = true;
+                    Ok(changed)
+                }
+            })
+            .unwrap();
+        settle(&mut dom);
+        let html = dioxus::ssr::render(&dom);
+        assert!(
+            html.contains("Project access is unavailable"),
+            "{change}: {html}"
+        );
+        assert!(
+            !html.contains("Alpha") && !html.contains("value=\"alpha\""),
+            "{change}: {html}"
+        );
+
+        // Retry access reloads under the original binding and mounts a new list.
+        click(&mut dom, "projects-retry-access");
+        let html = dioxus::ssr::render(&dom);
+        assert!(
+            html.contains("value=\"\"") && html.contains("All clients<span"),
+            "{change}: {html}"
+        );
+        assert!(
+            html.contains("Alpha four") && !checked(&html, "Alpha two"),
+            "{change}: {html}"
+        );
+        assert_eq!(
+            probe.overview_requests.borrow().last(),
+            Some(&Some(managed_overview().requester)),
+            "{change}"
+        );
+        assert_eq!(
+            probe.auxiliary_requesters.borrow().len(),
+            6,
+            "{change}: one remount"
+        );
+    }
 }
 
 /// What identifies an event target: its `id`, its `aria-label`, or its whole text.
