@@ -1,0 +1,15 @@
+[package]
+name = "horae-dioxus-lint"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[dependencies]
+# Resolves to the same Cargo.lock entry as the app's Dioxus, so rsx! bodies parse as the
+# app's do. When `cargo update` moves Dioxus, re-verify the skill's rules (SKILL.md Overview).
+dioxus-rsx = "0.7.9"
+proc-macro2 = { version = "1", features = ["span-locations"] }
+serde = { version = "1", features = ["derive"] }
+syn = { version = "2", features = ["full", "visit"] }
+toml = "0.8"

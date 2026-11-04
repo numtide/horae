@@ -1,0 +1,5 @@
+disallowed-methods = [
+  # dioxus/callback-new-in-render: SKILL.md "Props: what compares equal" (dioxus 0.7.9 core/src/events.rs `Callback::new`).
+  # `EventHandler` is an alias of `Callback`, so this also covers `EventHandler::new`.
+  { path = "dioxus_core::Callback::new", reason = "dioxus/callback-new-in-render: a new owned callback on every render that never compares equal; use `use_callback` (see .agents/skills/dioxus-best-practices/SKILL.md \"Props: what compares equal\")" },
+]

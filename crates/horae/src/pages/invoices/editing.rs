@@ -112,7 +112,7 @@ fn DraftEditForm(
         .cloned();
     let review_input = current.clone();
     let save_ready = ready.clone();
-    let save = EventHandler::new(move |confirm_excess: bool| {
+    let save = use_callback(move |confirm_excess: bool| {
         if busy() && !uncertain() {
             return;
         }
