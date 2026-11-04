@@ -16,7 +16,9 @@ use crate::route::Route;
 #[component]
 pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Element {
     // A refresh keeps the last answer, so the rail does not flicker while it runs.
-    let clients = shows_clients(use_session().permissions.read().as_ref());
+    let session = use_session();
+    let is_admin = matches!(&*session.me.read(), Some(Ok(me)) if me.is_admin());
+    let sections = nav_sections(nav_access(session.permissions.read().as_ref(), is_admin));
     rsx! {
         aside { id: "app-navigation", class: "app-sidebar", aria_label: "Navigation",
             div { class: "sidebar-brand",
@@ -34,24 +36,15 @@ pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Elemen
 
             TimerWidget {}
 
-            div { class: "sidebar-section", "Track" }
-            div { class: "sidebar-group",
-                SideLink { to: Route::Timesheet { view: ViewMode::Week, date: Anchor::default(), span: CalSpan::default(), user: String::new() }, icon: "timesheet", label: "Timesheet", on_navigate }
-            }
-
-            div { class: "sidebar-section", "Organize" }
-            div { class: "sidebar-group",
-                if clients {
-                    SideLink { to: Route::ClientList {}, icon: "clients", label: "Clients", on_navigate }
+            for (title, rows) in sections {
+                Fragment { key: "{title}",
+                    div { class: "sidebar-section", "{title}" }
+                    div { class: "sidebar-group",
+                        for NavRow { to, icon, label } in rows {
+                            SideLink { key: "{label}", to, icon, label, on_navigate }
+                        }
+                    }
                 }
-                SideLink { to: Route::ProjectList {}, icon: "projects", label: "Projects", on_navigate }
-                SideLink { to: Route::InvoiceList {}, icon: "invoices", label: "Invoices", on_navigate }
-            }
-
-            div { class: "sidebar-section", "Review" }
-            div { class: "sidebar-group",
-                SideLink { to: Route::Approvals { week: String::new() }, icon: "approvals", label: "Approvals", on_navigate }
-                SideLink { to: Route::Reports {}, icon: "reports", label: "Reports", on_navigate }
             }
 
             div { class: "sidebar-spacer" }
@@ -108,12 +101,9 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
             false,
         ),
     };
-    let (people, tasks, administrator, role) = match &*own.read() {
-        Some(Ok(None)) => (is_admin, false, is_admin, legacy_role),
+    let (administrator, role) = match &*own.read() {
+        Some(Ok(None)) => (is_admin, legacy_role),
         Some(Ok(Some(access))) if access.catalog_version == PERMISSION_CATALOG_VERSION => (
-            access.grants.contains(&Permission::PeopleReadAll)
-                || access.grants.contains(&Permission::PeopleReadManaged),
-            access.grants.contains(&Permission::TaskReadAll),
             access.is_administrator,
             if access.is_administrator {
                 "Administrator".into()
@@ -121,7 +111,7 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                 String::new()
             },
         ),
-        _ => (false, false, false, String::new()),
+        _ => (false, String::new()),
     };
     let role_class = if administrator {
         "badge badge-info badge-sm"
@@ -151,21 +141,14 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                             "Settings"
                         }
                     }
-                    if people || tasks || is_admin {
+                    // Team and Tasks live in the rail's Organize section.
+                    if is_admin {
                         div { class: "sidebar-menu-list",
                             div { class: "menu-group", "Workspace" }
-                            if people { Link { to: Route::AdminUsers {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
-                                span { class: "menu-item-icon", NavIcon { name: "users" } }
-                                "People"
-                            } }
-                            if tasks { Link { to: Route::TaskCatalog {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
-                                span { class: "menu-item-icon", NavIcon { name: "tasks" } }
-                                "Tasks"
-                            } }
-                            if is_admin { Link { to: Route::HarvestImport {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
+                            Link { to: Route::HarvestImport {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
                                 span { class: "menu-item-icon", NavIcon { name: "import" } }
                                 "Importers"
-                            } }
+                            }
                         }
                     }
                     div { class: "sidebar-menu-foot",
@@ -199,16 +182,97 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
     }
 }
 
-/// Policy zero keeps Clients for everyone; failed or unknown permission state hides it.
-fn shows_clients(own: Option<&Result<Option<OwnPermissions>, ServerFnError>>) -> bool {
+/// The rail rows that depend on the person's permissions. These only hide links;
+/// every page authorizes afresh.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct NavAccess {
+    people: bool,
+    clients: bool,
+    tasks: bool,
+}
+
+/// Policy zero keeps Clients for everyone and Team for legacy admins; failed or
+/// unknown permission state hides every gated row.
+fn nav_access(
+    own: Option<&Result<Option<OwnPermissions>, ServerFnError>>,
+    is_admin: bool,
+) -> NavAccess {
     match own {
-        Some(Ok(None)) => true,
-        Some(Ok(Some(access))) => {
-            access.catalog_version == PERMISSION_CATALOG_VERSION
-                && access.grants.contains(&Permission::ClientReadAll)
+        Some(Ok(None)) => NavAccess {
+            people: is_admin,
+            clients: true,
+            tasks: false,
+        },
+        Some(Ok(Some(access))) if access.catalog_version == PERMISSION_CATALOG_VERSION => {
+            NavAccess {
+                people: access.grants.contains(&Permission::PeopleReadAll)
+                    || access.grants.contains(&Permission::PeopleReadManaged),
+                clients: access.grants.contains(&Permission::ClientReadAll),
+                tasks: access.grants.contains(&Permission::TaskReadAll),
+            }
         }
-        _ => false,
+        _ => NavAccess::default(),
     }
+}
+
+struct NavRow {
+    to: Route,
+    icon: &'static str,
+    label: &'static str,
+}
+
+/// The rail's sections in Harvest's order, keeping only rows the person may open;
+/// a section left without rows is dropped so its header does not render.
+fn nav_sections(access: NavAccess) -> Vec<(&'static str, Vec<NavRow>)> {
+    let row = |to, icon, label| NavRow { to, icon, label };
+    let timesheet = Route::Timesheet {
+        view: ViewMode::Week,
+        date: Anchor::default(),
+        span: CalSpan::default(),
+        user: String::new(),
+    };
+    [
+        (
+            "Track",
+            vec![Some(row(timesheet, "timesheet", "Timesheet"))],
+        ),
+        (
+            "Organize",
+            vec![
+                access
+                    .people
+                    .then(|| row(Route::AdminUsers {}, "team", "Team")),
+                access
+                    .clients
+                    .then(|| row(Route::ClientList {}, "clients", "Clients")),
+                Some(row(Route::ProjectList {}, "projects", "Projects")),
+                access
+                    .tasks
+                    .then(|| row(Route::TaskCatalog {}, "tasks", "Tasks")),
+            ],
+        ),
+        (
+            "Bill",
+            vec![Some(row(Route::InvoiceList {}, "invoices", "Invoices"))],
+        ),
+        (
+            "Review",
+            vec![
+                Some(row(
+                    Route::Approvals {
+                        week: String::new(),
+                    },
+                    "approvals",
+                    "Approvals",
+                )),
+                Some(row(Route::Reports {}, "reports", "Reports")),
+            ],
+        ),
+    ]
+    .into_iter()
+    .map(|(title, rows)| (title, rows.into_iter().flatten().collect::<Vec<_>>()))
+    .filter(|(_, rows)| !rows.is_empty())
+    .collect()
 }
 
 /// Capitalize the first character (roles are stored lower-case: "admin" → "Admin").
@@ -245,29 +309,123 @@ mod tests {
         }
     }
 
+    fn access(own: Result<Option<OwnPermissions>, ServerFnError>, is_admin: bool) -> NavAccess {
+        nav_access(Some(&own), is_admin)
+    }
+
+    fn granted(grants: Vec<Permission>) -> NavAccess {
+        access(
+            Ok(Some(canonical(grants, PERMISSION_CATALOG_VERSION))),
+            false,
+        )
+    }
+
+    fn labels(access: NavAccess) -> Vec<(&'static str, Vec<&'static str>)> {
+        nav_sections(access)
+            .into_iter()
+            .map(|(title, rows)| (title, rows.iter().map(|row| row.label).collect()))
+            .collect()
+    }
+
     #[test]
-    fn clients_link_follows_client_read_and_fails_closed() {
-        let shows = |own: Result<Option<OwnPermissions>, ServerFnError>| shows_clients(Some(&own));
-        assert!(!shows_clients(None), "loading");
-        assert!(shows(Ok(None)), "policy zero");
-        assert!(!shows(Err(ServerFnError::new("unavailable"))));
-        assert!(shows(Ok(Some(canonical(
-            vec![Permission::ClientReadAll],
-            PERMISSION_CATALOG_VERSION
-        )))));
-        assert!(!shows(Ok(Some(canonical(
-            vec![Permission::ClientReadAll],
-            PERMISSION_CATALOG_VERSION + 1
-        )))));
+    fn full_access_lists_harvest_sections_in_order() {
+        let all = NavAccess {
+            people: true,
+            clients: true,
+            tasks: true,
+        };
+        assert_eq!(
+            labels(all),
+            [
+                ("Track", vec!["Timesheet"]),
+                ("Organize", vec!["Team", "Clients", "Projects", "Tasks"]),
+                ("Bill", vec!["Invoices"]),
+                ("Review", vec!["Approvals", "Reports"]),
+            ]
+        );
+    }
+
+    #[test]
+    fn gated_rows_are_left_out_without_access() {
+        assert_eq!(
+            labels(NavAccess::default()),
+            [
+                ("Track", vec!["Timesheet"]),
+                ("Organize", vec!["Projects"]),
+                ("Bill", vec!["Invoices"]),
+                ("Review", vec!["Approvals", "Reports"]),
+            ]
+        );
+    }
+
+    #[test]
+    fn policy_zero_offers_clients_to_everyone_and_team_to_admins() {
+        let member = NavAccess {
+            people: false,
+            clients: true,
+            tasks: false,
+        };
+        assert_eq!(access(Ok(None), false), member);
+        assert_eq!(
+            access(Ok(None), true),
+            NavAccess {
+                people: true,
+                ..member
+            }
+        );
+    }
+
+    #[test]
+    fn canonical_grants_open_their_own_rows() {
+        let only = |people, clients, tasks| NavAccess {
+            people,
+            clients,
+            tasks,
+        };
+        assert_eq!(
+            granted(vec![Permission::PeopleReadAll]),
+            only(true, false, false)
+        );
+        assert_eq!(
+            granted(vec![Permission::PeopleReadManaged]),
+            only(true, false, false)
+        );
+        assert_eq!(
+            granted(vec![Permission::ClientReadAll]),
+            only(false, true, false)
+        );
+        assert_eq!(
+            granted(vec![Permission::TaskReadAll]),
+            only(false, false, true)
+        );
         let unrelated = vec![
             Permission::ProjectReadAll,
             Permission::InvoiceReadAll,
             Permission::BillableRateReadAll,
             Permission::ReportProfitabilityRead,
         ];
-        assert!(!shows(Ok(Some(canonical(
-            unrelated,
-            PERMISSION_CATALOG_VERSION
-        )))));
+        assert_eq!(granted(unrelated), NavAccess::default());
+    }
+
+    #[test]
+    fn unknown_permission_state_hides_every_gated_row() {
+        let everything = vec![
+            Permission::PeopleReadAll,
+            Permission::ClientReadAll,
+            Permission::TaskReadAll,
+        ];
+        assert_eq!(nav_access(None, true), NavAccess::default(), "loading");
+        assert_eq!(
+            access(Err(ServerFnError::new("unavailable")), true),
+            NavAccess::default()
+        );
+        assert_eq!(
+            access(
+                Ok(Some(canonical(everything, PERMISSION_CATALOG_VERSION + 1))),
+                true
+            ),
+            NavAccess::default(),
+            "newer catalog"
+        );
     }
 }

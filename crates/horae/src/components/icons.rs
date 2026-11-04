@@ -70,6 +70,11 @@ pub fn NavIcon(name: String, #[props(default)] class: String) -> Element {
             circle { cx: "8", cy: "5.5", r: "2.5" }
             path { d: "M3.6 13 A4.4 4.4 0 0 1 12.4 13" }
         },
+        "team" => rsx! {
+            circle { cx: "6", cy: "5.5", r: "2.3" }
+            path { d: "M1.8 13 A4.2 4.2 0 0 1 10.2 13" }
+            path { d: "M10 3.3 A2.3 2.3 0 0 1 10 7.7 M11.6 9.2 A4.2 4.2 0 0 1 14.2 13" }
+        },
         "settings" => rsx! {
             line { x1: "3", y1: "5", x2: "13", y2: "5" }
             circle { cx: "6", cy: "5", r: "1.6" }
