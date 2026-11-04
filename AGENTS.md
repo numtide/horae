@@ -139,6 +139,7 @@ The repo ships agent skills in `.agents/skills/` (surfaced to Claude Code throug
 - **`rust-best-practices`** — idiomatic Rust from Apollo's handbook: borrowing vs cloning, `Result`/error handling, performance, and the sqlx compile-time-macro and module-layout rules this repo follows. Use when writing, reviewing, or refactoring Rust.
 - **`rust-testing`** — unit, integration, async, and property-based testing patterns (TDD). Use when adding or changing tests; pairs with the `#[sqlx::test]` / `#[serial]` setup under *Commands → Test & lint*.
 - **`rust-async-patterns`** — Tokio, async traits, and concurrency patterns. Use for async server code or when debugging async behaviour.
+- **`dioxus-best-practices`** — Dioxus 0.7.9 rules read from the pinned source: prop memoization (inline closures and `children` always re-render), subscriptions and `peek`, `use_resource` restart/SSR behaviour, `use_loader`/`use_action`/Stores, links and events, plus a ranked list of where Horae breaks them. Use when writing, reviewing or optimising any component, page or hook under `crates/horae/src/{components,pages}`.
 - **`ponytail`** — enforces the smallest solution that works (YAGNI, stdlib before deps, one line before fifty). Use on any coding task, especially before adding a dependency or abstraction.
 
 A `speckit-*` suite (`specify`, `plan`, `tasks`, `implement`, `analyze`, `checklist`, `clarify`, `constitution`, `converge`, `taskstoissues`) supports spec-driven development against the feature artifacts under `specs/` and the constitution.
