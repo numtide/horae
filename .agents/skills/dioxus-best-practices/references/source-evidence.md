@@ -1,7 +1,8 @@
 # Source evidence (Dioxus v0.7.9)
 
 Every rule in `SKILL.md` is backed by one of the excerpts below. Paths are relative to
-`packages/` in `github.com/DioxusLabs/dioxus` at tag `v0.7.9` (commit `3e43ffa`). The
+`packages/` in `github.com/DioxusLabs/dioxus` at tag `v0.7.9` (commit `3e43ffa`), the
+version `Cargo.lock` locks (`Cargo.toml` asks for `0.7`). The
 same files sit in `~/.cargo/registry/src/*/dioxus-*-0.7.9/`. Horae's
 `vendor/dioxus-fullstack-0.7.9` only backports a response-body error fix (see
 `vendor/PATCHES.md`), so none of the behaviour below depends on it.
@@ -36,6 +37,9 @@ When there are signal fields (`looks_like_signal_type`: `ReadSignal` at top leve
 comparison is `(&old_value).compare(&&new_value)` on the **peeked values**, followed by
 `point_to` plus `mark_dirty` when the values differ. That is why a top-level
 `x: ReadSignal<T>` prop built with `.into()` stays stable.
+`looks_like_signal_type` is `last_segment_matches(ty, ReadOnlySignal | ReadSignal)`,
+so `Option<ReadSignal<T>>` does not match. It falls back to `self == new`, which
+compares box handles (see `boxed.rs` below).
 
 **`core/src/events.rs`**:
 
@@ -150,7 +154,10 @@ therefore falls back at the root.
   `E: Into<CapturedError>`;
 - `loader_state` starts as `Pending` and is set to `Ready` or `Failed` only by the
   future, so `restart()` never puts it back to Pending, and the component keeps
-  rendering the old value;
+  rendering the old value while it runs;
+- the doc comment says "If an error occurs while re-loading, `use_loader` will once
+  again emit a `Loading::Failed` value": a failed reload sets `Failed`, and the next
+  render's `?` raises it to the boundary, replacing the subtree;
 - `impl From<Loading> for RenderError` turns Pending into `Suspended` and Failed into
   `RenderError::Error`, so `use_loader(..)?` routes errors to the nearest
   `ErrorBoundary`;
@@ -187,6 +194,13 @@ therefore sees the outcome of this call.
 `Action` is `Copy`, and its `PartialEq` compares the callback handle, so it is a
 stable prop.
 
+Two limits follow from the same code:
+- `task.cancel()` drops the client future only. A server fn request already sent
+  may still commit on the server, and its response is discarded.
+- `state.set(ActionState::Pending)` runs inside the spawned task, and `pending()` is
+  `*self.state.read() == ActionState::Pending`. Until the task first polls,
+  `pending()` still reports the previous state.
+
 ## Stores
 
 **`stores/src/impls/vec.rs`**:
@@ -194,14 +208,19 @@ stable prop.
 - `remove` and `insert` call `mark_dirty_at_and_after_index(index)`;
 - `retain` dirties everything after the first removed index.
 
-**`stores/src/impls/slice.rs`**: `iter`, `len` and `get` "only track the shallow state"
-of the slice. `get(i)` returns a store that "will only update when the item at the
-index changes".
+**`stores/src/impls/slice.rs`**: `iter` and `len` "only track the shallow state" of
+the slice, and `get(i)` checks `index >= self.len()` first, so it also subscribes
+shallowly to the slice.
 
 **`stores/src/impls/{hashmap,btreemap}.rs`**: `get<Q>(self, key: Q)` takes the key
-by value, `insert(key, value)` and `remove(&key)` work per key, and `len`, `is_empty`
-and `iter` "track the store shallowly and only cause re-runs when items are added or
-removed from the map, not when existing values are modified" (`selector().track_shallow()`).
+by value and, like `contains_key`, `len`, `is_empty` and `iter`, calls
+`selector().track_shallow()` on the map. `insert` and `remove` call
+`mark_dirty_shallow()` on the map.
+
+So a value edit through `get(id)` dirties only that entry, but any insert or remove
+re-runs every scope that called `get`. A VirtualDom render count from the review of
+this skill confirms it: inserting row 3 re-rendered rows 1 and 2. Maps and `Vec`s behave the same for
+add and remove.
 
 **`stores/src/scope.rs`**: `Readable::try_read_unchecked` calls `self.track()`, which
 is `self.store.track_deep(&self.path)`. A plain `.read()`, `.cloned()` or call on a
@@ -223,6 +242,7 @@ for id in filtered_todos() { TodoEntry { key: "{id}", id, todos } }
 #[component]
 fn TodoEntry(mut todos: Store<TodoState>, id: u32) -> Element {
     // "When we get an item out of the store, it will only subscribe to that specific item."
+    // (True for edits to that item; `get` also tracks the map shallowly, see above.)
     let entry = todos.todos().get(id).unwrap();
     … oninput: move |evt| entry.contents().set(evt.value()) …
 }
@@ -243,7 +263,9 @@ never prevents form submission by default.
 - the click `action` returns early for modifier keys, non-primary buttons, `new_tab`
   and external targets;
 - otherwise it calls `event.prevent_default(); router.push_any(to)`;
-- `aria_current = (href == current_url).then_some("page")`, which is an exact match.
+- `aria_current = (href == current_url).then_some("page")`, which is an exact match;
+- the rendered `a` lists `aria_current,` before `..attributes,`, so a caller's
+  `aria_current` is emitted as a second attribute, not a replacement.
 
 A raw `a { href }` takes none of these paths, so the browser performs a full
 navigation.
@@ -252,5 +274,5 @@ navigation.
 
 **`hooks/src/use_effect.rs`**: `use_effect(callback: impl FnMut() + 'static) -> Effect`,
 with no return value used. Reads are tracked by its `ReactiveContext`. For cleanup use
-`use_drop` (`core/src/global_context.rs`) or `use_on_unmount`
-(`hooks/src/use_on_destroy.rs`).
+`use_drop` (`core/src/global_context.rs`). `use_on_unmount`
+(`hooks/src/use_on_destroy.rs`) is `#[deprecated(note = "Use use_drop instead…")]`.
