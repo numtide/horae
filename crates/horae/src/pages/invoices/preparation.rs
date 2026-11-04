@@ -130,7 +130,7 @@ pub(super) fn PrepareInvoice(
             .read()
             .as_ref()
             .is_some_and(|review| !review.excess.is_empty());
-    let generate = EventHandler::new(move |confirm_excess: bool| {
+    let generate = use_callback(move |confirm_excess: bool| {
         if (busy() && !uncertain())
             || !is_reviewed(current.as_ref().ok(), reviewed.peek().as_ref())
             || !has_selection

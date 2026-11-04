@@ -1,0 +1,14 @@
+[package]
+name = "horae-dioxus-lint"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[dependencies]
+# Pinned to the Dioxus version in Cargo.lock, so rsx! bodies parse exactly as the app's do.
+dioxus-rsx = "=0.7.9"
+proc-macro2 = { version = "1", features = ["span-locations"] }
+serde = { version = "1", features = ["derive"] }
+syn = { version = "2", features = ["full", "visit"] }
+toml = "0.8"

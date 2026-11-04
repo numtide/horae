@@ -1,0 +1,18 @@
+# Violations of the dioxus-best-practices skill that predate the check, per rule.
+# The check fails when a count goes up (a new violation) or down (lower it here).
+
+["dioxus/inline-callback-prop"]
+count = 176
+reason = "Predates the check; mostly house Input, Checkbox and MenuItem props. Hoist into use_callback when touching a row or measuring a page."
+
+["dioxus/resource-gate"]
+count = 17
+reason = "Predates the check; each needs its own first-load gate and aria-busy fix (horae-application.md section 3), one per PR."
+
+["dioxus/internal-href"]
+count = 1
+reason = "settings/own_permissions.rs permission_content links to /admin/audit; a Link needs a router, and its unit tests render it with bare ssr::render_element, so the fix comes with a test harness change."
+
+["dioxus/render-helper"]
+count = 3
+reason = "timesheet.rs render_calendar_view, render_day_view and render_week_view; splitting them into components is horae-application.md section 1."
