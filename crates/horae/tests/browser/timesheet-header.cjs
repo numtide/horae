@@ -73,6 +73,29 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await expect(picker).toBeHidden();
     await expect(trigger).toHaveAttribute('aria-expanded', 'false');
     console.log('PASS: a click on the sidebar closes the open date picker');
+
+    // Day view's pager is as wide as Week's for the same week, so the picker
+    // opens under it the same way and stepping through weekdays never moves it.
+    const pagerBox = async (view, day) => {
+      const ready = page.waitForResponse(r => r.url().includes('/api/load_timesheet_page') && r.status() === 200);
+      await page.goto(`${base}/timesheet/${view}/${day}`);
+      await (await ready).finished();
+      return page.locator('.ts-pager').boundingBox();
+    };
+    const seeded = new Date(process.env.HORAE_TEST_WEEK);
+    const monday = seeded.getTime() - ((seeded.getUTCDay() + 6) % 7) * 86400000;
+    const weekPager = await pagerBox('week', process.env.HORAE_TEST_WEEK);
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(monday + i * 86400000).toISOString().slice(0, 10);
+      const dayPager = await pagerBox('day', day);
+      assert.equal(dayPager.width, weekPager.width, day);
+      await trigger.click();
+      const pop = await picker.boundingBox();
+      assert.ok(pop.x + pop.width <= dayPager.x + dayPager.width, `${day}: the picker overhangs the pager`);
+    }
+    // The reserved week label is hidden, so it is not part of the trigger's name.
+    await expect(trigger).not.toHaveAccessibleName(/week|–/i);
+    console.log('PASS: the Day view pager matches the Week view pager');
     assert.deepEqual(errors, []);
   } catch (error) {
     console.error({ url: page.url(), errors });
