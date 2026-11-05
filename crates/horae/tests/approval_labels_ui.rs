@@ -57,6 +57,9 @@ mod route {
 struct Probe {
     rows: Vec<approval_model::ApprovalSummary>,
     manager: bool,
+    admin: bool,
+    /// The session user's id; a fresh one when unset.
+    me_id: Option<Uuid>,
     /// The session user never resolves.
     me_pending: bool,
     pending: bool,
@@ -478,6 +481,44 @@ async fn approve_visible_submits_exactly_the_shown_pending_approvals() {
     assert_eq!(*probe.actions.borrow(), vec![expected]);
 }
 
+#[tokio::test]
+async fn a_manager_is_offered_no_decision_on_their_own_week() {
+    dioxus::html::set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
+    let probe = manager(vec![row("Reviewer"), row("Teammate")]);
+    let probe = Probe {
+        me_id: Some(probe.rows[0].approval.user_id),
+        ..probe
+    };
+    let (mut dom, edits) = render(&probe);
+    let html = html(&dom);
+    assert_eq!(html.matches(">Approve<").count(), 1, "{html}");
+    assert_eq!(html.matches(">Reopen<").count(), 1, "{html}");
+    assert!(
+        html.contains("1 timesheet(s) awaiting your approval"),
+        "{html}"
+    );
+
+    click(&mut dom, *click_listeners(edits).last().unwrap());
+    assert_eq!(
+        *probe.actions.borrow(),
+        vec![vec![probe.rows[1].approval.id.to_string()]]
+    );
+}
+
+#[tokio::test]
+async fn an_admin_is_offered_decisions_on_their_own_week() {
+    let probe = manager(vec![row("Reviewer")]);
+    let probe = Probe {
+        admin: true,
+        me_id: Some(probe.rows[0].approval.user_id),
+        ..probe
+    };
+    let (dom, _) = render(&probe);
+    let html = html(&dom);
+    assert_eq!(html.matches(">Approve<").count(), 1, "{html}");
+    assert_eq!(html.matches(">Reopen<").count(), 1, "{html}");
+}
+
 // T-U6
 #[tokio::test]
 async fn a_previous_weeks_rows_never_show_under_another_week() {
@@ -585,11 +626,13 @@ pub mod server_fns {
             std::future::pending::<()>().await;
         }
         Ok(user_model::CurrentUser {
-            id: Uuid::now_v7(),
+            id: probe.me_id.unwrap_or_else(Uuid::now_v7),
             org_id: Uuid::now_v7(),
             name: "Reviewer".into(),
             email: "reviewer@example.test".into(),
-            org_role: if probe.manager {
+            org_role: if probe.admin {
+                OrgRole::Admin
+            } else if probe.manager {
                 OrgRole::Manager
             } else {
                 OrgRole::Member

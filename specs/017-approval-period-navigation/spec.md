@@ -243,6 +243,9 @@ response harness.
   MUST be the exact integer sums over the shown rows only.
 - **FR-008**: "Approve visible timesheets" MUST submit only the pending
   approvals of the shown week, and MUST report the number actually approved.
+  A non-administrator is offered no Approve or Reopen on their own row, and
+  their own week is left out of the bulk selection; the server denies such a
+  decision outright, including a whole bulk request that contains one.
 - **FR-009**: Approve, bulk-approve and reopen MUST keep their existing
   authorization checks, state transitions, locks, invoiced-entry preservation
   and plugin events. Only which ids the page offers changes.

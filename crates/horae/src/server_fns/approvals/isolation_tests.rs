@@ -40,11 +40,11 @@ async fn entry_state(pool: &PgPool, entry_id: Uuid) -> EntryState {
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn foreign_approval_ids_do_not_change_another_organizations_week(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Manager).await;
     let foreign = seed(&pool, OrgRole::Member).await;
     let (approval, entry) = submitted_week(&pool, &foreign).await;
 
     for role in [OrgRole::Manager, OrgRole::Admin] {
+        let local = seed(&pool, role).await;
         let approved = approve_periods(&pool, &manager(&local, role), &[approval.id])
             .await
             .unwrap();
@@ -53,6 +53,10 @@ async fn foreign_approval_ids_do_not_change_another_organizations_week(pool: PgP
             "foreign approval returned for {role:?}"
         );
         assert_eq!(entry_state(&pool, entry).await, EntryState::Submitted);
+        assert_eq!(
+            foreign_week_total(&pool, &foreign, &approval, local.org_id).await,
+            0
+        );
     }
     let unchanged = sqlx::query!(
         "SELECT state::text, approved_by, approved_at FROM approvals WHERE id = $1",
@@ -63,28 +67,38 @@ async fn foreign_approval_ids_do_not_change_another_organizations_week(pool: PgP
     .unwrap();
     assert_eq!(unchanged.state.as_deref(), Some("submitted"));
     assert!(unchanged.approved_by.is_none() && unchanged.approved_at.is_none());
-    for (org_id, expected_total) in [(local.org_id, 0), (foreign.org_id, 60)] {
-        let total = week_total_minutes(
-            &pool,
-            foreign.user_id,
-            org_id,
-            approval.period_start,
-            approval.period_end,
-        )
-        .await
-        .unwrap();
-        assert_eq!(total, expected_total);
-    }
+    assert_eq!(
+        foreign_week_total(&pool, &foreign, &approval, foreign.org_id).await,
+        60
+    );
+}
+
+async fn foreign_week_total(
+    pool: &PgPool,
+    foreign: &SeedIds,
+    approval: &Approval,
+    org_id: Uuid,
+) -> i32 {
+    week_total_minutes(
+        pool,
+        foreign.user_id,
+        org_id,
+        approval.period_start,
+        approval.period_end,
+    )
+    .await
+    .unwrap()
 }
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn bulk_approval_only_returns_and_transitions_own_organization(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Manager).await;
+    // An administrator, so approving their own week is allowed.
+    let local = seed(&pool, OrgRole::Admin).await;
     let foreign = seed(&pool, OrgRole::Member).await;
     let (own_approval, own_entry) = submitted_week(&pool, &local).await;
     let (foreign_approval, foreign_entry) = submitted_week(&pool, &foreign).await;
-    let actor = manager(&local, OrgRole::Manager);
+    let actor = manager(&local, OrgRole::Admin);
 
     let approved = approve_periods(
         &pool,
@@ -117,18 +131,21 @@ async fn bulk_approval_only_returns_and_transitions_own_organization(pool: PgPoo
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn foreign_reopen_is_not_found_and_preserves_pending_and_approved_work(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Admin).await;
-    let foreign = seed(&pool, OrgRole::Manager).await;
+    let locals = [
+        (seed(&pool, OrgRole::Manager).await, OrgRole::Manager),
+        (seed(&pool, OrgRole::Admin).await, OrgRole::Admin),
+    ];
+    let foreign = seed(&pool, OrgRole::Admin).await;
     let (approval, entry) = submitted_week(&pool, &foreign).await;
 
     for expected in [EntryState::Submitted, EntryState::Approved] {
         if expected == EntryState::Approved {
-            approve_periods(&pool, &manager(&foreign, OrgRole::Manager), &[approval.id])
+            approve_periods(&pool, &manager(&foreign, OrgRole::Admin), &[approval.id])
                 .await
                 .unwrap();
         }
-        for role in [OrgRole::Manager, OrgRole::Admin] {
-            let result = reopen_period(&pool, &manager(&local, role), approval.id).await;
+        for (local, role) in &locals {
+            let result = reopen_period(&pool, &manager(local, *role), approval.id).await;
             assert!(
                 matches!(
                     result,
@@ -155,9 +172,9 @@ async fn foreign_reopen_is_not_found_and_preserves_pending_and_approved_work(poo
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn own_organization_can_reopen_without_unlocking_invoiced_entries(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Manager).await;
+    let local = seed(&pool, OrgRole::Admin).await;
     let (approval, entry) = submitted_week(&pool, &local).await;
-    let actor = manager(&local, OrgRole::Manager);
+    let actor = manager(&local, OrgRole::Admin);
     approve_periods(&pool, &actor, &[approval.id])
         .await
         .unwrap();
