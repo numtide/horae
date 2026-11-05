@@ -61,10 +61,17 @@ mod tests {
     }
 
     #[test]
-    fn nearest_ties_round_up() {
-        // 7.5 min → ties between 0 and 15 → rounds up to 15
+    fn nearest_takes_the_closer_multiple() {
+        // 15 is odd, so 7 and 8 fall either side of the midpoint 7.5.
         assert_eq!(round(8, 15, RoundDir::Nearest), 15);
         assert_eq!(round(7, 15, RoundDir::Nearest), 0);
+    }
+
+    #[test]
+    fn nearest_ties_round_up() {
+        // 30 is exactly halfway between 0 and 60.
+        assert_eq!(round(30, 60, RoundDir::Nearest), 60);
+        assert_eq!(round(90, 60, RoundDir::Nearest), 120);
     }
 
     #[test]
@@ -72,5 +79,7 @@ mod tests {
         assert_eq!(round(61, 15, RoundDir::Up), 75);
         assert_eq!(round(61, 15, RoundDir::Down), 60);
         assert_eq!(round(60, 15, RoundDir::Up), 60); // already multiple
+        assert_eq!(round(0, 15, RoundDir::Up), 0);
+        assert_eq!(round(0, 15, RoundDir::Nearest), 0);
     }
 }

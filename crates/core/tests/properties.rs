@@ -151,7 +151,11 @@ mod time_of_day {
             let (expected, step) = (i64::from(value.max(0)), i64::from(step));
             let last = i64::from(i32::MAX) / step * step;
             prop_assert!(snapped >= 0 && i64::from(snapped) % step == 0);
-            prop_assert!(2 * (i64::from(snapped) - expected).abs() <= step || i64::from(snapped) == last);
+            // The last step is an answer only where the nearest one is past it.
+            prop_assert!(
+                2 * (i64::from(snapped) - expected).abs() <= step
+                    || (i64::from(snapped) == last && expected + step / 2 > last)
+            );
         }
     }
 }
@@ -174,12 +178,37 @@ mod rounding {
     const MAX_MINUTES: u32 = i32::MAX as u32;
     const MAX_INCREMENT: u32 = i16::MAX as u32;
 
+    /// Stored (minutes, increment) pairs, weighted toward the inputs a slipped
+    /// comparison gets wrong: 0, exact multiples and exact Nearest ties
+    /// (`k × inc + inc / 2`, even `inc`), which uniform draws almost never hit.
+    fn stored_case() -> impl Strategy<Value = (u32, u32)> {
+        let multiple = (1..=MAX_INCREMENT).prop_flat_map(|inc| {
+            (
+                (0..=MAX_MINUTES / inc).prop_map(move |k| k * inc),
+                Just(inc),
+            )
+        });
+        let tie = (1..=MAX_INCREMENT / 2).prop_flat_map(|half| {
+            let inc = 2 * half;
+            (
+                (0..=(MAX_MINUTES - half) / inc).prop_map(move |k| k * inc + half),
+                Just(inc),
+            )
+        });
+        prop_oneof![
+            (0..=MAX_MINUTES, 1..=MAX_INCREMENT),
+            (Just(0), 1..=MAX_INCREMENT),
+            multiple,
+            tie,
+        ]
+    }
+
     /// `rounded` is a multiple of `inc` on the side `dir` names, less than one
     /// increment away; nearest takes the closer multiple and a tie goes up.
-    fn lands_on_the_named_side(minutes: u32, inc: u32, dir: RoundDir, rounded: u32) -> bool {
-        let (minutes, inc, rounded) = (u64::from(minutes), u64::from(inc), u64::from(rounded));
+    fn lands_on_the_named_side(minutes: u32, inc: u32, dir: RoundDir, rounded: u64) -> bool {
+        let (minutes, inc) = (u64::from(minutes), u64::from(inc));
         let gap = rounded.abs_diff(minutes);
-        rounded % inc == 0
+        rounded.is_multiple_of(inc)
             && gap < inc
             && match dir {
                 RoundDir::Up => rounded >= minutes,
@@ -194,15 +223,16 @@ mod rounding {
         /// the wrong direction or by a whole extra increment.
         #[test]
         fn round_lands_on_the_named_side_within_one_increment(
-            minutes in 0..=MAX_MINUTES,
-            inc in 1..=MAX_INCREMENT,
+            (minutes, inc) in stored_case(),
             dir in direction(),
         ) {
-            prop_assert!(lands_on_the_named_side(minutes, inc, dir, round(minutes, inc, dir)));
+            let rounded = round(minutes, inc, dir);
+            prop_assert!(lands_on_the_named_side(minutes, inc, dir, rounded.into()), "{rounded}");
         }
 
         /// Near `u32::MAX` rounding never wraps to a small value: it returns
-        /// the true multiple when that fits and `u32::MAX` only when it does not.
+        /// the true multiple when that fits, and `u32::MAX` only when the
+        /// multiple the direction requires (the next one up) does not.
         #[test]
         fn round_saturates_instead_of_wrapping(
             minutes in prop_oneof![Just(u32::MAX), u32::MAX - 100_000..=u32::MAX, any::<u32>()],
@@ -211,10 +241,16 @@ mod rounding {
         ) {
             let rounded = round(minutes, inc, dir);
             let above = (u64::from(minutes / inc) + 1) * u64::from(inc);
-            prop_assert!(
-                lands_on_the_named_side(minutes, inc, dir, rounded)
-                    || (rounded == u32::MAX && dir != RoundDir::Down && above > u64::from(u32::MAX))
-            );
+            let needs_above = match dir {
+                RoundDir::Up => minutes % inc != 0,
+                RoundDir::Nearest => 2 * u64::from(minutes % inc) >= u64::from(inc),
+                RoundDir::Down => false,
+            };
+            if needs_above && above > u64::from(u32::MAX) {
+                prop_assert_eq!(rounded, u32::MAX);
+            } else {
+                prop_assert!(lands_on_the_named_side(minutes, inc, dir, rounded.into()), "{rounded}");
+            }
         }
 
         /// Rounding twice equals rounding once, and more worked time never
@@ -243,8 +279,15 @@ mod money {
         /// Typed amounts read back exactly from both display forms, grouped or
         /// plain, so editing an amount without touching it never changes it.
         #[test]
-        fn displayed_amounts_parse_back(cents in prop_oneof![Just(i64::MIN), Just(i64::MAX), any::<i64>()]) {
-            prop_assert_eq!(parse_cents(&format_cents_plain(cents)).unwrap(), cents);
+        fn displayed_amounts_parse_back(
+            cents in prop_oneof![Just(i64::MIN), Just(i64::MAX), any::<i64>(), (i64::MIN / 10..=i64::MAX / 10).prop_map(|t| t * 10)],
+        ) {
+            let plain = format_cents_plain(cents);
+            prop_assert_eq!(parse_cents(&plain).unwrap(), cents);
+            // One fractional digit means tenths: "12.5" is 12.50, not 12.05.
+            if let Some(tenths) = plain.strip_suffix('0').filter(|p| p.contains('.')) {
+                prop_assert_eq!(parse_cents(tenths).unwrap(), cents);
+            }
             let shown = format_cents(cents, "EUR");
             prop_assert_eq!(parse_cents(shown.strip_prefix("EUR ").unwrap()).unwrap(), cents);
         }
@@ -299,6 +342,10 @@ mod invoice {
         (0..=10_000_u16).prop_map(|bps| Percentage::try_from(bps).unwrap())
     }
 
+    fn half() -> Percentage {
+        Percentage::try_from(5_000).unwrap()
+    }
+
     /// `amount × bps / 10_000` rounded half up lies within half a cent:
     /// `portion × 10_000 − amount × bps ∈ (−5_000, 5_000]`, a tie rounding up.
     fn is_half_up_portion(portion: i64, amount: i64, percentage: Percentage) -> bool {
@@ -314,10 +361,11 @@ mod invoice {
         /// not fit in `i64`.
         #[test]
         fn invoice_components_round_half_up_and_add_up(
-            subtotal in prop_oneof![Just(i64::MAX), 0..=i64::MAX],
-            discount in percentage(),
-            tax1 in percentage(),
-            tax2 in percentage(),
+            (subtotal, discount, tax1, tax2) in prop_oneof![
+                (prop_oneof![Just(i64::MAX), 0..=i64::MAX, 0..=10_000_i64], percentage(), percentage(), percentage()),
+                // An odd subtotal at 50% is an exact half-cent tie, which must round up.
+                ((0..=i64::MAX / 2).prop_map(|k| 2 * k + 1), Just(half()), Just(half()), Just(half())),
+            ],
         ) {
             let half_up = |amount: i64, p: Percentage| {
                 (i128::from(amount) * i128::from(p.basis_points()) + 5_000) / 10_000
@@ -344,11 +392,16 @@ mod invoice {
 
         /// Discounted line amounts add up to the invoice's discounted
         /// subtotal, stay within 0..=gross, and each line's discount is within
-        /// one cent of its exact proportional share. Catches a lost or
-        /// duplicated cent between the invoice header and its lines.
+        /// one cent of its exact proportional share; the leftover cents go to
+        /// the largest remainders, earlier lines first on a tie. Catches a lost
+        /// or duplicated cent between the invoice header and its lines.
         #[test]
         fn discount_allocation_conserves_the_header_discount(
-            gross in prop::collection::vec(0..=i64::MAX / 64, 0..64),
+            gross in prop_oneof![
+                prop::collection::vec(0..=i64::MAX / 64, 0..64),
+                // Small, often equal lines tie on remainders, so the tie order counts.
+                prop::collection::vec(0..=20_i64, 0..16),
+            ],
             discount in percentage(),
         ) {
             let net = allocate_invoice_discount(&gross, discount).unwrap();
@@ -356,11 +409,26 @@ mod invoice {
             let header = invoice_amounts(subtotal, discount, Percentage::ZERO, Percentage::ZERO).unwrap();
             prop_assert_eq!(net.len(), gross.len());
             prop_assert_eq!(net.iter().sum::<i64>(), header.total_cents);
+            // (remainder, gets a leftover cent) per line, in source order.
+            let mut lines = Vec::new();
             for (&net, &gross) in net.iter().zip(&gross) {
                 prop_assert!((0..=gross).contains(&net));
                 let share = i128::from(gross - net);
+                if subtotal == 0 {
+                    prop_assert_eq!(share, 0);
+                    continue;
+                }
                 let exact = i128::from(gross) * i128::from(header.discount_cents);
                 prop_assert!((share * i128::from(subtotal) - exact).abs() < i128::from(subtotal));
+                let floor = exact / i128::from(subtotal);
+                lines.push((exact % i128::from(subtotal), share > floor));
+            }
+            for (i, &(won, extra)) in lines.iter().enumerate() {
+                for (j, &(lost, missed)) in lines.iter().enumerate() {
+                    if extra && !missed {
+                        prop_assert!(won > lost || (won == lost && i < j), "line {i} over {j}");
+                    }
+                }
             }
         }
 
@@ -462,15 +530,15 @@ mod week {
         fn weeks_start_on_the_setting_and_contain_the_date(date in date()) {
             prop_assert_eq!(iso_week_monday(date), week_start(date, Weekday::Mon));
             for first_day in WEEKDAYS {
-                match week_bounds(date, first_day) {
-                    Some((start, end)) => {
-                        prop_assert_eq!(start.weekday(), first_day);
-                        prop_assert!(start <= date && date <= end);
-                        prop_assert_eq!((end - start).num_days(), 6);
-                    }
-                    None => prop_assert!(
-                        (date - NaiveDate::MIN).num_days() < 7 || (NaiveDate::MAX - date).num_days() < 7
-                    ),
+                // By search: the latest `first_day` on or before the date, and
+                // six days on, wherever both are representable.
+                let days = |n| chrono::Days::new(n);
+                let expected = (0..7)
+                    .find_map(|k| date.checked_sub_days(days(k)).filter(|d| d.weekday() == first_day))
+                    .and_then(|start| Some((start, start.checked_add_days(days(6))?)));
+                prop_assert_eq!(week_bounds(date, first_day), expected);
+                if let Some((start, end)) = expected {
+                    prop_assert!(start <= date && date <= end);
                 }
             }
         }

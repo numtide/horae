@@ -50,10 +50,15 @@ fn rounding_lands_on_the_named_side_for_every_u32() {
     let dir = any_dir();
     let rounded = u64::from(crate::rounding::round(minutes, inc, dir));
     let (minutes, inc) = (u64::from(minutes), u64::from(inc));
-    if rounded % inc != 0 {
-        let above = (minutes / inc + 1) * inc;
-        assert!(rounded == u64::from(u32::MAX) && above > rounded);
-        assert!(!matches!(dir, RoundDir::Down));
+    // Saturation is right only when the multiple the direction requires, the
+    // next one up, does not fit in `u32`.
+    let needs_above = match dir {
+        RoundDir::Up => minutes % inc != 0,
+        RoundDir::Nearest => 2 * (minutes % inc) >= inc,
+        RoundDir::Down => false,
+    };
+    if needs_above && (minutes / inc + 1) * inc > u64::from(u32::MAX) {
+        assert!(rounded == u64::from(u32::MAX));
         return;
     }
     assert!(rounded.abs_diff(minutes) < inc);
