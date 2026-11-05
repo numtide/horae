@@ -1,8 +1,9 @@
 use chrono::{Datelike, NaiveDate, Weekday};
 
-/// Monday of the ISO week containing `date`.
-pub fn iso_week_monday(date: NaiveDate) -> NaiveDate {
-    date - chrono::Duration::days(date.weekday().num_days_from_monday() as i64)
+/// Monday of the ISO week containing `date`, or `None` if it would precede the
+/// representable date range.
+pub fn iso_week_monday(date: NaiveDate) -> Option<NaiveDate> {
+    week_start(date, Weekday::Mon)
 }
 
 /// First day of the configured week containing `date`, or `None` if it would
@@ -27,8 +28,13 @@ mod tests {
     fn maps_any_weekday_to_its_monday() {
         let monday = NaiveDate::from_ymd_opt(2026, 1, 5).unwrap();
         let thursday = NaiveDate::from_ymd_opt(2026, 1, 8).unwrap();
-        assert_eq!(iso_week_monday(thursday), monday);
-        assert_eq!(iso_week_monday(monday), monday);
+        assert_eq!(iso_week_monday(thursday), Some(monday));
+        assert_eq!(iso_week_monday(monday), Some(monday));
+    }
+
+    #[test]
+    fn iso_week_before_the_representable_range_is_none() {
+        assert_eq!(iso_week_monday(NaiveDate::MIN), None);
     }
 
     #[test]

@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT effective_minutes($1, $2, $3, $4) AS \"minutes!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "minutes!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int2",
+        {
+          "Custom": {
+            "name": "round_dir",
+            "kind": {
+              "Enum": [
+                "nearest",
+                "up",
+                "down"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "09abf6186e7cf65d1e8f949cd1a6231e4636085ad12a398e03c06762adba2512"
+}

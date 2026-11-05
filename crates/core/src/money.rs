@@ -105,21 +105,22 @@ pub fn parse_cents(s: &str) -> Result<i64, AmountError> {
     if whole.is_empty() && frac.is_empty() {
         return Err(err());
     }
-    let units: i64 = if whole.is_empty() {
+    let units: i128 = if whole.is_empty() {
         0
     } else {
         whole.parse().map_err(|_| err())?
     };
-    let cents: i64 = match frac.len() {
+    let cents: i128 = match frac.len() {
         0 => 0,
-        1 => frac.parse::<i64>().map_err(|_| err())? * 10,
+        1 => frac.parse::<i128>().map_err(|_| err())? * 10,
         _ => frac.parse().map_err(|_| err())?,
     };
+    // Signed in i128 so `i64::MIN`, whose magnitude exceeds `i64::MAX`, reads back.
     let total = units
         .checked_mul(100)
         .and_then(|u| u.checked_add(cents))
         .ok_or_else(err)?;
-    Ok(if neg { -total } else { total })
+    i64::try_from(if neg { -total } else { total }).map_err(|_| err())
 }
 
 /// Format minor units for display: currency code + thousands-grouped decimal,

@@ -527,3 +527,91 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
         .is_empty()
     );
 }
+
+/// SC-002: for generated entries and organization rounding rules, every
+/// grouping of the report adds up to the same totals, and those equal the
+/// entries rounded and priced one by one with the core rules. Catches rounding
+/// after summing, a group dropping or double-counting entries, and rate drift.
+#[sqlx::test(migrations = "./migrations")]
+#[serial]
+async fn every_grouping_reconciles_with_the_entries(pool: PgPool) {
+    use horae_core::invoice::line_amount_cents;
+    use horae_core::rounding::effective_minutes;
+    use horae_core::types::RoundDir;
+    use proptest::prelude::*;
+    use proptest::strategy::ValueTree;
+    use proptest::test_runner::TestRunner;
+
+    let (first, second) = fixtures(&pool, "EUR").await;
+    let cross = SeedIds {
+        user_id: first.user_id,
+        task_id: first.task_id,
+        ..second
+    };
+    // The first project bills its task rate, the second its project rate.
+    let owners = [(&first, 9000), (&second, 12000), (&cross, 12000)];
+    let entry = (
+        0..owners.len(),
+        0..=7_200_i32,
+        prop::option::of(0..=7_200_i32),
+        any::<bool>(),
+    );
+    let scenario = (
+        prop::collection::vec(entry, 0..40),
+        prop_oneof![Just(0_i16), Just(1), 0..=60_i16],
+        prop_oneof![
+            Just(RoundDir::Up),
+            Just(RoundDir::Down),
+            Just(RoundDir::Nearest)
+        ],
+    );
+    // A fixed seed keeps failures reproducible; each prints its scenario.
+    let mut runner = TestRunner::deterministic();
+    for _ in 0..32 {
+        let (rows, inc, dir) = scenario.new_tree(&mut runner).unwrap().current();
+        sqlx::query!("DELETE FROM time_entries WHERE org_id = $1", first.org_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query!(
+            "UPDATE organizations SET round_minutes = $2, round_dir = $3 WHERE id = $1",
+            first.org_id,
+            inc,
+            dir as RoundDir,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        // (minutes, rounded, billable minutes, billable cents, cost cents)
+        let mut expected = (0, 0, 0, 0, 0);
+        for &(owner, minutes, frozen, billable) in &rows {
+            let (ids, rate) = owners[owner];
+            entries(&pool, ids, &[(minutes, frozen, billable)]).await;
+            let rounded =
+                effective_minutes(minutes as u32, frozen.map(|m| m as u32), inc as u32, dir) as i32;
+            expected.0 += i64::from(minutes);
+            expected.1 += i64::from(rounded);
+            if billable {
+                expected.2 += i64::from(rounded);
+                expected.3 += line_amount_cents(rate, rounded).unwrap();
+            }
+            expected.4 += line_amount_cents(6030, minutes).unwrap();
+        }
+        for dimension in ["project", "task", "client", "person"] {
+            let groups = report(&pool, first.user_id, dimension).await;
+            let totals = groups.iter().fold((0, 0, 0, 0, 0), |sum, group| {
+                (
+                    sum.0 + group.total_minutes,
+                    sum.1 + group.rounded_minutes,
+                    sum.2 + group.billable_minutes,
+                    sum.3 + group.billable_cents,
+                    sum.4 + group.cost_cents.unwrap(),
+                )
+            });
+            assert_eq!(
+                totals, expected,
+                "{dimension}, inc={inc}, dir={dir:?}: {rows:?}"
+            );
+        }
+    }
+}

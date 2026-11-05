@@ -139,6 +139,20 @@ mod time_of_day {
             prop_assert!(u32::from(start) + clamped <= u32::from(DAY_MINUTES));
             prop_assert_eq!(clamped == duration, u32::from(start) + duration <= u32::from(DAY_MINUTES));
         }
+
+        /// Snapping any `i32` never overflows: it lands on a non-negative step
+        /// within half a step, or on the last step `i32` can hold.
+        #[test]
+        fn snap_never_overflows(
+            value in prop_oneof![Just(i32::MAX), i32::MAX - 100..=i32::MAX, any::<i32>()],
+            step in 1..=u16::MAX,
+        ) {
+            let snapped = snap(value, step);
+            let (expected, step) = (i64::from(value.max(0)), i64::from(step));
+            let last = i64::from(i32::MAX) / step * step;
+            prop_assert!(snapped >= 0 && i64::from(snapped) % step == 0);
+            prop_assert!(2 * (i64::from(snapped) - expected).abs() <= step || i64::from(snapped) == last);
+        }
     }
 }
 
@@ -160,29 +174,47 @@ mod rounding {
     const MAX_MINUTES: u32 = i32::MAX as u32;
     const MAX_INCREMENT: u32 = i16::MAX as u32;
 
+    /// `rounded` is a multiple of `inc` on the side `dir` names, less than one
+    /// increment away; nearest takes the closer multiple and a tie goes up.
+    fn lands_on_the_named_side(minutes: u32, inc: u32, dir: RoundDir, rounded: u32) -> bool {
+        let (minutes, inc, rounded) = (u64::from(minutes), u64::from(inc), u64::from(rounded));
+        let gap = rounded.abs_diff(minutes);
+        rounded % inc == 0
+            && gap < inc
+            && match dir {
+                RoundDir::Up => rounded >= minutes,
+                RoundDir::Down => rounded <= minutes,
+                RoundDir::Nearest => 2 * gap < inc || (2 * gap == inc && rounded > minutes),
+            }
+    }
+
     proptest! {
-        /// Rounding lands on a multiple of the increment, on the side its
-        /// direction names, less than one increment away; nearest takes the
-        /// closer multiple and a tie goes up. Catches billing in the wrong
-        /// direction or by a whole extra increment.
+        /// Stored minutes round to a multiple of the increment on the side the
+        /// direction names, within one increment, ties up. Catches billing in
+        /// the wrong direction or by a whole extra increment.
         #[test]
         fn round_lands_on_the_named_side_within_one_increment(
             minutes in 0..=MAX_MINUTES,
             inc in 1..=MAX_INCREMENT,
             dir in direction(),
         ) {
-            let rounded = u64::from(round(minutes, inc, dir));
-            let (minutes, inc) = (u64::from(minutes), u64::from(inc));
-            prop_assert_eq!(rounded % inc, 0);
-            prop_assert!(rounded.abs_diff(minutes) < inc);
-            match dir {
-                RoundDir::Up => prop_assert!(rounded >= minutes),
-                RoundDir::Down => prop_assert!(rounded <= minutes),
-                RoundDir::Nearest => {
-                    let gap = 2 * rounded.abs_diff(minutes);
-                    prop_assert!(gap < inc || (gap == inc && rounded > minutes));
-                }
-            }
+            prop_assert!(lands_on_the_named_side(minutes, inc, dir, round(minutes, inc, dir)));
+        }
+
+        /// Near `u32::MAX` rounding never wraps to a small value: it returns
+        /// the true multiple when that fits and `u32::MAX` only when it does not.
+        #[test]
+        fn round_saturates_instead_of_wrapping(
+            minutes in prop_oneof![Just(u32::MAX), u32::MAX - 100_000..=u32::MAX, any::<u32>()],
+            inc in prop_oneof![1..=100_u32, 1..=u32::MAX],
+            dir in direction(),
+        ) {
+            let rounded = round(minutes, inc, dir);
+            let above = (u64::from(minutes / inc) + 1) * u64::from(inc);
+            prop_assert!(
+                lands_on_the_named_side(minutes, inc, dir, rounded)
+                    || (rounded == u32::MAX && dir != RoundDir::Down && above > u64::from(u32::MAX))
+            );
         }
 
         /// Rounding twice equals rounding once, and more worked time never
@@ -211,7 +243,7 @@ mod money {
         /// Typed amounts read back exactly from both display forms, grouped or
         /// plain, so editing an amount without touching it never changes it.
         #[test]
-        fn displayed_amounts_parse_back(cents in prop_oneof![Just(i64::MAX), any::<i64>()]) {
+        fn displayed_amounts_parse_back(cents in prop_oneof![Just(i64::MIN), Just(i64::MAX), any::<i64>()]) {
             prop_assert_eq!(parse_cents(&format_cents_plain(cents)).unwrap(), cents);
             let shown = format_cents(cents, "EUR");
             prop_assert_eq!(parse_cents(shown.strip_prefix("EUR ").unwrap()).unwrap(), cents);
@@ -410,7 +442,7 @@ mod budget {
 
 mod week {
     use super::*;
-    use horae_core::week::week_bounds;
+    use horae_core::week::{iso_week_monday, week_bounds, week_start};
 
     fn date() -> impl Strategy<Value = NaiveDate> {
         let days = NaiveDate::MIN.num_days_from_ce()..=NaiveDate::MAX.num_days_from_ce();
@@ -424,9 +456,11 @@ mod week {
     proptest! {
         /// For every first-day setting the configured week starts on that
         /// weekday, contains the date and spans seven days; a week the
-        /// calendar cannot represent is `None`, never a panic.
+        /// calendar cannot represent is `None`, never a panic. The ISO Monday
+        /// helper agrees with the Monday setting.
         #[test]
         fn weeks_start_on_the_setting_and_contain_the_date(date in date()) {
+            prop_assert_eq!(iso_week_monday(date), week_start(date, Weekday::Mon));
             for first_day in WEEKDAYS {
                 match week_bounds(date, first_day) {
                     Some((start, end)) => {

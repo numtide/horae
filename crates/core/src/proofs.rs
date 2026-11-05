@@ -32,9 +32,10 @@ fn any_currency() -> [u8; 3] {
     if kani::any() { *b"EUR" } else { *b"USD" }
 }
 
-/// Rounding any `u32` lands on a multiple of the increment, on the side its
-/// direction names, less than one increment away, without overflowing.
-/// Increments are boundary values: a symbolic `u32` divisor exceeds 30 minutes.
+/// Rounding any `u32` never wraps: it lands on a multiple of the increment, on
+/// the side its direction names, less than one increment away, or saturates to
+/// `u32::MAX` when that multiple does not fit. Increments are boundary values:
+/// a symbolic `u32` divisor exceeds 30 minutes.
 #[kani::proof]
 fn rounding_lands_on_the_named_side_for_every_u32() {
     let minutes: u32 = kani::any();
@@ -49,7 +50,12 @@ fn rounding_lands_on_the_named_side_for_every_u32() {
     let dir = any_dir();
     let rounded = u64::from(crate::rounding::round(minutes, inc, dir));
     let (minutes, inc) = (u64::from(minutes), u64::from(inc));
-    assert!(rounded % inc == 0);
+    if rounded % inc != 0 {
+        let above = (minutes / inc + 1) * inc;
+        assert!(rounded == u64::from(u32::MAX) && above > rounded);
+        assert!(!matches!(dir, RoundDir::Down));
+        return;
+    }
     assert!(rounded.abs_diff(minutes) < inc);
     match dir {
         RoundDir::Up => assert!(rounded >= minutes),

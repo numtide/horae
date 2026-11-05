@@ -13,6 +13,5 @@ mod proofs;
 pub mod rounding;
 pub mod state;
 pub mod time_of_day;
-pub mod totals;
 pub mod types;
 pub mod week;

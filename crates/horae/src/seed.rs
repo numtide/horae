@@ -1,6 +1,7 @@
 //! Initialize an empty database with a demo organization and the current ISO
 //! week's sample time. Existing demos, including older or edited ones, are left
 //! untouched: restarting the demo must not add time or restore deleted data.
+use anyhow::Context;
 use chrono::{NaiveDate, Utc};
 use horae_core::types::{BudgetKind, OrgRole, ProjectRole, ProjectType, RoundDir};
 use horae_core::week::iso_week_monday;
@@ -178,7 +179,7 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
 
     // Sample time entries — Mon–Fri of the current ISO week
     let today = Utc::now().date_naive();
-    let monday = iso_week_monday(today);
+    let monday = iso_week_monday(today).context("this week starts before the supported dates")?;
 
     let entries: &[(NaiveDate, Uuid, Uuid, i32, &str, bool)] = &[
         // Mon

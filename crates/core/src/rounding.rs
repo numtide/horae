@@ -12,30 +12,24 @@ pub fn effective_minutes(minutes: u32, frozen: Option<u32>, inc: u32, dir: Round
 /// - `RoundDir::Up` → ceiling to next multiple
 /// - `RoundDir::Down` → floor to previous multiple
 /// - `RoundDir::Nearest` → nearest multiple (ties round up)
+///
+/// A multiple above `u32::MAX` saturates to `u32::MAX`. Stored minutes are
+/// `i32` and increments `i16`, so stored values never reach it.
 pub fn round(minutes: u32, inc: u32, dir: RoundDir) -> u32 {
     if inc == 0 {
         return minutes;
     }
-    match dir {
-        RoundDir::Up => {
-            let rem = minutes % inc;
-            if rem == 0 {
-                minutes
-            } else {
-                minutes + (inc - rem)
-            }
-        }
-        RoundDir::Down => minutes - (minutes % inc),
-        RoundDir::Nearest => {
-            let lower = minutes - (minutes % inc);
-            let upper = lower + inc;
-            if minutes - lower < upper - minutes {
-                lower
-            } else {
-                upper
-            }
-        }
-    }
+    // Widened so the multiple above `minutes` cannot wrap.
+    let (minutes, inc) = (u64::from(minutes), u64::from(inc));
+    let lower = minutes - minutes % inc;
+    let rounded = match dir {
+        RoundDir::Up if lower == minutes => minutes,
+        RoundDir::Up => lower + inc,
+        RoundDir::Down => lower,
+        RoundDir::Nearest if 2 * (minutes - lower) < inc => lower,
+        RoundDir::Nearest => lower + inc,
+    };
+    u32::try_from(rounded).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]
