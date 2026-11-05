@@ -100,16 +100,16 @@ pub(super) async fn project_details(
         .map(|view| view.project))
 }
 
-/// The team members Project Detail shows to the viewer.
+/// The team members Project Detail shows to the viewer; `None` when the
+/// viewer cannot open the project at all.
 pub(super) async fn project_team(
     pool: &PgPool,
     viewer: &User,
     project_id: Uuid,
-) -> Result<Vec<crate::models::project::ProjectDetailIdentity>, ServerFnError> {
+) -> Result<Option<Vec<crate::models::project::ProjectDetailIdentity>>, ServerFnError> {
     Ok(readable_view(pool, viewer, project_id)
         .await?
-        .map(|view| view.team)
-        .unwrap_or_default())
+        .map(|view| view.team))
 }
 
 #[sqlx::test(migrations = "./migrations")]

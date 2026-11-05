@@ -353,7 +353,10 @@ async fn members_see_the_project_team_without_rates(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let team = project_team(&pool, &viewer, project).await.unwrap();
+    let team = project_team(&pool, &viewer, project)
+        .await
+        .unwrap()
+        .expect("a member opens the project");
     assert_eq!(team.len(), 2);
     for member in team {
         let payload = serde_json::to_value(member).unwrap();
@@ -374,7 +377,10 @@ async fn managers_and_admins_see_the_project_team(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-        let team = project_team(&pool, &viewer, project).await.unwrap();
+        let team = project_team(&pool, &viewer, project)
+            .await
+            .unwrap()
+            .expect("managers open every project");
         assert_eq!(team.len(), 1, "{role:?}");
     }
 }
@@ -390,6 +396,7 @@ async fn assignments_are_scoped_to_the_viewers_organization(pool: PgPool) {
         project_team(&pool, &viewer, project)
             .await
             .unwrap()
-            .is_empty()
+            .is_none(),
+        "a foreign project is not found"
     );
 }

@@ -24,9 +24,11 @@ impl Reader {
                     other => panic!("unexpected detail view result: {other:?}"),
                 }
             }
+            // Like DetailView, a 404 or 403 is a reader that sees no project.
             Self::Team => match project_team(pool, viewer, project).await {
-                Ok(team) => team.into_iter().map(|_| project).collect(),
-                Err(ServerFnError::ServerError {
+                Ok(Some(team)) => team.into_iter().map(|_| project).collect(),
+                Ok(None)
+                | Err(ServerFnError::ServerError {
                     code: FORBIDDEN, ..
                 }) => Vec::new(),
                 other => panic!("unexpected team result: {other:?}"),

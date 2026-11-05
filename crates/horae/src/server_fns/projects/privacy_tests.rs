@@ -205,12 +205,14 @@ async fn private_progress_does_not_prevent_tracking_or_reveal_financial_fields(p
     let decoded: Task = serde_json::from_value(serde_json::to_value(&tasks[0]).unwrap()).unwrap();
     assert_eq!(decoded.id, ids.task_id);
     assert!(decoded.default_rate_cents.is_none());
-    assert!(
-        project_team(&pool, &viewer, ids.project_id)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    let today = super::canonical_read_tests::today();
+    assert!(matches!(
+        detail_view::fetch(&pool, &viewer, ids.project_id, None, today).await,
+        Err(ServerFnError::ServerError {
+            code: NOT_FOUND,
+            ..
+        })
+    ));
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -315,7 +317,8 @@ async fn revoked_membership_preserves_only_own_historical_tracking_identity(pool
         project_team(&pool, &viewer, ids.project_id)
             .await
             .unwrap()
-            .is_empty()
+            .is_none(),
+        "a revoked member cannot open the project"
     );
     let tracking = projects_for_viewer(&pool, &viewer, None, true, ProjectRead::Tracking)
         .await
@@ -480,7 +483,10 @@ async fn outsiders_and_inactive_viewers_have_no_project_reads(pool: PgPool) {
                 })
             ));
         } else {
-            assert!(team.unwrap().is_empty());
+            assert!(
+                team.unwrap().is_none(),
+                "an outsider cannot open the project"
+            );
         }
         assert!(
             fetch_project_spend(&pool, viewer.org_id, viewer.id)
