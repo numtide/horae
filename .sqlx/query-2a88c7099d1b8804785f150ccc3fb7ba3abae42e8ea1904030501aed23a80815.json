@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode,report_visibility)\n                 VALUES ($1,$2,$3,$4,'project',$5)\n                 ON CONFLICT (project_id) DO UPDATE SET report_visibility=EXCLUDED.report_visibility",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2a88c7099d1b8804785f150ccc3fb7ba3abae42e8ea1904030501aed23a80815"
+}
