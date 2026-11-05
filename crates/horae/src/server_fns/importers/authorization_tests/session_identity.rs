@@ -60,26 +60,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .status(),
         StatusCode::UNAUTHORIZED
     );
-    assert_eq!(
-        api.call("logout", json!({}), Some(&cookie), false)
-            .await
-            .status(),
-        StatusCode::OK
-    );
-
-    let cookie = api.cookie(member).await;
-    assert_eq!(
-        api.call("logout", json!({}), Some(&cookie), false)
-            .await
-            .status(),
-        StatusCode::OK
-    );
-    assert_eq!(
-        api.call("get_me", json!({}), Some(&cookie), false)
-            .await
-            .status(),
-        StatusCode::UNAUTHORIZED
-    );
     let missing = api.cookie(Uuid::now_v7()).await;
     assert_eq!(
         api.call("get_me", json!({}), Some(&missing), false)

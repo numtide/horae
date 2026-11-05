@@ -4,28 +4,16 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// An explicit task rate in the currency shown to the project manager.
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "The task-link endpoint retains this wire DTO; the project editor uses ProjectForm."
-    )
-)]
 pub struct ProjectTaskRate {
     pub amount: String,
     pub currency: String,
 }
 
-/// Read-only fee context for authorized billing managers, one row per occurrence.
+/// Fee balances per occurrence; the fee tests read invoice preparation through it.
+#[cfg(all(test, feature = "server"))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "returned by the get_project_fee_balances server function; no web page reads it"
-    )
-)]
 pub struct ProjectFeeBalance {
     pub period_key: String,
     pub description: String,

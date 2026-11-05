@@ -3,12 +3,16 @@
 use super::*;
 #[cfg(feature = "server")]
 use crate::db::{OrganizationLock, lock_organization};
+use crate::models::ProjectTagLink;
 use crate::models::permission_editor::PermissionRequester;
-use crate::models::project::{ProjectFeeBalance, ProjectOverview};
+#[cfg(all(test, feature = "server"))]
+use crate::models::project::ProjectFeeBalance;
+use crate::models::project::ProjectOverview;
 #[cfg(feature = "server")]
 use crate::models::project::{ProjectOverviewClient, ProjectOverviewRow};
 use crate::models::task::TaskRateEdit;
-use crate::models::{ProjectDetails, ProjectTagLink, ProjectTaskRate};
+#[cfg(feature = "server")]
+use crate::models::{ProjectDetails, ProjectTaskRate};
 
 mod detail_view;
 pub use detail_view::get_project_detail_view;
@@ -59,30 +63,7 @@ mod task_link_tests;
 
 // ── Projects ─────────────────────────────────────────────────────────────────
 
-#[server]
-pub async fn get_project_fee_balances(
-    project_id: String,
-    period_from: String,
-    period_to: String,
-    expected_requester: Option<PermissionRequester>,
-) -> Result<Vec<ProjectFeeBalance>, ServerFnError> {
-    let viewer = require_manager().await?;
-    project_requester(&viewer, expected_requester)?;
-    let state = crate::state::global_state().await;
-    fetch_project_fee_balances(
-        &state.db,
-        viewer.org_id,
-        viewer.id,
-        parse_uuid(&project_id, "project_id")?,
-        (
-            parse_date(&period_from, "period_from")?,
-            parse_date(&period_to, "period_to")?,
-        ),
-    )
-    .await
-}
-
-#[cfg(feature = "server")]
+#[cfg(all(test, feature = "server"))]
 pub(super) async fn fetch_project_fee_balances(
     pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
@@ -136,21 +117,7 @@ pub(super) async fn fetch_project_fee_balances(
     Ok(balances)
 }
 
-#[server]
-pub async fn get_project_details(
-    project_id: String,
-    expected_requester: Option<PermissionRequester>,
-) -> Result<ProjectDetails, ServerFnError> {
-    let viewer = require_user().await?;
-    project_requester(&viewer, expected_requester)?;
-    let project_id = parse_uuid(&project_id, "project_id")?;
-    let state = crate::state::global_state().await;
-    fetch_project_details(&state.db, viewer.org_id, viewer.id, project_id)
-        .await?
-        .ok_or_else(|| not_found("Project not found"))
-}
-
-#[cfg(feature = "server")]
+#[cfg(all(test, feature = "server"))]
 async fn fetch_project_details(
     pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
@@ -892,15 +859,6 @@ pub async fn list_tracking_tasks() -> Result<Vec<Task>, ServerFnError> {
     tasks_for_viewer(&state.db, &user, None, TaskRead::Tracking).await
 }
 
-/// Lists tasks linked to a specific project via the `project_tasks` join table.
-#[server]
-pub async fn list_project_tasks(project_id: String) -> Result<Vec<Task>, ServerFnError> {
-    let user = require_user().await?;
-    let state = crate::state::global_state().await;
-    let project_id = parse_uuid(&project_id, "project_id")?;
-    tasks_for_viewer(&state.db, &user, Some(project_id), TaskRead::Catalog).await
-}
-
 #[cfg(feature = "server")]
 enum TaskRead {
     Catalog,
@@ -1426,34 +1384,7 @@ async fn lock_task(
     .ok_or_else(|| not_found("Task not found"))
 }
 
-/// Enable an org-level task on a project so it becomes loggable there. The
-/// project-task link inherits the task's default billable flag; idempotent.
-/// Current project editing authority is independent of global task management.
-#[server]
-pub async fn link_project_task(
-    project_id: String,
-    task_id: String,
-    rate: Option<ProjectTaskRate>,
-    expected_requester: PermissionRequester,
-) -> Result<(), ServerFnError> {
-    let actor = require_user().await?;
-    project_requester(&actor, Some(expected_requester))?;
-    let state = crate::state::global_state().await;
-    let project_id = parse_uuid(&project_id, "project_id")?;
-    let task_id = parse_uuid(&task_id, "task_id")?;
-
-    link_project_task_record(
-        &state.db,
-        actor.org_id,
-        actor.id,
-        project_id,
-        task_id,
-        rate.as_ref(),
-    )
-    .await
-}
-
-#[cfg(feature = "server")]
+#[cfg(all(test, feature = "server"))]
 async fn link_project_task_record(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
@@ -1628,19 +1559,7 @@ async fn enable_project_task(
 
 // ── Assignments ─────────────────────────────────────────────────────────────
 
-#[server]
-pub async fn list_assignments(
-    project_id: String,
-    expected_requester: Option<PermissionRequester>,
-) -> Result<Vec<Assignment>, ServerFnError> {
-    let viewer = require_user().await?;
-    project_requester(&viewer, expected_requester)?;
-    let state = crate::state::global_state().await;
-    let project_id = parse_uuid(&project_id, "project_id")?;
-    assignments_for_viewer(&state.db, &viewer, project_id).await
-}
-
-#[cfg(feature = "server")]
+#[cfg(all(test, feature = "server"))]
 async fn assignments_for_viewer(
     db: &sqlx::PgPool,
     viewer: &User,
