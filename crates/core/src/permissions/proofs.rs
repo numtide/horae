@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use super::{
     AccessScope, Actor, ManagementAssignments, ScopedResource,
-    catalog::{PERMISSION_CATALOG_VERSION, Permission, PermissionSelection},
+    catalog::{PERMISSION_CATALOG_VERSION, Permission, PermissionSelection, StoredPermissionError},
     rates::RateEdit,
 };
 
@@ -120,8 +120,8 @@ fn rate_edits_need_write_authority() {
     }
 }
 
-/// No catalog version but the current one restores a selection, whatever the
-/// stored grants. (FR-015)
+/// No catalog version but the current one restores even a canonical
+/// selection, and the rejection names the version. (FR-015)
 /// Catches: a stale or newer catalog read under today's grant meanings.
 #[kani::proof]
 // The set building after the version check is unreachable here; without a
@@ -130,11 +130,16 @@ fn rate_edits_need_write_authority() {
 fn other_catalog_versions_restore_nothing() {
     let version: u32 = kani::any();
     kani::assume(version != PERMISSION_CATALOG_VERSION);
-    let pick = || {
-        let index: usize = kani::any();
-        kani::assume(index < Permission::ALL.len());
-        Permission::ALL[index]
-    };
-    let stored = [pick(), pick()];
-    assert!(PermissionSelection::from_stored(version, &stored).is_err());
+    // The Member floor alone is canonical (the properties restore it at the
+    // current version), so only the version can reject it.
+    let floor = [
+        Permission::TimeReadOwn,
+        Permission::TimeWriteOwn,
+        Permission::ExpenseReadOwn,
+        Permission::ExpenseWriteOwn,
+    ];
+    assert!(matches!(
+        PermissionSelection::from_stored(version, &floor),
+        Err(StoredPermissionError::UnsupportedCatalogVersion)
+    ));
 }

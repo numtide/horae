@@ -13,7 +13,7 @@ use uuid::Uuid;
 use super::{
     AccessScope, Actor, ManagementAssignments, ScopedResource,
     approvals::approval_records_covered,
-    catalog::{PERMISSION_CATALOG_VERSION, Permission, PermissionSelection},
+    catalog::{PERMISSION_CATALOG_VERSION, Permission, PermissionSelection, StoredPermissionError},
     person_management::has_person_management_grant,
     rates::{
         BillableRateOwner, BillableRateResource, RateAction, billable_rate_access, cost_rate_access,
@@ -91,15 +91,6 @@ fn provenance_ok(actor: &Actor, assignments: &ManagementAssignments<'_>) -> bool
     actor.active && actor.id == assignments.actor_id && actor.org_id == assignments.org_id
 }
 
-/// The record is the actor's own, or tied to one of their management assignments.
-fn related(
-    actor: &Actor,
-    record: &ScopedResource,
-    assignments: &ManagementAssignments<'_>,
-) -> bool {
-    record.person_id == Some(actor.id) || managed(record, assignments)
-}
-
 fn managed(record: &ScopedResource, assignments: &ManagementAssignments<'_>) -> bool {
     record
         .person_id
@@ -109,10 +100,12 @@ fn managed(record: &ScopedResource, assignments: &ManagementAssignments<'_>) -> 
             .is_some_and(|id| assignments.projects.contains(&id))
 }
 
-/// Coverage never leaves the actor's organization or reaches a record that is
-/// neither theirs nor managed by them, unless ORGANIZATION was granted. (FR-006)
+/// Coverage never leaves the actor's organization and is reached only through
+/// a flag the scope holds: OWN by the record's person being the actor,
+/// MANAGED_PEOPLE by a managed person, MANAGED_PROJECTS by a managed project,
+/// or ORGANIZATION. (FR-006)
 /// Catches: a scope that ignores tenancy/activity, a missing dimension treated
-/// as a match, or managed-project scope leaking to a person-only record.
+/// as a match, or one managed flag matched through the other's assignments.
 #[test]
 fn scope_coverage_stays_within_granted_dimensions() {
     let actors: Vec<Actor> = PEOPLE[..2]
@@ -141,11 +134,23 @@ fn scope_coverage_stays_within_granted_dimensions() {
                             }
                             assert!(provenance_ok(actor, &assignments));
                             assert_eq!(record.org_id, actor.org_id);
-                            let org = scope.includes(AccessScope::ORGANIZATION);
-                            assert!(org || related(actor, record, &assignments));
-                            if !org && !scope.includes(AccessScope::OWN) {
-                                assert!(managed(record, &assignments));
-                            }
+                            let through = |flag, id: Option<Uuid>, set: &[Uuid]| {
+                                scope.includes(flag) && id.is_some_and(|id| set.contains(&id))
+                            };
+                            assert!(
+                                scope.includes(AccessScope::ORGANIZATION)
+                                    || through(AccessScope::OWN, record.person_id, &[actor.id])
+                                    || through(
+                                        AccessScope::MANAGED_PEOPLE,
+                                        record.person_id,
+                                        people
+                                    )
+                                    || through(
+                                        AccessScope::MANAGED_PROJECTS,
+                                        record.project_id,
+                                        projects
+                                    )
+                            );
                         }
                     }
                 }
@@ -200,7 +205,9 @@ fn scope_coverage_is_monotone_in_scope_and_assignments() {
     }
 }
 
-/// Independent transitive closure over the declared prerequisite edges.
+/// Independent transitive closure over the declared prerequisite edges. It
+/// reads the same `prerequisites()` table as the code under test, so the
+/// selection and removal properties check the algorithms, not the table.
 fn closure(grants: impl IntoIterator<Item = Permission>) -> BTreeSet<Permission> {
     let mut done = BTreeSet::new();
     let mut todo: Vec<_> = grants.into_iter().collect();
@@ -368,6 +375,14 @@ fn is_time_approval(grant: Permission) -> bool {
     )
 }
 
+/// How a stored grant list differs from the editor's canonical selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stored {
+    Canonical,
+    Duplicate,
+    Dropped,
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(2048))]
 
@@ -405,37 +420,39 @@ proptest! {
         }
     }
 
-    /// Saved grants are restored verbatim or rejected, and every catalog
-    /// version other than the current one is rejected. (FR-015)
-    /// Catches: read-time normalization widening stored access, or a stale or
-    /// newer catalog being interpreted under the current grant meanings.
+    /// An editor-built selection is restored verbatim; another catalog version,
+    /// a duplicate grant or a missing prerequisite is rejected with its own
+    /// reason, never repaired. (FR-015)
+    /// Catches: read-time normalization widening stored access, a stale or
+    /// newer catalog read under today's grant meanings, duplicates accepted,
+    /// or a closure rule the reader rejects, locking out saved people.
     #[test]
     fn stored_grants_are_restored_verbatim_or_rejected(
-        stored in prop::collection::vec(prop::sample::select(Permission::ALL), 0..30),
-        version in prop_oneof![3 => Just(PERMISSION_CATALOG_VERSION), 1 => any::<u32>()],
+        requested in grants(),
+        version in prop_oneof![Just(PERMISSION_CATALOG_VERSION), any::<u32>()],
+        edit in prop_oneof![Just(Stored::Canonical), Just(Stored::Duplicate), Just(Stored::Dropped)],
+        at in any::<prop::sample::Index>(),
     ) {
-        let grants: BTreeSet<_> = stored.iter().copied().collect();
-        let valid = version == PERMISSION_CATALOG_VERSION
-            && grants.len() == stored.len()
-            && closure(FLOOR.into_iter().chain(stored.iter().copied())) == grants;
-        match PermissionSelection::from_stored(version, &stored) {
-            Ok(selection) => {
-                prop_assert!(valid);
-                prop_assert_eq!(set(&selection), grants);
-            }
-            Err(_) => prop_assert!(!valid),
+        let mut stored: Vec<_> = PermissionSelection::new(&requested).iter().collect();
+        let i = at.index(stored.len());
+        match edit {
+            Stored::Canonical => {}
+            Stored::Duplicate => stored.push(stored[i]),
+            Stored::Dropped => { stored.remove(i); }
         }
-    }
-
-    /// Every editor-built selection survives storage unchanged. (FR-015)
-    /// Catches: a closure rule the reader rejects, locking out saved people.
-    #[test]
-    fn canonical_selections_round_trip_through_storage(requested in grants()) {
-        let selection = PermissionSelection::new(&requested);
-        let stored: Vec<_> = selection.iter().collect();
+        let grants: BTreeSet<_> = stored.iter().copied().collect();
+        let expected = if version != PERMISSION_CATALOG_VERSION {
+            Err(StoredPermissionError::UnsupportedCatalogVersion)
+        } else if edit == Stored::Duplicate {
+            Err(StoredPermissionError::DuplicatePermission)
+        } else if closure(FLOOR.into_iter().chain(grants.iter().copied())) != grants {
+            Err(StoredPermissionError::NonCanonicalSelection)
+        } else {
+            Ok(grants)
+        };
         prop_assert_eq!(
-            PermissionSelection::from_stored(PERMISSION_CATALOG_VERSION, &stored),
-            Ok(selection)
+            PermissionSelection::from_stored(version, &stored).map(|selection| set(&selection)),
+            expected
         );
     }
 
@@ -589,7 +606,8 @@ proptest! {
         );
     }
 
-    /// Whoever may write a rate may also read it. (FR-021, FR-022)
+    /// Whoever may write a rate may also read it, through the prerequisite
+    /// rules. (FR-015, FR-022)
     /// Catches: a prerequisite edit that leaves write-only rate authority,
     /// letting someone overwrite amounts they are not allowed to see.
     #[test]
@@ -635,33 +653,37 @@ proptest! {
         prop_assert!(!cost_rate_access(&selection, action, &world.actor, world.actor.org_id));
     }
 
-    /// Without a grant compatible with person management, managed-person
-    /// assignments change no decision. (FR-028)
-    /// Catches: the compatibility list missing a grant that core scopes by
-    /// managed people, so a "dormant" assignment silently grants access.
-    #[test]
-    fn person_assignments_are_inert_without_a_compatible_grant(
-        requested in grants_from(without(|grant| {
-            has_person_management_grant(&PermissionSelection::new(&[grant]))
-        })),
-        world in world(),
-        time in records(),
-        expenses in records(),
-        action in action(),
-        owner in owner(),
-    ) {
-        let selection = PermissionSelection::new(&requested);
-        prop_assert!(!has_person_management_grant(&selection));
-        let assignments = world.assignments();
-        let unmanaged = ManagementAssignments { people: &[], ..assignments };
-        prop_assert_eq!(
-            approval_records_covered(&selection, &world.actor, &assignments, &time, &expenses),
-            approval_records_covered(&selection, &world.actor, &unmanaged, &time, &expenses)
-        );
-        let resource = BillableRateResource { org_id: world.actor.org_id, owner };
-        prop_assert_eq!(
-            billable_rate_access(&selection, action, &world.actor, &resource, &assignments),
-            billable_rate_access(&selection, action, &world.actor, &resource, &unmanaged)
+}
+
+/// A person can receive managed people exactly when they hold a time,
+/// expense, people, billable-rate or approval-withdrawal grant beyond their own
+/// work; own-only, project, client, task, invoice, estimate, cost, report,
+/// company and billing grants do not qualify. The categories are read from the
+/// grant names, independently of the list in `has_person_management_grant`.
+/// (FR-028)
+/// Catches: a qualifying grant missing from the list, turning an eligible
+/// manager away, or an unrelated grant admitted, accepting a dormant assignment.
+#[test]
+fn person_management_eligibility_follows_the_grant_categories() {
+    let qualifies = |grant: Permission| {
+        let name = format!("{grant:?}");
+        !name.ends_with("Own")
+            && [
+                "Time",
+                "Expense",
+                "People",
+                "BillableRate",
+                "ApprovalWithdraw",
+            ]
+            .iter()
+            .any(|domain| name.starts_with(domain))
+    };
+    for grant in Permission::ALL.iter().copied() {
+        let selection = PermissionSelection::new(&[grant]);
+        assert_eq!(
+            has_person_management_grant(&selection),
+            selection.iter().any(qualifies),
+            "{grant:?}"
         );
     }
 }

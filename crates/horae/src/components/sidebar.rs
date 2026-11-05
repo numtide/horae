@@ -432,8 +432,9 @@ mod tests {
         );
     }
 
-    /// A stale or newer catalog never shows more rows than no grants at all,
-    /// whatever its grants and whether the person is a legacy admin.
+    /// The previous, next and largest catalog versions never show more rows
+    /// than no grants at all, for every subset of the gating grants and
+    /// whether or not the person is an administrator or legacy admin.
     #[test]
     fn other_catalog_versions_never_open_a_gated_row() {
         let gated = [
@@ -443,7 +444,6 @@ mod tests {
             Permission::TaskReadAll,
         ];
         let versions = [
-            0,
             PERMISSION_CATALOG_VERSION - 1,
             PERMISSION_CATALOG_VERSION + 1,
             u32::MAX,
