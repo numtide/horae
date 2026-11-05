@@ -1223,6 +1223,42 @@ async fn rows_past_the_daily_limit_are_reported_like_other_bad_rows(pool: PgPool
     assert_eq!(day_total, Some(14_400));
 }
 
+/// The import holds no day lock: one held elsewhere on an imported day does
+/// not stall it, however many days it spans.
+#[sqlx::test(migrations = "./migrations")]
+async fn an_import_of_many_days_takes_no_day_locks(pool: PgPool) {
+    use chrono::Datelike;
+    let org = seed_org(&pool).await;
+    let user = seed_user(&pool, org, "dev@acme.com").await;
+    let first = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+    let days: Vec<_> = first.iter_days().take(400).collect();
+    let rows = (0..).zip(&days).map(|(i, day)| {
+        api_row(
+            (1, 10, 100, 6000 + i, 1000),
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (day.year(), day.month(), day.day()),
+            "1",
+            None,
+        )
+    });
+    let mut holder = pool.begin().await.unwrap();
+    crate::db::daily_minutes_totals(&mut holder, user, &[days[200]])
+        .await
+        .unwrap();
+
+    let report = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        commit(&pool, org, rows.collect()),
+    )
+    .await
+    .expect("the import must not wait for a day lock");
+    holder.rollback().await.unwrap();
+    assert_eq!(report.summary.time_entries.created, 400);
+}
+
 // ── US5: CSV natural-key path ─────────────────────────────────────────────────
 
 #[sqlx::test(migrations = "./migrations")]

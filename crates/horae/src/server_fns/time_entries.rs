@@ -329,15 +329,18 @@ async fn lock_task_access(
     Ok(())
 }
 
+/// Lock the entries and their task access, returning the days they are on now:
+/// the rows are locked, so those days stay theirs until commit.
 #[cfg(feature = "server")]
 async fn lock_entry_task_access(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     user_id: uuid::Uuid,
     ids: &[uuid::Uuid],
-) -> Result<(), ServerFnError> {
+) -> Result<Vec<chrono::NaiveDate>, ServerFnError> {
     let entries = sqlx::query!(
-        "SELECT project_id, task_id FROM time_entries
-         WHERE user_id = $1 AND id = ANY($2) ORDER BY id FOR UPDATE",
+        r#"SELECT project_id, task_id, spent_date as "spent_date: chrono::NaiveDate"
+           FROM time_entries
+           WHERE user_id = $1 AND id = ANY($2) ORDER BY id FOR UPDATE"#,
         user_id,
         ids,
     )
@@ -356,7 +359,7 @@ async fn lock_entry_task_access(
     for (project_id, task_id) in contexts {
         lock_task_access(tx, user_id, project_id, task_id).await?;
     }
-    Ok(())
+    Ok(entries.into_iter().map(|entry| entry.spent_date).collect())
 }
 
 /// Eligibility and effective billability are resolved in the insert's snapshot,
@@ -796,7 +799,10 @@ async fn delete_entry(
     entry_id: uuid::Uuid,
 ) -> Result<TimeEntry, ServerFnError> {
     let mut tx = begin_active_time_write(db, user_id).await?;
-    lock_entry_task_access(&mut tx, user_id, &[entry_id]).await?;
+    let days = lock_entry_task_access(&mut tx, user_id, &[entry_id]).await?;
+    // A delete only lowers its day, but it still takes the day lock: otherwise
+    // it could land between another writer's before and after totals.
+    day_totals(&mut tx, user_id, &days).await?;
 
     // Delete and capture the row in one statement so the "only open entries"
     // guard holds atomically (no TOCTOU) and the event carries the removed
@@ -864,8 +870,9 @@ async fn reschedule_entry(
 ) -> Result<TimeEntry, ServerFnError> {
     let (minutes, start_minute) = normalize_start(minutes, Some(start_minute))?;
     let mut tx = begin_active_time_write(db, user_id).await?;
-    lock_entry_task_access(&mut tx, user_id, &[entry_id]).await?;
-    let day = day_totals(&mut tx, user_id, &[spent_date]).await?;
+    let mut days = lock_entry_task_access(&mut tx, user_id, &[entry_id]).await?;
+    days.push(spent_date);
+    let day = day_totals(&mut tx, user_id, &days).await?;
 
     let entry = sqlx::query_as!(
         TimeEntry,
@@ -926,8 +933,9 @@ async fn reorder_entries(
     let count = i32::try_from(ids.len()).map_err(|_| conflict("Too many entries to reorder"))?;
     let orders: Vec<i32> = (0..count).collect();
     let mut tx = begin_active_time_write(pool, user_id).await?;
-    lock_entry_task_access(&mut tx, user_id, ids).await?;
-    let day = day_totals(&mut tx, user_id, &[spent_date]).await?;
+    let mut days = lock_entry_task_access(&mut tx, user_id, ids).await?;
+    days.push(spent_date);
+    let day = day_totals(&mut tx, user_id, &days).await?;
 
     let updated = sqlx::query!(
         r#"UPDATE time_entries AS t

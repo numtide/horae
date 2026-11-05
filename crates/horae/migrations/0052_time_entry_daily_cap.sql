@@ -1,15 +1,28 @@
 -- Harvest refuses a person's day above 240 hours ("Daily hours cannot exceed
--- 240."). The server enforces that day total in each write transaction; these
--- checks bound a single entry, so no stored value rounds past `integer`:
---   * minutes: at most one full capped day, 14,400;
---   * rounded_minutes: frozen at approval or invoicing by rounding minutes by
---     the organization's increment, a smallint, so at most 14,400 + 32,767.
--- NOT VALID: new writes are checked, existing rows are not. A timer left
--- running for days may already have stored more, so a later migration
--- validates these once production has been checked.
+-- 240."). The server enforces that day total in each write transaction; this
+-- trigger bounds a single entry at one full day, 14,400 minutes, so no newly
+-- written value rounds past `integer` (frozen rounding adds at most one
+-- smallint increment).
+--
+-- A trigger rather than a CHECK: a timer left running for days may already
+-- have stored more, and a CHECK, even NOT VALID, tests every new row version,
+-- so submitting, approving, invoicing or sweeping such a row would fail. The
+-- trigger refuses only a new entry over the limit or raising one over it; an
+-- entry already over may still be lowered.
 
-ALTER TABLE time_entries
-  ADD CONSTRAINT time_entries_minutes_daily_cap
-    CHECK (minutes <= 14400) NOT VALID,
-  ADD CONSTRAINT time_entries_rounded_minutes_cap
-    CHECK (rounded_minutes IS NULL OR rounded_minutes <= 14400 + 32767) NOT VALID;
+CREATE FUNCTION time_entries_minutes_daily_cap() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.minutes > 14400
+     AND (TG_OP = 'INSERT' OR NEW.minutes > OLD.minutes) THEN
+    RAISE EXCEPTION 'Daily hours cannot exceed 240.'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END
+$$;
+REVOKE ALL ON FUNCTION time_entries_minutes_daily_cap() FROM PUBLIC;
+
+CREATE TRIGGER time_entries_minutes_daily_cap
+  BEFORE INSERT OR UPDATE ON time_entries
+  FOR EACH ROW EXECUTE FUNCTION time_entries_minutes_daily_cap();

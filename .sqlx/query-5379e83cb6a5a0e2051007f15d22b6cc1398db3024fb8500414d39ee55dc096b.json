@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT project_id, task_id FROM time_entries\n         WHERE user_id = $1 AND id = ANY($2) ORDER BY id FOR UPDATE",
+  "query": "SELECT project_id, task_id, spent_date as \"spent_date: chrono::NaiveDate\"\n           FROM time_entries\n           WHERE user_id = $1 AND id = ANY($2) ORDER BY id FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -12,6 +12,11 @@
         "ordinal": 1,
         "name": "task_id",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "spent_date: chrono::NaiveDate",
+        "type_info": "Date"
       }
     ],
     "parameters": {
@@ -22,8 +27,9 @@
     },
     "nullable": [
       false,
+      false,
       false
     ]
   },
-  "hash": "ed288c2b88d24ef635401c4acf023ddbe71397a0c24b506364725d40cffc6530"
+  "hash": "5379e83cb6a5a0e2051007f15d22b6cc1398db3024fb8500414d39ee55dc096b"
 }

@@ -147,3 +147,43 @@ pub async fn time_entry(
     .unwrap();
     id
 }
+
+/// Give an entry `minutes` as a row stored before the daily limit existed,
+/// which the trigger would refuse to write today.
+pub async fn legacy_minutes(pool: &PgPool, entry_id: Uuid, minutes: i32) {
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query!("ALTER TABLE time_entries DISABLE TRIGGER time_entries_minutes_daily_cap")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE time_entries SET minutes = $2 WHERE id = $1",
+        entry_id,
+        minutes
+    )
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    sqlx::query!("ALTER TABLE time_entries ENABLE TRIGGER time_entries_minutes_daily_cap")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+}
+
+/// Raising a legacy entry's minutes is still refused by the trigger.
+pub async fn assert_minutes_cannot_rise(pool: &PgPool, entry_id: Uuid) {
+    let raised = sqlx::query!(
+        "UPDATE time_entries SET minutes = minutes + 1 WHERE id = $1",
+        entry_id
+    )
+    .execute(pool)
+    .await
+    .unwrap_err();
+    assert!(
+        raised
+            .to_string()
+            .contains("Daily hours cannot exceed 240."),
+        "{raised}"
+    );
+}

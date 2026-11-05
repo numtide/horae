@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET minutes=$2 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a1c0b9389a298b9a49b265a50a073f19d8a43f2d782eda88bb82d0173a1c138"
+}

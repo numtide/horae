@@ -1,4 +1,5 @@
 use super::*;
+use crate::server_fns::test_seed::{assert_minutes_cannot_rise, legacy_minutes, wait_for_blocked};
 
 const DAY: &str = "2026-09-07";
 const NEXT_DAY: &str = "2026-09-08";
@@ -221,42 +222,87 @@ async fn stopping_a_timer_keeps_only_the_rest_of_the_day(pool: PgPool) {
 async fn the_database_bounds_each_entry(pool: PgPool) {
     let f = fixture(&pool).await;
     let entry = f.entry(&pool).await;
-    let set = |minutes: i32, rounded: Option<i32>| {
+    let set = |minutes: i32| {
         sqlx::query!(
-            "UPDATE time_entries SET minutes=$2, rounded_minutes=$3 WHERE id=$1",
+            "UPDATE time_entries SET minutes=$2 WHERE id=$1",
             entry,
-            minutes,
-            rounded
+            minutes
         )
         .execute(&pool)
     };
-    // The largest stored entry, rounded up by the largest smallint increment.
-    set(14_400, Some(14_400 + i32::from(i16::MAX)))
-        .await
-        .unwrap();
-    let minutes = set(14_401, None).await.unwrap_err();
+    set(14_400).await.unwrap();
+    let refused = set(14_401).await.unwrap_err();
     assert!(
-        minutes
+        refused
             .to_string()
-            .contains("time_entries_minutes_daily_cap"),
-        "{minutes}"
+            .contains("Daily hours cannot exceed 240."),
+        "{refused}"
     );
-    let rounded = set(60, Some(14_400 + i32::from(i16::MAX) + 1))
-        .await
-        .unwrap_err();
-    assert!(
-        rounded
-            .to_string()
-            .contains("time_entries_rounded_minutes_cap"),
-        "{rounded}"
-    );
-    // Existing rows wait for a validating migration once production is checked.
-    let validated = sqlx::query_scalar!(
-        r#"SELECT bool_or(convalidated) AS "validated!" FROM pg_constraint
-           WHERE conname IN ('time_entries_minutes_daily_cap', 'time_entries_rounded_minutes_cap')"#
+}
+
+/// The trigger refuses only a new value over the limit: a legacy entry keeps
+/// its minutes through every other write, such as the long-timer sweep's
+/// claim, and may be lowered.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_legacy_entry_over_the_limit_can_change_anything_but_raise_its_minutes(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let entry = f.entry(&pool).await;
+    legacy_minutes(&pool, entry, 20_000).await;
+    // `scheduler::sweep` needs the app state; this is the column its claim sets.
+    sqlx::query!(
+        "UPDATE time_entries SET is_running=true, started_at=now(), notified_long_running_at=now()
+         WHERE id=$1",
+        entry
     )
-    .fetch_one(&pool)
+    .execute(&pool)
     .await
     .unwrap();
-    assert!(!validated);
+    assert_minutes_cannot_rise(&pool, entry).await;
+    sqlx::query!("UPDATE time_entries SET minutes=19000 WHERE id=$1", entry)
+        .execute(&pool)
+        .await
+        .unwrap();
+}
+
+/// Two writers racing for the same empty day: the day lock lets exactly one of
+/// two 7,300-minute entries in.
+#[sqlx::test(migrations = "./migrations")]
+async fn concurrent_writers_cannot_overshoot_a_day_together(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let barrier = tokio::sync::Barrier::new(2);
+    let (barrier, pool_ref, fixture) = (&barrier, &pool, &f);
+    let race = move || async move {
+        barrier.wait().await;
+        create(pool_ref, fixture, DAY, 7_300).await
+    };
+    let (first, second) = tokio::join!(race(), race());
+    let (created, refused): (Vec<_>, Vec<_>) = [first, second].into_iter().partition(Result::is_ok);
+    assert_eq!((created.len(), refused.len()), (1, 1));
+    refused.into_iter().for_each(assert_daily_limit);
+    assert_eq!(day_total(&pool, &f, DAY.parse().unwrap()).await, 7_300);
+}
+
+/// A delete lowers its day but still waits for the day lock, so it cannot land
+/// between another writer's before and after totals.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_delete_waits_for_the_day_lock(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let entry = f.entry(&pool).await;
+    let mut holder = pool.begin().await.unwrap();
+    let pid = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *holder)
+        .await
+        .unwrap()
+        .unwrap();
+    crate::db::daily_minutes_totals(&mut holder, f.context.subject_id, &[DAY.parse().unwrap()])
+        .await
+        .unwrap();
+    let delete = tokio::spawn({
+        let pool = pool.clone();
+        let user = f.context.subject_id;
+        async move { delete_entry(&pool, user, entry).await.map(|_| ()) }
+    });
+    wait_for_blocked(&pool, pid).await;
+    holder.commit().await.unwrap();
+    delete.await.unwrap().unwrap();
 }
