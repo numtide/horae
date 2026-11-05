@@ -72,6 +72,7 @@ http://localhost:8080/auth/login and "Sign in as Admin" (needs `DEV_LOGIN=1`, wh
 
 ```sh
 cargo test -p horae-core                        # pure domain unit tests (no DB, no features)
+cargo kani -p horae-core                        # bounded proofs behind cfg(kani); setup in crates/core/src/permissions/proofs.rs
 DATABASE_URL=… cargo test -p horae --features server     # integration tests (need Postgres with CREATEDB)
 DATABASE_URL=… cargo test -p horae --features server <name>   # a single test
 cargo clippy -p horae --features server

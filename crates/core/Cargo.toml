@@ -13,3 +13,10 @@ uuid = { version = "1", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 sqlx = { version = "0.8", features = ["postgres"], optional = true }
+
+[dev-dependencies]
+proptest = { version = "1", default-features = false, features = ["std"] }
+
+[lints.rust]
+# Kani proof harnesses (`cargo kani -p horae-core`) live behind `cfg(kani)`.
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
