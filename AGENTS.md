@@ -168,6 +168,14 @@ Rules on top of idiomatic Rust (see the `rust-best-practices` skill). These come
 - **Avoid `Option<bool>` parameters.** `Some(false)` is ambiguous at the call site. For a two-state flag on a server function, prefer a plainly named `bool` with an obvious default, or a small purpose-named enum.
 - **New modules use the `foo.rs` + `foo/` layout, not `foo/mod.rs`.** A multi-file module lives in `foo.rs` (the module root) beside a `foo/` directory of submodules — as `pages`, `models`, `components`, and `server_fns` already do. `mod.rs` is *not* deprecated (the Rust Reference keeps both forms working), but the Reference encourages the sibling-file form and it keeps the tree free of many identically-named `mod.rs` files. The remaining `auth/mod.rs`, `harvest/mod.rs`, and `plugin/mod.rs` predate this rule; convert them opportunistically, not in unrelated PRs.
 
+### Harvest parity
+
+Horae reproduces Harvest's behaviour and workflows, not Harvest itself. [`specs/harvest-parity.md`](specs/harvest-parity.md) tracks coverage and evidence.
+
+- Rebuild what a screen does from what a user sees. Never copy Harvest's source, JS bundles, private endpoints, assets, logos, copy text or branding. Matching what a button does is parity; matching its sentence is copying.
+- Work from the public help center and the public API docs. Use the user's Harvest only for read-only viewing in a new Chrome tab: never create, edit or delete data, and never sign in on the user's behalf.
+- Naming Harvest where Horae interoperates with it (the importer, the `/harvest/v2` compatibility API) is fine. Outside those places, the product's look, name and wording stay Horae's (`DESIGN.md`).
+
 ## Repository Hygiene
 
 - Write commit messages, branch names, PR titles, PR bodies, and issue comments as a human developer would in any repository.
