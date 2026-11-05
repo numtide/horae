@@ -194,6 +194,8 @@ async fn legacy_billable(
 pub(super) struct Effects {
     pub entries: Vec<(TimeEntry, TimeEntryEvent)>,
     pub projects: BTreeSet<Uuid>,
+    /// Shown to the person, e.g. when the daily limit clamped a stopped timer.
+    pub notice: Option<String>,
 }
 
 async fn entries(
@@ -321,7 +323,9 @@ pub(super) async fn apply(
     let mut effects = Effects {
         entries: Vec::new(),
         projects: BTreeSet::new(),
+        notice: None,
     };
+    let day = day_totals(&mut tx, authority.subject, &dates).await?;
     match command {
         TimesheetCommand::Create { entry } => {
             let created = create(&mut tx, &authority, entry, false).await?;
@@ -433,11 +437,15 @@ pub(super) async fn apply(
                         let started = row
                             .started_at
                             .ok_or_else(|| conflict("Timer start is unavailable"))?;
-                        row.minutes = i32::try_from(horae_core::duration::minutes_between(
-                            started,
-                            Utc::now(),
-                        ))
-                        .map_err(|_| conflict("Timer duration exceeds supported minutes"))?;
+                        let elapsed = horae_core::duration::minutes_between(started, Utc::now());
+                        (row.minutes, effects.notice) = clamp_stopped_minutes(
+                            &mut tx,
+                            authority.subject,
+                            row.spent_date,
+                            original.minutes,
+                            elapsed,
+                        )
+                        .await?;
                         let start = horae_core::time_of_day::snap(
                             started.hour() as i32 * 60 + started.minute() as i32,
                             horae_core::time_of_day::SNAP_STEP,
@@ -460,6 +468,7 @@ pub(super) async fn apply(
             }
         }
     }
+    ensure_daily_limit(&mut tx, authority.subject, &day).await?;
     tx.commit().await.map_err(server_err)?;
     Ok(effects)
 }

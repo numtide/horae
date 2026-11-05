@@ -12,7 +12,9 @@ use super::super::{csv_source::import_body, report::ImportReport};
 use super::*;
 
 const HEADER: &str = "Date,Client,Project,Task,Hours,Email,Notes\n";
-const ROW: &str = "2026-01-15,Acme,Website,Design,1,dev@acme.com,kickoff\n";
+// One minute (0.02 h), so the thousands of rows these tests put on one
+// person's day stay within its 240-hour limit.
+const ROW: &str = "2026-01-15,Acme,Website,Design,0.02,dev@acme.com,kickoff\n";
 
 #[sqlx::test(migrations = "./migrations")]
 async fn durable_csv_waits_for_input_without_an_open_transaction(pool: PgPool) {
@@ -960,7 +962,8 @@ fn scale_body(records: u64, parents: u64) -> Body {
                 String::new()
             };
             for index in page * 100..((page + 1) * 100).min(records) {
-                let date = start + chrono::Duration::days((index % 365) as i64);
+                // Ten years of days keeps each day within the 240-hour limit.
+                let date = start + chrono::Duration::days((index % 3_650) as i64);
                 let date = if index % 1_000 == 0 {
                     "bad-date".to_owned()
                 } else {

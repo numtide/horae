@@ -250,7 +250,11 @@ async fn apply_time_entry(
     }
 
     // Create. State defaults to `open`; never `invoiced` from Harvest (FR-016).
+    // A row past the day's limit on its own fails here, not on the CHECK.
+    horae_core::duration::check_daily_total(minutes.into())
+        .map_err(|limit| RowFailure::new(limit.to_string()))?;
     crate::db::lock_time_entry_write(sp, user_id).await?;
+    let before = crate::db::daily_minutes_totals(sp, user_id, &[row.spent_date]).await?;
     let id = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO time_entries
@@ -268,6 +272,11 @@ async fn apply_time_entry(
     )
     .execute(&mut **sp)
     .await?;
+    let after = crate::db::daily_minutes_totals(sp, user_id, &[row.spent_date]).await?;
+    for ((_, before), (_, after)) in before.iter().zip(&after) {
+        horae_core::duration::check_daily_change(*before, *after)
+            .map_err(|limit| RowFailure::new(limit.to_string()))?;
+    }
     if let Some(hid) = row.harvest_time_entry_id {
         super::provenance::upsert(
             &mut **sp,

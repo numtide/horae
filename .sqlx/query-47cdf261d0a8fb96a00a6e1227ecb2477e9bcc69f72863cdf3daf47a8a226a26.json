@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT started_at as \"started_at: chrono::DateTime<chrono::Utc>\",\n                  state as \"state: EntryState\"\n               FROM time_entries\n               WHERE id = $1 AND user_id = $2 AND is_running = true",
+  "query": "SELECT started_at as \"started_at: chrono::DateTime<chrono::Utc>\",\n                  state as \"state: EntryState\",\n                  spent_date as \"spent_date: chrono::NaiveDate\", minutes\n               FROM time_entries\n               WHERE id = $1 AND user_id = $2 AND is_running = true",
   "describe": {
     "columns": [
       {
@@ -24,6 +24,16 @@
             }
           }
         }
+      },
+      {
+        "ordinal": 2,
+        "name": "spent_date: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 3,
+        "name": "minutes",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -34,8 +44,10 @@
     },
     "nullable": [
       true,
+      false,
+      false,
       false
     ]
   },
-  "hash": "19357eb7b69ab4ca25dffac97b46eed7893050dd6a0ac02e76bce556d5e96eab"
+  "hash": "47cdf261d0a8fb96a00a6e1227ecb2477e9bcc69f72863cdf3daf47a8a226a26"
 }

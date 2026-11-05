@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pg_advisory_xact_lock(hashtextextended('horae.day:' || $1::uuid::text || ':' || d::text, 0)) as \"lock!: ()\"\n           FROM (SELECT DISTINCT d FROM unnest($2::date[]) d ORDER BY d) days",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "lock!: ()",
+        "type_info": "Void"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "DateArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ff4457d64773ab0fdbfa2aa08da165cb78528e64ae25209c3f8aeffe54040fc4"
+}

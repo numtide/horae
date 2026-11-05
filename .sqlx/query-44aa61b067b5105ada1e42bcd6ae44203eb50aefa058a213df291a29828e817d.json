@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT SUM(minutes) FROM time_entries WHERE org_id = $1 AND spent_date = '2026-01-15'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sum",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "44aa61b067b5105ada1e42bcd6ae44203eb50aefa058a213df291a29828e817d"
+}

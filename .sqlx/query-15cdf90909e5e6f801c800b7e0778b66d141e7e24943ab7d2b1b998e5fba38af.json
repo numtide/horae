@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d as \"day!: chrono::NaiveDate\",\n                  COALESCE((SELECT SUM(minutes) FROM time_entries\n                            WHERE user_id = $1 AND spent_date = d), 0)::bigint as \"total!\"\n           FROM (SELECT DISTINCT d FROM unnest($2::date[]) d) days ORDER BY d",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "day!: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "total!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "DateArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "15cdf90909e5e6f801c800b7e0778b66d141e7e24943ab7d2b1b998e5fba38af"
+}

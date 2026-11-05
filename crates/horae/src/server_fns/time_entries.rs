@@ -18,11 +18,13 @@ pub async fn load_timesheet_tracking(
 }
 
 /// Apply one person-bound operation; client expectations never grant authority.
+/// Returns a notice for the person when the operation was adjusted, e.g. a
+/// stopped timer clamped to the daily limit.
 #[server]
 pub async fn apply_timesheet_command(
     context: crate::models::scoped_time::TimesheetWriteContext,
     command: crate::models::scoped_time::TimesheetCommand,
-) -> Result<(), ServerFnError> {
+) -> Result<Option<String>, ServerFnError> {
     let actor = require_user().await.map_err(commands::public_error)?;
     let state = crate::state::global_state().await;
     let effects = commands::apply(&state.db, actor.org_id, actor.id, &context, command)
@@ -34,7 +36,7 @@ pub async fn apply_timesheet_command(
     for project in effects.projects {
         tokio::spawn(check_project_budget(state, project));
     }
-    Ok(())
+    Ok(effects.notice)
 }
 
 /// Resolve a Timesheet subject and its rows without a separate identity bootstrap.
@@ -138,6 +140,9 @@ fn normalize_start(
     minutes: i32,
     start_minute: Option<i32>,
 ) -> Result<(i32, Option<i32>), ServerFnError> {
+    // One entry past the day's limit can never fit; refuse it before the
+    // database CHECK turns it into an opaque error.
+    horae_core::duration::check_daily_total(minutes.into()).map_err(conflict)?;
     match start_minute {
         None => Ok((minutes, None)),
         Some(sm) if (0..=1439).contains(&sm) => {
@@ -227,6 +232,62 @@ async fn begin_active_time_write(
     Ok(tx)
 }
 
+/// A person's total minutes per day, read and locked ahead of a write so
+/// [`ensure_daily_limit`] can tell whether the write grew them.
+#[cfg(feature = "server")]
+async fn day_totals(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    user_id: uuid::Uuid,
+    dates: &[chrono::NaiveDate],
+) -> Result<Vec<(chrono::NaiveDate, i64)>, ServerFnError> {
+    crate::db::daily_minutes_totals(tx, user_id, dates)
+        .await
+        .map_err(server_err)
+}
+
+/// Refuse a write that grows the person's day past 240 hours, as Harvest does
+/// (409 "Daily hours cannot exceed 240."). `before` is [`day_totals`] from
+/// ahead of the write; a day already over the limit may still be lowered.
+#[cfg(feature = "server")]
+async fn ensure_daily_limit(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    user_id: uuid::Uuid,
+    before: &[(chrono::NaiveDate, i64)],
+) -> Result<(), ServerFnError> {
+    let dates: Vec<_> = before.iter().map(|(day, _)| *day).collect();
+    let after = day_totals(tx, user_id, &dates).await?;
+    for ((_, before), (_, after)) in before.iter().zip(&after) {
+        horae_core::duration::check_daily_change(*before, *after).map_err(conflict)?;
+    }
+    Ok(())
+}
+
+/// The minutes a stopping timer keeps: what is left of its day, so a stop never
+/// fails and the timer is never trapped running. The notice says what was cut.
+#[cfg(feature = "server")]
+async fn clamp_stopped_minutes(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    user_id: uuid::Uuid,
+    spent_date: chrono::NaiveDate,
+    current_minutes: i32,
+    elapsed: u32,
+) -> Result<(i32, Option<String>), ServerFnError> {
+    use horae_core::duration::{clamp_to_daily_allowance, format_hhmm};
+    let [(_, total)] = day_totals(tx, user_id, &[spent_date]).await?[..] else {
+        return Err(server_err("Day total unavailable"));
+    };
+    let kept = clamp_to_daily_allowance(elapsed, total - i64::from(current_minutes));
+    let notice = (kept < elapsed).then(|| {
+        format!(
+            "Daily hours cannot exceed 240. The timer was stopped at {}; {} over the limit was not recorded.",
+            format_hhmm(kept.into()),
+            format_hhmm((elapsed - kept).into()),
+        )
+    });
+    // At most MAX_DAILY_MINUTES, so it fits.
+    Ok((kept as i32, notice))
+}
+
 /// Preserve archived history while enforcing current task grants. Lock both
 /// the restriction and a matching grant so revocation cannot race the write.
 #[cfg(feature = "server")]
@@ -309,6 +370,7 @@ async fn insert_time_entry(
 ) -> Result<TimeEntry, ServerFnError> {
     let mut tx = begin_active_time_write(db, user_id).await?;
     lock_task_access(&mut tx, user_id, input.project_id, input.task_id).await?;
+    let day = day_totals(&mut tx, user_id, &[input.spent_date]).await?;
     let entry = sqlx::query_as!(
         TimeEntry,
         r#"INSERT INTO time_entries
@@ -331,6 +393,7 @@ async fn insert_time_entry(
         input.is_running, input.start_minute,
     ).fetch_optional(&mut *tx).await.map_err(server_err)?
     .ok_or_else(|| conflict("Project/task is unavailable or not assigned, or a timer is already running."))?;
+    ensure_daily_limit(&mut tx, user_id, &day).await?;
     tx.commit().await.map_err(server_err)?;
     Ok(entry)
 }
@@ -440,16 +503,17 @@ pub async fn start_timer(
     Ok(entry)
 }
 
-/// Stop a running timer and record elapsed minutes.
+/// Stop a running timer and record elapsed minutes, clamped to what is left of
+/// the day; the notice, when present, says how much the daily limit cut.
 #[server]
-pub async fn stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError> {
+pub async fn stop_timer(entry_id: String) -> Result<(TimeEntry, Option<String>), ServerFnError> {
     let user_id = require_user().await?.id;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
-    let entry = stop_entry_timer(&state.db, user_id, entry_id).await?;
+    let (entry, notice) = stop_entry_timer(&state.db, user_id, entry_id).await?;
     dispatch_time_entry_event(&entry, TimeEntryEvent::Stopped).await;
     tokio::spawn(check_project_budget(state, entry.project_id));
-    Ok(entry)
+    Ok((entry, notice))
 }
 
 #[cfg(feature = "server")]
@@ -457,7 +521,7 @@ async fn stop_entry_timer(
     db: &sqlx::PgPool,
     user_id: uuid::Uuid,
     entry_id: uuid::Uuid,
-) -> Result<TimeEntry, ServerFnError> {
+) -> Result<(TimeEntry, Option<String>), ServerFnError> {
     // Stopping an own running timer remains possible after task access is revoked.
     let mut tx = begin_active_time_write(db, user_id).await?;
 
@@ -466,7 +530,8 @@ async fn stop_entry_timer(
     // minimum) so tracked totals stay exact (FR-003/FR-023).
     let row = sqlx::query!(
         r#"SELECT started_at as "started_at: chrono::DateTime<chrono::Utc>",
-                  state as "state: EntryState"
+                  state as "state: EntryState",
+                  spent_date as "spent_date: chrono::NaiveDate", minutes
                FROM time_entries
                WHERE id = $1 AND user_id = $2 AND is_running = true"#,
         entry_id,
@@ -491,7 +556,9 @@ async fn stop_entry_timer(
         .started_at
         .ok_or_else(|| not_found("No running timer found for this entry"))?;
 
-    let minutes = horae_core::duration::minutes_between(started_at, chrono::Utc::now()) as i32;
+    let elapsed = horae_core::duration::minutes_between(started_at, chrono::Utc::now());
+    let (minutes, notice) =
+        clamp_stopped_minutes(&mut tx, user_id, row.spent_date, row.minutes, elapsed).await?;
 
     // Record the clock time the timer started as the entry's start time (D9), so
     // it lands on the calendar at the right hour. `started_at` is UTC, matching
@@ -532,7 +599,7 @@ async fn stop_entry_timer(
     .ok_or_else(|| not_found("No running timer found for this entry"))?;
 
     tx.commit().await.map_err(server_err)?;
-    Ok(entry)
+    Ok((entry, notice))
 }
 
 /// Return the currently running timer for the authenticated user, if any.
@@ -667,6 +734,7 @@ async fn update_entry(
     .ok_or_else(|| conflict("Entry not found or is locked (not in 'open' state)"))?;
 
     lock_task_access(&mut tx, user_id, before.project_id, before.task_id).await?;
+    let day = day_totals(&mut tx, user_id, &[before.spent_date]).await?;
 
     let entry = sqlx::query_as!(
         TimeEntry,
@@ -705,6 +773,7 @@ async fn update_entry(
     .map_err(server_err)?;
 
     let changed = entry.is_some();
+    ensure_daily_limit(&mut tx, user_id, &day).await?;
     tx.commit().await.map_err(server_err)?;
     Ok((entry.unwrap_or(before), changed))
 }
@@ -796,6 +865,7 @@ async fn reschedule_entry(
     let (minutes, start_minute) = normalize_start(minutes, Some(start_minute))?;
     let mut tx = begin_active_time_write(db, user_id).await?;
     lock_entry_task_access(&mut tx, user_id, &[entry_id]).await?;
+    let day = day_totals(&mut tx, user_id, &[spent_date]).await?;
 
     let entry = sqlx::query_as!(
         TimeEntry,
@@ -821,6 +891,7 @@ async fn reschedule_entry(
     .map_err(server_err)?
     .ok_or_else(|| conflict("Entry not found or is locked (not in 'open' state)"))?;
 
+    ensure_daily_limit(&mut tx, user_id, &day).await?;
     tx.commit().await.map_err(server_err)?;
     Ok(entry)
 }
@@ -856,6 +927,7 @@ async fn reorder_entries(
     let orders: Vec<i32> = (0..count).collect();
     let mut tx = begin_active_time_write(pool, user_id).await?;
     lock_entry_task_access(&mut tx, user_id, ids).await?;
+    let day = day_totals(&mut tx, user_id, &[spent_date]).await?;
 
     let updated = sqlx::query!(
         r#"UPDATE time_entries AS t
@@ -878,6 +950,7 @@ async fn reorder_entries(
             "Some entries cannot be moved or reordered. Refresh the timesheet and try again.",
         ));
     }
+    ensure_daily_limit(&mut tx, user_id, &day).await?;
     tx.commit().await.map_err(server_err)?;
     Ok(())
 }

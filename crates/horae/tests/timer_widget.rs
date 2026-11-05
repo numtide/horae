@@ -340,7 +340,7 @@ mod server_fns {
         Ok(())
     }
 
-    pub async fn stop_timer(_: String) -> Result<(), ServerFnError> {
+    pub async fn stop_timer(_: String) -> Result<((), Option<String>), ServerFnError> {
         panic!("this test must not stop a timer")
     }
 }

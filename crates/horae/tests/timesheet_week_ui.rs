@@ -256,7 +256,7 @@ mod server_fns {
     pub async fn apply_timesheet_command(
         _: TimesheetWriteContext,
         command: TimesheetCommand,
-    ) -> Result<(), ServerFnError> {
+    ) -> Result<Option<String>, ServerFnError> {
         COMMANDS.with_borrow_mut(|commands| commands.push(command));
         if FAIL_COMMANDS.get() {
             return Err(ServerFnError::new("refused"));
@@ -265,7 +265,7 @@ mod server_fns {
         loop {
             let notified = released.notified();
             if !HOLD_COMMANDS.get() {
-                return Ok(());
+                return Ok(None);
             }
             notified.await;
         }

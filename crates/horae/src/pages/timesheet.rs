@@ -118,7 +118,9 @@ async fn persist_entry(
         (None, m) if m > 0 => TimesheetCommand::Create { entry },
         _ => return Ok(()),
     };
-    server_fns::apply_timesheet_command(context, command).await
+    server_fns::apply_timesheet_command(context, command)
+        .await
+        .map(|_| ())
 }
 
 #[derive(Clone, Copy, PartialEq, Default)]
@@ -568,6 +570,8 @@ fn TimesheetContent(
 
     let submit_status = use_signal(|| None::<String>);
     let mut grid_error = use_signal(|| None::<String>);
+    // What the daily limit cut from a stopped timer.
+    let mut stop_notice = use_signal(|| None::<String>);
 
     // Add–entry modal state. `add_open` holds the date the new entry is for
     // (None = closed); the rest back the form fields.
@@ -696,7 +700,7 @@ fn TimesheetContent(
             }
             spawn(async move {
                 match server_fns::apply_timesheet_command(context, command).await {
-                    Ok(()) => grid_error.set(None),
+                    Ok(_) => grid_error.set(None),
                     Err(e) => {
                         grid_error.set(Some(format!("Could not change entry: {e}")));
                         if let Some((entry_id, _)) = moved {
@@ -859,7 +863,10 @@ fn TimesheetContent(
             )
             .await
             {
-                Ok(()) => grid_error.set(None),
+                Ok(notice) => {
+                    grid_error.set(None);
+                    stop_notice.set(notice);
+                }
                 Err(error) => grid_error.set(Some(format!("Could not stop timer: {error}"))),
             }
             timer.refresh();
@@ -1077,7 +1084,7 @@ fn TimesheetContent(
                 entry_ids: entries.iter().map(|entry| entry.id).collect(),
             };
             match server_fns::apply_timesheet_command(context, command).await {
-                Ok(()) => {
+                Ok(_) => {
                     discard_row_drafts(&mut cell_drafts.write(), key, start);
                     grid_error.set(None);
                 }
@@ -1360,6 +1367,9 @@ fn TimesheetContent(
             if let Some(msg) = grid_error() {
                 div { class: "alert alert-danger", role: "alert", "{msg}" }
             }
+            if let Some(msg) = stop_notice() {
+                div { class: "alert alert-warning", role: "status", "{msg}" }
+            }
 
             // Content
             if current_sheet.read().is_none() && held().is_none() {
@@ -1541,7 +1551,7 @@ fn TimesheetContent(
                                         add_error.set(None);
                                         spawn(async move {
                                             match server_fns::apply_timesheet_command(context, TimesheetCommand::Delete { entry_ids: vec![id] }).await {
-                                                Ok(()) => {
+                                                Ok(_) => {
                                                     add_open.set(None);
                                                 }
                                                 Err(e) => {

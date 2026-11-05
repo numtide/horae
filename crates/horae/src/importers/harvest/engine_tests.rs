@@ -1172,6 +1172,57 @@ async fn bad_records_are_reported_and_run_continues(pool: PgPool) {
     assert_eq!(entries, 1);
 }
 
+#[sqlx::test(migrations = "./migrations")]
+async fn rows_past_the_daily_limit_are_reported_like_other_bad_rows(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let row = |entry, day, hours| {
+        api_row(
+            (1, 10, 100, entry, 1000),
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, day),
+            hours,
+            None,
+        )
+    };
+    let rows = vec![
+        // 200 h + 40 h fill the 15th exactly; one more minute does not fit.
+        row(5000, 15, "200"),
+        row(5001, 15, "40"),
+        row(5002, 15, "0.02"),
+        // A single row over 240 h on an empty day.
+        row(5003, 16, "240.02"),
+    ];
+    let report = commit(&pool, org, rows).await;
+
+    assert!(report.reconciles());
+    assert_eq!(report.summary.time_entries.created, 2);
+    assert_eq!(report.summary.time_entries.errored, 2);
+    let reasons: Vec<_> = report
+        .row_errors
+        .iter()
+        .map(|e| e.reason.as_str())
+        .collect();
+    assert_eq!(
+        reasons,
+        [
+            "Daily hours cannot exceed 240.",
+            "Daily hours cannot exceed 240."
+        ]
+    );
+    let day_total = sqlx::query_scalar!(
+        "SELECT SUM(minutes) FROM time_entries WHERE org_id = $1 AND spent_date = '2026-01-15'",
+        org
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(day_total, Some(14_400));
+}
+
 // ── US5: CSV natural-key path ─────────────────────────────────────────────────
 
 #[sqlx::test(migrations = "./migrations")]

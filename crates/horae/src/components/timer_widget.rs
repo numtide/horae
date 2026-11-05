@@ -109,6 +109,8 @@ pub fn TimerWidget() -> Element {
     let mut selected_task = use_signal(String::new);
     let mut notes = use_signal(String::new);
     let mut action_error = use_signal(|| None::<String>);
+    // What the daily limit cut from a stopped timer.
+    let mut stop_notice = use_signal(|| None::<String>);
     let mut saving = use_signal(|| false);
 
     // Task names are shared by the running label and the project-scoped picker.
@@ -206,6 +208,7 @@ pub fn TimerWidget() -> Element {
         let note = (!note.is_empty()).then_some(note);
         saving.set(true);
         action_error.set(None);
+        stop_notice.set(None);
         spawn(async move {
             match server_fns::start_timer(proj, task, note).await {
                 Ok(_) => {
@@ -233,9 +236,12 @@ pub fn TimerWidget() -> Element {
             saving.set(true);
             action_error.set(None);
             spawn(async move {
-                if let Err(e) = server_fns::stop_timer(eid).await {
-                    error!("Stop timer error: {e}");
-                    action_error.set(Some(e.to_string()));
+                match server_fns::stop_timer(eid).await {
+                    Ok((_, notice)) => stop_notice.set(notice),
+                    Err(e) => {
+                        error!("Stop timer error: {e}");
+                        action_error.set(Some(e.to_string()));
+                    }
                 }
                 // Re-read even after a refusal: the entry is usually already
                 // gone, and skipping this leaves the rail ticking against a
@@ -250,6 +256,9 @@ pub fn TimerWidget() -> Element {
         div { class: "sidebar-timer-wrap",
             if let Some(message) = action_error() {
                 div { class: "alert alert-danger", role: "alert", "{message}" }
+            }
+            if let Some(message) = stop_notice() {
+                div { class: "alert alert-warning", role: "status", "{message}" }
             }
             if is_running {
                 div { class: "sidebar-timer-live",
