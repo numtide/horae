@@ -1,7 +1,8 @@
 //! Record grant/scope checks, not a complete approval operation.
 //!
 //! Callers must load the complete intended set under current authorization,
-//! independently check submission/lock coverage and self-approval, and commit
+//! independently check submission/lock coverage and self-approval
+//! ([`may_decide_submission`]), and commit
 //! all effects atomically. Never obtain these inputs by filtering out unreadable
 //! records or reuse this result after releasing the authorization transaction.
 
@@ -9,8 +10,21 @@ use super::{
     AccessScope, Actor, ManagementAssignments, ScopedResource,
     catalog::{Permission, PermissionSelection},
 };
+use crate::types::OrgRole;
+use uuid::Uuid;
 
 const MANAGED: AccessScope = AccessScope::MANAGED_PEOPLE.union(AccessScope::MANAGED_PROJECTS);
+
+/// The self-approval policy: whether `requester` may approve or reject a
+/// submission owned by `owner`.
+///
+/// Only an Administrator may decide their own submission. This settles
+/// self-approval alone; the caller still checks role, scope and state.
+#[must_use]
+pub fn may_decide_submission(requester: Uuid, role: OrgRole, owner: Uuid) -> bool {
+    // The org's "Manager self-approval" setting (off by default) plugs in here.
+    role == OrgRole::Admin || requester != owner
+}
 
 /// Whether every supplied record has both approval and domain-read coverage.
 ///

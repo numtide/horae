@@ -7,14 +7,15 @@ use crate::server_fns::test_seed::{SeedIds, seed};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-fn manager(ids: &SeedIds) -> User {
+/// An administrator, the one role that may approve the weeks they submitted.
+fn approver(ids: &SeedIds) -> User {
     User {
         id: ids.user_id,
         org_id: ids.org_id,
         email: format!("{}@test.com", ids.user_id),
-        name: "Test manager".into(),
+        name: "Test admin".into(),
         oidc_subject: None,
-        org_role: OrgRole::Manager,
+        org_role: OrgRole::Admin,
         cost_rate_cents: None,
         billable_rate_cents: None,
         active: true,
@@ -73,13 +74,13 @@ fn is_bad_request(result: &Result<Vec<ApprovalSummary>, ServerFnError>) -> bool 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn a_week_lists_only_its_own_organizations_approvals_starting_that_day(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Manager).await;
+    let local = seed(&pool, OrgRole::Admin).await;
     let foreign = seed(&pool, OrgRole::Member).await;
     let (before, _) = submitted(&pool, &local, "2026-08-31").await;
     let (week, _) = submitted(&pool, &local, "2026-09-07").await;
     let (after, _) = submitted(&pool, &local, "2026-09-14").await;
     submitted(&pool, &foreign, "2026-09-07").await;
-    let actor = manager(&local);
+    let actor = approver(&local);
 
     let rows = list_week(&pool, &actor, None, "2026-09-07").await.unwrap();
     assert_eq!(ids_of(&rows), vec![week.id]);
@@ -96,9 +97,9 @@ async fn a_week_lists_only_its_own_organizations_approvals_starting_that_day(poo
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn the_status_filter_applies_within_the_week(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Manager).await;
+    let local = seed(&pool, OrgRole::Admin).await;
     let (week, _) = submitted(&pool, &local, "2026-09-07").await;
-    let actor = manager(&local);
+    let actor = approver(&local);
     approve_periods(&pool, &actor, &[week.id]).await.unwrap();
 
     let approved = list_week(&pool, &actor, Some("approved".into()), "2026-09-07")
@@ -114,9 +115,9 @@ async fn the_status_filter_applies_within_the_week(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn an_unusable_week_start_is_a_bad_request(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Manager).await;
+    let local = seed(&pool, OrgRole::Admin).await;
     submitted(&pool, &local, "2026-09-07").await;
-    let actor = manager(&local);
+    let actor = approver(&local);
     // The organization starts weeks on Monday (the column default).
     let last_monday = horae_core::week::week_start(chrono::NaiveDate::MAX, chrono::Weekday::Mon)
         .unwrap()
@@ -140,10 +141,10 @@ async fn an_unusable_week_start_is_a_bad_request(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn approving_a_week_leaves_the_previous_week_pending(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Manager).await;
+    let local = seed(&pool, OrgRole::Admin).await;
     let (before, before_entry) = submitted(&pool, &local, "2026-08-31").await;
     let (week, week_entry) = submitted(&pool, &local, "2026-09-07").await;
-    let actor = manager(&local);
+    let actor = approver(&local);
 
     let approved = approve_periods(&pool, &actor, &[week.id]).await.unwrap();
     assert_eq!(approved.len(), 1);
@@ -161,10 +162,10 @@ async fn approving_a_week_leaves_the_previous_week_pending(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn reopening_a_week_leaves_the_next_week_approved(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Manager).await;
+    let local = seed(&pool, OrgRole::Admin).await;
     let (week, week_entry) = submitted(&pool, &local, "2026-09-07").await;
     let (after, after_entry) = submitted(&pool, &local, "2026-09-14").await;
-    let actor = manager(&local);
+    let actor = approver(&local);
     approve_periods(&pool, &actor, &[week.id, after.id])
         .await
         .unwrap();
