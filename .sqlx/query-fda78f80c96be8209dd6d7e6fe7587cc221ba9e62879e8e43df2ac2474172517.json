@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT minutes, spent_date as \"spent_date: chrono::NaiveDate\" FROM time_entries WHERE id = $1",
+  "query": "SELECT minutes, spent_date as \"spent_date: chrono::NaiveDate\" FROM time_entries WHERE id=$1",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       false
     ]
   },
-  "hash": "66923ce16364934560028fad8bc76db5c24d95014bfafeca59b046796126b29a"
+  "hash": "fda78f80c96be8209dd6d7e6fe7587cc221ba9e62879e8e43df2ac2474172517"
 }

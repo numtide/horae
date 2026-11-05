@@ -23,7 +23,7 @@ fenix.url = "github:nix-community/fenix"
 Outputs to produce:
 
 - `packages.${system}.default` — Horae server binary via `rustPlatform.buildRustPackage` with `--features server` using fenix toolchain
-- `devShells.${system}.default` — fenix toolchain + dioxus-cli + sqlx-cli + wasm-pack + nil (Nix LSP)
+- `devShells.${system}.default` — fenix toolchain + dioxus-cli + sqlx-cli + nil (Nix LSP)
 - `formatter.${system}` — treefmt with nixpkgs-fmt, rustfmt, taplo, mdformat
 - `checks.${system}.fmt` — treefmt check
 - `nixosModules.default` — server module (see below)
@@ -116,7 +116,6 @@ horae/
     ├── config.rs            ← AppConfig (server feature only)
     ├── app.rs               ← root Dioxus component + Router<Route>
     ├── route.rs             ← Route enum (Routable derive)
-    ├── error.rs             ← AppError
     ├── db.rs                ← pool init + sqlx::migrate!() (server feature)
     ├── state.rs             ← server state passed via Dioxus context
     ├── models.rs            ← re-exports; submodules in src/models/
@@ -197,7 +196,7 @@ pub enum Route {
 All data fetching and mutations use `#[server]` macros — Dioxus automatically registers them as HTTP endpoints on the axum router. Examples:
 
 ```rust
-#[server] async fn list_time_entries(...) -> Result<Vec<TimeEntry>, ServerFnError>
+#[server] async fn load_timesheet_page(query: TimesheetQuery) -> Result<TimesheetPage, ServerFnError>
 #[server] async fn start_timer(project_id: Uuid) -> Result<TimeEntry, ServerFnError>
 #[server] async fn stop_timer(entry_id: Uuid) -> Result<TimeEntry, ServerFnError>
 #[server] async fn login(email: String, password: String) -> Result<(), ServerFnError>

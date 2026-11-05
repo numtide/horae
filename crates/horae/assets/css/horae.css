@@ -39,7 +39,6 @@
   /* Borders */
   --color-border: #322E26;
   --color-border-light: #262219;
-  --color-border-muted: #262219;
   --color-border-strong: #5A5446;   /* input hover, checkbox edge, control-lift */
 
   /* Semantic (base + the tinted foreground/border used by badges & alerts) */
@@ -163,7 +162,6 @@
 
   /* Layout — some values are overridden per breakpoint below */
   --sidebar-width: 264px;
-  --nav-height: 56px;
   --app-pad: var(--space-8);   /* main content padding; tightens on small screens */
 }
 
@@ -210,7 +208,6 @@
   /* Borders */
   --color-border: #E2DCCF;
   --color-border-light: #EAE4D6;
-  --color-border-muted: #EAE4D6;
   --color-border-strong: #C3B9A3;
 
   /* Semantic */
@@ -1066,13 +1063,6 @@ tbody tr:hover { background: var(--color-row-hover); }
   box-shadow: 0 24px 60px -34px rgba(0, 0, 0, 0.7);
 }
 
-/* Divider */
-.divider {
-  border: none;
-  border-top: 1px solid var(--color-border);
-  margin: var(--space-4) 0;
-}
-
 /* Empty state — a sunken card with a round glyph badge (design spec) */
 .empty-state {
   display: flex; flex-direction: column; align-items: center; gap: var(--space-3);
@@ -1346,8 +1336,7 @@ tbody tr:hover { background: var(--color-row-hover); }
   background: var(--color-cell-empty-bg); color: var(--color-text-secondary); cursor: pointer;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
-.dropzone:hover, .dropzone.dragover { border-color: var(--color-primary); color: var(--color-text); }
-.dropzone.dragover { background: var(--color-primary-bg); }
+.dropzone:hover { border-color: var(--color-primary); color: var(--color-text); }
 .file-chip {
   display: inline-flex; align-items: center; gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
@@ -1908,12 +1897,6 @@ tbody tr:hover { background: var(--color-row-hover); }
    enclosing label supplies the handoff's dropzone and replace affordances. */
 .himp-file-picker:focus-within { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .himp-file-input { inset: 0; opacity: 0; }
-.himp-logo {
-  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-  width: 48px; height: 48px; border-radius: var(--radius-lg);
-  background: var(--color-harvest); color: var(--color-harvest-fg);
-  font-family: var(--font-family-display); font-weight: 600; font-size: var(--font-size-2xl);
-}
 /* Entity stat tiles: as many across as fit, capped to the available width. The tiles
    themselves are the shared `.counter-tile`. */
 .himp-tiles { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
@@ -1922,7 +1905,6 @@ tbody tr:hover { background: var(--color-row-hover); }
   border: 2px solid var(--color-border-input); border-top-color: var(--color-primary);
   animation: himp-spin 0.8s linear infinite;
 }
-.himp-spinner-lg { width: 26px; height: 26px; border-width: 2.5px; }
 @keyframes himp-spin { to { transform: rotate(360deg); } }
 
 /* Importer landing: one selectable source per row. Clickable rows lift on hover;

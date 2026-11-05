@@ -5,7 +5,6 @@ use horae_core::types::EntryState;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
     let target = user(pool, ids.org_id, OrgRole::Member).await;
     let target_ids = crate::server_fns::test_seed::SeedIds {
         user_id: target,
@@ -25,7 +24,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .unwrap();
     sqlx::query!(
         "UPDATE time_entries SET notes='Visible work notes', rounded_minutes=60, invoice_id=$2,
-        created_at='2026-09-07 12:00:00+00' WHERE id=$1",
+        created_at='2026-09-07 12:00:00+00', is_running=true, started_at=now() WHERE id=$1",
         entry,
         invoice
     )
@@ -43,25 +42,13 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .await
         .unwrap();
         let cookie = api.cookie(target).await;
-        let response = api
-            .json(
-                "list_time_entries",
-                json!({
-                    "_user_id":foreign.user_id,"project_id":null,
-                    "date_from":"2026-09-01","date_to":"2026-09-30","limit":null
-                }),
-                &cookie,
-            )
-            .await;
-        for row in response.as_array().unwrap() {
-            assert!(
-                row.get("invoice_id").is_none(),
-                "time read disclosed invoice identity: {row}"
-            );
-            assert_eq!(row["user_id"], json!(target));
-        }
-        assert_eq!(response.as_array().unwrap().len(), 1);
-        assert_eq!(response[0]["id"], json!(entry));
+        let response = api.json("get_current_timer", json!({}), &cookie).await;
+        assert!(
+            response.get("invoice_id").is_none(),
+            "time read disclosed invoice identity: {response}"
+        );
+        assert_eq!(response["user_id"], json!(target));
+        assert_eq!(response["id"], json!(entry));
         let stored =
             sqlx::query_scalar!("SELECT invoice_id FROM time_entries WHERE id = $1", entry)
                 .fetch_one(pool)

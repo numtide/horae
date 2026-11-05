@@ -52,11 +52,7 @@ pub(super) async fn fetch(
         access.has(Permission::ProjectWriteAll)
             || (access.has(Permission::ProjectWriteManaged) && context.managed)
     };
-    let member_ids: Vec<_> = assignment_rows(&mut access, viewer, project_id)
-        .await?
-        .into_iter()
-        .map(|row| row.user_id)
-        .collect();
+    let member_ids = team_member_ids(&mut access, viewer, project_id).await?;
     let team = sqlx::query_as!(
         ProjectDetailIdentity,
         "SELECT id,name FROM users WHERE org_id=$1 AND id=ANY($2) ORDER BY lower(name),id",

@@ -74,7 +74,7 @@ async fn a_day_holds_exactly_240_hours_and_no_single_entry_more(pool: PgPool) {
     let f = fixture(&pool).await;
     create(&pool, &f, DAY, 14_400).await.unwrap();
     assert_daily_limit(create(&pool, &f, NEXT_DAY, 14_401).await);
-    // The legacy own-time edit refuses it the same way.
+    // Growing the full entry by a minute is refused the same way.
     let full = sqlx::query_scalar!(
         "SELECT id FROM time_entries WHERE user_id=$1",
         f.context.subject_id
@@ -82,8 +82,16 @@ async fn a_day_holds_exactly_240_hours_and_no_single_entry_more(pool: PgPool) {
     .fetch_one(&pool)
     .await
     .unwrap();
-    let legacy = update_entry(&pool, f.context.subject_id, full, 14_401, None, true, None).await;
-    assert_daily_limit(legacy.map(|_| ()));
+    assert_daily_limit(
+        f.execute(
+            &pool,
+            TimesheetCommand::Update {
+                entry_id: full,
+                entry: at(&f, DAY, 14_401),
+            },
+        )
+        .await,
+    );
     assert_eq!(day_total(&pool, &f, DAY.parse().unwrap()).await, 14_400);
     assert_eq!(day_total(&pool, &f, NEXT_DAY.parse().unwrap()).await, 0);
 }
@@ -157,10 +165,7 @@ async fn a_day_over_the_limit_can_be_lowered_but_not_raised(pool: PgPool) {
     assert_eq!(day_total(&pool, &f, day).await, 19_000);
     assert_daily_limit(edit(first, 9_001).await);
     assert_daily_limit(create(&pool, &f, DAY, 1).await);
-    // The legacy own-time edit lowers it the same way.
-    update_entry(&pool, f.context.subject_id, second, 5_000, None, true, None)
-        .await
-        .unwrap();
+    edit(second, 5_000).await.unwrap();
     f.execute(
         &pool,
         TimesheetCommand::Delete {
@@ -314,26 +319,36 @@ async fn concurrent_writers_cannot_overshoot_a_day_together(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn a_delete_waits_for_the_day_lock(pool: PgPool) {
     let f = fixture(&pool).await;
-    let entry = f.entry(&pool).await;
-    let delete = delete_entry(&pool, f.context.subject_id, entry);
+    let entry_ids = vec![f.entry(&pool).await];
+    let delete = f.execute(&pool, TimesheetCommand::Delete { entry_ids });
     behind_day_lock(&pool, &f, DAY, 1, delete).await.unwrap();
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn a_reschedule_waits_for_its_source_day_lock(pool: PgPool) {
     let f = fixture(&pool).await;
-    let entry = f.entry(&pool).await;
-    let next_day = NEXT_DAY.parse().unwrap();
-    let move_off = reschedule_entry(&pool, f.context.subject_id, entry, next_day, 600, 60);
+    let move_off = f.execute(
+        &pool,
+        TimesheetCommand::Reschedule {
+            entry_id: f.entry(&pool).await,
+            spent_date: NEXT_DAY.parse().unwrap(),
+            start_minute: 600,
+            minutes: 60,
+        },
+    );
     behind_day_lock(&pool, &f, DAY, 1, move_off).await.unwrap();
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn a_reorder_waits_for_its_source_day_lock(pool: PgPool) {
     let f = fixture(&pool).await;
-    let entries = [f.entry(&pool).await];
-    let next_day = NEXT_DAY.parse().unwrap();
-    let move_off = reorder_entries(&pool, f.context.subject_id, next_day, &entries);
+    let move_off = f.execute(
+        &pool,
+        TimesheetCommand::Reorder {
+            spent_date: NEXT_DAY.parse().unwrap(),
+            entry_ids: vec![f.entry(&pool).await],
+        },
+    );
     behind_day_lock(&pool, &f, DAY, 1, move_off).await.unwrap();
 }
 

@@ -4,7 +4,7 @@ All mutations go through session-authenticated, role-checked `#[server]` functio
 
 ## Changed
 
-### `create_time_entry`
+### `create_time_entry` (removed as dead code; superseded by `apply_timesheet_command`, #259)
 
 ```
 create_time_entry(
@@ -21,7 +21,7 @@ create_time_entry(
 - Server snaps `minutes` and `start_minute` to the 15-min step and applies `clamp_to_day`; rejects `start_minute` outside 0..=1439.
 - Backward compatible: existing callers pass `None` (Week grid, plain "+").
 
-### `update_time_entry`
+### `update_time_entry` (removed as dead code; superseded by `apply_timesheet_command`, #259)
 
 ```
 update_time_entry(
@@ -47,7 +47,7 @@ stop_timer(entry_id: String) -> Result<TimeEntry, ServerFnError>
 
 ## New
 
-### `reschedule_time_entry` (calendar move / resize — P2)
+### `reschedule_time_entry` (calendar move / resize — P2; removed as dead code, superseded by `apply_timesheet_command`, #259)
 
 ```
 reschedule_time_entry(
@@ -63,7 +63,7 @@ reschedule_time_entry(
 
 ## Unchanged reads
 
-`list_time_entries` returns `TimeEntry` including the new `start_minute` (used by the calendar to position timed blocks). No shape break — it is an added field.
+`list_time_entries` returns `TimeEntry` including the new `start_minute` (used by the calendar to position timed blocks). No shape break — it is an added field. (`list_time_entries` was later removed as dead code; the calendar reads through `load_timesheet_page`, #259.)
 
 ## Validation ownership
 

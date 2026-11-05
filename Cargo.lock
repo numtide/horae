@@ -3248,6 +3248,7 @@ dependencies = [
  "gloo-timers",
  "horae-core",
  "openidconnect",
+ "proptest",
  "rust_xlsxwriter",
  "serde",
  "serde_json",

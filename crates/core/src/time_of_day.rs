@@ -87,12 +87,13 @@ pub fn format_12h(minutes: u16) -> String {
 
 /// Round a minute value to the nearest `step`, clamped to `>= 0`.
 pub fn snap(value: i32, step: u16) -> i32 {
-    let step = step as i32;
-    if step <= 0 {
+    if step == 0 {
         return value.max(0);
     }
-    let v = value.max(0);
-    ((v + step / 2) / step) * step
+    // Widened so the half-step bias cannot overflow. Past the last whole step
+    // that fits in `i32`, that step is the nearest one there is.
+    let (v, step) = (i64::from(value.max(0)), i64::from(step));
+    ((v + step / 2) / step * step).min(i64::from(i32::MAX) / step * step) as i32
 }
 
 /// Shrink `duration` so `start + duration <= DAY_MINUTES` — the no-cross-midnight

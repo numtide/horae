@@ -1,3 +1,4 @@
+use super::canonical_read_tests::project_details;
 use super::*;
 use crate::server_fns::test_seed::seed;
 use serial_test::serial;
@@ -44,7 +45,7 @@ async fn project_details_only_offer_task_rate_currency_to_current_managers(pool:
                 .execute(&pool)
                 .await
                 .unwrap();
-                let details = fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
+                let details = project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
                     .await
                     .unwrap()
                     .unwrap();
@@ -99,7 +100,7 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
     .await
     .unwrap();
 
-    let details = fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
+    let details = project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
         .await
         .unwrap()
         .unwrap();
@@ -118,7 +119,7 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
         (ids.project_id, tag, "Launch")
     );
     assert!(
-        fetch_project_details(&pool, ids.org_id, ids.user_id, other.project_id)
+        project_details(&pool, ids.org_id, ids.user_id, other.project_id)
             .await
             .unwrap()
             .is_none()
@@ -137,7 +138,7 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
     .execute(&pool)
     .await
     .unwrap();
-    let details = fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
+    let details = project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
         .await
         .unwrap()
         .unwrap();
@@ -155,7 +156,7 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
     .await
     .unwrap();
     assert!(
-        fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
+        project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
             .await
             .unwrap()
             .is_none()
@@ -175,7 +176,7 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
     .execute(&pool)
     .await
     .unwrap();
-    let details = fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
+    let details = project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
         .await
         .unwrap()
         .unwrap();
@@ -185,12 +186,13 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
         .execute(&pool)
         .await
         .unwrap();
-    assert!(
-        fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
-            .await
-            .unwrap()
-            .is_none()
-    );
+    assert!(matches!(
+        project_details(&pool, ids.org_id, ids.user_id, ids.project_id).await,
+        Err(ServerFnError::ServerError {
+            code: FORBIDDEN,
+            ..
+        })
+    ));
     assert!(
         fetch_project_tags(&pool, ids.org_id, ids.user_id)
             .await
@@ -252,7 +254,7 @@ async fn unlinked_and_private_project_tags_do_not_leak_into_filters(pool: PgPool
             .is_empty()
     );
     assert!(
-        fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
+        project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
             .await
             .unwrap()
             .is_none()

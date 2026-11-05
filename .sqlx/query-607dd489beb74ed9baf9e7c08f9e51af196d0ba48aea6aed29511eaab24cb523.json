@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organizations SET round_minutes = $2, round_dir = $3 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2",
+        {
+          "Custom": {
+            "name": "round_dir",
+            "kind": {
+              "Enum": [
+                "nearest",
+                "up",
+                "down"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "607dd489beb74ed9baf9e7c08f9e51af196d0ba48aea6aed29511eaab24cb523"
+}

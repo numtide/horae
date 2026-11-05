@@ -60,6 +60,58 @@ pub(super) async fn fixture(
     (ids, viewer)
 }
 
+/// Project Detail's view for `viewer`; its 404 for a project the viewer cannot
+/// read is `None`.
+async fn readable_view(
+    pool: &PgPool,
+    viewer: &User,
+    project_id: Uuid,
+) -> Result<Option<crate::models::project::ProjectDetailView>, ServerFnError> {
+    match detail_view::fetch(pool, viewer, project_id, None, today()).await {
+        Ok(view) => Ok(Some(view)),
+        Err(ServerFnError::ServerError {
+            code: NOT_FOUND, ..
+        }) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+/// The saved details Project Detail shows to the viewer.
+pub(super) async fn project_details(
+    pool: &PgPool,
+    org_id: Uuid,
+    viewer_id: Uuid,
+    project_id: Uuid,
+) -> Result<Option<ProjectDetails>, ServerFnError> {
+    let viewer = User {
+        id: viewer_id,
+        org_id,
+        email: format!("{viewer_id}@test.com"),
+        name: "Project reader".into(),
+        oidc_subject: None,
+        org_role: OrgRole::Member,
+        cost_rate_cents: None,
+        billable_rate_cents: None,
+        active: true,
+        created_at: chrono::Utc::now(),
+    };
+    Ok(readable_view(pool, &viewer, project_id)
+        .await?
+        .map(|view| view.project))
+}
+
+/// The team members Project Detail shows to the viewer.
+pub(super) async fn project_team(
+    pool: &PgPool,
+    viewer: &User,
+    project_id: Uuid,
+) -> Result<Vec<crate::models::project::ProjectDetailIdentity>, ServerFnError> {
+    Ok(readable_view(pool, viewer, project_id)
+        .await?
+        .map(|view| view.team)
+        .unwrap_or_default())
+}
+
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn canonical_project_reader_lists_without_legacy_management_or_tracking(pool: PgPool) {
@@ -87,7 +139,7 @@ async fn canonical_project_reader_opens_without_legacy_management_or_tracking(po
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
-    let details = fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
+    let details = project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
         .await
         .unwrap();
     assert_eq!(details.map(|p| p.id), Some(ids.project_id));
@@ -110,7 +162,7 @@ async fn canonical_own_only_member_does_not_inherit_legacy_manager_project_list(
 #[serial_test::serial]
 async fn canonical_own_only_member_does_not_inherit_legacy_manager_project_details(pool: PgPool) {
     let (ids, _) = fixture(&pool, OrgRole::Manager, PermissionSelection::new(&[])).await;
-    let details = fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
+    let details = project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
         .await
         .unwrap();
     assert!(details.is_none(), "legacy Manager disclosed: {details:?}");
@@ -202,7 +254,7 @@ async fn canonical_managed_project_reads_require_current_designation(pool: PgPoo
             .await
             .unwrap();
         assert_eq!(projects.len(), usize::from(designated));
-        let details = fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
+        let details = project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
             .await
             .unwrap();
         assert_eq!(details.is_some(), designated);
@@ -265,7 +317,7 @@ async fn canonical_project_details_withhold_legacy_admin_notes_and_rate_controls
     .await;
     sqlx::query!("INSERT INTO project_private_settings (id,org_id,project_id,admin_notes) VALUES ($1,$2,$3,'Private launch plan')",
         Uuid::now_v7(), ids.org_id, ids.project_id).execute(&pool).await.unwrap();
-    let details = fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
+    let details = project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
         .await
         .unwrap()
         .unwrap();
@@ -367,7 +419,7 @@ async fn canonical_project_reads_reject_unknown_policy_and_invalid_grants(pool: 
                 ids.org_id).execute(&pool).await.unwrap();
         }
         assert!(matches!(
-            assignments_for_viewer(&pool, &viewer, ids.project_id).await,
+            project_team(&pool, &viewer, ids.project_id).await,
             Err(ServerFnError::ServerError {
                 code: FORBIDDEN,
                 ..
@@ -381,7 +433,7 @@ async fn canonical_project_reads_reject_unknown_policy_and_invalid_grants(pool: 
             })
         ));
         assert!(
-            fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
+            project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
                 .await
                 .is_err()
         );
@@ -501,7 +553,7 @@ async fn canonical_project_reads_exclude_foreign_client_parent_links(pool: PgPoo
             .is_empty()
     );
     assert!(
-        fetch_project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
+        project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
             .await
             .unwrap()
             .is_none()

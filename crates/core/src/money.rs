@@ -1,50 +1,5 @@
 use thiserror::Error;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Money {
-    pub cents: i64,
-    pub currency: [u8; 3], // ISO 4217 e.g. b"USD"
-}
-
-#[derive(Debug, Error)]
-#[error("currency mismatch: cannot add {a} and {b}")]
-pub struct CurrencyMismatch {
-    pub a: String,
-    pub b: String,
-}
-
-#[derive(Debug, Error)]
-pub enum AddError {
-    #[error(transparent)]
-    CurrencyMismatch(#[from] CurrencyMismatch),
-    #[error("money total exceeds the supported range")]
-    Overflow,
-}
-
-impl Money {
-    pub fn new(cents: i64, currency: [u8; 3]) -> Self {
-        Self { cents, currency }
-    }
-
-    pub fn currency_str(&self) -> &str {
-        std::str::from_utf8(&self.currency).unwrap_or("???")
-    }
-}
-
-pub fn add(a: Money, b: Money) -> Result<Money, AddError> {
-    if a.currency != b.currency {
-        return Err(CurrencyMismatch {
-            a: a.currency_str().to_owned(),
-            b: b.currency_str().to_owned(),
-        }
-        .into());
-    }
-    Ok(Money {
-        cents: a.cents.checked_add(b.cents).ok_or(AddError::Overflow)?,
-        currency: a.currency,
-    })
-}
-
 /// Some amount in the set is not visible to the viewer.
 #[derive(Debug, Error, PartialEq, Eq)]
 #[error("an amount in the total is withheld")]
@@ -105,21 +60,22 @@ pub fn parse_cents(s: &str) -> Result<i64, AmountError> {
     if whole.is_empty() && frac.is_empty() {
         return Err(err());
     }
-    let units: i64 = if whole.is_empty() {
+    let units: i128 = if whole.is_empty() {
         0
     } else {
         whole.parse().map_err(|_| err())?
     };
-    let cents: i64 = match frac.len() {
+    let cents: i128 = match frac.len() {
         0 => 0,
-        1 => frac.parse::<i64>().map_err(|_| err())? * 10,
+        1 => frac.parse::<i128>().map_err(|_| err())? * 10,
         _ => frac.parse().map_err(|_| err())?,
     };
+    // Signed in i128 so `i64::MIN`, whose magnitude exceeds `i64::MAX`, reads back.
     let total = units
         .checked_mul(100)
         .and_then(|u| u.checked_add(cents))
         .ok_or_else(err)?;
-    Ok(if neg { -total } else { total })
+    i64::try_from(if neg { -total } else { total }).map_err(|_| err())
 }
 
 /// Format minor units for display: currency code + thousands-grouped decimal,
@@ -182,29 +138,6 @@ pub fn format_budget(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn addition_rejects_overflow_in_both_directions() {
-        for (a, b) in [(i64::MAX, 1), (i64::MIN, -1)] {
-            assert!(add(Money::new(a, *b"EUR"), Money::new(b, *b"EUR")).is_err());
-        }
-    }
-
-    #[test]
-    fn addition_retains_currency_checks_and_representable_boundaries() {
-        assert!(matches!(
-            add(Money::new(1, *b"EUR"), Money::new(1, *b"USD")),
-            Err(AddError::CurrencyMismatch(_))
-        ));
-        assert_eq!(
-            add(Money::new(i64::MAX - 1, *b"EUR"), Money::new(1, *b"EUR")).unwrap(),
-            Money::new(i64::MAX, *b"EUR")
-        );
-        assert_eq!(
-            add(Money::new(i64::MIN + 1, *b"EUR"), Money::new(-1, *b"EUR")).unwrap(),
-            Money::new(i64::MIN, *b"EUR")
-        );
-    }
 
     #[test]
     fn currency_totals_are_exact_per_currency_and_ordered_by_code() {

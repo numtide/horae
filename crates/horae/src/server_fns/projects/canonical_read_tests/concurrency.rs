@@ -4,7 +4,6 @@ use crate::server_fns::test_seed::wait_for_blocked;
 #[derive(Clone, Copy, Debug)]
 enum Reader {
     List,
-    Details,
     Tags,
     Spend,
     Budget,
@@ -25,12 +24,13 @@ impl Reader {
                     other => panic!("unexpected detail view result: {other:?}"),
                 }
             }
-            Self::Team => assignments_for_viewer(pool, viewer, project)
-                .await
-                .unwrap()
-                .into_iter()
-                .map(|row| row.project_id)
-                .collect(),
+            Self::Team => match project_team(pool, viewer, project).await {
+                Ok(team) => team.into_iter().map(|_| project).collect(),
+                Err(ServerFnError::ServerError {
+                    code: FORBIDDEN, ..
+                }) => Vec::new(),
+                other => panic!("unexpected team result: {other:?}"),
+            },
             Self::Budget => crate::server_fns::budgets::progress_for_viewer(
                 pool,
                 viewer.org_id,
@@ -49,12 +49,6 @@ impl Reader {
                 .map(|row| row.project_id)
                 .collect(),
             Self::List => projects_for_viewer(pool, viewer, None, true, ProjectRead::Overview)
-                .await
-                .unwrap()
-                .into_iter()
-                .map(|row| row.id)
-                .collect(),
-            Self::Details => fetch_project_details(pool, viewer.org_id, viewer.id, project)
                 .await
                 .unwrap()
                 .into_iter()
@@ -116,7 +110,6 @@ async fn tagged_reader(pool: &PgPool) -> (SeedIds, User) {
 async fn project_readers_observe_grant_revocation_after_waiting_for_organization(pool: PgPool) {
     for reader in [
         Reader::List,
-        Reader::Details,
         Reader::Tags,
         Reader::Spend,
         Reader::Budget,
@@ -169,7 +162,6 @@ async fn project_readers_observe_grant_revocation_after_waiting_for_organization
 async fn project_readers_observe_deactivation_after_waiting_for_actor(pool: PgPool) {
     for reader in [
         Reader::List,
-        Reader::Details,
         Reader::Tags,
         Reader::Spend,
         Reader::Budget,
@@ -204,7 +196,6 @@ async fn project_readers_observe_deactivation_after_waiting_for_actor(pool: PgPo
 async fn project_readers_hold_authority_until_materialization_before_deactivation(pool: PgPool) {
     for reader in [
         Reader::List,
-        Reader::Details,
         Reader::Tags,
         Reader::Spend,
         Reader::Budget,
@@ -280,7 +271,6 @@ async fn project_readers_hold_authority_until_materialization_before_deactivatio
 async fn cancelling_project_readers_releases_organization_and_actor_fences(pool: PgPool) {
     for reader in [
         Reader::List,
-        Reader::Details,
         Reader::Tags,
         Reader::Spend,
         Reader::Budget,

@@ -73,7 +73,7 @@ async fn late_seed_failure_rolls_back_all_demo_data(pool: PgPool) {
     .unwrap();
     assert_eq!(entries.len(), 10);
     assert_eq!(entries.iter().map(|e| e.minutes).sum::<i32>(), 1455);
-    let monday = iso_week_monday(Utc::now().date_naive());
+    let monday = iso_week_monday(Utc::now().date_naive()).unwrap();
     assert!(entries.iter().all(
         |e| e.id.get_version_num() == 7 && (monday..=monday + days(4)).contains(&e.spent_date)
     ));

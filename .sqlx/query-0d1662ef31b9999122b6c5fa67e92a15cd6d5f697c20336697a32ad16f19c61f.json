@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE clients SET name = 'Changed' WHERE id = $1",
+  "query": "UPDATE time_entries SET start_minute=540 WHERE id=$1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "c157c9b71193d8002456f0eb6accb37ce915ee11fff41b40acf653378e855fcf"
+  "hash": "0d1662ef31b9999122b6c5fa67e92a15cd6d5f697c20336697a32ad16f19c61f"
 }

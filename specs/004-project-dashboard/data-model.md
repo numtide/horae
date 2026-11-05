@@ -123,7 +123,7 @@ RecentEntryRow {
 }
 ```
 
-(The team/assignments section reuses the existing `Assignment` DTO and `list_assignments`, unchanged.)
+(The team/assignments section reuses the existing `Assignment` DTO and `list_assignments`, unchanged. `list_assignments` was later removed as dead code; superseded by `get_project_detail_view`, #270.)
 
 ## Validation / behavior rules (from FR)
 

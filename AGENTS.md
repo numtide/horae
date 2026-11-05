@@ -80,6 +80,8 @@ nix fmt                                         # treefmt: rustfmt, taplo, nixpk
 cargo run -p horae-dioxus-lint                  # Dioxus rules ratchet (or: nix build .#checks.x86_64-linux.dioxus-lint)
 ```
 
+`cargo test -p horae-core` also runs the proptest properties in `crates/core/tests/properties.rs` and `crates/core/src/permissions/properties.rs`. The Kani harnesses live in `crates/core/src/proofs.rs` and `crates/core/src/permissions/proofs.rs`. Follow-up: no CI job runs them yet. Add one (e.g. `model-checking/kani-github-action`) once each harness's run time fits the CI budget.
+
 `crates/dioxus-lint` enforces the `dioxus-best-practices` skill: it parses every `rsx!` with `dioxus-rsx` and fails when a file's count for a rule differs from `crates/dioxus-lint/baseline.toml`, either up (a new violation: fix it) or down (lower the count). `clippy.toml` bans `Callback::new`/`EventHandler::new` in favour of `use_callback`. `cargo test -p horae-dioxus-lint` runs its fixtures and checks every rule against a SKILL.md heading.
 
 Integration tests (`crates/horae/tests/integration.rs`) use `#[sqlx::test]` — each spins up a throwaway database, so the DB role needs `CREATEDB` — and are marked `#[serial]`. `nix build` builds the package; `nix flake check` runs the whole suite against a PostgreSQL started inside the build sandbox (`nix/checks/tests.nix`), plus clippy, formatting, the `.sqlx` cache check, the Dioxus rules ratchet, and the NixOS e2e tests.
@@ -114,7 +116,7 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 
 ## Architecture
 
-**One app crate (`crates/horae/`), two build targets, feature-gated.** `crates/horae/src/main.rs` defines three `main()`s behind `cfg`: `server` (Axum + Tokio + the CLI), `web` (`dioxus::launch`, compiled to WASM), and a stub that errors if neither feature is set. Server-only modules (`auth`, `cli`, `config`, `db`, `harvest`, `reports`, `seed`, `state`) are `#[cfg(feature = "server")]`; the shared UI modules (`app`, `route`, `pages`, `components`, `server_fns`, `models`, `error`) compile for both targets. This is why a bare `cargo build`/`test` (empty default features) won't do what you expect.
+**One app crate (`crates/horae/`), two build targets, feature-gated.** `crates/horae/src/main.rs` defines three `main()`s behind `cfg`: `server` (Axum + Tokio + the CLI), `web` (`dioxus::launch`, compiled to WASM), and a stub that errors if neither feature is set. Server-only modules (`auth`, `cli`, `config`, `db`, `harvest`, `reports`, `seed`, `state`) are `#[cfg(feature = "server")]`; the shared UI modules (`app`, `route`, `pages`, `components`, `server_fns`, `models`) compile for both targets. This is why a bare `cargo build`/`test` (empty default features) won't do what you expect.
 
 **The `core` crate (`horae-core`) is pure domain logic** — duration parsing, rounding, money, totals, the entry state machine — with no I/O dependencies (only serde/uuid/chrono/thiserror). Correctness-critical code belongs here and is unit-tested in isolation; the Horae Constitution forbids sqlx/axum/dioxus deps in `core`.
 
@@ -168,6 +170,15 @@ Rules on top of idiomatic Rust (see the `rust-best-practices` skill). These come
 - **Named status codes, not integer literals.** When building `ServerFnError::ServerError { code, .. }` in `server_fns.rs`, use named constants (e.g. `NOT_FOUND`, `FORBIDDEN`) rather than bare `404`/`403`, so error paths read at a glance.
 - **Avoid `Option<bool>` parameters.** `Some(false)` is ambiguous at the call site. For a two-state flag on a server function, prefer a plainly named `bool` with an obvious default, or a small purpose-named enum.
 - **New modules use the `foo.rs` + `foo/` layout, not `foo/mod.rs`.** A multi-file module lives in `foo.rs` (the module root) beside a `foo/` directory of submodules — as `pages`, `models`, `components`, and `server_fns` already do. `mod.rs` is *not* deprecated (the Rust Reference keeps both forms working), but the Reference encourages the sibling-file form and it keeps the tree free of many identically-named `mod.rs` files. The remaining `auth/mod.rs`, `harvest/mod.rs`, and `plugin/mod.rs` predate this rule; convert them opportunistically, not in unrelated PRs.
+
+### Harvest parity
+
+Horae reproduces Harvest's behaviour and workflows, not Harvest itself. [`specs/harvest-parity.md`](specs/harvest-parity.md) tracks coverage and evidence.
+
+- Rebuild what a screen does from its observable behaviour and the public docs. Never copy Harvest's source, JS bundles, private endpoints, assets, logos, copy text or branding. Matching what a button does is parity; matching its sentence is copying. Short standard labels (Archive, Duplicate, Timesheet, Approvals) are generic, so reusing them is not copying.
+- Work from the public help center and the public API docs, plus read-only browsing in a session the user has already signed in to (open a new tab; never reuse or alter the user's tabs). Never sign in on the user's behalf.
+- Never create, edit or delete data in the production Harvest account. Disposable fixtures are allowed only in the test (evidence) account the user designates, with the user's authorization for the task recorded in `specs/harvest-parity.md`. Never touch pre-existing business records, delivery, payments or account settings. Track fixtures by exact ID and clean them up, or record that they are deliberately retained.
+- Naming Harvest where Horae interoperates with it (the importer, the `/harvest/v2` compatibility API) is fine. Outside those places, the product's look, name and wording stay Horae's (`DESIGN.md`).
 
 ## Repository Hygiene
 

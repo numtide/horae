@@ -94,7 +94,6 @@
         });
 
       apps = lib.genAttrs localSystems (system:
-        ((blueprint.apps or { }) // (darwinBlueprint.apps or { })).${system} or { } //
         (
           let
             hostPkgs = inputs.nixpkgs.legacyPackages.${system};

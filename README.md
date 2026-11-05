@@ -22,7 +22,7 @@ core crate and is unit-tested in isolation.
 
 - **Timesheets** — Day, Week, and Calendar views with weekly totals and a running timer.
 - **Clients & projects** — manage clients, projects, per-project assignments, tasks, and budgets.
-- **Approvals** — submit, approve, and reject time entries (manager and admin roles).
+- **Approvals** — submit, approve, and reject time entries (manager and admin roles; only an admin may approve or reject their own).
 - **Reports** — grouped time reports with CSV and XLSX export.
 - **Invoices** — draft invoices with CSV, XLSX, and PDF export.
 - **Harvest-style API** — a read-only `/harvest/v2/*` subset with session authentication.
@@ -45,7 +45,7 @@ The authenticated SPA is organized by route:
 ## Quick start
 
 Everything runs inside the Nix dev shell, which provides the Rust toolchain, `dx`
-(the Dioxus CLI), `sqlx-cli`, PostgreSQL, and `wasm-pack`. A running PostgreSQL is required
+(the Dioxus CLI), `sqlx-cli`, and PostgreSQL. A running PostgreSQL is required
 for anything that touches the database.
 
 ### Try the demo

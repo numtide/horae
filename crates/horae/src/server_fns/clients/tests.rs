@@ -1041,133 +1041,6 @@ async fn client_summaries_reject_a_foreign_actor_even_when_client_org_is_known(p
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn unchanged_edit_preserves_the_row(pool: PgPool) {
-    let client = client(&pool).await;
-    let before = row_version(&pool, client.id).await;
-    let (returned, changed) =
-        update_client_record(&pool, client.org_id, client.id, "Acme", "EUR", None, None)
-            .await
-            .unwrap();
-    let after = row_version(&pool, client.id).await;
-    assert_eq!((changed, returned, after), (false, client, before));
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn client_default_rate_prevents_currency_relabelling(pool: PgPool) {
-    let client = client(&pool).await;
-    for rate in [0_i64, 8000] {
-        sqlx::query!(
-            "UPDATE clients SET default_rate_cents = $2 WHERE id = $1",
-            client.id,
-            rate,
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        let before = row_version(&pool, client.id).await;
-        let error = update_client_record(
-            &pool,
-            client.org_id,
-            client.id,
-            "Renamed",
-            "USD",
-            Some("Street"),
-            Some("123"),
-        )
-        .await
-        .unwrap_err();
-        assert!(matches!(
-            error,
-            ServerFnError::ServerError { code: CONFLICT, .. }
-        ));
-        assert_eq!(row_version(&pool, client.id).await, before);
-    }
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn client_default_rate_allows_detail_edits_and_equivalent_currency(pool: PgPool) {
-    let client = client(&pool).await;
-    sqlx::query!(
-        "UPDATE clients SET default_rate_cents = $2 WHERE id = $1",
-        client.id,
-        8000_i64,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    for (name, expected_change) in [("Renamed", true), ("Renamed", false)] {
-        let (updated, changed) = update_client_record(
-            &pool,
-            client.org_id,
-            client.id,
-            name,
-            " eur ",
-            Some("Street"),
-            Some("123"),
-        )
-        .await
-        .unwrap();
-        assert_eq!(
-            (changed, updated.currency.as_str()),
-            (expected_change, "EUR")
-        );
-        assert_eq!(
-            (
-                updated.name.as_str(),
-                updated.address.as_deref(),
-                updated.tax_id.as_deref()
-            ),
-            (name, Some("Street"), Some("123"))
-        );
-    }
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn currency_edit_rechecks_a_concurrently_added_client_default_rate(pool: PgPool) {
-    let client = client(&pool).await;
-    let mut first = pool.begin().await.unwrap();
-    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
-        .fetch_one(&mut *first)
-        .await
-        .unwrap()
-        .unwrap();
-    sqlx::query!(
-        "UPDATE clients SET default_rate_cents = $2 WHERE id = $1",
-        client.id,
-        0_i64,
-    )
-    .execute(&mut *first)
-    .await
-    .unwrap();
-    let run_pool = pool.clone();
-    let mut run = tokio::task::JoinSet::new();
-    run.spawn(async move {
-        update_client_record(
-            &run_pool,
-            client.org_id,
-            client.id,
-            "Acme",
-            "USD",
-            None,
-            None,
-        )
-        .await
-    });
-    wait_for_blocked(&pool, blocker).await;
-    first.commit().await.unwrap();
-    let error = tokio::time::timeout(Duration::from_secs(5), run.join_next())
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap()
-        .unwrap_err();
-    assert!(matches!(
-        error,
-        ServerFnError::ServerError { code: CONFLICT, .. }
-    ));
-}
-
-#[sqlx::test(migrations = "./migrations")]
 async fn unchanged_activation_preserves_the_row(pool: PgPool) {
     let client = client(&pool).await;
     let before = row_version(&pool, client.id).await;
@@ -1178,57 +1051,6 @@ async fn unchanged_activation_preserves_the_row(pool: PgPool) {
             .unwrap();
     let after = row_version(&pool, client.id).await;
     assert_eq!((transition, returned, after), (None, client, before));
-}
-
-async fn competing_edit(pool: &PgPool, requested_name: &'static str) -> (Client, bool) {
-    let client = client(pool).await;
-    let mut first = pool.begin().await.unwrap();
-    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
-        .fetch_one(&mut *first)
-        .await
-        .unwrap()
-        .unwrap();
-    sqlx::query!(
-        "UPDATE clients SET name = 'Changed' WHERE id = $1",
-        client.id
-    )
-    .execute(&mut *first)
-    .await
-    .unwrap();
-    let run_pool = pool.clone();
-    let mut run = tokio::task::JoinSet::new();
-    run.spawn(async move {
-        update_client_record(
-            &run_pool,
-            client.org_id,
-            client.id,
-            requested_name,
-            "EUR",
-            None,
-            None,
-        )
-        .await
-    });
-    wait_for_blocked(pool, blocker).await;
-    first.commit().await.unwrap();
-    tokio::time::timeout(Duration::from_secs(5), run.join_next())
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap()
-        .unwrap()
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn repeating_a_competing_edit_does_not_report_a_change(pool: PgPool) {
-    let (client, changed) = competing_edit(&pool, "Changed").await;
-    assert_eq!((changed, client.name.as_str()), (false, "Changed"));
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn restoring_values_after_a_competing_edit_reports_a_change(pool: PgPool) {
-    let (client, changed) = competing_edit(&pool, "Acme").await;
-    assert_eq!((changed, client.name.as_str()), (true, "Acme"));
 }
 
 async fn competing_activation(pool: &PgPool, active: bool) -> (Client, Option<ActiveTransition>) {
@@ -1275,63 +1097,6 @@ async fn restoring_a_competing_deactivation_reports_reactivation(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn each_field_changes_once_and_preserves_inactive_status(pool: PgPool) {
-    let client = client(&pool).await;
-    archive_projects_of(&pool, client.id).await;
-    let actor = seeded_actor(&pool, client.org_id).await;
-    set_client_active_record(&pool, client.org_id, actor, client.id, false)
-        .await
-        .unwrap();
-    for (name, currency, address, tax_id) in [
-        ("Renamed", "EUR", None, None),
-        ("Renamed", "USD", None, None),
-        ("Renamed", "USD", Some("Main Street"), None),
-        ("Renamed", "USD", Some(""), None),
-        ("Renamed", "USD", None, None),
-        ("Renamed", "USD", None, Some("123")),
-        ("Renamed", "USD", None, Some("")),
-        ("Renamed", "USD", None, None),
-    ] {
-        let (updated, changed) = update_client_record(
-            &pool,
-            client.org_id,
-            client.id,
-            name,
-            currency,
-            address,
-            tax_id,
-        )
-        .await
-        .unwrap();
-        assert_eq!(
-            (
-                changed,
-                updated.name.as_str(),
-                updated.currency.as_str(),
-                updated.address.as_deref(),
-                updated.tax_id.as_deref(),
-                updated.active
-            ),
-            (true, name, currency, address, tax_id, false)
-        );
-        let before = row_version(&pool, client.id).await;
-        let (repeated, changed) = update_client_record(
-            &pool,
-            client.org_id,
-            client.id,
-            name,
-            currency,
-            address,
-            tax_id,
-        )
-        .await
-        .unwrap();
-        let after = row_version(&pool, client.id).await;
-        assert_eq!((changed, repeated, after), (false, updated, before));
-    }
-}
-
-#[sqlx::test(migrations = "./migrations")]
 async fn both_activation_transitions_change_once_and_preserve_details(pool: PgPool) {
     let mut expected = client(&pool).await;
     archive_projects_of(&pool, expected.id).await;
@@ -1365,16 +1130,6 @@ async fn missing_and_foreign_clients_are_not_noops(pool: PgPool) {
         (client.org_id, uuid::Uuid::now_v7()),
         (other.org_id, client.id),
     ] {
-        let error = update_client_record(&pool, org_id, client_id, "Acme", "EUR", None, None)
-            .await
-            .unwrap_err();
-        assert!(matches!(
-            error,
-            ServerFnError::ServerError {
-                code: NOT_FOUND,
-                ..
-            }
-        ));
         let actor = seeded_actor(&pool, org_id).await;
         let error = set_client_active_record(&pool, org_id, actor, client_id, true)
             .await
@@ -1392,58 +1147,42 @@ async fn missing_and_foreign_clients_are_not_noops(pool: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn concurrent_deletion_is_not_an_unchanged_mutation(pool: PgPool) {
-    for activation in [false, true] {
-        let client = client(&pool).await;
-        let mut first = pool.begin().await.unwrap();
-        let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
-            .fetch_one(&mut *first)
+    let client = client(&pool).await;
+    let mut first = pool.begin().await.unwrap();
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *first)
+        .await
+        .unwrap()
+        .unwrap();
+    sqlx::query!("DELETE FROM projects WHERE client_id = $1", client.id)
+        .execute(&mut *first)
+        .await
+        .unwrap();
+    sqlx::query!("DELETE FROM clients WHERE id = $1", client.id)
+        .execute(&mut *first)
+        .await
+        .unwrap();
+    let run_pool = pool.clone();
+    let actor = seeded_actor(&pool, client.org_id).await;
+    let mut run = tokio::task::JoinSet::new();
+    run.spawn(async move {
+        set_client_active_record(&run_pool, client.org_id, actor, client.id, true)
             .await
-            .unwrap()
-            .unwrap();
-        sqlx::query!("DELETE FROM projects WHERE client_id = $1", client.id)
-            .execute(&mut *first)
-            .await
-            .unwrap();
-        sqlx::query!("DELETE FROM clients WHERE id = $1", client.id)
-            .execute(&mut *first)
-            .await
-            .unwrap();
-        let run_pool = pool.clone();
-        let actor = seeded_actor(&pool, client.org_id).await;
-        let mut run = tokio::task::JoinSet::new();
-        run.spawn(async move {
-            if activation {
-                set_client_active_record(&run_pool, client.org_id, actor, client.id, true)
-                    .await
-                    .map(|_| ())
-            } else {
-                update_client_record(
-                    &run_pool,
-                    client.org_id,
-                    client.id,
-                    "Acme",
-                    "EUR",
-                    None,
-                    None,
-                )
-                .await
-                .map(|_| ())
-            }
-        });
-        wait_for_blocked(&pool, blocker).await;
-        first.commit().await.unwrap();
-        let error = tokio::time::timeout(Duration::from_secs(5), run.join_next())
-            .await
-            .unwrap()
-            .unwrap()
-            .unwrap()
-            .unwrap_err();
-        assert!(matches!(
-            error,
-            ServerFnError::ServerError {
-                code: NOT_FOUND,
-                ..
-            }
-        ));
-    }
+            .map(|_| ())
+    });
+    wait_for_blocked(&pool, blocker).await;
+    first.commit().await.unwrap();
+    let error = tokio::time::timeout(Duration::from_secs(5), run.join_next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap()
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        ServerFnError::ServerError {
+            code: NOT_FOUND,
+            ..
+        }
+    ));
 }

@@ -30,9 +30,7 @@ pub use jobs::{JobStatus, RetryAvailability};
 pub use organization::OrgBranding;
 #[cfg(any(feature = "server", test))]
 pub use project::ProjectBudgetProgress;
-pub use project::{
-    Project, ProjectBudgetOverview, ProjectDetails, ProjectTagLink, ProjectTaskRate,
-};
+pub use project::{Project, ProjectBudgetOverview, ProjectDetails, ProjectTagLink};
 pub use task::Task;
 pub use time_entry::TimeEntry;
 pub use user::User;

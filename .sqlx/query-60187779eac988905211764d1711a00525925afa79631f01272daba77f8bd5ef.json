@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM time_entries WHERE id = $1",
+  "query": "DELETE FROM time_entries WHERE org_id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "7122455edce661d5ee04ebec9a25c1a2cf581e13b9732637e5d072cbf11e2dd9"
+  "hash": "60187779eac988905211764d1711a00525925afa79631f01272daba77f8bd5ef"
 }

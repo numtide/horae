@@ -8,9 +8,10 @@ pub mod money;
 pub mod permissions;
 pub mod project;
 pub mod project_activity;
+#[cfg(kani)]
+mod proofs;
 pub mod rounding;
 pub mod state;
 pub mod time_of_day;
-pub mod totals;
 pub mod types;
 pub mod week;

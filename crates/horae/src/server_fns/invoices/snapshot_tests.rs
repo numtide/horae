@@ -1,5 +1,4 @@
 use super::*;
-use crate::server_fns::projects::fetch_project_fee_balances;
 use crate::server_fns::test_seed::{SeedIds, seed};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -27,11 +26,9 @@ async fn read(
                 .await
                 .map(|preview| preview.subtotal_cents)
         }
-        Reader::Fees => {
-            fetch_project_fee_balances(pool, identity.0, identity.1, ids.project_id, period)
-                .await
-                .map(|balances| balances[0].balance.remaining_cents)
-        }
+        Reader::Fees => fee_tests::fee_balances(pool, identity, ids, period)
+            .await
+            .map(|balances| balances[0].1.remaining_cents),
     }
 }
 

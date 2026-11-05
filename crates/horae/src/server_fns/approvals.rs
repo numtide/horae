@@ -2,6 +2,8 @@
 
 use super::*;
 use crate::models::scoped_time::TimesheetWriteContext;
+#[cfg(feature = "server")]
+use horae_core::permissions::approvals::may_decide_submission;
 
 // ── Approvals (M7) ──────────────────────────────────────────────────────────
 
@@ -323,10 +325,37 @@ async fn list_week(
         .collect())
 }
 
+/// The denial for approving or rejecting one's own submission. It names no
+/// other record, so a bulk request reveals nothing about the rest.
+#[cfg(feature = "server")]
+const OWN_SUBMISSION_FORBIDDEN: &str = "You cannot approve or reject your own submission";
+
+/// The requester's current role, read in the deciding transaction rather than
+/// trusted from the session. The row lock makes a concurrent role change or
+/// deactivation wait until this decision commits.
+#[cfg(feature = "server")]
+async fn current_role(
+    tx: &mut sqlx::PgConnection,
+    requester: &User,
+) -> Result<OrgRole, ServerFnError> {
+    sqlx::query_scalar!(
+        r#"SELECT org_role as "org_role: OrgRole" FROM users
+           WHERE id = $1 AND org_id = $2 AND active FOR SHARE"#,
+        requester.id,
+        requester.org_id,
+    )
+    .fetch_optional(tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| forbidden("Active same-organization account required"))
+}
+
 /// Approve every submitted approval in `ids` within one transaction: flip each
 /// row Submitted→Approved, transition its period's submitted entries, and return
 /// the rows actually approved (foreign or non-submitted ids are skipped). Shared by the
 /// single- and bulk-approve server functions so the transition lives in one place.
+/// If any of them is the requester's own and self-approval is not allowed, the
+/// whole request is denied and nothing changes.
 #[cfg(feature = "server")]
 async fn approve_periods(
     pool: &sqlx::PgPool,
@@ -334,6 +363,10 @@ async fn approve_periods(
     ids: &[uuid::Uuid],
 ) -> Result<Vec<Approval>, ServerFnError> {
     let mut tx = pool.begin().await.map_err(server_err)?;
+    let role = current_role(&mut tx, manager).await?;
+    if !horae_core::state::can_transition(EntryState::Submitted, EntryState::Approved, role) {
+        return Err(forbidden("Insufficient role to approve submissions"));
+    }
 
     let approvals = sqlx::query_as!(
         Approval,
@@ -356,6 +389,14 @@ async fn approve_periods(
     .fetch_all(&mut *tx)
     .await
     .map_err(server_err)?;
+    // Judge exactly the rows this request changed; returning drops `tx`, which
+    // rolls the update back.
+    if approvals
+        .iter()
+        .any(|a| !may_decide_submission(manager.id, role, a.user_id))
+    {
+        return Err(forbidden(OWN_SUBMISSION_FORBIDDEN));
+    }
 
     // Transition the submitted entries of every approved period to approved.
     let approved_ids: Vec<uuid::Uuid> = approvals.iter().map(|a| a.id).collect();
@@ -423,25 +464,10 @@ async fn approve_ids(manager: &User, ids: &[uuid::Uuid]) -> Result<Vec<Approval>
     Ok(approvals)
 }
 
-/// Ensure the caller may approve, mapping an insufficient role to a 403.
-#[cfg(feature = "server")]
-fn ensure_can_approve(manager: &User) -> Result<(), ServerFnError> {
-    if horae_core::state::can_transition(
-        EntryState::Submitted,
-        EntryState::Approved,
-        manager.org_role,
-    ) {
-        Ok(())
-    } else {
-        Err(forbidden("Insufficient role to approve submissions"))
-    }
-}
-
 /// Approve a single submitted week. Requires manager role.
 #[server]
 pub async fn approve_submission(approval_id: String) -> Result<Approval, ServerFnError> {
     let manager = require_manager().await?;
-    ensure_can_approve(&manager)?;
     let id = parse_uuid(&approval_id, "approval_id")?;
 
     approve_ids(&manager, &[id])
@@ -452,11 +478,11 @@ pub async fn approve_submission(approval_id: String) -> Result<Approval, ServerF
 }
 
 /// Approve several submitted weeks at once (the "approve visible" action).
-/// Returns the number actually approved; foreign or non-submitted ids are skipped.
+/// Returns the number actually approved; foreign or non-submitted ids are skipped,
+/// but a selection that includes the requester's own week is denied outright.
 #[server]
 pub async fn approve_submissions(approval_ids: Vec<String>) -> Result<usize, ServerFnError> {
     let manager = require_manager().await?;
-    ensure_can_approve(&manager)?;
     let ids = approval_ids
         .iter()
         .map(|s| parse_uuid(s, "approval_id"))
@@ -502,6 +528,7 @@ async fn reopen_period(
     approval_id: uuid::Uuid,
 ) -> Result<Approval, ServerFnError> {
     let mut tx = pool.begin().await.map_err(server_err)?;
+    let role = current_role(&mut tx, manager).await?;
 
     // Fetch the approval to know user + period + current state, locking the
     // row so a concurrent approve can't interleave with the reopen below.
@@ -527,8 +554,12 @@ async fn reopen_period(
     // Rejecting a pending week and reopening an approved one are both a
     // transition back to 'open'; the core state machine decides who may do
     // which from the approval's current state.
-    if !horae_core::state::can_transition(approval.state, EntryState::Open, manager.org_role) {
+    if !horae_core::state::can_transition(approval.state, EntryState::Open, role) {
         return Err(forbidden("Insufficient role to reject submissions"));
+    }
+    // Reopening an approved week is the same decision as rejecting it.
+    if !may_decide_submission(manager.id, role, approval.user_id) {
+        return Err(forbidden(OWN_SUBMISSION_FORBIDDEN));
     }
 
     // Reopen entries: submitted ones (pending week) or approved ones
@@ -651,3 +682,6 @@ mod isolation_tests;
 
 #[cfg(all(test, feature = "server"))]
 mod period_tests;
+
+#[cfg(all(test, feature = "server"))]
+mod self_approval_tests;

@@ -11,8 +11,6 @@
 //! component is length-prefixed via a delimiter that cannot appear in a
 //! normalized value boundary the same way (see [`compose`]).
 
-use chrono::NaiveDate;
-
 /// The exact whitespace set trimmed on both the Rust and SQL sides. It MUST match
 /// the `btrim` character set in migration 0009's `harvest_norm`, or a re-import
 /// could fail to match a record and create a duplicate. (Rust's default `trim`
@@ -60,31 +58,6 @@ pub fn project_key(client_name: &str, project_name: &str, project_code: Option<&
 /// Task natural key: normalized name within the org-level catalog (data-model.md).
 pub fn task_key(name: &str) -> String {
     normalize(name)
-}
-
-/// Time-entry natural key: the combination of user, project, task, spent date,
-/// duration in minutes, and notes (FR-012). This key alone cannot tell two
-/// genuinely identical entries apart — Harvest's Detailed export lists every
-/// entry, so two same-shaped rows are two real entries. The engine therefore
-/// identifies an id-less row by its natural key **plus** its occurrence number
-/// within the run, tracked with an [`OccurrenceCounter`]; that scheme lives in
-/// the server crate's `importers::harvest::apply` (see `entry_slot_key` there).
-pub fn time_entry_key(
-    user_email: &str,
-    project_key: &str,
-    task_key: &str,
-    spent_date: NaiveDate,
-    minutes: i64,
-    notes: Option<&str>,
-) -> String {
-    compose(&[
-        user_email,
-        project_key,
-        task_key,
-        &spent_date.to_string(),
-        &minutes.to_string(),
-        notes.unwrap_or(""),
-    ])
 }
 
 /// Counts, per natural key, how many identical rows an import run has already
@@ -163,21 +136,6 @@ mod tests {
     #[test]
     fn task_key_shared_across_projects() {
         assert_eq!(task_key("Design"), task_key(" design "));
-    }
-
-    #[test]
-    fn time_entry_key_distinguishes_and_matches() {
-        let date = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
-        let a = time_entry_key("u@x.com", "proj", "task", date, 90, Some("standup"));
-        let b = time_entry_key("U@X.com", "proj", "task", date, 90, Some("standup"));
-        // Case-folded user email matches.
-        assert_eq!(a, b);
-        // A different duration is a distinct entry.
-        let c = time_entry_key("u@x.com", "proj", "task", date, 120, Some("standup"));
-        assert_ne!(a, c);
-        // A different note is a distinct entry.
-        let d = time_entry_key("u@x.com", "proj", "task", date, 90, Some("review"));
-        assert_ne!(a, d);
     }
 
     #[test]

@@ -4,7 +4,6 @@ use crate::models::user::CurrentUser;
 
 pub mod admin;
 pub mod approvals;
-pub mod auth;
 pub mod clients;
 pub mod gallery;
 pub mod importers;

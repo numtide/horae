@@ -1,3 +1,4 @@
+use super::canonical_read_tests::project_team;
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
 use sqlx::PgPool;
@@ -204,13 +205,12 @@ async fn private_progress_does_not_prevent_tracking_or_reveal_financial_fields(p
     let decoded: Task = serde_json::from_value(serde_json::to_value(&tasks[0]).unwrap()).unwrap();
     assert_eq!(decoded.id, ids.task_id);
     assert!(decoded.default_rate_cents.is_none());
-    let team = assignments_for_viewer(&pool, &viewer, ids.project_id)
-        .await
-        .unwrap();
-    let payload = serde_json::to_value(&team[0]).unwrap();
-    assert!(payload.get("rate_cents").is_none());
-    let decoded: Assignment = serde_json::from_value(payload).unwrap();
-    assert_eq!(decoded.user_id, ids.user_id);
+    assert!(
+        project_team(&pool, &viewer, ids.project_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -312,7 +312,7 @@ async fn revoked_membership_preserves_only_own_historical_tracking_identity(pool
             .is_empty()
     );
     assert!(
-        assignments_for_viewer(&pool, &viewer, ids.project_id)
+        project_team(&pool, &viewer, ids.project_id)
             .await
             .unwrap()
             .is_empty()
@@ -470,12 +470,18 @@ async fn outsiders_and_inactive_viewers_have_no_project_reads(pool: PgPool) {
                     .is_empty()
             );
         }
-        assert!(
-            assignments_for_viewer(&pool, &viewer, ids.project_id)
-                .await
-                .unwrap()
-                .is_empty()
-        );
+        let team = project_team(&pool, &viewer, ids.project_id).await;
+        if inactive {
+            assert!(matches!(
+                team,
+                Err(ServerFnError::ServerError {
+                    code: FORBIDDEN,
+                    ..
+                })
+            ));
+        } else {
+            assert!(team.unwrap().is_empty());
+        }
         assert!(
             fetch_project_spend(&pool, viewer.org_id, viewer.id)
                 .await

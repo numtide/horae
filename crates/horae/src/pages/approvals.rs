@@ -1,6 +1,7 @@
 use chrono::{Datelike, Days, NaiveDate, Weekday};
 use dioxus::prelude::*;
 use horae_core::duration::format_hhmm;
+use horae_core::permissions::approvals::may_decide_submission;
 use horae_core::types::EntryState;
 use horae_core::week::week_bounds;
 
@@ -131,6 +132,13 @@ pub fn Approvals(week: String) -> Element {
     });
 
     let is_manager = is_manager(&me);
+    // Hide decisions the server would refuse; it re-checks every one.
+    let viewer = match &*me.read() {
+        Some(Ok(u)) => Some((u.id, u.org_role)),
+        _ => None,
+    };
+    let may_decide =
+        move |owner| viewer.is_some_and(|(id, role)| may_decide_submission(id, role, owner));
     let this_week = match &*first_day.read() {
         Some(Ok(first)) => week_bounds(today(), *first).map(|(start, _)| start),
         _ => None,
@@ -222,7 +230,10 @@ pub fn Approvals(week: String) -> Element {
 
                                     let pending_ids: Vec<String> = items
                                         .iter()
-                                        .filter(|s| s.approval.state == EntryState::Submitted)
+                                        .filter(|s| {
+                                            s.approval.state == EntryState::Submitted
+                                                && may_decide(s.approval.user_id)
+                                        })
                                         .map(|s| s.approval.id.to_string())
                                         .collect();
                                     let pending_count = pending_ids.len();
@@ -271,8 +282,8 @@ pub fn Approvals(week: String) -> Element {
                                                             let submitted = a.submitted_at.format("%d %b, %H:%M").to_string();
                                                             let hours = format_hhmm(s.total_minutes);
                                                             let is_pending = a.state == EntryState::Submitted;
-                                                            let can_reopen =
-                                                                is_pending || a.state == EntryState::Approved;
+                                                            let can_reopen = may_decide(a.user_id)
+                                                                && (is_pending || a.state == EntryState::Approved);
                                                             let aid = a.id.to_string();
                                                             rsx! {
                                                                 tr {
