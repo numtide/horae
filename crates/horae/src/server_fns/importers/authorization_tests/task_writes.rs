@@ -31,7 +31,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let cookie = api.cookie(ids.user_id).await;
     let restricted_cookie = api.cookie(restricted).await;
     let requester = json!({"org_id":ids.org_id,"user_id":ids.user_id});
-    let body = json!({"name":"  Created by current permissions  ","billable_default":true,"project_id":null,
+    let body = json!({"name":"  Created by current permissions  ","billable_default":true,
         "rate":{"action":"preserve"},"expected_requester":requester});
     assert_eq!(
         api.call("create_task", body.clone(), None, false)
@@ -59,63 +59,29 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(task["name"], "Created by current permissions");
     assert!(task.get("default_rate_cents").is_none());
 
-    let linked = api
-        .json(
-            "create_task",
-            json!({"name":"New linked task", "billable_default":true,
-        "project_id":ids.project_id,"rate":{"action":"preserve"},"expected_requester":requester}),
-            &cookie,
-        )
-        .await;
-    let linked_id: Uuid = serde_json::from_value(linked["id"].clone()).unwrap();
-    assert!(linked.get("default_rate_cents").is_none());
-    assert_eq!(
-        sqlx::query_scalar!(
-            "SELECT EXISTS(SELECT 1 FROM project_tasks WHERE project_id=$1 AND task_id=$2)",
-            ids.project_id,
-            linked_id
-        )
-        .fetch_one(pool)
-        .await
-        .unwrap(),
-        Some(true)
-    );
-    assert_eq!(
-        api.call(
-            "create_task",
-            json!({"name":"Foreign destination", "billable_default":true,
-        "project_id":foreign.project_id,"rate":{"action":"preserve"},"expected_requester":requester}),
-            Some(&cookie),
-            false
-        )
-        .await
-        .status(),
-        StatusCode::NOT_FOUND
-    );
-
-    let grants: Vec<String> =
-        serde_json::from_value(json!(PermissionSelection::new(&[Permission::TaskWriteAll])))
-            .unwrap();
-    sqlx::query!(
-        "UPDATE person_permission_states SET grants=$2 WHERE user_id=$1",
-        ids.user_id,
-        &grants
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-    assert_eq!(
-        api.call(
-            "create_task",
-            json!({"name":"Revoked project editor", "billable_default":true,
-        "project_id":ids.project_id,"rate":{"action":"preserve"},"expected_requester":requester}),
-            Some(&cookie),
-            false
-        )
-        .await
-        .status(),
-        StatusCode::FORBIDDEN
-    );
+    // Task creation is catalog-only: a client that still sends a project gets
+    // a catalog task and no project link, wherever that project lives.
+    for project in [ids.project_id, foreign.project_id] {
+        let stale = api
+            .json(
+                "create_task",
+                json!({"name":"Stale project link", "billable_default":true,
+            "project_id":project,"rate":{"action":"preserve"},"expected_requester":requester}),
+                &cookie,
+            )
+            .await;
+        let stale_id: Uuid = serde_json::from_value(stale["id"].clone()).unwrap();
+        assert_eq!(
+            sqlx::query_scalar!(
+                "SELECT COUNT(*) FROM project_tasks WHERE task_id=$1",
+                stale_id
+            )
+            .fetch_one(pool)
+            .await
+            .unwrap(),
+            Some(0)
+        );
+    }
     let floor: Vec<String> = serde_json::from_value(json!(PermissionSelection::new(&[]))).unwrap();
     sqlx::query!(
         "UPDATE person_permission_states SET grants=$2 WHERE user_id=$1",
@@ -146,7 +112,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .fetch_one(pool)
             .await
             .unwrap(),
-        Some(3)
+        Some(4)
     );
     assert_eq!(
         sqlx::query_scalar!("SELECT COUNT(*) FROM tasks WHERE org_id=$1", foreign.org_id)
@@ -174,7 +140,7 @@ async fn check_initial_rate(pool: &PgPool, api: &Api) {
     .unwrap();
     let cookie = api.cookie(ids.user_id).await;
     let body = json!({
-        "name":"Initial rate", "billable_default":true, "project_id":null,
+        "name":"Initial rate", "billable_default":true,
         "expected_requester":{"org_id":ids.org_id,"user_id":ids.user_id},
         "rate":{"action":"set","amount_cents":0,"currency":"EUR"}
     });
@@ -220,7 +186,6 @@ async fn check_initial_rate(pool: &PgPool, api: &Api) {
             json!({"action":"set","amount_cents":-1,"currency":"EUR"}),
             StatusCode::BAD_REQUEST,
         ),
-        ("project_id", json!(Uuid::now_v7()), StatusCode::NOT_FOUND),
     ] {
         let mut rejected = body.clone();
         rejected[field] = value;

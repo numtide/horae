@@ -1281,3 +1281,80 @@ async fn billing_schema_rejects_partial_fee_schedules(pool: PgPool) {
         assert!(error.as_database_error().unwrap().is_check_violation());
     }
 }
+
+/// A linked task inherits its catalog default only where billing uses task
+/// rates, and a non-billable project never makes the link billable.
+#[sqlx::test(migrations = "./migrations")]
+async fn finalized_task_links_inherit_default_rates_only_for_task_billing(pool: PgPool) {
+    use crate::models::project_creation::{ProjectTaskInput, TaskAccess, TaskSource};
+    use horae_core::project::RateMode;
+    use horae_core::types::ProjectType;
+    let ids = seed(&pool, OrgRole::Admin).await;
+    sqlx::query!(
+        "UPDATE tasks SET default_rate_cents=8000, default_rate_currency='EUR' WHERE id=$1",
+        ids.task_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for project_type in [
+        ProjectType::TimeAndMaterials,
+        ProjectType::FixedFee,
+        ProjectType::NonBillable,
+    ] {
+        for rate_mode in [RateMode::Person, RateMode::Project, RateMode::Task] {
+            let form = ProjectForm {
+                client_id: Some(ids.client_id),
+                name: format!("{project_type:?} {rate_mode:?}"),
+                project_type,
+                rate_mode,
+                project_rate: "10".into(),
+                fee_amount: "100".into(),
+                tasks: vec![ProjectTaskInput {
+                    id: Uuid::now_v7(),
+                    source: TaskSource::Existing {
+                        task_id: ids.task_id,
+                    },
+                    billable: true,
+                    rate: String::new(),
+                    budget: String::new(),
+                    access: TaskAccess::Everyone,
+                }],
+                ..Default::default()
+            };
+            let draft = Uuid::now_v7();
+            super::save_draft_record(&pool, ids.user_id, ids.org_id, draft, 0, &form)
+                .await
+                .unwrap();
+            let project = super::finalize_draft_record(
+                &pool,
+                ids.user_id,
+                ids.org_id,
+                draft,
+                1,
+                &form,
+                false,
+            )
+            .await
+            .unwrap();
+            let link = sqlx::query!(
+                "SELECT billable, rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2",
+                project,
+                ids.task_id
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            let task_billing =
+                project_type == ProjectType::TimeAndMaterials && rate_mode == RateMode::Task;
+            assert_eq!(
+                (link.billable, link.rate_cents),
+                (
+                    project_type != ProjectType::NonBillable,
+                    task_billing.then_some(8000)
+                ),
+                "{project_type:?} {rate_mode:?}"
+            );
+        }
+    }
+}

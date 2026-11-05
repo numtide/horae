@@ -864,7 +864,6 @@ async fn tasks_for_viewer(
 pub async fn create_task(
     name: String,
     billable_default: bool,
-    project_id: Option<String>,
     rate: TaskRateEdit,
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
@@ -872,14 +871,12 @@ pub async fn create_task(
     project_requester(&actor, Some(expected_requester))
         .map_err(|_| forbidden("Task requester has changed"))?;
     let state = crate::state::global_state().await;
-    let project_id = parse_opt_uuid(project_id, "project_id")?;
-    let (task, event) = create_task_for_project(
+    let (task, event) = create_catalog_task(
         &state.db,
         actor.org_id,
         actor.id,
         &name,
         billable_default,
-        project_id,
         &rate,
     )
     .await?;
@@ -899,7 +896,6 @@ async fn authorize_task_write(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
-    project_id: Option<uuid::Uuid>,
     gate: OrganizationLock,
 ) -> Result<Option<crate::models::permissions::PersonPermissions>, ServerFnError> {
     use crate::server_fns::permissions::{configure_administration, load_person_permissions};
@@ -925,39 +921,28 @@ async fn authorize_task_write(
         1 => {}
         _ => return Err(forbidden("Task permission state is unavailable")),
     }
-    let permissions = if let Some(project_id) = project_id {
-        // Use the editor's current managed/all scope, not legacy membership roles.
-        crate::server_fns::permissions::project_management::authorize_actor(
-            tx, org_id, actor_id, project_id,
-        )
+    let permissions = load_person_permissions(tx, org_id, actor_id)
         .await
         .map_err(|error| {
-            tracing::debug!(%error, "Task creation project authority unavailable");
-            forbidden("Current project editing authority is required")
+            tracing::error!(%error, "Unable to load task editing permissions");
+            forbidden("Task permission state is unavailable")
         })?
-    } else {
-        load_person_permissions(tx, org_id, actor_id)
-            .await
-            .map_err(|error| {
-                tracing::error!(%error, "Unable to load task editing permissions");
-                forbidden("Task permission state is unavailable")
-            })?
-            .ok_or_else(|| forbidden("Task permission state is unavailable"))?
-    };
+        .ok_or_else(|| forbidden("Task permission state is unavailable"))?;
     if !permissions.grants.contains(Permission::TaskWriteAll) {
         return Err(forbidden("Current task editing authority is required"));
     }
     Ok(Some(permissions))
 }
 
+/// Adds a task to the organization catalog. Projects link tasks through the
+/// project editor, as Harvest links them through task assignments.
 #[cfg(feature = "server")]
-async fn create_task_for_project(
+async fn create_catalog_task(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
     name: &str,
     billable_default: bool,
-    project_id: Option<uuid::Uuid>,
     rate: &TaskRateEdit,
 ) -> Result<(Task, crate::plugin::event::TaskPayload), ServerFnError> {
     let name = name.trim();
@@ -965,12 +950,8 @@ async fn create_task_for_project(
         return Err(conflict("Task name cannot be empty"));
     }
     let mut tx = db.begin().await.map_err(server_err)?;
-    let gate = if project_id.is_some() {
-        OrganizationLock::AccessChange
-    } else {
-        OrganizationLock::Shared
-    };
-    let permissions = authorize_task_write(&mut tx, org_id, actor_id, project_id, gate).await?;
+    let permissions =
+        authorize_task_write(&mut tx, org_id, actor_id, OrganizationLock::Shared).await?;
     let (amount, currency) =
         authorize_task_rate(&mut tx, org_id, permissions.as_ref(), rate).await?;
     let id = uuid::Uuid::now_v7();
@@ -989,10 +970,6 @@ async fn create_task_for_project(
     .fetch_one(&mut *tx)
     .await
     .map_err(server_err)?;
-
-    if let Some(project_id) = project_id {
-        enable_project_task(&mut tx, org_id, project_id, task.id).await?;
-    }
     let event = task_payload(&task);
     if permissions
         .as_ref()
@@ -1055,7 +1032,7 @@ async fn update_task_record(
     }
     let mut tx = db.begin().await.map_err(server_err)?;
     let permissions =
-        authorize_task_write(&mut tx, org_id, actor_id, None, OrganizationLock::Shared).await?;
+        authorize_task_write(&mut tx, org_id, actor_id, OrganizationLock::Shared).await?;
     let (amount, currency) =
         authorize_task_rate(&mut tx, org_id, permissions.as_ref(), rate).await?;
     let preserve = matches!(rate, TaskRateEdit::Preserve {});
@@ -1176,14 +1153,8 @@ async fn set_task_active_record(
 ) -> Result<(Task, Option<crate::plugin::AppEvent>), ServerFnError> {
     let mut tx = db.begin().await.map_err(server_err)?;
     // Tracking writers hold the shared gate through entry insertion.
-    let permissions = authorize_task_write(
-        &mut tx,
-        org_id,
-        actor_id,
-        None,
-        OrganizationLock::AccessChange,
-    )
-    .await?;
+    let permissions =
+        authorize_task_write(&mut tx, org_id, actor_id, OrganizationLock::AccessChange).await?;
     if permissions.is_some() && !active {
         // Link updates invalidate editors through their parent project trigger.
         // Take every parent before the task/link locks, in stable order.
@@ -1293,81 +1264,6 @@ async fn lock_task(
     .await
     .map_err(server_err)?
     .ok_or_else(|| not_found("Task not found"))
-}
-
-#[cfg(feature = "server")]
-async fn enable_project_task(
-    db: &mut sqlx::PgConnection,
-    org_id: uuid::Uuid,
-    project_id: uuid::Uuid,
-    task_id: uuid::Uuid,
-) -> Result<(), ServerFnError> {
-    if !lock_project_revision(db, org_id, project_id).await? {
-        return Err(not_found(
-            "Active project and task not found in this organization",
-        ));
-    }
-    // Validate before the idempotent insert, including already-linked pairs.
-    // Hold these rows until commit so archiving cannot race task enablement.
-    // Preserve legacy catalog inheritance, including non-billable projects.
-    let task = sqlx::query!(
-        r#"SELECT CASE WHEN o.permission_policy_version=1 AND p.project_type='non_billable'
-                      THEN false ELSE t.billable_default END AS "billable_default!",
-                p.currency, t.default_rate_currency,
-                (ps.project_id IS NOT NULL OR o.permission_policy_version=1) AS "require_rate_currency!",
-                EXISTS(SELECT 1 FROM project_tasks pt
-                       WHERE pt.project_id = p.id AND pt.task_id = t.id) AS "linked!",
-                (o.permission_policy_version=1 AND EXISTS(SELECT 1 FROM project_tasks pt
-                       WHERE pt.project_id=p.id AND pt.task_id=t.id AND NOT pt.active)) AS "archived!",
-                CASE WHEN ps.project_id IS NULL
-                       OR (p.project_type = 'time_and_materials' AND ps.rate_mode = 'task')
-                     THEN t.default_rate_cents ELSE NULL END AS default_rate_cents
-         FROM projects p JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
-         JOIN organizations o ON o.id=p.org_id
-         JOIN tasks t ON t.org_id = p.org_id
-         LEFT JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id = p.org_id
-         WHERE p.id = $1 AND t.id = $2 AND p.org_id = $3
-           AND p.active AND c.active AND t.active
-         FOR SHARE OF c, t"#,
-        project_id,
-        task_id,
-        org_id,
-    )
-    .fetch_optional(&mut *db)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Active project and task not found in this organization"))?;
-    if task.linked {
-        if task.archived {
-            return Err(conflict(
-                "Restore this task explicitly in the project editor",
-            ));
-        }
-        return Ok(());
-    }
-    if task.require_rate_currency
-        && task.default_rate_cents.is_some()
-        && !task
-            .default_rate_currency
-            .as_deref()
-            .is_some_and(|source| source.eq_ignore_ascii_case(task.currency.trim()))
-    {
-        return Err(conflict(
-            "Task rate: currency is unknown or incompatible; enter an explicit rate in the project currency",
-        ));
-    }
-    sqlx::query!(
-        "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents)
-         VALUES ($1, $2, $3, $4) ON CONFLICT (project_id, task_id) DO NOTHING",
-        project_id,
-        task_id,
-        task.billable_default,
-        task.default_rate_cents,
-    )
-    .execute(db)
-    .await
-    .map_err(server_err)?;
-    Ok(())
 }
 
 // ── Assignments ─────────────────────────────────────────────────────────────
