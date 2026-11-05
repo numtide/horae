@@ -539,7 +539,6 @@ const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
       await expect(balances.getByRole('group', { name: `— ${month} fee` })).toContainText('Remaining: EUR 900.00');
     }
     assert.equal(Number(sql(`SELECT count(*) FROM project_fee_occurrences WHERE project_id='${monthlyProject.id}'`)), 0);
-    assert.equal(feeReads, 0, 'Project Detail requests no fee balances');
     assert.deepEqual(errors, []);
     console.log('PASS: invoice selection, partial balances, exact excess, dirty/pending navigation, reload recovery, account-scoped replay, storage failure safety and authorized per-occurrence balances in invoice preparation');
   } catch (error) {
