@@ -123,6 +123,17 @@ This orders planning, not implementation authorization:
 
 ## Iteration log
 
+### 2026-11-05 — Reference-account data policy
+
+- Policy, by role: no data is created, edited or deleted in the production Harvest
+  account. Disposable fixtures are allowed only in the test (evidence) account the
+  user designates, with the user's authorization for each task recorded here. Pre-existing
+  business records, delivery, payments and account settings are never touched.
+  Fixtures are tracked by exact ID and cleaned up, or recorded as deliberately retained.
+- Test account: a time entry of 1000:00 or 240:01 on one day is rejected with 409
+  "Daily hours cannot exceed 240." Nothing was created. The limit is 240 hours per
+  person per day, as a sum.
+
 ### 2026-10-01 — Independent investigations completed and published
 
 - Published expense revision `85791e9` in #214 and permission evidence

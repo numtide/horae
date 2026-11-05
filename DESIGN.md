@@ -241,6 +241,18 @@ acceptance work; this page is not evidence that every final gate has passed.
 - Shared `Menu` uses a native popover in the top layer so tables cannot clip it. It opens above or below its trigger within the viewport, dismisses on outside click or anchor scrolling/resizing, and supports arrows, Home/End, initial-letter navigation, Escape and Tab. Each caller supplies a stable, unique ID for the trigger/menu association. The browser owns visibility; the shared script supplies positioning and [menu keyboard behavior](https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/).
 - Status indicated by text + color (never color alone) — badges include both dot and text label
 
+## Screen States
+
+Every new or changed screen and data-bearing component covers these states before it is done; record the check in the feature's `quickstart.md` validation, or its `visual-review.md` where one exists (as in `specs/012-clients-design/increments/mvp/`). Build each state from the existing classes and tokens; add a variant to them rather than a new one-off style.
+
+- **Empty**: `.empty-state` with copy that says what to do next, not a blank table.
+- **Loading**: inline, per region (see Interaction Principles); keep the layout stable so content doesn't jump when data arrives.
+- **Error**: `.alert.alert-danger` for page and form errors, inline `text-danger` for field errors, and `.banner-danger` for errors that need an action such as retry. Form fields keep the values the user entered after a failed submit.
+- **No permission**: non-disclosing (spec 015). Name the role that can grant access ("Ask an Administrator", as in `own_permissions.rs`) without revealing the resource, its owner or other people's permissions; out-of-scope direct links behave as not found. Hide actions the user can never take in this context; disable, with the reason, actions that are only temporarily unavailable.
+- **Long content**: 60-character names, large amounts and many rows wrap or truncate inside their column without overlapping (see Layout → Narrow content).
+- **Narrow**: usable at 390px and at the 768px mobile-navigation breakpoint.
+- **Keyboard**: the whole flow completes without a mouse, with a visible `--ring` focus and focus returned after dialogs and menus close (see Accessibility).
+
 ## Interaction Principles
 
 - Timer state is reactive: the running timer increments via `use_interval`

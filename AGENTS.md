@@ -169,6 +169,15 @@ Rules on top of idiomatic Rust (see the `rust-best-practices` skill). These come
 - **Avoid `Option<bool>` parameters.** `Some(false)` is ambiguous at the call site. For a two-state flag on a server function, prefer a plainly named `bool` with an obvious default, or a small purpose-named enum.
 - **New modules use the `foo.rs` + `foo/` layout, not `foo/mod.rs`.** A multi-file module lives in `foo.rs` (the module root) beside a `foo/` directory of submodules — as `pages`, `models`, `components`, and `server_fns` already do. `mod.rs` is *not* deprecated (the Rust Reference keeps both forms working), but the Reference encourages the sibling-file form and it keeps the tree free of many identically-named `mod.rs` files. The remaining `auth/mod.rs`, `harvest/mod.rs`, and `plugin/mod.rs` predate this rule; convert them opportunistically, not in unrelated PRs.
 
+### Harvest parity
+
+Horae reproduces Harvest's behaviour and workflows, not Harvest itself. [`specs/harvest-parity.md`](specs/harvest-parity.md) tracks coverage and evidence.
+
+- Rebuild what a screen does from its observable behaviour and the public docs. Never copy Harvest's source, JS bundles, private endpoints, assets, logos, copy text or branding. Matching what a button does is parity; matching its sentence is copying. Short standard labels (Archive, Duplicate, Timesheet, Approvals) are generic, so reusing them is not copying.
+- Work from the public help center and the public API docs, plus read-only browsing in a session the user has already signed in to (open a new tab; never reuse or alter the user's tabs). Never sign in on the user's behalf.
+- Never create, edit or delete data in the production Harvest account. Disposable fixtures are allowed only in the test (evidence) account the user designates, with the user's authorization for the task recorded in `specs/harvest-parity.md`. Never touch pre-existing business records, delivery, payments or account settings. Track fixtures by exact ID and clean them up, or record that they are deliberately retained.
+- Naming Harvest where Horae interoperates with it (the importer, the `/harvest/v2` compatibility API) is fine. Outside those places, the product's look, name and wording stay Horae's (`DESIGN.md`).
+
 ## Repository Hygiene
 
 - Write commit messages, branch names, PR titles, PR bodies, and issue comments as a human developer would in any repository.
