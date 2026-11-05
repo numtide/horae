@@ -12,30 +12,24 @@ pub fn effective_minutes(minutes: u32, frozen: Option<u32>, inc: u32, dir: Round
 /// - `RoundDir::Up` → ceiling to next multiple
 /// - `RoundDir::Down` → floor to previous multiple
 /// - `RoundDir::Nearest` → nearest multiple (ties round up)
+///
+/// A multiple above `u32::MAX` saturates to `u32::MAX`. Stored minutes are
+/// `i32` and increments `i16`, so stored values never reach it.
 pub fn round(minutes: u32, inc: u32, dir: RoundDir) -> u32 {
     if inc == 0 {
         return minutes;
     }
-    match dir {
-        RoundDir::Up => {
-            let rem = minutes % inc;
-            if rem == 0 {
-                minutes
-            } else {
-                minutes + (inc - rem)
-            }
-        }
-        RoundDir::Down => minutes - (minutes % inc),
-        RoundDir::Nearest => {
-            let lower = minutes - (minutes % inc);
-            let upper = lower + inc;
-            if minutes - lower < upper - minutes {
-                lower
-            } else {
-                upper
-            }
-        }
-    }
+    // Widened so the multiple above `minutes` cannot wrap.
+    let (minutes, inc) = (u64::from(minutes), u64::from(inc));
+    let lower = minutes - minutes % inc;
+    let rounded = match dir {
+        RoundDir::Up if lower == minutes => minutes,
+        RoundDir::Up => lower + inc,
+        RoundDir::Down => lower,
+        RoundDir::Nearest if 2 * (minutes - lower) < inc => lower,
+        RoundDir::Nearest => lower + inc,
+    };
+    u32::try_from(rounded).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]
@@ -67,10 +61,17 @@ mod tests {
     }
 
     #[test]
-    fn nearest_ties_round_up() {
-        // 7.5 min → ties between 0 and 15 → rounds up to 15
+    fn nearest_takes_the_closer_multiple() {
+        // 15 is odd, so 7 and 8 fall either side of the midpoint 7.5.
         assert_eq!(round(8, 15, RoundDir::Nearest), 15);
         assert_eq!(round(7, 15, RoundDir::Nearest), 0);
+    }
+
+    #[test]
+    fn nearest_ties_round_up() {
+        // 30 is exactly halfway between 0 and 60.
+        assert_eq!(round(30, 60, RoundDir::Nearest), 60);
+        assert_eq!(round(90, 60, RoundDir::Nearest), 120);
     }
 
     #[test]
@@ -78,5 +79,7 @@ mod tests {
         assert_eq!(round(61, 15, RoundDir::Up), 75);
         assert_eq!(round(61, 15, RoundDir::Down), 60);
         assert_eq!(round(60, 15, RoundDir::Up), 60); // already multiple
+        assert_eq!(round(0, 15, RoundDir::Up), 0);
+        assert_eq!(round(0, 15, RoundDir::Nearest), 0);
     }
 }
