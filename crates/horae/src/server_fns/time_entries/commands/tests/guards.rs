@@ -588,3 +588,158 @@ async fn no_op_emits_no_effects_and_changed_payload_uses_normalized_effective_va
         (entry.minutes, entry.start_minute, entry.billable)
     );
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn reorders_reject_locked_timed_and_running_entries_atomically(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let subject = SeedIds {
+        user_id: f.context.subject_id,
+        ..f.ids
+    };
+    let id = f.entry(&pool).await;
+    let mut invalid = Vec::new();
+    for state in [
+        EntryState::Submitted,
+        EntryState::Approved,
+        EntryState::Invoiced,
+    ] {
+        invalid.push(time_entry(&pool, &subject, state).await);
+    }
+    let timed = f.entry(&pool).await;
+    sqlx::query!(
+        "UPDATE time_entries SET start_minute=540 WHERE id=$1",
+        timed
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    invalid.push(timed);
+    let running = f.entry(&pool).await;
+    sqlx::query!(
+        "UPDATE time_entries SET is_running=true,started_at=now() WHERE id=$1",
+        running
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let before = snapshot(&pool, f.ids.org_id).await;
+    for bad in invalid {
+        let result = f
+            .execute(
+                &pool,
+                TimesheetCommand::Reorder {
+                    spent_date: "2026-09-08".parse().unwrap(),
+                    entry_ids: vec![id, bad],
+                },
+            )
+            .await;
+        assert!(
+            matches!(
+                result,
+                Err(ServerFnError::ServerError { code: CONFLICT, .. })
+            ),
+            "{result:?}"
+        );
+        assert_eq!(snapshot(&pool, f.ids.org_id).await, before);
+    }
+    let result = f
+        .execute(
+            &pool,
+            TimesheetCommand::Reorder {
+                spent_date: "2026-09-08".parse().unwrap(),
+                entry_ids: vec![running],
+            },
+        )
+        .await;
+    assert!(
+        matches!(
+            result,
+            Err(ServerFnError::ServerError { code: CONFLICT, .. })
+        ),
+        "a running timer cannot change day: {result:?}"
+    );
+    assert_eq!(snapshot(&pool, f.ids.org_id).await, before);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn legacy_archived_edits_keep_time_but_cannot_override_non_billability(pool: PgPool) {
+    for non_billable_project in [false, true] {
+        let mut f = fixture(&pool).await;
+        let owner = f.context.subject_id;
+        f.context.expected_requester.user_id = owner;
+        f.context.expected_policy = TimesheetPolicy::LegacyOwn;
+        f.ids.user_id = owner;
+        sqlx::query!(
+            "UPDATE organizations SET permission_policy_version=0 WHERE id=$1",
+            f.ids.org_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let id = f.entry(&pool).await;
+        // Exactly one of the project type and the task link is non-billable.
+        sqlx::query!(
+            "UPDATE projects SET active=false, project_type=CASE WHEN $2 THEN 'non_billable'::project_type ELSE project_type END WHERE id=$1",
+            f.ids.project_id,
+            non_billable_project
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "UPDATE project_tasks SET billable=$2 WHERE project_id=$1",
+            f.ids.project_id,
+            non_billable_project
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let edit = TimesheetEntryInput {
+            minutes: 90,
+            notes: Some("Kept".into()),
+            billable: true,
+            start_minute: Some(540),
+            ..f.input()
+        };
+        let update = |entry: TimesheetEntryInput| TimesheetCommand::Update {
+            entry_id: id,
+            entry,
+        };
+        let effects = apply(&pool, f.ids.org_id, owner, &f.context, update(edit.clone()))
+            .await
+            .unwrap();
+        assert_eq!(effects.entries.len(), 1);
+        let (entry, _) = &effects.entries[0];
+        assert!(
+            !entry.billable,
+            "non_billable_project={non_billable_project}"
+        );
+        assert_eq!(
+            (entry.minutes, entry.start_minute, entry.notes.as_deref()),
+            (90, Some(540), Some("Kept"))
+        );
+        let effects = apply(&pool, f.ids.org_id, owner, &f.context, update(edit.clone()))
+            .await
+            .unwrap();
+        assert!(
+            effects.entries.is_empty(),
+            "effective no-op must not emit an update event"
+        );
+        let effects = apply(
+            &pool,
+            f.ids.org_id,
+            owner,
+            &f.context,
+            update(TimesheetEntryInput {
+                minutes: 60,
+                notes: None,
+                start_minute: Some(1425),
+                ..edit
+            }),
+        )
+        .await
+        .unwrap();
+        let (entry, _) = &effects.entries[0];
+        assert_eq!((entry.minutes, entry.start_minute), (15, Some(1425)));
+    }
+}

@@ -98,11 +98,7 @@ pub(crate) fn parse_opt_uuid(
 }
 
 /// Parse a `YYYY-MM-DD` date argument, mapping a malformed value to a clear
-/// error naming the field. Optional dates go through
-/// `opt.as_deref().map(|s| parse_date(s, "…")).transpose()?` — deliberately
-/// without `parse_opt_uuid`'s empty-string-is-`None` shortcut, because
-/// `listing_is_bounded` counts `Some("")` as a bounding date, so swallowing it
-/// would let an unbounded listing through.
+/// error naming the field.
 #[cfg(feature = "server")]
 pub(crate) fn parse_date(s: &str, field: &str) -> Result<chrono::NaiveDate, ServerFnError> {
     s.parse()

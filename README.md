@@ -45,7 +45,7 @@ The authenticated SPA is organized by route:
 ## Quick start
 
 Everything runs inside the Nix dev shell, which provides the Rust toolchain, `dx`
-(the Dioxus CLI), `sqlx-cli`, PostgreSQL, and `wasm-pack`. A running PostgreSQL is required
+(the Dioxus CLI), `sqlx-cli`, and PostgreSQL. A running PostgreSQL is required
 for anything that touches the database.
 
 ### Try the demo

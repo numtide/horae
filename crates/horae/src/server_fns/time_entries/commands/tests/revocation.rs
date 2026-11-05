@@ -237,3 +237,78 @@ async fn cancelling_waiting_command_releases_authority_and_subject_barriers(pool
         60
     );
 }
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn waiting_writes_recheck_entry_state_after_the_submission_barrier(pool: PgPool) {
+    for reorder in [false, true] {
+        let f = fixture(&pool).await;
+        let id = f.entry(&pool).await;
+        let mut submission = pool.begin().await.unwrap();
+        let pid = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+            .fetch_one(&mut *submission)
+            .await
+            .unwrap();
+        sqlx::query!(
+            r#"SELECT pg_advisory_xact_lock(hashtextextended('horae.timesheet:' || $1::uuid::text, 0)) AS "lock!: ()""#,
+            f.context.subject_id,
+        )
+        .execute(&mut *submission)
+        .await
+        .unwrap();
+        let command = if reorder {
+            TimesheetCommand::Reorder {
+                spent_date: "2026-09-14".parse().unwrap(),
+                entry_ids: vec![id],
+            }
+        } else {
+            TimesheetCommand::Update {
+                entry_id: id,
+                entry: TimesheetEntryInput {
+                    minutes: 121,
+                    ..f.input()
+                },
+            }
+        };
+        let db = pool.clone();
+        let context = f.context;
+        let actor = f.ids.user_id;
+        let org = f.ids.org_id;
+        let mut writes = tokio::task::JoinSet::new();
+        writes.spawn(async move { apply(&db, org, actor, &context, command).await.map(|_| ()) });
+        wait_for_blocked(&pool, pid).await;
+        // The submission wins; the waiting write must reread the entry state
+        // after it acquires the barrier.
+        sqlx::query!(
+            "UPDATE time_entries SET state='submitted', rounded_minutes=60 WHERE id=$1",
+            id
+        )
+        .execute(&mut *submission)
+        .await
+        .unwrap();
+        submission.commit().await.unwrap();
+        let result = tokio::time::timeout(std::time::Duration::from_secs(5), writes.join_next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert!(
+            matches!(
+                result,
+                Err(ServerFnError::ServerError { code: CONFLICT, .. })
+            ),
+            "reorder={reorder}: {result:?}"
+        );
+        let stored = sqlx::query!(
+            r#"SELECT minutes, spent_date as "spent_date: chrono::NaiveDate" FROM time_entries WHERE id=$1"#,
+            id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            (stored.minutes, stored.spent_date),
+            (60, "2026-09-07".parse().unwrap())
+        );
+    }
+}

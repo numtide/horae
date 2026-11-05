@@ -36,7 +36,7 @@ Horae, not an assertion that its access should be preserved unchanged:
 | Source | Migration-relevant fact |
 | --- | --- |
 | `migrations/0001_init.sql`, `server_fns::{require_user,require_manager,require_admin}` | A person's active flag and Admin/Manager/Member organization role drive current guards; authentication identity must not be rebound during migration. |
-| `server_fns/time_entries.rs::list_time_entries` and entry mutations | The timesheet uses the session person, including for managers. A target profile allowing edits to other people's work adds a capability, even if its name sounds narrower. |
+| `server_fns/time_entries.rs::list_time_entries` and entry mutations (removed as dead code; superseded by `load_timesheet_page` / `apply_timesheet_command`, #259) | The timesheet uses the session person, including for managers. A target profile allowing edits to other people's work adds a capability, even if its name sounds narrower. |
 | `server_fns/users.rs::list_users`, `server_fns/auth.rs::get_me` | Manager sees directory rates; Member directory rates are redacted. The own-user response is a separate path and cannot be inferred from directory redaction. |
 | `server_fns/organization.rs::update_org_branding` | Manager can change invoice branding. The target workspace/account boundary must explicitly classify this existing operation. |
 | `server_fns/project_creation.rs::lock_creation_actor` | Project editing accepts a current Manager/Admin under an actor lock. Existing project/billing writes do not require a six-profile capability. |

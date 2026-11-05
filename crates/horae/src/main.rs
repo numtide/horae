@@ -35,7 +35,6 @@ mod state;
 
 mod app;
 mod components;
-mod error;
 mod models;
 mod pages;
 mod route;

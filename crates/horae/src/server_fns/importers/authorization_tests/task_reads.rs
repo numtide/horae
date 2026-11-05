@@ -40,7 +40,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     for (endpoint, body) in [
         ("list_tasks", json!({})),
         ("list_tracking_tasks", json!({})),
-        ("list_project_tasks", json!({"project_id":ids.project_id})),
     ] {
         assert_eq!(
             api.call(endpoint, body, None, false).await.status(),
@@ -60,15 +59,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     );
     let other = api.json("list_tasks", json!({}), &foreign_cookie).await;
     assert_eq!(other[0]["id"], json!(foreign.task_id));
-    assert_eq!(
-        api.json(
-            "list_project_tasks",
-            json!({"project_id":ids.project_id}),
-            &foreign_cookie
-        )
-        .await,
-        json!([])
-    );
 
     let grants: Vec<String> =
         serde_json::from_value(json!(PermissionSelection::new(&[Permission::TaskReadAll])))

@@ -17,54 +17,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .execute(pool)
     .await
     .unwrap();
-    // The legacy fee child must not use a different authenticated account than
-    // the detail page that mounted it. This does not activate canonical fee scope.
-    let legacy_cookie = api.cookie(restricted).await;
-    let other_cookie = api.cookie(outsider.user_id).await;
-    let fee_request = json!({
-        "project_id": ids.project_id,
-        "period_from": "2026-10-01", "period_to": "2026-10-31",
-        "expected_requester": {"org_id": ids.org_id, "user_id": restricted},
-    });
-    assert_eq!(
-        api.json(
-            "get_project_fee_balances",
-            fee_request.clone(),
-            &legacy_cookie
-        )
-        .await,
-        json!([])
-    );
-    assert_eq!(
-        api.call("get_project_fee_balances", fee_request.clone(), None, false)
-            .await
-            .status(),
-        StatusCode::UNAUTHORIZED
-    );
-    assert_eq!(
-        api.call(
-            "get_project_fee_balances",
-            fee_request.clone(),
-            Some(&other_cookie),
-            false
-        )
-        .await
-        .status(),
-        StatusCode::FORBIDDEN
-    );
-    let mut wrong_organization = fee_request;
-    wrong_organization["expected_requester"]["org_id"] = json!(outsider.org_id);
-    assert_eq!(
-        api.call(
-            "get_project_fee_balances",
-            wrong_organization,
-            Some(&legacy_cookie),
-            false
-        )
-        .await
-        .status(),
-        StatusCode::FORBIDDEN
-    );
     for (actor, permissions) in [
         (
             ids.user_id,
@@ -135,9 +87,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     for (endpoint, body) in [
         ("get_project_overview", json!({"expected_requester": null})),
         ("list_projects", list.clone()),
-        ("get_project_details", detail.clone()),
         ("get_project_detail_view", detail.clone()),
-        ("list_assignments", detail.clone()),
         ("list_project_tags", json!({})),
         ("list_project_spend", json!({})),
         ("list_project_budget_progress", json!({})),
@@ -215,30 +165,12 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(detail_view["requester"], requester);
     assert_eq!(detail_view["canonical_permissions"], json!(true));
     assert_eq!(detail_view["can_edit"], json!(false));
-    assert_eq!(
-        detail_view["project"],
-        api.json("get_project_details", bound_detail.clone(), &cookie)
-            .await
-    );
+    assert_eq!(detail_view["project"]["id"], json!(ids.project_id));
+    assert!(detail_view["project"].get("admin_notes").is_none());
+    assert!(detail_view["project"].get("task_rate_currency").is_none());
     assert_eq!(detail_view["team"].as_array().unwrap().len(), 1);
     assert_eq!(detail_view["team"][0]["id"], json!(teammate));
     assert_eq!(detail_view["team"][0].as_object().unwrap().len(), 2);
-    let team = api
-        .json("list_assignments", bound_detail.clone(), &cookie)
-        .await;
-    assert_eq!(team.as_array().unwrap().len(), 1);
-    assert_eq!(team[0]["user_id"], json!(teammate));
-    assert_eq!(team[0]["rate_cents"], json!(76543));
-    assert_eq!(
-        api.json("list_assignments", detail.clone(), &cookie).await,
-        team
-    );
-    assert_eq!(
-        api.json("get_project_details", bound_detail.clone(), &cookie)
-            .await,
-        api.json("get_project_details", detail.clone(), &cookie)
-            .await,
-    );
     for changed_cookie in [&restricted_cookie, &foreign_cookie] {
         assert_eq!(
             api.call(
@@ -250,28 +182,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .await
             .status(),
             StatusCode::FORBIDDEN
-        );
-        assert_eq!(
-            api.call(
-                "list_assignments",
-                bound_detail.clone(),
-                Some(changed_cookie),
-                false
-            )
-            .await
-            .status(),
-            StatusCode::FORBIDDEN,
-        );
-        assert_eq!(
-            api.call(
-                "get_project_details",
-                bound_detail.clone(),
-                Some(changed_cookie),
-                false
-            )
-            .await
-            .status(),
-            StatusCode::FORBIDDEN,
         );
         for (endpoint, body) in [
             (
@@ -308,12 +218,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(budget[0]["project_id"], json!(ids.project_id));
     assert_eq!(budget[0]["budget"], json!(86753));
     assert_eq!(budget[0]["consumed"], json!(0));
-    let details = api
-        .json("get_project_details", detail.clone(), &cookie)
-        .await;
-    assert_eq!(details["id"], json!(ids.project_id));
-    assert!(details.get("admin_notes").is_none());
-    assert!(details.get("task_rate_currency").is_none());
     let tags = api.json("list_project_tags", json!({}), &cookie).await;
     assert_eq!(tags.as_array().unwrap().len(), 1);
     assert_eq!(tags[0]["project_id"], json!(ids.project_id));
@@ -343,32 +247,12 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         );
         assert_eq!(
             api.json(
-                "list_assignments",
-                json!({"project_id":ids.project_id,"viewer_id":ids.user_id,"org_id":ids.org_id}),
-                denied_cookie
-            )
-            .await,
-            json!([]),
-        );
-        assert_eq!(
-            api.json(
                 "list_project_budget_progress",
                 json!({"viewer_id": ids.user_id, "org_id": ids.org_id}),
                 denied_cookie
             )
             .await,
             json!([])
-        );
-        assert_eq!(
-            api.call(
-                "get_project_details",
-                detail.clone(),
-                Some(denied_cookie),
-                false
-            )
-            .await
-            .status(),
-            StatusCode::NOT_FOUND
         );
     }
     // The same authenticated session must lose financial fields immediately,
@@ -403,14 +287,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             assert_eq!(overview["projects"][0]["can_edit"], json!(false));
         }
         let tags = api.json("list_project_tags", json!({}), &cookie).await;
-        let team = api
-            .json("list_assignments", bound_detail.clone(), &cookie)
-            .await;
-        assert_eq!(team.as_array().unwrap().len(), usize::from(can_read));
-        if can_read {
-            assert_eq!(team[0]["user_id"], json!(teammate));
-            assert!(team[0].get("rate_cents").is_none(), "{team}");
-        }
         let spend = api.json("list_project_spend", json!({}), &cookie).await;
         let budget = api
             .json("list_project_budget_progress", json!({}), &cookie)
@@ -425,6 +301,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 .await;
             assert_eq!(view["can_edit"], json!(false));
             assert_eq!(view["team"][0].as_object().unwrap().len(), 2);
+            assert!(view["project"].get("admin_notes").is_none());
+            assert!(view["project"].get("task_rate_currency").is_none());
             assert!(budget[0].get("budget").is_none(), "{budget}");
             assert!(budget[0].get("consumed").is_none(), "{budget}");
             assert_eq!(budget[0]["breakdown"], json!([]));
@@ -433,11 +311,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             for field in ["rate_cents", "budget_amount_cents"] {
                 assert!(projects[0].get(field).is_none(), "{projects}");
             }
-            let details = api
-                .json("get_project_details", detail.clone(), &cookie)
-                .await;
-            assert!(details.get("admin_notes").is_none());
-            assert!(details.get("task_rate_currency").is_none());
         } else {
             assert_eq!(
                 api.call(
@@ -450,12 +323,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 .status(),
                 StatusCode::NOT_FOUND
             );
-            assert_eq!(
-                api.call("get_project_details", detail.clone(), Some(&cookie), false)
-                    .await
-                    .status(),
-                StatusCode::NOT_FOUND
-            );
         }
     }
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
@@ -465,9 +332,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     for (endpoint, body) in [
         ("get_project_overview", bound),
         ("list_projects", list),
-        ("get_project_details", detail),
-        ("get_project_detail_view", bound_detail.clone()),
-        ("list_assignments", bound_detail),
+        ("get_project_detail_view", bound_detail),
         ("list_project_tags", json!({})),
         ("list_project_spend", json!({})),
         ("list_project_budget_progress", json!({})),

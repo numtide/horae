@@ -1,50 +1,5 @@
 use thiserror::Error;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Money {
-    pub cents: i64,
-    pub currency: [u8; 3], // ISO 4217 e.g. b"USD"
-}
-
-#[derive(Debug, Error)]
-#[error("currency mismatch: cannot add {a} and {b}")]
-pub struct CurrencyMismatch {
-    pub a: String,
-    pub b: String,
-}
-
-#[derive(Debug, Error)]
-pub enum AddError {
-    #[error(transparent)]
-    CurrencyMismatch(#[from] CurrencyMismatch),
-    #[error("money total exceeds the supported range")]
-    Overflow,
-}
-
-impl Money {
-    pub fn new(cents: i64, currency: [u8; 3]) -> Self {
-        Self { cents, currency }
-    }
-
-    pub fn currency_str(&self) -> &str {
-        std::str::from_utf8(&self.currency).unwrap_or("???")
-    }
-}
-
-pub fn add(a: Money, b: Money) -> Result<Money, AddError> {
-    if a.currency != b.currency {
-        return Err(CurrencyMismatch {
-            a: a.currency_str().to_owned(),
-            b: b.currency_str().to_owned(),
-        }
-        .into());
-    }
-    Ok(Money {
-        cents: a.cents.checked_add(b.cents).ok_or(AddError::Overflow)?,
-        currency: a.currency,
-    })
-}
-
 /// Some amount in the set is not visible to the viewer.
 #[derive(Debug, Error, PartialEq, Eq)]
 #[error("an amount in the total is withheld")]
@@ -183,29 +138,6 @@ pub fn format_budget(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn addition_rejects_overflow_in_both_directions() {
-        for (a, b) in [(i64::MAX, 1), (i64::MIN, -1)] {
-            assert!(add(Money::new(a, *b"EUR"), Money::new(b, *b"EUR")).is_err());
-        }
-    }
-
-    #[test]
-    fn addition_retains_currency_checks_and_representable_boundaries() {
-        assert!(matches!(
-            add(Money::new(1, *b"EUR"), Money::new(1, *b"USD")),
-            Err(AddError::CurrencyMismatch(_))
-        ));
-        assert_eq!(
-            add(Money::new(i64::MAX - 1, *b"EUR"), Money::new(1, *b"EUR")).unwrap(),
-            Money::new(i64::MAX, *b"EUR")
-        );
-        assert_eq!(
-            add(Money::new(i64::MIN + 1, *b"EUR"), Money::new(-1, *b"EUR")).unwrap(),
-            Money::new(i64::MIN, *b"EUR")
-        );
-    }
 
     #[test]
     fn currency_totals_are_exact_per_currency_and_ordered_by_code() {

@@ -1228,3 +1228,63 @@ async fn editor_recovers_each_budget_scope_without_turning_absence_into_zero(poo
         assert_eq!(loaded.team[0].budget, form.team[0].budget);
     }
 }
+
+/// A task linked without an explicit rate inherits its catalog default only
+/// when that default is in the project currency; otherwise nothing is linked.
+#[sqlx::test(migrations = "./migrations")]
+async fn linked_task_inherits_its_default_rate_only_in_the_project_currency(pool: PgPool) {
+    for (currency, rate, expected) in [
+        (None, "", None),
+        (Some("USD"), "", None),
+        (Some("EUR"), "", Some(8000)),
+        (Some("USD"), "12.34", Some(1234)),
+    ] {
+        let (owner, original) = configured_fixture(&pool).await;
+        let task_id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO tasks (id,org_id,name,billable_default,default_rate_cents,default_rate_currency)
+             VALUES ($1,$2,'Catalog default',true,8000,$3)",
+            task_id,
+            owner.org_id,
+            currency,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let mut request = edit_request(original.clone());
+        request.form.tasks.push(ProjectTaskInput {
+            id: Uuid::now_v7(),
+            source: TaskSource::Existing { task_id },
+            billable: true,
+            rate: rate.into(),
+            budget: String::new(),
+            access: TaskAccess::Everyone,
+        });
+        let result =
+            save_editable_project(&pool, owner.user_id, owner.org_id, &request, false).await;
+        let stored = sqlx::query_scalar!(
+            "SELECT rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2",
+            original.id,
+            task_id,
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap();
+        if let Some(expected) = expected {
+            result.unwrap();
+            assert_eq!(stored, Some(Some(expected)), "{currency:?} {rate:?}");
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(ServerFnError::ServerError {
+                        code: BAD_REQUEST,
+                        ..
+                    })
+                ),
+                "{currency:?}: {result:?}"
+            );
+            assert_eq!(stored, None, "{currency:?}");
+        }
+    }
+}

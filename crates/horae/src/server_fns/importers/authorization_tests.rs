@@ -45,7 +45,6 @@ mod session_identity;
 mod task_activity;
 mod task_catalog;
 mod task_edits;
-mod task_links;
 mod task_reads;
 mod task_writes;
 mod time_entry_payload;
@@ -419,7 +418,6 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     task_edits::check(&pool, &api).await;
     task_activity::check(&pool, &api).await;
     task_catalog::check(&pool, &api).await;
-    task_links::check(&pool, &api).await;
     scoped_directory::check(&pool, &api).await;
     scoped_time::check(&pool, &api).await;
     delegated_time::check(&pool, &api).await;

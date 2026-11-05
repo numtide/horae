@@ -28,7 +28,7 @@ async fn assignment_count(pool: &PgPool) -> i64 {
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
 async fn project_membership_and_task_callers_wait_before_authorizing(pool: PgPool) {
-    for operation in ["assign", "remove", "link", "create_link", "create_task"] {
+    for operation in ["assign", "remove", "create_link", "create_task"] {
         let ids = seed(&pool, OrgRole::Admin).await;
         let actor = admin(&ids);
         let assignment = insert_assignment(
@@ -76,17 +76,6 @@ async fn project_membership_and_task_callers_wait_before_authorizing(pool: PgPoo
                 "remove" => remove_assignment(&db, &actor, assignment.id)
                     .await
                     .map(|_| ()),
-                "link" => {
-                    link_project_task_record(
-                        &db,
-                        ids.org_id,
-                        actor.id,
-                        ids.project_id,
-                        ids.task_id,
-                        None,
-                    )
-                    .await
-                }
                 "create_link" => create_task_for_project(
                     &db,
                     ids.org_id,

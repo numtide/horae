@@ -469,6 +469,23 @@ mod tests {
     use uuid::Uuid;
 
     #[test]
+    fn rates_distinguish_inheritance_zero_and_exact_amounts() {
+        assert_eq!(optional_amount("  ", "Rate").unwrap(), None);
+        assert_eq!(optional_amount("0", "Rate").unwrap(), Some(0));
+        assert_eq!(optional_amount(" 120.50 ", "Rate").unwrap(), Some(12050));
+        assert_eq!(
+            optional_amount("92233720368547758.07", "Rate").unwrap(),
+            Some(i64::MAX)
+        );
+        for invalid in ["-1", "NaN", "inf", "12.345", "92233720368547758.08"] {
+            assert!(
+                optional_amount(invalid, "Rate").is_err(),
+                "accepted {invalid}"
+            );
+        }
+    }
+
+    #[test]
     fn task_name_and_access_rejections_identify_the_invalid_row() {
         use crate::models::project_creation::ProjectTaskInput;
         let first = Uuid::now_v7();

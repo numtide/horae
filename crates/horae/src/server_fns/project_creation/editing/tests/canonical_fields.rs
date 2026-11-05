@@ -1473,3 +1473,92 @@ async fn canonical_managed_editor_requires_the_project_designation(pool: PgPool)
             .is_ok()
     );
 }
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn canonical_save_rejects_unavailable_authority_without_changing_storage(pool: PgPool) {
+    for case in [
+        "missing",
+        "malformed",
+        "unknown_policy",
+        "inactive",
+        "no_grant",
+    ] {
+        let (owner, original) = configured_fixture(&pool).await;
+        canonical_actor(
+            &pool,
+            &owner,
+            &PermissionSelection::new(&[Permission::ProjectWriteAll]),
+        )
+        .await;
+        let editor = load_editable_project(&pool, owner.user_id, owner.org_id, original.id)
+            .await
+            .unwrap();
+        let mut request = edit_request(editor);
+        request.unchanged = keep_protected(&request.form);
+        request.form.name = "Unauthorized rename".into();
+        match case {
+            "missing" => {
+                sqlx::query!(
+                    "DELETE FROM person_permission_states WHERE user_id=$1",
+                    owner.user_id
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+            "malformed" => {
+                sqlx::query!(
+                    "UPDATE person_permission_states SET grants=ARRAY['unknown.permission'] WHERE user_id=$1",
+                    owner.user_id
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+            "unknown_policy" => {
+                sqlx::query!(
+                    "UPDATE organizations SET permission_policy_version=2 WHERE id=$1",
+                    owner.org_id
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+            "inactive" => {
+                sqlx::query!("UPDATE users SET active=false WHERE id=$1", owner.user_id)
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+            }
+            "no_grant" => {
+                let floor: Vec<String> = serde_json::from_value(
+                    serde_json::to_value(PermissionSelection::new(&[])).unwrap(),
+                )
+                .unwrap();
+                sqlx::query!(
+                    "UPDATE person_permission_states SET grants=$2 WHERE user_id=$1",
+                    owner.user_id,
+                    &floor
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let before =
+            sqlx::query_scalar!("SELECT xmin::text FROM projects WHERE id=$1", original.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let result =
+            save_editable_project(&pool, owner.user_id, owner.org_id, &request, false).await;
+        assert!(result.is_err(), "{case}: {result:?}");
+        let after = sqlx::query_scalar!("SELECT xmin::text FROM projects WHERE id=$1", original.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(before, after, "{case}");
+    }
+}
