@@ -24,14 +24,14 @@ Each fires immediately after the named server mutation commits. No event fires o
 
 | Hook | Trigger | Payload key |
 |---|---|---|
-| `time_entry_updated` | `update_time_entry` | `time_entry` |
-| `time_entry_deleted` | `delete_time_entry` | `time_entry` |
+| `time_entry_updated` | `apply_timesheet_command` (#259; `update_time_entry` removed as dead code) | `time_entry` |
+| `time_entry_deleted` | `apply_timesheet_command` (#259; `delete_time_entry` removed as dead code) | `time_entry` |
 | `timesheet_submitted` | `submit_week` | `submission` |
 | `submission_approved` | `approve_submission` | `submission` |
 | `submission_rejected` | `reject_submission` | `submission` |
 | `invoice_paid` | `update_invoice_status` → `paid` | `invoice` |
 | `invoice_voided` | `update_invoice_status` → `void` | `invoice` |
-| `client_created` / `client_updated` | `create_client` / `update_client` | `client` |
+| `client_created` / `client_updated` | `create_client_profile` / `update_client_profile` (#216; `create_client` / `update_client` removed as dead code) | `client` |
 | `client_deactivated` / `client_reactivated` | `set_client_active` (on flip) | `client` |
 | `project_created` / `project_updated` | `create_project` / `update_project` | `project` |
 | `project_deactivated` / `project_reactivated` | `set_project_active` (on flip) | `project` |
@@ -40,7 +40,7 @@ Each fires immediately after the named server mutation commits. No event fires o
 | `user_created` | `create_user` | `user` |
 | `user_role_changed` | `set_user_role` | `user` + `previous_role` |
 | `user_deactivated` | `set_user_active` → inactive | `user` |
-| `user_logged_out` | `logout` | `user` |
+| `user_logged_out` | Axum `POST /auth/logout` (the never-rendered `logout` server fn was removed as dead code) | `user` |
 | `user_assigned_to_project` | `create_assignment` | `assignment` |
 | `assignment_removed` | `delete_assignment` | `assignment` |
 | `org_branding_updated` | `update_org_branding` | `org` |

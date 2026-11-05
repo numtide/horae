@@ -57,7 +57,7 @@ pub async fn list_recent_project_entries(project_id: String, limit: i64)
 
 ## 5. Reused, unchanged
 
-- **`list_assignments(project_id)`** — the team section (already rendered on the page today).
+- **`list_assignments(project_id)`** — the team section (already rendered on the page today). Removed as dead code; superseded by `get_project_detail_view` (#270).
 - **`list_project_spend()`** — refactored internally onto `horae_core::project_rollup::fold_entries`; its signature and result are unchanged, but it now shares the fold with the dashboard so figures cannot drift.
 - **`get_me()`** — money-visibility / role gating, as elsewhere.
 

@@ -50,8 +50,8 @@ validator remains authoritative.
 - `list_tasks` is used by the legacy administrative task section.
   `list_tracking_tasks` supplies timer identities. The main project editor has
   its own context-bound catalog; the detail page now uses minimal bound labels.
-  `list_project_tasks` remains an authenticated endpoint even without a current
-  production UI caller and must enforce current project/workflow authority.
+  `list_project_tasks`, which had no production UI caller, was removed as dead
+  code; the detail page reads through `get_project_detail_view` (#270).
 - At that baseline, compatibility `list_tasks`/`get_task` independently use the legacy view;
   count and rows are separate statements. Their filters/direct IDs, financial
   projection and current authority need equivalent enforcement.
@@ -408,7 +408,9 @@ manager authorization. Reuse the project editor's current all/managed operation
 gate for linking existing identities; global task write is not required and
 does not authorize the destination. Bind the request to the authenticated
 organization/person, including repeats, and acquire the access-changing
-organization gate before actor, project or task locks.
+organization gate before actor, project or task locks. (`link_project_task` was
+later removed as dead code; task linking goes through `save_project_editor`,
+#270.)
 
 Keep the existing association transport: absent `rate` uses established defaults
 for a new link and never edits an existing link; an explicit `ProjectTaskRate`

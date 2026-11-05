@@ -123,21 +123,21 @@ trait object). This gives you:
 
 ```rust
 // Preferred
-pub struct AppError(AppErrorKind);
+pub struct LookupError(LookupErrorKind);
 
-enum AppErrorKind {
+enum LookupErrorKind {
     NotFound(String),
     Forbidden,
     // ...
 }
 
-impl AppError {
+impl LookupError {
     pub fn not_found(msg: impl Into<String>) -> Self { ... }
     pub fn is_not_found(&self) -> bool { ... }
 }
 
 // Avoid
-pub enum AppError {
+pub enum LookupError {
     NotFound(String),
     Forbidden,
 }

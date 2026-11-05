@@ -10,7 +10,7 @@ A runnable guide to bring the app up and validate the feature end-to-end. It map
 ## Setup
 
 ```sh
-nix develop                 # dev shell: rust toolchain, dx, sqlx-cli, postgres, wasm-pack
+nix develop                 # dev shell: rust toolchain, dx, sqlx-cli, postgres
 nix run .#qemu-vm           # (optional) boot a NixOS VM running PostgreSQL
 
 # apply schema, then load demo data
