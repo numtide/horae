@@ -49,7 +49,7 @@ let
       cp -f ${dummyMain} "$out/crates/horae/src/main.rs"
     '';
   };
-  dxInputs = with buildPkgs; [ dioxus-cli wasm-pack binaryen ]
+  dxInputs = with buildPkgs; [ dioxus-cli binaryen ]
     ++ lib.optionals stdenv.hostPlatform.isDarwin [ buildPkgs.darwin.sigtool ];
   dxBuild = ''
     (cd crates/horae && dx build --release --locked)
