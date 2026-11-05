@@ -123,6 +123,17 @@ This orders planning, not implementation authorization:
 
 ## Iteration log
 
+### 2026-11-05 — Reference-account data policy
+
+- Policy, by role: no data is created, edited or deleted in the production Harvest
+  account. Disposable fixtures are allowed only in the test (evidence) account the
+  user designates, with the user's authorization for each task recorded here. Pre-existing
+  business records, delivery, payments and account settings are never touched.
+  Fixtures are tracked by exact ID and cleaned up, or recorded as deliberately retained.
+- Test account: a time entry of 1000:00 or 240:01 on one day is rejected with 409
+  "Daily hours cannot exceed 240." Nothing was created. The limit is 240 hours per
+  person per day, as a sum.
+
 ### 2026-10-01 — Independent investigations completed and published
 
 - Published expense revision `85791e9` in #214 and permission evidence
@@ -363,9 +374,8 @@ This orders planning, not implementation authorization:
 - No reference records were saved, no messages sent, no migrations or application
   changes made and no merges performed. Discarded the unsaved form and ended the
   MCP client connection, preserving the user's tabs.
-- Next: obtain explicit authority for disposable reference fixtures in a dedicated
-  test account, never the production account (no existing business records,
-  delivery, payments or account changes; clean up by exact ID), then execute E-NUM,
+- Next: obtain explicit authority for disposable reference fixtures (no existing
+  business records, delivery, payments or account changes), then execute E-NUM,
   E-RATE, E-CUR, E-BILL and E-REC. E-AUTH additionally needs editable non-owner
   access; do not buy seats or change the owner. Continue evidence work rather
   than inventing the missing rules or marking clarification complete.
