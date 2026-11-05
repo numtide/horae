@@ -1288,3 +1288,61 @@ async fn linked_task_inherits_its_default_rate_only_in_the_project_currency(pool
         }
     }
 }
+
+/// A task added in the editor inherits its catalog default only where billing
+/// uses task rates, and a non-billable project never makes the link billable.
+#[sqlx::test(migrations = "./migrations")]
+async fn added_task_links_inherit_default_rates_only_for_task_billing(pool: PgPool) {
+    use horae_core::types::ProjectType;
+    for (project_type, rate_mode) in [
+        (ProjectType::TimeAndMaterials, RateMode::Task),
+        (ProjectType::TimeAndMaterials, RateMode::Person),
+        (ProjectType::TimeAndMaterials, RateMode::Project),
+        (ProjectType::NonBillable, RateMode::Task),
+    ] {
+        let (owner, original) = configured_fixture(&pool).await;
+        let task_id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO tasks (id,org_id,name,billable_default,default_rate_cents,default_rate_currency)
+             VALUES ($1,$2,'Catalog default',true,8000,'EUR')",
+            task_id,
+            owner.org_id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let mut request = edit_request(original.clone());
+        request.form.project_type = project_type;
+        request.form.rate_mode = rate_mode;
+        request.form.project_rate = "10".into();
+        request.form.tasks.push(ProjectTaskInput {
+            id: Uuid::now_v7(),
+            source: TaskSource::Existing { task_id },
+            billable: true,
+            rate: String::new(),
+            budget: String::new(),
+            access: TaskAccess::Everyone,
+        });
+        save_editable_project(&pool, owner.user_id, owner.org_id, &request, false)
+            .await
+            .unwrap();
+        let link = sqlx::query!(
+            "SELECT billable, rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2",
+            original.id,
+            task_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let task_billing =
+            project_type == ProjectType::TimeAndMaterials && rate_mode == RateMode::Task;
+        assert_eq!(
+            (link.billable, link.rate_cents),
+            (
+                project_type != ProjectType::NonBillable,
+                task_billing.then_some(8000)
+            ),
+            "{project_type:?} {rate_mode:?}"
+        );
+    }
+}

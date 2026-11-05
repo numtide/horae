@@ -155,7 +155,7 @@ ______________________________________________________________________
 |---|---|---|---|---|
 | `list_tasks` | — | `Vec<Task>` (active, session organization only) | `ServerFnError` (`500`) | member |
 | `list_project_tasks` — removed (dead code; superseded by `get_project_detail_view`, #270) | `project_id: Uuid` | `Vec<Task>` (linked via `project_tasks`) | `ServerFnError` (`401`, `500`) | member |
-| `create_task` | `name: String`, `billable_default: bool`, `project_id: Option<Uuid>` | `Task` | `ServerFnError` (`403` non-manager, `404` unavailable project, `409` empty name) | manager |
+| `create_task` | `name: String`, `billable_default: bool`, `rate: TaskRateEdit`, `expected_requester: PermissionRequester` (`project_id: Option<Uuid>` removed; the task is created in the catalog only) | `Task` | `ServerFnError` (`403` non-manager, `409` empty name) | manager |
 | `update_task` | `task_id: Uuid`, `name: String`, `billable_default: bool`, `default_rate_cents: Option<i64>` | `Task` | `ServerFnError` (`403`, `404`) | manager |
 | `set_task_active` | `task_id: Uuid`, `active: bool` | `Task` | `ServerFnError` (`403`, `404`) | manager |
 | `link_project_task` — removed (dead code; task linking goes through `save_project_editor`, #270) | `project_id: Uuid`, `task_id: Uuid` | `()` | `ServerFnError` (`403`, `404`) | manager |
@@ -174,7 +174,7 @@ Notes:
    **manager**. The removed `link_project_task` inherited the task's `billable_default` /
    `default_rate_cents` onto the new `project_tasks` row and is idempotent
    (`ON CONFLICT DO NOTHING`).
-1. Passing `project_id` to `create_task` creates and enables the task in one transaction. A linking failure rolls back the task, and the creation event is emitted only after commit. The project detail page offers both this action and enabling an existing catalog task. Linking checks the active client/project/task and organization even when a link already exists; repeating it preserves existing billability and rate overrides.
+1. Removed: `create_task` used to accept a `project_id` and link the new task to that project in the same transaction. No page ever sent one, and the parameter is gone. `create_task` now only adds a catalog task, and tasks are linked to projects through the project editor (`save_project_editor`) and project creation. This matches Harvest: `POST /v2/tasks` takes no project, and linking is a separate task assignment.
 
 ______________________________________________________________________
 

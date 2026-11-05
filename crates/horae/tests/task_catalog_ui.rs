@@ -36,13 +36,7 @@ type Request = (
     Option<TaskCursor>,
     Option<PermissionRequester>,
 );
-type Creation = (
-    String,
-    bool,
-    Option<String>,
-    TaskRateEdit,
-    PermissionRequester,
-);
+type Creation = (String, bool, TaskRateEdit, PermissionRequester);
 #[derive(Clone, Default)]
 struct Probe {
     replies: Rc<RefCell<VecDeque<oneshot::Receiver<Response>>>>,
@@ -238,7 +232,6 @@ async fn creation_without_rates_keeps_validation_input_and_refreshes_after_succe
         (
             "New consulting task".into(),
             true,
-            None,
             TaskRateEdit::Preserve {},
             requester,
         )
@@ -282,7 +275,7 @@ async fn creation_validates_exact_rate_blocks_duplicate_submit_and_discards_revo
     ui.form_event("task-name", "input", "Exact initial rate");
     ui.form_event("task-edit-form", "submit", "");
     assert_eq!(
-        probe.creations.borrow_mut().pop().unwrap().3,
+        probe.creations.borrow_mut().pop().unwrap().2,
         TaskRateEdit::Preserve {},
         "A financial editor may leave the initial rate blank without setting zero"
     );
@@ -301,7 +294,6 @@ async fn creation_validates_exact_rate_blocks_duplicate_submit_and_discards_revo
         &[(
             "Exact initial rate".into(),
             true,
-            None,
             TaskRateEdit::Set {
                 amount_cents: 0,
                 currency: "EUR".into()
@@ -465,7 +457,6 @@ mod server_fns {
     pub async fn create_task(
         name: String,
         billable: bool,
-        project_id: Option<String>,
         rate: TaskRateEdit,
         requester: PermissionRequester,
     ) -> Result<Task, ServerFnError> {
@@ -473,7 +464,7 @@ mod server_fns {
         probe
             .creations
             .borrow_mut()
-            .push((name, billable, project_id, rate, requester));
+            .push((name, billable, rate, requester));
         let receive = probe.creation_reply.borrow_mut().take();
         if let Some(receive) = receive {
             return receive.await.unwrap();

@@ -296,7 +296,7 @@ fn LegacyAdminUsers() -> Element {
                                 let n = task_name();
                                 let b = task_billable();
                                 let Some(requester) = task_requester else { return; };
-                                run_action(server_fns::create_task(n, b, None, TaskRateEdit::Preserve {}, requester), tasks, task_error, move || {
+                                run_action(server_fns::create_task(n, b, TaskRateEdit::Preserve {}, requester), tasks, task_error, move || {
                                     task_name.set(String::new());
                                     task_billable.set(true);
                                     show_task_form.set(false);

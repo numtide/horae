@@ -97,7 +97,7 @@ fn TaskForm(
                 let (result, message) = if let Some(id) = task_id {
                     (server_fns::update_task(id.to_string(), edited_name, edited_billable, rate, requester).await, "Task updated.")
                 } else {
-                    (server_fns::create_task(edited_name, edited_billable, None, rate, requester).await, "Task created.")
+                    (server_fns::create_task(edited_name, edited_billable, rate, requester).await, "Task created.")
                 };
                 finish(result, busy, error, on_saved, on_denied, message);
             });
