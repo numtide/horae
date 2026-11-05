@@ -672,6 +672,9 @@ mod tests {
 }
 
 #[cfg(all(test, feature = "server"))]
+mod legacy_minutes_tests;
+
+#[cfg(all(test, feature = "server"))]
 mod submission_tests;
 
 #[cfg(all(test, feature = "server"))]

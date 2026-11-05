@@ -1172,6 +1172,93 @@ async fn bad_records_are_reported_and_run_continues(pool: PgPool) {
     assert_eq!(entries, 1);
 }
 
+#[sqlx::test(migrations = "./migrations")]
+async fn rows_past_the_daily_limit_are_reported_like_other_bad_rows(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    seed_user(&pool, org, "dev@acme.com").await;
+    let row = |entry, day, hours| {
+        api_row(
+            (1, 10, 100, entry, 1000),
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (2026, 1, day),
+            hours,
+            None,
+        )
+    };
+    let rows = vec![
+        // 200 h + 40 h fill the 15th exactly; one more minute does not fit.
+        row(5000, 15, "200"),
+        row(5001, 15, "40"),
+        row(5002, 15, "0.02"),
+        // A single row over 240 h on an empty day.
+        row(5003, 16, "240.02"),
+    ];
+    let report = commit(&pool, org, rows).await;
+
+    assert!(report.reconciles());
+    assert_eq!(report.summary.time_entries.created, 2);
+    assert_eq!(report.summary.time_entries.errored, 2);
+    let reasons: Vec<_> = report
+        .row_errors
+        .iter()
+        .map(|e| e.reason.as_str())
+        .collect();
+    assert_eq!(
+        reasons,
+        [
+            "Daily hours cannot exceed 240.",
+            "Daily hours cannot exceed 240."
+        ]
+    );
+    let day_total = sqlx::query_scalar!(
+        "SELECT SUM(minutes) FROM time_entries WHERE org_id = $1 AND spent_date = '2026-01-15'",
+        org
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(day_total, Some(14_400));
+}
+
+/// The import holds no day lock: one held elsewhere on an imported day does
+/// not stall it, however many days it spans.
+#[sqlx::test(migrations = "./migrations")]
+async fn an_import_of_many_days_takes_no_day_locks(pool: PgPool) {
+    use chrono::Datelike;
+    let org = seed_org(&pool).await;
+    let user = seed_user(&pool, org, "dev@acme.com").await;
+    let first = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+    let days: Vec<_> = first.iter_days().take(400).collect();
+    let rows = (0..).zip(&days).map(|(i, day)| {
+        api_row(
+            (1, 10, 100, 6000 + i, 1000),
+            "Acme",
+            "Website",
+            "Design",
+            "dev@acme.com",
+            (day.year(), day.month(), day.day()),
+            "1",
+            None,
+        )
+    });
+    let mut holder = pool.begin().await.unwrap();
+    crate::db::daily_minutes_totals(&mut holder, user, &[days[200]])
+        .await
+        .unwrap();
+
+    let report = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        commit(&pool, org, rows.collect()),
+    )
+    .await
+    .expect("the import must not wait for a day lock");
+    holder.rollback().await.unwrap();
+    assert_eq!(report.summary.time_entries.created, 400);
+}
+
 // ── US5: CSV natural-key path ─────────────────────────────────────────────────
 
 #[sqlx::test(migrations = "./migrations")]

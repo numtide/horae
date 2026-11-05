@@ -2056,3 +2056,34 @@ async fn invoice_transitions_reject_invalid_states_and_foreign_organizations(poo
         Err(ServerFnError::ServerError { code: CONFLICT, .. })
     ));
 }
+
+/// An entry stored over the daily limit before it existed can still be
+/// invoiced and released by a void; only raising its minutes is refused.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_legacy_entry_over_the_limit_is_invoiced_and_voided(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    let entry = time_entry(&pool, &ids, EntryState::Open).await;
+    crate::server_fns::test_seed::legacy_minutes(&pool, entry, 20_000).await;
+    let day = "2026-09-07".parse().unwrap();
+    let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+        .await
+        .unwrap();
+    transition_invoice(
+        &pool,
+        ids.org_id,
+        invoice.invoice.id,
+        InvoiceStatus::Void,
+        ids.user_id,
+    )
+    .await
+    .unwrap();
+    let stored = sqlx::query!(
+        r#"SELECT minutes, state as "state: EntryState" FROM time_entries WHERE id = $1"#,
+        entry
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!((stored.minutes, stored.state), (20_000, EntryState::Open));
+    crate::server_fns::test_seed::assert_minutes_cannot_rise(&pool, entry).await;
+}

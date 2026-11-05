@@ -77,9 +77,74 @@ pub fn minutes_between(
     (end - start).num_minutes().max(0) as u32
 }
 
+/// The most one person may track on one day, summed over all their entries:
+/// Harvest's 240 hours ("Daily hours cannot exceed 240.").
+pub const MAX_DAILY_MINUTES: i64 = 14_400;
+
+#[derive(Debug, Error, PartialEq, Eq)]
+#[error("Daily hours cannot exceed 240.")]
+pub struct DailyLimitExceeded;
+
+/// Accepts a person's day total (in SQL's `SUM` width) up to [`MAX_DAILY_MINUTES`].
+pub fn check_daily_total(total_minutes: i64) -> Result<(), DailyLimitExceeded> {
+    if total_minutes > MAX_DAILY_MINUTES {
+        Err(DailyLimitExceeded)
+    } else {
+        Ok(())
+    }
+}
+
+/// Refuses a change only when it leaves the day over [`MAX_DAILY_MINUTES`] and
+/// higher than it was, so a day already over the limit can still be lowered.
+pub fn check_daily_change(before: i64, after: i64) -> Result<(), DailyLimitExceeded> {
+    if after > before {
+        check_daily_total(after)
+    } else {
+        Ok(())
+    }
+}
+
+/// Clamps `minutes` to what is left of the day once `others` minutes are
+/// tracked, never below 0, so a stopped timer fits the day instead of
+/// staying trapped in a running state.
+pub fn clamp_to_daily_allowance(minutes: u32, others: i64) -> u32 {
+    let remaining = (MAX_DAILY_MINUTES - others).clamp(0, MAX_DAILY_MINUTES);
+    minutes.min(remaining as u32)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn daily_total_accepts_exactly_240_hours_and_rejects_one_minute_more() {
+        assert_eq!(check_daily_total(0), Ok(()));
+        assert_eq!(check_daily_total(14_400), Ok(()));
+        assert_eq!(check_daily_total(14_401), Err(DailyLimitExceeded));
+        assert_eq!(
+            DailyLimitExceeded.to_string(),
+            "Daily hours cannot exceed 240."
+        );
+    }
+
+    #[test]
+    fn daily_change_refuses_only_growth_past_the_limit() {
+        assert_eq!(check_daily_change(14_000, 14_400), Ok(()));
+        assert_eq!(check_daily_change(14_000, 14_401), Err(DailyLimitExceeded));
+        // A day already over the limit may shrink or stay, never grow.
+        assert_eq!(check_daily_change(20_000, 15_000), Ok(()));
+        assert_eq!(check_daily_change(20_000, 20_000), Ok(()));
+        assert_eq!(check_daily_change(20_000, 20_001), Err(DailyLimitExceeded));
+    }
+
+    #[test]
+    fn clamp_keeps_a_stop_within_the_rest_of_the_day() {
+        assert_eq!(clamp_to_daily_allowance(90, 0), 90);
+        assert_eq!(clamp_to_daily_allowance(90, 14_350), 50);
+        assert_eq!(clamp_to_daily_allowance(90, 14_400), 0);
+        assert_eq!(clamp_to_daily_allowance(90, 20_000), 0);
+        assert_eq!(clamp_to_daily_allowance(u32::MAX, -5), 14_400);
+    }
 
     #[test]
     fn parse_rejects_negative_non_finite_and_malformed_values() {

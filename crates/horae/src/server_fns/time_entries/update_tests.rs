@@ -366,7 +366,7 @@ async fn revoked_grant_does_not_trap_an_own_running_timer(pool: PgPool) {
             ..
         })
     ));
-    let stopped = stop_entry_timer(&pool, entry.user_id, running.id)
+    let (stopped, _) = stop_entry_timer(&pool, entry.user_id, running.id)
         .await
         .unwrap();
     assert!(!stopped.is_running);

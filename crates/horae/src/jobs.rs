@@ -1926,9 +1926,10 @@ mod tests {
         .await
         .unwrap();
         let mut csv = String::from("Date,Client,Project,Task,Hours,Email\n");
-        csv.push_str(&"2026-01-01,Client,Project,Task,1,known@example.com\n".repeat(499));
-        csv.push_str("bad-date,Client,Project,Task,1,known@example.com\n");
-        csv.push_str("2026-01-01,Client,Project,Task,1,known@example.com\n");
+        // Quarter hours keep 500 rows within one person's 240-hour day.
+        csv.push_str(&"2026-01-01,Client,Project,Task,0.25,known@example.com\n".repeat(499));
+        csv.push_str("bad-date,Client,Project,Task,0.25,known@example.com\n");
+        csv.push_str("2026-01-01,Client,Project,Task,0.25,known@example.com\n");
         let id = enqueue_csv(
             &pool,
             org_id,

@@ -678,11 +678,23 @@ async fn detailed_report_totals_use_bigint_and_count_zero_duration_entries(pool:
     let ids = fixture(&pool).await;
     let billed = time_entry(&pool, &ids, EntryState::Open).await;
     let unbilled = time_entry(&pool, &ids, EntryState::Open).await;
+    // Each entry holds at most 14,400 minutes, so it takes this many billable
+    // copies for the totals to pass `integer`.
+    let copies = i64::from(i32::MAX) / 14_400 + 1;
     sqlx::query!(
-        "UPDATE time_entries SET minutes=$2,rounded_minutes=$2,billable=(id=$3) WHERE id=ANY($1)",
+        "UPDATE time_entries SET minutes=14400,rounded_minutes=14400,billable=(id=$2) WHERE id=ANY($1)",
         &[billed, unbilled],
-        i32::MAX,
         billed
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,rounded_minutes,billable)
+         SELECT gen_random_uuid(),org_id,user_id,project_id,task_id,spent_date,minutes,rounded_minutes,billable
+         FROM time_entries, generate_series(2, $2::bigint) WHERE id=$1",
+        billed,
+        copies
     )
     .execute(&pool)
     .await
@@ -690,9 +702,24 @@ async fn detailed_report_totals_use_bigint_and_count_zero_duration_entries(pool:
     let page = read(&pool, ids.org_id, ids.user_id, &query())
         .await
         .unwrap();
-    let max = i64::from(i32::MAX);
-    assert_totals(&page, 2, max * 2, max * 2, max);
+    let billable = copies * 14_400;
+    assert!(billable > i64::from(i32::MAX));
+    assert_totals(
+        &page,
+        copies + 1,
+        billable + 14_400,
+        billable + 14_400,
+        billable,
+    );
 
+    sqlx::query!(
+        "DELETE FROM time_entries WHERE org_id=$1 AND NOT id=ANY($2)",
+        ids.org_id,
+        &[billed, unbilled]
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     sqlx::query!(
         "UPDATE time_entries SET minutes=0,rounded_minutes=0 WHERE org_id=$1",
         ids.org_id

@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT started_at as \"started_at: chrono::DateTime<chrono::Utc>\",\n                  state as \"state: EntryState\",\n                  spent_date as \"spent_date: chrono::NaiveDate\", minutes\n               FROM time_entries\n               WHERE id = $1 AND user_id = $2 AND is_running = true FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "started_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "state: EntryState",
+        "type_info": {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "spent_date: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 3,
+        "name": "minutes",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7940e35b2d4b6b0b1f6a4dedd1995e8abcf7effc56d64419eae7adc7d710ea6f"
+}

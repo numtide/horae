@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET is_running=true, started_at=now(), notified_long_running_at=now()\n         WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "06e61ce7678087602bf83241c46b50022013fe8878b10bfe46f7c67de0aceec6"
+}

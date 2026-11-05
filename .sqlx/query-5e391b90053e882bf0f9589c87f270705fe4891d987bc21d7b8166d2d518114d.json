@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE time_entries DISABLE TRIGGER time_entries_minutes_daily_cap",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "5e391b90053e882bf0f9589c87f270705fe4891d987bc21d7b8166d2d518114d"
+}

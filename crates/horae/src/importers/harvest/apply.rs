@@ -250,6 +250,9 @@ async fn apply_time_entry(
     }
 
     // Create. State defaults to `open`; never `invoiced` from Harvest (FR-016).
+    // A row past the day's limit on its own fails here, not on the trigger.
+    horae_core::duration::check_daily_total(minutes.into())
+        .map_err(|limit| RowFailure::new(limit.to_string()))?;
     crate::db::lock_time_entry_write(sp, user_id).await?;
     let id = Uuid::now_v7();
     sqlx::query!(
@@ -268,6 +271,22 @@ async fn apply_time_entry(
     )
     .execute(&mut **sp)
     .await?;
+    // An import spans thousands of person-days in one transaction, too many to
+    // hold a day lock each, so it sums the day without one; the savepoint
+    // drops the row if it grew the day past the limit.
+    // shortcut: a web write committing to the same day between this sum and
+    // the import's commit can still push the day past 240 hours; take the day
+    // locks per batch, in date order, if that is ever seen.
+    let after = sqlx::query_scalar!(
+        r#"SELECT COALESCE(SUM(minutes), 0)::bigint as "total!" FROM time_entries
+           WHERE user_id = $1 AND spent_date = $2"#,
+        user_id,
+        row.spent_date as chrono::NaiveDate,
+    )
+    .fetch_one(&mut **sp)
+    .await?;
+    horae_core::duration::check_daily_change(after - i64::from(minutes), after)
+        .map_err(|limit| RowFailure::new(limit.to_string()))?;
     if let Some(hid) = row.harvest_time_entry_id {
         super::provenance::upsert(
             &mut **sp,

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(SUM(minutes), 0) AS \"total!\" FROM time_entries WHERE user_id=$1 AND spent_date=$2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c77c65556fe3ce6c6407b4fa0345e6ba82e17ad9e2cd6390a4999a4b8ee2fd67"
+}

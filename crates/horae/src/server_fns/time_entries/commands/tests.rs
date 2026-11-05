@@ -4,6 +4,7 @@ use crate::models::scoped_time::{TimesheetEntryInput, TimesheetPolicy};
 use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
+mod daily_limit;
 mod guards;
 mod revocation;
 

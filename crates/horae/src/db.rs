@@ -113,6 +113,42 @@ pub async fn lock_time_entry_write(
     Ok(())
 }
 
+/// `user_id`'s total minutes on each of `dates` (0 when empty), including this
+/// transaction's own writes. The write lock above is shared, so it does not
+/// order two writers for the same day; each (person, day) is locked here until
+/// commit. Every web write that changes a day's minutes, decreases included,
+/// takes it. Read before a write and again after it, the two totals bracket
+/// exactly this transaction's change.
+pub async fn daily_minutes_totals(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    user_id: uuid::Uuid,
+    dates: &[chrono::NaiveDate],
+) -> Result<Vec<(chrono::NaiveDate, i64)>, sqlx::Error> {
+    // One lock per statement, in ascending date order, so writers sharing days
+    // always queue in the same order and cannot deadlock.
+    let days: std::collections::BTreeSet<_> = dates.iter().collect();
+    for day in days {
+        sqlx::query!(
+            r#"SELECT pg_advisory_xact_lock(hashtextextended('horae.day:' || $1::uuid::text || ':' || $2::date::text, 0)) as "lock!: ()""#,
+            user_id,
+            day as &chrono::NaiveDate,
+        )
+        .execute(&mut **tx)
+        .await?;
+    }
+    let rows = sqlx::query!(
+        r#"SELECT d as "day!: chrono::NaiveDate",
+                  COALESCE((SELECT SUM(minutes) FROM time_entries
+                            WHERE user_id = $1 AND spent_date = d), 0)::bigint as "total!"
+           FROM (SELECT DISTINCT d FROM unnest($2::date[]) d) days ORDER BY d"#,
+        user_id,
+        dates as &[chrono::NaiveDate],
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows.into_iter().map(|row| (row.day, row.total)).collect())
+}
+
 /// Open only the submission barrier for tests that coordinate competing writers.
 #[cfg(test)]
 pub async fn begin_time_entry_write(

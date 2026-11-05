@@ -17,13 +17,18 @@ pub struct SeedIds {
 
 /// Wait for a real database lock dependency, rather than guessing task timing.
 pub async fn wait_for_blocked(pool: &PgPool, blocker: i32) {
+    wait_for_waiters(pool, blocker, 1).await;
+}
+
+/// Wait until `count` sessions are blocked behind `blocker`.
+pub async fn wait_for_waiters(pool: &PgPool, blocker: i32, count: i64) {
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             let waiting = sqlx::query_scalar!(
-                "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid)))",
+                r#"SELECT count(*) AS "count!" FROM pg_stat_activity WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid))"#,
                 blocker,
-            ).fetch_one(pool).await.unwrap().unwrap();
-            if waiting {
+            ).fetch_one(pool).await.unwrap();
+            if waiting >= count {
                 break;
             }
             tokio::task::yield_now().await;
@@ -146,4 +151,44 @@ pub async fn time_entry(
     .await
     .unwrap();
     id
+}
+
+/// Give an entry `minutes` as a row stored before the daily limit existed,
+/// which the trigger would refuse to write today.
+pub async fn legacy_minutes(pool: &PgPool, entry_id: Uuid, minutes: i32) {
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query!("ALTER TABLE time_entries DISABLE TRIGGER time_entries_minutes_daily_cap")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE time_entries SET minutes = $2 WHERE id = $1",
+        entry_id,
+        minutes
+    )
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    sqlx::query!("ALTER TABLE time_entries ENABLE TRIGGER time_entries_minutes_daily_cap")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+}
+
+/// Raising a legacy entry's minutes is still refused by the trigger.
+pub async fn assert_minutes_cannot_rise(pool: &PgPool, entry_id: Uuid) {
+    let raised = sqlx::query!(
+        "UPDATE time_entries SET minutes = minutes + 1 WHERE id = $1",
+        entry_id
+    )
+    .execute(pool)
+    .await
+    .unwrap_err();
+    assert!(
+        raised
+            .to_string()
+            .contains("Daily hours cannot exceed 240."),
+        "{raised}"
+    );
 }
