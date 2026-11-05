@@ -196,7 +196,7 @@ pub enum Route {
 All data fetching and mutations use `#[server]` macros — Dioxus automatically registers them as HTTP endpoints on the axum router. Examples:
 
 ```rust
-#[server] async fn list_time_entries(...) -> Result<Vec<TimeEntry>, ServerFnError>
+#[server] async fn load_timesheet_page(query: TimesheetQuery) -> Result<TimesheetPage, ServerFnError>
 #[server] async fn start_timer(project_id: Uuid) -> Result<TimeEntry, ServerFnError>
 #[server] async fn stop_timer(entry_id: Uuid) -> Result<TimeEntry, ServerFnError>
 #[server] async fn login(email: String, password: String) -> Result<(), ServerFnError>

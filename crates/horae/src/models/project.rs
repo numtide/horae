@@ -3,24 +3,6 @@ use horae_core::types::{BudgetKind, ProjectType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// An explicit task rate in the currency shown to the project manager.
-#[cfg(feature = "server")]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ProjectTaskRate {
-    pub amount: String,
-    pub currency: String,
-}
-
-/// Fee balances per occurrence; the fee tests read invoice preparation through it.
-#[cfg(all(test, feature = "server"))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ProjectFeeBalance {
-    pub period_key: String,
-    pub description: String,
-    pub currency: String,
-    pub balance: super::invoice::InvoiceFeeBalance,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct Project {

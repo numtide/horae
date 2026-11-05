@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT minutes, spent_date as \"spent_date: chrono::NaiveDate\" FROM time_entries WHERE id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "minutes",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "spent_date: chrono::NaiveDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "fda78f80c96be8209dd6d7e6fe7587cc221ba9e62879e8e43df2ac2474172517"
+}

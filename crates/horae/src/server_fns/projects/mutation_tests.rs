@@ -159,7 +159,10 @@ mod project {
                 (updated.budget_amount_cents, updated.budget_minutes),
                 expected_budget
             );
-            assert_eq!(updated.rate_cents, parse_project_rate(rate).unwrap());
+            assert_eq!(
+                updated.rate_cents,
+                horae_core::money::parse_cents(rate).ok()
+            );
             let before = version(&pool, ids.project_id).await;
             let (repeated, changed) = save(&pool, &ids, &edit).await.unwrap();
             assert_eq!(

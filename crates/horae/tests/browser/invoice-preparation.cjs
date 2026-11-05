@@ -488,13 +488,10 @@ const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
     await page.evaluate(() => { Storage.prototype.getItem = window.originalInvoiceGetItem; delete window.originalInvoiceGetItem; });
     await page.getByRole('button', { name: 'Retry loading invoices', exact: true }).click();
     await expect(page.getByRole('button', { name: 'New Invoice', exact: true })).toBeVisible();
-    let feeReads = 0;
-    page.on('request', request => { if (request.url().includes('/api/get_project_fee_balances')) feeReads += 1; });
     await page.goto(`${base}/projects/${project.id}`);
     await expect(page.getByRole('region', { name: 'Project details', exact: true })).toBeVisible();
     await readsFinished();
     await expect(page.getByRole('region', { name: 'Project fee balances', exact: true })).toHaveCount(0);
-    assert.equal(feeReads, 0, 'Project Detail requests no fee balances');
 
     let preparationRequest;
     page.on('request', request => { if (request.url().includes('/api/prepare_invoice')) preparationRequest = request; });

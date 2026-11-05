@@ -1129,9 +1129,9 @@ async fn approval_hours_aggregate_billable_within_period(pool: PgPool) {
 // US2: organizing clients, projects, tasks
 // ---------------------------------------------------------------------------
 
-/// A newly created org task is not loggable on a project until it is linked
-/// (mirrors `link_project_task`); once linked it appears on the project's task
-/// picker and a time entry can be recorded against it.
+/// A newly created org task is not loggable on a project until it is linked;
+/// once linked it appears on the project's task picker and a time entry can be
+/// recorded against it.
 #[sqlx::test(migrations = "./migrations")]
 #[serial]
 async fn new_task_becomes_loggable_on_project(pool: PgPool) {
@@ -2526,7 +2526,7 @@ async fn reschedule_moves_open_entry_and_rejects_locked(pool: PgPool) {
     )
     .await;
 
-    // Reschedule to tomorrow 13:00 for 120m (mirrors reschedule_time_entry).
+    // Reschedule to tomorrow 13:00 for 120m.
     let moved = sqlx::query!(
         "UPDATE time_entries \
          SET spent_date = CURRENT_DATE + 1, start_minute = 780, minutes = 120, updated_at = now() \
@@ -2611,7 +2611,7 @@ async fn reorder_untimed_orders_and_moves_across_days(pool: PgPool) {
     )
     .await;
 
-    // Place [moved, today[0], today[1]] on today — mirrors reorder_untimed_entries.
+    // Place [moved, today[0], today[1]] on today.
     // The tomorrow entry is pulled onto today, and the stack is ordered.
     let ordered = vec![moved, today[0], today[1]];
     let orders: Vec<i32> = vec![0, 1, 2];
