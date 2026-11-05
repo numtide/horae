@@ -243,12 +243,12 @@ acceptance work; this page is not evidence that every final gate has passed.
 
 ## Screen States
 
-Every screen and data-bearing component covers these states before it is done. Build each state from the existing classes and tokens; add a variant to them rather than a new one-off style.
+Every new or changed screen and data-bearing component covers these states before it is done; record the check in the feature's `quickstart.md` validation, or its `visual-review.md` where one exists (as in `specs/012-clients-design/increments/mvp/`). Build each state from the existing classes and tokens; add a variant to them rather than a new one-off style.
 
 - **Empty**: `.empty-state` with copy that says what to do next, not a blank table.
 - **Loading**: inline, per region (see Interaction Principles); keep the layout stable so content doesn't jump when data arrives.
-- **Error**: a `.banner-danger` with the cause and a retry action. Input is never lost.
-- **No permission**: explain why and who can grant access; hide or disable actions the user can't take.
+- **Error**: `.alert.alert-danger` for page and form errors, inline `text-danger` for field errors, and `.banner-danger` for errors that need an action such as retry. Form fields keep the values the user entered after a failed submit.
+- **No permission**: non-disclosing (spec 015). Name the role that can grant access ("Ask an Administrator", as in `own_permissions.rs`) without revealing the resource, its owner or other people's permissions; out-of-scope direct links behave as not found. Hide actions the user can never take in this context; disable, with the reason, actions that are only temporarily unavailable.
 - **Long content**: 60-character names, large amounts and many rows wrap or truncate inside their column without overlapping (see Layout → Narrow content).
 - **Narrow**: usable at 390px and at the 768px mobile-navigation breakpoint.
 - **Keyboard**: the whole flow completes without a mouse, with a visible `--ring` focus and focus returned after dialogs and menus close (see Accessibility).

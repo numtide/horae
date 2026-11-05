@@ -172,8 +172,9 @@ Rules on top of idiomatic Rust (see the `rust-best-practices` skill). These come
 
 Horae reproduces Harvest's behaviour and workflows, not Harvest itself. [`specs/harvest-parity.md`](specs/harvest-parity.md) tracks coverage and evidence.
 
-- Rebuild what a screen does from what a user sees. Never copy Harvest's source, JS bundles, private endpoints, assets, logos, copy text or branding. Matching what a button does is parity; matching its sentence is copying.
-- Work from the public help center and the public API docs. Use the user's Harvest only for read-only viewing in a new Chrome tab: never create, edit or delete data, and never sign in on the user's behalf.
+- Rebuild what a screen does from its observable behaviour and the public docs. Never copy Harvest's source, JS bundles, private endpoints, assets, logos, copy text or branding. Matching what a button does is parity; matching its sentence is copying. Short standard labels (Archive, Duplicate, Timesheet, Approvals) are generic, so reusing them is not copying.
+- Work from the public help center and the public API docs, plus read-only browsing in a session the user has already signed in to (open a new tab; never reuse or alter the user's tabs). Never sign in on the user's behalf.
+- Never create, edit or delete data in the user's production Harvest account. Disposable fixtures go only in a dedicated test account, with the user's explicit authorization recorded in `specs/harvest-parity.md`, and are cleaned up by exact ID.
 - Naming Harvest where Horae interoperates with it (the importer, the `/harvest/v2` compatibility API) is fine. Outside those places, the product's look, name and wording stay Horae's (`DESIGN.md`).
 
 ## Repository Hygiene

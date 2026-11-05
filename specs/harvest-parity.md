@@ -363,8 +363,9 @@ This orders planning, not implementation authorization:
 - No reference records were saved, no messages sent, no migrations or application
   changes made and no merges performed. Discarded the unsaved form and ended the
   MCP client connection, preserving the user's tabs.
-- Next: obtain explicit authority for disposable reference fixtures (no existing
-  business records, delivery, payments or account changes), then execute E-NUM,
+- Next: obtain explicit authority for disposable reference fixtures in a dedicated
+  test account, never the production account (no existing business records,
+  delivery, payments or account changes; clean up by exact ID), then execute E-NUM,
   E-RATE, E-CUR, E-BILL and E-REC. E-AUTH additionally needs editable non-owner
   access; do not buy seats or change the owner. Continue evidence work rather
   than inventing the missing rules or marking clarification complete.
