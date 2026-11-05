@@ -189,8 +189,10 @@ pkgs.testers.nixosTest {
     for termination in ("term", "kill"):
         prefix = f"restart-{termination}"
         header = "Date,Client,Project,Task,Hours,Email,Notes"
+        # 100 one-hour rows a day, so both runs together stay under the
+        # 240-hour daily limit.
         records = [
-            f"2024-01-15,Restart Client,Restart Project,Restart Task,1,admin@example.com,{prefix}-{i}"
+            f"2024-01-{10 + i // 100},Restart Client,Restart Project,Restart Task,1,admin@example.com,{prefix}-{i}"
             for i in range(1000)
         ]
         contents = chr(10).join([header, *records, ""])

@@ -17,13 +17,18 @@ pub struct SeedIds {
 
 /// Wait for a real database lock dependency, rather than guessing task timing.
 pub async fn wait_for_blocked(pool: &PgPool, blocker: i32) {
+    wait_for_waiters(pool, blocker, 1).await;
+}
+
+/// Wait until `count` sessions are blocked behind `blocker`.
+pub async fn wait_for_waiters(pool: &PgPool, blocker: i32, count: i64) {
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             let waiting = sqlx::query_scalar!(
-                "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid)))",
+                r#"SELECT count(*) AS "count!" FROM pg_stat_activity WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid))"#,
                 blocker,
-            ).fetch_one(pool).await.unwrap().unwrap();
-            if waiting {
+            ).fetch_one(pool).await.unwrap();
+            if waiting >= count {
                 break;
             }
             tokio::task::yield_now().await;

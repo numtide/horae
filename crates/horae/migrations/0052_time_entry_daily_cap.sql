@@ -8,7 +8,8 @@
 -- have stored more, and a CHECK, even NOT VALID, tests every new row version,
 -- so submitting, approving, invoicing or sweeping such a row would fail. The
 -- trigger refuses only a new entry over the limit or raising one over it; an
--- entry already over may still be lowered.
+-- entry already over may still be lowered. It fires only on writes that set
+-- `minutes`, so state, invoice and sweep updates skip it.
 
 CREATE FUNCTION time_entries_minutes_daily_cap() RETURNS trigger
 LANGUAGE plpgsql AS $$
@@ -24,5 +25,5 @@ $$;
 REVOKE ALL ON FUNCTION time_entries_minutes_daily_cap() FROM PUBLIC;
 
 CREATE TRIGGER time_entries_minutes_daily_cap
-  BEFORE INSERT OR UPDATE ON time_entries
+  BEFORE INSERT OR UPDATE OF minutes ON time_entries
   FOR EACH ROW EXECUTE FUNCTION time_entries_minutes_daily_cap();

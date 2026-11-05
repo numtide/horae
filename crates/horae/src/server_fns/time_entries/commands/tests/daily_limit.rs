@@ -1,5 +1,7 @@
 use super::*;
-use crate::server_fns::test_seed::{assert_minutes_cannot_rise, legacy_minutes, wait_for_blocked};
+use crate::server_fns::test_seed::{
+    assert_minutes_cannot_rise, legacy_minutes, wait_for_blocked, wait_for_waiters,
+};
 
 const DAY: &str = "2026-09-07";
 const NEXT_DAY: &str = "2026-09-08";
@@ -264,45 +266,102 @@ async fn a_legacy_entry_over_the_limit_can_change_anything_but_raise_its_minutes
         .unwrap();
 }
 
-/// Two writers racing for the same empty day: the day lock lets exactly one of
-/// two 7,300-minute entries in.
+async fn backend_pid(tx: &mut sqlx::PgConnection) -> i32 {
+    sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(tx)
+        .await
+        .unwrap()
+        .unwrap()
+}
+
+/// Run `writes` while another transaction holds the lock on `day`, and check
+/// that `waiters` of them queue behind it before it is released.
+async fn behind_day_lock<T>(
+    pool: &PgPool,
+    f: &Fixture,
+    day: &str,
+    waiters: i64,
+    writes: impl std::future::Future<Output = T>,
+) -> T {
+    let mut holder = pool.begin().await.unwrap();
+    let pid = backend_pid(&mut holder).await;
+    crate::db::daily_minutes_totals(&mut holder, f.context.subject_id, &[day.parse().unwrap()])
+        .await
+        .unwrap();
+    let release = async {
+        wait_for_waiters(pool, pid, waiters).await;
+        holder.commit().await.unwrap();
+    };
+    tokio::join!(writes, release).0
+}
+
+/// Two writers on the same empty day queue on its lock, so exactly one of two
+/// 7,300-minute entries gets in.
 #[sqlx::test(migrations = "./migrations")]
 async fn concurrent_writers_cannot_overshoot_a_day_together(pool: PgPool) {
     let f = fixture(&pool).await;
-    let barrier = tokio::sync::Barrier::new(2);
-    let (barrier, pool_ref, fixture) = (&barrier, &pool, &f);
-    let race = move || async move {
-        barrier.wait().await;
-        create(pool_ref, fixture, DAY, 7_300).await
-    };
-    let (first, second) = tokio::join!(race(), race());
+    let both = async { tokio::join!(create(&pool, &f, DAY, 7_300), create(&pool, &f, DAY, 7_300)) };
+    let (first, second) = behind_day_lock(&pool, &f, DAY, 2, both).await;
     let (created, refused): (Vec<_>, Vec<_>) = [first, second].into_iter().partition(Result::is_ok);
     assert_eq!((created.len(), refused.len()), (1, 1));
     refused.into_iter().for_each(assert_daily_limit);
     assert_eq!(day_total(&pool, &f, DAY.parse().unwrap()).await, 7_300);
 }
 
-/// A delete lowers its day but still waits for the day lock, so it cannot land
-/// between another writer's before and after totals.
+/// Decreases wait for the day lock too, so they cannot land between another
+/// writer's before and after totals: a delete, and the day a reschedule or a
+/// reorder moves an entry off.
 #[sqlx::test(migrations = "./migrations")]
 async fn a_delete_waits_for_the_day_lock(pool: PgPool) {
     let f = fixture(&pool).await;
     let entry = f.entry(&pool).await;
+    let delete = delete_entry(&pool, f.context.subject_id, entry);
+    behind_day_lock(&pool, &f, DAY, 1, delete).await.unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_reschedule_waits_for_its_source_day_lock(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let entry = f.entry(&pool).await;
+    let next_day = NEXT_DAY.parse().unwrap();
+    let move_off = reschedule_entry(&pool, f.context.subject_id, entry, next_day, 600, 60);
+    behind_day_lock(&pool, &f, DAY, 1, move_off).await.unwrap();
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_reorder_waits_for_its_source_day_lock(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let entries = [f.entry(&pool).await];
+    let next_day = NEXT_DAY.parse().unwrap();
+    let move_off = reorder_entries(&pool, f.context.subject_id, next_day, &entries);
+    behind_day_lock(&pool, &f, DAY, 1, move_off).await.unwrap();
+}
+
+/// The widget stop locks the running entry before its day, like every other
+/// write: a writer holding the row and then taking the day lock does not
+/// deadlock with it.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_widget_stop_waits_for_the_entry_lock(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let timer = running_timer(&pool, &f, 30).await;
     let mut holder = pool.begin().await.unwrap();
-    let pid = sqlx::query_scalar!("SELECT pg_backend_pid()")
-        .fetch_one(&mut *holder)
-        .await
-        .unwrap()
-        .unwrap();
-    crate::db::daily_minutes_totals(&mut holder, f.context.subject_id, &[DAY.parse().unwrap()])
-        .await
-        .unwrap();
-    let delete = tokio::spawn({
-        let pool = pool.clone();
-        let user = f.context.subject_id;
-        async move { delete_entry(&pool, user, entry).await.map(|_| ()) }
-    });
-    wait_for_blocked(&pool, pid).await;
-    holder.commit().await.unwrap();
-    delete.await.unwrap().unwrap();
+    let pid = backend_pid(&mut holder).await;
+    let day = sqlx::query_scalar!(
+        r#"SELECT spent_date AS "spent_date: NaiveDate" FROM time_entries WHERE id=$1 FOR UPDATE"#,
+        timer
+    )
+    .fetch_one(&mut *holder)
+    .await
+    .unwrap();
+    let holder_writes = async {
+        wait_for_blocked(&pool, pid).await;
+        crate::db::daily_minutes_totals(&mut holder, f.context.subject_id, &[day]).await?;
+        holder.commit().await
+    };
+    let (stopped, held) = tokio::join!(
+        stop_entry_timer(&pool, f.context.subject_id, timer),
+        holder_writes
+    );
+    held.unwrap();
+    assert!(!stopped.unwrap().0.is_running);
 }

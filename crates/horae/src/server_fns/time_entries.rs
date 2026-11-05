@@ -141,7 +141,7 @@ fn normalize_start(
     start_minute: Option<i32>,
 ) -> Result<(i32, Option<i32>), ServerFnError> {
     // One entry past the day's limit can never fit; refuse it before the
-    // database CHECK turns it into an opaque error.
+    // database trigger turns it into an opaque error.
     horae_core::duration::check_daily_total(minutes.into()).map_err(conflict)?;
     match start_minute {
         None => Ok((minutes, None)),
@@ -530,13 +530,15 @@ async fn stop_entry_timer(
 
     // Read the running entry's start time, then compute the exact elapsed
     // minutes in `horae-core` (floored to the minute, no artificial 1-minute
-    // minimum) so tracked totals stay exact (FR-003/FR-023).
+    // minimum) so tracked totals stay exact (FR-003/FR-023). The row is locked
+    // before the day, as on every other write path, so racing stops queue
+    // instead of deadlocking and the clamp reads current minutes.
     let row = sqlx::query!(
         r#"SELECT started_at as "started_at: chrono::DateTime<chrono::Utc>",
                   state as "state: EntryState",
                   spent_date as "spent_date: chrono::NaiveDate", minutes
                FROM time_entries
-               WHERE id = $1 AND user_id = $2 AND is_running = true"#,
+               WHERE id = $1 AND user_id = $2 AND is_running = true FOR UPDATE"#,
         entry_id,
         user_id,
     )
