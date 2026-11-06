@@ -147,22 +147,27 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     assert.ok(!requests.slice(readStart).some(path => /^\/api\/(list_users|list_tasks)/.test(path)));
     const railTeam = page.locator('.app-sidebar').getByRole('link', { name: 'Team', exact: true });
     const userMenu = page.locator('.sidebar-menu');
-    // Settings and Sign out are always offered; Importers only to legacy admins.
-    const expectUserMenu = async importers => {
+    // Settings and Sign out are always offered; Administration to legacy admins
+    // and to canonical Administrators.
+    const expectUserMenu = async administration => {
       await page.locator('.sidebar-footer').click();
-      await expect(userMenu.getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
-      await expect(userMenu.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
-      await expect(userMenu.getByRole('link', { name: 'Importers', exact: true })).toHaveCount(importers ? 1 : 0);
+      await expect(userMenu.locator('.menu-item')).toHaveText(administration ? ['Settings', 'Administration', 'Sign out'] : ['Settings', 'Sign out']);
+      if (!administration && process.env.HORAE_BROWSER_ARTIFACTS) {
+        await page.screenshot({ path: join(process.env.HORAE_BROWSER_ARTIFACTS, 'account-menu-member.png'), animations: 'disabled' });
+      }
       await page.locator('.sidebar-footer').click();
       await expect(userMenu).toHaveCount(0);
     };
     await expect(railTeam).toBeVisible();
     await expect(page.locator('.adm-nav').getByRole('link', { name: 'Team', exact: true })).toBeVisible();
-    await expectUserMenu(false);
+    // A legacy member who is a canonical Administrator.
+    await expectUserMenu(true);
     sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
     await page.reload();
     await expect(page.getByRole('cell', { name: personName, exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Edit permissions for/ })).toHaveCount(0);
+    // A plain member: neither a legacy admin nor a canonical Administrator.
+    await expectUserMenu(false);
     sql(`INSERT INTO person_management_assignments(id, org_id, manager_id, managed_user_id)
       VALUES ('01960000-0000-7000-8000-000000000708', '${actor.org_id}', '${actor.id}', '${person}');
       UPDATE person_permission_states SET grants=${array([...floor, 'people_read_managed'])} WHERE id='${actorState}'`);

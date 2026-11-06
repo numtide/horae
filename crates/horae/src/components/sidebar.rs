@@ -75,7 +75,7 @@ fn SideLink(to: Route, icon: String, label: String, on_navigate: EventHandler<()
 }
 
 /// The signed-in user: an avatar + name + role row that opens an account popover
-/// (settings, an admin section for admins, and sign out). Falls back to a
+/// (settings, Administration for legacy admins and Administrators, and sign out). Falls back to a
 /// placeholder until `get_me` resolves (or when not authenticated).
 #[component]
 fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
@@ -140,17 +140,14 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                     }
                     div { class: "sidebar-menu-list",
                         Link { to: Route::Settings {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
-                            span { class: "menu-item-icon", NavIcon { name: "settings" } }
+                            span { class: "menu-item-icon", NavIcon { name: "users" } }
                             "Settings"
                         }
-                    }
-                    // Team and Tasks live in the rail's Organize section.
-                    if is_admin {
-                        div { class: "sidebar-menu-list",
-                            div { class: "menu-group", "Workspace" }
-                            Link { to: Route::HarvestImport {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
-                                span { class: "menu-item-icon", NavIcon { name: "import" } }
-                                "Importers"
+                        // The admin shell's own sub-navigation reaches every admin section.
+                        if is_admin || administrator {
+                            Link { to: Route::AdminUsers {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
+                                span { class: "menu-item-icon", NavIcon { name: "settings" } }
+                                "Administration"
                             }
                         }
                     }
