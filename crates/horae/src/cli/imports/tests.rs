@@ -159,6 +159,9 @@ fn job(status: &str) -> JobStatus {
         created_at: chrono::Utc::now(),
         finished_at: None,
         retry_availability: crate::models::RetryAvailability::Unknown,
+        mode: Some(ImportMode::DryRun),
+        source: None,
+        commit_availability: Default::default(),
     }
 }
 

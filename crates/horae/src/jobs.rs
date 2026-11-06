@@ -460,6 +460,112 @@ async fn enqueue_csv_request(
     Ok(row.id)
 }
 
+/// Why a preview cannot be committed. The run page shows the same reasons in
+/// advance through [`crate::models::CommitAvailability`].
+#[derive(Debug, thiserror::Error)]
+pub enum CommitRefused {
+    #[error("Only a preview that finished can be committed")]
+    NotPreview,
+    #[error("A newer import replaced this preview; start a new preview")]
+    NewerImport,
+    #[error("The Harvest account changed since this preview; start a new preview")]
+    PreviousAccount,
+    #[error("The CSV upload is no longer retained; upload the file again")]
+    MissingUpload,
+}
+
+/// Queue the commit of a finished preview with the preview's own input: its
+/// sync scope and account generation, or its retained CSV upload. Once per
+/// preview: a repeated request returns the commit it already queued. `None`
+/// when the preview is not this organization's.
+pub async fn commit_preview_in(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: Uuid,
+    preview_id: Uuid,
+    policy: JobPolicy,
+    requester_id: Uuid,
+) -> anyhow::Result<Option<Uuid>> {
+    use crate::models::CommitAvailability;
+    // Locking the preview serializes two tabs committing it at once.
+    let Some(preview) = sqlx::query!(
+        "SELECT kind, payload, account_generation FROM horae_jobs
+         WHERE id = $1 AND org_id = $2 FOR UPDATE",
+        preview_id,
+        org_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await?
+    else {
+        return Ok(None);
+    };
+    let key = format!("preview-commit:{preview_id}");
+    let queued = sqlx::query_scalar!(
+        "SELECT id FROM horae_jobs WHERE org_id = $1 AND kind = $2 AND idempotency_key = $3",
+        org_id,
+        preview.kind,
+        key,
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+    if queued.is_some() {
+        return Ok(queued);
+    }
+    let availability = status(&mut **tx, org_id, preview_id)
+        .await?
+        .context("preview disappeared")?
+        .commit_availability;
+    match availability {
+        CommitAvailability::Available => {}
+        CommitAvailability::NewerImport => anyhow::bail!(CommitRefused::NewerImport),
+        CommitAvailability::PreviousAccount => anyhow::bail!(CommitRefused::PreviousAccount),
+        CommitAvailability::MissingUpload => anyhow::bail!(CommitRefused::MissingUpload),
+        CommitAvailability::NotPreview
+        | CommitAvailability::UnavailableState
+        | CommitAvailability::Unknown => anyhow::bail!(CommitRefused::NotPreview),
+    }
+    let id = match decode_payload(preview.payload)? {
+        JobPayload::HarvestApi { sync, .. } => {
+            let payload = JobPayload::HarvestApi {
+                mode: ImportMode::Commit,
+                sync,
+            };
+            enqueue_api_request(
+                tx,
+                org_id,
+                &payload,
+                &key,
+                policy,
+                preview.account_generation,
+                Some(requester_id),
+            )
+            .await?
+        }
+        JobPayload::HarvestCsv { .. } => {
+            let body = sqlx::query_scalar!(
+                "SELECT body FROM horae_job_uploads WHERE job_id = $1 AND org_id = $2",
+                preview_id,
+                org_id,
+            )
+            .fetch_optional(&mut **tx)
+            .await?
+            .context(CommitRefused::MissingUpload)?;
+            enqueue_csv_request(
+                tx,
+                org_id,
+                ImportMode::Commit,
+                body,
+                &key,
+                policy,
+                Some(requester_id),
+            )
+            .await?
+        }
+        #[cfg(test)]
+        JobPayload::Synthetic => anyhow::bail!(CommitRefused::NotPreview),
+    };
+    Ok(Some(id))
+}
+
 fn retry_availability(
     kind: &str,
     state: &str,
@@ -487,6 +593,48 @@ fn retry_availability(
     }
 }
 
+/// The request's mode and source, and whether a finished preview may still be
+/// committed: only the latest run of its source, against the same account, with
+/// its CSV upload retained.
+fn preview_fields(
+    kind: &str,
+    state: &str,
+    payload: &serde_json::Value,
+    generation: i64,
+    current_generation: i64,
+    has_upload: bool,
+    newer_import: bool,
+) -> (
+    Option<ImportMode>,
+    Option<SourceKind>,
+    crate::models::CommitAvailability,
+) {
+    use crate::models::CommitAvailability;
+    let (mode, source) = match decode_payload(payload.clone()) {
+        Ok(JobPayload::HarvestApi { mode, .. }) if kind == "harvest_api_import" => {
+            (mode, SourceKind::HarvestApi)
+        }
+        Ok(JobPayload::HarvestCsv { mode }) if kind == "harvest_csv_import" => {
+            (mode, SourceKind::Csv)
+        }
+        _ => return (None, None, CommitAvailability::Unknown),
+    };
+    let availability = if mode == ImportMode::Commit {
+        CommitAvailability::NotPreview
+    } else if state != "succeeded" {
+        CommitAvailability::UnavailableState
+    } else if newer_import {
+        CommitAvailability::NewerImport
+    } else if source == SourceKind::HarvestApi && generation != current_generation {
+        CommitAvailability::PreviousAccount
+    } else if source == SourceKind::Csv && !has_upload {
+        CommitAvailability::MissingUpload
+    } else {
+        CommitAvailability::Available
+    };
+    (Some(mode), Some(source), availability)
+}
+
 pub async fn status<'e, E: sqlx::PgExecutor<'e>>(
     exec: E,
     org_id: Uuid,
@@ -501,7 +649,10 @@ pub async fn status<'e, E: sqlx::PgExecutor<'e>>(
                   COALESCE((SELECT g.account_generation FROM harvest_connection_generations g
                             WHERE g.org_id = horae_jobs.org_id), 0) AS "current_generation!",
                   EXISTS(SELECT 1 FROM horae_job_uploads u
-                         WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS "has_upload!"
+                         WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS "has_upload!",
+                  EXISTS(SELECT 1 FROM horae_jobs n
+                         WHERE n.org_id = horae_jobs.org_id AND n.kind = horae_jobs.kind
+                           AND (n.created_at, n.id) > (horae_jobs.created_at, horae_jobs.id)) AS "newer_import!"
              FROM horae_jobs
             WHERE id = $1 AND org_id = $2"#,
         id,
@@ -509,60 +660,20 @@ pub async fn status<'e, E: sqlx::PgExecutor<'e>>(
     )
     .fetch_optional(exec)
     .await?;
-    Ok(row.map(|r| crate::models::JobStatus {
-        retry_availability: retry_availability(
+    Ok(row.map(|r| {
+        let (mode, source, commit_availability) = preview_fields(
             &r.kind,
             &r.status,
-            r.payload,
+            &r.payload,
             r.account_generation,
             r.current_generation,
             r.has_upload,
-        ),
-        id: r.id,
-        kind: r.kind,
-        status: r.status,
-        phase: r.phase,
-        processed_count: r.processed_count,
-        total_count: r.total_count,
-        report: r.report,
-        last_error: r.last_error,
-        created_at: r.created_at,
-        finished_at: r.finished_at,
-    }))
-}
-
-pub async fn list<'e, E: sqlx::PgExecutor<'e>>(
-    exec: E,
-    org_id: Uuid,
-    limit: i64,
-    before: Option<Uuid>,
-) -> anyhow::Result<Vec<crate::models::JobStatus>> {
-    let rows = sqlx::query!(
-        r#"SELECT id, kind, status, phase, processed_count, total_count,
-                  COALESCE(checkpoint->'report', report) AS report, last_error,
-                  created_at as "created_at!: chrono::DateTime<chrono::Utc>",
-                  finished_at as "finished_at: chrono::DateTime<chrono::Utc>",
-                  payload, account_generation,
-                  COALESCE((SELECT g.account_generation FROM harvest_connection_generations g
-                            WHERE g.org_id = horae_jobs.org_id), 0) AS "current_generation!",
-                  EXISTS(SELECT 1 FROM horae_job_uploads u
-                         WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS "has_upload!"
-             FROM horae_jobs
-            WHERE org_id = $1
-              AND ($3::uuid IS NULL OR (created_at, id) < (
-                  SELECT created_at, id FROM horae_jobs WHERE id = $3 AND org_id = $1
-              ))
-            ORDER BY created_at DESC, id DESC
-            LIMIT $2"#,
-        org_id,
-        limit.clamp(1, 100),
-        before,
-    )
-    .fetch_all(exec)
-    .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| crate::models::JobStatus {
+            r.newer_import,
+        );
+        crate::models::JobStatus {
+            mode,
+            source,
+            commit_availability,
             retry_availability: retry_availability(
                 &r.kind,
                 &r.status,
@@ -581,6 +692,77 @@ pub async fn list<'e, E: sqlx::PgExecutor<'e>>(
             last_error: r.last_error,
             created_at: r.created_at,
             finished_at: r.finished_at,
+        }
+    }))
+}
+
+pub async fn list<'e, E: sqlx::PgExecutor<'e>>(
+    exec: E,
+    org_id: Uuid,
+    limit: i64,
+    before: Option<Uuid>,
+) -> anyhow::Result<Vec<crate::models::JobStatus>> {
+    let rows = sqlx::query!(
+        r#"SELECT id, kind, status, phase, processed_count, total_count,
+                  COALESCE(checkpoint->'report', report) AS report, last_error,
+                  created_at as "created_at!: chrono::DateTime<chrono::Utc>",
+                  finished_at as "finished_at: chrono::DateTime<chrono::Utc>",
+                  payload, account_generation,
+                  COALESCE((SELECT g.account_generation FROM harvest_connection_generations g
+                            WHERE g.org_id = horae_jobs.org_id), 0) AS "current_generation!",
+                  EXISTS(SELECT 1 FROM horae_job_uploads u
+                         WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS "has_upload!",
+                  EXISTS(SELECT 1 FROM horae_jobs n
+                         WHERE n.org_id = horae_jobs.org_id AND n.kind = horae_jobs.kind
+                           AND (n.created_at, n.id) > (horae_jobs.created_at, horae_jobs.id)) AS "newer_import!"
+             FROM horae_jobs
+            WHERE org_id = $1
+              AND ($3::uuid IS NULL OR (created_at, id) < (
+                  SELECT created_at, id FROM horae_jobs WHERE id = $3 AND org_id = $1
+              ))
+            ORDER BY created_at DESC, id DESC
+            LIMIT $2"#,
+        org_id,
+        limit.clamp(1, 100),
+        before,
+    )
+    .fetch_all(exec)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let (mode, source, commit_availability) = preview_fields(
+                &r.kind,
+                &r.status,
+                &r.payload,
+                r.account_generation,
+                r.current_generation,
+                r.has_upload,
+                r.newer_import,
+            );
+            crate::models::JobStatus {
+                mode,
+                source,
+                commit_availability,
+                retry_availability: retry_availability(
+                    &r.kind,
+                    &r.status,
+                    r.payload,
+                    r.account_generation,
+                    r.current_generation,
+                    r.has_upload,
+                ),
+                id: r.id,
+                kind: r.kind,
+                status: r.status,
+                phase: r.phase,
+                processed_count: r.processed_count,
+                total_count: r.total_count,
+                report: r.report,
+                last_error: r.last_error,
+                created_at: r.created_at,
+                finished_at: r.finished_at,
+            }
         })
         .collect())
 }

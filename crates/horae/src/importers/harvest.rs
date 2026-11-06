@@ -458,8 +458,8 @@ async fn oauth_callback(
         .flatten()
         .and_then(|encoded| serde_json::from_str::<OAuthAttempt>(&encoded).ok());
 
-    let dest_ok = "/admin/importers?connected=1";
-    let dest_err = "/admin/importers?error=1";
+    let dest_ok = "/admin/importers/harvest?connected=1";
+    let dest_err = "/admin/importers/harvest?error=1";
 
     // Validate `state` and extract the code; a missing/mismatched state or error
     // yields no code, so we never reach the exchange (research.md §10).

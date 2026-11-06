@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage};
-use crate::models::user::UserListItem;
+use crate::models::user::{Activation, NewPerson, UserListItem};
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 
@@ -83,6 +83,55 @@ pub async fn create_user(email: String, name: String, role: String) -> Result<Us
     Ok(user)
 }
 
+/// The most people one request may add, matching the importer's bounded list
+/// of missing people.
+#[cfg(feature = "server")]
+const MAX_NEW_PEOPLE: usize = 500;
+
+/// Add members, all or none, deactivated unless the administrator chose
+/// otherwise. The Harvest run page uses this for people a run could not match.
+#[server]
+pub async fn add_harvest_people(
+    people: Vec<NewPerson>,
+    activation: Activation,
+) -> Result<Vec<User>, ServerFnError> {
+    let admin = require_admin().await?;
+    if people.is_empty() || people.len() > MAX_NEW_PEOPLE {
+        return Err(err(
+            BAD_REQUEST,
+            format!("Add between 1 and {MAX_NEW_PEOPLE} people at a time"),
+        ));
+    }
+    let people = people
+        .into_iter()
+        .map(|person| {
+            person
+                .normalized()
+                .ok_or_else(|| err(BAD_REQUEST, "Every person needs an email address"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let state = crate::state::global_state().await;
+    let users = insert_users(
+        &state.db,
+        admin.org_id,
+        admin.id,
+        &people,
+        OrgRole::Member,
+        activation,
+    )
+    .await?;
+    for user in &users {
+        state
+            .plugins
+            .dispatch(crate::plugin::AppEvent::UserCreated {
+                occurred_at: chrono::Utc::now(),
+                org_id: admin.org_id,
+                user: user_payload(user),
+            });
+    }
+    Ok(users)
+}
+
 #[cfg(feature = "server")]
 async fn insert_user(
     db: &sqlx::PgPool,
@@ -92,32 +141,95 @@ async fn insert_user(
     name: &str,
     org_role: OrgRole,
 ) -> Result<User, ServerFnError> {
-    let mut tx = begin_user_access_change(db, org_id, actor_id).await?;
-    let user = sqlx::query_as!(
-        User,
-        r#"INSERT INTO users (id, org_id, email, name, org_role)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, org_id, email, name, oidc_subject,
-                   org_role as "org_role: OrgRole",
-                   cost_rate_cents, billable_rate_cents, active,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        uuid::Uuid::now_v7(),
+    let person = NewPerson {
+        email: email.to_owned(),
+        name: name.to_owned(),
+    };
+    let mut users = insert_users(
+        db,
         org_id,
-        email,
-        name,
-        org_role as OrgRole,
+        actor_id,
+        &[person],
+        org_role,
+        Activation::Active,
     )
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(|e| {
-        if e.to_string().contains("users_email_key") {
-            conflict("A user with this email already exists")
-        } else {
-            server_err(e)
+    .await?;
+    Ok(users.remove(0))
+}
+
+#[cfg(feature = "server")]
+async fn insert_users(
+    db: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    people: &[NewPerson],
+    org_role: OrgRole,
+    activation: Activation,
+) -> Result<Vec<User>, ServerFnError> {
+    let mut tx = begin_user_access_change(db, org_id, actor_id).await?;
+    // Every account creation serializes on its email, ignoring case. Taking
+    // the locks in one order keeps two batches from deadlocking.
+    let mut order: Vec<_> = people.iter().collect();
+    order.sort_by_key(|person| person.email.to_lowercase());
+    for pair in order.windows(2) {
+        if pair[0].email.eq_ignore_ascii_case(&pair[1].email) {
+            return Err(err(
+                BAD_REQUEST,
+                format!("The email {} is listed twice", pair[1].email),
+            ));
         }
-    })?;
+    }
+    for person in order {
+        crate::db::lock_user_email(&mut tx, &person.email)
+            .await
+            .map_err(server_err)?;
+        let taken = sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM users WHERE lower(btrim(email)) = lower(btrim($1))) AS "taken!""#,
+            person.email,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(server_err)?;
+        if taken {
+            return Err(conflict(format!(
+                "A user with the email {} already exists",
+                person.email
+            )));
+        }
+    }
+    let mut users = Vec::with_capacity(people.len());
+    for person in people {
+        let user = sqlx::query_as!(
+            User,
+            r#"INSERT INTO users (id, org_id, email, name, org_role, active)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id, org_id, email, name, oidc_subject,
+                       org_role as "org_role: OrgRole",
+                       cost_rate_cents, billable_rate_cents, active,
+                       created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+            uuid::Uuid::now_v7(),
+            org_id,
+            person.email,
+            person.name,
+            org_role as OrgRole,
+            activation == Activation::Active,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("users_email_key") {
+                conflict(format!(
+                    "A user with the email {} already exists",
+                    person.email
+                ))
+            } else {
+                server_err(e)
+            }
+        })?;
+        users.push(user);
+    }
     tx.commit().await.map_err(server_err)?;
-    Ok(user)
+    Ok(users)
 }
 
 #[cfg(feature = "server")]
@@ -346,4 +458,5 @@ mod tests {
 
     mod authority;
     mod concurrency;
+    mod people;
 }

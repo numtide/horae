@@ -81,13 +81,13 @@ automatic reset, data deletion or cross-account migration is provided.
 
 ## Scenario 2 — Dry-run the API import previews without writing (US3, FR-014)
 
-On the connected Harvest screen, click **Preview import (dry-run)**. This always previews a full sync.
+On the connected Harvest screen (`/admin/importers/harvest`), click **Preview import (dry run)**. This always previews a full sync, and opens the preview's run page (spec 019).
 
 **Expected**: a summary reporting would-create/update/skip/error per entity type (clients, projects, tasks, time entries); problem records appear under **Record errors** with their Harvest id + reason. **No imported data, provenance or watermark changes persist**. An expired OAuth token can still be refreshed and saved during a preview, independently of the rolled-back data transaction.
 
 ## Scenario 3 — First real API import populates Horae (US1, FR-004/005/006/023)
 
-Review the preview's counts and record errors, then click **Commit this import**. This starts a new full import against the current source and database, not a saved copy of the preview. Keep both unchanged when comparing preview and commit counts.
+Review the preview's counts and record errors, then click **Commit this dry run** on its run page. This starts a new full import against the current source and database, with the preview's Harvest account, not a saved copy of the preview. Keep both unchanged when comparing preview and commit counts.
 
 **Expected**: the importer pages through Harvest (respecting the rate limit), then creates clients first, then projects under them, then tasks (+ per-project enablement), then time entries. A 1.5-hour Harvest entry stores `minutes = 90` exactly; an entry with a billable rate stores integer cents + ISO currency. Provenance rows are written to `harvest_import_map` for every created record, and the summary counts match the dry-run's would-create numbers. The unknown-user rows are reported as errors and skipped (US4).
 
@@ -108,7 +108,7 @@ invent a placeholder client or leave behind partial provenance.
 
 ## Scenario 4 — Re-sync is idempotent and edit-robust (US2, FR-011/FR-026, SC-002)
 
-Click **Preview import (dry-run)** again, review the result, then **Commit this import** to repeat the full sync against unchanged data.
+Click **Preview import (dry run)** again, review the result, then **Commit this dry run** to repeat the full sync against unchanged data.
 
 **Expected**: the second run creates **zero** new records — all matched by provenance (Harvest id) and reported as skipped/unchanged. Then edit one imported entry's notes in Horae and re-run: it is **still** matched to the same entry by Harvest id (not duplicated), proving provenance matching survives edits that a pure natural key would miss.
 
@@ -129,9 +129,9 @@ If a previous version already advanced past failed records, correct their report
 Prepare a small Harvest detailed-time-report CSV fixture (columns per `contracts/csv-format.md`) with a couple of clients/projects/tasks and a handful of entries — including one unknown-user and one malformed-date row.
 
 1. Return to **All importers** and select **CSV file** (or choose **Use a CSV instead** from the Harvest screen).
-1. Use **browse** to select `harvest-sample.csv`, then click **Preview file (dry-run)**.
-1. Review the summary and **Record errors**, then click **Commit this import**.
-1. Keep the same file selected and repeat preview and commit; the re-run should report zero creations.
+1. Use **browse** to select `harvest-sample.csv`, then click **Preview file (dry run)**.
+1. On the preview's run page, review the summary and **Record errors**, then click **Commit this dry run**. It commits the retained upload, so the file is not chosen again.
+1. Choose the same file again and repeat preview and commit; the re-run should report zero creations.
 
 **Expected**: same FK-safe order, exact conversions, dry-run, and per-row error behavior as the API path; the re-run creates zero duplicates (matched by the composite natural key, since the CSV carries no Harvest ids and writes no provenance).
 

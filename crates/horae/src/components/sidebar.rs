@@ -148,7 +148,7 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                     if is_admin {
                         div { class: "sidebar-menu-list",
                             div { class: "menu-group", "Workspace" }
-                            Link { to: Route::HarvestImport {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
+                            Link { to: Route::ImporterIndex {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
                                 span { class: "menu-item-icon", NavIcon { name: "import" } }
                                 "Importers"
                             }

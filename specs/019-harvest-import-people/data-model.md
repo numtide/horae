@@ -65,7 +65,9 @@ Invariants:
 
 - `JobStatus` += `mode`, `source` and `commit_availability`, all read from the payload with
   serde defaults.
-- `ErrorSummary` = { groups: [{ kind?, reason, entity, count, samples ≤ 3 }], people: \[{ email?,
-  name?, entries }\], omitted_groups, omitted_people }
+- `ErrorSummary` = { groups: [{ entity, kind?, reason, count, samples ≤ 3 }], people: \[{ email?,
+  name?, kind, entries }\], omitted_errors, omitted_people }. A person's `kind` is their own error's
+  kind once seen, otherwise `person_not_imported`; `entries` counts their time-entry errors.
 - `NewPerson` { email, name }
 - `Activation` = `Deactivated | Active`
+- `RunsCursor` = the `before=` query of the run history, absent for the newest page.

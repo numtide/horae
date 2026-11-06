@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, kind, status, phase, processed_count, total_count,\n                  COALESCE(checkpoint->'report', report) AS report, last_error,\n                  created_at as \"created_at!: chrono::DateTime<chrono::Utc>\",\n                  finished_at as \"finished_at: chrono::DateTime<chrono::Utc>\",\n                  payload, account_generation,\n                  COALESCE((SELECT g.account_generation FROM harvest_connection_generations g\n                            WHERE g.org_id = horae_jobs.org_id), 0) AS \"current_generation!\",\n                  EXISTS(SELECT 1 FROM horae_job_uploads u\n                         WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS \"has_upload!\"\n             FROM horae_jobs\n            WHERE org_id = $1\n              AND ($3::uuid IS NULL OR (created_at, id) < (\n                  SELECT created_at, id FROM horae_jobs WHERE id = $3 AND org_id = $1\n              ))\n            ORDER BY created_at DESC, id DESC\n            LIMIT $2",
+  "query": "SELECT id, kind, status, phase, processed_count, total_count,\n                  COALESCE(checkpoint->'report', report) AS report, last_error,\n                  created_at as \"created_at!: chrono::DateTime<chrono::Utc>\",\n                  finished_at as \"finished_at: chrono::DateTime<chrono::Utc>\",\n                  payload, account_generation,\n                  COALESCE((SELECT g.account_generation FROM harvest_connection_generations g\n                            WHERE g.org_id = horae_jobs.org_id), 0) AS \"current_generation!\",\n                  EXISTS(SELECT 1 FROM horae_job_uploads u\n                         WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS \"has_upload!\",\n                  EXISTS(SELECT 1 FROM horae_jobs n\n                         WHERE n.org_id = horae_jobs.org_id AND n.kind = horae_jobs.kind\n                           AND (n.created_at, n.id) > (horae_jobs.created_at, horae_jobs.id)) AS \"newer_import!\"\n             FROM horae_jobs\n            WHERE org_id = $1\n              AND ($3::uuid IS NULL OR (created_at, id) < (\n                  SELECT created_at, id FROM horae_jobs WHERE id = $3 AND org_id = $1\n              ))\n            ORDER BY created_at DESC, id DESC\n            LIMIT $2",
   "describe": {
     "columns": [
       {
@@ -72,6 +72,11 @@
         "ordinal": 13,
         "name": "has_upload!",
         "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
+        "name": "newer_import!",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -95,8 +100,9 @@
       false,
       false,
       null,
+      null,
       null
     ]
   },
-  "hash": "330c2122b154668bd1574031c84977000f733ed5d7fabab0551de13c289daa20"
+  "hash": "0ee0a4ae5a3d119231c087d7c3616d780683e12b8ccc184e850b9349f18e48b7"
 }

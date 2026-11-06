@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs SET status = 'succeeded', finished_at = now(), report = $2 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0d717aa05189e070f7bebff8c28e54d40212fca025041698ffffd3ba1a239762"
+}

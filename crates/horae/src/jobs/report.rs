@@ -12,6 +12,8 @@ const CHUNK_BYTES: usize = 64 * 1024;
 
 mod legacy;
 pub(crate) use legacy::upgrade_legacy_reports;
+mod summary;
+pub(crate) use summary::summarize;
 
 #[cfg(test)]
 mod tests;

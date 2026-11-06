@@ -17,7 +17,6 @@ reason = "Predates the check; mostly house Input, Checkbox and MenuItem props. H
 "crates/horae/src/pages/clients/form.rs" = 6
 "crates/horae/src/pages/clients/status.rs" = 1
 "crates/horae/src/pages/gallery.rs" = 11
-"crates/horae/src/pages/importers.rs" = 9
 "crates/horae/src/pages/invoices.rs" = 2
 "crates/horae/src/pages/invoices/defaults_form.rs" = 7
 "crates/horae/src/pages/invoices/editing.rs" = 3

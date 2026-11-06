@@ -402,7 +402,7 @@ mod route {
         #[route("/admin/tasks")]
         TaskCatalog {},
         #[route("/admin/importers")]
-        HarvestImport {},
+        ImporterIndex {},
         #[route("/admin/audit")]
         PermissionAudit {},
     }
@@ -431,7 +431,7 @@ mod route {
     }
 
     #[component]
-    fn HarvestImport() -> Element {
+    fn ImporterIndex() -> Element {
         rsx! { "Importer panel" }
     }
 

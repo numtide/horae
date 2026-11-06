@@ -7,6 +7,7 @@ use horae_core::importers::harvest::client::{
     CALLBACK_PATH, ClientSettings, ClientSource, DISCONNECT_UNCONFIRMED, save_disconnects,
 };
 
+use crate::route::Route;
 use crate::server_fns;
 
 const LABEL: &str = "block text-xs uppercase tracking-eyebrow text-faint mb-2";
@@ -22,8 +23,6 @@ enum Change {
 pub(super) fn HarvestOAuthApp(
     /// Whether Harvest is connected, so a disconnecting change asks first.
     connected: bool,
-    back_label: &'static str,
-    onback: EventHandler<()>,
     on_changed: EventHandler<()>,
 ) -> Element {
     let mut settings = use_resource(server_fns::harvest_client_settings);
@@ -146,12 +145,11 @@ pub(super) fn HarvestOAuthApp(
     rsx! {
         div { class: "flex flex-col gap-5",
             div {
-                button {
-                    r#type: "button",
+                Link {
+                    to: Route::HarvestOverview {},
                     class: "imp-back text-primary text-sm",
-                    "data-testid": "harvest-oauth-back".to_owned(),
-                    onclick: move |_| onback.call(()),
-                    "{back_label}"
+                    "data-testid": "harvest-oauth-back",
+                    "← Back to Harvest"
                 }
             }
             div { class: "alert alert-warning mb-0",
