@@ -289,6 +289,16 @@ fn main() -> anyhow::Result<()> {
                         "/health",
                         get(|| async { axum::Json(serde_json::json!({"status": "ok"})) }),
                     )
+                    // Browsers and crawlers request this path directly, whatever the page links.
+                    .route(
+                        "/favicon.ico",
+                        get(|| async {
+                            (
+                                [(axum::http::header::CONTENT_TYPE, "image/x-icon")],
+                                include_bytes!("../assets/favicon.ico").as_slice(),
+                            )
+                        }),
+                    )
                     .route("/api/reports/export/csv", get(reports::export_csv))
                     .route("/api/reports/export/xlsx", get(reports::export_xlsx))
                     .route(
