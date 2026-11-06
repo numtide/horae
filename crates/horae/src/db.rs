@@ -113,6 +113,23 @@ pub async fn lock_time_entry_write(
     Ok(())
 }
 
+/// Serialize account creation for one email, ignoring case, until the
+/// transaction ends. Account emails are unique only case-sensitively, so a
+/// creator checks for an existing account under this lock. Sign-in provisioning
+/// takes the same key, so every way of creating an account shares it.
+pub async fn lock_user_email(
+    conn: &mut sqlx::PgConnection,
+    email: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"SELECT pg_advisory_xact_lock(hashtextextended('horae.signup-email:' || lower($1), 0)) as "lock!: ()""#,
+        email,
+    )
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
 /// `user_id`'s total minutes on each of `dates` (0 when empty), including this
 /// transaction's own writes. The write lock above is shared, so it does not
 /// order two writers for the same day; each (person, day) is locked here until

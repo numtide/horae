@@ -35,6 +35,6 @@ no person fields on its errors.
 - `people[].outcome`: `created` or `matched`. `harvest_active` is Harvest's flag and is never
   applied to the account.
 - The `person.kind` values are `unmatched_email`, `unmatched_name`, `ambiguous_person`, `missing_email`,
-  `duplicate_email` and `person_not_imported`. The `reason` text stays human-readable and is
+  `duplicate_email`, `person_not_imported` and `email_in_use`. The `reason` text stays human-readable and is
   unchanged for existing error classes.
 - Exit codes and CLI flags are unchanged.

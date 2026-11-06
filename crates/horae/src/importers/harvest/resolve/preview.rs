@@ -1,5 +1,8 @@
 //! Parent state needed to continue a rollback-only import simulation.
 
+use horae_core::importers::harvest::types::{
+    EntityType, ImportReport, PersonError, PersonErrorKind, RowOutcome,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::PgConnection;
@@ -86,7 +89,7 @@ impl ParentSnapshot {
         &self,
         conn: &mut PgConnection,
         org_id: Uuid,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<LostPerson>> {
         let owner = org_id.to_string();
         for rows in [&self.clients, &self.projects, &self.tasks, &self.users] {
             anyhow::ensure!(
@@ -97,6 +100,8 @@ impl ParentSnapshot {
             );
         }
         // Simulated people own entries in later batches, so they come back first.
+        // A real account that took the email meanwhile keeps it; the simulated
+        // person is then reported as lost instead of failing later entries.
         sqlx::query!(
             "INSERT INTO users (id, org_id, email, name, org_role, active)
              SELECT id, org_id, email, name, org_role, active
@@ -106,6 +111,16 @@ impl ParentSnapshot {
             org_id,
         )
         .execute(&mut *conn)
+        .await?;
+        let lost = sqlx::query_as!(
+            LostPerson,
+            r#"SELECT r.id AS "id!", r.email AS "email!"
+               FROM jsonb_populate_recordset(NULL::users, $1) r
+               WHERE r.org_id = $2 AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = r.id)"#,
+            &self.users,
+            org_id,
+        )
+        .fetch_all(&mut *conn)
         .await?;
         sqlx::query!(
             "INSERT INTO clients (id, org_id, name, currency, address, active)
@@ -158,7 +173,42 @@ impl ParentSnapshot {
         )
         .execute(&mut *conn)
         .await?;
-        Ok(())
+        Ok(lost)
+    }
+}
+
+/// A simulated person a preview could not restore, because a real account
+/// took the email between batches.
+#[derive(Debug)]
+pub(in crate::importers::harvest) struct LostPerson {
+    id: Uuid,
+    email: String,
+}
+
+/// Later rows resolve the lost people against current data again (a commit
+/// started now would match the real account), and each is reported once.
+pub(in crate::importers::harvest) fn forget_lost_people(
+    cache: &mut RunCache,
+    report: &mut ImportReport,
+    lost: Vec<LostPerson>,
+) {
+    for person in lost {
+        cache.users.retain(|_, id| *id != person.id);
+        report.record(
+            EntityType::Person,
+            &RowOutcome::Errored {
+                source_location: format!("person {}", person.email),
+                reason: format!(
+                    "an account with the email {:?} was added while this preview ran; preview again for exact results",
+                    person.email
+                ),
+                person: Some(PersonError {
+                    kind: PersonErrorKind::EmailInUse,
+                    email: Some(person.email),
+                    name: None,
+                }),
+            },
+        );
     }
 }
 
@@ -276,5 +326,55 @@ mod tests {
             );
             tx.rollback().await.unwrap();
         }
+    }
+
+    #[sqlx::test]
+    async fn a_person_whose_email_was_taken_meanwhile_is_reported_not_restored(pool: sqlx::PgPool) {
+        use horae_core::importers::harvest::types::{ImportMode, SourceKind};
+
+        let ids =
+            crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
+        let simulated = Uuid::now_v7();
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::query!(
+            "INSERT INTO users (id, org_id, email, name, org_role, active)
+             VALUES ($1, $2, 'lost@example.com', 'Lost', 'member', false)",
+            simulated,
+            ids.org_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        let mut cache = RunCache::default();
+        cache.users.insert(
+            super::super::UserKey::Email("lost@example.com".into()),
+            simulated,
+        );
+        let snapshot = ParentSnapshot::capture(&mut tx, ids.org_id, &cache)
+            .await
+            .unwrap();
+        tx.rollback().await.unwrap();
+        // A real account takes the email between two preview batches.
+        sqlx::query!(
+            "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, 'lost@example.com', 'Real')",
+            Uuid::now_v7(),
+            ids.org_id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let mut tx = pool.begin().await.unwrap();
+        let lost = snapshot.restore(&mut tx, ids.org_id).await.unwrap();
+        tx.rollback().await.unwrap();
+        let mut report = ImportReport::new(SourceKind::Csv, ImportMode::DryRun);
+        forget_lost_people(&mut cache, &mut report, lost);
+        assert!(cache.users.is_empty(), "later rows must resolve again");
+        assert_eq!(report.summary.people.errored, 1);
+        assert_eq!(
+            report.row_errors[0].person.as_ref().unwrap().kind,
+            PersonErrorKind::EmailInUse
+        );
+        assert!(report.reconciles());
     }
 }

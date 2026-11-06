@@ -99,14 +99,28 @@
 
 ## R-8 "User created" event
 
-- **Decision**: After a committing job completes, `jobs::execute` dispatches `AppEvent::UserCreated`
-  for each `created` row in `report.people`, with `method: None` and `org_role: "member"`. This is
-  best effort, through `state.plugins.dispatch`. Dry runs dispatch nothing. A pure helper builds the
-  events from the report so it can be tested.
-- **Rationale**: `UserPayload.method` is documented as login-only. Dispatching at job completion
-  uses the final report, which includes batches committed before a resume. A job that fails after
-  committing some batches emits nothing for them, which is acceptable for best-effort delivery and
-  is the same as a server fn whose process dies after commit.
+- **Decision**: `create_person` queues `AppEvent::UserCreated` (`method: None`, role `member`) in
+  `horae_outbox` (kind `user_created`) inside the savepoint that inserts the account. The existing
+  outbox worker, which delivered only `project_created`, now also claims `user_created`.
+- **Rationale**: A durable commit commits each batch separately. The event therefore commits or
+  rolls back with its account, whether the job then succeeds, fails, is cancelled, or loses its
+  lease, and a preview's rollback discards it. `UserPayload.method` is documented as login-only.
+- **Rejected**: dispatching after job completion (first version). A failed job never announced the
+  accounts its committed batches had created, and later runs match them by provenance.
+
+## R-10 Review fixes (2026-11-06)
+
+- **One account per Harvest person**: before linking an email match, the people phase refuses an
+  account already linked to a different Harvest person id (`ambiguous_person`). Otherwise a person
+  who inherited a former colleague's email would get that colleague's history.
+- **Case-insensitive creation**: `create_person` takes
+  `pg_advisory_xact_lock(hashtextextended('horae.signup-email:' || lower(email), 0))`, the key
+  sign-in provisioning (PR #340) uses. It then checks again for any account with that email
+  ignoring case: the same workspace is matched, anything else is `email_in_use`. A unique
+  violation maps to `email_in_use` too. Follow-up: once #340 lands, share its helper.
+- **Lost preview people**: `ParentSnapshot::restore` returns the simulated people it could not
+  restore. They are removed from the run cache and reported once as `email_in_use`.
+- **CSV people count once** per account, tracked in the run cache.
 
 ## R-9 US2 design (adopted)
 

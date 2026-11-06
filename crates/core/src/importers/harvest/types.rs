@@ -182,6 +182,9 @@ pub enum PersonErrorKind {
     DuplicateEmail,
     /// The entry's Harvest person failed to import earlier in the run.
     PersonNotImported,
+    /// An account the import cannot use, such as one in another workspace,
+    /// already has the email.
+    EmailInUse,
 }
 
 /// A Harvest person the run linked to a Horae account.

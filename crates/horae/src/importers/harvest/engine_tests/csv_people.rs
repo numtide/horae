@@ -66,7 +66,10 @@ async fn email_rows_create_one_deactivated_person_and_names_never_do(pool: PgPoo
     );
     assert_eq!(commit.people.len(), 1);
     assert_eq!(commit.people[0].outcome, PersonOutcome::Created);
-    assert_eq!(super::super::created_user_events(org, &commit).len(), 1);
+    assert_eq!(
+        super::super::sync_tests::people::queued_user_events(&pool, org).await,
+        1
+    );
 
     let again = import(&pool, org, &csv, ImportMode::Commit).await;
     assert_eq!(
@@ -74,6 +77,25 @@ async fn email_rows_create_one_deactivated_person_and_names_never_do(pool: PgPoo
         (0, 1)
     );
     assert_eq!(again.summary.time_entries.skipped, 2);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_person_reached_by_name_and_by_email_counts_once(pool: PgPool) {
+    let org = seed_org(&pool).await;
+    let id = seed_user(&pool, org, "dev@acme.com").await;
+    let csv = format!(
+        "{HEADER}{}{}",
+        row("1", "Dana", "Dev", ""),
+        row("2", "Dana", "Dev", "dev@acme.com"),
+    );
+    let report = import(&pool, org, &csv, ImportMode::Commit).await;
+    assert_eq!(report.summary.time_entries.created, 2);
+    assert_eq!(
+        (report.summary.people.skipped, report.summary.people.created),
+        (1, 0)
+    );
+    assert_eq!(report.people.len(), 1);
+    assert_eq!(report.people[0].horae_id, id);
 }
 
 #[sqlx::test(migrations = "./migrations")]

@@ -31,9 +31,7 @@ pub(crate) use sync_tests::complete_cli_api_fixture;
 use chrono::Utc;
 #[cfg(test)]
 use horae_core::importers::harvest::types::SourceKind;
-use horae_core::importers::harvest::types::{
-    EntityType, ImportMode, PersonOutcome, SourceRow, SyncScope,
-};
+use horae_core::importers::harvest::types::{EntityType, ImportMode, SourceRow, SyncScope};
 use sqlx::{Connection, PgPool};
 use uuid::Uuid;
 
@@ -63,33 +61,6 @@ pub(crate) fn job_report(report: &ImportReport) -> anyhow::Result<(serde_json::V
         + report.summary.people.processed()
         + report.summary.time_entries.processed();
     Ok((serde_json::to_value(report)?, i64::try_from(processed)?))
-}
-
-/// The "user created" events for the accounts a committed import created.
-/// Sent best effort after the job completes; a preview created nothing.
-pub(crate) fn created_user_events(
-    org_id: Uuid,
-    report: &ImportReport,
-) -> Vec<crate::plugin::AppEvent> {
-    if report.mode != ImportMode::Commit {
-        return Vec::new();
-    }
-    report
-        .people
-        .iter()
-        .filter(|person| person.outcome == PersonOutcome::Created)
-        .map(|person| crate::plugin::AppEvent::UserCreated {
-            occurred_at: Utc::now(),
-            org_id,
-            user: crate::plugin::event::UserPayload {
-                id: person.horae_id,
-                email: person.email.clone().unwrap_or_default(),
-                name: person.name.clone(),
-                org_role: "member".into(),
-                method: None,
-            },
-        })
-        .collect()
 }
 
 async fn finish_import(

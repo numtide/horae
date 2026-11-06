@@ -95,6 +95,8 @@ pub struct PendingCache {
     /// Parents this row resolved or created.
     pub parents: Vec<(ParentKind, String, Uuid)>,
     pub user: Option<(UserKey, Uuid)>,
+    /// The account this row counted as a person in the report.
+    pub person: Option<Uuid>,
     pub project_task: Option<(Uuid, Uuid)>,
     /// The natural-key slot an id-less time entry consumed (see
     /// [`RunCache::entry_slot_offset`]); bumped on commit so the next identical
@@ -115,6 +117,10 @@ pub struct RunCache {
         deserialize_with = "deserialize_users"
     )]
     users: HashMap<UserKey, Uuid>,
+    /// Accounts already counted as people. A CSV person can be reached by
+    /// name and by email, and must still count once.
+    #[serde(default)]
+    people: HashSet<Uuid>,
     project_tasks: HashSet<(Uuid, Uuid)>,
     entry_slots: keys::OccurrenceCounter,
     failed_parents: HashSet<(EntityType, i64)>,
@@ -144,6 +150,10 @@ impl RunCache {
         self.failed_parents.contains(&(entity, id))
     }
 
+    pub fn person_counted(&self, id: Uuid) -> bool {
+        self.people.contains(&id)
+    }
+
     fn get(&self, kind: ParentKind, key: &str) -> Option<Uuid> {
         self.map(kind).get(key).copied()
     }
@@ -171,6 +181,9 @@ impl RunCache {
         }
         if let Some((key, id)) = pending.user {
             self.users.insert(key, id);
+        }
+        if let Some(id) = pending.person {
+            self.people.insert(id);
         }
         if let Some(pair) = pending.project_task {
             self.project_tasks.insert(pair);
@@ -645,14 +658,29 @@ pub async fn resolve_person(
     .await?;
     let (id, outcome) = match matches.as_slice() {
         [id] => (*id, PersonOutcome::Matched),
-        [] => (
-            create_person(conn, org_id, person.email, person.name).await?,
-            PersonOutcome::Created,
-        ),
-        _ => {
+        [] => create_person(conn, org_id, person.email, person.name).await?,
+        _ => return Err(ambiguous_person(person.email, person.name)),
+    };
+    if let Some(hid) = person.harvest_id {
+        // An email match must not take over an account that already holds the
+        // history of another Harvest person, e.g. after an email moved between
+        // people in Harvest.
+        if outcome == PersonOutcome::Matched
+            && let Some(other) = sqlx::query_scalar!(
+                "SELECT harvest_id FROM harvest_import_map
+                 WHERE org_id = $1 AND harvest_entity_type = 'person'
+                   AND horae_id = $2 AND harvest_id <> $3
+                 LIMIT 1",
+                org_id,
+                id,
+                hid,
+            )
+            .fetch_optional(&mut *conn)
+            .await?
+        {
             return Err(RowFailure::person(
                 format!(
-                    "ambiguous person email {:?}: multiple Horae users match",
+                    "the Horae account with email {:?} already belongs to Harvest person {other}",
                     person.email
                 ),
                 PersonErrorKind::AmbiguousPerson,
@@ -660,23 +688,52 @@ pub async fn resolve_person(
                 Some(person.name),
             ));
         }
-    };
-    if let Some(hid) = person.harvest_id {
         super::provenance::upsert(&mut *conn, org_id, EntityType::Person, hid, id, None).await?;
     }
     Ok((key, id, outcome))
 }
 
+fn ambiguous_person(email: &str, name: &str) -> RowFailure {
+    RowFailure::person(
+        format!("ambiguous person email {email:?}: multiple Horae users match"),
+        PersonErrorKind::AmbiguousPerson,
+        Some(email),
+        Some(name),
+    )
+}
+
 /// Create the account that owns a person's imported history. It is a
 /// deactivated member with no rates and no sign-in identity, so an import never
 /// grants access; an administrator reactivates the people who still work there.
+///
+/// Account emails are unique only case-sensitively, so creation takes the
+/// email's lock and checks again, ignoring case, before inserting. An account
+/// another request created meanwhile is matched instead; one elsewhere is
+/// reported. The "user created" event is queued with the account, so it is
+/// delivered exactly when the account commits.
 async fn create_person(
     conn: &mut sqlx::PgConnection,
     org_id: Uuid,
     email: &str,
     name: &str,
-) -> Result<Uuid, RowFailure> {
+) -> Result<(Uuid, PersonOutcome), RowFailure> {
+    crate::db::lock_user_email(&mut *conn, email).await?;
+    let existing = sqlx::query!(
+        "SELECT id, org_id FROM users WHERE lower(btrim(email)) = lower(btrim($1)) LIMIT 2",
+        email,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    match existing.as_slice() {
+        [] => {}
+        [user] if user.org_id == org_id => return Ok((user.id, PersonOutcome::Matched)),
+        [_, _] if existing.iter().all(|user| user.org_id == org_id) => {
+            return Err(ambiguous_person(email, name));
+        }
+        _ => return Err(email_in_use(email, name)),
+    }
     let name = keys::trim_ws(name);
+    let name = if name.is_empty() { email } else { name };
     let id = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO users (id, org_id, email, name, org_role, active)
@@ -684,11 +741,39 @@ async fn create_person(
         id,
         org_id,
         email,
-        if name.is_empty() { email } else { name },
+        name,
     )
     .execute(&mut *conn)
-    .await?;
-    Ok(id)
+    .await
+    .map_err(|error| match &error {
+        sqlx::Error::Database(db) if db.is_unique_violation() => email_in_use(email, name),
+        _ => error.into(),
+    })?;
+    let event = crate::plugin::AppEvent::UserCreated {
+        occurred_at: Utc::now(),
+        org_id,
+        user: crate::plugin::event::UserPayload {
+            id,
+            email: email.to_owned(),
+            name: name.to_owned(),
+            org_role: "member".into(),
+            method: None,
+        },
+    };
+    let event = serde_json::to_value(event).map_err(|e| RowFailure::new(e.to_string()))?;
+    crate::jobs::enqueue_outbox(&mut *conn, org_id, "user_created", event)
+        .await
+        .map_err(|e| RowFailure::new(e.to_string()))?;
+    Ok((id, PersonOutcome::Created))
+}
+
+fn email_in_use(email: &str, name: &str) -> RowFailure {
+    RowFailure::person(
+        format!("an account outside this import already uses the email {email:?}"),
+        PersonErrorKind::EmailInUse,
+        Some(email),
+        Some(name),
+    )
 }
 
 /// Match one org user, including inactive historical users. Email is authoritative;
@@ -763,8 +848,8 @@ pub async fn resolve_user(
     match (matches.as_slice(), email) {
         ([id], _) => Ok((key, *id, csv_outcome(PersonOutcome::Matched))),
         ([], Some(email)) if source == SourceKind::Csv => {
-            let id = create_person(conn, org_id, email, name.unwrap_or(email)).await?;
-            Ok((key, id, csv_outcome(PersonOutcome::Created)))
+            let (id, outcome) = create_person(conn, org_id, email, name.unwrap_or(email)).await?;
+            Ok((key, id, csv_outcome(outcome)))
         }
         ([], _) => Err(RowFailure::person(
             format!("no Horae user matches {field} {value:?}"),
@@ -814,6 +899,7 @@ mod checkpoint_tests {
                 (ParentKind::Task, "task".into(), task),
             ],
             user: Some((UserKey::Email("same-key".into()), email_user)),
+            person: Some(email_user),
             project_task: Some((project, task)),
             entry_slot: Some("identical-entry".into()),
         });
@@ -830,6 +916,7 @@ mod checkpoint_tests {
         assert_eq!(restored.tasks, cache.tasks);
         assert_eq!(restored.users, cache.users);
         assert_eq!(restored.project_tasks, cache.project_tasks);
+        assert!(restored.person_counted(email_user));
         assert_eq!(restored.entry_slot_offset("identical-entry"), 2);
         assert!(restored.parent_failed(EntityType::Project, 42));
     }

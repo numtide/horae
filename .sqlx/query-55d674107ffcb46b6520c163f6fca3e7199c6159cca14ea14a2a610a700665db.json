@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"count!\" FROM horae_outbox\n           WHERE org_id = $1 AND event_kind = 'user_created'\n             AND payload->>'event' = 'user_created' AND payload->'user'->>'method' IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "55d674107ffcb46b6520c163f6fca3e7199c6159cca14ea14a2a610a700665db"
+}

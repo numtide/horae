@@ -45,7 +45,7 @@ RowOutcome::Errored += person: Option<PersonError>      (defaulted, skipped when
 RowError        += person: Option<PersonError>      (defaulted, skipped when None)
 PersonError      { kind: PersonErrorKind, email: Option<String>, name: Option<String> }
 PersonErrorKind  UnmatchedEmail | UnmatchedName | AmbiguousPerson | MissingEmail
-                 | DuplicateEmail | PersonNotImported
+                 | DuplicateEmail | PersonNotImported | EmailInUse
 ```
 
 Invariants:

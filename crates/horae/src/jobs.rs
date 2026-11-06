@@ -65,7 +65,7 @@ fn decode_payload(value: serde_json::Value) -> anyhow::Result<JobPayload> {
 /// Insert an event in the same transaction as the state change that produced
 /// it. Consumers can claim undelivered rows independently of the job worker.
 pub async fn enqueue_outbox(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: &mut sqlx::PgConnection,
     org_id: Uuid,
     event_kind: &str,
     payload: serde_json::Value,
@@ -79,7 +79,7 @@ pub async fn enqueue_outbox(
         event_kind,
         payload,
     )
-    .execute(&mut **tx)
+    .execute(tx)
     .await?;
     Ok(id)
 }
@@ -804,17 +804,6 @@ async fn claim(pool: &sqlx::PgPool, worker_id: &str) -> anyhow::Result<Option<Cl
     }))
 }
 
-/// The import has committed by the time it returns, so its accounts exist.
-fn announce_created_people(
-    state: &AppState,
-    org_id: Uuid,
-    report: &crate::importers::harvest::report::ImportReport,
-) {
-    for event in crate::importers::harvest::created_user_events(org_id, report) {
-        state.plugins.dispatch(event);
-    }
-}
-
 async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::Result<()> {
     let (stop, receiver) = tokio::sync::watch::channel(false);
     let lease = JobLease {
@@ -858,7 +847,6 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
                     &state.db, job.org_id, &currency, &cfg, *mode, *sync, &lease,
                 )
                 .await?;
-                announce_created_people(state, job.org_id, &report);
                 crate::importers::harvest::job_report(&report)
             }
             JobPayload::HarvestCsv { mode } => {
@@ -884,7 +872,6 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
                     Some(&lease),
                 )
                 .await?;
-                announce_created_people(state, job.org_id, &report);
                 crate::importers::harvest::job_report(&report)
             }
             #[cfg(test)]

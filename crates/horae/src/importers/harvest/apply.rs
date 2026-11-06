@@ -140,6 +140,10 @@ async fn apply_within(
             .await
             .map_err(|e| (EntityType::TimeEntry, e))?;
     pending.user = Some((user_key, user_id));
+    let person_outcome = person_outcome.filter(|_| !cache.person_counted(user_id));
+    if person_outcome.is_some() {
+        pending.person = Some(user_id);
+    }
     let person = person_outcome.map(|outcome| {
         outcomes.push((
             EntityType::Person,

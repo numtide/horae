@@ -192,10 +192,22 @@ add a missing person, and commit a succeeded preview into a new run.
   the current unique-name match and error when no single account matches; the CSV path never creates
   an account from a name alone.
 - **FR-013**: Each account created by a committed import MUST emit the existing "user created" plugin
-  event, without a sign-in method, best effort after its data commits; a preview emits none.
+  event, without a sign-in method. The event is queued in the same transaction as the account, so
+  it is delivered exactly when the account commits, including when the job later fails, is
+  cancelled or is retried; a preview emits none.
+- **FR-013a**: An email match MUST NOT link a Harvest person to an account already linked to a
+  different Harvest person; that person is reported as ambiguous and their entries are not
+  imported.
+- **FR-013b**: Creating an account MUST serialize with every other account creation for the same
+  email ignoring case, and an email already used by an account the import cannot match (another
+  workspace, or one created concurrently with different case) MUST be reported as "email in use".
+- **FR-013c**: A preview whose simulated person lost their email to a real account between batches
+  MUST report that person once and resolve their later records against current data, never fail
+  on a missing account.
 - **FR-014**: Each person-related row error MUST carry, besides its reason, a machine-readable kind
   (unmatched email, unmatched name, ambiguous person, missing email, duplicate email, person not
-  imported) and the person's email and name when known. Errors written before this feature MUST
+  imported, email in use) and the person's email and name when known. A CSV person reached by
+  both name and email rows counts once. Errors written before this feature MUST
   still load without them.
 - **FR-014a**: A time entry whose Harvest person errored in the same run MUST be reported as "person
   not imported" and MUST NOT be attached to any account by email.
@@ -261,5 +273,8 @@ add a missing person, and commit a succeeded preview into a new run.
   only. Plugins that need to distinguish imports can check the account's deactivated state.
 - People are a Harvest catalog collection the importer already downloads; no new Harvest permission
   or scope is needed.
+- Known limitation: an imported account keeps the email's casing from Harvest. Matching ignores
+  case, but binding a sign-in identity by email compares exact text, so a provider that reports the
+  email in different case will not bind until the address is corrected in Horae.
 - Out of scope: importing Harvest roles, teams, project assignments, capacity, avatars or rates;
   deleting Horae accounts for people removed from Harvest; changing the People page.

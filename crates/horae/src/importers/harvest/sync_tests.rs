@@ -6,7 +6,7 @@ use serde_json::json;
 mod archived_clients;
 mod checkpoints;
 mod paging;
-mod people;
+pub(super) mod people;
 mod scale;
 
 /// Drive a CLI-submitted durable job through the production API adapter using

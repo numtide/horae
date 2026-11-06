@@ -71,6 +71,19 @@ async fn person_links(pool: &PgPool, org: Uuid) -> Vec<i64> {
     .unwrap()
 }
 
+/// "User created" events queued for delivery, committed with their accounts.
+pub(in crate::importers::harvest) async fn queued_user_events(pool: &PgPool, org: Uuid) -> i64 {
+    sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM horae_outbox
+           WHERE org_id = $1 AND event_kind = 'user_created'
+             AND payload->>'event' = 'user_created' AND payload->'user'->>'method' IS NULL"#,
+        org,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
 fn kinds(report: &ImportReport) -> Vec<(String, PersonErrorKind)> {
     report
         .row_errors
@@ -164,7 +177,7 @@ async fn people_are_matched_or_created_and_their_entries_import(pool: PgPool) {
         }
     );
     assert_eq!(report.people.len(), 3);
-    assert_eq!(created_user_events(org, &report).len(), 1);
+    assert_eq!(queued_user_events(&pool, org).await, 1);
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -205,7 +218,11 @@ async fn a_second_commit_creates_nobody_and_follows_the_harvest_identity(pool: P
             .all(|p| p.outcome == PersonOutcome::Matched)
     );
     assert_eq!(accounts(&pool, org).await, before);
-    assert!(created_user_events(org, &again).is_empty());
+    assert_eq!(
+        queued_user_events(&pool, org).await,
+        1,
+        "only the first run creates"
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -224,7 +241,7 @@ async fn a_preview_reports_people_and_writes_none(pool: PgPool) {
     .unwrap();
     assert_eq!(accounts(&pool, org).await, before);
     assert!(person_links(&pool, org).await.is_empty());
-    assert!(created_user_events(org, &preview).is_empty());
+    assert_eq!(queued_user_events(&pool, org).await, 0);
     let commit = apply_api_data(
         &pool,
         org,
@@ -287,6 +304,17 @@ fn paged_people(url: &openidconnect::url::Url) -> Response {
 }
 
 async fn durable_people_run(pool: &PgPool, org: Uuid, mode: ImportMode) -> ImportReport {
+    durable_people_job(pool, org, mode, paged_people)
+        .await
+        .unwrap()
+}
+
+async fn durable_people_job(
+    pool: &PgPool,
+    org: Uuid,
+    mode: ImportMode,
+    pages: fn(&openidconnect::url::Url) -> Response,
+) -> Result<ImportReport, ApiImportError> {
     jobs::enqueue(
         pool,
         org,
@@ -299,7 +327,7 @@ async fn durable_people_run(pool: &PgPool, org: Uuid, mode: ImportMode) -> Impor
     )
     .await
     .unwrap();
-    let server = Server::start(paged_people);
+    let server = Server::start(pages);
     let (lease, _stop) = jobs::claim_lease_for_test(pool).await;
     let cfg = HarvestConfig {
         client_id: "test".into(),
@@ -318,7 +346,6 @@ async fn durable_people_run(pool: &PgPool, org: Uuid, mode: ImportMode) -> Impor
         Some(&lease),
     )
     .await
-    .unwrap()
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -335,5 +362,90 @@ async fn a_durable_preview_keeps_simulated_people_across_pages(pool: PgPool) {
     let commit = durable_people_run(&pool, org, ImportMode::Commit).await;
     assert_eq!(preview.summary, commit.summary);
     assert_eq!(person_links(&pool, org).await, vec![5]);
-    assert_eq!(created_user_events(org, &commit).len(), 1);
+    assert_eq!(queued_user_events(&pool, org).await, 1);
+}
+
+/// Harvest fails while serving entries, after the people batch has committed.
+fn failing_entries(url: &openidconnect::url::Url) -> Response {
+    if url.path().ends_with("/time_entries") {
+        return Response {
+            status: 500,
+            headers: vec![],
+            body: vec![],
+        };
+    }
+    paged_people(url)
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_created_person_is_announced_even_when_the_job_fails_later(pool: PgPool) {
+    let org = setup(&pool).await;
+    let error = durable_people_job(&pool, org, ImportMode::Commit, failing_entries)
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("HTTP 500"), "{error}");
+    assert_eq!(person_links(&pool, org).await, vec![5]);
+    assert_eq!(queued_user_events(&pool, org).await, 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn an_email_match_never_takes_over_another_harvest_persons_account(pool: PgPool) {
+    let org = setup(&pool).await;
+    let mut data = valid_data();
+    data.users = serde_json::from_value(json!([{"id":1,"email":"a@example.com"}])).unwrap();
+    data.time_entries[0].user.id = 1;
+    apply_api_data(&pool, org, "USD", ImportMode::Commit, &data, day(4))
+        .await
+        .unwrap();
+    // In Harvest, person 1 moved to a new email and person 3 took the old one.
+    data.users = serde_json::from_value(json!([
+        {"id":1,"email":"a2@example.com"},
+        {"id":3,"email":"a@example.com"}
+    ]))
+    .unwrap();
+    let mut entry = data.time_entries[0].clone();
+    entry.id = 30;
+    entry.user.id = 3;
+    data.time_entries.push(entry);
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &data, day(4))
+        .await
+        .unwrap();
+    assert_eq!(
+        kinds(&report),
+        vec![
+            ("person 3".into(), PersonErrorKind::AmbiguousPerson),
+            ("time_entry 30".into(), PersonErrorKind::PersonNotImported),
+        ]
+    );
+    assert!(report.row_errors[0].reason.contains("Harvest person 1"));
+    assert_eq!(person_links(&pool, org).await, vec![1]);
+    assert_eq!(report.summary.time_entries.skipped, 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn an_email_used_outside_the_workspace_is_reported_not_created(pool: PgPool) {
+    let org = setup(&pool).await;
+    let elsewhere = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO organizations (id, name) VALUES ($1, 'Elsewhere')",
+        elsewhere
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    add_user(&pool, elsewhere, "Taken@Example.com").await;
+    let mut data = valid_data();
+    data.users = serde_json::from_value(json!([{"id":4,"email":"taken@example.com"}])).unwrap();
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &data, day(4))
+        .await
+        .unwrap();
+    assert_eq!(
+        kinds(&report),
+        vec![
+            ("person 4".into(), PersonErrorKind::EmailInUse),
+            ("time_entry 10".into(), PersonErrorKind::PersonNotImported),
+        ]
+    );
+    assert!(person_links(&pool, org).await.is_empty());
+    assert_eq!(queued_user_events(&pool, org).await, 0);
 }
