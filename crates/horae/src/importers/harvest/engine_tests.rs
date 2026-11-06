@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use super::{RowSource, VecSource, run_import};
 
+mod csv_people;
 mod csv_streaming;
 mod lookup_cache;
 
@@ -1318,27 +1319,34 @@ async fn csv_name_fallback_requires_a_full_unique_name_and_never_overrides_email
         .await
         .unwrap();
     assert!(report.reconciles());
+    // The unknown email creates a second "Dana Dev", so the name-only row that
+    // used to match the first one is now ambiguous and is never guessed.
     assert_eq!(report.summary.time_entries.errored, 4);
     assert_eq!(report.summary.time_entries.created, 1);
     assert!(
         report.row_errors[0]
             .reason
-            .contains("no Horae user matches email")
-    );
-    assert!(
-        report.row_errors[1]
-            .reason
             .contains("no Horae user matches name")
     );
     assert!(
-        report.row_errors[3]
+        report.row_errors[2]
             .reason
             .contains("no user email or full name")
     );
+    assert!(report.row_errors[3].reason.contains("ambiguous user name"));
     assert_eq!(count(&pool, "clients").await, 1);
     assert_eq!(count(&pool, "projects").await, 1);
     assert_eq!(count(&pool, "tasks").await, 1);
-    assert_eq!(count(&pool, "users").await, 1);
+    // The unknown email becomes its own person instead of matching "Dana Dev".
+    let created = sqlx::query_scalar!(
+        "SELECT active FROM users WHERE org_id = $1 AND email = 'missing@example.com'",
+        org,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(!created);
+    assert_eq!(count(&pool, "users").await, 2);
 }
 
 #[sqlx::test(migrations = "./migrations")]

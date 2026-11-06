@@ -1202,7 +1202,7 @@ fn PlannedSource(icon: String, name: String) -> Element {
 }
 
 /// The subtitle shared by both source flows once a source is chosen.
-const IMPORT_SUB: &str = "Bring your clients, projects, tasks and time entries across. Preview first; confirm only after reviewing the results.";
+const IMPORT_SUB: &str = "Bring your clients, projects, tasks, people and time entries across. Preview first; confirm only after reviewing the results.";
 
 /// Cap the inline error table; the full set is available in the run record.
 const ERROR_ROW_LIMIT: usize = 50;
@@ -1212,6 +1212,7 @@ fn entity_label(e: EntityType) -> &'static str {
         EntityType::Client => "Clients",
         EntityType::Project => "Projects",
         EntityType::Task => "Tasks",
+        EntityType::Person => "People",
         EntityType::TimeEntry => "Time entries",
     }
 }

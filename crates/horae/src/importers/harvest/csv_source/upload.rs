@@ -200,12 +200,14 @@ pub(crate) async fn import_body_with_lease(
                     for (entity, outcome) in &result.outcomes {
                         checkpoint.report.record(*entity, outcome);
                     }
+                    checkpoint.report.people.extend(result.person);
                 }
                 Err(error) => checkpoint.report.record(
                     EntityType::TimeEntry,
                     &RowOutcome::Errored {
                         source_location: error.source_location,
                         reason: error.reason,
+                        person: None,
                     },
                 ),
             }

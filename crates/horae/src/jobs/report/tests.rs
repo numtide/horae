@@ -52,6 +52,7 @@ async fn report_fragments_survive_until_the_owning_job_expires(pool: sqlx::PgPoo
         &RowOutcome::Errored {
             source_location: "CSV row 1".into(),
             reason: "invalid date ".repeat(2_000),
+            person: None,
         },
     );
     let mut tx = pool.begin().await.unwrap();
@@ -133,6 +134,7 @@ async fn upgrading_legacy_reports_preserves_errors_and_fences_old_attempts(pool:
                 } else {
                     format!("Invalid date at record {index}")
                 },
+                person: None,
             },
         );
     }
@@ -303,6 +305,7 @@ async fn legacy_upgrade_preserves_job_states_and_existing_archives(pool: sqlx::P
                         &RowOutcome::Errored {
                             source_location: "previously archived".into(),
                             reason: "keep this fragment".into(),
+                            person: None,
                         },
                     );
                     expected.extend(report.row_errors.clone());
@@ -324,6 +327,7 @@ async fn legacy_upgrade_preserves_job_states_and_existing_archives(pool: sqlx::P
                     &RowOutcome::Errored {
                         source_location: "legacy inline".into(),
                         reason: "legacy overflow ".repeat(2_000),
+                        person: None,
                     },
                 );
                 expected.extend(report.row_errors.clone());
@@ -441,6 +445,7 @@ async fn legacy_upgrade_preserves_a_concurrently_archived_workers_lease(pool: sq
         &RowOutcome::Errored {
             source_location: "legacy row".into(),
             reason: "invalid date ".repeat(2_000),
+            person: None,
         },
     );
     let expected_errors = report.row_errors.clone();
@@ -544,6 +549,7 @@ async fn oversized_legacy_job(pool: &sqlx::PgPool, org: Uuid) -> (Uuid, ImportRe
         &RowOutcome::Errored {
             source_location: "legacy row".into(),
             reason: "invalid date ".repeat(2_000),
+            person: None,
         },
     );
     let metadata = serde_json::to_value(&report).unwrap();

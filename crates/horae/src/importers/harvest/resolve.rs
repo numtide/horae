@@ -20,19 +20,40 @@ use chrono::{DateTime, Utc};
 use fields::{ClientFields, ProjectFields, TaskFields};
 use horae_core::importers::harvest::convert;
 use horae_core::importers::harvest::keys;
-use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceKind, SourceRow};
+use horae_core::importers::harvest::types::{
+    EntityType, PersonError, PersonErrorKind, PersonOutcome, RowOutcome, SourceKind, SourceRow,
+};
 use uuid::Uuid;
 
 /// A per-record failure that errors the row and continues the run (FR-018).
 #[derive(Debug)]
 pub struct RowFailure {
     pub reason: String,
+    pub person: Option<PersonError>,
 }
 
 impl RowFailure {
     pub fn new(reason: impl Into<String>) -> Self {
         Self {
             reason: reason.into(),
+            person: None,
+        }
+    }
+
+    /// A failure caused by the record's person, reported with who it was.
+    pub fn person(
+        reason: impl Into<String>,
+        kind: PersonErrorKind,
+        email: Option<&str>,
+        name: Option<&str>,
+    ) -> Self {
+        Self {
+            reason: reason.into(),
+            person: Some(PersonError {
+                kind,
+                email: email.map(str::to_owned),
+                name: name.map(str::to_owned).filter(|n| !n.is_empty()),
+            }),
         }
     }
 }
@@ -583,38 +604,140 @@ pub async fn ensure_project_task(
     Ok(())
 }
 
+/// A Harvest person as the people phase sees it.
+pub struct PersonFields<'a> {
+    pub harvest_id: Option<i64>,
+    /// Trimmed and non-empty.
+    pub email: &'a str,
+    pub name: &'a str,
+}
+
+/// Resolve a Harvest person to an account: its Harvest identity link first,
+/// then a unique normalized email (active or not), else a new deactivated
+/// member. Never changes an account it matched.
+pub async fn resolve_person(
+    conn: &mut sqlx::PgConnection,
+    org_id: Uuid,
+    person: &PersonFields<'_>,
+) -> Result<(UserKey, Uuid, PersonOutcome), RowFailure> {
+    let email = keys::normalize(person.email);
+    let key = UserKey::Email(email.clone());
+    if let Some(hid) = person.harvest_id
+        && let Some(id) =
+            super::provenance::lookup(&mut *conn, org_id, EntityType::Person, hid).await?
+        && sqlx::query_scalar!(
+            "SELECT id FROM users WHERE id = $1 AND org_id = $2",
+            id,
+            org_id
+        )
+        .fetch_optional(&mut *conn)
+        .await?
+        .is_some()
+    {
+        return Ok((key, id, PersonOutcome::Matched));
+    }
+    let matches = sqlx::query_scalar!(
+        "SELECT id FROM users WHERE org_id = $1 AND harvest_norm(email) = $2 LIMIT 2",
+        org_id,
+        email,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    let (id, outcome) = match matches.as_slice() {
+        [id] => (*id, PersonOutcome::Matched),
+        [] => (
+            create_person(conn, org_id, person.email, person.name).await?,
+            PersonOutcome::Created,
+        ),
+        _ => {
+            return Err(RowFailure::person(
+                format!(
+                    "ambiguous person email {:?}: multiple Horae users match",
+                    person.email
+                ),
+                PersonErrorKind::AmbiguousPerson,
+                Some(person.email),
+                Some(person.name),
+            ));
+        }
+    };
+    if let Some(hid) = person.harvest_id {
+        super::provenance::upsert(&mut *conn, org_id, EntityType::Person, hid, id, None).await?;
+    }
+    Ok((key, id, outcome))
+}
+
+/// Create the account that owns a person's imported history. It is a
+/// deactivated member with no rates and no sign-in identity, so an import never
+/// grants access; an administrator reactivates the people who still work there.
+async fn create_person(
+    conn: &mut sqlx::PgConnection,
+    org_id: Uuid,
+    email: &str,
+    name: &str,
+) -> Result<Uuid, RowFailure> {
+    let name = keys::trim_ws(name);
+    let id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO users (id, org_id, email, name, org_role, active)
+         VALUES ($1, $2, $3, $4, 'member', false)",
+        id,
+        org_id,
+        email,
+        if name.is_empty() { email } else { name },
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(id)
+}
+
 /// Match one org user, including inactive historical users. Email is authoritative;
-/// only CSV rows without email may use an unambiguous full-name fallback.
-/// Never provisions users or guesses between normalized duplicates.
+/// only CSV rows without email may use an unambiguous full-name fallback. A CSV
+/// email with no match creates the person (returned with its outcome, which the
+/// API source never has: its people are resolved before the entries). Never
+/// guesses between normalized duplicates or creates a person from a name.
 pub async fn resolve_user(
     conn: &mut sqlx::PgConnection,
     cache: &RunCache,
     org_id: Uuid,
     row: &SourceRow,
     source: SourceKind,
-) -> Result<(UserKey, Uuid), RowFailure> {
+) -> Result<(UserKey, Uuid, Option<PersonOutcome>), RowFailure> {
     let email = row
         .user_email
         .as_deref()
         .map(keys::trim_ws)
         .filter(|e| !e.is_empty());
+    let name = row
+        .user_name
+        .as_deref()
+        .map(keys::trim_ws)
+        .filter(|n| !n.is_empty());
     let (key, field, value) = if let Some(email) = email {
         (UserKey::Email(keys::normalize(email)), "email", email)
     } else {
         if source != SourceKind::Csv {
-            return Err(RowFailure::new("time entry has no user email to match"));
+            return Err(RowFailure::person(
+                "time entry has no user email to match",
+                PersonErrorKind::MissingEmail,
+                None,
+                name,
+            ));
         }
-        let name = row
-            .user_name
-            .as_deref()
-            .map(keys::trim_ws)
-            .filter(|n| !n.is_empty())
-            .ok_or_else(|| RowFailure::new("time entry has no user email or full name to match"))?;
+        let name = name.ok_or_else(|| {
+            RowFailure::person(
+                "time entry has no user email or full name to match",
+                PersonErrorKind::MissingEmail,
+                None,
+                None,
+            )
+        })?;
         (UserKey::FullName(keys::normalize(name)), "name", name)
     };
     if let Some(&id) = cache.users.get(&key) {
-        return Ok((key, id));
+        return Ok((key, id, None));
     }
+    let csv_outcome = |outcome| (source == SourceKind::Csv).then_some(outcome);
     // Two matches are enough to prove ambiguity; do not arbitrarily select one.
     // Missing/ambiguous identities and database errors are never cached.
     let matches = match &key {
@@ -637,14 +760,30 @@ pub async fn resolve_user(
             .await?
         }
     };
-    match matches.as_slice() {
-        [id] => Ok((key, *id)),
-        [] => Err(RowFailure::new(format!(
-            "no Horae user matches {field} {value:?}"
-        ))),
-        _ => Err(RowFailure::new(format!(
-            "ambiguous user {field} {value:?}: multiple Horae users match; provide a unique email or resolve duplicate identities"
-        ))),
+    match (matches.as_slice(), email) {
+        ([id], _) => Ok((key, *id, csv_outcome(PersonOutcome::Matched))),
+        ([], Some(email)) if source == SourceKind::Csv => {
+            let id = create_person(conn, org_id, email, name.unwrap_or(email)).await?;
+            Ok((key, id, csv_outcome(PersonOutcome::Created)))
+        }
+        ([], _) => Err(RowFailure::person(
+            format!("no Horae user matches {field} {value:?}"),
+            if email.is_some() {
+                PersonErrorKind::UnmatchedEmail
+            } else {
+                PersonErrorKind::UnmatchedName
+            },
+            email,
+            name,
+        )),
+        (_, _) => Err(RowFailure::person(
+            format!(
+                "ambiguous user {field} {value:?}: multiple Horae users match; provide a unique email or resolve duplicate identities"
+            ),
+            PersonErrorKind::AmbiguousPerson,
+            email,
+            name,
+        )),
     }
 }
 

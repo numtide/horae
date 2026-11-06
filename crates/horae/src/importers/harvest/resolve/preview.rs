@@ -15,6 +15,13 @@ pub(in crate::importers::harvest) struct ParentSnapshot {
     projects: Value,
     tasks: Value,
     project_tasks: Value,
+    /// Absent from checkpoints saved before people were imported.
+    #[serde(default = "no_rows")]
+    users: Value,
+}
+
+fn no_rows() -> Value {
+    Value::Array(Vec::new())
 }
 
 impl ParentSnapshot {
@@ -26,6 +33,7 @@ impl ParentSnapshot {
         let clients: Vec<_> = cache.clients.values().copied().collect();
         let projects: Vec<_> = cache.projects.values().copied().collect();
         let tasks: Vec<_> = cache.tasks.values().copied().collect();
+        let users: Vec<_> = cache.users.values().copied().collect();
         let (linked_projects, linked_tasks): (Vec<_>, Vec<_>) =
             cache.project_tasks.iter().copied().unzip();
         // OFFSET 0 keeps the selected pairs driving indexed link lookups even
@@ -61,6 +69,13 @@ impl ParentSnapshot {
                    ) pt ON true"#,
                 org_id, &linked_projects, &linked_tasks,
             ).fetch_one(&mut *conn).await?,
+            // Matched accounts are captured too; restoring them is a no-op.
+            users: sqlx::query_scalar!(
+                r#"SELECT COALESCE(jsonb_agg(to_jsonb(r)), '[]'::jsonb) AS "rows!"
+                   FROM (SELECT id, org_id, email, name, org_role, active FROM users
+                         WHERE org_id = $1 AND id = ANY($2)) r"#,
+                org_id, &users,
+            ).fetch_one(&mut *conn).await?,
         })
     }
 
@@ -73,7 +88,7 @@ impl ParentSnapshot {
         org_id: Uuid,
     ) -> anyhow::Result<()> {
         let owner = org_id.to_string();
-        for rows in [&self.clients, &self.projects, &self.tasks] {
+        for rows in [&self.clients, &self.projects, &self.tasks, &self.users] {
             anyhow::ensure!(
                 rows.as_array().is_some_and(|rows| rows.iter().all(|row| {
                     row.get("org_id").and_then(Value::as_str) == Some(owner.as_str())
@@ -81,6 +96,17 @@ impl ParentSnapshot {
                 "preview checkpoint organization mismatch"
             );
         }
+        // Simulated people own entries in later batches, so they come back first.
+        sqlx::query!(
+            "INSERT INTO users (id, org_id, email, name, org_role, active)
+             SELECT id, org_id, email, name, org_role, active
+             FROM jsonb_populate_recordset(NULL::users, $1) WHERE org_id = $2
+             ON CONFLICT DO NOTHING",
+            &self.users,
+            org_id,
+        )
+        .execute(&mut *conn)
+        .await?;
         sqlx::query!(
             "INSERT INTO clients (id, org_id, name, currency, address, active)
              SELECT id, org_id, name, currency, address, active

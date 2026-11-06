@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (id, org_id, email, name, org_role, active)\n             SELECT id, org_id, email, name, org_role, active\n             FROM jsonb_populate_recordset(NULL::users, $1) WHERE org_id = $2\n             ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cb1dd4f66a516e535de48393bb442cd242bbda922e48a43c9d164f819be84ca7"
+}

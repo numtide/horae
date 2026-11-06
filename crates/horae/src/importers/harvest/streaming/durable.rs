@@ -89,7 +89,10 @@ pub(super) struct Checkpoint {
 
 impl Checkpoint {
     fn parent_count(&self) -> usize {
-        self.catalog.clients.len() + self.catalog.projects.len() + self.catalog.tasks.len()
+        self.catalog.clients.len()
+            + self.catalog.projects.len()
+            + self.catalog.tasks.len()
+            + self.catalog.users.len()
     }
 
     async fn save(
