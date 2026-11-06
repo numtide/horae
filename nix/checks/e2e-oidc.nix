@@ -152,6 +152,9 @@ pkgs.testers.nixosTest {
 
     services.horae.enable = true;
     services.horae.database.createLocally = true;
+    # The test restarts Horae once per configuration it exercises, faster than
+    # the default start limit allows on a quick builder.
+    systemd.services.horae.unitConfig.StartLimitIntervalSec = 0;
 
     # Production auth: point Horae at the local dex issuer. DEV_LOGIN is unset,
     # so /auth/login starts the OIDC flow and the dev bypass is not registered.
