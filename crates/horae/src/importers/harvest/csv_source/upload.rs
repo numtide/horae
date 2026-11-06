@@ -14,7 +14,10 @@ use uuid::Uuid;
 use super::super::{
     apply, begin_import_transaction, finish_import, lock_import, release_import,
     report::ImportReport,
-    resolve::{OrgDefaults, RunCache, preview::ParentSnapshot},
+    resolve::{
+        OrgDefaults, RunCache,
+        preview::{ParentSnapshot, forget_lost_people},
+    },
 };
 use super::{CsvError, Cursor, Record, read_csv_from};
 
@@ -179,7 +182,8 @@ pub(crate) async fn import_body_with_lease(
         let mut connection = session.lock().await;
         let mut tx = begin_import_transaction(&mut connection, org_id).await?;
         if let Some(preview) = &checkpoint.preview {
-            preview.restore(&mut tx, org_id).await?;
+            let lost = preview.restore(&mut tx, org_id).await?;
+            forget_lost_people(&mut checkpoint.cache, &mut checkpoint.report, lost);
         }
         let org = OrgDefaults {
             org_id,
@@ -200,12 +204,14 @@ pub(crate) async fn import_body_with_lease(
                     for (entity, outcome) in &result.outcomes {
                         checkpoint.report.record(*entity, outcome);
                     }
+                    checkpoint.report.people.extend(result.person);
                 }
                 Err(error) => checkpoint.report.record(
                     EntityType::TimeEntry,
                     &RowOutcome::Errored {
                         source_location: error.source_location,
                         reason: error.reason,
+                        person: None,
                     },
                 ),
             }
@@ -239,7 +245,8 @@ pub(crate) async fn import_body_with_lease(
                 batch = read_batch(&mut receive, true).await?;
                 tx = begin_import_transaction(&mut connection, org_id).await?;
                 if let Some(preview) = &checkpoint.preview {
-                    preview.restore(&mut tx, org_id).await?;
+                    let lost = preview.restore(&mut tx, org_id).await?;
+                    forget_lost_people(&mut checkpoint.cache, &mut checkpoint.report, lost);
                 }
             }
             next = match batch.pop_front() {

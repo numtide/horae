@@ -48,6 +48,12 @@ async fn begin_import_transaction(
     org_id: Uuid,
 ) -> anyhow::Result<sqlx::Transaction<'_, sqlx::Postgres>> {
     let mut tx = connection.begin().await?;
+    // Rechecks under advisory locks (a person's email, an archived parent)
+    // must see rows committed while the lock was awaited, whatever the
+    // connection default.
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        .execute(&mut *tx)
+        .await?;
     // Access-changing commands lock project parents before task links. Join
     // their gate before the importer acquires any of those resource locks.
     crate::db::lock_organization(&mut tx, org_id, crate::db::OrganizationLock::Shared).await?;
@@ -58,6 +64,7 @@ pub(crate) fn job_report(report: &ImportReport) -> anyhow::Result<(serde_json::V
     let processed = report.summary.clients.processed()
         + report.summary.projects.processed()
         + report.summary.tasks.processed()
+        + report.summary.people.processed()
         + report.summary.time_entries.processed();
     Ok((serde_json::to_value(report)?, i64::try_from(processed)?))
 }
@@ -134,6 +141,7 @@ async fn apply_rows<S: RowSource>(
         for (entity, outcome) in &result.outcomes {
             report.record(*entity, outcome);
         }
+        report.people.extend(result.person);
     }
 
     debug_assert!(report.reconciles());

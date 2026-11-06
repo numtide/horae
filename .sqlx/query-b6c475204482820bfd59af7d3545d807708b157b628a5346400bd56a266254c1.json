@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET email = 'renamed@example.com' WHERE org_id = $1 AND email = 'new@example.com'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b6c475204482820bfd59af7d3545d807708b157b628a5346400bd56a266254c1"
+}

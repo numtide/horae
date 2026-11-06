@@ -14,7 +14,8 @@
                 "client",
                 "project",
                 "task",
-                "time_entry"
+                "time_entry",
+                "person"
               ]
             }
           }

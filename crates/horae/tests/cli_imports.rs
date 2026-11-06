@@ -310,6 +310,7 @@ async fn executable_wait_and_failure_exit_codes_match_the_json_contract() {
                     &RowOutcome::Errored {
                         source_location: "fixture".into(),
                         reason: "unknown user".into(),
+                        person: None,
                     },
                 );
                 value["report"] = json!(report);

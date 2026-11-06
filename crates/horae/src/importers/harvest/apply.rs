@@ -7,7 +7,9 @@
 //! so the run continues (FR-018). Only on a clean commit are the row's newly
 //! resolved parents, users and project-task links promoted into the run cache.
 
-use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceKind, SourceRow};
+use horae_core::importers::harvest::types::{
+    EntityType, PersonErrorKind, PersonOutcome, ReportPerson, RowOutcome, SourceKind, SourceRow,
+};
 use horae_core::importers::harvest::{convert, keys};
 use sqlx::{Acquire, Postgres, Transaction};
 use uuid::Uuid;
@@ -17,6 +19,8 @@ use super::resolve::{self, OrgDefaults, PendingCache, RowFailure, RunCache};
 /// The per-entity outcomes of applying one row, ready to fold into the summary.
 pub struct RowResult {
     pub outcomes: Vec<(EntityType, RowOutcome)>,
+    /// The person a committed CSV row resolved for the first time in the run.
+    pub person: Option<ReportPerson>,
 }
 
 /// Apply one source row within its own savepoint. On success returns the entity
@@ -40,9 +44,25 @@ pub async fn apply_row(
             return errored(
                 EntityType::TimeEntry,
                 row,
-                format!("{} {id} failed to import", entity.as_str()),
+                RowFailure::new(format!("{} {id} failed to import", entity.as_str())),
             );
         }
+    }
+    // An entry never falls back to email matching for a person who failed,
+    // which would attach two Harvest people sharing an email to one account.
+    if let Some(id) = row.harvest_user_id
+        && cache.parent_failed(EntityType::Person, id)
+    {
+        return errored(
+            EntityType::TimeEntry,
+            row,
+            RowFailure::person(
+                format!("person {id} failed to import"),
+                PersonErrorKind::PersonNotImported,
+                row.user_email.as_deref(),
+                row.user_name.as_deref(),
+            ),
+        );
     }
     let mut sp = match outer.begin().await {
         Ok(sp) => sp,
@@ -50,25 +70,35 @@ pub async fn apply_row(
             return errored(
                 EntityType::TimeEntry,
                 row,
-                format!("cannot open savepoint: {e}"),
+                RowFailure::new(format!("cannot open savepoint: {e}")),
             );
         }
     };
 
     match apply_within(&mut sp, cache, org, row, source).await {
-        Ok((outcomes, pending)) => match sp.commit().await {
+        Ok((outcomes, pending, person)) => match sp.commit().await {
             Ok(()) => {
                 cache.merge(pending);
-                RowResult { outcomes }
+                RowResult { outcomes, person }
             }
-            Err(e) => errored(EntityType::TimeEntry, row, format!("commit failed: {e}")),
+            Err(e) => errored(
+                EntityType::TimeEntry,
+                row,
+                RowFailure::new(format!("commit failed: {e}")),
+            ),
         },
         Err((entity, failure)) => {
             let _ = sp.rollback().await;
-            errored(entity, row, failure.reason)
+            errored(entity, row, failure)
         }
     }
 }
+
+type Applied = (
+    Vec<(EntityType, RowOutcome)>,
+    PendingCache,
+    Option<ReportPerson>,
+);
 
 /// The resolve → create/skip pipeline for one row inside its savepoint. Returns
 /// the outcomes plus the cache entries to promote only if the caller commits.
@@ -78,7 +108,7 @@ async fn apply_within(
     org: OrgDefaults<'_>,
     row: &SourceRow,
     source: SourceKind,
-) -> Result<(Vec<(EntityType, RowOutcome)>, PendingCache), (EntityType, RowFailure)> {
+) -> Result<Applied, (EntityType, RowFailure)> {
     let mut outcomes = Vec::new();
     let mut pending = PendingCache::default();
 
@@ -105,10 +135,42 @@ async fn apply_within(
         .map_err(|e| (EntityType::Task, e))?;
     pending.project_task = Some((project_id, task_id));
 
-    let (user_key, user_id) = resolve::resolve_user(sp, cache, org.org_id, row, source)
-        .await
-        .map_err(|e| (EntityType::TimeEntry, e))?;
+    let (user_key, user_id, person_outcome) =
+        resolve::resolve_user(sp, cache, org.org_id, row, source)
+            .await
+            .map_err(|e| (EntityType::TimeEntry, e))?;
     pending.user = Some((user_key, user_id));
+    let person_outcome = person_outcome.filter(|_| !cache.person_counted(user_id));
+    if person_outcome.is_some() {
+        pending.person = Some(user_id);
+    }
+    let person = person_outcome.map(|outcome| {
+        outcomes.push((
+            EntityType::Person,
+            match outcome {
+                PersonOutcome::Created => RowOutcome::Created,
+                PersonOutcome::Matched => RowOutcome::Skipped,
+            },
+        ));
+        let email = row
+            .user_email
+            .as_deref()
+            .map(keys::trim_ws)
+            .filter(|e| !e.is_empty());
+        let name = row
+            .user_name
+            .as_deref()
+            .map(keys::trim_ws)
+            .filter(|n| !n.is_empty());
+        ReportPerson {
+            harvest_id: row.harvest_user_id,
+            horae_id: user_id,
+            email: email.map(str::to_owned),
+            name: name.or(email).unwrap_or_default().to_owned(),
+            outcome,
+            harvest_active: None,
+        }
+    });
 
     // Time entry — the record proper.
     let (te_outcome, entry_slot) =
@@ -118,7 +180,7 @@ async fn apply_within(
     outcomes.push((EntityType::TimeEntry, te_outcome));
     pending.entry_slot = entry_slot;
 
-    Ok((outcomes, pending))
+    Ok((outcomes, pending, person))
 }
 
 /// Insert (or skip) the time entry for a row.
@@ -335,14 +397,16 @@ pub(super) fn fold(
     }
 }
 
-fn errored(entity: EntityType, row: &SourceRow, reason: String) -> RowResult {
+fn errored(entity: EntityType, row: &SourceRow, failure: RowFailure) -> RowResult {
     RowResult {
         outcomes: vec![(
             entity,
             RowOutcome::Errored {
                 source_location: row.source_location.clone(),
-                reason,
+                reason: failure.reason,
+                person: failure.person,
             },
         )],
+        person: None,
     }
 }

@@ -111,7 +111,8 @@ async fn resumed_api(
     );
     let before = jobs::status(&pool, org, id).await.unwrap().unwrap();
     if interrupted_collection == "time_entries" {
-        assert_eq!(before.processed_count, 5);
+        // Two clients, a project, a task, a person and the first entry.
+        assert_eq!(before.processed_count, 6);
         assert_eq!(
             sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1", org)
                 .fetch_one(&pool)
@@ -165,8 +166,8 @@ async fn resumed_api(
     assert_eq!(report.summary.time_entries.skipped, 0);
     let status = jobs::status(&pool, org, id).await.unwrap().unwrap();
     assert_eq!(status.status, "succeeded");
-    assert_eq!(status.processed_count, 6);
-    assert_eq!(status.total_count, Some(6));
+    assert_eq!(status.processed_count, 7);
+    assert_eq!(status.total_count, Some(7));
     assert_eq!(status.report, Some(serde_json::to_value(&report).unwrap()));
     assert_eq!(
         sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1", org)
@@ -331,7 +332,7 @@ async fn failed_api_report(pool: PgPool, mode: ImportMode) {
     let failed = jobs::status(&pool, org, id).await.unwrap().unwrap();
     assert_eq!(failed.status, "failed");
     assert!(failed.last_error.as_deref().unwrap().contains("HTTP 500"));
-    assert_eq!(failed.processed_count, 5);
+    assert_eq!(failed.processed_count, 6);
     let partial: ImportReport = serde_json::from_value(failed.report.clone().unwrap()).unwrap();
     assert_eq!(partial.mode, mode);
     assert_eq!(partial.summary.clients.created, 2);
@@ -456,7 +457,7 @@ async fn interrupted_api_batch(pool: PgPool, cancel: bool, mode: ImportMode) {
             .unwrap()
             .unwrap()
             .processed_count,
-        5
+        6
     );
     let replacement = if cancel {
         assert!(jobs::cancel(&pool, org, id).await.unwrap());
@@ -591,7 +592,7 @@ async fn durable_api_finalization_retry_does_not_repeat_completed_downloads(pool
             .unwrap()
             .unwrap()
             .processed_count,
-        6
+        7
     );
     assert_eq!(watermark(&pool, org).await, json!({}));
     let before = server.count.load(std::sync::atomic::Ordering::Acquire);
@@ -849,7 +850,7 @@ async fn durable_api_preview_preserves_adoptions_and_repeated_ids_across_recover
             .unwrap()
             .unwrap()
             .processed_count,
-        6
+        7
     );
     assert_eq!(
         sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1", org)
@@ -1000,7 +1001,7 @@ async fn durable_api_preview_finalization_retry_does_not_repeat_completed_downlo
             .unwrap()
             .unwrap()
             .processed_count,
-        6
+        7
     );
     assert_eq!(watermark(&pool, org).await, json!({}));
     assert_eq!(
@@ -1043,6 +1044,6 @@ async fn durable_api_preview_finalization_retry_does_not_repeat_completed_downlo
     let status = jobs::status(&pool, org, id).await.unwrap().unwrap();
     assert_eq!(status.status, "succeeded");
     assert_eq!(status.report, Some(serde_json::to_value(report).unwrap()));
-    assert_eq!(status.total_count, Some(6));
+    assert_eq!(status.total_count, Some(7));
     assert_eq!(watermark(&pool, org).await, json!({}));
 }

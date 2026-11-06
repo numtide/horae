@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
-use super::super::super::resolve::{RunCache, preview::ParentSnapshot};
+use super::super::super::resolve::{
+    RunCache,
+    preview::{LostPerson, ParentSnapshot},
+};
 
 #[derive(Default, Serialize, Deserialize)]
 pub(super) struct ApiPreview {
@@ -47,10 +50,11 @@ impl ApiPreview {
         conn: &mut PgConnection,
         org_id: Uuid,
         page_ids: &[i64],
-    ) -> anyhow::Result<()> {
-        if let Some(parents) = &self.parents {
-            parents.restore(conn, org_id).await?;
-        }
+    ) -> anyhow::Result<Vec<LostPerson>> {
+        let lost = match &self.parents {
+            Some(parents) => parents.restore(conn, org_id).await?,
+            None => Vec::new(),
+        };
         // Reserve every adopted real entry against other Harvest IDs. Virtual
         // entries have no remaining row to adopt after rollback, so only IDs
         // repeated on this page need their mapping restored. Replaying all old
@@ -74,7 +78,7 @@ impl ApiPreview {
         )
         .execute(&mut *conn)
         .await?;
-        Ok(())
+        Ok(lost)
     }
 }
 

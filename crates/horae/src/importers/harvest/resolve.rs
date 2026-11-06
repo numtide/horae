@@ -20,19 +20,40 @@ use chrono::{DateTime, Utc};
 use fields::{ClientFields, ProjectFields, TaskFields};
 use horae_core::importers::harvest::convert;
 use horae_core::importers::harvest::keys;
-use horae_core::importers::harvest::types::{EntityType, RowOutcome, SourceKind, SourceRow};
+use horae_core::importers::harvest::types::{
+    EntityType, PersonError, PersonErrorKind, PersonOutcome, RowOutcome, SourceKind, SourceRow,
+};
 use uuid::Uuid;
 
 /// A per-record failure that errors the row and continues the run (FR-018).
 #[derive(Debug)]
 pub struct RowFailure {
     pub reason: String,
+    pub person: Option<PersonError>,
 }
 
 impl RowFailure {
     pub fn new(reason: impl Into<String>) -> Self {
         Self {
             reason: reason.into(),
+            person: None,
+        }
+    }
+
+    /// A failure caused by the record's person, reported with who it was.
+    pub fn person(
+        reason: impl Into<String>,
+        kind: PersonErrorKind,
+        email: Option<&str>,
+        name: Option<&str>,
+    ) -> Self {
+        Self {
+            reason: reason.into(),
+            person: Some(PersonError {
+                kind,
+                email: email.map(str::to_owned),
+                name: name.map(str::to_owned).filter(|n| !n.is_empty()),
+            }),
         }
     }
 }
@@ -74,6 +95,8 @@ pub struct PendingCache {
     /// Parents this row resolved or created.
     pub parents: Vec<(ParentKind, String, Uuid)>,
     pub user: Option<(UserKey, Uuid)>,
+    /// The account this row counted as a person in the report.
+    pub person: Option<Uuid>,
     pub project_task: Option<(Uuid, Uuid)>,
     /// The natural-key slot an id-less time entry consumed (see
     /// [`RunCache::entry_slot_offset`]); bumped on commit so the next identical
@@ -94,6 +117,10 @@ pub struct RunCache {
         deserialize_with = "deserialize_users"
     )]
     users: HashMap<UserKey, Uuid>,
+    /// Accounts already counted as people. A CSV person can be reached by
+    /// name and by email, and must still count once.
+    #[serde(default)]
+    people: HashSet<Uuid>,
     project_tasks: HashSet<(Uuid, Uuid)>,
     entry_slots: keys::OccurrenceCounter,
     failed_parents: HashSet<(EntityType, i64)>,
@@ -123,6 +150,10 @@ impl RunCache {
         self.failed_parents.contains(&(entity, id))
     }
 
+    pub fn person_counted(&self, id: Uuid) -> bool {
+        self.people.contains(&id)
+    }
+
     fn get(&self, kind: ParentKind, key: &str) -> Option<Uuid> {
         self.map(kind).get(key).copied()
     }
@@ -150,6 +181,9 @@ impl RunCache {
         }
         if let Some((key, id)) = pending.user {
             self.users.insert(key, id);
+        }
+        if let Some(id) = pending.person {
+            self.people.insert(id);
         }
         if let Some(pair) = pending.project_task {
             self.project_tasks.insert(pair);
@@ -583,38 +617,212 @@ pub async fn ensure_project_task(
     Ok(())
 }
 
+/// A Harvest person as the people phase sees it.
+pub struct PersonFields<'a> {
+    pub harvest_id: Option<i64>,
+    /// Trimmed and non-empty.
+    pub email: &'a str,
+    pub name: &'a str,
+}
+
+/// Resolve a Harvest person to an account: its Harvest identity link first,
+/// then a unique normalized email (active or not), else a new deactivated
+/// member. Never changes an account it matched.
+pub async fn resolve_person(
+    conn: &mut sqlx::PgConnection,
+    org_id: Uuid,
+    person: &PersonFields<'_>,
+) -> Result<(UserKey, Uuid, PersonOutcome), RowFailure> {
+    let email = keys::normalize(person.email);
+    let key = UserKey::Email(email.clone());
+    if let Some(hid) = person.harvest_id
+        && let Some(id) =
+            super::provenance::lookup(&mut *conn, org_id, EntityType::Person, hid).await?
+        && sqlx::query_scalar!(
+            "SELECT id FROM users WHERE id = $1 AND org_id = $2",
+            id,
+            org_id
+        )
+        .fetch_optional(&mut *conn)
+        .await?
+        .is_some()
+    {
+        return Ok((key, id, PersonOutcome::Matched));
+    }
+    let matches = sqlx::query_scalar!(
+        "SELECT id FROM users WHERE org_id = $1 AND harvest_norm(email) = $2 LIMIT 2",
+        org_id,
+        email,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    let (id, outcome) = match matches.as_slice() {
+        [id] => (*id, PersonOutcome::Matched),
+        [] => create_person(conn, org_id, person.email, person.name).await?,
+        _ => return Err(ambiguous_person(person.email, person.name)),
+    };
+    if let Some(hid) = person.harvest_id {
+        // An email match must not take over an account that already holds the
+        // history of another Harvest person, e.g. after an email moved between
+        // people in Harvest.
+        if outcome == PersonOutcome::Matched
+            && let Some(other) = sqlx::query_scalar!(
+                "SELECT harvest_id FROM harvest_import_map
+                 WHERE org_id = $1 AND harvest_entity_type = 'person'
+                   AND horae_id = $2 AND harvest_id <> $3
+                 LIMIT 1",
+                org_id,
+                id,
+                hid,
+            )
+            .fetch_optional(&mut *conn)
+            .await?
+        {
+            return Err(RowFailure::person(
+                format!(
+                    "the Horae account with email {:?} already belongs to Harvest person {other}",
+                    person.email
+                ),
+                PersonErrorKind::AmbiguousPerson,
+                Some(person.email),
+                Some(person.name),
+            ));
+        }
+        super::provenance::upsert(&mut *conn, org_id, EntityType::Person, hid, id, None).await?;
+    }
+    Ok((key, id, outcome))
+}
+
+fn ambiguous_person(email: &str, name: &str) -> RowFailure {
+    RowFailure::person(
+        format!("ambiguous person email {email:?}: multiple Horae users match"),
+        PersonErrorKind::AmbiguousPerson,
+        Some(email),
+        Some(name),
+    )
+}
+
+/// Create the account that owns a person's imported history. It is a
+/// deactivated member with no rates and no sign-in identity, so an import never
+/// grants access; an administrator reactivates the people who still work there.
+///
+/// Account emails are unique only case-sensitively, so creation takes the
+/// email's lock and checks again, ignoring case, before inserting. An account
+/// another request created meanwhile is matched instead; one elsewhere is
+/// reported. The "user created" event is queued with the account, so it is
+/// delivered exactly when the account commits.
+async fn create_person(
+    conn: &mut sqlx::PgConnection,
+    org_id: Uuid,
+    email: &str,
+    name: &str,
+) -> Result<(Uuid, PersonOutcome), RowFailure> {
+    crate::db::lock_user_email(&mut *conn, email).await?;
+    let existing = sqlx::query!(
+        "SELECT id, org_id FROM users WHERE lower(btrim(email)) = lower(btrim($1)) LIMIT 2",
+        email,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    match existing.as_slice() {
+        [] => {}
+        [user] if user.org_id == org_id => return Ok((user.id, PersonOutcome::Matched)),
+        [_, _] if existing.iter().all(|user| user.org_id == org_id) => {
+            return Err(ambiguous_person(email, name));
+        }
+        _ => return Err(email_in_use(email, name)),
+    }
+    let name = keys::trim_ws(name);
+    let name = if name.is_empty() { email } else { name };
+    let id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO users (id, org_id, email, name, org_role, active)
+         VALUES ($1, $2, $3, $4, 'member', false)",
+        id,
+        org_id,
+        email,
+        name,
+    )
+    .execute(&mut *conn)
+    .await
+    .map_err(|error| match &error {
+        sqlx::Error::Database(db) if db.is_unique_violation() => email_in_use(email, name),
+        _ => error.into(),
+    })?;
+    let event = crate::plugin::AppEvent::UserCreated {
+        occurred_at: Utc::now(),
+        org_id,
+        user: crate::plugin::event::UserPayload {
+            id,
+            email: email.to_owned(),
+            name: name.to_owned(),
+            org_role: "member".into(),
+            method: None,
+        },
+    };
+    let event = serde_json::to_value(event).map_err(|e| RowFailure::new(e.to_string()))?;
+    crate::jobs::enqueue_outbox(&mut *conn, org_id, "user_created", event)
+        .await
+        .map_err(|e| RowFailure::new(e.to_string()))?;
+    Ok((id, PersonOutcome::Created))
+}
+
+fn email_in_use(email: &str, name: &str) -> RowFailure {
+    RowFailure::person(
+        format!("an account outside this import already uses the email {email:?}"),
+        PersonErrorKind::EmailInUse,
+        Some(email),
+        Some(name),
+    )
+}
+
 /// Match one org user, including inactive historical users. Email is authoritative;
-/// only CSV rows without email may use an unambiguous full-name fallback.
-/// Never provisions users or guesses between normalized duplicates.
+/// only CSV rows without email may use an unambiguous full-name fallback. A CSV
+/// email with no match creates the person (returned with its outcome, which the
+/// API source never has: its people are resolved before the entries). Never
+/// guesses between normalized duplicates or creates a person from a name.
 pub async fn resolve_user(
     conn: &mut sqlx::PgConnection,
     cache: &RunCache,
     org_id: Uuid,
     row: &SourceRow,
     source: SourceKind,
-) -> Result<(UserKey, Uuid), RowFailure> {
+) -> Result<(UserKey, Uuid, Option<PersonOutcome>), RowFailure> {
     let email = row
         .user_email
         .as_deref()
         .map(keys::trim_ws)
         .filter(|e| !e.is_empty());
+    let name = row
+        .user_name
+        .as_deref()
+        .map(keys::trim_ws)
+        .filter(|n| !n.is_empty());
     let (key, field, value) = if let Some(email) = email {
         (UserKey::Email(keys::normalize(email)), "email", email)
     } else {
         if source != SourceKind::Csv {
-            return Err(RowFailure::new("time entry has no user email to match"));
+            return Err(RowFailure::person(
+                "time entry has no user email to match",
+                PersonErrorKind::MissingEmail,
+                None,
+                name,
+            ));
         }
-        let name = row
-            .user_name
-            .as_deref()
-            .map(keys::trim_ws)
-            .filter(|n| !n.is_empty())
-            .ok_or_else(|| RowFailure::new("time entry has no user email or full name to match"))?;
+        let name = name.ok_or_else(|| {
+            RowFailure::person(
+                "time entry has no user email or full name to match",
+                PersonErrorKind::MissingEmail,
+                None,
+                None,
+            )
+        })?;
         (UserKey::FullName(keys::normalize(name)), "name", name)
     };
     if let Some(&id) = cache.users.get(&key) {
-        return Ok((key, id));
+        return Ok((key, id, None));
     }
+    let csv_outcome = |outcome| (source == SourceKind::Csv).then_some(outcome);
     // Two matches are enough to prove ambiguity; do not arbitrarily select one.
     // Missing/ambiguous identities and database errors are never cached.
     let matches = match &key {
@@ -637,14 +845,30 @@ pub async fn resolve_user(
             .await?
         }
     };
-    match matches.as_slice() {
-        [id] => Ok((key, *id)),
-        [] => Err(RowFailure::new(format!(
-            "no Horae user matches {field} {value:?}"
-        ))),
-        _ => Err(RowFailure::new(format!(
-            "ambiguous user {field} {value:?}: multiple Horae users match; provide a unique email or resolve duplicate identities"
-        ))),
+    match (matches.as_slice(), email) {
+        ([id], _) => Ok((key, *id, csv_outcome(PersonOutcome::Matched))),
+        ([], Some(email)) if source == SourceKind::Csv => {
+            let (id, outcome) = create_person(conn, org_id, email, name.unwrap_or(email)).await?;
+            Ok((key, id, csv_outcome(outcome)))
+        }
+        ([], _) => Err(RowFailure::person(
+            format!("no Horae user matches {field} {value:?}"),
+            if email.is_some() {
+                PersonErrorKind::UnmatchedEmail
+            } else {
+                PersonErrorKind::UnmatchedName
+            },
+            email,
+            name,
+        )),
+        (_, _) => Err(RowFailure::person(
+            format!(
+                "ambiguous user {field} {value:?}: multiple Horae users match; provide a unique email or resolve duplicate identities"
+            ),
+            PersonErrorKind::AmbiguousPerson,
+            email,
+            name,
+        )),
     }
 }
 
@@ -675,6 +899,7 @@ mod checkpoint_tests {
                 (ParentKind::Task, "task".into(), task),
             ],
             user: Some((UserKey::Email("same-key".into()), email_user)),
+            person: Some(email_user),
             project_task: Some((project, task)),
             entry_slot: Some("identical-entry".into()),
         });
@@ -691,6 +916,7 @@ mod checkpoint_tests {
         assert_eq!(restored.tasks, cache.tasks);
         assert_eq!(restored.users, cache.users);
         assert_eq!(restored.project_tasks, cache.project_tasks);
+        assert!(restored.person_counted(email_user));
         assert_eq!(restored.entry_slot_offset("identical-entry"), 2);
         assert!(restored.parent_failed(EntityType::Project, 42));
     }

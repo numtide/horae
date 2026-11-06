@@ -65,7 +65,7 @@ fn decode_payload(value: serde_json::Value) -> anyhow::Result<JobPayload> {
 /// Insert an event in the same transaction as the state change that produced
 /// it. Consumers can claim undelivered rows independently of the job worker.
 pub async fn enqueue_outbox(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: &mut sqlx::PgConnection,
     org_id: Uuid,
     event_kind: &str,
     payload: serde_json::Value,
@@ -79,7 +79,7 @@ pub async fn enqueue_outbox(
         event_kind,
         payload,
     )
-    .execute(&mut **tx)
+    .execute(tx)
     .await?;
     Ok(id)
 }
