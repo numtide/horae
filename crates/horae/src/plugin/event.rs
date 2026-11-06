@@ -274,7 +274,8 @@ pub struct UserPayload {
     pub email: String,
     pub name: String,
     pub org_role: String,
-    /// How the user authenticated — set only on login events; omitted otherwise.
+    /// How the user authenticated — set on login events, and on the account
+    /// creation a first OIDC sign-in performs; omitted otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub method: Option<String>,
 }

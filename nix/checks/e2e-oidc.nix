@@ -12,6 +12,9 @@
 # uses a fixture patch: for the dedicated client `horae-omit-email-verified`
 # only, Dex leaves the claim out while building the token, before signing. It is
 # a test fixture, not stock Dex and not acceptance against a real provider.
+#
+# The last phases cover the sign-in page's refusal notices and accounts created
+# at first sign-in for a listed domain, with and without `email_verified`.
 let
   omitClient = "horae-omit-email-verified";
 
@@ -350,5 +353,101 @@ pkgs.testers.nixosTest {
     # Now the provider's normal flow signs the person in.
     status = api_status_after_sign_in("/tmp/jar4.txt")
     assert status == "200", f"linked identity must sign in without email_verified, got {status}"
+
+    # Third phase: refused sign-ins explain themselves on the sign-in page, and
+    # listed domains create their own accounts. Each phase rewrites the same
+    # drop-in, so only the settings named here apply.
+    def restart_with(env):
+        lines = " ".join(shlex.quote(f"Environment={k}={v}") for k, v in env.items())
+        server.succeed(
+            "mkdir -p /run/systemd/system/horae.service.d && printf '%s\\n' '[Service]' "
+            f"{lines} > /run/systemd/system/horae.service.d/omit-email-verified.conf"
+        )
+        server.succeed("systemctl daemon-reload && systemctl restart horae.service")
+        server.wait_for_open_port(3000)
+
+    def page_after_sign_in(jar):
+        # A refusal ends on /auth/login with its notice; the next visit has none.
+        page = server.succeed(
+            f"curl -sS -c {jar} -b {jar} -L --max-redirs 8 "
+            "http://127.0.0.1:3000/auth/oidc/start"
+        )
+        again = server.succeed(f"curl -sS -c {jar} -b {jar} http://127.0.0.1:3000/auth/login")
+        assert 'role="alert"' not in again, "the notice must be shown only once"
+        return page
+
+    def free_identity(email):
+        # Move the account holding the Dex identity aside so it matches nothing.
+        sql(
+            f"UPDATE users SET email = '{email}', oidc_issuer = NULL, oidc_subject = NULL "
+            "WHERE email = 'kilgore@kilgore.trout'"
+        )
+
+    def kilgore_accounts():
+        return sql("SELECT count(*) FROM users WHERE lower(email) = 'kilgore@kilgore.trout'")
+
+    verified_client = {
+        "HORAE_OIDC_CLIENT_ID": "horae",
+        "HORAE_OIDC_CLIENT_SECRET": "horae-e2e-secret",
+    }
+    omit_client = {
+        "HORAE_OIDC_CLIENT_ID": "${omitClient}",
+        "HORAE_OIDC_CLIENT_SECRET": "horae-omit-e2e-secret",
+    }
+    domains = "HORAE_OIDC_AUTO_PROVISION_DOMAINS"
+
+    free_identity("kilgore-linked@kilgore.trout")
+    restart_with(verified_client)
+    page = page_after_sign_in("/tmp/jar5.txt")
+    assert "No Horae account exists for kilgore@kilgore.trout." in page, page[-1500:]
+    assert kilgore_accounts() == "0"
+
+    restart_with({**verified_client, domains: "example.com"})
+    page = page_after_sign_in("/tmp/jar6.txt")
+    assert "addresses at kilgore.trout can't create one" in page, page[-1500:]
+    assert kilgore_accounts() == "0"
+
+    # A listed domain (matched case-insensitively) with a verified email.
+    restart_with({**verified_client, domains: "Kilgore.Trout"})
+    status = api_status_after_sign_in("/tmp/jar7.txt")
+    assert status == "200", f"a listed domain must create the account, got {status}"
+    row = sql(
+        "SELECT org_role, active, cost_rate_cents IS NULL AND billable_rate_cents IS NULL, "
+        "oidc_issuer, oidc_subject FROM users WHERE email = 'kilgore@kilgore.trout'"
+    )
+    assert row == f"member|t|t|{verified['iss']}|{verified['sub']}", row
+
+    # Deactivation sticks: no second account, no reactivation, a clear notice.
+    sql("UPDATE users SET active = false WHERE email = 'kilgore@kilgore.trout'")
+    page = page_after_sign_in("/tmp/jar8.txt")
+    assert "Your Horae account is deactivated." in page, page[-1500:]
+    assert kilgore_accounts() == "1"
+    assert sql("SELECT active FROM users WHERE email = 'kilgore@kilgore.trout'") == "f"
+
+    # Fourth phase: the provider omits email_verified (the tsidp case).
+    free_identity("kilgore-provisioned@kilgore.trout")
+    restart_with({**omit_client, domains: "kilgore.trout"})
+    page = page_after_sign_in("/tmp/jar9.txt")
+    assert "your identity provider hasn't confirmed this address" in page, page[-1500:]
+    assert kilgore_accounts() == "0"
+
+    restart_with({**omit_client, domains: "kilgore.trout", "HORAE_OIDC_TRUST_UNVERIFIED_EMAIL": "1"})
+    status = api_status_after_sign_in("/tmp/jar10.txt")
+    assert status == "200", f"a trusted absent claim must create the account, got {status}"
+    assert sql(
+        "SELECT count(*) FROM users WHERE email = 'kilgore@kilgore.trout' "
+        "AND active AND org_role = 'member'"
+    ) == "1"
+
+    # A malformed list stops the server instead of guessing.
+    server.execute(
+        "printf '%s\\n' '[Service]' 'Environment=HORAE_OIDC_AUTO_PROVISION_DOMAINS=*' "
+        "> /run/systemd/system/horae.service.d/omit-email-verified.conf && "
+        "systemctl daemon-reload && systemctl restart horae.service"
+    )
+    server.wait_until_fails("systemctl is-active --quiet horae.service")
+    assert "HORAE_OIDC_AUTO_PROVISION_DOMAINS" in server.succeed(
+        "journalctl -u horae.service --no-pager -n 50"
+    )
   '';
 }
