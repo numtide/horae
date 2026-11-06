@@ -144,12 +144,23 @@ fn main() -> anyhow::Result<()> {
                         let org_role: horae_core::types::OrgRole =
                             role.parse().map_err(|e: String| anyhow::anyhow!(e))?;
 
-                        let org_id = sqlx::query_scalar!("SELECT id FROM organizations LIMIT 1")
-                            .fetch_optional(&pool)
-                            .await?
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("No organization found. Run `init` first.")
-                            })?;
+                        let mut tx = pool.begin().await?;
+                        sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+                            .execute(&mut *tx)
+                            .await?;
+                        // Organization row, then email: the lock order of every
+                        // path that creates a user.
+                        let org_id = sqlx::query_scalar!(
+                            "SELECT id FROM organizations LIMIT 1 FOR KEY SHARE"
+                        )
+                        .fetch_optional(&mut *tx)
+                        .await?
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("No organization found. Run `init` first.")
+                        })?;
+                        if db::lock_new_user_email(&mut tx, &email).await? {
+                            anyhow::bail!("A user with the email {email} already exists.");
+                        }
 
                         let id = uuid::Uuid::now_v7();
                         sqlx::query!(
@@ -161,8 +172,9 @@ fn main() -> anyhow::Result<()> {
                             name,
                             org_role as horae_core::types::OrgRole,
                         )
-                        .execute(&pool)
+                        .execute(&mut *tx)
                         .await?;
+                        tx.commit().await?;
 
                         println!("Created user: {} ({}) [{}]", name, email, role);
                     }

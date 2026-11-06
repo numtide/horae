@@ -1,6 +1,5 @@
-use super::linking::{identity, wait_for_links};
+use super::linking::{identity, sign_in, wait_for_links};
 use crate::auth::oidc::link::{LinkError, LinkOutcome, Rejection, link};
-use crate::auth::oidc::resolve_user;
 use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use std::time::Duration;
@@ -220,9 +219,7 @@ async fn a_callback_ordered_after_a_link_of_its_subject_gets_no_session(pool: Pg
     let db = pool.clone();
     let callback = tokio::spawn(async move {
         let token = identity(ISSUER, "contested", Some(unbound_email), true);
-        resolve_user(&db, &token)
-            .await
-            .map(|user| user.map(|u| u.id))
+        sign_in(&db, &token).await.map(|user| user.map(|u| u.id))
     });
     wait_for_links(&pool, 1).await;
     assert_eq!(
@@ -273,7 +270,7 @@ fn spawn_callback(pool: &PgPool, email: String, subject: &'static str) -> Spawne
     let db = pool.clone();
     tokio::spawn(async move {
         let token = identity(ISSUER, subject, Some(email), true);
-        resolve_user(&db, &token).await.unwrap().map(|user| user.id)
+        sign_in(&db, &token).await.unwrap().map(|user| user.id)
     })
 }
 
@@ -426,7 +423,7 @@ async fn a_deactivation_ordered_after_a_link_still_revokes_sign_in(pool: PgPool)
     // The binding stays; sign-in refuses the inactive account. Each request's
     // `require_user` re-check is existing behavior and is not retested here.
     let token = identity(ISSUER, "early", None, false);
-    assert!(resolve_user(&pool, &token).await.unwrap().is_none());
+    assert!(sign_in(&pool, &token).await.unwrap().is_none());
     assert_eq!(
         binding(&pool, id).await,
         (Some(ISSUER.into()), Some("early".into()))

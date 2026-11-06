@@ -151,6 +151,8 @@ Production authentication uses OIDC. It is enabled only when all four OIDC varia
 | `HORAE_OIDC_REDIRECT_URL` | Exact public callback URL registered with the provider, ending in `/auth/callback` |
 | `HORAE_OIDC_ADDITIONAL_AUDIENCES` | Extra `aud` values to trust (comma-separated); optional |
 | `HORAE_OIDC_BUTTON_LABEL` | Sign-in button text; defaults to `Continue with SSO` |
+| `HORAE_OIDC_AUTO_PROVISION_DOMAINS` | Email domains whose people may create their own account by signing in (comma-separated); optional, see below |
+| `HORAE_OIDC_TRUST_UNVERIFIED_EMAIL` | `1` treats a token without `email_verified` as verified when creating accounts; optional, see below |
 
 Unset or empty required values leave OIDC unconfigured; they do not enable the dev
 bypass. Use the `HORAE_OIDC_*` names above, not the old unprefixed `OIDC_*` examples.
@@ -309,6 +311,39 @@ wrong link; that needs direct database administration.
 and cannot sign in through OIDC until linked. After confirming the configured provider is
 the one that issued their subjects, run `link-oidc` for each with that issuer and the
 account's existing subject. Open sessions keep working until logout or expiry.
+
+### Creating accounts at first sign-in
+
+By default only administrators create accounts. A sign-in that matches no account, or a
+deactivated one, returns to the sign-in page with a notice that names the person's own
+email and tells them to ask an administrator.
+
+To let people from your own email domains create their account by signing in, list the
+domains:
+
+```sh
+HORAE_OIDC_AUTO_PROVISION_DOMAINS=example.com,example.org
+```
+
+A first sign-in then creates an active **member** account with no rates, bound to the
+provider's issuer and subject, when all of these hold:
+
+- the part of the email after its last `@` is one of the listed domains (case-insensitive,
+  exact: `sub.example.com` is not `example.com`);
+- the ID token says the email is verified (`email_verified: true`);
+- no account already has that email, in any letter case and in any state. A deactivated
+  account stays deactivated; signing in never re-creates or reactivates it.
+
+Promote or deactivate the new account in People like any other. There is no wildcard: `*`,
+an empty item or an entry with `@` stops the server at startup.
+
+Some providers never send `email_verified`; tsidp (Tailscale) is one. Its email is the
+person's tailnet login, which they cannot choose. For providers like that, set
+`HORAE_OIDC_TRUST_UNVERIFIED_EMAIL=1` so that a missing claim counts as verified when
+creating an account. A token that says `email_verified: false` is still refused, and the
+setting never lets a sign-in claim an existing account by email: that still needs
+`email_verified: true`, or `link-oidc`. Do not set it for a provider where people can pick
+their own address, or anyone there could join under your domain.
 
 ### Container image
 

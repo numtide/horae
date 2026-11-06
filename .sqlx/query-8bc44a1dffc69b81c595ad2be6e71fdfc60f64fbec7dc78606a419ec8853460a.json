@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id FROM organizations LIMIT 1",
+  "query": "SELECT id FROM organizations LIMIT 1 FOR KEY SHARE",
   "describe": {
     "columns": [
       {
@@ -16,5 +16,5 @@
       false
     ]
   },
-  "hash": "4f077a2167642279018451da37516890862206aeee376b86764aee859bcc7feb"
+  "hash": "8bc44a1dffc69b81c595ad2be6e71fdfc60f64fbec7dc78606a419ec8853460a"
 }

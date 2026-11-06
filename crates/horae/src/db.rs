@@ -99,6 +99,30 @@ pub(crate) async fn lock_organization(
     Ok(())
 }
 
+/// Lock `email` for creating an account, until commit, and report whether an
+/// account already holds it in any letter case. The unique index on `email` is
+/// case-sensitive, so every path that creates a user takes this lock and
+/// refuses a held address. Callers lock the organization row first, so the
+/// order is always organization, then email. The transaction must be READ
+/// COMMITTED, so the check sees accounts committed while the lock was awaited.
+pub async fn lock_new_user_email(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    email: &str,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query!(
+        r#"SELECT pg_advisory_xact_lock(hashtextextended('horae.signup-email:' || lower($1), 0)) as "lock!: ()""#,
+        email,
+    )
+    .execute(&mut **tx)
+    .await?;
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM users WHERE lower(email) = lower($1)) as "held!""#,
+        email,
+    )
+    .fetch_one(&mut **tx)
+    .await
+}
+
 /// Join the user's time-entry write barrier before acquiring entry row locks.
 /// Writers share this lock; submitting a week takes the same key exclusively.
 /// The user-wide key also covers moves between weeks without a racy date lookup.
