@@ -202,6 +202,8 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     // A plain member with floor grants has no admin section, so no entry.
     sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`);
     await page.reload();
+    // The server render only says "Loading…", so this waits for hydration too.
+    await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toBeVisible();
     await expect(page.locator('.adm-nav')).toHaveCount(0);
     await expectUserMenu(null);
     sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'`);
@@ -598,6 +600,8 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
       DELETE FROM permission_change_receipts WHERE org_id='${actor.org_id}' AND actor_user_id='${actor.id}';
       DELETE FROM person_permission_states WHERE id IN ('${actorState}', '${personState}', '${otherState}');
       DELETE FROM permission_templates WHERE org_id='${actor.org_id}' AND name='${templateName}';
+      -- The run removes this assignment itself only when its step passes.
+      DELETE FROM person_management_assignments WHERE id='01960000-0000-7000-8000-000000000708';
       DELETE FROM users WHERE id='${person}' AND email='permission-browser@example.test';
       DELETE FROM users WHERE id='${otherActor}' AND email='permission-other-browser@example.test';
       UPDATE users SET org_role='admin' WHERE id='${actor.id}';
