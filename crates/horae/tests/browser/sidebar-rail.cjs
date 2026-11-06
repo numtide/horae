@@ -94,6 +94,19 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
       await expect(link).toHaveAttribute('title', name);
     }
     for (const glyph of glyphs) assert.ok(glyph.label === 'none' && glyph.width === 15 && glyph.paths > 0 && Math.abs(glyph.cx - chip.cx) < 0.5, JSON.stringify({ chip, glyph }));
+    // The account menu flies out of the collapsed rail; every row stays one unclipped line.
+    await sidebar.locator('.sidebar-footer').click();
+    await expect(menu.getByRole('link', { name: 'Administration', exact: true })).toBeVisible();
+    const rows = await menu.locator('.menu-item').evaluateAll(items => items.map(item => {
+      const r = item.getBoundingClientRect();
+      return { text: item.textContent, height: r.height, inView: r.right <= innerWidth, clipped: item.scrollWidth > item.clientWidth };
+    }));
+    const [settings, administration] = rows;
+    // Administration wraps if it grows taller than its single-line Settings sibling.
+    assert.ok(administration.height === settings.height && rows.every(row => row.inView && !row.clipped), JSON.stringify(rows));
+    if (process.env.HORAE_BROWSER_ARTIFACTS) await page.screenshot({ path: `${process.env.HORAE_BROWSER_ARTIFACTS}/account-menu-collapsed.png`, animations: 'disabled' });
+    await sidebar.locator('.sidebar-footer').click();
+    await expect(menu).toHaveCount(0);
 
     // The toggle keeps one label in both states.
     await sidebar.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
