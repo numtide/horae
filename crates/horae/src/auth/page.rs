@@ -10,6 +10,7 @@
 //! email/password and provider-list controls are intentionally absent — every
 //! control on this page maps to a real action.
 
+use dioxus::prelude::{asset, manganis};
 use serde::{Deserialize, Serialize};
 
 /// Why the last OIDC sign-in was refused, shown once above the call to action.
@@ -83,7 +84,16 @@ pub fn render(variant: LoginVariant, notice: Option<&LoginNotice>) -> String {
             escape_html(&cta_label)
         ),
     };
-    PAGE.replace("<!--ACTION-->", &format!("{notice}{action}"))
+    // The same icons the app shell links (app.rs), through the same hashed asset URLs.
+    let icons = format!(
+        r#"<link rel="icon" href="/favicon.ico" sizes="32x32">
+  <link rel="icon" type="image/svg+xml" href="{}">
+  <link rel="apple-touch-icon" href="{}">"#,
+        asset!("/assets/favicon.svg"),
+        asset!("/assets/apple-touch-icon.png"),
+    );
+    PAGE.replace("<!--ICONS-->", &icons)
+        .replace("<!--ACTION-->", &format!("{notice}{action}"))
 }
 
 /// Minimal HTML-text escaping for interpolating operator-controlled config into
@@ -110,6 +120,7 @@ static PAGE: &str = r#"<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign in — Horae</title>
+  <!--ICONS-->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,500&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -347,6 +358,15 @@ mod tests {
         // The design's decorative controls must not appear — every control is real.
         assert!(!html.contains(r#"type="password""#));
         assert!(!html.contains("Continue with Google"));
+    }
+
+    #[test]
+    fn page_links_the_favicons() {
+        let html = render(LoginVariant::Dev, None);
+        assert!(html.contains(r#"<link rel="icon" href="/favicon.ico" sizes="32x32">"#));
+        assert!(html.contains(r#"<link rel="icon" type="image/svg+xml" href="/"#));
+        assert!(html.contains(r#"<link rel="apple-touch-icon" href="/"#));
+        assert!(!html.contains("<!--ICONS-->"));
     }
 
     #[test]
