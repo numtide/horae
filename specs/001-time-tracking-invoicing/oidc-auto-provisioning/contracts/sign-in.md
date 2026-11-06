@@ -25,7 +25,8 @@ After the existing state, PKCE and ID-token validation succeed:
 | domain listed, claim `false`, or absent without the trust switch | redirect | EmailUnconfirmed |
 | domain listed, claim counts as verified, insert created the account | session, `/`, `UserCreated` | — |
 | insert created nothing; a concurrent sign-in created this identity's account | as for a bound account | — |
-| insert created nothing otherwise (email or subject held, no single organization) | redirect | NoAccount |
+| insert created nothing otherwise (email or subject held, no single organization) | redirect | NoAccount (no address) |
+| verified-email binding lost to a concurrent sign-in | redirect | NoAccount (no address) |
 
 Every other failure (provider `error`, missing flow, state mismatch, exchange or
 validation failure, internal error) redirects to `/auth/login` with no notice, as before.

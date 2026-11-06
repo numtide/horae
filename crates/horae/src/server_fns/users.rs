@@ -84,7 +84,7 @@ pub async fn create_user(email: String, name: String, role: String) -> Result<Us
 }
 
 #[cfg(feature = "server")]
-async fn insert_user(
+pub(crate) async fn insert_user(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
@@ -93,6 +93,14 @@ async fn insert_user(
     org_role: OrgRole,
 ) -> Result<User, ServerFnError> {
     let mut tx = begin_user_access_change(db, org_id, actor_id).await?;
+    // The organization row is already locked, so the email lock comes second,
+    // as on every user-creating path.
+    if crate::db::lock_new_user_email(&mut tx, email)
+        .await
+        .map_err(server_err)?
+    {
+        return Err(conflict("A user with this email already exists"));
+    }
     let user = sqlx::query_as!(
         User,
         r#"INSERT INTO users (id, org_id, email, name, org_role)

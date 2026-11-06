@@ -27,7 +27,7 @@ Stored under one session key between `/auth/callback` and `/auth/login`, removed
 
 | Variant | Carries | Shown when |
 |---------|---------|------------|
-| `NoAccount` | the token's email, if any | nothing matches and provisioning is off, or the email or subject is held by another identity |
+| `NoAccount` | the token's email when nothing matches and provisioning is off; no email when the email or subject is held by an account this identity cannot sign in to | nothing matches, or the account holding the email or subject cannot be signed in to |
 | `Deactivated` | — | the identity, or a verified email of an unbound account, resolves to an inactive account |
 | `DomainNotAllowed` | email | provisioning is on and the domain is not listed |
 | `EmailUnconfirmed` | email | provisioning is on, the domain is listed, and the claim does not count as verified |

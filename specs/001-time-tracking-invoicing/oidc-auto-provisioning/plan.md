@@ -91,10 +91,15 @@ file sits beside `linking.rs` and reuses its `identity` and `wait_for_links` hel
    order. Its final "no match" branch now consults `Eligibility` (Off, NoEmail,
    DomainNotAllowed, Unconfirmed, Allowed), computed by a pure function from the policy,
    the email and the tristate claim. Only `Allowed` yields `Resolution::Provision`.
-1. **Insert.** `INSERT INTO users (...) SELECT ... FROM organizations WHERE (SELECT count(*) FROM organizations) = 1 AND NOT EXISTS (SELECT 1 FROM users WHERE lower(email) = lower($email)) ON CONFLICT DO NOTHING RETURNING ...`. Zero rows means: the email is held,
-   the subject is held, there is no single organization, or a concurrent sign-in won. The
-   callback then re-reads by issuer and subject: the winner's account signs in (or is
-   refused if inactive); anything else is the no-account notice.
+1. **Insert.** In a read-committed transaction: lock the organization rows `FOR KEY SHARE` (nothing is created unless there is exactly one), then
+   `db::lock_new_user_email` (an advisory lock on the lowercased email plus a
+   case-insensitive check, since the unique index on `email` is case-sensitive), then
+   `INSERT ... ON CONFLICT DO NOTHING RETURNING ...`. Administrator `create_user` and CLI
+   `user create` take the same lock in the same order. Nothing is created when the email
+   is held, the subject is held, there is no single organization, or a concurrent sign-in
+   won. The callback then re-reads by issuer and
+   subject: the winner's account signs in (or is refused if inactive); anything else is
+   the no-account notice without the address.
 1. **Notice.** `LoginNotice` is a serde enum stored under one session key. `login_page`
    takes the `Session`, removes the key and passes the value to `page::render`, which
    HTML-escapes the email. Other failures never set it (FR-003).

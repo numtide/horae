@@ -219,12 +219,8 @@ async fn the_trust_switch_never_binds_an_existing_account_by_email(pool: PgPool)
         &allow(&["example.com"], true),
     )
     .await;
-    assert_eq!(
-        notice,
-        LoginNotice::NoAccount {
-            email: Some(EMAIL.into())
-        }
-    );
+    // An account holds the address, so the notice must not claim otherwise.
+    assert_eq!(notice, LoginNotice::NoAccount { email: None });
     let subject = sqlx::query_scalar!("SELECT oidc_subject FROM users WHERE id = $1", existing)
         .fetch_one(&pool)
         .await
@@ -280,9 +276,7 @@ async fn an_email_held_by_another_identity_is_not_reused(pool: PgPool) {
         .await;
         assert_eq!(
             notice,
-            LoginNotice::NoAccount {
-                email: Some(EMAIL.into())
-            },
+            LoginNotice::NoAccount { email: None },
             "{held} {active} {binding:?}"
         );
         assert_eq!(accounts(&pool).await, 1);
@@ -318,13 +312,7 @@ async fn a_subject_held_by_another_account_is_not_reused(pool: PgPool) {
             &allow(&["example.com"], false),
         )
         .await;
-        assert_eq!(
-            notice,
-            LoginNotice::NoAccount {
-                email: Some(EMAIL.into())
-            },
-            "{issuer:?}"
-        );
+        assert_eq!(notice, LoginNotice::NoAccount { email: None }, "{issuer:?}");
         assert_eq!(accounts(&pool).await, 1);
         sqlx::query!("DELETE FROM users WHERE id = $1", holder)
             .execute(&pool)
@@ -356,17 +344,7 @@ async fn nothing_is_created_without_exactly_one_organization(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn concurrent_first_sign_ins_create_one_account(pool: PgPool) {
     let org_id = organization(&pool).await;
-    // Hold the organization row: the first insert waits on its foreign key
-    // check and the second on the first insert's unique entries, so both are
-    // in flight before either commits.
-    let mut blocker = pool.begin().await.unwrap();
-    sqlx::query!(
-        "SELECT id FROM organizations WHERE id = $1 FOR UPDATE",
-        org_id
-    )
-    .fetch_one(&mut *blocker)
-    .await
-    .unwrap();
+    let blocker = hold_organization(&pool, org_id).await;
 
     let mut attempts = JoinSet::new();
     for _ in 0..2 {
@@ -391,4 +369,114 @@ async fn concurrent_first_sign_ins_create_one_account(pool: PgPool) {
     assert_eq!(results[0].user.id, results[1].user.id);
     assert_eq!(results.iter().filter(|sign_in| sign_in.created).count(), 1);
     assert_eq!(accounts(&pool).await, 1);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn concurrent_sign_ins_with_case_variant_emails_create_one_account(pool: PgPool) {
+    let org_id = organization(&pool).await;
+    let blocker = hold_organization(&pool, org_id).await;
+
+    // Different people at the provider whose addresses differ only in case:
+    // the case-sensitive unique index alone would let both rows in.
+    let mut attempts = JoinSet::new();
+    for (subject, email) in [
+        ("subject-a", "Ada@example.com"),
+        ("subject-b", "ada@example.com"),
+    ] {
+        let db = pool.clone();
+        attempts.spawn(async move {
+            resolve_user(
+                &db,
+                &token(subject, email, Some(true)),
+                &allow(&["example.com"], false),
+            )
+            .await
+            .unwrap()
+        });
+    }
+    wait_for_links(&pool, 2).await;
+    blocker.commit().await.unwrap();
+
+    let results = timeout(std::time::Duration::from_secs(10), attempts.join_all())
+        .await
+        .unwrap();
+    assert_eq!(accounts(&pool).await, 1);
+    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    let loser = results.into_iter().find_map(Result::err);
+    assert_eq!(loser, Some(LoginNotice::NoAccount { email: None }));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn admin_creation_and_provisioning_of_case_variant_emails_create_one_account(pool: PgPool) {
+    let ids = crate::server_fns::test_seed::seed(&pool, OrgRole::Admin).await;
+    // Hold the email lock. The sign-in takes its share of the organization row
+    // and queues on the email; the administrator's exclusive organization lock
+    // then queues behind the sign-in, so the sign-in commits first and the
+    // administrator must see its lowercase twin.
+    let mut blocker = pool.begin().await.unwrap();
+    crate::db::lock_new_user_email(&mut blocker, EMAIL)
+        .await
+        .unwrap();
+
+    let db = pool.clone();
+    let sign_in = tokio::spawn(async move {
+        resolve_user(
+            &db,
+            &token("new-subject", EMAIL, Some(true)),
+            &allow(&["example.com"], false),
+        )
+        .await
+        .unwrap()
+    });
+    wait_for_links(&pool, 1).await;
+    let db = pool.clone();
+    let admin = tokio::spawn(async move {
+        crate::server_fns::insert_user(
+            &db,
+            ids.org_id,
+            ids.user_id,
+            "Ada@example.com",
+            "Ada",
+            OrgRole::Member,
+        )
+        .await
+    });
+    wait_for_links(&pool, 2).await;
+    blocker.commit().await.unwrap();
+
+    let (admin, sign_in) = timeout(std::time::Duration::from_secs(10), async {
+        (admin.await.unwrap(), sign_in.await.unwrap())
+    })
+    .await
+    .unwrap();
+    let ada = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM users WHERE lower(email) = 'ada@example.com'"#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(ada, 1);
+    assert!(sign_in.is_ok_and(|sign_in| sign_in.created));
+    assert!(
+        admin.is_err(),
+        "the administrator must not create a case twin"
+    );
+}
+
+/// Hold the organization row so the first insert waits on its foreign key
+/// check and any other waits behind it, putting every attempt in flight before
+/// either commits. Commit the returned transaction to release them.
+async fn hold_organization(
+    pool: &PgPool,
+    org_id: Uuid,
+) -> sqlx::Transaction<'static, sqlx::Postgres> {
+    let mut blocker = pool.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM organizations WHERE id = $1 FOR UPDATE",
+        org_id
+    )
+    .fetch_one(&mut *blocker)
+    .await
+    .unwrap();
+    blocker
 }

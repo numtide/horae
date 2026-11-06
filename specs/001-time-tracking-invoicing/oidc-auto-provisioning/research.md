@@ -40,14 +40,21 @@ source trees.
 
 ## R4. Concurrent first sign-ins
 
-- **Decision**: a single `INSERT ... ON CONFLICT DO NOTHING RETURNING`, then a re-read by
-  issuer and subject.
-- **Rationale**: the global unique constraints on `users.email` and `users.oidc_subject`
-  already make a second row impossible; the loser re-reads the winner's committed row.
-  Grafana handles its first-login race the same way (re-fetch on conflict). NetBird takes a
-  global lock and re-checks.
-- **Alternatives**: an advisory lock or locking the organization row (more moving parts,
-  no extra guarantee).
+- **Decision**: an `INSERT ... ON CONFLICT DO NOTHING RETURNING` under a transaction-scoped
+  advisory lock keyed on the lowercased email, then a re-read by issuer and subject.
+- **Rationale**: the unique constraint on `users.oidc_subject` stops a second row for one
+  identity, but the one on `users.email` is case-sensitive: `Ada@x` and `ada@x` from two
+  identities would both pass a snapshot `NOT EXISTS (lower(email) = ...)` check. The lock
+  orders creations per address, and a read-committed check after it sees the winner. The
+  loser re-reads the winner's committed row. Every path that creates a user (sign-in,
+  administrator `create_user`, CLI `user create`) takes the same lock through
+  `db::lock_new_user_email`, after locking the organization row, so the paths cannot
+  deadlock one another. `init` creates the first organization and its admin in one
+  transaction, before any sign-in can provision, and `seed` is demo data; neither takes
+  the lock. Grafana handles its
+  first-login race with a re-fetch on conflict; NetBird takes a global lock and re-checks.
+- **Alternatives**: a unique index on `lower(email)` (a migration, and existing data may
+  already hold case variants); locking the organization row (serializes every sign-up).
 
 ## R5. How the reason reaches the sign-in page
 
@@ -64,8 +71,15 @@ source trees.
 
 - **Decision**: only the person's own token email and reasons about that email. An email
   held by a different identity, or a subject held under another issuer, gets the generic
-  no-account notice. A deactivated account is named only when the person's own identity or
+  no-account notice without the address, since "no account exists for <email>" would be
+  false there. A deactivated account is named only when the person's own identity or
   verified email resolves to it.
+- **Accepted trade-off**: with provisioning off, a sign-in whose email is held by an
+  account bound to another identity, or whose unverified email matches an account, still
+  reads "No Horae account exists for <email>". Telling those cases apart would need an
+  extra lookup, and the difference in wording would let someone who can choose an
+  unverified address at the provider probe which addresses hold Horae accounts. Not
+  revealing held versus free addresses outweighs the imprecise wording.
 - **Rationale**: NetBird names the account owner (masked); Horae names no administrator.
 
 ## R7. Account name

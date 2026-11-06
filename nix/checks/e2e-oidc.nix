@@ -374,6 +374,11 @@ pkgs.testers.nixosTest {
         )
         again = server.succeed(f"curl -sS -c {jar} -b {jar} http://127.0.0.1:3000/auth/login")
         assert 'role="alert"' not in again, "the notice must be shown only once"
+        # Showing it also removes it from the stored session, email included.
+        assert sql(
+            "SELECT count(*) FROM tower_sessions.session "
+            "WHERE position(convert_to('kilgore@kilgore.trout', 'UTF8') in data) > 0"
+        ) == "0", "a shown notice must not stay in the session store"
         return page
 
     def free_identity(email):

@@ -307,9 +307,10 @@ async fn resolve_user(
     // The trust switch is for provisioning only: binding an existing account by
     // email always needs an explicit `true` (FR-010).
     let email_verified = identity.email_verified == Some(true);
-    let no_account = || LoginNotice::NoAccount {
-        email: identity.email.clone(),
-    };
+    // Where an account holds the email or subject but cannot be signed in to,
+    // "no account exists for <email>" would be false. The generic notice says
+    // nothing about the address.
+    let unmatched = || LoginNotice::NoAccount { email: None };
     let by_subject = fetch_by_identity(db, identity).await?;
     // Only an as-yet-unlinked account may be claimed by a verified email — a
     // first-login bootstrap. This prevents a different subject with a matching
@@ -358,13 +359,15 @@ async fn resolve_user(
                 Some(_) => Err(LoginNotice::Deactivated),
                 None => {
                     tracing::warn!("OIDC login denied: email or subject held by another account");
-                    Err(no_account())
+                    Err(unmatched())
                 }
             });
         }
         Resolution::DenyNoUser => {
             tracing::warn!("OIDC login denied: no account for subject/email");
-            return Ok(Err(no_account()));
+            return Ok(Err(LoginNotice::NoAccount {
+                email: identity.email.clone(),
+            }));
         }
         Resolution::DenyInactive => {
             tracing::warn!("OIDC login denied: account is deactivated");
@@ -414,7 +417,7 @@ async fn resolve_user(
                 user,
                 created: false,
             })
-            .ok_or_else(no_account));
+            .ok_or_else(unmatched));
     }
 
     Ok(Ok(SignIn {
@@ -426,19 +429,33 @@ async fn resolve_user(
 /// Create an active member account bound to the identity. Creates nothing when
 /// any account holds the email (in any letter case or state), when another
 /// account holds the subject, or when there is not exactly one organization.
-/// The unique email and subject constraints make concurrent first sign-ins for
-/// one identity create a single row.
+/// Every user-creating path holds the email lock from
+/// [`crate::db::lock_new_user_email`], and the unique subject constraint makes
+/// concurrent first sign-ins for one identity create a single row.
 async fn provision(
     db: &sqlx::PgPool,
     identity: &Identity,
     email: &str,
 ) -> anyhow::Result<Option<User>> {
+    let mut tx = db.begin().await?;
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        .execute(&mut *tx)
+        .await?;
+    // Lock the organization row before the email, the order every
+    // user-creating path follows, so none of them can deadlock another.
+    let organizations = sqlx::query_scalar!("SELECT id FROM organizations FOR KEY SHARE")
+        .fetch_all(&mut *tx)
+        .await?;
+    let [org_id] = organizations[..] else {
+        return Ok(None);
+    };
+    if crate::db::lock_new_user_email(&mut tx, email).await? {
+        return Ok(None);
+    }
     let user = sqlx::query_as!(
         User,
         r#"INSERT INTO users (id, org_id, email, name, org_role, oidc_subject, oidc_issuer)
-           SELECT $1, o.id, $2, $3, $4, $5, $6 FROM organizations o
-           WHERE (SELECT count(*) FROM organizations) = 1
-             AND NOT EXISTS (SELECT 1 FROM users WHERE lower(email) = lower($2))
+           VALUES ($1, $7, $2, $3, $4, $5, $6)
            ON CONFLICT DO NOTHING
            RETURNING id, org_id, email, name, oidc_subject,
                      org_role as "org_role: OrgRole",
@@ -450,9 +467,11 @@ async fn provision(
         OrgRole::Member as OrgRole,
         identity.subject,
         identity.issuer,
+        org_id,
     )
-    .fetch_optional(db)
+    .fetch_optional(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(user)
 }
 

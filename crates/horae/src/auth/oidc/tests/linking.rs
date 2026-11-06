@@ -35,7 +35,9 @@ async fn account(pool: &PgPool) -> (Uuid, String) {
 }
 
 pub(super) async fn wait_for_links(pool: &PgPool, count: i64) {
-    timeout(std::time::Duration::from_secs(10), async {
+    // Generous because the full suite runs many databases at once; the budget
+    // only bounds how long a broken wait takes to fail.
+    timeout(std::time::Duration::from_secs(60), async {
         loop {
             let waiting = sqlx::query_scalar!(
                 r#"SELECT COUNT(*) AS "count!" FROM pg_stat_activity

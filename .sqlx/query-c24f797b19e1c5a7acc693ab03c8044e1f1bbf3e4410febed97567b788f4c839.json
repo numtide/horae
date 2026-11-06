@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pg_advisory_xact_lock(hashtextextended('horae.signup-email:' || lower($1), 0)) as \"lock!: ()\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "lock!: ()",
+        "type_info": "Void"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c24f797b19e1c5a7acc693ab03c8044e1f1bbf3e4410febed97567b788f4c839"
+}

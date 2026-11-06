@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO users (id, org_id, email, name, org_role, oidc_subject, oidc_issuer)\n           SELECT $1, o.id, $2, $3, $4, $5, $6 FROM organizations o\n           WHERE (SELECT count(*) FROM organizations) = 1\n             AND NOT EXISTS (SELECT 1 FROM users WHERE lower(email) = lower($2))\n           ON CONFLICT DO NOTHING\n           RETURNING id, org_id, email, name, oidc_subject,\n                     org_role as \"org_role: OrgRole\",\n                     cost_rate_cents, billable_rate_cents, active,\n                     created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "INSERT INTO users (id, org_id, email, name, org_role, oidc_subject, oidc_issuer)\n           VALUES ($1, $7, $2, $3, $4, $5, $6)\n           ON CONFLICT DO NOTHING\n           RETURNING id, org_id, email, name, oidc_subject,\n                     org_role as \"org_role: OrgRole\",\n                     cost_rate_cents, billable_rate_cents, active,\n                     created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
   "describe": {
     "columns": [
       {
@@ -83,7 +83,8 @@
           }
         },
         "Text",
-        "Text"
+        "Text",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -99,5 +100,5 @@
       false
     ]
   },
-  "hash": "7c9db5df153fc883e84958cd5cdc3e5154b1a070639ec474872bc065a14f1915"
+  "hash": "5107559cf0ec50259517cb3690a5cfb26dc0b7c25310bc06b8bd52b5c7d51053"
 }
