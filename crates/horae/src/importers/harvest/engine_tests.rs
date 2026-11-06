@@ -1759,9 +1759,9 @@ async fn csv_lines_for_a_new_project_of_an_archived_client_fail_and_retry(pool: 
 }
 
 /// An archive commits while an import waits to create a project under that
-/// client. The import must not create it, at READ COMMITTED (it reads the
-/// archived client) or REPEATABLE READ (its share lock fails to serialize and
-/// the record errors), and the run still finishes with the other rows.
+/// client. The import must not create it, even when the connection default is
+/// REPEATABLE READ: the import runs at READ COMMITTED and reads the archived
+/// client. The run still finishes with the other rows.
 #[sqlx::test(migrations = "./migrations")]
 async fn an_import_waiting_for_a_client_archive_creates_no_project_under_it(pool: PgPool) {
     let rr = crate::server_fns::test_seed::repeatable_read_pool(&pool).await;

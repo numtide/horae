@@ -201,8 +201,9 @@ add a missing person, and commit a succeeded preview into a new run.
 - **FR-013b**: Creating an account MUST serialize with every other account creation for the same
   email ignoring case, and an email already used by an account the import cannot match (another
   workspace, or one created concurrently with different case) MUST be reported as "email in use".
-- **FR-013c**: A preview whose simulated person lost their email to a real account between batches
-  MUST report that person once and resolve their later records against current data, never fail
+  This holds whatever the database connection's default isolation level is.
+- **FR-013c**: A preview whose simulated person lost their email to a real account between batches,
+  in any letter case, MUST report that person once and resolve their later records against current data, never fail
   on a missing account.
 - **FR-014**: Each person-related row error MUST carry, besides its reason, a machine-readable kind
   (unmatched email, unmatched name, ambiguous person, missing email, duplicate email, person not

@@ -100,12 +100,17 @@ impl ParentSnapshot {
             );
         }
         // Simulated people own entries in later batches, so they come back first.
-        // A real account that took the email meanwhile keeps it; the simulated
-        // person is then reported as lost instead of failing later entries.
+        // A real account that took the email meanwhile, in any case, keeps it;
+        // the simulated person is then reported as lost instead of failing
+        // later entries.
         sqlx::query!(
             "INSERT INTO users (id, org_id, email, name, org_role, active)
-             SELECT id, org_id, email, name, org_role, active
-             FROM jsonb_populate_recordset(NULL::users, $1) WHERE org_id = $2
+             SELECT r.id, r.org_id, r.email, r.name, r.org_role, r.active
+             FROM jsonb_populate_recordset(NULL::users, $1) r
+             WHERE r.org_id = $2
+               AND NOT EXISTS (
+                 SELECT 1 FROM users u WHERE lower(btrim(u.email)) = lower(btrim(r.email))
+               )
              ON CONFLICT DO NOTHING",
             &self.users,
             org_id,
@@ -334,47 +339,66 @@ mod tests {
 
         let ids =
             crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
-        let simulated = Uuid::now_v7();
-        let mut tx = pool.begin().await.unwrap();
-        sqlx::query!(
-            "INSERT INTO users (id, org_id, email, name, org_role, active)
-             VALUES ($1, $2, 'lost@example.com', 'Lost', 'member', false)",
-            simulated,
-            ids.org_id,
-        )
-        .execute(&mut *tx)
-        .await
-        .unwrap();
-        let mut cache = RunCache::default();
-        cache.users.insert(
-            super::super::UserKey::Email("lost@example.com".into()),
-            simulated,
-        );
-        let snapshot = ParentSnapshot::capture(&mut tx, ids.org_id, &cache)
+        // The real account may differ from the simulated person only in case.
+        for (simulated_email, real_email) in [
+            ("lost0@example.com", "lost0@example.com"),
+            ("lost1@example.com", "Lost1@Example.com"),
+        ] {
+            let simulated = Uuid::now_v7();
+            let mut tx = pool.begin().await.unwrap();
+            sqlx::query!(
+                "INSERT INTO users (id, org_id, email, name, org_role, active)
+                 VALUES ($1, $2, $3, 'Lost', 'member', false)",
+                simulated,
+                ids.org_id,
+                simulated_email,
+            )
+            .execute(&mut *tx)
             .await
             .unwrap();
-        tx.rollback().await.unwrap();
-        // A real account takes the email between two preview batches.
-        sqlx::query!(
-            "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, 'lost@example.com', 'Real')",
-            Uuid::now_v7(),
-            ids.org_id,
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
+            let mut cache = RunCache::default();
+            cache.users.insert(
+                super::super::UserKey::Email(simulated_email.into()),
+                simulated,
+            );
+            let snapshot = ParentSnapshot::capture(&mut tx, ids.org_id, &cache)
+                .await
+                .unwrap();
+            tx.rollback().await.unwrap();
+            // A real account takes the email between two preview batches.
+            sqlx::query!(
+                "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, 'Real')",
+                Uuid::now_v7(),
+                ids.org_id,
+                real_email,
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
 
-        let mut tx = pool.begin().await.unwrap();
-        let lost = snapshot.restore(&mut tx, ids.org_id).await.unwrap();
-        tx.rollback().await.unwrap();
-        let mut report = ImportReport::new(SourceKind::Csv, ImportMode::DryRun);
-        forget_lost_people(&mut cache, &mut report, lost);
-        assert!(cache.users.is_empty(), "later rows must resolve again");
-        assert_eq!(report.summary.people.errored, 1);
-        assert_eq!(
-            report.row_errors[0].person.as_ref().unwrap().kind,
-            PersonErrorKind::EmailInUse
-        );
-        assert!(report.reconciles());
+            let mut tx = pool.begin().await.unwrap();
+            let lost = snapshot.restore(&mut tx, ids.org_id).await.unwrap();
+            let restored = sqlx::query_scalar!(
+                r#"SELECT count(*) AS "count!" FROM users WHERE lower(email) = $1"#,
+                simulated_email,
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+            tx.rollback().await.unwrap();
+            assert_eq!(restored, 1, "{real_email}: the real account alone keeps it");
+            let mut report = ImportReport::new(SourceKind::Csv, ImportMode::DryRun);
+            forget_lost_people(&mut cache, &mut report, lost);
+            assert!(
+                cache.users.is_empty(),
+                "{real_email}: later rows must resolve again"
+            );
+            assert_eq!(report.summary.people.errored, 1, "{real_email}");
+            assert_eq!(
+                report.row_errors[0].person.as_ref().unwrap().kind,
+                PersonErrorKind::EmailInUse
+            );
+            assert!(report.reconciles());
+        }
     }
 }

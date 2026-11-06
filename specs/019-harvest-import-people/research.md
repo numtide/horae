@@ -118,8 +118,12 @@
   sign-in provisioning (PR #340) uses. It then checks again for any account with that email
   ignoring case: the same workspace is matched, anything else is `email_in_use`. A unique
   violation maps to `email_in_use` too. Follow-up: once #340 lands, share its helper.
+- **READ COMMITTED imports**: `begin_import_transaction` sets READ COMMITTED first. Under a
+  REPEATABLE READ connection default the snapshot would predate the lock wait, so the recheck
+  would miss an account committed meanwhile. Nothing in the import relies on a snapshot spanning
+  statements: every guard is a lock followed by a read, which needs the newest committed rows.
 - **Lost preview people**: `ParentSnapshot::restore` returns the simulated people it could not
-  restore. They are removed from the run cache and reported once as `email_in_use`.
+  restore, including when the real account's email differs only in case. They are removed from the run cache and reported once as `email_in_use`.
 - **CSV people count once** per account, tracked in the run cache.
 
 ## R-9 US2 design (adopted)

@@ -449,3 +449,62 @@ async fn an_email_used_outside_the_workspace_is_reported_not_created(pool: PgPoo
     assert!(person_links(&pool, org).await.is_empty());
     assert_eq!(queued_user_events(&pool, org).await, 0);
 }
+
+/// Sign-in creates `Late@Example.com` while the import waits on that email's
+/// lock. Even on a REPEATABLE READ connection the import's recheck must see
+/// it, or it would add `late@example.com` beside it.
+#[sqlx::test(migrations = "./migrations")]
+async fn an_account_created_while_the_import_waits_is_never_duplicated(pool: PgPool) {
+    let org = setup(&pool).await;
+    let elsewhere = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO organizations (id, name) VALUES ($1, 'Elsewhere')",
+        elsewhere
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut signup = pool.begin().await.unwrap();
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+        .fetch_one(&mut *signup)
+        .await
+        .unwrap();
+    crate::db::lock_user_email(&mut signup, "Late@Example.com")
+        .await
+        .unwrap();
+    sqlx::query!(
+        "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $2, 'Late@Example.com', 'Late', 'member')",
+        Uuid::now_v7(),
+        elsewhere,
+    )
+    .execute(&mut *signup)
+    .await
+    .unwrap();
+    let mut data = valid_data();
+    data.users = serde_json::from_value(json!([{"id":4,"email":"late@example.com"}])).unwrap();
+    let rr = crate::server_fns::test_seed::repeatable_read_pool(&pool).await;
+    let import = tokio::spawn(async move {
+        apply_api_data(&rr, org, "USD", ImportMode::Commit, &data, day(4)).await
+    });
+    crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+    signup.commit().await.unwrap();
+    let report = tokio::time::timeout(std::time::Duration::from_secs(10), import)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        kinds(&report),
+        vec![
+            ("person 4".into(), PersonErrorKind::EmailInUse),
+            ("time_entry 10".into(), PersonErrorKind::PersonNotImported),
+        ]
+    );
+    let accounts = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM users WHERE lower(email) = 'late@example.com'"#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(accounts, 1);
+}
