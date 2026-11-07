@@ -1,19 +1,26 @@
-//! Import API catalog records independently of time entries, in FK order.
+//! Import API catalog records independently of time entries, in FK order:
+//! clients, projects, tasks, then people, so entries find all of them.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use horae_core::importers::harvest::types::{EntityType, RowOutcome};
+use horae_core::importers::harvest::keys;
+use horae_core::importers::harvest::types::{
+    EntityType, PersonErrorKind, PersonOutcome, ReportPerson, RowOutcome,
+};
 use sqlx::{Acquire, Postgres, Transaction};
 
-use super::api_source::{ApiClient, ApiProject, ApiTask, HarvestData};
+use super::api_source::{ApiClient, ApiProject, ApiTask, ApiUser, HarvestData};
 use super::report::ImportReport;
 use super::resolve::fields::{ClientFields, ProjectFields, TaskFields};
-use super::resolve::{self, OrgDefaults, PendingCache, Resolved, RowFailure, RunCache};
+use super::resolve::{
+    self, OrgDefaults, PendingCache, PersonFields, Resolved, RowFailure, RunCache,
+};
 
 enum Parent<'a> {
     Client(&'a ApiClient),
     Project(&'a ApiProject, Option<&'a ApiClient>),
     Task(&'a ApiTask),
+    Person(&'a ApiUser),
 }
 
 impl Parent<'_> {
@@ -22,8 +29,26 @@ impl Parent<'_> {
             Self::Client(c) => (EntityType::Client, c.id),
             Self::Project(p, _) => (EntityType::Project, p.id),
             Self::Task(t) => (EntityType::Task, t.id),
+            Self::Person(u) => (EntityType::Person, u.id),
         }
     }
+}
+
+/// What a resolved catalog record contributes once its savepoint commits.
+enum Applied {
+    Parents(Vec<(EntityType, Resolved)>),
+    Person(resolve::UserKey, ReportPerson),
+}
+
+/// Normalized emails that more than one Harvest person uses. Matching either
+/// person would be a guess, so all of them are reported instead.
+fn shared_emails(users: &[ApiUser]) -> HashSet<String> {
+    let mut seen = HashSet::new();
+    users
+        .iter()
+        .filter_map(|u| u.email.as_deref().map(keys::normalize))
+        .filter(|email| !email.is_empty() && !seen.insert(email.clone()))
+        .collect()
 }
 
 fn client_fields(client: &ApiClient) -> ClientFields<'_> {
@@ -67,12 +92,14 @@ pub(super) async fn apply_batch(
                 .iter()
                 .map(|p| Parent::Project(p, clients.get(&p.client.id).copied())),
         )
-        .chain(data.tasks.iter().map(Parent::Task));
+        .chain(data.tasks.iter().map(Parent::Task))
+        .chain(data.users.iter().map(Parent::Person));
+    let shared = shared_emails(&data.users);
     for parent in parents.skip(range.start).take(range.len()) {
         let (entity, id) = parent.identity();
         let mut sp = tx.begin().await?;
-        match resolve_parent(&mut sp, cache, org, parent).await {
-            Ok(resolved) => {
+        match resolve_parent(&mut sp, cache, org, &shared, parent).await {
+            Ok(Applied::Parents(resolved)) => {
                 sp.commit().await?;
                 let mut outcomes = Vec::new();
                 let mut pending = PendingCache::default();
@@ -84,6 +111,21 @@ pub(super) async fn apply_batch(
                     report.record(kind, &outcome);
                 }
             }
+            Ok(Applied::Person(key, person)) => {
+                sp.commit().await?;
+                cache.merge(PendingCache {
+                    user: Some((key, person.horae_id)),
+                    ..Default::default()
+                });
+                report.record(
+                    EntityType::Person,
+                    &match person.outcome {
+                        PersonOutcome::Created => RowOutcome::Created,
+                        PersonOutcome::Matched => RowOutcome::Skipped,
+                    },
+                );
+                report.people.push(person);
+            }
             Err(failure) => {
                 sp.rollback().await?;
                 cache.mark_failed(entity, id);
@@ -92,6 +134,7 @@ pub(super) async fn apply_batch(
                     &RowOutcome::Errored {
                         source_location: format!("{} {id}", entity.as_str()),
                         reason: failure.reason,
+                        person: failure.person,
                     },
                 );
             }
@@ -100,17 +143,68 @@ pub(super) async fn apply_batch(
     Ok(())
 }
 
+async fn resolve_person(
+    conn: &mut sqlx::PgConnection,
+    org: OrgDefaults<'_>,
+    shared: &HashSet<String>,
+    user: &ApiUser,
+) -> Result<Applied, RowFailure> {
+    let name = user.full_name();
+    let email = user.email.as_deref().map(keys::trim_ws).unwrap_or_default();
+    if email.is_empty() {
+        return Err(RowFailure::person(
+            "Harvest person has no email; add one in Harvest, or add the person in Horae",
+            PersonErrorKind::MissingEmail,
+            None,
+            Some(&name),
+        ));
+    }
+    if shared.contains(&keys::normalize(email)) {
+        return Err(RowFailure::person(
+            format!(
+                "another Harvest person also uses the email {email:?}; give each a unique email"
+            ),
+            PersonErrorKind::DuplicateEmail,
+            Some(email),
+            Some(&name),
+        ));
+    }
+    let fields = PersonFields {
+        harvest_id: Some(user.id),
+        email,
+        name: &name,
+    };
+    let (key, horae_id, outcome) = resolve::resolve_person(conn, org.org_id, &fields).await?;
+    Ok(Applied::Person(
+        key,
+        ReportPerson {
+            harvest_id: Some(user.id),
+            horae_id,
+            email: Some(email.to_owned()),
+            name: if name.is_empty() {
+                email.to_owned()
+            } else {
+                name
+            },
+            outcome,
+            harvest_active: Some(user.is_active),
+        },
+    ))
+}
+
 async fn resolve_parent(
     conn: &mut sqlx::PgConnection,
     cache: &RunCache,
     org: OrgDefaults<'_>,
+    shared: &HashSet<String>,
     parent: Parent<'_>,
-) -> Result<Vec<(EntityType, Resolved)>, RowFailure> {
-    match parent {
-        Parent::Client(client) => Ok(vec![(
+) -> Result<Applied, RowFailure> {
+    Ok(Applied::Parents(match parent {
+        Parent::Person(user) => return resolve_person(conn, org, shared, user).await,
+        Parent::Client(client) => vec![(
             EntityType::Client,
             resolve::resolve_client(conn, cache, org, &client_fields(client)).await?,
-        )]),
+        )],
         Parent::Project(project, client) => {
             if cache.parent_failed(EntityType::Client, project.client.id) {
                 return Err(RowFailure::new(format!(
@@ -141,10 +235,10 @@ async fn resolve_parent(
             };
             let resolved_project =
                 resolve::resolve_project(conn, cache, org, resolved_client.id, &fields).await?;
-            Ok(vec![
+            vec![
                 (EntityType::Client, resolved_client),
                 (EntityType::Project, resolved_project),
-            ])
+            ]
         }
         Parent::Task(task) => {
             let rate = task
@@ -161,10 +255,10 @@ async fn resolve_parent(
                 rate_currency: None,
                 harvest_updated_at: task.updated_at,
             };
-            Ok(vec![(
+            vec![(
                 EntityType::Task,
                 resolve::resolve_task(conn, cache, org, &fields).await?,
-            )])
+            )]
         }
-    }
+    }))
 }

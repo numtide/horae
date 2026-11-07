@@ -12,7 +12,7 @@ use crate::auth::session::{clear_session, set_session_user_id};
 
 /// `GET /auth/login` in dev mode — the one-click "Sign in as Admin" page.
 pub async fn login_page() -> impl IntoResponse {
-    Html(render(LoginVariant::Dev))
+    Html(render(LoginVariant::Dev, None))
 }
 
 /// `POST /auth/dev-login` — look up the first admin user and log them in.

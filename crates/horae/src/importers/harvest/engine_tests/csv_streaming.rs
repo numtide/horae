@@ -148,7 +148,8 @@ async fn durable_csv_discards_incomplete_preparation_and_resumes_its_checkpoint(
             );
             let job = jobs::status(&pool, org, id).await.unwrap().unwrap();
             assert_eq!(job.status, "running");
-            assert_eq!(job.processed_count, if completed == 0 { 0 } else { 503 });
+            // 500 entries, their client, project and task, and their person.
+            assert_eq!(job.processed_count, if completed == 0 { 0 } else { 504 });
 
             let report =
                 import_body_with_lease(&pool, org, "USD", Body::from(source), mode, Some(&lease))
@@ -511,7 +512,7 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption, 
     }
     let progress = jobs::status(&pool, org, id).await.unwrap().unwrap();
     assert_eq!(progress.status, "running");
-    assert_eq!(progress.processed_count, 503);
+    assert_eq!(progress.processed_count, 504);
 
     let (lease, _stop) = match interruption {
         BatchInterruption::Crash => {
@@ -580,7 +581,7 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption, 
             .unwrap()
             .unwrap()
             .processed_count,
-        503
+        504
     );
     let report = import_body_with_lease(
         &pool,
@@ -609,7 +610,7 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption, 
             .unwrap()
             .unwrap()
             .total_count,
-        Some(1004)
+        Some(1005)
     );
     assert_eq!(
         jobs::status(&pool, org, id).await.unwrap().unwrap().status,

@@ -56,7 +56,8 @@ As a developer, I can register other bounded background workloads using the same
 - Queueing interactive CRUD mutations such as timers, time entries, or invoice transitions.
 - Adding Redis, RabbitMQ, or another runtime service.
 - Scheduled automatic Harvest synchronization.
-- Importing Harvest invoices, expenses, users, or teams.
+- Importing Harvest invoices, expenses, or teams. (Users were listed here until
+  [019](../019-harvest-import-people/spec.md) added people import.)
 - Guaranteeing exactly-once execution for external Harvest HTTP side effects.
 - Implementing every future job kind in this feature.
 

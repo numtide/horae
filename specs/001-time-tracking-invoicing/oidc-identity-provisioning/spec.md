@@ -272,6 +272,9 @@ ID next to its name, email, role and status.
   only when the validated token says the email is verified; a missing
   `email_verified` claim counts as unverified. The binding it creates MUST record
   the token's issuer. The email MUST NOT be used to resolve any other binding.
+  `oidc-auto-provisioning` adds account creation for identities that match no
+  account at all; it does not change this rule, and its trust setting for an absent
+  claim does not apply here.
 - **FR-011**: Linking MUST NOT create, end or alter sessions. Sessions belong to
   accounts, and every request still requires the account to be active (parent
   FR-002), so deactivation keeps revoking access and no blanket sign-out is added.

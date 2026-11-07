@@ -1,4 +1,5 @@
-//! Confirmed delivery of transactional project-created events to plugins.
+//! Confirmed delivery of transactional project-created and user-created events
+//! to plugins.
 
 use std::time::Duration;
 
@@ -7,6 +8,9 @@ use crate::{plugin::AppEvent, state::AppState};
 
 const DELIVERY_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// The outbox kinds this worker delivers to plugins.
+const KINDS: [&str; 2] = ["project_created", "user_created"];
+
 pub(crate) fn spawn(state: &AppState) -> Worker {
     let (stop, mut receiver) = tokio::sync::watch::channel(false);
     let state = state.clone();
@@ -14,15 +18,21 @@ pub(crate) fn spawn(state: &AppState) -> Worker {
         while !*receiver.borrow() && receiver.has_changed().is_ok() {
             // Finish a claim even during shutdown; dropping its SQL future can
             // leave a successfully assigned lease with no owning consumer.
-            match claim_outbox(&state.db, "project_created").await {
-                Ok(Some(event)) => {
-                    if let Err(error) = deliver(&state, &event).await {
-                        tracing::warn!(%error, event_id = %event.id, "project event delivery storage failed");
+            let mut delivered = false;
+            for kind in KINDS {
+                match claim_outbox(&state.db, kind).await {
+                    Ok(Some(event)) => {
+                        delivered = true;
+                        if let Err(error) = deliver(&state, &event).await {
+                            tracing::warn!(%error, event_id = %event.id, "plugin event delivery storage failed");
+                        }
                     }
-                    continue;
+                    Ok(None) => {}
+                    Err(error) => tracing::warn!(%error, kind, "plugin event poll failed"),
                 }
-                Ok(None) => {}
-                Err(error) => tracing::warn!(%error, "project event poll failed"),
+            }
+            if delivered {
+                continue;
             }
             tokio::select! {
                 _ = receiver.changed() => break,
@@ -31,6 +41,21 @@ pub(crate) fn spawn(state: &AppState) -> Worker {
         }
     });
     Worker { stop, task }
+}
+
+/// The deadline is shorter than the outbox lease. A cancelled or crashed
+/// consumer leaves the same event available after lease expiry.
+async fn confirm(
+    state: &AppState,
+    event: &AppEvent,
+    failed: &'static str,
+    timed_out: &'static str,
+) -> Option<&'static str> {
+    match tokio::time::timeout(DELIVERY_TIMEOUT, state.plugins.dispatch_confirmed(event)).await {
+        Ok(Ok(())) => None,
+        Ok(Err(_)) => Some(failed),
+        Err(_) => Some(timed_out),
+    }
 }
 
 async fn deliver(state: &AppState, event: &OutboxEvent) -> anyhow::Result<()> {
@@ -49,20 +74,30 @@ async fn deliver(state: &AppState, event: &OutboxEvent) -> anyhow::Result<()> {
         return Ok(());
     }
     let decoded = serde_json::from_value::<AppEvent>(event.payload.clone());
-    let failure = match decoded {
-        // The deadline is shorter than the outbox lease. A cancelled or crashed
-        // consumer leaves the same event available after lease expiry.
-        Ok(decoded @ AppEvent::ProjectCreated { org_id, .. })
-            if org_id == event.org_id && event.event_kind == "project_created" =>
+    let failure = match (decoded, event.event_kind.as_str()) {
+        (Ok(decoded @ AppEvent::ProjectCreated { org_id, .. }), "project_created")
+            if org_id == event.org_id =>
         {
-            match tokio::time::timeout(DELIVERY_TIMEOUT, state.plugins.dispatch_confirmed(&decoded))
-                .await
-            {
-                Ok(Ok(())) => None,
-                Ok(Err(_)) => Some("Project-created plugin delivery failed"),
-                Err(_) => Some("Project-created plugin delivery timed out"),
-            }
+            confirm(
+                state,
+                &decoded,
+                "Project-created plugin delivery failed",
+                "Project-created plugin delivery timed out",
+            )
+            .await
         }
+        (Ok(decoded @ AppEvent::UserCreated { org_id, .. }), "user_created")
+            if org_id == event.org_id =>
+        {
+            confirm(
+                state,
+                &decoded,
+                "User-created plugin delivery failed",
+                "User-created plugin delivery timed out",
+            )
+            .await
+        }
+        (_, "user_created") => Some("Invalid user-created event"),
         _ => Some("Invalid project-created event"),
     };
     // Never persist plugin error strings or malformed payloads: they may contain

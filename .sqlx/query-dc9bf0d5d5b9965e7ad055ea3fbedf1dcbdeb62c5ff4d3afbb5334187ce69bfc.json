@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.id AS \"id!\", r.email AS \"email!\"\n               FROM jsonb_populate_recordset(NULL::users, $1) r\n               WHERE r.org_id = $2 AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = r.id)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "dc9bf0d5d5b9965e7ad055ea3fbedf1dcbdeb62c5ff4d3afbb5334187ce69bfc"
+}

@@ -476,6 +476,7 @@ async fn result_copy_distinguishes_preview_zero_skipped_and_mixed_outcomes() {
                     &horae_core::importers::harvest::types::RowOutcome::Errored {
                         source_location: "row 2".into(),
                         reason: "Invalid date".into(),
+                        person: None,
                     },
                 );
             }
@@ -783,6 +784,7 @@ async fn archived_report_shows_total_errors_and_a_job_scoped_download() {
                 &RowOutcome::Errored {
                     source_location: format!("record {line}"),
                     reason: "invalid date".into(),
+                    person: None,
                 },
             );
         }

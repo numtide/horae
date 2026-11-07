@@ -7,7 +7,10 @@ pub use horae_core::importers::harvest::types::ImportReport;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use horae_core::importers::harvest::types::{EntityType, ImportMode, RowOutcome, SourceKind};
+    use horae_core::importers::harvest::types::{
+        EntityCounts, EntityType, ImportMode, PersonError, PersonErrorKind, PersonOutcome,
+        ReportPerson, RowOutcome, SourceKind,
+    };
 
     fn report() -> ImportReport {
         let mut report = ImportReport::new(SourceKind::Csv, ImportMode::Commit);
@@ -17,9 +20,72 @@ mod tests {
             &RowOutcome::Errored {
                 source_location: "record 2".into(),
                 reason: "invalid date".into(),
+                person: None,
             },
         );
         report
+    }
+
+    #[test]
+    fn reports_without_people_fields_still_load() {
+        let legacy = serde_json::json!({
+            "version": 1,
+            "source": "harvest_api",
+            "mode": "Commit",
+            "summary": {
+                "clients": {"created": 1, "updated": 0, "skipped": 0, "errored": 0},
+                "projects": {"created": 0, "updated": 0, "skipped": 0, "errored": 0},
+                "tasks": {"created": 0, "updated": 0, "skipped": 0, "errored": 0},
+                "time_entries": {"created": 0, "updated": 0, "skipped": 0, "errored": 1}
+            },
+            "row_errors": [{
+                "source_location": "time_entry 1",
+                "entity": "time_entry",
+                "reason": "no Horae user matches email \"a@b.c\""
+            }]
+        });
+        let report: ImportReport = serde_json::from_value(legacy).unwrap();
+        assert_eq!(report.summary.people, EntityCounts::default());
+        assert!(report.people.is_empty());
+        assert_eq!(report.row_errors[0].person, None);
+        assert!(report.reconciles());
+    }
+
+    #[test]
+    fn person_details_round_trip_and_reconcile() {
+        let mut report = ImportReport::new(SourceKind::HarvestApi, ImportMode::Commit);
+        report.record(EntityType::Person, &RowOutcome::Created);
+        report.record(
+            EntityType::Person,
+            &RowOutcome::Errored {
+                source_location: "person 7".into(),
+                reason: "Harvest person has no email".into(),
+                person: Some(PersonError {
+                    kind: PersonErrorKind::MissingEmail,
+                    email: None,
+                    name: Some("No Mail".into()),
+                }),
+            },
+        );
+        report.people.push(ReportPerson {
+            harvest_id: Some(6),
+            horae_id: uuid::Uuid::nil(),
+            email: Some("dana@example.com".into()),
+            name: "Dana Dev".into(),
+            outcome: PersonOutcome::Created,
+            harvest_active: Some(false),
+        });
+        assert!(report.reconciles());
+        let encoded = serde_json::to_value(&report).unwrap();
+        assert_eq!(encoded["summary"]["people"]["created"], 1);
+        assert_eq!(encoded["row_errors"][0]["entity"], "person");
+        assert_eq!(encoded["row_errors"][0]["person"]["kind"], "missing_email");
+        assert!(encoded["row_errors"][0]["person"].get("email").is_none());
+        assert_eq!(encoded["people"][0]["outcome"], "created");
+        assert_eq!(
+            serde_json::from_value::<ImportReport>(encoded).unwrap(),
+            report
+        );
     }
 
     #[test]

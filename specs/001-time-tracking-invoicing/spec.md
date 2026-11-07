@@ -109,8 +109,8 @@ An operator drops a sandboxed plugin into the deployment to react to business ev
 
 **Access & accounts**
 
-- **FR-001**: The system MUST require users to authenticate before accessing any data, and MUST restrict actions by role (administrator, manager, member).
-- **FR-002**: Administrators MUST be able to create user accounts, assign roles, and deactivate accounts; deactivated users MUST be unable to sign in.
+- **FR-001**: The system MUST require users to authenticate before accessing any data, and MUST restrict actions by role (administrator, manager, member). A sign-in refused because of the account (none, deactivated, or not eligible for automatic creation) MUST tell the person why on the sign-in page (see `oidc-auto-provisioning`).
+- **FR-002**: Administrators MUST be able to create user accounts, assign roles, and deactivate accounts; deactivated users MUST be unable to sign in. When the operator enables automatic provisioning for an email domain, a first sign-in with an eligible email in that domain MAY also create an active member account (see `oidc-auto-provisioning`); signing in never re-creates or reactivates an account.
 
 **Time tracking**
 

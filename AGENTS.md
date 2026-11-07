@@ -127,7 +127,7 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 
 **Shared state**: `state.rs` holds a global `AppState` in a `OnceCell`, initialized once at startup with the `PgPool`; server fns and auth read from it. The pool is created and migrations applied eagerly on `serve`.
 
-**Auth**: production uses OIDC (`openidconnect`); `DEV_LOGIN=1` enables a one-click admin login that bypasses OIDC (see `auth/`). Sessions are cookie-based, persisted in Postgres.
+**Auth**: production uses OIDC (`openidconnect`); `DEV_LOGIN=1` enables a one-click admin login that bypasses OIDC (see `auth/`). Sessions are cookie-based, persisted in Postgres. A refused sign-in leaves a one-time notice in the session for `/auth/login`. `HORAE_OIDC_AUTO_PROVISION_DOMAINS` lets a first sign-in create an active member account (the Principle IV sign-in exception); `HORAE_OIDC_TRUST_UNVERIFIED_EMAIL` accepts a missing `email_verified` claim for that only.
 
 ## Domain invariants (from the Horae Constitution — do not violate)
 

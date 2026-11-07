@@ -63,11 +63,23 @@ pub struct ApiTask {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiUser {
     pub id: i64,
-    pub email: String,
+    /// Missing on some records; such a person is reported, never guessed.
+    #[serde(default)]
+    pub email: Option<String>,
     #[serde(default)]
     pub first_name: String,
     #[serde(default)]
     pub last_name: String,
+    #[serde(default = "yes")]
+    pub is_active: bool,
+}
+
+impl ApiUser {
+    pub fn full_name(&self) -> String {
+        format!("{} {}", self.first_name, self.last_name)
+            .trim()
+            .to_string()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -213,12 +225,8 @@ impl<'a> RowLookup<'a> {
                 .unwrap_or_default(),
             task_billable_default: task.map(|t| t.billable_by_default).unwrap_or(true),
 
-            user_email: user.map(|u| u.email.clone()),
-            user_name: user.map(|u| {
-                format!("{} {}", u.first_name, u.last_name)
-                    .trim()
-                    .to_string()
-            }),
+            user_email: user.and_then(|u| u.email.clone()),
+            user_name: user.map(|u| u.full_name()),
 
             spent_date: te.spent_date,
             hours: decimal(&te.hours),

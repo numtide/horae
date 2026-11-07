@@ -50,7 +50,9 @@ pkgs.runCommand "horae-oci-image-check"
   # Extraction applies the umask, so read the mode from the layer itself.
   for layer in $(jq -r '.layers[].digest' manifest.json); do
     blob "$layer" | tar -tvz
-  done | grep -Eq '^drwxrwxrwt .* \./tmp/?$'
+  # Not `grep -q`: it exits on the first match, so tar dies writing to a closed
+  # pipe and pipefail fails the check whenever the match comes early.
+  done | grep -E '^drwxrwxrwt .* \./tmp/?$' >/dev/null
   # No shell, and no data or secrets baked in.
   test ! -e rootfs/bin/sh
   test -z "$(ls -A rootfs/var 2>/dev/null | grep -v '^empty$' || true)"

@@ -1,10 +1,12 @@
 use super::*;
 use chrono::{DateTime, TimeZone};
+use horae_core::importers::harvest::types::PersonErrorKind;
 use serde_json::json;
 
 mod archived_clients;
 mod checkpoints;
 mod paging;
+pub(super) mod people;
 mod scale;
 
 /// Drive a CLI-submitted durable job through the production API adapter using
@@ -195,17 +197,22 @@ fn day(day: u32) -> DateTime<Utc> {
 async fn api_requires_email_even_when_full_name_matches(pool: PgPool) {
     let org = setup(&pool).await;
     let mut source = valid_data();
-    source.users[0].email.clear();
+    source.users[0].email = None;
     source.users[0].first_name = "Sync".into();
     source.users[0].last_name = "User".into();
     let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
         .await
         .unwrap();
+    assert_eq!(report.summary.people.errored, 1);
     assert_eq!(report.summary.time_entries.errored, 1);
     assert_eq!(report.summary.time_entries.created, 0);
-    assert!(report.row_errors[0].reason.contains("no user email"));
+    assert!(report.row_errors[0].reason.contains("has no email"));
+    assert_eq!(
+        report.row_errors[1].person.as_ref().unwrap().kind,
+        PersonErrorKind::PersonNotImported
+    );
     assert_eq!(watermark(&pool, org).await, json!({}));
-    source.users[0].email = "known@example.com".into();
+    source.users[0].email = Some("known@example.com".into());
     let retry = apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
         .await
         .unwrap();
@@ -221,7 +228,12 @@ async fn api_rejects_ambiguous_email_without_advancing_watermark(pool: PgPool) {
         .unwrap();
     assert_eq!(report.summary.time_entries.errored, 1);
     assert_eq!(report.summary.time_entries.created, 0);
-    assert!(report.row_errors[0].reason.contains("ambiguous user email"));
+    assert!(
+        report.row_errors[0]
+            .reason
+            .contains("ambiguous person email")
+    );
+    assert_eq!(report.summary.people.errored, 1);
     assert_eq!(watermark(&pool, org).await, json!({}));
 }
 
@@ -653,11 +665,8 @@ fn data() -> HarvestData {
         projects: serde_json::from_value(json!([{"id":2,"name":"Project","client":{"id":1}}]))
             .unwrap(),
         tasks: serde_json::from_value(json!([{"id":3,"name":"Task"}])).unwrap(),
-        users: serde_json::from_value(json!([
-            {"id":4,"email":"known@example.com"},
-            {"id":5,"email":"missing@example.com"}
-        ]))
-        .unwrap(),
+        // Entry 11's person is missing from the catalog, so it cannot import.
+        users: serde_json::from_value(json!([{"id":4,"email":"known@example.com"}])).unwrap(),
         time_entries: serde_json::from_value(json!([
             {"id":10,"spent_date":"2026-01-01","hours":1,"project":{"id":2},
              "task":{"id":3},"user":{"id":4},"updated_at":day(3)},
@@ -666,6 +675,11 @@ fn data() -> HarvestData {
         ]))
         .unwrap(),
     }
+}
+
+/// Entry 11's person, once Harvest lists them.
+fn missing_person() -> api_source::ApiUser {
+    serde_json::from_value(json!({"id":5,"email":"missing@example.com"})).unwrap()
 }
 
 fn valid_data() -> HarvestData {
@@ -691,8 +705,8 @@ async fn failed_rows_are_available_to_the_next_incremental_retry(pool: PgPool) {
         Some(day(1))
     );
 
-    add_user(&pool, org, "missing@example.com").await;
     let mut retry = data();
+    retry.users.push(missing_person());
     let since = connection.watermark_for(EntityType::TimeEntry).unwrap();
     retry
         .time_entries
@@ -797,11 +811,11 @@ async fn watermark_never_passes_the_start_of_capture(pool: PgPool) {
 #[sqlx::test(migrations = "./migrations")]
 async fn missing_source_timestamp_keeps_the_previous_watermark(pool: PgPool) {
     let org = setup(&pool).await;
-    add_user(&pool, org, "missing@example.com").await;
     credentials::advance_watermark(&pool, org, &[(EntityType::TimeEntry, day(1))])
         .await
         .unwrap();
     let mut data = data();
+    data.users.push(missing_person());
     data.time_entries[1].updated_at = None;
     let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &data, day(4))
         .await

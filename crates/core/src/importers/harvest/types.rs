@@ -11,31 +11,34 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
-/// The four Harvest/Horae entity levels the importer creates, in FK-safe order.
+/// The five Harvest/Horae entity levels the importer creates, in FK-safe order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EntityType {
     Client,
     Project,
     Task,
+    Person,
     TimeEntry,
 }
 
 impl EntityType {
-    pub const ALL: [EntityType; 4] = [
+    pub const ALL: [EntityType; 5] = [
         EntityType::Client,
         EntityType::Project,
         EntityType::Task,
+        EntityType::Person,
         EntityType::TimeEntry,
     ];
 
     /// The lowercase token used in the `harvest_import_map.harvest_entity_type`
-    /// enum column (`client|project|task|time_entry`).
+    /// enum column (`client|project|task|person|time_entry`).
     pub fn as_str(self) -> &'static str {
         match self {
             EntityType::Client => "client",
             EntityType::Project => "project",
             EntityType::Task => "task",
+            EntityType::Person => "person",
             EntityType::TimeEntry => "time_entry",
         }
     }
@@ -106,7 +109,7 @@ pub struct SourceRow {
     pub task_billable_default: bool,
 
     // Person — resolved by unique email; CSV alone permits a unique full-name
-    // fallback when email is absent. Neither source creates users (FR-010).
+    // fallback when email is absent. Only an email can create an account.
     pub user_email: Option<String>,
     pub user_name: Option<String>,
 
@@ -148,7 +151,63 @@ pub enum RowOutcome {
     Errored {
         source_location: String,
         reason: String,
+        /// Set when the failure concerns a person, so reports can group it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        person: Option<PersonError>,
     },
+}
+
+/// Why a record failed because of its person, and who that person is.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersonError {
+    pub kind: PersonErrorKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PersonErrorKind {
+    /// No Horae account has the email.
+    UnmatchedEmail,
+    /// No single Horae account has the name (CSV rows without an email).
+    UnmatchedName,
+    /// More than one Horae account matches.
+    AmbiguousPerson,
+    /// The Harvest person has no email.
+    MissingEmail,
+    /// Another Harvest person in the same account has the same email.
+    DuplicateEmail,
+    /// The entry's Harvest person failed to import earlier in the run.
+    PersonNotImported,
+    /// An account the import cannot use, such as one in another workspace,
+    /// already has the email.
+    EmailInUse,
+}
+
+/// A Harvest person the run linked to a Horae account.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReportPerson {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harvest_id: Option<i64>,
+    pub horae_id: uuid::Uuid,
+    /// Absent only for a CSV person matched by name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    pub name: String,
+    pub outcome: PersonOutcome,
+    /// Harvest's own active flag, for the administrator; never applied.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harvest_active: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PersonOutcome {
+    Created,
+    Matched,
 }
 
 /// Per-entity-type counts. Invariant: `processed = created + updated + skipped +
@@ -177,12 +236,15 @@ impl EntityCounts {
     }
 }
 
-/// Counts for each of the four entity types.
+/// Counts for each of the five entity types.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImportSummary {
     pub clients: EntityCounts,
     pub projects: EntityCounts,
     pub tasks: EntityCounts,
+    /// Absent from reports written before people were imported.
+    #[serde(default)]
+    pub people: EntityCounts,
     pub time_entries: EntityCounts,
 }
 
@@ -193,6 +255,7 @@ impl ImportSummary {
             EntityType::Client => &mut self.clients,
             EntityType::Project => &mut self.projects,
             EntityType::Task => &mut self.tasks,
+            EntityType::Person => &mut self.people,
             EntityType::TimeEntry => &mut self.time_entries,
         }
     }
@@ -202,6 +265,7 @@ impl ImportSummary {
             EntityType::Client => &self.clients,
             EntityType::Project => &self.projects,
             EntityType::Task => &self.tasks,
+            EntityType::Person => &self.people,
             EntityType::TimeEntry => &self.time_entries,
         }
     }
@@ -281,6 +345,8 @@ pub struct RowError {
     pub source_location: String,
     pub entity: EntityType,
     pub reason: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub person: Option<PersonError>,
 }
 
 /// The result of an import run, returned by every surface (server fn + CLI). A
@@ -294,6 +360,10 @@ pub struct ImportReport {
     pub mode: ImportMode,
     pub summary: ImportSummary,
     pub row_errors: Vec<RowError>,
+    /// One row per Harvest person the run resolved; bounded by the people in
+    /// the source, not by its entries.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub people: Vec<ReportPerson>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error_archive: Option<ErrorArchive>,
 }
@@ -312,6 +382,8 @@ struct ImportReportWire {
     mode: ImportMode,
     summary: ImportSummary,
     row_errors: Vec<RowError>,
+    #[serde(default)]
+    people: Vec<ReportPerson>,
     error_archive: Option<ErrorArchive>,
 }
 
@@ -337,6 +409,7 @@ impl TryFrom<ImportReportWire> for ImportReport {
             mode: wire.mode,
             summary: wire.summary,
             row_errors: wire.row_errors,
+            people: wire.people,
             error_archive: wire.error_archive,
         };
         if !report.reconciles() {
@@ -354,6 +427,7 @@ impl ImportReport {
             mode,
             summary: ImportSummary::default(),
             row_errors: Vec::new(),
+            people: Vec::new(),
             error_archive: None,
         }
     }
@@ -365,12 +439,14 @@ impl ImportReport {
         if let RowOutcome::Errored {
             source_location,
             reason,
+            person,
         } = outcome
         {
             self.row_errors.push(RowError {
                 source_location: source_location.clone(),
                 entity,
                 reason: reason.clone(),
+                person: person.clone(),
             });
         }
     }
@@ -440,6 +516,7 @@ mod tests {
         let error = RowOutcome::Errored {
             source_location: "record 1".into(),
             reason: "invalid date".into(),
+            person: None,
         };
         report.record(EntityType::TimeEntry, &error);
         let summary = report.summary;
@@ -475,6 +552,7 @@ mod tests {
             RowOutcome::Errored {
                 source_location: format!("{}:1", entity.as_str()),
                 reason: "bad row".into(),
+                person: None,
             },
         )
     }

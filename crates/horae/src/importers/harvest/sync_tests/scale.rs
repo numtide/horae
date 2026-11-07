@@ -92,9 +92,8 @@ fn scale_server_with_error_interval(records: u64, invalid_every: u64) -> Server 
             "clients" => json!([{"id":1,"name":"Client","currency":"USD"}]),
             "projects" => json!([{"id":2,"name":"Project","client":{"id":1}}]),
             "tasks" => json!([{"id":3,"name":"Task"}]),
-            "users" => {
-                json!([{"id":4,"email":"known@example.com"},{"id":5,"email":"missing@example.com"}])
-            }
+            // Person 5 is not listed, so each of their entries is an error.
+            "users" => json!([{"id":4,"email":"known@example.com"}]),
             "time_entries" => json!(
                 (offset..(offset + 100).min(records))
                     .map(|n| {
@@ -189,7 +188,7 @@ async fn measured_apply(
         report
             .row_errors
             .iter()
-            .all(|e| e.reason.contains("no Horae user matches email"))
+            .all(|e| e.reason.contains("no user email"))
     );
     report
 }

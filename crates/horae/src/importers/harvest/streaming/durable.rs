@@ -13,7 +13,7 @@ use super::super::api_source::{
     ApiClient, ApiProject, ApiSource, ApiTask, ApiTimeEntry, ApiUser, HarvestData, RowLookup,
 };
 use super::super::report::ImportReport;
-use super::super::resolve::{OrgDefaults, RunCache};
+use super::super::resolve::{OrgDefaults, RunCache, preview::forget_lost_people};
 use super::super::{apply_rows, credentials, parents};
 use super::{IncompleteDownload, Page, Settings, begin_transaction};
 use crate::jobs::JobLease;
@@ -89,7 +89,10 @@ pub(super) struct Checkpoint {
 
 impl Checkpoint {
     fn parent_count(&self) -> usize {
-        self.catalog.clients.len() + self.catalog.projects.len() + self.catalog.tasks.len()
+        self.catalog.clients.len()
+            + self.catalog.projects.len()
+            + self.catalog.tasks.len()
+            + self.catalog.users.len()
     }
 
     async fn save(
@@ -354,7 +357,8 @@ pub(super) async fn apply(
         let mut tx = begin_transaction(connection, org_id).await?;
         let mut batch = tx.begin().await?;
         if let Some(preview) = &checkpoint.preview {
-            preview.restore(&mut batch, org_id, &[]).await?;
+            let lost = preview.restore(&mut batch, org_id, &[]).await?;
+            forget_lost_people(&mut checkpoint.cache, &mut checkpoint.report, lost);
         }
         parents::apply_batch(
             &mut batch,
@@ -408,7 +412,8 @@ pub(super) async fn apply(
                 let mut tx = begin_transaction(connection, org_id).await?;
                 let mut simulation = tx.begin().await?;
                 if let Some(preview) = &checkpoint.preview {
-                    preview.restore(&mut simulation, org_id, &page_ids).await?;
+                    let lost = preview.restore(&mut simulation, org_id, &page_ids).await?;
+                    forget_lost_people(&mut checkpoint.cache, &mut checkpoint.report, lost);
                 }
                 apply_rows(
                     &mut simulation,
