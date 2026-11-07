@@ -86,6 +86,51 @@ pub(super) async fn retry(
     Ok(result)
 }
 
+pub(super) async fn commit_preview(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+    preview_id: Uuid,
+    policy: JobPolicy,
+) -> Result<JobStatus, ServerFnError> {
+    let mut tx = begin_access(pool, org_id, actor_id).await?;
+    let id = jobs::commit_preview_in(&mut tx, org_id, preview_id, policy, actor_id)
+        .await
+        .map_err(map_enqueue_error)?
+        .ok_or_else(|| err(NOT_FOUND, "Import job not found"))?;
+    let result = required_job(&mut tx, org_id, id).await?;
+    tx.commit().await.map_err(server_err)?;
+    Ok(result)
+}
+
+pub(super) async fn error_summary(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+    id: Uuid,
+) -> Result<crate::models::ErrorSummary, ServerFnError> {
+    // Read-only, over a report that no longer changes once the run ends: it
+    // skips the organization lock, so it never queues behind an import or an
+    // access change, and every read below is scoped by `org_id`.
+    let mut connection = pool.acquire().await.map_err(server_err)?;
+    let admin = sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM users
+             WHERE id = $1 AND org_id = $2 AND active AND org_role = 'admin') AS "admin!""#,
+        actor_id,
+        org_id,
+    )
+    .fetch_one(&mut *connection)
+    .await
+    .map_err(server_err)?;
+    if !admin {
+        return Err(forbidden("Active administrator access required"));
+    }
+    jobs::report::summarize(&mut connection, org_id, id)
+        .await
+        .map_err(server_err)?
+        .ok_or_else(|| err(NOT_FOUND, "Import job not found"))
+}
+
 pub(super) async fn status(
     pool: &PgPool,
     org_id: Uuid,

@@ -63,8 +63,8 @@
 
 ### Tests (write first)
 
-- [ ] T017 [P] [US2] Pure `summarize` fold tests: lines split across chunks, groups by kind or reason, people counts, caps
-- [ ] T018 [P] [US2] Server fn tests:
+- [x] T017 [P] [US2] Pure `summarize` fold tests: lines split across chunks, groups by kind or reason, people counts, caps
+- [x] T018 [P] [US2] Server fn tests:
   - `harvest_import_error_summary`: admin only, scoped to the org;
   - `commit_harvest_import_preview`:
     - an API preview with the same account generation commits, and a changed generation is refused;
@@ -74,18 +74,18 @@
     - a non-admin is refused;
   - `add_harvest_people`: deactivated by default, active on request, a duplicate refused, events emitted, non-admin refused;
   - `JobStatus.mode/source` read from the payload.
-- [ ] T019 [P] [US2] Route parse tests for each URL and `matches_navigation`; SSR tests in `detail_navigation*` and `admin_shell.rs`
-- [ ] T020 [P] [US2] Browser `crates/horae/tests/browser/harvest-section.cjs`; `importers.cjs` updated; no planned-source assertions
+- [x] T019 [P] [US2] Route parse tests for each URL and `matches_navigation`; SSR tests in `detail_navigation*` and `admin_shell.rs`
+- [x] T020 [P] [US2] Browser `crates/horae/tests/browser/harvest-section.cjs`; `importers.cjs` updated; no planned-source assertions
 
 ### Implementation
 
-- [ ] T021 [US2] `jobs/report.rs` `summarize` + `harvest_import_error_summary`
-- [ ] T022 [US2] `commit_harvest_import_preview` and `JobStatus` fields
-- [ ] T023 [US2] `insert_user` gains `active`; `add_harvest_people(people, Activation)`
-- [ ] T024 [US2] Routes in `route.rs`; OAuth callback redirects to `/admin/importers/harvest`
-- [ ] T025 [US2] Pages under `pages/importers/harvest/`, one component per file; remove the monolithic `HarvestImport`
-- [ ] T026 [US2] Index lists Harvest API and Harvest CSV only; remove `PlannedSource` (Toggl Track, Clockify) and the component if unused
-- [ ] T027 [US2] Dioxus lint baseline, screenshots, gates
+- [x] T021 [US2] `jobs/report.rs` `summarize` + `harvest_import_error_summary`
+- [x] T022 [US2] `commit_harvest_import_preview` and `JobStatus` fields
+- [x] T023 [US2] `insert_user` gains `active`; `add_harvest_people(people, Activation)`
+- [x] T024 [US2] Routes in `route.rs`; OAuth callback redirects to `/admin/importers/harvest`
+- [x] T025 [US2] Pages under `pages/importers/harvest/`, one component per file; remove the monolithic `HarvestImport`
+- [x] T026 [US2] Index lists Harvest API and Harvest CSV only; remove `PlannedSource` (Toggl Track, Clockify) and the component if unused
+- [x] T027 [US2] Dioxus lint baseline, screenshots, gates
 
 ## Dependencies
 

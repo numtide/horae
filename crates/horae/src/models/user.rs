@@ -37,6 +37,45 @@ pub struct UserListItem {
     pub active: bool,
 }
 
+/// A person to add as a member: an email and a display name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NewPerson {
+    pub email: String,
+    pub name: String,
+}
+
+impl NewPerson {
+    /// Trimmed fields, the email standing in for a blank name. `None` when
+    /// there is no usable email.
+    #[cfg(feature = "server")]
+    pub fn normalized(self) -> Option<Self> {
+        let email = self.email.trim();
+        if email.is_empty() || !email.contains('@') {
+            return None;
+        }
+        let name = self.name.trim();
+        Some(Self {
+            email: email.to_owned(),
+            name: if name.is_empty() { email } else { name }.to_owned(),
+        })
+    }
+}
+
+/// The outcome of adding several people: the accounts created, and the
+/// emails that already had one and were left alone.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AddedPeople {
+    pub added: Vec<User>,
+    pub present: Vec<String>,
+}
+
+/// Whether a new account can sign in straight away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Activation {
+    Active,
+    Deactivated,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct User {

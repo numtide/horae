@@ -189,7 +189,7 @@ mod route {
         #[route("/projects/:id")]
         ProjectDetail { id: Uuid },
         #[route("/admin/importers")]
-        HarvestImport {},
+        ImporterIndex {},
     }
 
     #[component]
@@ -209,7 +209,7 @@ mod route {
     }
 
     #[component]
-    fn HarvestImport() -> Element {
+    fn ImporterIndex() -> Element {
         rsx! { h1 { "Importers" } }
     }
 
@@ -540,7 +540,7 @@ async fn empty_project_list_links_to_the_importer_route() {
 
     let navigator = probe.navigator.borrow().unwrap();
     dom.in_scope(probe.scope.borrow().unwrap(), || {
-        navigator.push(route::Route::HarvestImport {})
+        navigator.push(route::Route::ImporterIndex {})
     });
     settle(&mut dom);
     assert!(dioxus::ssr::render(&dom).contains("Importers"));

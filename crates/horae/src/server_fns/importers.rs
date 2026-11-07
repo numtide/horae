@@ -286,6 +286,27 @@ pub async fn start_harvest_csv_import(
     .await
 }
 
+/// Commit a finished preview from its run page, with the preview's own input.
+/// Repeating the request returns the same commit job.
+#[dioxus_fullstack::post("/api/import/harvest/commit-preview")]
+pub async fn commit_harvest_import_preview(
+    job_id: uuid::Uuid,
+) -> Result<crate::models::JobStatus, ServerFnError> {
+    let admin = require_admin().await?;
+    let state = crate::state::global_state().await;
+    commands::commit_preview(&state.db, admin.org_id, admin.id, job_id, state.job_policy).await
+}
+
+/// A finished run's errors grouped by problem, and the people behind them.
+#[dioxus_fullstack::post("/api/import/harvest/error-summary")]
+pub async fn harvest_import_error_summary(
+    job_id: uuid::Uuid,
+) -> Result<crate::models::ErrorSummary, ServerFnError> {
+    let admin = require_admin().await?;
+    let state = crate::state::global_state().await;
+    commands::error_summary(&state.db, admin.org_id, admin.id, job_id).await
+}
+
 #[dioxus_fullstack::post("/api/import/harvest/cancel")]
 pub async fn cancel_harvest_import_job(
     job_id: uuid::Uuid,
@@ -357,6 +378,8 @@ fn map_enqueue_error(error: anyhow::Error) -> ServerFnError {
             CONFLICT
         };
         err(code, policy)
+    } else if let Some(refused) = error.downcast_ref::<crate::jobs::CommitRefused>() {
+        err(CONFLICT, refused)
     } else if error.is::<crate::jobs::RequestConflict>() {
         err(
             CONFLICT,

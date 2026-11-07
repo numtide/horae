@@ -117,7 +117,8 @@
   `pg_advisory_xact_lock(hashtextextended('horae.signup-email:' || lower(email), 0))`, the key
   sign-in provisioning (PR #340) uses. It then checks again for any account with that email
   ignoring case: the same workspace is matched, anything else is `email_in_use`. A unique
-  violation maps to `email_in_use` too. Follow-up: once #340 lands, share its helper.
+  violation maps to `email_in_use` too. Every account-creating path (sign-in provisioning, the CLI,
+  People, the importer) now takes it through one helper, `db::lock_new_user_email`.
 - **READ COMMITTED imports**: `begin_import_transaction` sets READ COMMITTED first. Under a
   REPEATABLE READ connection default the snapshot would predate the lock wait, so the recheck
   would miss an account committed meanwhile. Nothing in the import relies on a snapshot spanning
@@ -125,6 +126,25 @@
 - **Lost preview people**: `ParentSnapshot::restore` returns the simulated people it could not
   restore, including when the real account's email differs only in case. They are removed from the run cache and reported once as `email_in_use`.
 - **CSV people count once** per account, tracked in the run cache.
+
+## R-11 PR B review fixes (2026-11-07)
+
+- **Adding people is not all or nothing on existing emails**: `add_harvest_people` leaves an email
+  any account already uses (checked under its lock, ignoring case) and reports it as present, so
+  "Add all as deactivated" after a reload or from a second tab adds the rest. An email listed twice
+  in one request, compared as `trim` + lowercase like the server, is still refused. Adding one
+  person from People still refuses an email in use.
+- **What replaces a preview**: only a later run of the same source that has not failed or been
+  cancelled, and is not the preview's own commit. A committed preview says so and links to its
+  commit (`JobStatus.committed_as`, `CommitAvailability::Committed`).
+- **Run pages re-read the run** after every action and whenever the tab or window is shown again,
+  one status read each, so a finished run's commit and retry offers stay current.
+- **The error summary takes no organization lock**: it checks the administrator and scopes every
+  read by `org_id`, so it never queues behind a running import or an access change. Adding people
+  still takes the access-change lock, like adding a person from People.
+- **Known gap, accepted**: starting a new preview does not lock an older preview's row, so a new
+  preview can be created while the old one is being committed. The commit then still runs; the new
+  preview reports the commit as a newer run.
 
 ## R-9 US2 design (adopted)
 

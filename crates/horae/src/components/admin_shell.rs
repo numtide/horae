@@ -92,7 +92,7 @@ pub(crate) fn first_admin_route(
     [
         (access.people, Route::AdminUsers {}),
         (access.tasks, Route::TaskCatalog {}),
-        (access.importers, Route::HarvestImport {}),
+        (access.importers, Route::ImporterIndex {}),
         (access.audit, Route::PermissionAudit {}),
     ]
     .into_iter()
@@ -209,7 +209,7 @@ fn AdminWorkspace(access: WorkspaceAccess) -> Element {
                     if access.importers || access.audit {
                         div { class: "adm-group-label", "Data" }
                         nav { class: "flex flex-col gap-1 mb-5",
-                            if access.importers { AdmLink { to: Route::HarvestImport {}, label: "Importers" } }
+                            if access.importers { AdmLink { to: Route::ImporterIndex {}, label: "Importers" } }
                             if access.audit { AdmLink { to: Route::PermissionAudit {}, label: "Audit log" } }
                         }
                     }

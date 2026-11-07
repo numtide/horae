@@ -180,7 +180,7 @@ pub fn ClientList() -> Element {
                         }
                     }
                     if can_import {
-                        Link { to: Route::HarvestImport {}, class: "btn btn-secondary", "Import" }
+                        Link { to: Route::ImporterIndex {}, class: "btn btn-secondary", "Import" }
                     }
                     input {
                         class: "form-input client-search w-form-select max-w-full",
@@ -274,7 +274,7 @@ pub fn ClientList() -> Element {
                                     button { class: "btn btn-primary", onclick: move |_| { reset_form(); show_form.set(true); }, "New client" }
                                 }
                                 if can_import {
-                                    Link { to: Route::HarvestImport {}, class: "btn btn-secondary", "Import from Harvest" }
+                                    Link { to: Route::ImporterIndex {}, class: "btn btn-secondary", "Import from Harvest" }
                                 }
                             }
                         } else {

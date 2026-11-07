@@ -106,20 +106,20 @@ pub(crate) async fn lock_organization(
 /// order is always organization, then email. The transaction must be READ
 /// COMMITTED, so the check sees accounts committed while the lock was awaited.
 pub async fn lock_new_user_email(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    conn: &mut sqlx::PgConnection,
     email: &str,
 ) -> Result<bool, sqlx::Error> {
     sqlx::query!(
         r#"SELECT pg_advisory_xact_lock(hashtextextended('horae.signup-email:' || lower($1), 0)) as "lock!: ()""#,
         email,
     )
-    .execute(&mut **tx)
+    .execute(&mut *conn)
     .await?;
     sqlx::query_scalar!(
         r#"SELECT EXISTS(SELECT 1 FROM users WHERE lower(email) = lower($1)) as "held!""#,
         email,
     )
-    .fetch_one(&mut **tx)
+    .fetch_one(conn)
     .await
 }
 
@@ -134,23 +134,6 @@ pub async fn lock_time_entry_write(
         r#"SELECT pg_advisory_xact_lock_shared(hashtextextended('horae.timesheet:' || $1::uuid::text, 0)) as "lock!: ()""#,
         user_id,
     ).execute(&mut **tx).await?;
-    Ok(())
-}
-
-/// Serialize account creation for one email, ignoring case, until the
-/// transaction ends. Account emails are unique only case-sensitively, so a
-/// creator checks for an existing account under this lock. Sign-in provisioning
-/// takes the same key, so every way of creating an account shares it.
-pub async fn lock_user_email(
-    conn: &mut sqlx::PgConnection,
-    email: &str,
-) -> Result<(), sqlx::Error> {
-    sqlx::query!(
-        r#"SELECT pg_advisory_xact_lock(hashtextextended('horae.signup-email:' || lower($1), 0)) as "lock!: ()""#,
-        email,
-    )
-    .execute(conn)
-    .await?;
     Ok(())
 }
 

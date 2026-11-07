@@ -6,15 +6,18 @@ use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 
 use dioxus::core::{AttributeValue, ElementId, Mutation};
+use dioxus::history::MemoryHistory;
 use dioxus::html::{FileData, SerializedFileData, SerializedFormObject};
 use dioxus::prelude::*;
+use dioxus::router::components::HistoryProvider;
 use dioxus_html::SerializedHtmlEventConverter;
 use futures_util::FutureExt;
 use horae_core::importers::harvest::client::{
     ClientSettings, ClientSource, DISCONNECT_UNCONFIRMED,
 };
 use horae_core::importers::harvest::types::{
-    ConnectionStatus, ImportMode, ImportReport, SourceKind, SyncScope,
+    ConnectionStatus, EntityType, ImportMode, ImportReport, PersonErrorKind, RowOutcome,
+    SourceKind, SyncScope,
 };
 use tokio::sync::oneshot;
 use uuid::Uuid;
@@ -23,14 +26,62 @@ use uuid::Uuid;
 mod importers;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
-#[path = "../src/models/jobs.rs"]
-mod models;
-#[path = "../src/components/toast.rs"]
-pub mod toast;
+
+mod models {
+    include!("../src/models/jobs.rs");
+
+    pub mod user {
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct NewPerson {
+            pub email: String,
+            pub name: String,
+        }
+
+        #[derive(Debug, Clone, Copy, PartialEq)]
+        pub enum Activation {
+            Active,
+            Deactivated,
+        }
+
+        pub struct User {
+            pub email: String,
+        }
+
+        pub struct AddedPeople {
+            pub added: Vec<User>,
+            pub present: Vec<String>,
+        }
+    }
+}
 
 mod components {
     pub use crate::modal;
-    pub use crate::toast;
+}
+
+/// The importer routes, as the app declares them.
+mod route {
+    use crate::importers::{
+        HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns, ImporterIndex,
+        RunsCursor,
+    };
+    use dioxus::prelude::*;
+    use uuid::Uuid;
+
+    #[derive(Routable, Clone, PartialEq)]
+    pub enum Route {
+        #[route("/admin/importers")]
+        ImporterIndex {},
+        #[route("/admin/importers/harvest")]
+        HarvestOverview {},
+        #[route("/admin/importers/harvest/oauth")]
+        HarvestOAuth {},
+        #[route("/admin/importers/harvest/csv")]
+        HarvestCsv {},
+        #[route("/admin/importers/harvest/runs?:..before")]
+        HarvestRuns { before: RunsCursor },
+        #[route("/admin/importers/harvest/runs/:id")]
+        HarvestRun { id: Uuid },
+    }
 }
 
 type JobResponse = Result<Option<models::JobStatus>, ServerFnError>;
@@ -40,6 +91,7 @@ type ConnectionResponse = oneshot::Receiver<Result<ConnectionStatus, ServerFnErr
 type ConnectResponse = oneshot::Receiver<Result<String, ServerFnError>>;
 type ApiSubmission = (ImportMode, SyncScope, Option<i64>);
 type ClientSave = (String, Option<String>, String, bool);
+type Additions = Vec<(Vec<models::user::NewPerson>, models::user::Activation)>;
 
 #[derive(Clone, Default)]
 struct Probe {
@@ -58,9 +110,16 @@ struct Probe {
     history_cursors: Rc<RefCell<Vec<Option<Uuid>>>>,
     retries: Rc<RefCell<Vec<Uuid>>>,
     cancellations: Rc<RefCell<Vec<Uuid>>>,
+    commits: Rc<RefCell<Vec<Uuid>>>,
     csv_submissions: Rc<RefCell<Vec<(ImportMode, String)>>>,
     api_submissions: Rc<RefCell<Vec<ApiSubmission>>>,
     action_responses: Rc<RefCell<VecDeque<oneshot::Receiver<ActionResponse>>>>,
+    summary: Rc<RefCell<models::ErrorSummary>>,
+    summaries: Rc<RefCell<Vec<Uuid>>>,
+    additions: Rc<RefCell<Additions>>,
+    addition_error: Rc<RefCell<Option<String>>>,
+    /// Emails the server reports as already having an account.
+    already_present: Rc<RefCell<Vec<String>>>,
     client: Rc<RefCell<ClientSettings>>,
     client_saves: Rc<RefCell<Vec<ClientSave>>>,
     client_removes: Rc<RefCell<usize>>,
@@ -80,9 +139,27 @@ impl Probe {
     }
 }
 
-fn app(probe: Probe) -> Element {
-    use_context_provider(|| probe);
-    rsx! { importers::HarvestImport {} }
+#[derive(Props, Clone)]
+struct AppProps {
+    probe: Probe,
+    path: String,
+}
+
+impl PartialEq for AppProps {
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
+
+fn app(props: AppProps) -> Element {
+    use_context_provider(|| props.probe.clone());
+    let path = props.path.clone();
+    rsx! {
+        HistoryProvider {
+            history: move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
+            Router::<route::Route> {}
+        }
+    }
 }
 
 struct Ui {
@@ -92,9 +169,19 @@ struct Ui {
 
 impl Ui {
     fn start(probe: &Probe) -> Self {
+        Self::at(probe, "/admin/importers")
+    }
+
+    fn at(probe: &Probe, path: &str) -> Self {
         set_event_converter(Box::new(SerializedHtmlEventConverter));
         let mut ui = Self {
-            dom: VirtualDom::new_with_props(app, probe.clone()),
+            dom: VirtualDom::new_with_props(
+                app,
+                AppProps {
+                    probe: probe.clone(),
+                    path: path.into(),
+                },
+            ),
             targets: HashMap::new(),
         };
         let mutations = ui.dom.rebuild_to_vec().edits;
@@ -129,11 +216,15 @@ impl Ui {
         panic!("importer did not settle after controlled responses");
     }
 
-    fn click(&mut self, name: &str) {
-        let id = *self
+    fn target(&self, name: &str) -> ElementId {
+        *self
             .targets
             .get(name)
-            .unwrap_or_else(|| panic!("missing button {name}: {}", self.html()));
+            .unwrap_or_else(|| panic!("missing target {name}: {}", self.html()))
+    }
+
+    fn click(&mut self, name: &str) {
+        let id = self.target(name);
         let event = Event::new(
             Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
@@ -146,15 +237,23 @@ impl Ui {
         dioxus::ssr::render(&self.dom)
     }
 
-    fn type_into(&mut self, name: &str, value: &str) {
-        let id = self.targets[name];
+    fn form_event(&mut self, event_name: &str, name: &str, value: &str) {
+        let id = self.target(name);
         let data = SerializedFormData::new(value.into(), vec![]);
         let event = Event::new(
             Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>,
             true,
         );
-        self.dom.runtime().handle_event("input", event, id);
+        self.dom.runtime().handle_event(event_name, event, id);
         self.settle();
+    }
+
+    fn type_into(&mut self, name: &str, value: &str) {
+        self.form_event("input", name, value);
+    }
+
+    fn check(&mut self, name: &str) {
+        self.form_event("change", name, "true");
     }
 
     fn cancel_dialog(&mut self) {
@@ -205,22 +304,81 @@ fn job(id: u128, status: &str) -> models::JobStatus {
         created_at: chrono::Utc::now(),
         finished_at: None,
         retry_availability: models::RetryAvailability::Available,
+        mode: Some(ImportMode::DryRun),
+        source: Some(SourceKind::Csv),
+        commit_availability: models::CommitAvailability::UnavailableState,
+        committed_as: None,
+    }
+}
+
+/// A finished run of `mode` with its report.
+fn finished(id: u128, mode: ImportMode, report: ImportReport) -> models::JobStatus {
+    let mut run = job(id, "succeeded");
+    run.mode = Some(mode);
+    run.commit_availability = match mode {
+        ImportMode::DryRun => models::CommitAvailability::Available,
+        ImportMode::Commit => models::CommitAvailability::NotPreview,
+    };
+    run.report = Some(serde_json::to_value(report).unwrap());
+    run
+}
+
+fn run_path(id: u128) -> String {
+    format!("/admin/importers/harvest/runs/{}", Uuid::from_u128(id))
+}
+
+/// Open a run's page and answer its first status read.
+fn open_run(probe: &Probe, run: models::JobStatus) -> Ui {
+    let response = probe.request();
+    let path = format!("/admin/importers/harvest/runs/{}", run.id);
+    let mut ui = Ui::at(probe, &path);
+    response.send(Ok(Some(run))).unwrap();
+    ui.settle();
+    ui
+}
+
+fn errored_report(mode: ImportMode, errors: usize) -> ImportReport {
+    let mut report = ImportReport::new(SourceKind::Csv, mode);
+    for line in 1..=errors {
+        report.record(
+            EntityType::TimeEntry,
+            &RowOutcome::Errored {
+                source_location: format!("record {line}"),
+                reason: "invalid date".into(),
+                person: None,
+            },
+        );
+    }
+    report
+}
+
+#[test]
+fn the_index_lists_only_real_sources() {
+    let probe = Probe::default();
+    let ui = Ui::start(&probe);
+    let html = ui.html();
+    assert!(
+        html.contains("Harvest") && html.contains("CSV file"),
+        "{html}"
+    );
+    assert!(html.contains("href=\"/admin/importers/harvest\""), "{html}");
+    assert!(
+        html.contains("href=\"/admin/importers/harvest/csv\""),
+        "{html}"
+    );
+    for planned in ["Toggl Track", "Clockify", "Planned"] {
+        assert!(!html.contains(planned), "{html}");
     }
 }
 
 #[tokio::test]
-async fn reopening_importer_restores_queued_and_running_jobs_from_history() {
+async fn a_run_page_follows_its_job_from_the_url() {
     for state in ["queued", "running"] {
         let probe = Probe::default();
         let mut snapshot = job(1, state);
         snapshot.last_error = Some("Temporary source failure".into());
-        probe.history.borrow_mut().push(snapshot.clone());
-        let response = probe.request();
-        let mut ui = Ui::start(&probe);
-        response.send(Ok(Some(snapshot))).unwrap();
-        ui.settle();
+        let ui = open_run(&probe, snapshot);
         let html = ui.html();
-        assert!(html.contains("Import history"), "{html}");
         assert!(
             html.contains("12 processed") && html.contains(" of 30"),
             "{html}"
@@ -229,336 +387,12 @@ async fn reopening_importer_restores_queued_and_running_jobs_from_history() {
             html.contains("Last attempt: Temporary source failure"),
             "{html}"
         );
+        assert!(
+            html.contains("Leaving this page does not stop the import"),
+            "{html}"
+        );
+        assert!(html.contains("Dry run"), "{html}");
         assert_eq!(&*probe.requests.borrow(), &[Uuid::from_u128(1)]);
-    }
-}
-
-#[tokio::test]
-async fn failed_poll_can_resume_without_replaying_its_old_error() {
-    let probe = Probe::default();
-    probe.history.borrow_mut().push(job(1, "running"));
-    let response = probe.request();
-    let mut ui = Ui::start(&probe);
-    response
-        .send(Err(ServerFnError::new("Network unavailable")))
-        .unwrap();
-    ui.settle();
-    assert!(ui.html().contains("Network unavailable"));
-    assert!(!ui.html().contains("Following import"));
-
-    let response = probe.request();
-    ui.click("resume-monitoring");
-    assert!(ui.html().contains("Following import"));
-    assert!(!ui.html().contains("Network unavailable"));
-    response.send(Ok(Some(job(1, "cancelled")))).unwrap();
-    ui.settle();
-    assert!(ui.html().contains("Import cancelled"));
-    assert!(!ui.html().contains("Following import"));
-    assert_eq!(
-        &*probe.requests.borrow(),
-        &[Uuid::from_u128(1), Uuid::from_u128(1)]
-    );
-}
-
-#[tokio::test]
-async fn missing_job_stops_polling_and_explains_that_status_is_unavailable() {
-    let probe = Probe::default();
-    probe.history.borrow_mut().push(job(1, "running"));
-    let response = probe.request();
-    let mut ui = Ui::start(&probe);
-    response.send(Ok(None)).unwrap();
-    ui.settle();
-    assert!(ui.html().contains("Import job not found"));
-    assert!(!ui.html().contains("Following import"));
-}
-
-#[tokio::test]
-async fn historical_preview_is_read_only_and_selecting_another_job_clears_it() {
-    let probe = Probe::default();
-    let mut preview = job(1, "succeeded");
-    preview.report =
-        Some(serde_json::to_value(ImportReport::new(SourceKind::Csv, ImportMode::DryRun)).unwrap());
-    probe
-        .history
-        .borrow_mut()
-        .extend([preview.clone(), job(2, "failed")]);
-    let mut ui = Ui::start(&probe);
-    let response = probe.request();
-    ui.click(&format!("select-{}", preview.id));
-    response.send(Ok(Some(preview))).unwrap();
-    ui.settle();
-    assert!(ui.html().contains("Historical preview"));
-    assert!(!ui.html().contains("Commit this import"));
-    let response = probe.request();
-    ui.click(&format!("select-{}", Uuid::from_u128(2)));
-    assert!(!ui.html().contains("Historical preview"));
-    response.send(Ok(Some(job(2, "failed")))).unwrap();
-    ui.settle();
-    assert!(ui.html().contains("Import failed"));
-}
-
-#[tokio::test]
-async fn retry_errors_are_visible_and_success_restarts_monitoring() {
-    let probe = Probe::default();
-    probe.history.borrow_mut().push(job(1, "failed"));
-    let mut ui = Ui::start(&probe);
-    let action = probe.action();
-    let target = format!("retry-{}", Uuid::from_u128(1));
-    ui.click(&target);
-    ui.click(&target);
-    assert_eq!(
-        probe.retries.borrow().len(),
-        1,
-        "pending retry must not be submitted twice"
-    );
-    action
-        .send(Err(ServerFnError::new("Retry rejected")))
-        .unwrap();
-    ui.settle();
-    assert!(ui.html().contains("Could not retry import"));
-    let action = probe.action();
-    let response = probe.request();
-    ui.click(&target);
-    action.send(Ok(job(1, "queued"))).unwrap();
-    ui.settle();
-    assert!(ui.html().contains("Following import"));
-    assert!(!ui.html().contains("Could not retry import"));
-    response.send(Ok(Some(job(1, "running")))).unwrap();
-    ui.settle();
-    assert_eq!(
-        &*probe.retries.borrow(),
-        &[Uuid::from_u128(1), Uuid::from_u128(1)]
-    );
-}
-
-#[tokio::test]
-async fn cancellation_errors_are_visible_and_acceptance_does_not_acknowledge_completion() {
-    let probe = Probe::default();
-    probe.history.borrow_mut().push(job(1, "running"));
-    let response = probe.request();
-    let mut ui = Ui::start(&probe);
-    response.send(Ok(Some(job(1, "running")))).unwrap();
-    ui.settle();
-    let action = probe.action();
-    ui.click("cancel-import");
-    action
-        .send(Err(ServerFnError::new("Cancellation rejected")))
-        .unwrap();
-    ui.settle();
-    assert!(ui.html().contains("Could not cancel import"));
-    assert!(ui.html().contains("Following import"));
-    let action = probe.action();
-    ui.click("cancel-import");
-    let mut accepted = job(1, "running");
-    accepted.phase = Some("cancelling".into());
-    action.send(Ok(accepted)).unwrap();
-    ui.settle();
-    assert!(ui.html().contains("Cancellation requested"));
-    assert!(ui.html().contains("Following import"));
-    assert!(!ui.html().contains("Import cancelled"));
-    assert_eq!(probe.cancellations.borrow().len(), 2);
-}
-
-#[tokio::test]
-async fn history_failure_can_be_refreshed_and_restores_an_active_job() {
-    let probe = Probe::default();
-    *probe.history_error.borrow_mut() = Some("History unavailable".into());
-    let mut ui = Ui::start(&probe);
-    assert!(ui.html().contains("Could not load import history"));
-    *probe.history_error.borrow_mut() = None;
-    probe.history.borrow_mut().push(job(1, "running"));
-    let _response = probe.request();
-    ui.click("refresh-history");
-    assert!(!ui.html().contains("Could not load import history"));
-    assert_eq!(&*probe.requests.borrow(), &[Uuid::from_u128(1)]);
-}
-
-#[tokio::test]
-async fn history_can_page_back_and_return_to_the_latest_imports() {
-    let probe = Probe::default();
-    probe
-        .history
-        .borrow_mut()
-        .extend((1..=24).map(|id| job(id, "succeeded")));
-    let mut ui = Ui::start(&probe);
-    assert!(
-        !ui.html()
-            .contains(&format!("select-{}", Uuid::from_u128(24)))
-    );
-    ui.click("older-history");
-    assert!(
-        ui.html()
-            .contains(&format!("select-{}", Uuid::from_u128(24)))
-    );
-    assert!(
-        !ui.html()
-            .contains(&format!("select-{}", Uuid::from_u128(1)))
-    );
-    ui.click("newer-history");
-    assert!(
-        ui.html()
-            .contains(&format!("select-{}", Uuid::from_u128(1)))
-    );
-    ui.click("older-history");
-    ui.click("refresh-history");
-    assert!(
-        ui.html()
-            .contains(&format!("select-{}", Uuid::from_u128(1)))
-    );
-    assert_eq!(
-        &*probe.history_cursors.borrow(),
-        &[
-            None,
-            Some(Uuid::from_u128(20)),
-            None,
-            Some(Uuid::from_u128(20)),
-            None,
-        ]
-    );
-}
-
-#[tokio::test]
-async fn submission_displays_its_acknowledged_state_before_status_polling_returns() {
-    let probe = Probe::default();
-    let mut ui = Ui::start(&probe);
-    ui.click("choose-csv");
-    ui.choose_file("import.csv");
-    let _pending_status = probe.request();
-    ui.click("preview-csv");
-    assert!(ui.html().contains("Queued"));
-    assert!(ui.html().contains("Following import"));
-    assert_eq!(&*probe.requests.borrow(), &[Uuid::from_u128(11)]);
-    assert_eq!(probe.csv_submissions.borrow().len(), 1);
-}
-
-#[tokio::test]
-async fn replacing_a_file_during_preview_does_not_change_the_committed_source() {
-    let probe = Probe::default();
-    let mut ui = Ui::start(&probe);
-    ui.click("choose-csv");
-    ui.choose_file("original.csv");
-    let preview_response = probe.request();
-    ui.click("preview-csv");
-    ui.click("preview-csv");
-    ui.choose_file("replacement.csv");
-    let mut preview = job(11, "succeeded");
-    preview.report =
-        Some(serde_json::to_value(ImportReport::new(SourceKind::Csv, ImportMode::DryRun)).unwrap());
-    preview_response.send(Ok(Some(preview))).unwrap();
-    ui.settle();
-    assert!(ui.html().contains("Report source: original.csv"));
-    assert!(ui.html().contains("replacement.csv"));
-    assert_eq!(ui.html().matches("btn btn-primary").count(), 1);
-    let _commit_response = probe.request();
-    ui.click("commit-preview");
-    assert_eq!(
-        &*probe.csv_submissions.borrow(),
-        &[
-            (ImportMode::DryRun, "original.csv".into()),
-            (ImportMode::Commit, "original.csv".into()),
-        ]
-    );
-}
-
-#[tokio::test]
-async fn result_copy_distinguishes_preview_zero_skipped_and_mixed_outcomes() {
-    for mode in [ImportMode::DryRun, ImportMode::Commit] {
-        for (created, updated, skipped, errored) in [(0, 0, 0, 0), (0, 0, 7, 0), (2, 3, 4, 1)] {
-            let probe = Probe::default();
-            let mut snapshot = job(1, "succeeded");
-            let mut report = ImportReport::new(SourceKind::Csv, mode);
-            report.summary.time_entries.created = created;
-            report.summary.time_entries.updated = updated;
-            report.summary.time_entries.skipped = skipped;
-            for _ in 0..errored {
-                report.record(
-                    horae_core::importers::harvest::types::EntityType::TimeEntry,
-                    &horae_core::importers::harvest::types::RowOutcome::Errored {
-                        source_location: "row 2".into(),
-                        reason: "Invalid date".into(),
-                        person: None,
-                    },
-                );
-            }
-            snapshot.report = Some(serde_json::to_value(report).unwrap());
-            probe.history.borrow_mut().push(snapshot.clone());
-            let mut ui = Ui::start(&probe);
-            let response = probe.request();
-            ui.click(&format!("select-{}", snapshot.id));
-            response.send(Ok(Some(snapshot))).unwrap();
-            ui.settle();
-            let html = ui.html();
-            assert!(
-                html.contains(&format!(
-                    "{created} created · {updated} updated · {skipped} skipped · {errored} errored"
-                )),
-                "{html}"
-            );
-            assert!(!html.contains("Every record was written"), "{html}");
-            assert!(!html.contains("nothing was written"), "{html}");
-            if mode == ImportMode::DryRun {
-                assert!(html.contains("No business data was written"), "{html}");
-                assert!(html.contains("Historical preview"), "{html}");
-            }
-        }
-    }
-}
-
-#[test]
-fn unselected_connected_importer_does_not_claim_an_empty_history() {
-    let probe = Probe::default();
-    *probe.connection.borrow_mut() = ConnectionStatus {
-        configured: true,
-        connected: true,
-        account_id: Some("A".into()),
-        ..ConnectionStatus::default()
-    };
-    probe.history.borrow_mut().push(job(1, "succeeded"));
-    let mut ui = Ui::start(&probe);
-    ui.click("choose-api");
-    let html = ui.html();
-    assert!(html.contains("No report selected"), "{html}");
-    assert!(!html.contains("Nothing imported yet"), "{html}");
-    assert!(!html.contains("without writing a single row"), "{html}");
-    assert!(!html.contains("Every import is reversible"), "{html}");
-}
-
-#[tokio::test]
-async fn history_labels_selection_and_unknown_metadata_are_readable() {
-    for (kind, mode, source, label) in [
-        (
-            "harvest_api_import",
-            Some(ImportMode::DryRun),
-            "Harvest API",
-            "Preview",
-        ),
-        (
-            "harvest_csv_import",
-            Some(ImportMode::Commit),
-            "CSV file",
-            "Import",
-        ),
-        ("future_import", None, "Unknown source", "Mode unavailable"),
-    ] {
-        let probe = Probe::default();
-        let mut snapshot = job(1, "succeeded");
-        snapshot.kind = kind.into();
-        snapshot.created_at = chrono::DateTime::parse_from_rfc3339("2026-09-15T10:30:00Z")
-            .unwrap()
-            .to_utc();
-        snapshot.report = mode
-            .map(|mode| serde_json::to_value(ImportReport::new(SourceKind::Csv, mode)).unwrap());
-        probe.history.borrow_mut().push(snapshot.clone());
-        let mut ui = Ui::start(&probe);
-        let html = ui.html();
-        assert!(html.contains(source) && html.contains(label), "{html}");
-        assert!(html.contains("15 Sep 2026, 10:30 UTC"), "{html}");
-        assert!(html.contains("datetime="), "{html}");
-        let response = probe.request();
-        ui.click(&format!("select-{}", snapshot.id));
-        response.send(Ok(Some(snapshot))).unwrap();
-        ui.settle();
-        assert!(ui.html().contains("aria-pressed=\"true\""));
     }
 }
 
@@ -567,20 +401,226 @@ async fn progress_uses_observed_counts_and_readable_phase_without_an_eta() {
     let probe = Probe::default();
     let mut snapshot = job(1, "running");
     snapshot.total_count = None;
-    probe.history.borrow_mut().push(snapshot.clone());
-    let response = probe.request();
-    let mut ui = Ui::start(&probe);
-    response.send(Ok(Some(snapshot))).unwrap();
-    ui.settle();
+    let ui = open_run(&probe, snapshot);
     let html = ui.html();
     assert!(html.contains("Time entries"), "{html}");
-    assert!(
-        html.contains("Leaving this page does not stop the import"),
-        "{html}"
-    );
     assert!(html.contains("12 processed"), "{html}");
     assert!(!html.contains(" of 30"));
     assert!(!html.contains("time_entries"));
+}
+
+#[tokio::test]
+async fn a_failed_status_read_can_be_checked_again() {
+    let probe = Probe::default();
+    let response = probe.request();
+    let mut ui = Ui::at(&probe, &run_path(1));
+    response
+        .send(Err(ServerFnError::new("Network unavailable")))
+        .unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Network unavailable"));
+    assert!(ui.html().contains("Status unavailable"));
+
+    let response = probe.request();
+    ui.click("resume-monitoring");
+    response.send(Ok(Some(job(1, "cancelled")))).unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Import cancelled"), "{}", ui.html());
+    assert!(!ui.html().contains("Network unavailable"));
+    assert_eq!(
+        &*probe.requests.borrow(),
+        &[Uuid::from_u128(1), Uuid::from_u128(1)]
+    );
+}
+
+#[tokio::test]
+async fn a_missing_job_explains_that_status_is_unavailable() {
+    let probe = Probe::default();
+    let response = probe.request();
+    let mut ui = Ui::at(&probe, &run_path(1));
+    response.send(Ok(None)).unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Import job not found"));
+}
+
+#[tokio::test]
+async fn a_finished_preview_commits_once_and_opens_the_commit_run() {
+    let probe = Probe::default();
+    let preview = finished(
+        1,
+        ImportMode::DryRun,
+        ImportReport::new(SourceKind::Csv, ImportMode::DryRun),
+    );
+    let mut ui = open_run(&probe, preview);
+    assert!(ui.html().contains("Preview complete"), "{}", ui.html());
+    let action = probe.action();
+    ui.click("commit-preview");
+    ui.click("commit-preview");
+    assert_eq!(&*probe.commits.borrow(), &[Uuid::from_u128(1)]);
+
+    let next = probe.request();
+    let mut commit = job(2, "queued");
+    commit.mode = Some(ImportMode::Commit);
+    action.send(Ok(commit.clone())).unwrap();
+    ui.settle();
+    next.send(Ok(Some(commit))).unwrap();
+    ui.settle();
+    let html = ui.html();
+    assert!(html.contains("Waiting to start"), "{html}");
+    assert!(!html.contains("Preview complete"), "{html}");
+    assert_eq!(
+        &*probe.requests.borrow(),
+        &[Uuid::from_u128(1), Uuid::from_u128(2)]
+    );
+}
+
+#[tokio::test]
+async fn a_refused_commit_is_explained() {
+    let probe = Probe::default();
+    let preview = finished(
+        1,
+        ImportMode::DryRun,
+        ImportReport::new(SourceKind::Csv, ImportMode::DryRun),
+    );
+    let mut ui = open_run(&probe, preview.clone());
+    let action = probe.action();
+    ui.click("commit-preview");
+    // The refusal re-reads the run, which now says why.
+    let reread = probe.request();
+    action
+        .send(Err(ServerFnError::new(
+            "A newer import replaced this preview",
+        )))
+        .unwrap();
+    ui.settle();
+    let mut replaced = preview;
+    replaced.commit_availability = models::CommitAvailability::NewerImport;
+    reread.send(Ok(Some(replaced))).unwrap();
+    ui.settle();
+    let html = ui.html();
+    assert!(html.contains("Could not commit this preview"), "{html}");
+    assert!(
+        html.contains("A newer import from this source replaced this preview"),
+        "{html}"
+    );
+    assert!(!html.contains("data-testid=\"commit-preview\""), "{html}");
+    assert_eq!(probe.requests.borrow().len(), 2);
+}
+
+#[tokio::test]
+async fn a_committed_preview_links_to_its_commit() {
+    let probe = Probe::default();
+    let mut preview = finished(
+        1,
+        ImportMode::DryRun,
+        ImportReport::new(SourceKind::Csv, ImportMode::DryRun),
+    );
+    preview.commit_availability = models::CommitAvailability::Committed;
+    preview.committed_as = Some(Uuid::from_u128(2));
+    let ui = open_run(&probe, preview);
+    let html = ui.html();
+    assert!(html.contains("This dry run was committed"), "{html}");
+    assert!(
+        html.contains(&format!("href=\"{}\"", run_path(2))),
+        "{html}"
+    );
+    assert!(!html.contains("Commit this dry run"), "{html}");
+    assert!(!html.contains("newer import"), "{html}");
+}
+
+#[tokio::test]
+async fn a_preview_that_cannot_be_committed_says_why() {
+    for (availability, reason) in [
+        (models::CommitAvailability::NewerImport, "newer import"),
+        (
+            models::CommitAvailability::PreviousAccount,
+            "previous Harvest account",
+        ),
+        (
+            models::CommitAvailability::MissingUpload,
+            "no longer retained",
+        ),
+        (
+            models::CommitAvailability::Unknown,
+            "Commit availability is unknown",
+        ),
+    ] {
+        let probe = Probe::default();
+        let mut preview = finished(
+            1,
+            ImportMode::DryRun,
+            ImportReport::new(SourceKind::Csv, ImportMode::DryRun),
+        );
+        preview.commit_availability = availability;
+        let ui = open_run(&probe, preview);
+        let html = ui.html();
+        assert!(html.contains(reason), "{html}");
+        assert!(!html.contains("Commit this dry run"), "{html}");
+    }
+}
+
+#[tokio::test]
+async fn retry_errors_are_visible_and_success_follows_the_run_again() {
+    let probe = Probe::default();
+    let mut ui = open_run(&probe, job(1, "failed"));
+    let action = probe.action();
+    ui.click("retry-run");
+    ui.click("retry-run");
+    assert_eq!(
+        probe.retries.borrow().len(),
+        1,
+        "pending retry must not be submitted twice"
+    );
+    let reread = probe.request();
+    action
+        .send(Err(ServerFnError::new("Retry rejected")))
+        .unwrap();
+    ui.settle();
+    reread.send(Ok(Some(job(1, "failed")))).unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Could not retry import"));
+    let action = probe.action();
+    let response = probe.request();
+    ui.click("retry-run");
+    action.send(Ok(job(1, "queued"))).unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Waiting to start"), "{}", ui.html());
+    assert!(!ui.html().contains("Could not retry import"));
+    response.send(Ok(Some(job(1, "running")))).unwrap();
+    ui.settle();
+    assert_eq!(
+        &*probe.retries.borrow(),
+        &[Uuid::from_u128(1), Uuid::from_u128(1)]
+    );
+    assert_eq!(probe.requests.borrow().len(), 3);
+}
+
+#[tokio::test]
+async fn cancellation_errors_are_visible_and_acceptance_does_not_acknowledge_completion() {
+    let probe = Probe::default();
+    let mut ui = open_run(&probe, job(1, "running"));
+    let action = probe.action();
+    ui.click("cancel-import");
+    let reread = probe.request();
+    action
+        .send(Err(ServerFnError::new("Cancellation rejected")))
+        .unwrap();
+    ui.settle();
+    reread.send(Ok(Some(job(1, "running")))).unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Could not cancel import"));
+    let action = probe.action();
+    ui.click("cancel-import");
+    let mut accepted = job(1, "running");
+    accepted.phase = Some("cancelling".into());
+    let reread = probe.request();
+    action.send(Ok(accepted.clone())).unwrap();
+    ui.settle();
+    reread.send(Ok(Some(accepted))).unwrap();
+    ui.settle();
+    assert!(ui.html().contains("Cancellation requested"));
+    assert!(!ui.html().contains("Import cancelled"));
+    assert_eq!(probe.cancellations.borrow().len(), 2);
 }
 
 #[tokio::test]
@@ -601,134 +641,35 @@ async fn blocked_retry_keeps_partial_reports_and_explains_the_missing_prerequisi
     ] {
         let probe = Probe::default();
         let mut snapshot = job(1, "failed");
+        snapshot.mode = Some(ImportMode::Commit);
         snapshot.retry_availability = availability;
         snapshot.report = Some(
             serde_json::to_value(ImportReport::new(SourceKind::Csv, ImportMode::Commit)).unwrap(),
         );
-        probe.history.borrow_mut().push(snapshot.clone());
-        let mut ui = Ui::start(&probe);
+        let ui = open_run(&probe, snapshot);
         let html = ui.html();
         assert!(html.contains(reason), "{html}");
-        assert!(!html.contains(&format!("data-testid=\"retry-{}\"", snapshot.id)));
-        let response = probe.request();
-        ui.click(&format!("select-{}", snapshot.id));
-        response.send(Ok(Some(snapshot))).unwrap();
-        ui.settle();
-        assert!(ui.html().contains("Partial report"));
-        assert!(!ui.html().contains("Import complete"));
+        assert!(!html.contains("data-testid=\"retry-run\""), "{html}");
+        assert!(html.contains("Partial report"), "{html}");
+        assert!(!html.contains("Import complete"), "{html}");
         assert!(probe.retries.borrow().is_empty());
     }
 }
 
 #[tokio::test]
-async fn navigating_away_invalidates_a_pending_preview_confirmation() {
-    let probe = Probe::default();
-    let mut ui = Ui::start(&probe);
-    ui.click("choose-csv");
-    ui.choose_file("original.csv");
-    let response = probe.request();
-    ui.click("preview-csv");
-    ui.click("all-importers");
-    let mut preview = job(11, "succeeded");
-    preview.report =
-        Some(serde_json::to_value(ImportReport::new(SourceKind::Csv, ImportMode::DryRun)).unwrap());
-    response.send(Ok(Some(preview))).unwrap();
-    ui.settle();
-    assert!(!ui.html().contains("Commit this import"));
-    assert!(ui.html().contains("Historical preview"));
-    assert_eq!(probe.csv_submissions.borrow().len(), 1);
-}
-
-#[tokio::test]
-async fn api_preview_confirmation_is_bound_to_the_original_account_generation() {
-    for account_changed in [false, true] {
-        let probe = Probe::default();
-        *probe.connection.borrow_mut() = ConnectionStatus {
-            configured: true,
-            connected: true,
-            account_id: Some("A".into()),
-            account_generation: 2,
-            ..ConnectionStatus::default()
-        };
-        let mut ui = Ui::start(&probe);
-        ui.click("choose-api");
-        let response = probe.request();
-        ui.click("preview-api");
-        let mut preview = job(11, "succeeded");
-        preview.kind = "harvest_api_import".into();
-        preview.report = Some(
-            serde_json::to_value(ImportReport::new(
-                SourceKind::HarvestApi,
-                ImportMode::DryRun,
-            ))
-            .unwrap(),
-        );
-        response.send(Ok(Some(preview))).unwrap();
-        ui.settle();
-        assert_eq!(ui.html().matches("btn btn-primary").count(), 1);
-        if account_changed {
-            probe.connection.borrow_mut().account_generation = 3;
-            probe.connection.borrow_mut().account_id = Some("B".into());
-        }
-        ui.click("refresh-connection");
-        if account_changed {
-            assert!(
-                !ui.html().contains("Commit this import"),
-                "A preview from account A cannot confirm against B"
-            );
-            assert_eq!(probe.api_submissions.borrow().len(), 1);
-        } else {
-            let _response = probe.request();
-            ui.click("commit-preview");
-            ui.click("commit-preview");
-            assert_eq!(
-                &*probe.api_submissions.borrow(),
-                &[
-                    (ImportMode::DryRun, SyncScope::Full, Some(2)),
-                    (ImportMode::Commit, SyncScope::Full, Some(2))
-                ]
-            );
-        }
-    }
-}
-
-#[tokio::test]
-async fn selecting_another_job_drops_the_previous_pending_status_request() {
-    let probe = Probe::default();
-    probe
-        .history
-        .borrow_mut()
-        .extend([job(1, "running"), job(2, "succeeded")]);
-    let old_response = probe.request();
-    let mut ui = Ui::start(&probe);
-    let response = probe.request();
-    ui.click(&format!("select-{}", Uuid::from_u128(2)));
-    assert!(old_response.send(Ok(Some(job(1, "failed")))).is_err());
-    let mut completed = job(2, "succeeded");
-    completed.report =
-        Some(serde_json::to_value(ImportReport::new(SourceKind::Csv, ImportMode::Commit)).unwrap());
-    response.send(Ok(Some(completed))).unwrap();
-    ui.settle();
-    assert!(ui.html().contains("Import complete"));
-    assert!(!ui.html().contains("Import failed"));
-}
-
-#[tokio::test]
-async fn failed_and_cancelled_history_shows_partial_outcomes_without_success_actions() {
+async fn failed_and_cancelled_runs_show_partial_outcomes_without_success_actions() {
     for state in ["failed", "cancelled"] {
         for mode in [ImportMode::Commit, ImportMode::DryRun] {
             let probe = Probe::default();
             let mut snapshot = job(1, state);
-            let mut report = ImportReport::new(SourceKind::Csv, mode);
+            snapshot.kind = "harvest_api_import".into();
+            snapshot.source = Some(SourceKind::HarvestApi);
+            snapshot.mode = Some(mode);
+            let mut report = ImportReport::new(SourceKind::HarvestApi, mode);
             report.summary.time_entries.created = 499;
             snapshot.report = Some(serde_json::to_value(report).unwrap());
             snapshot.last_error = (state == "failed").then(|| "Source connection lost".to_string());
-            probe.history.borrow_mut().push(snapshot.clone());
-            let mut ui = Ui::start(&probe);
-            let response = probe.request();
-            ui.click(&format!("select-{}", snapshot.id));
-            response.send(Ok(Some(snapshot))).unwrap();
-            ui.settle();
+            let ui = open_run(&probe, snapshot);
             let html = ui.html();
             assert!(html.contains("Partial report"), "{html}");
             assert!(html.contains("499"), "{html}");
@@ -741,75 +682,363 @@ async fn failed_and_cancelled_history_shows_partial_outcomes_without_success_act
                 "{html}"
             );
             assert!(!html.contains("Import complete"), "{html}");
-            assert!(!html.contains("Commit this import"), "{html}");
+            assert!(!html.contains("Commit this dry run"), "{html}");
             assert!(!html.contains("Re-sync changes"), "{html}");
         }
     }
 }
 
 #[tokio::test]
-async fn newly_submitted_failed_preview_cannot_be_confirmed() {
-    let probe = Probe::default();
-    let mut ui = Ui::start(&probe);
-    ui.click("choose-csv");
-    ui.choose_file("partial.csv");
-    let response = probe.request();
-    ui.click("preview-csv");
-    let mut snapshot = job(11, "failed");
-    snapshot.report =
-        Some(serde_json::to_value(ImportReport::new(SourceKind::Csv, ImportMode::DryRun)).unwrap());
-    snapshot.last_error = Some("Upload unavailable".into());
-    response.send(Ok(Some(snapshot))).unwrap();
-    ui.settle();
-    let html = ui.html();
-    assert!(html.contains("Partial report"), "{html}");
-    assert!(html.contains("Upload unavailable"), "{html}");
-    assert!(!html.contains("Commit this import"), "{html}");
-    ui.choose_file("another.csv");
-    assert!(!ui.html().contains("Partial report"));
-    assert!(!ui.html().contains("Upload unavailable"));
+async fn result_copy_distinguishes_preview_zero_skipped_and_mixed_outcomes() {
+    for mode in [ImportMode::DryRun, ImportMode::Commit] {
+        for (created, updated, skipped, errored) in [(0, 0, 0, 0), (0, 0, 7, 0), (2, 3, 4, 1)] {
+            let probe = Probe::default();
+            let mut report = errored_report(mode, errored);
+            report.summary.time_entries.created = created;
+            report.summary.time_entries.updated = updated;
+            report.summary.time_entries.skipped = skipped;
+            let ui = open_run(&probe, finished(1, mode, report));
+            let html = ui.html();
+            assert!(
+                html.contains(&format!(
+                    "{created} created · {updated} updated · {skipped} skipped · {errored} errored"
+                )),
+                "{html}"
+            );
+            if mode == ImportMode::DryRun {
+                assert!(html.contains("No business data was written"), "{html}");
+            }
+        }
+    }
 }
 
 #[tokio::test]
-async fn archived_report_shows_total_errors_and_a_job_scoped_download() {
-    use horae_core::importers::harvest::types::{EntityType, RowOutcome};
-
+async fn errors_are_grouped_on_the_server_with_a_job_scoped_download() {
     for state in ["succeeded", "failed"] {
         let probe = Probe::default();
-        let mut snapshot = job(17, state);
-        let mut report = ImportReport::new(SourceKind::Csv, ImportMode::Commit);
-        for line in 1..=2 {
-            report.record(
-                EntityType::TimeEntry,
-                &RowOutcome::Errored {
-                    source_location: format!("record {line}"),
-                    reason: "invalid date".into(),
-                    person: None,
-                },
-            );
-        }
+        *probe.summary.borrow_mut() = models::ErrorSummary {
+            groups: vec![models::ErrorGroup {
+                entity: EntityType::TimeEntry,
+                kind: None,
+                reason: "invalid date".into(),
+                count: 2,
+                samples: vec!["record 1".into(), "record 2".into()],
+            }],
+            omitted_errors: 4,
+            ..models::ErrorSummary::default()
+        };
+        let mut report = errored_report(ImportMode::Commit, 2);
         report.archive_errors(1).unwrap();
-        snapshot.report = Some(serde_json::to_value(report).unwrap());
-        probe.history.borrow_mut().push(snapshot.clone());
-        let mut ui = Ui::start(&probe);
-        let response = probe.request();
-        ui.click(&format!("select-{}", snapshot.id));
-        response.send(Ok(Some(snapshot.clone()))).unwrap();
-        ui.settle();
+        let mut snapshot = finished(17, ImportMode::Commit, report);
+        snapshot.status = state.into();
+        let ui = open_run(&probe, snapshot);
         let html = ui.html();
-        assert!(html.contains("Showing 0 inline errors of 2."), "{html}");
-        assert!(html.contains("Download all errors"), "{html}");
+        assert_eq!(&*probe.summaries.borrow(), &[Uuid::from_u128(17)]);
+        assert!(html.contains("invalid date"), "{html}");
+        assert!(html.contains("record 1, record 2"), "{html}");
+        assert!(html.contains("4 more errors"), "{html}");
         assert!(
-            html.contains(&format!("/api/import/harvest/jobs/{}/errors", snapshot.id)),
+            html.contains(&format!(
+                "/api/import/harvest/jobs/{}/errors",
+                Uuid::from_u128(17)
+            )),
             "{html}"
         );
-        assert!(!html.contains("Every record was written"), "{html}");
         if state == "succeeded" {
             assert!(html.contains("Import complete with 2 errors"), "{html}");
         } else {
             assert!(html.contains("Partial report"), "{html}");
         }
     }
+}
+
+#[tokio::test]
+async fn a_run_without_errors_never_asks_for_a_summary() {
+    let probe = Probe::default();
+    let report = ImportReport::new(SourceKind::Csv, ImportMode::Commit);
+    let _ui = open_run(&probe, finished(1, ImportMode::Commit, report));
+    assert!(probe.summaries.borrow().is_empty());
+}
+
+fn missing(
+    email: Option<&str>,
+    name: &str,
+    kind: PersonErrorKind,
+    entries: u64,
+) -> models::MissingPerson {
+    models::MissingPerson {
+        email: email.map(Into::into),
+        name: Some(name.into()),
+        kind,
+        entries,
+    }
+}
+
+fn run_with_missing_people(probe: &Probe) -> Ui {
+    *probe.summary.borrow_mut() = models::ErrorSummary {
+        people: vec![
+            missing(
+                Some("dana@x.com"),
+                "Dana",
+                PersonErrorKind::UnmatchedEmail,
+                3,
+            ),
+            missing(None, "No Mail", PersonErrorKind::MissingEmail, 2),
+            missing(None, "Sam Name", PersonErrorKind::UnmatchedName, 1),
+        ],
+        ..models::ErrorSummary::default()
+    };
+    open_run(
+        probe,
+        finished(1, ImportMode::DryRun, errored_report(ImportMode::DryRun, 6)),
+    )
+}
+
+#[tokio::test]
+async fn missing_people_say_what_to_do_and_can_all_be_added_deactivated() {
+    let probe = Probe::default();
+    let mut ui = run_with_missing_people(&probe);
+    let html = ui.html();
+    assert!(html.contains("People not imported"), "{html}");
+    assert!(html.contains("No Horae account has this email"), "{html}");
+    assert!(
+        html.contains("Add an email to this person in Harvest"),
+        "{html}"
+    );
+    assert!(html.contains("Add all as deactivated (1)"), "{html}");
+    assert!(
+        !html.contains("data-testid=\"add-person-No Mail\""),
+        "{html}"
+    );
+
+    ui.click("add-all-people");
+    assert_eq!(
+        &*probe.additions.borrow(),
+        &[(
+            vec![models::user::NewPerson {
+                email: "dana@x.com".into(),
+                name: "Dana".into(),
+            }],
+            models::user::Activation::Deactivated,
+        )]
+    );
+    let html = ui.html();
+    assert!(html.contains("Added 1 people"), "{html}");
+    assert!(html.contains("Start a new preview"), "{html}");
+    assert!(!html.contains("Add all as deactivated"), "{html}");
+}
+
+#[tokio::test]
+async fn adding_everyone_reports_who_already_had_an_account() {
+    let probe = Probe::default();
+    // Added meanwhile from another tab, or before a reload.
+    probe.already_present.borrow_mut().push("dana@x.com".into());
+    *probe.summary.borrow_mut() = models::ErrorSummary {
+        people: vec![
+            missing(
+                Some("dana@x.com"),
+                "Dana",
+                PersonErrorKind::UnmatchedEmail,
+                3,
+            ),
+            missing(Some("lee@x.com"), "Lee", PersonErrorKind::UnmatchedEmail, 1),
+        ],
+        ..models::ErrorSummary::default()
+    };
+    let mut ui = open_run(
+        &probe,
+        finished(1, ImportMode::DryRun, errored_report(ImportMode::DryRun, 4)),
+    );
+    assert!(ui.html().contains("Add all as deactivated (2)"));
+    ui.click("add-all-people");
+    let html = ui.html();
+    assert!(html.contains("Added 1 people."), "{html}");
+    assert!(html.contains("1 already had an account"), "{html}");
+    assert!(html.contains("Already in Horae"), "{html}");
+    assert!(!html.contains("Add all as deactivated"), "{html}");
+    assert_eq!(probe.additions.borrow().len(), 1);
+}
+
+#[tokio::test]
+async fn a_person_is_added_in_place_and_can_be_made_active() {
+    let probe = Probe::default();
+    let mut ui = run_with_missing_people(&probe);
+    // A CSV row known only by name: the administrator supplies the email.
+    ui.click("add-person-Sam Name");
+    ui.type_into("person-email-Sam Name", "sam@x.com");
+    ui.check("person-active-Sam Name");
+    ui.click("confirm-person-Sam Name");
+    assert_eq!(
+        &*probe.additions.borrow(),
+        &[(
+            vec![models::user::NewPerson {
+                email: "sam@x.com".into(),
+                name: "Sam Name".into(),
+            }],
+            models::user::Activation::Active,
+        )]
+    );
+    assert!(ui.html().contains("Added"), "{}", ui.html());
+}
+
+#[tokio::test]
+async fn a_refused_addition_stays_on_its_row() {
+    let probe = Probe::default();
+    *probe.addition_error.borrow_mut() =
+        Some("A user with the email dana@x.com already exists".into());
+    let mut ui = run_with_missing_people(&probe);
+    ui.click("add-person-dana@x.com");
+    ui.click("confirm-person-dana@x.com");
+    let html = ui.html();
+    assert!(html.contains("already exists"), "{html}");
+    assert!(
+        html.contains("data-testid=\"confirm-person-dana@x.com\""),
+        "{html}"
+    );
+}
+
+#[tokio::test]
+async fn a_csv_preview_opens_its_run() {
+    let probe = Probe::default();
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-csv");
+    ui.choose_file("import.csv");
+    let _pending_status = probe.request();
+    ui.click("preview-csv");
+    ui.click("preview-csv");
+    assert_eq!(&*probe.requests.borrow(), &[Uuid::from_u128(11)]);
+    assert_eq!(
+        &*probe.csv_submissions.borrow(),
+        &[(ImportMode::DryRun, "import.csv".into())]
+    );
+}
+
+#[tokio::test]
+async fn an_api_preview_is_bound_to_the_current_account_and_opens_its_run() {
+    let probe = Probe::default();
+    *probe.connection.borrow_mut() = ConnectionStatus {
+        configured: true,
+        connected: true,
+        account_id: Some("A".into()),
+        account_generation: 2,
+        ..ConnectionStatus::default()
+    };
+    let mut ui = Ui::start(&probe);
+    ui.click("choose-api");
+    let _pending_status = probe.request();
+    ui.click("preview-api");
+    assert_eq!(
+        &*probe.api_submissions.borrow(),
+        &[(ImportMode::DryRun, SyncScope::Full, Some(2))]
+    );
+    assert_eq!(&*probe.requests.borrow(), &[Uuid::from_u128(11)]);
+}
+
+#[tokio::test]
+async fn a_committed_api_run_can_resync_incrementally() {
+    let probe = Probe::default();
+    probe.connection.borrow_mut().account_generation = 4;
+    let mut run = finished(
+        1,
+        ImportMode::Commit,
+        ImportReport::new(SourceKind::HarvestApi, ImportMode::Commit),
+    );
+    run.kind = "harvest_api_import".into();
+    run.source = Some(SourceKind::HarvestApi);
+    let mut ui = open_run(&probe, run);
+    let _pending_status = probe.request();
+    ui.click("resync");
+    assert_eq!(
+        &*probe.api_submissions.borrow(),
+        &[(ImportMode::Commit, SyncScope::Incremental, Some(4))]
+    );
+    assert_eq!(probe.requests.borrow().len(), 2);
+}
+
+#[tokio::test]
+async fn history_labels_mode_source_and_date() {
+    for (kind, mode, source, label) in [
+        (
+            "harvest_api_import",
+            Some(ImportMode::DryRun),
+            "Harvest API",
+            "Dry run",
+        ),
+        (
+            "harvest_csv_import",
+            Some(ImportMode::Commit),
+            "CSV file",
+            "Commit",
+        ),
+        ("future_import", None, "Unknown source", "Mode unavailable"),
+    ] {
+        let probe = Probe::default();
+        let mut snapshot = job(1, "succeeded");
+        snapshot.kind = kind.into();
+        snapshot.mode = mode;
+        snapshot.created_at = chrono::DateTime::parse_from_rfc3339("2026-09-15T10:30:00Z")
+            .unwrap()
+            .to_utc();
+        probe.history.borrow_mut().push(snapshot.clone());
+        let ui = Ui::at(&probe, "/admin/importers/harvest");
+        let html = ui.html();
+        assert!(html.contains(source) && html.contains(label), "{html}");
+        assert!(html.contains("15 Sep 2026, 10:30 UTC"), "{html}");
+        assert!(
+            html.contains(&format!("href=\"{}\"", run_path(1))),
+            "{html}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn the_overview_shows_the_latest_five_runs() {
+    let probe = Probe::default();
+    probe
+        .history
+        .borrow_mut()
+        .extend((1..=8).map(|id| job(id, "succeeded")));
+    let ui = Ui::at(&probe, "/admin/importers/harvest");
+    let html = ui.html();
+    assert!(html.contains(&run_path(5)), "{html}");
+    assert!(!html.contains(&run_path(6)), "{html}");
+    assert!(
+        html.contains("href=\"/admin/importers/harvest/runs?\""),
+        "{html}"
+    );
+}
+
+#[tokio::test]
+async fn run_history_pages_back_and_returns_to_the_newest_runs() {
+    let probe = Probe::default();
+    probe
+        .history
+        .borrow_mut()
+        .extend((1..=24).map(|id| job(id, "succeeded")));
+    let mut ui = Ui::at(&probe, "/admin/importers/harvest/runs");
+    assert!(!ui.html().contains(&run_path(24)));
+    ui.click("older-history");
+    assert!(ui.html().contains(&run_path(24)), "{}", ui.html());
+    assert!(!ui.html().contains(&run_path(1)));
+    ui.click("newer-history");
+    assert!(ui.html().contains(&run_path(1)));
+    assert_eq!(
+        &*probe.history_cursors.borrow(),
+        &[None, Some(Uuid::from_u128(20)), None]
+    );
+}
+
+#[tokio::test]
+async fn a_history_failure_can_be_tried_again() {
+    let probe = Probe::default();
+    *probe.history_error.borrow_mut() = Some("History unavailable".into());
+    let mut ui = Ui::at(&probe, "/admin/importers/harvest/runs");
+    assert!(ui.html().contains("Could not load runs"));
+    *probe.history_error.borrow_mut() = None;
+    probe.history.borrow_mut().push(job(1, "running"));
+    ui.click("refresh-history");
+    assert!(!ui.html().contains("Could not load runs"));
+    assert!(ui.html().contains(&run_path(1)));
 }
 
 #[test]
@@ -1089,26 +1318,67 @@ mod server_fns {
         Ok(job(10 + submitted.len() as u128, "queued"))
     }
 
+    fn next_action(probe: &Probe, what: &str) -> oneshot::Receiver<ActionResponse> {
+        probe
+            .action_responses
+            .borrow_mut()
+            .pop_front()
+            .unwrap_or_else(|| panic!("unexpected {what}"))
+    }
+
     pub async fn cancel_harvest_import_job(id: Uuid) -> ActionResponse {
         let probe = consume_context::<Probe>();
         probe.cancellations.borrow_mut().push(id);
-        let response = probe
-            .action_responses
-            .borrow_mut()
-            .pop_front()
-            .expect("unexpected cancellation");
-        response.await.unwrap()
+        next_action(&probe, "cancellation").await.unwrap()
     }
+
     pub async fn retry_harvest_import_job(id: Uuid) -> ActionResponse {
         let probe = consume_context::<Probe>();
         probe.retries.borrow_mut().push(id);
-        let response = probe
-            .action_responses
-            .borrow_mut()
-            .pop_front()
-            .expect("unexpected retry");
-        response.await.unwrap()
+        next_action(&probe, "retry").await.unwrap()
     }
+
+    pub async fn commit_harvest_import_preview(id: Uuid) -> ActionResponse {
+        let probe = consume_context::<Probe>();
+        probe.commits.borrow_mut().push(id);
+        next_action(&probe, "commit").await.unwrap()
+    }
+
+    pub async fn harvest_import_error_summary(
+        id: Uuid,
+    ) -> Result<models::ErrorSummary, ServerFnError> {
+        let probe = consume_context::<Probe>();
+        probe.summaries.borrow_mut().push(id);
+        Ok(probe.summary.borrow().clone())
+    }
+
+    pub async fn add_harvest_people(
+        people: Vec<models::user::NewPerson>,
+        activation: models::user::Activation,
+    ) -> Result<models::user::AddedPeople, ServerFnError> {
+        let probe = consume_context::<Probe>();
+        probe
+            .additions
+            .borrow_mut()
+            .push((people.clone(), activation));
+        if let Some(error) = probe.addition_error.borrow().as_ref() {
+            return Err(ServerFnError::new(error));
+        }
+        let present = probe.already_present.borrow();
+        let (present, added): (Vec<_>, Vec<_>) = people
+            .into_iter()
+            .partition(|person| present.contains(&person.email));
+        Ok(models::user::AddedPeople {
+            added: added
+                .into_iter()
+                .map(|person| models::user::User {
+                    email: person.email,
+                })
+                .collect(),
+            present: present.into_iter().map(|person| person.email).collect(),
+        })
+    }
+
     pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
         let probe = consume_context::<Probe>();
         *probe.connects.borrow_mut() += 1;
@@ -1118,6 +1388,7 @@ mod server_fns {
         }
         Err(ServerFnError::new("authorization unavailable"))
     }
+
     pub async fn harvest_disconnect() -> Result<(), ServerFnError> {
         let probe = consume_context::<Probe>();
         *probe.disconnects.borrow_mut() += 1;
@@ -1141,7 +1412,11 @@ fn connection_picker_distinguishes_loading_unavailable_and_unconfigured() {
     send.send(Err(ServerFnError::new("check failed"))).unwrap();
     ui.settle();
     assert!(ui.html().contains("Status unavailable"));
+    let (send, receive) = oneshot::channel();
+    *probe.connection_response.borrow_mut() = Some(receive);
     ui.click("choose-api");
+    send.send(Err(ServerFnError::new("check failed"))).unwrap();
+    ui.settle();
     assert!(ui.html().contains("Could not check Harvest connection"));
     ui.click("refresh-connection");
     assert!(ui.html().contains("Set up the Harvest OAuth app"));
@@ -1279,7 +1554,7 @@ fn unconfigured_importer_saves_an_oauth_app_and_never_shows_its_secret() {
         "{html}"
     );
     assert!(html.contains("/auth/harvest/callback"), "{html}");
-    assert!(!html.contains("Import history"));
+    assert!(!html.contains("Latest runs"));
 
     ui.type_into("harvest-client-id", " 1234.pt.app ");
     ui.type_into("harvest-client-secret", "very-secret");

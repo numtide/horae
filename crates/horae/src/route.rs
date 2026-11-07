@@ -8,7 +8,10 @@ use crate::pages::{
     approvals::Approvals,
     clients::{ClientDetail, ClientList},
     gallery::Gallery,
-    importers::HarvestImport,
+    importers::{
+        HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns, ImporterIndex,
+        RunsCursor,
+    },
     invoices::{InvoiceDetail, InvoiceList, NewInvoiceForClient},
     new_project::{EditProject, NewProject, NewProjectForClient},
     permission_audit::PermissionAudit,
@@ -91,7 +94,17 @@ pub enum Route {
     #[route("/admin/tasks")]
     TaskCatalog {},
     #[route("/admin/importers")]
-    HarvestImport {},
+    ImporterIndex {},
+    #[route("/admin/importers/harvest")]
+    HarvestOverview {},
+    #[route("/admin/importers/harvest/oauth")]
+    HarvestOAuth {},
+    #[route("/admin/importers/harvest/csv")]
+    HarvestCsv {},
+    #[route("/admin/importers/harvest/runs?:..before")]
+    HarvestRuns { before: RunsCursor },
+    #[route("/admin/importers/harvest/runs/:id")]
+    HarvestRun { id: Uuid },
     #[route("/admin/audit")]
     PermissionAudit {},
     #[end_layout]
@@ -123,6 +136,14 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
                 | Route::EditProject { .. }
         ) | (Route::ClientList {}, Route::ClientDetail { .. })
             | (Route::InvoiceList {}, Route::NewInvoiceForClient { .. })
+            | (
+                Route::ImporterIndex {},
+                Route::HarvestOverview {}
+                    | Route::HarvestOAuth {}
+                    | Route::HarvestCsv {}
+                    | Route::HarvestRuns { .. }
+                    | Route::HarvestRun { .. }
+            )
     ) || std::mem::discriminant(current) == std::mem::discriminant(to)
 }
 
@@ -174,6 +195,62 @@ mod tests {
             assert_eq!(route.to_string(), path);
             assert!(matches_navigation(&section, &route));
             assert!(!matches_navigation(&Route::ClientList {}, &route));
+        }
+    }
+
+    #[test]
+    fn harvest_section_urls_round_trip_and_keep_importers_highlighted() {
+        let id = Uuid::now_v7();
+        let routes = [
+            ("/admin/importers".to_owned(), Route::ImporterIndex {}),
+            (
+                "/admin/importers/harvest".to_owned(),
+                Route::HarvestOverview {},
+            ),
+            (
+                "/admin/importers/harvest/oauth".to_owned(),
+                Route::HarvestOAuth {},
+            ),
+            (
+                "/admin/importers/harvest/csv".to_owned(),
+                Route::HarvestCsv {},
+            ),
+            (
+                "/admin/importers/harvest/runs".to_owned(),
+                Route::HarvestRuns {
+                    before: RunsCursor::default(),
+                },
+            ),
+            (
+                format!("/admin/importers/harvest/runs?before={id}"),
+                Route::HarvestRuns {
+                    before: RunsCursor(Some(id)),
+                },
+            ),
+            (
+                format!("/admin/importers/harvest/runs/{id}"),
+                Route::HarvestRun { id },
+            ),
+        ];
+        for (path, route) in routes {
+            assert!(path.parse::<Route>().unwrap() == route, "{path}");
+            // An empty whole-query argument still renders its `?`.
+            assert_eq!(route.to_string().trim_end_matches('?'), path);
+            assert!(
+                matches_navigation(&Route::ImporterIndex {}, &route),
+                "{path}"
+            );
+            assert!(!matches_navigation(&Route::ClientList {}, &route), "{path}");
+        }
+        // The OAuth callback returns to the overview with its outcome.
+        for path in [
+            "/admin/importers/harvest?connected=1",
+            "/admin/importers/harvest?error=1",
+        ] {
+            assert!(
+                path.parse::<Route>().unwrap() == Route::HarvestOverview {},
+                "{path}"
+            );
         }
     }
 

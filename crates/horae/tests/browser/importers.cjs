@@ -17,9 +17,14 @@ const job = (status = 'succeeded', mode = 'DryRun') => ({
   id, kind: 'harvest_csv_import', status, phase: 'time_entries', processed_count: 12,
   total_count: null, report: report(mode), last_error: null,
   created_at: '2026-09-15T10:30:00Z', finished_at: null, retry_availability: 'unavailable_state',
+  mode, source: 'csv', commit_availability: mode === 'DryRun' && status === 'succeeded' ? 'available' : 'not_preview',
 });
 const connected = () => ({ configured: true, connected: true, account_id: 'fixture-account',
   token_expired: false, account_generation: 2, connection_revision: 4, has_provenance: false, active_imports: 0 });
+const groups = errors => ({
+  groups: errors.map(error => ({ entity: 'time_entry', kind: null, reason: error.reason, count: 1, samples: [error.source_location] })),
+  people: [], omitted_errors: 0, omitted_people: 0,
+});
 
 (async () => {
   const zoomExtension = path.join(__dirname, 'fixtures', 'zoom');
@@ -38,7 +43,8 @@ const connected = () => ({ configured: true, connected: true, account_id: 'fixtu
     changeGate = null; starts = 0; changes = 0; statusReads = [];
   }
   reset();
-  await page.route(url => url.pathname.includes('harvest') || url.pathname.startsWith('/api/import/'), async route => {
+  // Only API calls: the section's own page URLs contain "harvest" too.
+  await page.route(url => url.pathname.startsWith('/api/') && url.pathname.includes('harvest'), async route => {
     const path = new URL(route.request().url()).pathname;
     const reply = value => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(value) });
     if (path === '/api/import/harvest/connection') return reply(connection);
@@ -54,6 +60,7 @@ const connected = () => ({ configured: true, connected: true, account_id: 'fixtu
       if (statusFailure) return route.abort('failed');
       return reply(selected);
     }
+    if (path === '/api/import/harvest/error-summary') return reply(groups(selected.report.row_errors));
     if (path.startsWith('/api/import/harvest/csv-job/') || path === '/api/import/harvest/start') {
       starts++;
       return reply({ ...selected, status: 'queued' });
@@ -66,9 +73,13 @@ const connected = () => ({ configured: true, connected: true, account_id: 'fixtu
   });
   async function visit() {
     const loaded = page.waitForResponse(r => r.url().includes('/api/import/harvest/history'));
-    await page.goto(`${base}/admin/importers`);
+    await page.goto(`${base}/admin/importers/harvest`);
     await loaded;
-    await expect(page.getByTestId('choose-api')).toBeVisible();
+    await expect(page.getByTestId('all-importers')).toBeVisible();
+  }
+  async function visitRun() {
+    await page.goto(`${base}/admin/importers/harvest/runs/${id}`);
+    await expect(page.getByTestId('back-to-harvest')).toBeVisible();
   }
   async function check(name, run) {
     try { reset(); await run(); console.log(`PASS: ${name}`); }
@@ -88,7 +99,6 @@ const connected = () => ({ configured: true, connected: true, account_id: 'fixtu
 
     await check('connection disclosure, modal focus and pending safeguards', async () => {
       await visit();
-      await page.getByTestId('choose-api').click();
       const manage = page.getByTestId('manage-connection');
       await expect(manage).toHaveAttribute('aria-expanded', 'false');
       await manage.focus(); await page.keyboard.press('Enter');
@@ -120,44 +130,38 @@ const connected = () => ({ configured: true, connected: true, account_id: 'fixtu
       await page.keyboard.press('Escape');
     });
 
-    await check('keyboard CSV choice and a single current-preview primary action', async () => {
-      await visit(); await page.getByTestId('choose-csv').click();
+    await check('keyboard CSV choice opens the preview run with a single primary action', async () => {
+      await page.goto(`${base}/admin/importers/harvest/csv`);
       const file = page.getByTestId('csv-file');
       await file.focus(); await expect(file).toBeFocused();
       await file.setInputFiles({ name: 'fixture.csv', mimeType: 'text/csv', buffer: Buffer.from('Date,Hours\n2026-09-15,1\n') });
       await page.getByTestId('preview-csv').click();
+      await page.waitForURL(`${base}/admin/importers/harvest/runs/${id}`);
       await expect(page.getByTestId('commit-preview')).toBeVisible();
       await expect(page.locator('main .btn-primary:visible')).toHaveCount(1);
       await expect(page.getByText('No business data was written.', { exact: false })).toBeVisible();
       assert.equal(starts, 1);
-      await page.getByTestId('all-importers').click();
+      await page.getByTestId('back-to-harvest').click();
       await expect(page.getByTestId('commit-preview')).toHaveCount(0);
     });
 
-    await check('old-account partial report, selected history and keyboard error disclosure', async () => {
+    await check('old-account partial report explains the missing prerequisite and keeps the download', async () => {
       selected = job('failed', 'Commit');
-      selected.kind = 'harvest_api_import'; selected.retry_availability = 'previous_account';
+      selected.kind = 'harvest_api_import'; selected.source = 'harvest_api'; selected.retry_availability = 'previous_account';
       selected.report.source = 'harvest_api';
       selected.report.summary.time_entries.errored = 1;
       selected.report.row_errors = [{ entity: 'time_entry', source_location: 'row 2', reason: 'invalid date' }];
-      history = [selected];
-      await visit();
-      const row = page.getByTestId(`select-${id}`);
-      await row.click(); await expect(row).toHaveAttribute('aria-pressed', 'true');
+      await visitRun();
       await expect(page.getByText('Partial report — confirmed batches only')).toBeVisible();
       await expect(page.getByText('previous Harvest account', { exact: false })).toBeVisible();
-      await expect(page.getByTestId(`retry-${id}`)).toHaveCount(0);
-      const toggle = page.getByTestId('toggle-import-errors');
-      await toggle.focus(); await page.keyboard.press('Enter');
-      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-      await page.keyboard.press('Enter');
-      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.getByTestId('retry-run')).toHaveCount(0);
+      await expect(page.getByText('invalid date')).toBeVisible();
       await expect(page.getByRole('link', { name: 'Download all errors (NDJSON)' })).toBeVisible();
     });
 
-    await check('monitoring failure resumes the same ID without a new import', async () => {
-      selected = job('running'); history = [selected]; statusFailure = true;
-      await visit(); await expect(page.getByTestId('resume-monitoring')).toBeVisible();
+    await check('monitoring failure checks the same ID again without a new import', async () => {
+      selected = job('running'); statusFailure = true;
+      await visitRun(); await expect(page.getByTestId('resume-monitoring')).toBeVisible();
       statusFailure = false;
       await page.getByTestId('resume-monitoring').click();
       await expect(page.getByText('Leaving this page does not stop the import.')).toBeVisible();
@@ -173,10 +177,10 @@ const connected = () => ({ configured: true, connected: true, account_id: 'fixtu
       selected.report.row_errors = [{ entity: 'time_entry', source_location: 'fixture'.repeat(60), reason: 'invalid date' }];
       for (const width of [360, 768, 1440]) {
         await page.setViewportSize({ width, height: 640 });
-        await visit(); await page.getByTestId('choose-api').click(); await fits(width);
-        await page.getByTestId(`select-${id}`).click();
+        await visitRun();
         await expect(page.getByText('Import complete with 1 errors', { exact: true })).toBeVisible();
         await fits(width);
+        await visit(); await fits(width);
         await page.getByTestId('manage-connection').click();
         await page.getByTestId('change-account').click();
         const modal = page.getByRole('dialog', { name: 'Change Harvest account?' });
@@ -205,9 +209,6 @@ const connected = () => ({ configured: true, connected: true, account_id: 'fixtu
       await expect.poll(() => page.evaluate(() => window.innerWidth)).toBeLessThan(before.width);
       const after = await page.evaluate(() => ({ width: window.innerWidth, ratio: window.devicePixelRatio }));
       assert.ok(after.ratio >= before.ratio * 1.99, 'Page zoom changes effective pixel ratio');
-      await page.getByTestId('choose-api').click();
-      await fits(after.width);
-      await page.getByTestId(`select-${id}`).click();
       await fits(after.width);
       await page.getByTestId('manage-connection').click();
       await page.getByTestId('change-account').click();
@@ -216,6 +217,8 @@ const connected = () => ({ configured: true, connected: true, account_id: 'fixtu
       assert.ok(await modal.locator('.modal').evaluate(el => el.scrollWidth <= el.clientWidth));
       await expect(page.getByTestId('cancel-change-account')).toBeInViewport();
       await page.keyboard.press('Escape');
+      await page.getByTestId(`run-${id}`).click();
+      await fits(after.width);
       console.log(`ZOOM: ${zoom * 100}%, layout ${before.width}px → ${after.width}px, DPR ${before.ratio} → ${after.ratio}`);
     });
     assert.deepEqual(errors, [], 'No browser runtime errors');

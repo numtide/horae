@@ -717,7 +717,10 @@ async fn create_person(
     email: &str,
     name: &str,
 ) -> Result<(Uuid, PersonOutcome), RowFailure> {
-    crate::db::lock_user_email(&mut *conn, email).await?;
+    // The import needs to know whose account holds the email, not only that
+    // one does, so it reads them under the shared lock itself, also ignoring
+    // surrounding whitespace.
+    crate::db::lock_new_user_email(&mut *conn, email).await?;
     let existing = sqlx::query!(
         "SELECT id, org_id FROM users WHERE lower(btrim(email)) = lower(btrim($1)) LIMIT 2",
         email,

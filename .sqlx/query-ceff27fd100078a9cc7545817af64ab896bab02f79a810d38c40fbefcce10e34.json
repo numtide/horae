@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM users\n             WHERE id = $1 AND org_id = $2 AND active AND org_role = 'admin') AS \"admin!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "admin!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ceff27fd100078a9cc7545817af64ab896bab02f79a810d38c40fbefcce10e34"
+}

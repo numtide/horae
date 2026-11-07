@@ -784,7 +784,7 @@ fn ProjectListContent(
                         }
                     }
                     if can_import {
-                        Link { to: Route::HarvestImport {}, class: "btn btn-secondary py-2 px-4", "Import" }
+                        Link { to: Route::ImporterIndex {}, class: "btn btn-secondary py-2 px-4", "Import" }
                     }
                     button {
                         r#type: "button",
@@ -928,7 +928,7 @@ fn ProjectListContent(
                                             }
                                         }
                                         if can_import {
-                                            Link { to: Route::HarvestImport {}, class: "text-sm font-semibold", "Import from Harvest →" }
+                                            Link { to: Route::ImporterIndex {}, class: "text-sm font-semibold", "Import from Harvest →" }
                                         }
                                     }
                                 } else {

@@ -24,6 +24,8 @@ pub(super) fn state_label(state: &str) -> &'static str {
 pub(super) fn phase_label(phase: Option<&str>) -> &'static str {
     match phase {
         Some("importing") => "Reading source",
+        Some(phase) if phase.starts_with("download_") => "Downloading from Harvest",
+        Some("catalog") => "Clients, projects, tasks and people",
         Some("clients") => "Clients",
         Some("projects") => "Projects",
         Some("tasks") => "Tasks",
@@ -54,18 +56,70 @@ pub(super) fn result_summary(report: &ImportReport) -> String {
     format!("{created} created · {updated} updated · {skipped} skipped · {errored} errored")
 }
 
-pub(super) fn empty_selection() -> &'static str {
-    "No report selected"
+pub(super) fn mode_label(
+    mode: Option<horae_core::importers::harvest::types::ImportMode>,
+) -> &'static str {
+    use horae_core::importers::harvest::types::ImportMode;
+    match mode {
+        Some(ImportMode::DryRun) => "Dry run",
+        Some(ImportMode::Commit) => "Commit",
+        None => "Mode unavailable",
+    }
 }
 
-pub(super) fn mode_label(report: Option<&serde_json::Value>) -> &'static str {
-    match report
-        .and_then(|report| report.get("mode"))
-        .and_then(serde_json::Value::as_str)
-    {
-        Some("DryRun") => "Preview",
-        Some("Commit") => "Import",
-        _ => "Mode unavailable",
+pub(super) fn commit_reason(availability: crate::models::CommitAvailability) -> &'static str {
+    use crate::models::CommitAvailability;
+    match availability {
+        CommitAvailability::NewerImport => {
+            "A newer import from this source replaced this preview. Start a new preview to commit."
+        }
+        CommitAvailability::PreviousAccount => {
+            "This preview belongs to a previous Harvest account. Start a new preview for the current account."
+        }
+        CommitAvailability::MissingUpload => {
+            "The CSV upload is no longer retained. Choose the file again and start a new preview."
+        }
+        CommitAvailability::UnavailableState => "Only a preview that finished can be committed.",
+        CommitAvailability::Unknown => {
+            "Commit availability is unknown. Reload the page or update Horae."
+        }
+        CommitAvailability::Available
+        | CommitAvailability::NotPreview
+        | CommitAvailability::Committed => "",
+    }
+}
+
+pub(super) fn person_kind_label(
+    kind: horae_core::importers::harvest::types::PersonErrorKind,
+) -> &'static str {
+    use horae_core::importers::harvest::types::PersonErrorKind;
+    match kind {
+        PersonErrorKind::UnmatchedEmail => "No Horae account has this email",
+        PersonErrorKind::UnmatchedName => "No Horae account has this name",
+        PersonErrorKind::AmbiguousPerson => "Several Horae accounts could match",
+        PersonErrorKind::MissingEmail => "The Harvest person has no email",
+        PersonErrorKind::DuplicateEmail => "Several Harvest people share this email",
+        PersonErrorKind::PersonNotImported => "The person was not imported",
+        PersonErrorKind::EmailInUse => "Another account uses this email",
+    }
+}
+
+/// What the administrator can do about a person, when adding them is not it.
+pub(super) fn person_fix(
+    kind: horae_core::importers::harvest::types::PersonErrorKind,
+) -> &'static str {
+    use horae_core::importers::harvest::types::PersonErrorKind;
+    match kind {
+        PersonErrorKind::UnmatchedEmail | PersonErrorKind::UnmatchedName => "",
+        PersonErrorKind::MissingEmail => {
+            "Add an email to this person in Harvest, then preview again."
+        }
+        PersonErrorKind::DuplicateEmail => "Give each of these Harvest people their own email.",
+        PersonErrorKind::AmbiguousPerson => {
+            "Make the email or name unique in Horae, or change it in Harvest."
+        }
+        PersonErrorKind::EmailInUse => "Change the email in Harvest or on the other account.",
+        PersonErrorKind::PersonNotImported => "Fix the person's own error first.",
     }
 }
 
@@ -155,10 +209,5 @@ mod tests {
                 "2 created · 3 updated · 4 skipped · 1 errored"
             );
         }
-    }
-
-    #[test]
-    fn no_selection_does_not_claim_no_import_history() {
-        assert_eq!(empty_selection(), "No report selected");
     }
 }
