@@ -117,7 +117,8 @@
   `pg_advisory_xact_lock(hashtextextended('horae.signup-email:' || lower(email), 0))`, the key
   sign-in provisioning (PR #340) uses. It then checks again for any account with that email
   ignoring case: the same workspace is matched, anything else is `email_in_use`. A unique
-  violation maps to `email_in_use` too. Follow-up: once #340 lands, share its helper.
+  violation maps to `email_in_use` too. Every account-creating path (sign-in provisioning, the CLI,
+  People, the importer) now takes it through one helper, `db::lock_new_user_email`.
 - **READ COMMITTED imports**: `begin_import_transaction` sets READ COMMITTED first. Under a
   REPEATABLE READ connection default the snapshot would predate the lock wait, so the recheck
   would miss an account committed meanwhile. Nothing in the import relies on a snapshot spanning

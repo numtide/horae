@@ -3,16 +3,19 @@
 //! `GET /auth/login` serves the sign-in landing page; its button hands off to
 //! `GET /auth/oidc/start`, which redirects to the provider. `GET /auth/callback`
 //! completes the exchange, verifies the ID token, and maps the verified identity
-//! onto an **existing** Horae user. Accounts are created by admins (FR-002), so a
-//! first OIDC login *links* the subject to a user matched by verified email — it
-//! never auto-provisions. Deactivated users are denied at sign-in.
+//! onto a Horae user. Accounts are created by admins (FR-002), so a first OIDC
+//! login *links* the subject to a user matched by verified email. Only when the
+//! operator lists the email's domain does a first login that matches no account
+//! create one (an active member). Deactivated users are denied at sign-in, and a
+//! sign-in refused because of the account leaves a one-time notice that
+//! `/auth/login` shows.
 
 pub mod link;
 
 use axum::extract::Query;
 use axum::response::{Html, IntoResponse, Redirect};
 
-use crate::auth::page::{LoginVariant, render};
+use crate::auth::page::{LoginNotice, LoginVariant, render};
 use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreProviderMetadata};
 use openidconnect::{
     AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, PkceCodeChallenge,
@@ -23,13 +26,17 @@ use tower_sessions::Session;
 use uuid::Uuid;
 
 use crate::auth::session::set_session_user_id;
-use crate::config::OidcConfig;
+use crate::config::{AutoProvision, OidcConfig};
 use crate::models::User;
 use horae_core::types::OrgRole;
 
 /// Session key holding the in-flight authorization request's CSRF, PKCE, and
 /// nonce secrets between `/auth/login` and `/auth/callback`.
 const OIDC_FLOW_KEY: &str = "oidc_flow";
+
+/// Session key holding the [`LoginNotice`] of a refused sign-in until
+/// `/auth/login` shows it. Kept server-side so the email never enters a URL.
+const LOGIN_NOTICE_KEY: &str = "login_notice";
 
 /// The one-time secrets that tie a callback back to the login that started it.
 #[derive(Serialize, Deserialize)]
@@ -47,15 +54,24 @@ pub struct CallbackParams {
 }
 
 /// `GET /auth/login` for OIDC deployments: serve the sign-in landing page. The
-/// page's button links to `/auth/oidc/start`, which begins the flow.
-pub async fn login_page() -> impl IntoResponse {
+/// page's button links to `/auth/oidc/start`, which begins the flow. A notice
+/// left by a refused sign-in is shown once.
+pub async fn login_page(session: Session) -> impl IntoResponse {
     let label = crate::state::global_state()
         .await
         .oidc
         .as_ref()
         .map(|c| c.button_label.clone())
         .unwrap_or_else(|| crate::config::DEFAULT_OIDC_BUTTON_LABEL.into());
-    Html(render(LoginVariant::Oidc { cta_label: label }))
+    let notice = session
+        .remove::<LoginNotice>(LOGIN_NOTICE_KEY)
+        .await
+        .ok()
+        .flatten();
+    Html(render(
+        LoginVariant::Oidc { cta_label: label },
+        notice.as_ref(),
+    ))
 }
 
 /// `GET /auth/oidc/start`: begin the authorization-code flow. Stashes the
@@ -130,6 +146,7 @@ pub async fn callback(session: Session, Query(params): Query<CallbackParams>) ->
         return Redirect::to("/auth/login");
     }
 
+    let policy = cfg.auto_provision.clone();
     // Exchange the code and verify the ID token off the async runtime (blocking).
     let identity = tokio::task::spawn_blocking(move || {
         exchange_and_verify(&cfg, code, &flow.pkce_verifier, &flow.nonce)
@@ -147,7 +164,7 @@ pub async fn callback(session: Session, Query(params): Query<CallbackParams>) ->
         }
     };
 
-    match resolve_and_login(state, &session, &identity).await {
+    match resolve_and_login(state, &session, &identity, &policy).await {
         Ok(true) => Redirect::to("/"),
         Ok(false) => Redirect::to("/auth/login"),
         Err(e) => {
@@ -163,7 +180,11 @@ struct Identity {
     issuer: String,
     subject: String,
     email: Option<String>,
-    email_verified: bool,
+    /// `None` when the token has no `email_verified` claim, which some
+    /// providers (tsidp) never send.
+    email_verified: Option<bool>,
+    /// The token's `name` claim, if any.
+    name: Option<String>,
 }
 
 /// A candidate user row for the resolution decision.
@@ -172,25 +193,74 @@ struct Candidate {
     active: bool,
 }
 
+/// Whether an identity that matches no account may create one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Eligibility {
+    /// Provisioning is off, or the token has no usable email.
+    Off,
+    /// The email's domain is not on the operator's list.
+    DomainNotAllowed,
+    /// The domain is listed, but the email does not count as verified.
+    Unconfirmed,
+    Allowed,
+}
+
+/// Pure eligibility check. `true` verifies; an absent claim verifies only when
+/// the operator trusts it; `false` never does.
+fn eligibility(
+    policy: &AutoProvision,
+    email: Option<&str>,
+    email_verified: Option<bool>,
+) -> Eligibility {
+    if policy.domains.is_empty() {
+        return Eligibility::Off;
+    }
+    let Some((_, domain)) = email.and_then(|e| e.rsplit_once('@')) else {
+        return Eligibility::Off;
+    };
+    if domain.is_empty() {
+        return Eligibility::Off;
+    }
+    if !policy
+        .domains
+        .iter()
+        .any(|d| d.eq_ignore_ascii_case(domain))
+    {
+        return Eligibility::DomainNotAllowed;
+    }
+    match email_verified {
+        Some(true) => Eligibility::Allowed,
+        None if policy.trust_unverified_email => Eligibility::Allowed,
+        _ => Eligibility::Unconfirmed,
+    }
+}
+
 /// What a callback should do with the verified identity.
 #[derive(Debug, PartialEq, Eq)]
 enum Resolution {
     /// Log in this user; `link_subject` = write the OIDC subject onto the row
     /// (true on a first, email-matched login).
     Login { id: Uuid, link_subject: bool },
-    /// No Horae account matches — accounts are admin-created, so deny (FR-002).
+    /// No account matches and the identity may create one.
+    Provision,
+    /// No Horae account matches and none may be created (FR-002).
     DenyNoUser,
     /// The matched account is deactivated — deny sign-in (FR-002).
     DenyInactive,
+    /// No account matches, and provisioning is off for this email's domain.
+    DenyDomainNotAllowed,
+    /// No account matches, and the provider did not confirm the email.
+    DenyEmailUnconfirmed,
 }
 
 /// Pure resolution: match by subject first, then (only for a verified email) by
-/// email. Deactivated matches are denied; an unmatched identity is denied rather
-/// than provisioned.
+/// email. Deactivated matches are denied; an unmatched identity is provisioned
+/// only when `eligibility` allows it.
 fn resolve_identity(
     by_subject: Option<Candidate>,
     email_verified: bool,
     by_email: Option<Candidate>,
+    eligibility: Eligibility,
 ) -> Resolution {
     if let Some(u) = by_subject {
         return if u.active {
@@ -212,24 +282,49 @@ fn resolve_identity(
             Resolution::DenyInactive
         };
     }
-    Resolution::DenyNoUser
+    match eligibility {
+        Eligibility::Allowed => Resolution::Provision,
+        Eligibility::DomainNotAllowed => Resolution::DenyDomainNotAllowed,
+        Eligibility::Unconfirmed => Resolution::DenyEmailUnconfirmed,
+        Eligibility::Off => Resolution::DenyNoUser,
+    }
 }
 
-/// Resolve a verified identity to the account that may receive a session.
-async fn resolve_user(db: &sqlx::PgPool, identity: &Identity) -> anyhow::Result<Option<User>> {
+/// An account that may receive a session; `created` when this sign-in made it.
+#[derive(Debug)]
+struct SignIn {
+    user: User,
+    created: bool,
+}
+
+/// Resolve a verified identity to the account that may receive a session, or
+/// to the notice explaining why there is none.
+async fn resolve_user(
+    db: &sqlx::PgPool,
+    identity: &Identity,
+    policy: &AutoProvision,
+) -> anyhow::Result<Result<SignIn, LoginNotice>> {
+    // The trust switch is for provisioning only: binding an existing account by
+    // email always needs an explicit `true` (FR-010).
+    let email_verified = identity.email_verified == Some(true);
+    // Where an account holds the email or subject but cannot be signed in to,
+    // "no account exists for <email>" would be false. The generic notice says
+    // nothing about the address.
+    let unmatched = || LoginNotice::NoAccount { email: None };
     let by_subject = fetch_by_identity(db, identity).await?;
     // Only an as-yet-unlinked account may be claimed by a verified email — a
     // first-login bootstrap. This prevents a different subject with a matching
     // email from silently rebinding an already-linked account.
-    let by_email = match (identity.email_verified, &identity.email) {
+    let by_email = match (email_verified, &identity.email) {
         (true, Some(email)) => fetch_unlinked_by_email(db, email).await?,
         _ => None,
     };
 
     let resolution = resolve_identity(
         by_subject.as_ref().map(candidate),
-        identity.email_verified,
+        email_verified,
         by_email.as_ref().map(candidate),
+        eligibility(policy, identity.email.as_deref(), identity.email_verified),
     );
 
     let (user, link_subject) = match resolution {
@@ -242,13 +337,53 @@ async fn resolve_user(db: &sqlx::PgPool, identity: &Identity) -> anyhow::Result<
                 .ok_or_else(|| anyhow::anyhow!("resolved user vanished"))?;
             (user, link_subject)
         }
+        Resolution::Provision => {
+            let email = identity
+                .email
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("provisioning needs an email"))?;
+            if let Some(user) = provision(db, identity, email).await? {
+                tracing::info!(user_id = %user.id, "OIDC sign-in created an account");
+                return Ok(Ok(SignIn {
+                    user,
+                    created: true,
+                }));
+            }
+            // Nothing was created: a concurrent first sign-in for this identity
+            // won, or the email or subject is held by another account.
+            return Ok(match fetch_by_identity(db, identity).await? {
+                Some(user) if user.active => Ok(SignIn {
+                    user,
+                    created: false,
+                }),
+                Some(_) => Err(LoginNotice::Deactivated),
+                None => {
+                    tracing::warn!("OIDC login denied: email or subject held by another account");
+                    Err(unmatched())
+                }
+            });
+        }
         Resolution::DenyNoUser => {
             tracing::warn!("OIDC login denied: no account for subject/email");
-            return Ok(None);
+            return Ok(Err(LoginNotice::NoAccount {
+                email: identity.email.clone(),
+            }));
         }
         Resolution::DenyInactive => {
             tracing::warn!("OIDC login denied: account is deactivated");
-            return Ok(None);
+            return Ok(Err(LoginNotice::Deactivated));
+        }
+        Resolution::DenyDomainNotAllowed => {
+            tracing::warn!("OIDC login denied: no account, and the email's domain is not listed");
+            return Ok(Err(LoginNotice::DomainNotAllowed {
+                email: identity.email.clone().unwrap_or_default(),
+            }));
+        }
+        Resolution::DenyEmailUnconfirmed => {
+            tracing::warn!("OIDC login denied: no account, and the email is not verified");
+            return Ok(Err(LoginNotice::EmailUnconfirmed {
+                email: identity.email.clone().unwrap_or_default(),
+            }));
         }
     };
 
@@ -267,27 +402,107 @@ async fn resolve_user(db: &sqlx::PgPool, identity: &Identity) -> anyhow::Result<
         )
         .fetch_optional(db)
         .await?;
-        if linked.is_some() {
-            return Ok(linked);
+        if let Some(user) = linked {
+            return Ok(Ok(SignIn {
+                user,
+                created: false,
+            }));
         }
         // A concurrent callback may have linked the row. Only the same identity
         // winning that same active account is allowed to receive a session.
         return Ok(fetch_by_identity(db, identity)
             .await?
-            .filter(|current| current.id == user.id && current.active));
+            .filter(|current| current.id == user.id && current.active)
+            .map(|user| SignIn {
+                user,
+                created: false,
+            })
+            .ok_or_else(unmatched));
     }
 
-    Ok(Some(user))
+    Ok(Ok(SignIn {
+        user,
+        created: false,
+    }))
 }
 
-/// Resolve the identity before creating a session or dispatching a login event.
+/// Create an active member account bound to the identity. Creates nothing when
+/// any account holds the email (in any letter case or state), when another
+/// account holds the subject, or when there is not exactly one organization.
+/// Every user-creating path holds the email lock from
+/// [`crate::db::lock_new_user_email`], and the unique subject constraint makes
+/// concurrent first sign-ins for one identity create a single row.
+async fn provision(
+    db: &sqlx::PgPool,
+    identity: &Identity,
+    email: &str,
+) -> anyhow::Result<Option<User>> {
+    let mut tx = db.begin().await?;
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        .execute(&mut *tx)
+        .await?;
+    // Lock the organization row before the email, the order every
+    // user-creating path follows, so none of them can deadlock another.
+    let organizations = sqlx::query_scalar!("SELECT id FROM organizations FOR KEY SHARE")
+        .fetch_all(&mut *tx)
+        .await?;
+    let [org_id] = organizations[..] else {
+        return Ok(None);
+    };
+    if crate::db::lock_new_user_email(&mut tx, email).await? {
+        return Ok(None);
+    }
+    let user = sqlx::query_as!(
+        User,
+        r#"INSERT INTO users (id, org_id, email, name, org_role, oidc_subject, oidc_issuer)
+           VALUES ($1, $7, $2, $3, $4, $5, $6)
+           ON CONFLICT DO NOTHING
+           RETURNING id, org_id, email, name, oidc_subject,
+                     org_role as "org_role: OrgRole",
+                     cost_rate_cents, billable_rate_cents, active,
+                     created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        Uuid::now_v7(),
+        email,
+        account_name(identity.name.as_deref(), email),
+        OrgRole::Member as OrgRole,
+        identity.subject,
+        identity.issuer,
+        org_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(user)
+}
+
+/// The token's display name, or the email's local part when it has none.
+fn account_name(name: Option<&str>, email: &str) -> String {
+    name.map(str::trim)
+        .filter(|name| !name.is_empty())
+        .or_else(|| {
+            email
+                .rsplit_once('@')
+                .map(|(local, _)| local)
+                .filter(|local| !local.is_empty())
+        })
+        .unwrap_or(email)
+        .to_string()
+}
+
+/// Resolve the identity before creating a session or dispatching events. A
+/// refusal stores its notice for `/auth/login`.
 async fn resolve_and_login(
     state: &'static crate::state::AppState,
     session: &Session,
     identity: &Identity,
+    policy: &AutoProvision,
 ) -> anyhow::Result<bool> {
-    let Some(user) = resolve_user(&state.db, identity).await? else {
-        return Ok(false);
+    let SignIn { user, created } = match resolve_user(&state.db, identity, policy).await? {
+        Ok(sign_in) => sign_in,
+        Err(notice) => {
+            session.insert(LOGIN_NOTICE_KEY, notice).await?;
+            return Ok(false);
+        }
     };
 
     // Rotate the session id on the privilege change to defeat session fixation:
@@ -296,18 +511,29 @@ async fn resolve_and_login(
     session.cycle_id().await?;
     set_session_user_id(session, user.id).await?;
 
+    let payload = crate::plugin::event::UserPayload {
+        id: user.id,
+        email: user.email.clone(),
+        name: user.name.clone(),
+        org_role: user.org_role.to_string(),
+        method: Some("oidc".into()),
+    };
+    let occurred_at = chrono::Utc::now();
+    if created {
+        state
+            .plugins
+            .dispatch(crate::plugin::AppEvent::UserCreated {
+                occurred_at,
+                org_id: user.org_id,
+                user: payload.clone(),
+            });
+    }
     state
         .plugins
         .dispatch(crate::plugin::AppEvent::UserLoggedIn {
-            occurred_at: chrono::Utc::now(),
+            occurred_at,
             org_id: user.org_id,
-            user: crate::plugin::event::UserPayload {
-                id: user.id,
-                email: user.email.clone(),
-                name: user.name.clone(),
-                org_role: user.org_role.to_string(),
-                method: Some("oidc".into()),
-            },
+            user: payload,
         });
 
     Ok(true)
@@ -424,7 +650,11 @@ fn exchange_and_verify(
         issuer: claims.issuer().as_str().to_string(),
         subject: claims.subject().as_str().to_string(),
         email: claims.email().map(|e| e.as_str().to_string()),
-        email_verified: claims.email_verified().unwrap_or(false),
+        email_verified: claims.email_verified(),
+        name: claims
+            .name()
+            .and_then(|name| name.get(None))
+            .map(|name| name.as_str().to_string()),
     })
 }
 
@@ -508,6 +738,7 @@ mod tests {
 
     mod link;
     mod linking;
+    mod provisioning;
 
     fn active(id: Uuid) -> Candidate {
         Candidate { id, active: true }
@@ -515,12 +746,18 @@ mod tests {
     fn inactive(id: Uuid) -> Candidate {
         Candidate { id, active: false }
     }
+    fn policy(domains: &[&str], trust_unverified_email: bool) -> AutoProvision {
+        AutoProvision {
+            domains: domains.iter().map(|d| d.to_string()).collect(),
+            trust_unverified_email,
+        }
+    }
 
     #[test]
     fn subject_match_logs_in_without_relinking() {
         let id = Uuid::now_v7();
         assert_eq!(
-            resolve_identity(Some(active(id)), true, None),
+            resolve_identity(Some(active(id)), true, None, Eligibility::Off),
             Resolution::Login {
                 id,
                 link_subject: false
@@ -532,7 +769,7 @@ mod tests {
     fn first_login_links_subject_via_verified_email() {
         let id = Uuid::now_v7();
         assert_eq!(
-            resolve_identity(None, true, Some(active(id))),
+            resolve_identity(None, true, Some(active(id)), Eligibility::Off),
             Resolution::Login {
                 id,
                 link_subject: true
@@ -545,21 +782,57 @@ mod tests {
         let id = Uuid::now_v7();
         // Even with an email-matched candidate, an unverified email must not link.
         assert_eq!(
-            resolve_identity(None, false, Some(active(id))),
+            resolve_identity(None, false, Some(active(id)), Eligibility::Off),
             Resolution::DenyNoUser
         );
     }
 
     #[test]
-    fn no_account_is_denied_not_provisioned() {
-        assert_eq!(resolve_identity(None, true, None), Resolution::DenyNoUser);
+    fn no_account_is_denied_when_provisioning_is_off() {
+        assert_eq!(
+            resolve_identity(None, true, None, Eligibility::Off),
+            Resolution::DenyNoUser
+        );
+    }
+
+    #[test]
+    fn no_account_is_provisioned_when_eligible() {
+        assert_eq!(
+            resolve_identity(None, true, None, Eligibility::Allowed),
+            Resolution::Provision
+        );
+    }
+
+    #[test]
+    fn ineligible_identities_get_their_reason() {
+        assert_eq!(
+            resolve_identity(None, true, None, Eligibility::DomainNotAllowed),
+            Resolution::DenyDomainNotAllowed
+        );
+        assert_eq!(
+            resolve_identity(None, false, None, Eligibility::Unconfirmed),
+            Resolution::DenyEmailUnconfirmed
+        );
+    }
+
+    #[test]
+    fn a_matched_account_is_never_provisioned_over() {
+        let id = Uuid::now_v7();
+        assert_eq!(
+            resolve_identity(Some(inactive(id)), true, None, Eligibility::Allowed),
+            Resolution::DenyInactive
+        );
+        assert_eq!(
+            resolve_identity(None, true, Some(inactive(id)), Eligibility::Allowed),
+            Resolution::DenyInactive
+        );
     }
 
     #[test]
     fn deactivated_subject_match_is_denied() {
         let id = Uuid::now_v7();
         assert_eq!(
-            resolve_identity(Some(inactive(id)), true, None),
+            resolve_identity(Some(inactive(id)), true, None, Eligibility::Off),
             Resolution::DenyInactive
         );
     }
@@ -568,9 +841,109 @@ mod tests {
     fn deactivated_email_match_is_denied() {
         let id = Uuid::now_v7();
         assert_eq!(
-            resolve_identity(None, true, Some(inactive(id))),
+            resolve_identity(None, true, Some(inactive(id)), Eligibility::Off),
             Resolution::DenyInactive
         );
+    }
+
+    #[test]
+    fn provisioning_is_off_without_domains() {
+        assert_eq!(
+            eligibility(&policy(&[], true), Some("ada@example.com"), Some(true)),
+            Eligibility::Off
+        );
+    }
+
+    #[test]
+    fn listed_domain_with_verified_email_is_allowed() {
+        assert_eq!(
+            eligibility(
+                &policy(&["example.com"], false),
+                Some("Ada@Example.COM"),
+                Some(true)
+            ),
+            Eligibility::Allowed
+        );
+    }
+
+    #[test]
+    fn domain_is_the_part_after_the_last_at() {
+        let policy = policy(&["example.com"], false);
+        assert_eq!(
+            eligibility(&policy, Some("a@b@example.com"), Some(true)),
+            Eligibility::Allowed
+        );
+        assert_eq!(
+            eligibility(&policy, Some("ada@example.com@evil.test"), Some(true)),
+            Eligibility::DomainNotAllowed
+        );
+    }
+
+    #[test]
+    fn subdomains_and_other_domains_are_not_allowed() {
+        let policy = policy(&["example.com"], false);
+        for email in [
+            "ada@sub.example.com",
+            "ada@example.org",
+            "ada@notexample.com",
+        ] {
+            assert_eq!(
+                eligibility(&policy, Some(email), Some(true)),
+                Eligibility::DomainNotAllowed,
+                "{email}"
+            );
+        }
+    }
+
+    #[test]
+    fn missing_or_domainless_email_cannot_provision() {
+        let policy = policy(&["example.com"], true);
+        for email in [None, Some("ada"), Some("ada@")] {
+            assert_eq!(eligibility(&policy, email, Some(true)), Eligibility::Off);
+        }
+    }
+
+    #[test]
+    fn email_verified_false_is_never_trusted() {
+        for trust in [false, true] {
+            assert_eq!(
+                eligibility(
+                    &policy(&["example.com"], trust),
+                    Some("ada@example.com"),
+                    Some(false)
+                ),
+                Eligibility::Unconfirmed
+            );
+        }
+    }
+
+    #[test]
+    fn absent_email_verified_is_trusted_only_when_configured() {
+        let email = Some("ada@example.com");
+        assert_eq!(
+            eligibility(&policy(&["example.com"], false), email, None),
+            Eligibility::Unconfirmed
+        );
+        assert_eq!(
+            eligibility(&policy(&["example.com"], true), email, None),
+            Eligibility::Allowed
+        );
+    }
+
+    #[test]
+    fn account_name_prefers_the_trimmed_name_claim() {
+        assert_eq!(
+            account_name(Some("  Ada Lovelace "), "ada@example.com"),
+            "Ada Lovelace"
+        );
+    }
+
+    #[test]
+    fn account_name_falls_back_to_the_email_local_part() {
+        for name in [None, Some(""), Some("   ")] {
+            assert_eq!(account_name(name, "ada@example.com"), "ada");
+        }
+        assert_eq!(account_name(None, "@example.com"), "@example.com");
     }
 
     #[test]
@@ -589,7 +962,12 @@ mod tests {
         let subject_id = Uuid::now_v7();
         let email_id = Uuid::now_v7();
         assert_eq!(
-            resolve_identity(Some(active(subject_id)), true, Some(active(email_id))),
+            resolve_identity(
+                Some(active(subject_id)),
+                true,
+                Some(active(email_id)),
+                Eligibility::Allowed
+            ),
             Resolution::Login {
                 id: subject_id,
                 link_subject: false

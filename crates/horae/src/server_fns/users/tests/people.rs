@@ -125,7 +125,7 @@ async fn an_email_already_in_use_is_reported_present_and_the_rest_are_added(pool
         &pool,
         ids.org_id,
         ids.user_id,
-        &[person("new@x.com"), person(" dana@x.com ")],
+        &[person("new@x.com"), person("dana@x.com")],
         Activation::Deactivated,
     )
     .await
@@ -136,7 +136,7 @@ async fn an_email_already_in_use_is_reported_present_and_the_rest_are_added(pool
         .map(|user| user.email.as_str())
         .collect();
     assert_eq!(added, ["new@x.com"]);
-    assert_eq!(result.present, [" dana@x.com "]);
+    assert_eq!(result.present, ["dana@x.com"]);
     assert_eq!(emails(&pool, ids.org_id).await, expected);
 
     // Adding one person from People still refuses an email in use.

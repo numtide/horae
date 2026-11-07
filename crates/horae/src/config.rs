@@ -230,6 +230,22 @@ pub struct OidcConfig {
     /// (e.g. "Continue with Okta", "Sign in with Google"), so this is overridable
     /// via `HORAE_OIDC_BUTTON_LABEL`; it defaults to [`DEFAULT_OIDC_BUTTON_LABEL`].
     pub button_label: String,
+    /// Which first sign-ins may create their own account. Off unless the
+    /// operator lists domains.
+    pub auto_provision: AutoProvision,
+}
+
+/// Operator policy for creating accounts at first OIDC sign-in.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AutoProvision {
+    /// Lowercased email domains whose people may create an active member
+    /// account by signing in (`HORAE_OIDC_AUTO_PROVISION_DOMAINS`). Empty
+    /// means provisioning is off.
+    pub domains: Vec<String>,
+    /// Treat a token with no `email_verified` claim as verified, for
+    /// provisioning only (`HORAE_OIDC_TRUST_UNVERIFIED_EMAIL`). Meant for
+    /// providers such as tsidp whose users cannot choose their address.
+    pub trust_unverified_email: bool,
 }
 
 /// Default text on the OIDC sign-in button when `HORAE_OIDC_BUTTON_LABEL` is
@@ -247,7 +263,7 @@ impl AppConfig {
                 .unwrap_or(false),
             plugins_dir: std::env::var("HORAE_PLUGINS_DIR").unwrap_or_else(|_| "plugins".into()),
             plugin_database_url: non_empty("HORAE_PLUGIN_DATABASE_URL"),
-            oidc: OidcConfig::from_env(),
+            oidc: OidcConfig::from_env()?,
             secure_cookies: std::env::var("HORAE_SECURE_COOKIES")
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false),
@@ -281,13 +297,33 @@ impl HarvestDeployment {
 impl OidcConfig {
     /// Returns `Some` only when all four OIDC env vars are present; a partial
     /// configuration is treated as "OIDC not configured" rather than a hard error,
-    /// so `DEV_LOGIN` deployments need not set any of them.
-    fn from_env() -> Option<Self> {
-        Some(Self {
-            issuer: non_empty("HORAE_OIDC_ISSUER")?,
-            client_id: non_empty("HORAE_OIDC_CLIENT_ID")?,
-            client_secret: non_empty("HORAE_OIDC_CLIENT_SECRET")?,
-            redirect_url: non_empty("HORAE_OIDC_REDIRECT_URL")?,
+    /// so `DEV_LOGIN` deployments need not set any of them. A malformed
+    /// provisioning domain list is an error, so a typo cannot silently open or
+    /// close sign-up.
+    fn from_env() -> anyhow::Result<Option<Self>> {
+        let auto_provision = AutoProvision {
+            domains: parse_auto_provision_domains(
+                non_empty("HORAE_OIDC_AUTO_PROVISION_DOMAINS")
+                    .as_deref()
+                    .unwrap_or_default(),
+            )?,
+            trust_unverified_email: std::env::var("HORAE_OIDC_TRUST_UNVERIFIED_EMAIL")
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
+        };
+        let (Some(issuer), Some(client_id), Some(client_secret), Some(redirect_url)) = (
+            non_empty("HORAE_OIDC_ISSUER"),
+            non_empty("HORAE_OIDC_CLIENT_ID"),
+            non_empty("HORAE_OIDC_CLIENT_SECRET"),
+            non_empty("HORAE_OIDC_REDIRECT_URL"),
+        ) else {
+            return Ok(None);
+        };
+        Ok(Some(Self {
+            issuer,
+            client_id,
+            client_secret,
+            redirect_url,
             additional_audiences: non_empty("HORAE_OIDC_ADDITIONAL_AUDIENCES")
                 .map(|v| {
                     v.split(',')
@@ -299,8 +335,35 @@ impl OidcConfig {
                 .unwrap_or_default(),
             button_label: non_empty("HORAE_OIDC_BUTTON_LABEL")
                 .unwrap_or_else(|| DEFAULT_OIDC_BUTTON_LABEL.into()),
-        })
+            auto_provision,
+        }))
     }
+}
+
+/// Parse `HORAE_OIDC_AUTO_PROVISION_DOMAINS`: comma-separated domains, trimmed
+/// and lowercased. Empty input means provisioning is off. There is no
+/// wildcard: without an approval step, "every domain" would let anyone the
+/// provider authenticates join.
+fn parse_auto_provision_domains(raw: &str) -> anyhow::Result<Vec<String>> {
+    if raw.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    raw.split(',')
+        .map(|item| {
+            let domain = item.trim();
+            if domain.is_empty()
+                || domain == "*"
+                || domain.contains('@')
+                || domain.contains(char::is_whitespace)
+            {
+                anyhow::bail!(
+                    "HORAE_OIDC_AUTO_PROVISION_DOMAINS must be a comma-separated list of email \
+                     domains (e.g. example.com,example.org); {item:?} is not a domain"
+                );
+            }
+            Ok(domain.to_ascii_lowercase())
+        })
+        .collect()
 }
 
 /// An environment variable's value if it is set and non-empty.
@@ -386,5 +449,40 @@ mod tests {
     #[test]
     fn without_dev_login_any_bind_is_fine() {
         assert!(check_dev_login_bind(false, "0.0.0.0").is_ok());
+    }
+
+    #[test]
+    fn auto_provision_domains_are_trimmed_and_lowercased() {
+        assert_eq!(
+            super::parse_auto_provision_domains(" Example.COM, example.org ").unwrap(),
+            ["example.com", "example.org"]
+        );
+    }
+
+    #[test]
+    fn empty_auto_provision_domains_turn_provisioning_off() {
+        for raw in ["", "  "] {
+            assert!(super::parse_auto_provision_domains(raw).unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn malformed_auto_provision_domains_are_refused() {
+        for raw in [
+            "*",
+            "a.com,,b.com",
+            "a.com,",
+            "ada@a.com",
+            "a .com",
+            "a.com,*",
+        ] {
+            let error = super::parse_auto_provision_domains(raw).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("HORAE_OIDC_AUTO_PROVISION_DOMAINS"),
+                "{raw}: {error}"
+            );
+        }
     }
 }

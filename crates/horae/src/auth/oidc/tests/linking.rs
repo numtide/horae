@@ -15,8 +15,18 @@ pub(super) fn identity(
         issuer: issuer.into(),
         subject: subject.into(),
         email,
-        email_verified,
+        email_verified: Some(email_verified),
+        name: None,
     }
+}
+
+/// Sign in with provisioning off, as every deployment did before it existed:
+/// the account that receives a session, or `None` when refused.
+pub(super) async fn sign_in(pool: &PgPool, identity: &Identity) -> anyhow::Result<Option<User>> {
+    Ok(resolve_user(pool, identity, &AutoProvision::default())
+        .await?
+        .ok()
+        .map(|sign_in| sign_in.user))
 }
 
 async fn account(pool: &PgPool) -> (Uuid, String) {
@@ -25,7 +35,9 @@ async fn account(pool: &PgPool) -> (Uuid, String) {
 }
 
 pub(super) async fn wait_for_links(pool: &PgPool, count: i64) {
-    timeout(std::time::Duration::from_secs(10), async {
+    // Generous because the full suite runs many databases at once; the budget
+    // only bounds how long a broken wait takes to fail.
+    timeout(std::time::Duration::from_secs(60), async {
         loop {
             let waiting = sqlx::query_scalar!(
                 r#"SELECT COUNT(*) AS "count!" FROM pg_stat_activity
@@ -57,7 +69,7 @@ async fn concurrent_links(pool: &PgPool, subjects: [&str; 2]) {
         let db = pool.clone();
         let identity = identity(ISSUER, subject, Some(email.clone()), true);
         attempts.spawn(async move {
-            let user = resolve_user(&db, &identity).await.unwrap();
+            let user = sign_in(&db, &identity).await.unwrap();
             (identity.subject, user)
         });
     }
@@ -110,7 +122,7 @@ async fn deactivation_during_first_link_denies_login(pool: PgPool) {
     let mut attempts = JoinSet::new();
     let db = pool.clone();
     attempts.spawn(async move {
-        resolve_user(&db, &identity(ISSUER, "new-subject", Some(email), true))
+        sign_in(&db, &identity(ISSUER, "new-subject", Some(email), true))
             .await
             .unwrap()
     });
@@ -132,22 +144,16 @@ async fn existing_subject_wins_over_another_accounts_email(pool: PgPool) {
     let (id, email) = account(&pool).await;
     let (_, other_email) = account(&pool).await;
     let mut identity = identity(ISSUER, "linked-subject", Some(email), true);
-    assert_eq!(
-        resolve_user(&pool, &identity).await.unwrap().unwrap().id,
-        id
-    );
+    assert_eq!(sign_in(&pool, &identity).await.unwrap().unwrap().id, id);
     identity.email = Some(other_email);
-    assert_eq!(
-        resolve_user(&pool, &identity).await.unwrap().unwrap().id,
-        id
-    );
+    assert_eq!(sign_in(&pool, &identity).await.unwrap().unwrap().id, id);
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn unverified_email_cannot_link_an_account(pool: PgPool) {
     let (_, email) = account(&pool).await;
     let identity = identity(ISSUER, "unverified-subject", Some(email), false);
-    assert!(resolve_user(&pool, &identity).await.unwrap().is_none());
+    assert!(sign_in(&pool, &identity).await.unwrap().is_none());
 }
 
 async fn binding(pool: &PgPool, id: Uuid) -> (Option<String>, Option<String>) {
@@ -179,13 +185,13 @@ async fn sign_in_resolves_only_the_issuer_and_subject_pair(pool: PgPool) {
     bind(&pool, id, Some(ISSUER), "pair-subject").await;
 
     let same = identity(ISSUER, "pair-subject", None, false);
-    assert_eq!(resolve_user(&pool, &same).await.unwrap().unwrap().id, id);
+    assert_eq!(sign_in(&pool, &same).await.unwrap().unwrap().id, id);
     // The same subject from another issuer is a different person.
     let other = identity("https://other.example", "pair-subject", None, false);
-    assert!(resolve_user(&pool, &other).await.unwrap().is_none());
+    assert!(sign_in(&pool, &other).await.unwrap().is_none());
     // Issuers compare exactly: a trailing slash is another issuer.
     let slash = identity("https://id.example.com/", "pair-subject", None, false);
-    assert!(resolve_user(&pool, &slash).await.unwrap().is_none());
+    assert!(sign_in(&pool, &slash).await.unwrap().is_none());
     assert_eq!(
         binding(&pool, id).await,
         (Some(ISSUER.into()), Some("pair-subject".into()))
@@ -201,7 +207,7 @@ async fn verified_email_binding_records_the_tokens_issuer(pool: PgPool) {
         Some(email),
         true,
     );
-    assert_eq!(resolve_user(&pool, &first).await.unwrap().unwrap().id, id);
+    assert_eq!(sign_in(&pool, &first).await.unwrap().unwrap().id, id);
     assert_eq!(
         binding(&pool, id).await,
         (
@@ -219,7 +225,7 @@ async fn legacy_binding_is_denied_without_adopting_an_issuer(pool: PgPool) {
     // Neither its own subject nor its verified email signs the account in.
     for email in [None, Some(email)] {
         let token = identity(ISSUER, "legacy-subject", email, true);
-        assert!(resolve_user(&pool, &token).await.unwrap().is_none());
+        assert!(sign_in(&pool, &token).await.unwrap().is_none());
     }
     assert_eq!(
         binding(&pool, id).await,
@@ -231,7 +237,7 @@ async fn legacy_binding_is_denied_without_adopting_an_issuer(pool: PgPool) {
         .await
         .unwrap();
     let token = identity(ISSUER, "legacy-subject", None, false);
-    assert_eq!(resolve_user(&pool, &token).await.unwrap().unwrap().id, id);
+    assert_eq!(sign_in(&pool, &token).await.unwrap().unwrap().id, id);
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -245,7 +251,7 @@ async fn held_subject_with_another_accounts_verified_email_changes_nothing(pool:
         // The pair misses, the email names an unbound account, and binding it
         // would put one subject on two accounts. The existing error path denies.
         let token = identity(ISSUER, &subject, Some(unbound_email), true);
-        let error = resolve_user(&pool, &token)
+        let error = sign_in(&pool, &token)
             .await
             .expect_err("the unique subject must refuse the second account");
         assert!(!format!("{error:#}").contains(&subject), "{error:#}");

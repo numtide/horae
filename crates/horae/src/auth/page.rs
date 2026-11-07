@@ -5,9 +5,56 @@
 //! mirror the "Horae Login" design. Only the call-to-action differs: a one-click
 //! "Sign in as Admin" in dev mode, or a single "Continue with SSO" hand-off to
 //! the OIDC provider in production. Horae has no passwords, no multi-provider
-//! picker, and no self-serve signup (accounts are admin-created, single org), so
-//! the design's email/password and provider-list controls are intentionally
-//! absent — every control on this page maps to a real action.
+//! picker, and no signup form (accounts are admin-created, or created at first
+//! sign-in when the operator allows the email's domain), so the design's
+//! email/password and provider-list controls are intentionally absent — every
+//! control on this page maps to a real action.
+
+use dioxus::prelude::{asset, manganis};
+use serde::{Deserialize, Serialize};
+
+/// Why the last OIDC sign-in was refused, shown once above the call to action.
+/// Each variant names only the person's own email from their validated token.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LoginNotice {
+    /// No account matches, and none may be created.
+    NoAccount { email: Option<String> },
+    /// The person's account is deactivated.
+    Deactivated,
+    /// Provisioning is on, but not for this email's domain.
+    DomainNotAllowed { email: String },
+    /// Provisioning is on for the domain, but the provider did not confirm the
+    /// email.
+    EmailUnconfirmed { email: String },
+}
+
+impl LoginNotice {
+    fn message(&self) -> String {
+        match self {
+            Self::NoAccount { email: Some(email) } => format!(
+                "No Horae account exists for {}. Ask an administrator to add you.",
+                escape_html(email)
+            ),
+            Self::NoAccount { email: None } => {
+                "No Horae account matches this sign-in. Ask an administrator to add you.".into()
+            }
+            Self::Deactivated => {
+                "Your Horae account is deactivated. Ask an administrator to restore access.".into()
+            }
+            Self::DomainNotAllowed { email } => format!(
+                "No Horae account exists for {}, and addresses at {} can't create one. \
+                 Ask an administrator to add you.",
+                escape_html(email),
+                escape_html(email.rsplit_once('@').map_or("", |(_, domain)| domain)),
+            ),
+            Self::EmailUnconfirmed { email } => format!(
+                "No Horae account exists for {}, and your identity provider hasn't confirmed \
+                 this address, so Horae can't create one. Ask an administrator to add you.",
+                escape_html(email)
+            ),
+        }
+    }
+}
 
 /// Which sign-in action the page offers.
 pub enum LoginVariant {
@@ -19,8 +66,11 @@ pub enum LoginVariant {
     Oidc { cta_label: String },
 }
 
-/// Render the full login page for `variant`.
-pub fn render(variant: LoginVariant) -> String {
+/// Render the full login page for `variant`, with `notice` above the action.
+pub fn render(variant: LoginVariant, notice: Option<&LoginNotice>) -> String {
+    let notice = notice.map_or_else(String::new, |notice| {
+        format!(r#"<p class="notice" role="alert">{}</p>"#, notice.message())
+    });
     let action = match variant {
         LoginVariant::Dev => r#"<form class="action" method="POST" action="/auth/dev-login">
           <button type="submit" class="cta">Sign in as Admin</button>
@@ -34,7 +84,16 @@ pub fn render(variant: LoginVariant) -> String {
             escape_html(&cta_label)
         ),
     };
-    PAGE.replace("<!--ACTION-->", &action)
+    // The same icons the app shell links (app.rs), through the same hashed asset URLs.
+    let icons = format!(
+        r#"<link rel="icon" href="/favicon.ico" sizes="32x32">
+  <link rel="icon" type="image/svg+xml" href="{}">
+  <link rel="apple-touch-icon" href="{}">"#,
+        asset!("/assets/favicon.svg"),
+        asset!("/assets/apple-touch-icon.png"),
+    );
+    PAGE.replace("<!--ICONS-->", &icons)
+        .replace("<!--ACTION-->", &format!("{notice}{action}"))
 }
 
 /// Minimal HTML-text escaping for interpolating operator-controlled config into
@@ -61,6 +120,7 @@ static PAGE: &str = r#"<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign in — Horae</title>
+  <!--ICONS-->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,500&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -143,6 +203,13 @@ static PAGE: &str = r#"<!DOCTYPE html>
     }
     .cta:hover { filter: brightness(1.1); color: var(--heading); }
 
+    .notice {
+      margin-bottom: 20px; padding: 12px 14px; border-radius: 9px;
+      font-size: 14px; line-height: 1.5; color: var(--text);
+      background: rgba(217, 154, 60, 0.12); border: 1px solid rgba(217, 154, 60, 0.35);
+      overflow-wrap: anywhere;
+    }
+
     .dev-badge {
       display: inline-block; margin-top: 20px; padding: 4px 10px;
       border-radius: 9999px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
@@ -214,9 +281,77 @@ static PAGE: &str = r#"<!DOCTYPE html>
 mod tests {
     use super::*;
 
+    fn oidc() -> LoginVariant {
+        LoginVariant::Oidc {
+            cta_label: "Continue with SSO".into(),
+        }
+    }
+
+    #[test]
+    fn page_without_a_notice_has_no_alert() {
+        assert!(!render(oidc(), None).contains(r#"role="alert""#));
+    }
+
+    #[test]
+    fn no_account_notice_names_the_persons_email() {
+        let html = render(
+            oidc(),
+            Some(&LoginNotice::NoAccount {
+                email: Some("ada@example.com".into()),
+            }),
+        );
+        assert!(html.contains("No Horae account exists for ada@example.com."));
+    }
+
+    #[test]
+    fn no_account_notice_without_email_names_no_address() {
+        let html = render(oidc(), Some(&LoginNotice::NoAccount { email: None }));
+        assert!(html.contains("No Horae account matches this sign-in."));
+    }
+
+    #[test]
+    fn deactivated_notice_says_the_account_is_deactivated() {
+        let html = render(oidc(), Some(&LoginNotice::Deactivated));
+        assert!(html.contains("Your Horae account is deactivated."));
+    }
+
+    #[test]
+    fn domain_notice_names_the_emails_domain() {
+        let html = render(
+            oidc(),
+            Some(&LoginNotice::DomainNotAllowed {
+                email: "ada@other.example".into(),
+            }),
+        );
+        assert!(html.contains("addresses at other.example can't create one"));
+    }
+
+    #[test]
+    fn unconfirmed_notice_says_the_provider_did_not_confirm() {
+        let html = render(
+            oidc(),
+            Some(&LoginNotice::EmailUnconfirmed {
+                email: "ada@example.com".into(),
+            }),
+        );
+        assert!(html.contains("your identity provider hasn't confirmed this address"));
+    }
+
+    #[test]
+    fn provider_sent_email_is_html_escaped_in_the_notice() {
+        let html = render(
+            oidc(),
+            Some(&LoginNotice::DomainNotAllowed {
+                email: "<b>x</b>@<i>y</i>".into(),
+            }),
+        );
+        assert!(html.contains("&lt;b&gt;x&lt;/b&gt;@&lt;i&gt;y&lt;/i&gt;"));
+        assert!(!html.contains("<b>x</b>") && !html.contains("<i>y</i>"));
+    }
+
     #[test]
     fn dev_variant_offers_the_admin_bypass_and_no_fake_controls() {
-        let html = render(LoginVariant::Dev);
+        let html = render(LoginVariant::Dev, None);
         assert!(html.contains(r#"action="/auth/dev-login""#));
         assert!(html.contains("Sign in as Admin"));
         assert!(html.contains("Dev mode"));
@@ -226,10 +361,22 @@ mod tests {
     }
 
     #[test]
+    fn page_links_the_favicons() {
+        let html = render(LoginVariant::Dev, None);
+        assert!(html.contains(r#"<link rel="icon" href="/favicon.ico" sizes="32x32">"#));
+        assert!(html.contains(r#"<link rel="icon" type="image/svg+xml" href="/"#));
+        assert!(html.contains(r#"<link rel="apple-touch-icon" href="/"#));
+        assert!(!html.contains("<!--ICONS-->"));
+    }
+
+    #[test]
     fn oidc_variant_uses_the_configured_label_and_hands_off_to_start() {
-        let html = render(LoginVariant::Oidc {
-            cta_label: "Continue with Okta".into(),
-        });
+        let html = render(
+            LoginVariant::Oidc {
+                cta_label: "Continue with Okta".into(),
+            },
+            None,
+        );
         assert!(html.contains(r#"href="/auth/oidc/start""#));
         assert!(html.contains("Continue with Okta"));
         assert!(!html.contains(r#"action="/auth/dev-login""#));
@@ -237,9 +384,12 @@ mod tests {
 
     #[test]
     fn configured_label_is_html_escaped() {
-        let html = render(LoginVariant::Oidc {
-            cta_label: r#"<b>x</b>&"#.into(),
-        });
+        let html = render(
+            LoginVariant::Oidc {
+                cta_label: r#"<b>x</b>&"#.into(),
+            },
+            None,
+        );
         assert!(html.contains("&lt;b&gt;x&lt;/b&gt;&amp;"));
         assert!(!html.contains("<b>x</b>"));
     }

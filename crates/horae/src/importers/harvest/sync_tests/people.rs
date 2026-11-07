@@ -469,7 +469,7 @@ async fn an_account_created_while_the_import_waits_is_never_duplicated(pool: PgP
         .fetch_one(&mut *signup)
         .await
         .unwrap();
-    crate::db::lock_user_email(&mut signup, "Late@Example.com")
+    crate::db::lock_new_user_email(&mut signup, "Late@Example.com")
         .await
         .unwrap();
     sqlx::query!(

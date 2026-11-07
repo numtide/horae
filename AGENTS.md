@@ -127,7 +127,7 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 
 **Shared state**: `state.rs` holds a global `AppState` in a `OnceCell`, initialized once at startup with the `PgPool`; server fns and auth read from it. The pool is created and migrations applied eagerly on `serve`.
 
-**Auth**: production uses OIDC (`openidconnect`); `DEV_LOGIN=1` enables a one-click admin login that bypasses OIDC (see `auth/`). Sessions are cookie-based, persisted in Postgres.
+**Auth**: production uses OIDC (`openidconnect`); `DEV_LOGIN=1` enables a one-click admin login that bypasses OIDC (see `auth/`). Sessions are cookie-based, persisted in Postgres. A refused sign-in leaves a one-time notice in the session for `/auth/login`. `HORAE_OIDC_AUTO_PROVISION_DOMAINS` lets a first sign-in create an active member account (the Principle IV sign-in exception); `HORAE_OIDC_TRUST_UNVERIFIED_EMAIL` accepts a missing `email_verified` claim for that only.
 
 ## Domain invariants (from the Horae Constitution — do not violate)
 
@@ -147,6 +147,7 @@ The repo ships agent skills in `.agents/skills/` (surfaced to Claude Code throug
 - **`rust-async-patterns`** — Tokio, async traits, and concurrency patterns. Use for async server code or when debugging async behaviour.
 - **`dioxus-best-practices`** — Dioxus 0.7.9 rules read from the locked source: prop memoization (inline closures and `children` re-render whenever the parent does), subscriptions, `use_resource` restarts and SSR, and where Horae breaks them. Use when writing, reviewing or optimising components, pages or hooks.
 - **`ponytail`** — enforces the smallest solution that works (YAGNI, stdlib before deps, one line before fifty). Use on any coding task, especially before adding a dependency or abstraction.
+- **`humanizer`** — rewrites prose that reads as machine-written (staged contrasts, one-line closers, forced triads, inflated claims, stock words) without changing what it says. Use when writing or reviewing commit messages, PR bodies, docs, specs, or UI copy.
 
 A `speckit-*` suite (`specify`, `plan`, `tasks`, `implement`, `analyze`, `checklist`, `clarify`, `constitution`, `converge`, `taskstoissues`) supports spec-driven development against the feature artifacts under `specs/` and the constitution.
 

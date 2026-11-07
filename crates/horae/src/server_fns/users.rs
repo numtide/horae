@@ -136,7 +136,7 @@ pub async fn add_harvest_people(
 }
 
 #[cfg(feature = "server")]
-async fn insert_user(
+pub(crate) async fn insert_user(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
@@ -172,9 +172,8 @@ async fn insert_users(
     existing: Existing,
 ) -> Result<AddedPeople, ServerFnError> {
     let mut tx = begin_user_access_change(db, org_id, actor_id).await?;
-    // Every account creation serializes on its email, ignoring case the way
-    // the database's `lower(btrim(email))` does. Taking the locks in one
-    // order keeps two batches from deadlocking.
+    // The organization row is locked first, then each email, in one order so
+    // two batches cannot deadlock. Emails compare trimmed and ignoring case.
     let key = |person: &NewPerson| person.email.trim().to_lowercase();
     let mut order: Vec<_> = people.iter().collect();
     order.sort_by_key(|person| key(person));
@@ -189,16 +188,9 @@ async fn insert_users(
     let mut fresh = Vec::with_capacity(order.len());
     let mut present = Vec::new();
     for person in order {
-        crate::db::lock_user_email(&mut tx, &person.email)
+        let taken = crate::db::lock_new_user_email(&mut tx, &person.email)
             .await
             .map_err(server_err)?;
-        let taken = sqlx::query_scalar!(
-            r#"SELECT EXISTS(SELECT 1 FROM users WHERE lower(btrim(email)) = lower(btrim($1))) AS "taken!""#,
-            person.email,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(server_err)?;
         match (taken, existing) {
             (false, _) => fresh.push(person),
             (true, Existing::Skip) => present.push(person.email.clone()),
