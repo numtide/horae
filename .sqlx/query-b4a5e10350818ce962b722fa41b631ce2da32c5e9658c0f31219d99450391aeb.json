@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, kind, status, phase, processed_count, total_count,\n                  COALESCE(checkpoint->'report', report) AS report, last_error,\n                  created_at as \"created_at!: chrono::DateTime<chrono::Utc>\",\n                  finished_at as \"finished_at: chrono::DateTime<chrono::Utc>\",\n                  payload, account_generation,\n                  COALESCE((SELECT g.account_generation FROM harvest_connection_generations g\n                            WHERE g.org_id = horae_jobs.org_id), 0) AS \"current_generation!\",\n                  EXISTS(SELECT 1 FROM horae_job_uploads u\n                         WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS \"has_upload!\",\n                  EXISTS(SELECT 1 FROM horae_jobs n\n                         WHERE n.org_id = horae_jobs.org_id AND n.kind = horae_jobs.kind\n                           AND (n.created_at, n.id) > (horae_jobs.created_at, horae_jobs.id)) AS \"newer_import!\"\n             FROM horae_jobs\n            WHERE id = $1 AND org_id = $2",
+  "query": "SELECT id, kind, status, phase, processed_count, total_count,\n                  COALESCE(checkpoint->'report', report) AS report, last_error,\n                  created_at as \"created_at!: chrono::DateTime<chrono::Utc>\",\n                  finished_at as \"finished_at: chrono::DateTime<chrono::Utc>\",\n                  payload, account_generation,\n                  COALESCE((SELECT g.account_generation FROM harvest_connection_generations g\n                            WHERE g.org_id = horae_jobs.org_id), 0) AS \"current_generation!\",\n                  EXISTS(SELECT 1 FROM horae_job_uploads u\n                         WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS \"has_upload!\",\n                  EXISTS(SELECT 1 FROM horae_jobs n\n                         WHERE n.org_id = horae_jobs.org_id AND n.kind = horae_jobs.kind\n                           AND (n.created_at, n.id) > (horae_jobs.created_at, horae_jobs.id)\n                           AND n.status NOT IN ('cancelled', 'failed')\n                           AND n.idempotency_key IS DISTINCT FROM 'preview-commit:' || horae_jobs.id) AS \"newer_import!\",\n                  (SELECT c.id FROM horae_jobs c\n                    WHERE c.org_id = horae_jobs.org_id AND c.kind = horae_jobs.kind\n                      AND c.idempotency_key = 'preview-commit:' || horae_jobs.id) AS committed_as\n             FROM horae_jobs\n            WHERE id = $1 AND org_id = $2",
   "describe": {
     "columns": [
       {
@@ -77,6 +77,11 @@
         "ordinal": 14,
         "name": "newer_import!",
         "type_info": "Bool"
+      },
+      {
+        "ordinal": 15,
+        "name": "committed_as",
+        "type_info": "Uuid"
       }
     ],
     "parameters": {
@@ -100,8 +105,9 @@
       false,
       null,
       null,
+      null,
       null
     ]
   },
-  "hash": "50354eae0cf7b264a27784b9dec22829722fcddd2e2b5c9527a0ece6c0f39f34"
+  "hash": "b4a5e10350818ce962b722fa41b631ce2da32c5e9658c0f31219d99450391aeb"
 }

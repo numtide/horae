@@ -3,6 +3,7 @@ use horae_core::importers::harvest::types::ImportMode;
 
 use super::presentation;
 use crate::models::{CommitAvailability, JobStatus, RetryAvailability};
+use crate::route::Route;
 
 /// What the run is (dry run or commit, source, state, start) and what can be
 /// done with it now.
@@ -60,7 +61,12 @@ pub(super) fn RunHeader(
                 }
             }
             if preview && job.status == "succeeded" {
-                if job.commit_availability == CommitAvailability::Available {
+                if let Some(commit) = job.committed_as {
+                    p { class: "text-sm", "data-testid": "committed-as",
+                        "This dry run was committed. "
+                        Link { to: Route::HarvestRun { id: commit }, "Open the commit run" }
+                    }
+                } else if job.commit_availability == CommitAvailability::Available {
                     button {
                         r#type: "button",
                         class: "btn btn-primary btn-sm",

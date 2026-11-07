@@ -26,7 +26,11 @@ enum GroupKey {
 #[derive(Default)]
 pub(crate) struct Summarizer {
     groups: HashMap<GroupKey, ErrorGroup>,
+    /// Keyed `email:<email>`, or `name:<name>` for a person with no email.
     people: HashMap<String, MissingPerson>,
+    /// Each name seen with an email, to the key of that person; `None` once a
+    /// second email claims the same name.
+    names: HashMap<String, Option<String>>,
     untracked_errors: u64,
     untracked_people: u64,
     /// The start of a line that continues in the next chunk.
@@ -87,14 +91,25 @@ impl Summarizer {
         entity: EntityType,
         person: &horae_core::importers::harvest::types::PersonError,
     ) {
-        let Some(key) = person
-            .email
-            .as_deref()
-            .or(person.name.as_deref())
-            .map(|key| key.trim().to_lowercase())
-            .filter(|key| !key.is_empty())
-        else {
-            return;
+        let normalize = |value: &Option<String>| {
+            value
+                .as_deref()
+                .map(|value| value.trim().to_lowercase())
+                .filter(|value| !value.is_empty())
+        };
+        let key = match (normalize(&person.email), normalize(&person.name)) {
+            (Some(email), name) => {
+                let key = format!("email:{email}");
+                if let Some(name) = name {
+                    self.alias(name, &key);
+                }
+                key
+            }
+            (None, Some(name)) => match self.names.get(&name) {
+                Some(Some(key)) => key.clone(),
+                _ => format!("name:{name}"),
+            },
+            (None, None) => return,
         };
         let tracked = self.people.len();
         let missing = match self.people.get_mut(&key) {
@@ -114,9 +129,36 @@ impl Summarizer {
         if missing.kind == PersonErrorKind::PersonNotImported {
             missing.kind = person.kind;
         }
+        missing.email = missing.email.take().or_else(|| person.email.clone());
         missing.name = missing.name.take().or_else(|| person.name.clone());
         if entity == EntityType::TimeEntry {
             missing.entries += 1;
+        }
+    }
+
+    /// Record that `name` belongs to the person at `key`, so an error that
+    /// names them without an email counts for them too. Anything already
+    /// counted under the bare name moves over. A name that two emails share
+    /// stays apart from both.
+    fn alias(&mut self, name: String, key: &str) {
+        match self.names.get(&name) {
+            Some(Some(known)) if known != key => {
+                self.names.insert(name, None);
+            }
+            Some(_) => {}
+            None => {
+                if let Some(bare) = self.people.remove(&format!("name:{name}")) {
+                    let missing = self.people.entry(key.to_owned()).or_insert(MissingPerson {
+                        entries: 0,
+                        ..bare.clone()
+                    });
+                    missing.entries += bare.entries;
+                    if missing.kind == PersonErrorKind::PersonNotImported {
+                        missing.kind = bare.kind;
+                    }
+                }
+                self.names.insert(name, Some(key.to_owned()));
+            }
         }
     }
 
@@ -321,6 +363,65 @@ mod tests {
                 entries: 2,
             }]
         );
+    }
+
+    #[test]
+    fn a_person_named_with_and_without_an_email_is_listed_once() {
+        let by_name = |n: u32| {
+            person_error(
+                EntityType::TimeEntry,
+                &format!("time_entry {n}"),
+                PersonErrorKind::PersonNotImported,
+                None,
+                Some("Dana Dev"),
+            )
+        };
+        let own = person_error(
+            EntityType::Person,
+            "person 4",
+            PersonErrorKind::EmailInUse,
+            Some("dana@x.com"),
+            Some("Dana Dev"),
+        );
+        // Either order: the bare-name entries move to the email's row.
+        for errors in [
+            vec![by_name(1), own.clone(), by_name(2)],
+            vec![own.clone(), by_name(1), by_name(2)],
+        ] {
+            let mut summary = Summarizer::default();
+            for error in errors {
+                summary.add(error);
+            }
+            assert_eq!(
+                summary.finish().unwrap().people,
+                [MissingPerson {
+                    email: Some("dana@x.com".into()),
+                    name: Some("Dana Dev".into()),
+                    kind: PersonErrorKind::EmailInUse,
+                    entries: 2,
+                }]
+            );
+        }
+
+        // A name two emails share is not guessed.
+        let mut summary = Summarizer::default();
+        for email in ["a@x.com", "b@x.com"] {
+            summary.add(person_error(
+                EntityType::Person,
+                "person",
+                PersonErrorKind::DuplicateEmail,
+                Some(email),
+                Some("Sam"),
+            ));
+        }
+        summary.add(person_error(
+            EntityType::TimeEntry,
+            "time_entry 9",
+            PersonErrorKind::PersonNotImported,
+            None,
+            Some("Sam"),
+        ));
+        assert_eq!(summary.finish().unwrap().people.len(), 3);
     }
 
     #[test]

@@ -3,7 +3,7 @@ use horae_core::importers::harvest::types::PersonErrorKind;
 
 use super::presentation;
 use crate::models::MissingPerson;
-use crate::models::user::{Activation, NewPerson};
+use crate::models::user::{Activation, AddedPeople, NewPerson};
 use crate::server_fns;
 
 /// One person a run could not import. When adding them to Horae would let the
@@ -11,15 +11,18 @@ use crate::server_fns;
 #[component]
 pub(super) fn MissingPersonRow(
     person: MissingPerson,
-    added: bool,
+    /// "Added" or "Already in Horae" once this page added the person's email.
+    outcome: Option<&'static str>,
     busy: Signal<bool>,
-    on_added: EventHandler<String>,
+    on_added: EventHandler<AddedPeople>,
 ) -> Element {
     let mut open = use_signal(|| false);
     let mut email = use_signal(|| person.email.clone().unwrap_or_default());
     let mut name = use_signal(|| person.name.clone().unwrap_or_default());
     let mut active = use_signal(|| false);
-    let mut done = use_signal(|| false);
+    // For a person known only by name, whose entered email the parent
+    // cannot match to this row.
+    let mut done = use_signal(|| None::<&'static str>);
     let mut error = use_signal(|| None::<String>);
     // A run matches by email, or for a CSV row without one, by name.
     let addable = matches!(
@@ -48,10 +51,14 @@ pub(super) fn MissingPersonRow(
         busy.set(true);
         error.set(None);
         match server_fns::add_harvest_people(vec![new.clone()], activation).await {
-            Ok(_) => {
-                done.set(true);
+            Ok(result) => {
+                done.set(Some(if result.added.is_empty() {
+                    "Already in Horae"
+                } else {
+                    "Added"
+                }));
                 open.set(false);
-                on_added.call(new.email);
+                on_added.call(result);
             }
             Err(e) => error.set(Some(e.to_string())),
         }
@@ -66,8 +73,8 @@ pub(super) fn MissingPersonRow(
                 }
                 // The action stays in the first column, so it is on screen
                 // even when a narrow viewport scrolls the table.
-                if added || done() {
-                    span { class: "badge badge-success badge-sm", "Added" }
+                if let Some(state) = outcome.or(done()) {
+                    span { class: "badge badge-success badge-sm", "{state}" }
                 } else if addable && !open() {
                     button {
                         r#type: "button",

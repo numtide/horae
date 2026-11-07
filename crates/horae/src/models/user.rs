@@ -61,6 +61,14 @@ impl NewPerson {
     }
 }
 
+/// The outcome of adding several people: the accounts created, and the
+/// emails that already had one and were left alone.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AddedPeople {
+    pub added: Vec<User>,
+    pub present: Vec<String>,
+}
+
 /// Whether a new account can sign in straight away.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Activation {

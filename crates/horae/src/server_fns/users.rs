@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage};
-use crate::models::user::{Activation, NewPerson, UserListItem};
+use crate::models::user::{Activation, AddedPeople, NewPerson, UserListItem};
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 
@@ -88,13 +88,15 @@ pub async fn create_user(email: String, name: String, role: String) -> Result<Us
 #[cfg(feature = "server")]
 const MAX_NEW_PEOPLE: usize = 500;
 
-/// Add members, all or none, deactivated unless the administrator chose
-/// otherwise. The Harvest run page uses this for people a run could not match.
+/// Add members, deactivated unless the administrator chose otherwise. The
+/// Harvest run page uses this for people a run could not match. An email that
+/// already has an account (added meanwhile, or in another tab) is reported as
+/// present rather than failing the rest.
 #[server]
 pub async fn add_harvest_people(
     people: Vec<NewPerson>,
     activation: Activation,
-) -> Result<Vec<User>, ServerFnError> {
+) -> Result<AddedPeople, ServerFnError> {
     let admin = require_admin().await?;
     if people.is_empty() || people.len() > MAX_NEW_PEOPLE {
         return Err(err(
@@ -111,16 +113,17 @@ pub async fn add_harvest_people(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let state = crate::state::global_state().await;
-    let users = insert_users(
+    let result = insert_users(
         &state.db,
         admin.org_id,
         admin.id,
         &people,
         OrgRole::Member,
         activation,
+        Existing::Skip,
     )
     .await?;
-    for user in &users {
+    for user in &result.added {
         state
             .plugins
             .dispatch(crate::plugin::AppEvent::UserCreated {
@@ -129,7 +132,7 @@ pub async fn add_harvest_people(
                 user: user_payload(user),
             });
     }
-    Ok(users)
+    Ok(result)
 }
 
 #[cfg(feature = "server")]
@@ -145,16 +148,17 @@ async fn insert_user(
         email: email.to_owned(),
         name: name.to_owned(),
     };
-    let mut users = insert_users(
+    let mut created = insert_users(
         db,
         org_id,
         actor_id,
         &[person],
         org_role,
         Activation::Active,
+        Existing::Refuse,
     )
     .await?;
-    Ok(users.remove(0))
+    Ok(created.added.remove(0))
 }
 
 #[cfg(feature = "server")]
@@ -165,20 +169,25 @@ async fn insert_users(
     people: &[NewPerson],
     org_role: OrgRole,
     activation: Activation,
-) -> Result<Vec<User>, ServerFnError> {
+    existing: Existing,
+) -> Result<AddedPeople, ServerFnError> {
     let mut tx = begin_user_access_change(db, org_id, actor_id).await?;
-    // Every account creation serializes on its email, ignoring case. Taking
-    // the locks in one order keeps two batches from deadlocking.
+    // Every account creation serializes on its email, ignoring case the way
+    // the database's `lower(btrim(email))` does. Taking the locks in one
+    // order keeps two batches from deadlocking.
+    let key = |person: &NewPerson| person.email.trim().to_lowercase();
     let mut order: Vec<_> = people.iter().collect();
-    order.sort_by_key(|person| person.email.to_lowercase());
+    order.sort_by_key(|person| key(person));
     for pair in order.windows(2) {
-        if pair[0].email.eq_ignore_ascii_case(&pair[1].email) {
+        if key(pair[0]) == key(pair[1]) {
             return Err(err(
                 BAD_REQUEST,
                 format!("The email {} is listed twice", pair[1].email),
             ));
         }
     }
+    let mut fresh = Vec::with_capacity(order.len());
+    let mut present = Vec::new();
     for person in order {
         crate::db::lock_user_email(&mut tx, &person.email)
             .await
@@ -190,15 +199,19 @@ async fn insert_users(
         .fetch_one(&mut *tx)
         .await
         .map_err(server_err)?;
-        if taken {
-            return Err(conflict(format!(
-                "A user with the email {} already exists",
-                person.email
-            )));
+        match (taken, existing) {
+            (false, _) => fresh.push(person),
+            (true, Existing::Skip) => present.push(person.email.clone()),
+            (true, Existing::Refuse) => {
+                return Err(conflict(format!(
+                    "A user with the email {} already exists",
+                    person.email
+                )));
+            }
         }
     }
-    let mut users = Vec::with_capacity(people.len());
-    for person in people {
+    let mut users = Vec::with_capacity(fresh.len());
+    for person in fresh {
         let user = sqlx::query_as!(
             User,
             r#"INSERT INTO users (id, org_id, email, name, org_role, active)
@@ -229,7 +242,20 @@ async fn insert_users(
         users.push(user);
     }
     tx.commit().await.map_err(server_err)?;
-    Ok(users)
+    Ok(AddedPeople {
+        added: users,
+        present,
+    })
+}
+
+/// What adding people does with an email an account already uses.
+#[cfg(feature = "server")]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Existing {
+    /// Refuse the request: the person was meant to be new.
+    Refuse,
+    /// Leave the account alone and report the email as already present.
+    Skip,
 }
 
 #[cfg(feature = "server")]

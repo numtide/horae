@@ -100,11 +100,13 @@ async fn an_api_preview_commits_once_with_its_scope_and_account(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(payload["payload"]["value"]["sync"], "Full", "{payload}");
-    // The commit replaces the preview: nothing else can be committed from it.
-    assert_eq!(
-        availability(&pool, &ids, preview).await,
-        CommitAvailability::NewerImport
-    );
+    // The preview points at its own commit, not at "a newer import".
+    let shown = status(&pool, ids.org_id, ids.user_id, preview)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(shown.commit_availability, CommitAvailability::Committed);
+    assert_eq!(shown.committed_as, Some(first.id));
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -174,7 +176,28 @@ async fn only_the_latest_finished_preview_of_its_source_commits(pool: PgPool) {
         availability(&pool, &ids, old).await,
         CommitAvailability::Available
     );
+    // Nor does a later run that failed or was cancelled.
+    for (key, state) in [("failed", "failed"), ("cancelled", "cancelled")] {
+        let dead = api_preview(&pool, &ids, key).await;
+        sqlx::query!(
+            "UPDATE horae_jobs SET status = $2 WHERE id = $1",
+            dead,
+            state
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            availability(&pool, &ids, old).await,
+            CommitAvailability::Available,
+            "{state}"
+        );
+    }
     let newer = api_preview(&pool, &ids, "newer").await;
+    assert_eq!(
+        availability(&pool, &ids, old).await,
+        CommitAvailability::NewerImport
+    );
     refused_with(commit(&pool, &ids, old).await, CONFLICT, "newer import");
     commit(&pool, &ids, newer).await.unwrap();
 
@@ -298,9 +321,23 @@ async fn a_summary_groups_archived_and_inline_errors_for_administrators(pool: Pg
     .await
     .unwrap();
 
-    let summary = error_summary(&pool, ids.org_id, ids.user_id, job)
-        .await
-        .unwrap();
+    // An import or access change holding the organization does not delay it.
+    let mut holder = pool.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM organizations WHERE id = $1 FOR UPDATE",
+        ids.org_id
+    )
+    .fetch_one(&mut *holder)
+    .await
+    .unwrap();
+    let summary = tokio::time::timeout(
+        Duration::from_secs(5),
+        error_summary(&pool, ids.org_id, ids.user_id, job),
+    )
+    .await
+    .expect("the summary must not wait for the organization lock")
+    .unwrap();
+    holder.rollback().await.unwrap();
     let groups: Vec<_> = summary
         .groups
         .iter()

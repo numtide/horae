@@ -17,13 +17,23 @@ async fn add(
     actor: uuid::Uuid,
     people: &[NewPerson],
     activation: Activation,
-) -> Result<Vec<User>, ServerFnError> {
-    insert_users(pool, org, actor, people, OrgRole::Member, activation).await
+) -> Result<AddedPeople, ServerFnError> {
+    insert_users(
+        pool,
+        org,
+        actor,
+        people,
+        OrgRole::Member,
+        activation,
+        Existing::Skip,
+    )
+    .await
 }
 
+/// Members and whether they are active, in Rust's byte order.
 async fn emails(pool: &PgPool, org: uuid::Uuid) -> Vec<(String, bool)> {
-    sqlx::query!(
-        "SELECT email, active FROM users WHERE org_id = $1 AND org_role = 'member' ORDER BY email",
+    let mut rows: Vec<_> = sqlx::query!(
+        "SELECT email, active FROM users WHERE org_id = $1 AND org_role = 'member'",
         org
     )
     .fetch_all(pool)
@@ -31,7 +41,9 @@ async fn emails(pool: &PgPool, org: uuid::Uuid) -> Vec<(String, bool)> {
     .unwrap()
     .into_iter()
     .map(|row| (row.email, row.active))
-    .collect()
+    .collect();
+    rows.sort();
+    rows
 }
 
 #[test]
@@ -65,7 +77,8 @@ async fn people_are_added_deactivated_or_active_as_chosen(pool: PgPool) {
         Activation::Deactivated,
     )
     .await
-    .unwrap();
+    .unwrap()
+    .added;
     assert_eq!(added.len(), 2);
     assert!(
         added
@@ -93,7 +106,7 @@ async fn people_are_added_deactivated_or_active_as_chosen(pool: PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]
-async fn an_email_in_use_in_any_case_refuses_the_whole_batch(pool: PgPool) {
+async fn an_email_already_in_use_is_reported_present_and_the_rest_are_added(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     add(
         &pool,
@@ -104,10 +117,55 @@ async fn an_email_in_use_in_any_case_refuses_the_whole_batch(pool: PgPool) {
     )
     .await
     .unwrap();
+    let mut expected = emails(&pool, ids.org_id).await;
+    expected.push(("new@x.com".to_owned(), false));
+    expected.sort();
+    // A reload, or another tab, adds the same people again.
+    let result = add(
+        &pool,
+        ids.org_id,
+        ids.user_id,
+        &[person("new@x.com"), person(" dana@x.com ")],
+        Activation::Deactivated,
+    )
+    .await
+    .unwrap();
+    let added: Vec<_> = result
+        .added
+        .iter()
+        .map(|user| user.email.as_str())
+        .collect();
+    assert_eq!(added, ["new@x.com"]);
+    assert_eq!(result.present, [" dana@x.com "]);
+    assert_eq!(emails(&pool, ids.org_id).await, expected);
+
+    // Adding one person from People still refuses an email in use.
+    let created = insert_user(
+        &pool,
+        ids.org_id,
+        ids.user_id,
+        "DANA@x.com",
+        "Dana",
+        OrgRole::Member,
+    )
+    .await;
+    assert!(
+        matches!(
+            created,
+            Err(ServerFnError::ServerError { code: CONFLICT, .. })
+        ),
+        "{created:?}"
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn an_email_listed_twice_in_any_case_refuses_the_batch(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
     let before = emails(&pool, ids.org_id).await;
     for batch in [
-        vec![person("new@x.com"), person("dana@x.com")],
         vec![person("twice@x.com"), person("TWICE@x.com")],
+        vec![person("Élodie@x.com"), person(" élodie@x.com")],
     ] {
         let result = add(
             &pool,
@@ -120,7 +178,10 @@ async fn an_email_in_use_in_any_case_refuses_the_whole_batch(pool: PgPool) {
         assert!(
             matches!(
                 result,
-                Err(ServerFnError::ServerError { code, .. }) if code == CONFLICT || code == BAD_REQUEST
+                Err(ServerFnError::ServerError {
+                    code: BAD_REQUEST,
+                    ..
+                })
             ),
             "{batch:?}: {result:?}"
         );

@@ -5,7 +5,7 @@ use horae_core::importers::harvest::types::{PersonErrorKind, SourceKind};
 
 use super::missing_person_row::MissingPersonRow;
 use crate::models::MissingPerson;
-use crate::models::user::{Activation, NewPerson};
+use crate::models::user::{Activation, AddedPeople, NewPerson};
 use crate::route::Route;
 use crate::server_fns;
 
@@ -17,19 +17,37 @@ pub(super) fn MissingPeople(
     omitted: u64,
     source: Option<SourceKind>,
 ) -> Element {
-    // Lowercased emails added from this page.
+    // Emails, as `key` normalizes them, added from this page, and those that
+    // turned out to have an account already (another tab, or a reload).
     let mut added = use_signal(HashSet::<String>::new);
+    let mut present = use_signal(HashSet::<String>::new);
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
-    let on_added = use_callback(move |email: String| {
-        added.write().insert(email.to_lowercase());
+    let key = |email: &str| email.trim().to_lowercase();
+    let on_added = use_callback(move |result: AddedPeople| {
+        added
+            .write()
+            .extend(result.added.iter().map(|user| key(&user.email)));
+        present
+            .write()
+            .extend(result.present.iter().map(|email| key(email)));
     });
+    let outcome = move |email: Option<&str>| {
+        let email = key(email?);
+        if added.read().contains(&email) {
+            Some("Added")
+        } else if present.read().contains(&email) {
+            Some("Already in Horae")
+        } else {
+            None
+        }
+    };
     let pending: Vec<NewPerson> = people
         .iter()
         .filter(|person| person.kind == PersonErrorKind::UnmatchedEmail)
         .filter_map(|person| {
             let email = person.email.clone()?;
-            (!added.read().contains(&email.to_lowercase())).then(|| NewPerson {
+            outcome(Some(&email)).is_none().then(|| NewPerson {
                 name: person.name.clone().unwrap_or_default(),
                 email,
             })
@@ -46,9 +64,7 @@ pub(super) fn MissingPeople(
                 busy.set(true);
                 error.set(None);
                 match server_fns::add_harvest_people(pending, Activation::Deactivated).await {
-                    Ok(users) => added
-                        .write()
-                        .extend(users.into_iter().map(|user| user.email.to_lowercase())),
+                    Ok(result) => on_added.call(result),
                     Err(e) => error.set(Some(e.to_string())),
                 }
                 busy.set(false);
@@ -85,9 +101,11 @@ pub(super) fn MissingPeople(
             if let Some(message) = error() {
                 div { class: "alert alert-danger m-4", role: "alert", "{message}" }
             }
-            if !added.read().is_empty() {
+            if !added.read().is_empty() || !present.read().is_empty() {
                 div { class: "alert alert-success m-4", role: "status",
-                    "Added {added.read().len()} people. Their entries import with the next run. "
+                    if !added.read().is_empty() { "Added {added.read().len()} people. " }
+                    if !present.read().is_empty() { "{present.read().len()} already had an account and were left as they are. " }
+                    "Their entries import with the next run. "
                     Link { to: preview_again, "data-testid": "preview-again", "Start a new preview" }
                 }
             }
@@ -105,7 +123,7 @@ pub(super) fn MissingPeople(
                             MissingPersonRow {
                                 key: "{person.email.as_deref().or(person.name.as_deref()).unwrap_or_default()}",
                                 person: person.clone(),
-                                added: person.email.as_ref().is_some_and(|email| added.read().contains(&email.to_lowercase())),
+                                outcome: outcome(person.email.as_deref()),
                                 busy,
                                 on_added,
                             }

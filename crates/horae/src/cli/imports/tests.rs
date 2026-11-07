@@ -162,6 +162,7 @@ fn job(status: &str) -> JobStatus {
         mode: Some(ImportMode::DryRun),
         source: None,
         commit_availability: Default::default(),
+        committed_as: None,
     }
 }
 

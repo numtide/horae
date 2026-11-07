@@ -519,7 +519,9 @@ pub async fn commit_preview_in(
         CommitAvailability::NewerImport => anyhow::bail!(CommitRefused::NewerImport),
         CommitAvailability::PreviousAccount => anyhow::bail!(CommitRefused::PreviousAccount),
         CommitAvailability::MissingUpload => anyhow::bail!(CommitRefused::MissingUpload),
-        CommitAvailability::NotPreview
+        // A committed preview returned its commit above.
+        CommitAvailability::Committed
+        | CommitAvailability::NotPreview
         | CommitAvailability::UnavailableState
         | CommitAvailability::Unknown => anyhow::bail!(CommitRefused::NotPreview),
     }
@@ -594,8 +596,10 @@ fn retry_availability(
 }
 
 /// The request's mode and source, and whether a finished preview may still be
-/// committed: only the latest run of its source, against the same account, with
-/// its CSV upload retained.
+/// committed: once, as the latest live run of its source, against the same
+/// account, with its CSV upload retained. `newer_import` ignores failed and
+/// cancelled runs and the preview's own commit.
+#[allow(clippy::too_many_arguments)]
 fn preview_fields(
     kind: &str,
     state: &str,
@@ -604,6 +608,7 @@ fn preview_fields(
     current_generation: i64,
     has_upload: bool,
     newer_import: bool,
+    committed: bool,
 ) -> (
     Option<ImportMode>,
     Option<SourceKind>,
@@ -623,6 +628,8 @@ fn preview_fields(
         CommitAvailability::NotPreview
     } else if state != "succeeded" {
         CommitAvailability::UnavailableState
+    } else if committed {
+        CommitAvailability::Committed
     } else if newer_import {
         CommitAvailability::NewerImport
     } else if source == SourceKind::HarvestApi && generation != current_generation {
@@ -652,7 +659,12 @@ pub async fn status<'e, E: sqlx::PgExecutor<'e>>(
                          WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS "has_upload!",
                   EXISTS(SELECT 1 FROM horae_jobs n
                          WHERE n.org_id = horae_jobs.org_id AND n.kind = horae_jobs.kind
-                           AND (n.created_at, n.id) > (horae_jobs.created_at, horae_jobs.id)) AS "newer_import!"
+                           AND (n.created_at, n.id) > (horae_jobs.created_at, horae_jobs.id)
+                           AND n.status NOT IN ('cancelled', 'failed')
+                           AND n.idempotency_key IS DISTINCT FROM 'preview-commit:' || horae_jobs.id) AS "newer_import!",
+                  (SELECT c.id FROM horae_jobs c
+                    WHERE c.org_id = horae_jobs.org_id AND c.kind = horae_jobs.kind
+                      AND c.idempotency_key = 'preview-commit:' || horae_jobs.id) AS committed_as
              FROM horae_jobs
             WHERE id = $1 AND org_id = $2"#,
         id,
@@ -669,11 +681,13 @@ pub async fn status<'e, E: sqlx::PgExecutor<'e>>(
             r.current_generation,
             r.has_upload,
             r.newer_import,
+            r.committed_as.is_some(),
         );
         crate::models::JobStatus {
             mode,
             source,
             commit_availability,
+            committed_as: r.committed_as,
             retry_availability: retry_availability(
                 &r.kind,
                 &r.status,
@@ -714,7 +728,12 @@ pub async fn list<'e, E: sqlx::PgExecutor<'e>>(
                          WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS "has_upload!",
                   EXISTS(SELECT 1 FROM horae_jobs n
                          WHERE n.org_id = horae_jobs.org_id AND n.kind = horae_jobs.kind
-                           AND (n.created_at, n.id) > (horae_jobs.created_at, horae_jobs.id)) AS "newer_import!"
+                           AND (n.created_at, n.id) > (horae_jobs.created_at, horae_jobs.id)
+                           AND n.status NOT IN ('cancelled', 'failed')
+                           AND n.idempotency_key IS DISTINCT FROM 'preview-commit:' || horae_jobs.id) AS "newer_import!",
+                  (SELECT c.id FROM horae_jobs c
+                    WHERE c.org_id = horae_jobs.org_id AND c.kind = horae_jobs.kind
+                      AND c.idempotency_key = 'preview-commit:' || horae_jobs.id) AS committed_as
              FROM horae_jobs
             WHERE org_id = $1
               AND ($3::uuid IS NULL OR (created_at, id) < (
@@ -739,11 +758,13 @@ pub async fn list<'e, E: sqlx::PgExecutor<'e>>(
                 r.current_generation,
                 r.has_upload,
                 r.newer_import,
+                r.committed_as.is_some(),
             );
             crate::models::JobStatus {
                 mode,
                 source,
                 commit_availability,
+                committed_as: r.committed_as,
                 retry_availability: retry_availability(
                     &r.kind,
                     &r.status,

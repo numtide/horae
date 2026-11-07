@@ -24,11 +24,13 @@ OAuth callback redirects to `/admin/importers/harvest?connected=1` on success an
 |---|---|---|
 | `harvest_import_error_summary(job_id)` | `ErrorSummary`: ≤ 50 groups and ≤ 500 people, with `omitted_errors` and `omitted_people` | `NOT_FOUND` for another organization's job; `FORBIDDEN` for a non-admin |
 | `commit_harvest_import_preview(job_id)` | `JobStatus` of the commit job; the same job for a repeated call (key `preview-commit:{job_id}`) | `CONFLICT` when the job is not a succeeded preview, a newer job of the same source exists, the account changed, or the upload expired; `NOT_FOUND`; `FORBIDDEN` |
-| `add_harvest_people(people: Vec<NewPerson>, activation: Activation)` | the created `User`s, members, active only for `Activation::Active` | `BAD_REQUEST` for 0 or more than 500 people, a missing or invalid email, or an email listed twice; `CONFLICT` for an email any account uses, ignoring case; `FORBIDDEN`. One transaction, all or nothing |
+| `add_harvest_people(people: Vec<NewPerson>, activation: Activation)` | `AddedPeople { added: Vec<User>, present: Vec<String> }`: members created (active only for `Activation::Active`), and emails that already had an account, left alone | `BAD_REQUEST` for 0 or more than 500 people, a missing or invalid email, or an email listed twice (trimmed, ignoring case); `FORBIDDEN`. One transaction |
 
-`JobStatus` gains `mode`, `source` and `commit_availability`
-(`available | not_preview | unavailable_state | newer_import | previous_account | missing_upload | unknown`),
-all read from the job request, so history labels a run before it has a report.
+`JobStatus` gains `mode`, `source`, `commit_availability`
+(`available | not_preview | unavailable_state | committed | newer_import | previous_account | missing_upload | unknown`)
+and `committed_as` (the commit run of a committed preview), so history labels a run before it has
+a report. A "newer import" is a later run of the same source that has not failed or been cancelled
+and is not the preview's own commit.
 
 Unchanged and reused: connection, client settings, start, get and list, cancel, retry, and the
 NDJSON error download.

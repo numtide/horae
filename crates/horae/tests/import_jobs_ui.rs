@@ -46,6 +46,11 @@ mod models {
         pub struct User {
             pub email: String,
         }
+
+        pub struct AddedPeople {
+            pub added: Vec<User>,
+            pub present: Vec<String>,
+        }
     }
 }
 
@@ -113,6 +118,8 @@ struct Probe {
     summaries: Rc<RefCell<Vec<Uuid>>>,
     additions: Rc<RefCell<Additions>>,
     addition_error: Rc<RefCell<Option<String>>>,
+    /// Emails the server reports as already having an account.
+    already_present: Rc<RefCell<Vec<String>>>,
     client: Rc<RefCell<ClientSettings>>,
     client_saves: Rc<RefCell<Vec<ClientSave>>>,
     client_removes: Rc<RefCell<usize>>,
@@ -300,6 +307,7 @@ fn job(id: u128, status: &str) -> models::JobStatus {
         mode: Some(ImportMode::DryRun),
         source: Some(SourceKind::Csv),
         commit_availability: models::CommitAvailability::UnavailableState,
+        committed_as: None,
     }
 }
 
@@ -474,21 +482,50 @@ async fn a_refused_commit_is_explained() {
         ImportMode::DryRun,
         ImportReport::new(SourceKind::Csv, ImportMode::DryRun),
     );
-    let mut ui = open_run(&probe, preview);
+    let mut ui = open_run(&probe, preview.clone());
     let action = probe.action();
     ui.click("commit-preview");
+    // The refusal re-reads the run, which now says why.
+    let reread = probe.request();
     action
         .send(Err(ServerFnError::new(
             "A newer import replaced this preview",
         )))
         .unwrap();
     ui.settle();
+    let mut replaced = preview;
+    replaced.commit_availability = models::CommitAvailability::NewerImport;
+    reread.send(Ok(Some(replaced))).unwrap();
+    ui.settle();
     let html = ui.html();
     assert!(html.contains("Could not commit this preview"), "{html}");
     assert!(
-        html.contains("A newer import replaced this preview"),
+        html.contains("A newer import from this source replaced this preview"),
         "{html}"
     );
+    assert!(!html.contains("data-testid=\"commit-preview\""), "{html}");
+    assert_eq!(probe.requests.borrow().len(), 2);
+}
+
+#[tokio::test]
+async fn a_committed_preview_links_to_its_commit() {
+    let probe = Probe::default();
+    let mut preview = finished(
+        1,
+        ImportMode::DryRun,
+        ImportReport::new(SourceKind::Csv, ImportMode::DryRun),
+    );
+    preview.commit_availability = models::CommitAvailability::Committed;
+    preview.committed_as = Some(Uuid::from_u128(2));
+    let ui = open_run(&probe, preview);
+    let html = ui.html();
+    assert!(html.contains("This dry run was committed"), "{html}");
+    assert!(
+        html.contains(&format!("href=\"{}\"", run_path(2))),
+        "{html}"
+    );
+    assert!(!html.contains("Commit this dry run"), "{html}");
+    assert!(!html.contains("newer import"), "{html}");
 }
 
 #[tokio::test]
@@ -534,9 +571,12 @@ async fn retry_errors_are_visible_and_success_follows_the_run_again() {
         1,
         "pending retry must not be submitted twice"
     );
+    let reread = probe.request();
     action
         .send(Err(ServerFnError::new("Retry rejected")))
         .unwrap();
+    ui.settle();
+    reread.send(Ok(Some(job(1, "failed")))).unwrap();
     ui.settle();
     assert!(ui.html().contains("Could not retry import"));
     let action = probe.action();
@@ -552,7 +592,7 @@ async fn retry_errors_are_visible_and_success_follows_the_run_again() {
         &*probe.retries.borrow(),
         &[Uuid::from_u128(1), Uuid::from_u128(1)]
     );
-    assert_eq!(probe.requests.borrow().len(), 2);
+    assert_eq!(probe.requests.borrow().len(), 3);
 }
 
 #[tokio::test]
@@ -561,16 +601,22 @@ async fn cancellation_errors_are_visible_and_acceptance_does_not_acknowledge_com
     let mut ui = open_run(&probe, job(1, "running"));
     let action = probe.action();
     ui.click("cancel-import");
+    let reread = probe.request();
     action
         .send(Err(ServerFnError::new("Cancellation rejected")))
         .unwrap();
+    ui.settle();
+    reread.send(Ok(Some(job(1, "running")))).unwrap();
     ui.settle();
     assert!(ui.html().contains("Could not cancel import"));
     let action = probe.action();
     ui.click("cancel-import");
     let mut accepted = job(1, "running");
     accepted.phase = Some("cancelling".into());
-    action.send(Ok(accepted)).unwrap();
+    let reread = probe.request();
+    action.send(Ok(accepted.clone())).unwrap();
+    ui.settle();
+    reread.send(Ok(Some(accepted))).unwrap();
     ui.settle();
     assert!(ui.html().contains("Cancellation requested"));
     assert!(!ui.html().contains("Import cancelled"));
@@ -780,6 +826,37 @@ async fn missing_people_say_what_to_do_and_can_all_be_added_deactivated() {
     assert!(html.contains("Added 1 people"), "{html}");
     assert!(html.contains("Start a new preview"), "{html}");
     assert!(!html.contains("Add all as deactivated"), "{html}");
+}
+
+#[tokio::test]
+async fn adding_everyone_reports_who_already_had_an_account() {
+    let probe = Probe::default();
+    // Added meanwhile from another tab, or before a reload.
+    probe.already_present.borrow_mut().push("dana@x.com".into());
+    *probe.summary.borrow_mut() = models::ErrorSummary {
+        people: vec![
+            missing(
+                Some("dana@x.com"),
+                "Dana",
+                PersonErrorKind::UnmatchedEmail,
+                3,
+            ),
+            missing(Some("lee@x.com"), "Lee", PersonErrorKind::UnmatchedEmail, 1),
+        ],
+        ..models::ErrorSummary::default()
+    };
+    let mut ui = open_run(
+        &probe,
+        finished(1, ImportMode::DryRun, errored_report(ImportMode::DryRun, 4)),
+    );
+    assert!(ui.html().contains("Add all as deactivated (2)"));
+    ui.click("add-all-people");
+    let html = ui.html();
+    assert!(html.contains("Added 1 people."), "{html}");
+    assert!(html.contains("1 already had an account"), "{html}");
+    assert!(html.contains("Already in Horae"), "{html}");
+    assert!(!html.contains("Add all as deactivated"), "{html}");
+    assert_eq!(probe.additions.borrow().len(), 1);
 }
 
 #[tokio::test]
@@ -1278,7 +1355,7 @@ mod server_fns {
     pub async fn add_harvest_people(
         people: Vec<models::user::NewPerson>,
         activation: models::user::Activation,
-    ) -> Result<Vec<models::user::User>, ServerFnError> {
+    ) -> Result<models::user::AddedPeople, ServerFnError> {
         let probe = consume_context::<Probe>();
         probe
             .additions
@@ -1287,12 +1364,19 @@ mod server_fns {
         if let Some(error) = probe.addition_error.borrow().as_ref() {
             return Err(ServerFnError::new(error));
         }
-        Ok(people
+        let present = probe.already_present.borrow();
+        let (present, added): (Vec<_>, Vec<_>) = people
             .into_iter()
-            .map(|person| models::user::User {
-                email: person.email,
-            })
-            .collect())
+            .partition(|person| present.contains(&person.email));
+        Ok(models::user::AddedPeople {
+            added: added
+                .into_iter()
+                .map(|person| models::user::User {
+                    email: person.email,
+                })
+                .collect(),
+            present: present.into_iter().map(|person| person.email).collect(),
+        })
     }
 
     pub async fn harvest_connect_start() -> Result<String, ServerFnError> {

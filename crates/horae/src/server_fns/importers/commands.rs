@@ -109,13 +109,26 @@ pub(super) async fn error_summary(
     actor_id: Uuid,
     id: Uuid,
 ) -> Result<crate::models::ErrorSummary, ServerFnError> {
-    let mut tx = begin_access(pool, org_id, actor_id).await?;
-    let result = jobs::report::summarize(&mut tx, org_id, id)
+    // Read-only, over a report that no longer changes once the run ends: it
+    // skips the organization lock, so it never queues behind an import or an
+    // access change, and every read below is scoped by `org_id`.
+    let mut connection = pool.acquire().await.map_err(server_err)?;
+    let admin = sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM users
+             WHERE id = $1 AND org_id = $2 AND active AND org_role = 'admin') AS "admin!""#,
+        actor_id,
+        org_id,
+    )
+    .fetch_one(&mut *connection)
+    .await
+    .map_err(server_err)?;
+    if !admin {
+        return Err(forbidden("Active administrator access required"));
+    }
+    jobs::report::summarize(&mut connection, org_id, id)
         .await
         .map_err(server_err)?
-        .ok_or_else(|| err(NOT_FOUND, "Import job not found"))?;
-    tx.commit().await.map_err(server_err)?;
-    Ok(result)
+        .ok_or_else(|| err(NOT_FOUND, "Import job not found"))
 }
 
 pub(super) async fn status(

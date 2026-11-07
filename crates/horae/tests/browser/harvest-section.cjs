@@ -48,9 +48,9 @@ const user = email => ({
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const failures = [];
   const errors = [];
-  let commits, additions, summaries;
+  let commits, additions, summaries, statusReads;
   page.on('pageerror', error => errors.push(error.message));
-  const reset = () => { commits = 0; additions = []; summaries = 0; };
+  const reset = () => { commits = 0; additions = []; summaries = 0; statusReads = 0; };
   reset();
   // Only API calls: the section's own page URLs contain "harvest" too.
   await page.route(url => url.pathname.startsWith('/api/') && url.pathname.includes('harvest'), async route => {
@@ -63,6 +63,7 @@ const user = email => ({
     }
     if (pathname === '/api/import/harvest/history') return reply([run(commitId, 'Commit', 'queued'), run(previewId, 'DryRun')]);
     if (pathname === '/api/import/harvest/status') {
+      statusReads++;
       const { job_id } = request.postDataJSON();
       return reply(job_id === commitId ? run(commitId, 'Commit', 'queued') : run(previewId, 'DryRun'));
     }
@@ -71,7 +72,10 @@ const user = email => ({
     if (pathname.includes('add_harvest_people')) {
       const { people, activation } = request.postDataJSON();
       additions.push({ emails: people.map(person => person.email), activation });
-      return reply(people.map(person => user(person.email)));
+      // Sam was added from another tab meanwhile.
+      const present = people.filter(person => person.email === 'sam@example.com');
+      const added = people.filter(person => !present.includes(person));
+      return reply({ added: added.map(person => user(person.email)), present: present.map(person => person.email) });
     }
     errors.push(`Unrecognized importer request was blocked: ${pathname}`);
     return route.abort('failed');
@@ -127,6 +131,11 @@ const user = email => ({
       await expect(people.getByText('dana@example.com')).toBeVisible();
       await expect(people.getByText('Add an email to this person in Harvest', { exact: false })).toBeVisible();
       assert.equal(summaries, 1, 'A finished run groups its errors once');
+      // Coming back to the tab re-reads the finished run, and only the run.
+      const before = statusReads;
+      await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+      await expect.poll(() => statusReads).toBeGreaterThan(before);
+      assert.equal(summaries, 1, 'Re-reading the run does not regroup its errors');
     });
 
     await check('a person is added in place, deactivated by default', async () => {
@@ -138,7 +147,8 @@ const user = email => ({
       await expect(page.getByText('Added 1 people', { exact: false })).toBeVisible();
       assert.deepEqual(additions, [{ emails: ['dana@example.com'], activation: 'Deactivated' }]);
       await page.getByTestId('add-all-people').click();
-      await expect(page.getByText('Added 2 people', { exact: false })).toBeVisible();
+      await expect(page.getByText('1 already had an account', { exact: false })).toBeVisible();
+      await expect(page.getByText('Already in Horae')).toBeVisible();
       assert.deepEqual(additions[1], { emails: ['sam@example.com'], activation: 'Deactivated' });
       await expect(page.getByTestId('preview-again')).toHaveAttribute('href', '/admin/importers/harvest/csv');
     });

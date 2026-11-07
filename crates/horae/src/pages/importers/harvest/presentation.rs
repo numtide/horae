@@ -83,7 +83,9 @@ pub(super) fn commit_reason(availability: crate::models::CommitAvailability) -> 
         CommitAvailability::Unknown => {
             "Commit availability is unknown. Reload the page or update Horae."
         }
-        CommitAvailability::Available | CommitAvailability::NotPreview => "",
+        CommitAvailability::Available
+        | CommitAvailability::NotPreview
+        | CommitAvailability::Committed => "",
     }
 }
 

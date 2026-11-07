@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT email, active FROM users WHERE org_id = $1 AND org_role = 'member' ORDER BY email",
+  "query": "SELECT email, active FROM users WHERE org_id = $1 AND org_role = 'member'",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       false
     ]
   },
-  "hash": "eb3b5d615995899e7a594138f3ea70832074cf4f63b074a580b48cd579abe73c"
+  "hash": "adfea4c66cdea4ab2a4bd7ce78698d3e0c7b1efc2ca436f62d07a685ed4d72e0"
 }

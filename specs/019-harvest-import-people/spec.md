@@ -229,12 +229,14 @@ add a missing person, and commit a succeeded preview into a new run.
   deactivated by default with an explicit choice to add active, and add every listed person whose
   email matched no account as deactivated in one action. A person known only by name (CSV) is added
   with an email the administrator enters. Additions MUST emit the same events as adding a person
-  from People, and MUST refuse an email any account already uses, ignoring case. A person the
+  from People. A person whose email an account already uses, ignoring case, MUST be left alone and
+  shown as already present, without failing the others. A person the
   addition cannot help (no Harvest email, a shared email, an email in use) is shown with what to
   change instead.
 - **FR-019**: "Commit this dry run" MUST start a commit for a succeeded preview from the preview alone
   (API: the preview's Harvest account generation; CSV: the retained upload), MUST be idempotent per
-  preview, and MUST be refused with a conflict when a newer job of the same source exists, the
+  preview, and MUST be refused with a conflict when a newer job of the same source exists (one that
+  has not failed or been cancelled, other than this preview's own commit), the
   account changed, or the upload expired. The run status MUST say which of these makes commit
   unavailable.
 - **FR-020**: Every page and action in the section MUST be administrator-only.

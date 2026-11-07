@@ -23,6 +23,8 @@ pub enum CommitAvailability {
     NotPreview,
     /// Only a preview that finished can be committed.
     UnavailableState,
+    /// This preview was committed; [`JobStatus::committed_as`] is that run.
+    Committed,
     /// A later import from the same source replaces this preview.
     NewerImport,
     PreviousAccount,
@@ -53,6 +55,9 @@ pub struct JobStatus {
     pub source: Option<SourceKind>,
     #[serde(default)]
     pub commit_availability: CommitAvailability,
+    /// The commit run started from this preview, if any.
+    #[serde(default)]
+    pub committed_as: Option<uuid::Uuid>,
 }
 
 impl JobStatus {

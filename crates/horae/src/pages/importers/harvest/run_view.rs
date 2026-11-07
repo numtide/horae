@@ -18,10 +18,19 @@ use crate::server_fns;
 pub(super) fn RunView(id: Uuid) -> Element {
     let navigator = use_navigator();
     let mut job = use_signal(|| None::<Result<JobStatus, String>>);
-    // Bumped to follow the run again after a retry or a failed status read.
+    // Bumped to read the run again: after any action, a failed status read,
+    // or the page coming back into view. A finished run is read once each
+    // time, so what it offers (commit, retry) never goes stale.
     let mut follow = use_signal(|| 0_u64);
     let mut busy = use_signal(|| false);
     let mut action_error = use_signal(|| None::<String>);
+
+    use_future(move || async move {
+        let mut shown = document::eval(&WATCH_VISIBILITY.replace("RUN_ID", &id.to_string()));
+        while shown.recv::<bool>().await.is_ok() {
+            follow += 1;
+        }
+    });
 
     let _poll = use_resource(move || {
         follow();
@@ -78,6 +87,7 @@ pub(super) fn RunView(id: Uuid) -> Element {
                 Ok(run) => job.set(Some(Ok(run))),
                 Err(error) => action_error.set(Some(format!("Could not cancel import: {error}"))),
             }
+            follow += 1;
             busy.set(false);
         });
     });
@@ -89,12 +99,10 @@ pub(super) fn RunView(id: Uuid) -> Element {
             busy.set(true);
             action_error.set(None);
             match server_fns::retry_harvest_import_job(id).await {
-                Ok(run) => {
-                    job.set(Some(Ok(run)));
-                    follow += 1;
-                }
-                Err(error) => action_error.set(Some(format!("Could not retry import: {error}. Reload the run to check its state before trying again."))),
+                Ok(run) => job.set(Some(Ok(run))),
+                Err(error) => action_error.set(Some(format!("Could not retry import: {error}"))),
             }
+            follow += 1;
             busy.set(false);
         });
     });
@@ -110,7 +118,9 @@ pub(super) fn RunView(id: Uuid) -> Element {
                     navigator.push(Route::HarvestRun { id: run.id });
                 }
                 Err(error) => {
-                    action_error.set(Some(format!("Could not commit this preview: {error}")))
+                    action_error.set(Some(format!("Could not commit this preview: {error}")));
+                    // The refusal usually means the run's state moved on.
+                    follow += 1;
                 }
             }
             busy.set(false);
@@ -136,7 +146,10 @@ pub(super) fn RunView(id: Uuid) -> Element {
             Ok(run) => {
                 navigator.push(Route::HarvestRun { id: run.id });
             }
-            Err(error) => action_error.set(Some(format!("Could not start the re-sync: {error}"))),
+            Err(error) => {
+                action_error.set(Some(format!("Could not start the re-sync: {error}")));
+                follow += 1;
+            }
         }
         busy.set(false);
     };
@@ -145,7 +158,7 @@ pub(super) fn RunView(id: Uuid) -> Element {
     let run = match &*snapshot {
         None => {
             return rsx! {
-                div { class: "himp-page min-w-0",
+                div { class: "himp-page min-w-0", "data-run": "{id}",
                     BackLinks {}
                     p { role: "status", "Loading run…" }
                 }
@@ -153,7 +166,7 @@ pub(super) fn RunView(id: Uuid) -> Element {
         }
         Some(Err(error)) => {
             return rsx! {
-                div { class: "himp-page min-w-0",
+                div { class: "himp-page min-w-0", "data-run": "{id}",
                     BackLinks {}
                     div { class: "alert alert-danger mt-4", role: "alert",
                         p { "Status unavailable. The import may still be running." }
@@ -177,7 +190,7 @@ pub(super) fn RunView(id: Uuid) -> Element {
         && run.status == "succeeded";
 
     rsx! {
-        div { class: "himp-page min-w-0",
+        div { class: "himp-page min-w-0", "data-run": "{id}",
             BackLinks {}
             RunHeader { job: run.clone(), busy, on_cancel: cancel, on_retry: retry, on_commit: commit }
             if let Some(error) = action_error() {
@@ -255,3 +268,20 @@ pub(super) fn RunView(id: Uuid) -> Element {
         }
     }
 }
+
+/// Tells the run page when the tab or window is shown again. The listeners
+/// remove themselves once this run's page is gone, since dropping the eval
+/// does not reach the browser.
+const WATCH_VISIBILITY: &str = r#"
+const shown = () => {
+  if (!document.querySelector('[data-run="RUN_ID"]')) {
+    window.removeEventListener('focus', shown);
+    document.removeEventListener('visibilitychange', shown);
+    return;
+  }
+  if (document.visibilityState === 'visible') dioxus.send(true);
+};
+window.addEventListener('focus', shown);
+document.addEventListener('visibilitychange', shown);
+await new Promise(() => {});
+"#;
