@@ -603,12 +603,6 @@ h1, h2, h3, h4, h5, h6 {
 .sidebar-menu .menu-item { display: flex; align-items: center; gap: var(--space-3); }
 .menu-item-icon { display: inline-flex; width: 15px; flex-shrink: 0; color: var(--color-text-muted); }
 .sidebar-menu-foot { border-top: 1px solid var(--color-border); }
-/* Account popover: section labels are uppercase micro-headers (design spec).
-   Scoped so the shared combobox group label keeps its own casing. */
-.sidebar-menu .menu-group {
-  text-transform: uppercase; letter-spacing: 0.12em;
-  color: var(--color-text-muted); font-size: var(--font-size-xs);
-}
 
 /* ── Admin area shell ──────────────────────────────────────────────────────
    A secondary Workspace / Data sub-nav beside the active admin panel, layered

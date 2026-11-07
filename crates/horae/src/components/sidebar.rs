@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 
+use crate::components::admin_shell::first_admin_route;
 use crate::components::avatar::Avatar;
 use crate::components::icons::NavIcon;
 use crate::components::logo::HoraeMark;
@@ -75,7 +76,7 @@ fn SideLink(to: Route, icon: String, label: String, on_navigate: EventHandler<()
 }
 
 /// The signed-in user: an avatar + name + role row that opens an account popover
-/// (settings, an admin section for admins, and sign out). Falls back to a
+/// (settings, Administration when an admin section is open to them, and sign out). Falls back to a
 /// placeholder until `get_me` resolves (or when not authenticated).
 #[component]
 fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
@@ -116,6 +117,7 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
         ),
         _ => (false, String::new()),
     };
+    let admin_route = first_admin_route(own.read().as_ref(), me.read().as_ref());
     let role_class = if administrator {
         "badge badge-info badge-sm"
     } else {
@@ -140,17 +142,14 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                     }
                     div { class: "sidebar-menu-list",
                         Link { to: Route::Settings {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
-                            span { class: "menu-item-icon", NavIcon { name: "settings" } }
+                            span { class: "menu-item-icon", NavIcon { name: "users" } }
                             "Settings"
                         }
-                    }
-                    // Team and Tasks live in the rail's Organize section.
-                    if is_admin {
-                        div { class: "sidebar-menu-list",
-                            div { class: "menu-group", "Workspace" }
-                            Link { to: Route::HarvestImport {}, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
-                                span { class: "menu-item-icon", NavIcon { name: "import" } }
-                                "Importers"
+                        // The admin shell's own sub-navigation reaches the other sections.
+                        if let Some(to) = admin_route {
+                            Link { to, class: "menu-item", onclick: move |_| { open.set(false); on_navigate.call(()); },
+                                span { class: "menu-item-icon", NavIcon { name: "settings" } }
+                                "Administration"
                             }
                         }
                     }

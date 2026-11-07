@@ -147,22 +147,36 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     assert.ok(!requests.slice(readStart).some(path => /^\/api\/(list_users|list_tasks)/.test(path)));
     const railTeam = page.locator('.app-sidebar').getByRole('link', { name: 'Team', exact: true });
     const userMenu = page.locator('.sidebar-menu');
-    // Settings and Sign out are always offered; Importers only to legacy admins.
-    const expectUserMenu = async importers => {
+    // Settings and Sign out are always offered. Administration appears only when
+    // an admin section is open, and lands on the first one (`landing`).
+    const expectUserMenu = async landing => {
       await page.locator('.sidebar-footer').click();
-      await expect(userMenu.getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
-      await expect(userMenu.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
-      await expect(userMenu.getByRole('link', { name: 'Importers', exact: true })).toHaveCount(importers ? 1 : 0);
-      await page.locator('.sidebar-footer').click();
+      await expect(userMenu.locator('.menu-item')).toHaveText(landing ? ['Settings', 'Administration', 'Sign out'] : ['Settings', 'Sign out']);
+      if (!landing) {
+        if (process.env.HORAE_BROWSER_ARTIFACTS) {
+          await page.screenshot({ path: join(process.env.HORAE_BROWSER_ARTIFACTS, 'account-menu-member.png'), animations: 'disabled' });
+        }
+        await page.locator('.sidebar-footer').click();
+      } else {
+        const entry = userMenu.getByRole('link', { name: 'Administration', exact: true });
+        await expect(entry).toHaveAttribute('href', landing);
+        await entry.click();
+        await page.waitForURL(`${base}${landing}`);
+        await expect(page.locator('.adm-nav')).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toHaveCount(0);
+      }
       await expect(userMenu).toHaveCount(0);
     };
     await expect(railTeam).toBeVisible();
     await expect(page.locator('.adm-nav').getByRole('link', { name: 'Team', exact: true })).toBeVisible();
-    await expectUserMenu(false);
+    // A legacy member who is a canonical Administrator.
+    await expectUserMenu('/admin/users');
     sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
     await page.reload();
     await expect(page.getByRole('cell', { name: personName, exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Edit permissions for/ })).toHaveCount(0);
+    // Directory grants alone still open Team.
+    await expectUserMenu('/admin/users');
     sql(`INSERT INTO person_management_assignments(id, org_id, manager_id, managed_user_id)
       VALUES ('01960000-0000-7000-8000-000000000708', '${actor.org_id}', '${actor.id}', '${person}');
       UPDATE person_permission_states SET grants=${array([...floor, 'people_read_managed'])} WHERE id='${actorState}'`);
@@ -182,12 +196,25 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     assert.ok(!requests.slice(readStart).some(path => /^\/api\/(list_people|list_users|list_tasks|load_permission_editor|list_permission_subjects)/.test(path)));
     // A legacy admin role grants no directory read once canonical grants apply.
     await expect(railTeam).toHaveCount(0);
+    // Importers is still open to that legacy admin, so Administration leads there.
+    await expectUserMenu('/admin/importers');
+    await expect(page.locator('.adm-main .page-title')).toHaveText('Importers');
+    // A plain member with floor grants has no admin section, so no entry.
+    sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`);
+    await page.reload();
+    // The server render only says "Loading…", so this waits for hydration too.
+    await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toBeVisible();
+    await expect(page.locator('.adm-nav')).toHaveCount(0);
+    await expectUserMenu(null);
+    sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'`);
+    await page.goto(`${base}/admin/users`);
+    await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toBeVisible();
     sql(`UPDATE organizations SET permission_policy_version=0 WHERE id='${actor.org_id}'`);
     await page.reload();
     await expect(page.getByRole('button', { name: 'Invite User', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Edit permissions for/ })).toHaveCount(0);
     await expect(railTeam).toBeVisible();
-    await expectUserMenu(true);
+    await expectUserMenu('/admin/users');
     sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}';
       UPDATE person_permission_states SET grants=${array(administrator)}, is_administrator=true WHERE id='${actorState}';
       DELETE FROM person_management_assignments WHERE id='01960000-0000-7000-8000-000000000708'`);
@@ -573,6 +600,8 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
       DELETE FROM permission_change_receipts WHERE org_id='${actor.org_id}' AND actor_user_id='${actor.id}';
       DELETE FROM person_permission_states WHERE id IN ('${actorState}', '${personState}', '${otherState}');
       DELETE FROM permission_templates WHERE org_id='${actor.org_id}' AND name='${templateName}';
+      -- The run removes this assignment itself only when its step passes.
+      DELETE FROM person_management_assignments WHERE id='01960000-0000-7000-8000-000000000708';
       DELETE FROM users WHERE id='${person}' AND email='permission-browser@example.test';
       DELETE FROM users WHERE id='${otherActor}' AND email='permission-other-browser@example.test';
       UPDATE users SET org_role='admin' WHERE id='${actor.id}';

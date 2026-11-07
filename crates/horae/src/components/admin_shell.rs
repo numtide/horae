@@ -79,6 +79,26 @@ fn workspace_access(
     }))
 }
 
+/// The first section the person may open, in sub-navigation order, so an entry
+/// into the admin area never lands on "Access unavailable". `None` while loading
+/// or when no section is open.
+pub(crate) fn first_admin_route(
+    own: Option<&Result<Option<OwnPermissions>, ServerFnError>>,
+    me: Option<&Result<CurrentUser, ServerFnError>>,
+) -> Option<Route> {
+    // Asking as Importers keeps the shell's fallback for legacy admins whose
+    // permission state is unavailable.
+    let access = workspace_access(Section::Importers, own, me)?.ok()?;
+    [
+        (access.people, Route::AdminUsers {}),
+        (access.tasks, Route::TaskCatalog {}),
+        (access.importers, Route::HarvestImport {}),
+        (access.audit, Route::PermissionAudit {}),
+    ]
+    .into_iter()
+    .find_map(|(allowed, route)| allowed.then_some(route))
+}
+
 /// The admin area shell: a secondary sub-navigation (Workspace / Data) beside the
 /// active admin panel, rendered through an `Outlet`. Layered inside `AppLayout`,
 /// so the main rail stays put and this owns only the content panel (per the
@@ -315,5 +335,30 @@ mod tests {
             workspace_access(Section::Importers, Some(&Ok(None)), Some(&no_identity)),
             Some(Err(()))
         );
+    }
+
+    #[test]
+    fn first_admin_route_follows_sub_navigation_order() {
+        let admin = user(OrgRole::Admin);
+        let member = user(OrgRole::Member);
+        let version = PERMISSION_CATALOG_VERSION;
+        // `Route` has no `Debug`, so compare the paths it renders to.
+        let first = |own: &Result<Option<OwnPermissions>, ServerFnError>, me| {
+            first_admin_route(Some(own), Some(me)).map(|route| route.to_string())
+        };
+        let path = |p: &str| Some(p.to_string());
+        assert_eq!(first(&Ok(None), &admin), path("/admin/users"));
+        assert_eq!(first(&Ok(None), &member), None);
+        let tasks = canonical(vec![Permission::TaskReadAll], true, version);
+        assert_eq!(first(&tasks, &member), path("/admin/tasks"));
+        let floor = canonical(Vec::new(), false, version);
+        assert_eq!(first(&floor, &admin), path("/admin/importers"));
+        assert_eq!(first(&floor, &member), None);
+        let administrator = canonical(Vec::new(), true, version);
+        assert_eq!(first(&administrator, &member), path("/admin/audit"));
+        let failed = Err(ServerFnError::new("unavailable"));
+        assert_eq!(first(&failed, &admin), path("/admin/importers"));
+        assert_eq!(first(&failed, &member), None);
+        assert!(first_admin_route(None, Some(&admin)).is_none(), "loading");
     }
 }
