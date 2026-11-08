@@ -280,9 +280,6 @@ pub(super) fn RunPanel(
                                     button { r#type: "button", class: "btn btn-primary", "data-testid": "reconnect".to_owned(),
                                         disabled: busy(), onclick: move |_| act(Action::Reconnect), "Reconnect Harvest"
                                     }
-                                    span { class: "text-sm text-secondary",
-                                        "Then continue the {noun}; it picks up where it stopped."
-                                    }
                                 },
                                 Some(JobErrorKind::Forbidden) => rsx! {
                                     button { r#type: "button", class: "btn btn-primary", "data-testid": "reconnect".to_owned(),
@@ -302,6 +299,11 @@ pub(super) fn RunPanel(
                                 }
                                 if entries > 0 && !access_error {
                                     span { class: "text-sm text-secondary", "Picks up from {presentation::count(entries)} time entries." }
+                                }
+                                if job.error_kind == Some(JobErrorKind::ReconnectRequired) {
+                                    span { class: "text-sm text-secondary",
+                                        "Reconnect first, then continue; it picks up where it stopped."
+                                    }
                                 }
                             } else {
                                 p { class: "text-sm text-faint", "{presentation::retry_reason(job.retry_availability)}" }

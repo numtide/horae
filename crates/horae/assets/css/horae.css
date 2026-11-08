@@ -1882,6 +1882,8 @@ tbody tr:hover { background: var(--color-row-hover); }
 /* Harvest / CSV importer screen. Layout is composed from
    utilities in the markup; only what utilities can't express lives here. */
 .himp-page { overflow-wrap: anywhere; }
+/* Tables scroll inside their card; breaking inside a word ("Clien ts") would not help. */
+.himp-page .table :is(th, td) { overflow-wrap: normal; }
 .himp-page .btn { white-space: normal; max-width: 100%; }
 .himp-page .banner { flex-wrap: wrap; }
 .himp-history[aria-pressed="true"] {
