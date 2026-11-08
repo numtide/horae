@@ -432,11 +432,19 @@ async fn update_time_entry(
     )
     .fetch_one(&mut **sp)
     .await?;
-    sqlx::query!(
-        "UPDATE time_entries
+    // The caller's checks ran before the lock: a submit or an edit that
+    // committed while this waited must still stop the write. Postgres
+    // re-evaluates this WHERE on the row version it waited for.
+    let written = sqlx::query!(
+        "UPDATE time_entries AS te
             SET user_id = $2, project_id = $3, task_id = $4, spent_date = $5,
                 minutes = $6, notes = $7, billable = $8
-          WHERE id = $1",
+          FROM harvest_import_map AS m
+          WHERE te.id = $1 AND te.state = 'open'
+            AND m.org_id = te.org_id
+            AND m.harvest_entity_type = 'time_entry'::harvest_entity_type
+            AND m.horae_id = te.id
+            AND te.updated_at = COALESCE(m.horae_updated_at, te.created_at)",
         id,
         user_id,
         project_id,
@@ -448,6 +456,11 @@ async fn update_time_entry(
     )
     .execute(&mut **sp)
     .await?;
+    if written.rows_affected() != 1 {
+        return Err(RowFailure::new(
+            "entry changed in Horae during the import; not updated from Harvest",
+        ));
+    }
     let after = sqlx::query_scalar!(
         r#"SELECT COALESCE(SUM(minutes), 0)::bigint as "total!" FROM time_entries
            WHERE user_id = $1 AND spent_date = $2"#,

@@ -223,3 +223,69 @@ async fn later_harvest_edits_never_overwrite_submitted_or_horae_edited_entries(p
         }
     }
 }
+
+async fn entry(pool: &PgPool, org: Uuid) -> (i32, String, Option<String>) {
+    let row = sqlx::query!(
+        r#"SELECT minutes, state::text AS "state!", notes FROM time_entries WHERE org_id = $1"#,
+        org
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    (row.minutes, row.state, row.notes)
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_submit_racing_an_update_keeps_the_submitted_entry(pool: PgPool) {
+    let org = setup(&pool).await;
+    sync(
+        &pool,
+        org,
+        ImportMode::Commit,
+        json!({"hours":1,"updated_at":day(3)}),
+    )
+    .await;
+    let user = sqlx::query_scalar!("SELECT user_id FROM time_entries WHERE org_id = $1", org)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    // Submit holds the exclusive timesheet lock while it freezes the week.
+    let mut submission = pool.begin().await.unwrap();
+    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        .fetch_one(&mut *submission)
+        .await
+        .unwrap()
+        .unwrap();
+    sqlx::query!(
+        r#"SELECT pg_advisory_xact_lock(hashtextextended('horae.timesheet:' || $1::uuid::text, 0)) as "lock!: ()""#,
+        user,
+    )
+    .execute(&mut *submission)
+    .await
+    .unwrap();
+    let run_pool = pool.clone();
+    let run = tokio::spawn(async move {
+        sync(
+            &run_pool,
+            org,
+            ImportMode::Commit,
+            json!({"hours":8,"updated_at":day(5)}),
+        )
+        .await
+    });
+    crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+    sqlx::query!(
+        "UPDATE time_entries SET state = 'submitted', rounded_minutes = minutes WHERE org_id = $1",
+        org
+    )
+    .execute(&mut *submission)
+    .await
+    .unwrap();
+    submission.commit().await.unwrap();
+    let report = run.await.unwrap();
+    assert_eq!(
+        reasons(&report),
+        ["entry changed in Horae during the import; not updated from Harvest"]
+    );
+    assert_eq!(entry(&pool, org).await, (60, "submitted".into(), None));
+}

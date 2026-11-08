@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET state = 'submitted', rounded_minutes = minutes WHERE org_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2f3f11076d310a17c659609514168c3f9f0e7d082e02e77900ce29ab53e29a0b"
+}

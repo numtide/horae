@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries AS te\n            SET user_id = $2, project_id = $3, task_id = $4, spent_date = $5,\n                minutes = $6, notes = $7, billable = $8\n          FROM harvest_import_map AS m\n          WHERE te.id = $1 AND te.state = 'open'\n            AND m.org_id = te.org_id\n            AND m.harvest_entity_type = 'time_entry'::harvest_entity_type\n            AND m.horae_id = te.id\n            AND te.updated_at = COALESCE(m.horae_updated_at, te.created_at)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Int4",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a80c97d4308beb19faf9258699efdc87e44981a8457f27cab7dab9820935ab1d"
+}
