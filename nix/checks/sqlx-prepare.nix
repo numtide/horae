@@ -2,6 +2,8 @@
 perSystem.self.default.overrideAttrs (old: {
   pname = "horae-sqlx-prepare";
   cargoArtifacts = old.passthru.checkArtifacts;
+  # No commit in the version label, so a commit that changes no source keeps this cached.
+  HORAE_GIT_REV = "";
   nativeBuildInputs = old.nativeBuildInputs ++ [
     pkgs.postgresql
     pkgs.sqlx-cli

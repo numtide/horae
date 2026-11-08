@@ -39,6 +39,7 @@ mod models;
 mod pages;
 mod route;
 mod server_fns;
+mod version;
 
 #[cfg(feature = "server")]
 fn main() -> anyhow::Result<()> {

@@ -512,6 +512,25 @@ h1, h2, h3, h4, h5, h6 {
 .sidebar-user-sub { font-size: var(--font-size-xs); color: var(--color-text-muted); }
 .sidebar-user-caret { color: var(--color-text-muted); font-size: var(--font-size-sm); flex-shrink: 0; }
 
+/* Build versions above the account chip (administrators only). A server and
+   front-end mismatch turns it to the warning tint with a Reload button. */
+.sidebar-version {
+  margin-bottom: var(--space-2); padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border); border-radius: var(--radius);
+  font-size: var(--font-size-xs); color: var(--color-text-muted);
+}
+.sidebar-version dl { margin: 0; display: grid; gap: var(--space-1); }
+.sidebar-version dl > div { display: flex; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.sidebar-version dd {
+  margin: 0; font-family: var(--font-family-mono); color: var(--color-text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sidebar-version.stale {
+  border-color: var(--color-warning-line); background: var(--color-warning-bg); color: var(--color-warning-fg);
+}
+.sidebar-version.stale dd { color: var(--color-warning-fg); }
+.sidebar-version .btn { width: 100%; margin-top: var(--space-2); }
+
 /* Dropdown menus — shared by the sidebar account popover and row action menus.
    Positioning stays in each caller's own class; this is box + item appearance. */
 .menu {
@@ -651,7 +670,8 @@ h1, h2, h3, h4, h5, h6 {
 .app-shell.collapsed .nav-item-label,
 .app-shell.collapsed .sidebar-timer-label,
 .app-shell.collapsed .sidebar-footer .sidebar-user,
-.app-shell.collapsed .sidebar-user-caret { display: none; }
+.app-shell.collapsed .sidebar-user-caret,
+.app-shell.collapsed .sidebar-version { display: none; }
 .app-shell.collapsed .sidebar-brand { flex-direction: column; gap: var(--space-2); }
 .app-shell.collapsed .sidebar-collapse { margin-left: 0; }
 .app-shell.collapsed .nav-item { justify-content: center; padding: var(--space-2); }

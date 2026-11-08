@@ -2,6 +2,8 @@
 perSystem.self.default.overrideAttrs (old: {
   pname = "horae-clippy";
   cargoArtifacts = old.passthru.checkArtifacts;
+  # No commit in the version label, so a commit that changes no source keeps this cached.
+  HORAE_GIT_REV = "";
 
   # Let compile-time sqlx macros (query!, query_as!, …) resolve from the
   # .sqlx/ cache instead of requiring a live database connection.

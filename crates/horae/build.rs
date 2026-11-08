@@ -15,8 +15,10 @@ const OUT: &str = "assets/css/horae-utils.css";
 const BREAKPOINTS: &[(&str, u32)] = &[("sm", 640), ("md", 768), ("lg", 1024)];
 
 fn main() {
-    // Only re-run when the generator itself changes, not on every build.
+    // The stylesheet depends only on this file; `git_commit` adds its own triggers.
     println!("cargo:rerun-if-changed=build.rs");
+
+    git_commit();
 
     let css = stylesheet();
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -43,6 +45,61 @@ fn main() {
             );
         }
     }
+}
+
+// ── Commit for the version label ────────────────────────────────────────────
+
+/// Sets `HORAE_GIT_REV` from git when the build environment does not: Nix
+/// builds pass the flake's commit and have no `.git`, `dx serve` and plain
+/// cargo builds read it here. Without git it stays unset and the label is `dev`.
+fn git_commit() {
+    println!("cargo:rerun-if-env-changed=HORAE_GIT_REV");
+    if std::env::var_os("HORAE_GIT_REV").is_some() {
+        return;
+    }
+    let Some(commit) = git(&[
+        "describe",
+        "--always",
+        "--dirty",
+        "--abbrev=7",
+        "--exclude=*",
+    ]) else {
+        return;
+    };
+    println!("cargo:rustc-env=HORAE_GIT_REV={commit}");
+
+    // Describe again after a commit, checkout or staging change, and after a
+    // source edit, which can make the tree dirty.
+    // shortcut: an edit outside src/ alone keeps a stale "-dirty" state until
+    // the next commit, staging change or source edit; enough for a dev label.
+    println!("cargo:rerun-if-changed=src");
+    let branch = git(&["rev-parse", "--symbolic-full-name", "HEAD"]).unwrap_or_default();
+    let mut args = vec![
+        "rev-parse",
+        "--git-path",
+        "HEAD",
+        "--git-path",
+        "index",
+        "--git-path",
+        "packed-refs",
+    ];
+    if branch.starts_with("refs/") {
+        args.extend(["--git-path", branch.as_str()]);
+    }
+    for path in git(&args).unwrap_or_default().lines() {
+        // A missing path would make cargo re-run the script on every build.
+        if std::path::Path::new(path).exists() {
+            println!("cargo:rerun-if-changed={path}");
+        }
+    }
+}
+
+fn git(args: &[&str]) -> Option<String> {
+    let output = std::process::Command::new("git").args(args).output().ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
 // ── CSS generation (ported from crates/cssgen) ──────────────────────────────

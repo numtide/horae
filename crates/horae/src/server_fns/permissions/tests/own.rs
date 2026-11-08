@@ -1,5 +1,7 @@
 use super::own::{OwnPermissionsError, read};
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::server_fns::{FORBIDDEN, server_version};
+use dioxus::prelude::ServerFnError;
 use horae_core::{
     permissions::catalog::{BuiltInProfile, Permission},
     types::OrgRole,
@@ -15,8 +17,18 @@ async fn state(pool: &PgPool, ids: &SeedIds, profile: BuiltInProfile, administra
 }
 
 async fn fixture(pool: &PgPool) -> SeedIds {
-    let ids = seed(pool, OrgRole::Member).await;
-    state(pool, &ids, BuiltInProfile::Member, false).await;
+    policy_one(pool, OrgRole::Member, BuiltInProfile::Member, false).await
+}
+
+/// A person with a legacy role, moved to policy one with the given canonical state.
+async fn policy_one(
+    pool: &PgPool,
+    role: OrgRole,
+    profile: BuiltInProfile,
+    administrator: bool,
+) -> SeedIds {
+    let ids = seed(pool, role).await;
+    state(pool, &ids, profile, administrator).await;
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version = 1, access_revision = 7 WHERE id = $1",
         ids.org_id
@@ -44,6 +56,68 @@ async fn own_permissions_legacy_mode_never_discloses_staging(pool: PgPool) {
         read(&pool, ids.org_id, ids.user_id).await,
         Err(OwnPermissionsError::Forbidden)
     ));
+}
+
+// `get_server_version` past its session lookup: the user as `require_user`
+// would load it, with the role stored for it.
+fn session_user(ids: &SeedIds, org_role: OrgRole) -> crate::models::User {
+    crate::models::User {
+        id: ids.user_id,
+        org_id: ids.org_id,
+        email: String::new(),
+        name: String::new(),
+        oidc_subject: None,
+        org_role,
+        cost_rate_cents: None,
+        billable_rate_cents: None,
+        active: true,
+        created_at: chrono::Utc::now(),
+    }
+}
+
+fn is_forbidden(result: Result<String, ServerFnError>) -> bool {
+    matches!(
+        result,
+        Err(ServerFnError::ServerError {
+            code: FORBIDDEN,
+            ..
+        })
+    )
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn server_version_under_policy_zero_follows_the_legacy_role(pool: PgPool) {
+    let admin = seed(&pool, OrgRole::Admin).await;
+    let member = seed(&pool, OrgRole::Member).await;
+    let version = server_version(&pool, &session_user(&admin, OrgRole::Admin)).await;
+    assert_eq!(version.unwrap(), crate::version::current());
+    let version = server_version(&pool, &session_user(&member, OrgRole::Member)).await;
+    assert!(is_forbidden(version));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn server_version_under_policy_one_follows_the_canonical_flag(pool: PgPool) {
+    let admin = policy_one(&pool, OrgRole::Member, BuiltInProfile::Administrator, true).await;
+    let member = policy_one(&pool, OrgRole::Admin, BuiltInProfile::Member, false).await;
+    let version = server_version(&pool, &session_user(&admin, OrgRole::Member)).await;
+    assert_eq!(version.unwrap(), crate::version::current());
+    // The legacy role no longer grants anything once canonical state exists.
+    let version = server_version(&pool, &session_user(&member, OrgRole::Admin)).await;
+    assert!(is_forbidden(version));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn server_version_refuses_a_person_deactivated_mid_session(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let version = server_version(&pool, &session_user(&ids, OrgRole::Admin)).await;
+    assert!(is_forbidden(version));
 }
 
 #[sqlx::test(migrations = "./migrations")]

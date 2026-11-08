@@ -7,6 +7,7 @@ use crate::components::icons::NavIcon;
 use crate::components::logo::HoraeMark;
 use crate::components::session::{Session, use_session};
 use crate::components::timer_widget::TimerWidget;
+use crate::components::version_info::VersionInfo;
 use crate::models::own_permissions::OwnPermissions;
 use crate::pages::timesheet::{Anchor, CalSpan, ViewMode};
 use crate::route::Route;
@@ -20,6 +21,7 @@ pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Elemen
     let session = use_session();
     let is_admin = matches!(&*session.me.read(), Some(Ok(me)) if me.is_admin());
     let sections = nav_sections(nav_access(session.permissions.read().as_ref(), is_admin));
+    let version_block = show_version(session.permissions.read().as_ref(), is_admin);
     rsx! {
         aside { id: "app-navigation", class: "app-sidebar", aria_label: "Navigation",
             div { class: "sidebar-brand",
@@ -49,6 +51,10 @@ pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Elemen
             }
 
             div { class: "sidebar-spacer" }
+
+            if version_block {
+                VersionInfo {}
+            }
 
             SidebarUser { on_navigate }
         }
@@ -105,17 +111,11 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
             false,
         ),
     };
-    let (administrator, role) = match &*own.read() {
-        Some(Ok(None)) => (is_admin, legacy_role),
-        Some(Ok(Some(access))) if access.catalog_version == PERMISSION_CATALOG_VERSION => (
-            access.is_administrator,
-            if access.is_administrator {
-                "Administrator".into()
-            } else {
-                String::new()
-            },
-        ),
-        _ => (false, String::new()),
+    let administrator = administrator(own.read().as_ref(), is_admin);
+    let role = match &*own.read() {
+        Some(Ok(None)) => legacy_role,
+        _ if administrator => "Administrator".into(),
+        _ => String::new(),
     };
     let admin_route = first_admin_route(own.read().as_ref(), me.read().as_ref());
     let role_class = if administrator {
@@ -181,6 +181,35 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                 span { class: "sidebar-user-caret", if open() { "⌃" } else { "⌄" } }
             }
         }
+    }
+}
+
+/// Administrator authority for display: the canonical flag under policy one, the
+/// legacy admin role under policy zero, and nothing while unknown or failed.
+fn administrator(
+    own: Option<&Result<Option<OwnPermissions>, ServerFnError>>,
+    is_admin: bool,
+) -> bool {
+    match own {
+        Some(Ok(None)) => is_admin,
+        Some(Ok(Some(access))) => {
+            access.catalog_version == PERMISSION_CATALOG_VERSION && access.is_administrator
+        }
+        _ => false,
+    }
+}
+
+/// Whether to show the version block: to administrators, and also under a
+/// catalog version this bundle does not know, since that means the bundle is
+/// older than the server and the block is what says so. The server still
+/// refuses the version to anyone else.
+fn show_version(
+    own: Option<&Result<Option<OwnPermissions>, ServerFnError>>,
+    is_admin: bool,
+) -> bool {
+    match own {
+        Some(Ok(Some(access))) if access.catalog_version != PERMISSION_CATALOG_VERSION => true,
+        own => administrator(own, is_admin),
     }
 }
 
@@ -467,6 +496,61 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn administrator_follows_the_legacy_role_or_the_canonical_flag() {
+        let admin = OwnPermissions {
+            is_administrator: true,
+            ..canonical(Vec::new(), PERMISSION_CATALOG_VERSION)
+        };
+        assert!(administrator(Some(&Ok(None)), true));
+        assert!(!administrator(Some(&Ok(None)), false));
+        assert!(administrator(Some(&Ok(Some(admin.clone()))), false));
+        assert!(!administrator(
+            Some(&Ok(Some(canonical(Vec::new(), PERMISSION_CATALOG_VERSION)))),
+            true
+        ));
+        let future = OwnPermissions {
+            catalog_version: PERMISSION_CATALOG_VERSION + 1,
+            ..admin
+        };
+        assert!(!administrator(Some(&Ok(Some(future))), true));
+        assert!(!administrator(None, true));
+        assert!(!administrator(
+            Some(&Err(ServerFnError::new("unavailable"))),
+            true
+        ));
+    }
+
+    #[test]
+    fn version_block_follows_administrator_authority() {
+        let admin = OwnPermissions {
+            is_administrator: true,
+            ..canonical(Vec::new(), PERMISSION_CATALOG_VERSION)
+        };
+        assert!(show_version(Some(&Ok(None)), true));
+        assert!(!show_version(Some(&Ok(None)), false));
+        assert!(show_version(Some(&Ok(Some(admin))), false));
+        assert!(!show_version(
+            Some(&Ok(Some(canonical(Vec::new(), PERMISSION_CATALOG_VERSION)))),
+            false
+        ));
+        assert!(!show_version(None, true));
+    }
+
+    /// A deploy that changes the catalog leaves open tabs on the old one, and
+    /// those are the tabs that need the stale-bundle warning. The server still
+    /// refuses the version to anyone who is not an administrator.
+    #[test]
+    fn version_block_shows_under_another_catalog_version() {
+        for is_administrator in [false, true] {
+            let own = OwnPermissions {
+                is_administrator,
+                ..canonical(Vec::new(), PERMISSION_CATALOG_VERSION + 1)
+            };
+            assert!(show_version(Some(&Ok(Some(own))), false));
         }
     }
 }

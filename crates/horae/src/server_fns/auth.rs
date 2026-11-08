@@ -110,3 +110,35 @@ pub async fn get_my_permissions()
             }
         })
 }
+
+/// The running server's version label, for administrators only.
+#[server]
+pub async fn get_server_version() -> Result<String, ServerFnError> {
+    let user = require_user().await?;
+    let state = crate::state::global_state().await;
+    server_version(&state.db, &user).await
+}
+
+/// [`get_server_version`] for the session's active user.
+#[cfg(feature = "server")]
+pub(crate) async fn server_version(
+    pool: &sqlx::PgPool,
+    user: &crate::models::User,
+) -> Result<String, ServerFnError> {
+    let administrator =
+        super::permissions::own::is_administrator(pool, user.org_id, user.id, user.org_role)
+            .await
+            .map_err(|error| match error {
+                super::permissions::own::OwnPermissionsError::Forbidden => {
+                    forbidden("Current active identity is required")
+                }
+                error => {
+                    tracing::error!(%error, "Unable to check administrator authority");
+                    server_err("Version is unavailable")
+                }
+            })?;
+    if !administrator {
+        return Err(forbidden("Administrator authority is required"));
+    }
+    Ok(crate::version::current())
+}

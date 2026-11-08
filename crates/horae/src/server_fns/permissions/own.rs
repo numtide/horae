@@ -4,6 +4,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
+use horae_core::types::OrgRole;
 
 use super::{
     PermissionStorageError, ReadIsolation, begin_lock_only_read_async_commit,
@@ -74,4 +75,19 @@ pub(crate) async fn read(
     };
     tx.commit().await?;
     Ok(Some(result))
+}
+
+/// Whether the person holds Administrator authority now: the canonical flag
+/// under policy one, the legacy admin role under policy zero. IDs and role
+/// must come from the session's active user.
+pub(crate) async fn is_administrator(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+    legacy_role: OrgRole,
+) -> Result<bool, OwnPermissionsError> {
+    Ok(match read(pool, org_id, actor_id).await? {
+        None => legacy_role == OrgRole::Admin,
+        Some(own) => own.is_administrator,
+    })
 }
