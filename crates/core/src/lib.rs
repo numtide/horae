@@ -14,4 +14,5 @@ pub mod rounding;
 pub mod state;
 pub mod time_of_day;
 pub mod types;
+pub mod version;
 pub mod week;
