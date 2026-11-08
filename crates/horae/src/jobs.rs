@@ -1128,9 +1128,9 @@ async fn fail_claimed(
     sqlx::query!(
                 r#"UPDATE horae_jobs
                       SET status = CASE WHEN cancellation_requested THEN 'cancelled'
-                                        WHEN attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
+                                        WHEN $5 OR attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
                           available_at = now() + LEAST(power(2::double precision, LEAST(attempts, 9)), 300)::int * interval '1 second',
-                          finished_at = CASE WHEN cancellation_requested OR attempts >= max_attempts THEN now() ELSE NULL END,
+                          finished_at = CASE WHEN cancellation_requested OR $5 OR attempts >= max_attempts THEN now() ELSE NULL END,
                           lease_until = NULL, worker_id = NULL, claim_token = NULL,
                           last_error = CASE WHEN cancellation_requested THEN NULL ELSE $1 END,
                           updated_at = now()
@@ -1138,6 +1138,8 @@ async fn fail_claimed(
                       AND lease_until > clock_timestamp()"#,
                 error.to_string(),
                 lease.id, lease.org_id, lease.token,
+                // Retrying a revoked or under-privileged connection cannot succeed.
+                crate::importers::harvest::ApiImportError::is_permanent(error),
     ).execute(pool).await?;
     Ok(())
 }

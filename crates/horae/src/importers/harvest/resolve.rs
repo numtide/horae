@@ -124,6 +124,10 @@ pub struct RunCache {
     project_tasks: HashSet<(Uuid, Uuid)>,
     entry_slots: keys::OccurrenceCounter,
     failed_parents: HashSet<(EntityType, i64)>,
+    /// Harvest `updated_at` of entries a durable preview simulated on earlier
+    /// pages and rolled back, set for the page being applied only.
+    #[serde(skip)]
+    simulated_entries: HashMap<i64, DateTime<Utc>>,
 }
 
 // JSON object keys cannot represent the email/full-name enum namespaces.
@@ -152,6 +156,14 @@ impl RunCache {
 
     pub fn person_counted(&self, id: Uuid) -> bool {
         self.people.contains(&id)
+    }
+
+    pub fn set_simulated_entries(&mut self, entries: HashMap<i64, DateTime<Utc>>) {
+        self.simulated_entries = entries;
+    }
+
+    pub fn simulated_entry(&self, harvest_id: i64) -> Option<DateTime<Utc>> {
+        self.simulated_entries.get(&harvest_id).copied()
     }
 
     fn get(&self, kind: ParentKind, key: &str) -> Option<Uuid> {

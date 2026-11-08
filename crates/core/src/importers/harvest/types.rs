@@ -122,6 +122,9 @@ pub struct SourceRow {
     /// Harvest's invoiced flag — informational only, never couples to a Horae
     /// invoice (FR-016).
     pub invoiced: bool,
+    /// A Harvest timer still running: its hours are partial, so it is reported
+    /// and left for a later sync instead of imported (API source only).
+    pub running: bool,
 
     // Money — decimal amounts as text; converted via `money_to_cents`.
     pub billable_rate: Option<String>,

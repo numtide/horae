@@ -350,6 +350,65 @@ async fn failed_api_report(pool: PgPool, mode: ImportMode) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn rejected_credentials_finish_the_job_while_server_errors_retry(pool: PgPool) {
+    let org = setup(&pool).await;
+    for (status, outcome, message) in [
+        (401, "failed", "reconnect Harvest"),
+        (403, "failed", "HTTP 403"),
+        (500, "queued", "HTTP 500"),
+    ] {
+        let id = jobs::enqueue(
+            &pool,
+            org,
+            &jobs::JobPayload::HarvestApi {
+                mode: ImportMode::Commit,
+                sync: SyncScope::Full,
+            },
+            &format!("rejected-{status}"),
+            crate::config::JobPolicy { max_attempts: 5 },
+        )
+        .await
+        .unwrap();
+        let server = Server::start(move |url| {
+            if url.path().ends_with("/users") {
+                return Response {
+                    status,
+                    headers: vec![],
+                    body: vec![],
+                };
+            }
+            fixture_page(url, FirstEntry::Valid)
+        });
+        let (lease, stop) = jobs::claim_lease_for_test(&pool).await;
+        jobs::run_claimed(&pool, &lease, stop, async {
+            let report = run_api_import_with_http(
+                &pool,
+                org,
+                "USD",
+                &config(),
+                ImportMode::Commit,
+                SyncScope::Full,
+                ApiHttp::local(server.base.clone()),
+                Some(&lease),
+            )
+            .await?;
+            job_report(&report)
+        })
+        .await
+        .unwrap();
+        let job = jobs::status(&pool, org, id).await.unwrap().unwrap();
+        assert_eq!(job.status, outcome, "HTTP {status}");
+        let error = job.last_error.unwrap();
+        assert!(error.contains(message), "HTTP {status}: {error}");
+        // Clear the requeued job so the next case claims its own.
+        sqlx::query!("UPDATE horae_jobs SET status = 'failed' WHERE id = $1", id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn failed_api_commit_publishes_its_last_confirmed_page_report(pool: PgPool) {
     failed_api_report(pool, ImportMode::Commit).await;
 }
@@ -896,7 +955,9 @@ async fn durable_api_preview_preserves_adoptions_and_repeated_ids_across_recover
     );
     assert_eq!(report.error_count(), 0);
     assert_eq!(report.summary.time_entries.created, 2);
-    assert_eq!(report.summary.time_entries.skipped, 3);
+    // Entry 11 comes back on the last page with a newer `updated_at`.
+    assert_eq!(report.summary.time_entries.updated, 1);
+    assert_eq!(report.summary.time_entries.skipped, 2);
     let inline = run_api_import_with_http(
         &pool,
         org,

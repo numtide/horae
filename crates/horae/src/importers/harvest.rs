@@ -180,10 +180,32 @@ pub enum ApiImportError {
     Busy,
     #[error("no usable Harvest connection — connect Harvest first")]
     NotConnected,
-    #[error("Harvest connection expired — reconnect Harvest")]
+    #[error("Harvest no longer accepts this connection — reconnect Harvest")]
     ReconnectRequired,
+    #[error(
+        "Harvest refused access (HTTP 403) — reconnect Harvest as a user who can see all clients, projects, people and time entries"
+    )]
+    Forbidden,
     #[error(transparent)]
-    Other(#[from] anyhow::Error),
+    Other(anyhow::Error),
+}
+
+impl From<anyhow::Error> for ApiImportError {
+    /// Unwraps a typed failure raised below an `anyhow` boundary (the HTTP
+    /// thread, the token refresh) so the job runner can still see its kind.
+    fn from(error: anyhow::Error) -> Self {
+        error.downcast().unwrap_or_else(Self::Other)
+    }
+}
+
+impl ApiImportError {
+    /// Failures no retry can fix until an administrator acts in Harvest or Horae.
+    pub(crate) fn is_permanent(error: &anyhow::Error) -> bool {
+        matches!(
+            error.downcast_ref::<Self>(),
+            Some(Self::NotConnected | Self::ReconnectRequired | Self::Forbidden)
+        )
+    }
 }
 
 /// One import session per organization, shared by API and CSV across processes.
@@ -334,23 +356,20 @@ async fn run_api_import_with_http(
         }
     };
 
-    // Transparent refresh when the access token is at or past expiry (FR-024).
-    if let Some(expiry) = conn.token_expires_at
-        && expiry <= Utc::now()
-    {
+    // Transparent refresh before the access token expires (FR-024).
+    if oauth::needs_refresh(conn.token_expires_at, Utc::now()) {
         let cfg_owned = cfg.clone();
         let refresh_token = conn.refresh_token.clone();
         let (returned_connection, refreshed) = blocking_import_call(connection, move || {
-            let agent = ureq::agent();
-            oauth::refresh(&agent, &cfg_owned, &refresh_token)
+            oauth::refresh(&cfg_owned, &refresh_token)
         })
         .await?;
         connection = returned_connection;
         let refreshed = match refreshed {
             Ok(value) => value,
-            Err(_) => {
+            Err(error) => {
                 release_import(connection).await?;
-                return Err(ApiImportError::ReconnectRequired);
+                return Err(error.into());
             }
         };
         let updated = credentials::update_tokens(
@@ -576,9 +595,8 @@ async fn complete_connect(
     // Exchange + account lookup off the async runtime (blocking ureq).
     let cfg_owned = cfg.clone();
     let (tokens, account_id) = tokio::task::spawn_blocking(move || {
-        let agent = ureq::agent();
-        let tokens = oauth::exchange_code(&agent, &cfg_owned, &code)?;
-        let account_id = oauth::fetch_account_id(&agent, &tokens.access_token)?;
+        let tokens = oauth::exchange_code(&cfg_owned, &code)?;
+        let account_id = oauth::fetch_account_id(&tokens.access_token)?;
         anyhow::Ok((tokens, account_id))
     })
     .await??;

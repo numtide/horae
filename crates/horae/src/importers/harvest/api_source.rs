@@ -92,6 +92,8 @@ pub struct ApiTimeEntry {
     pub billable: bool,
     #[serde(default)]
     pub is_billed: bool,
+    #[serde(default)]
+    pub is_running: bool,
     pub client: Option<ApiRef>,
     pub project: ApiRef,
     pub task: ApiRef,
@@ -233,6 +235,7 @@ impl<'a> RowLookup<'a> {
             notes: te.notes.clone(),
             billable: te.billable,
             invoiced: te.is_billed,
+            running: te.is_running,
 
             billable_rate: te.billable_rate.as_ref().map(decimal),
             billable_amount: None,

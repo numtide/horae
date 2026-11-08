@@ -9,6 +9,8 @@ use chrono::{DateTime, Utc};
 use openidconnect::url::Url;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
+use crate::importers::harvest::ApiImportError;
+
 #[cfg(test)]
 pub(in crate::importers::harvest) mod test_server;
 
@@ -228,19 +230,18 @@ impl ApiHttp {
                     );
                     return Ok(bytes);
                 }
-                Err(ureq::Error::Status(429, response)) if attempt < 6 => {
-                    let seconds = response
-                        .header("Retry-After")
-                        .unwrap_or("2")
-                        .parse::<u64>()
-                        .context("invalid Harvest Retry-After")?;
-                    let delay = Duration::from_secs(seconds);
+                Err(ureq::Error::Status(429 | 502 | 503 | 504, response)) if attempt < 6 => {
+                    let delay = retry_after(response.header("Retry-After"));
                     ensure!(
                         delay <= MAX_RETRY_WAIT,
-                        "Harvest throttled for more than five minutes; retry later"
+                        "Harvest asked to wait more than five minutes; retry later"
                     );
                     wait(delay, cancelled)?;
                 }
+                Err(ureq::Error::Status(401, _)) => {
+                    return Err(ApiImportError::ReconnectRequired.into());
+                }
+                Err(ureq::Error::Status(403, _)) => return Err(ApiImportError::Forbidden.into()),
                 // Do not return provider-controlled URLs/bodies or transport
                 // debug output through the user-visible import error.
                 Err(ureq::Error::Status(status, _)) => {
@@ -251,6 +252,26 @@ impl ApiHttp {
         }
         bail!("Harvest request exhausted retries")
     }
+}
+
+/// `Retry-After` is either delay seconds or an HTTP date (RFC 9110 §10.2.3).
+/// Delay seconds or an RFC 2822 date; anything else (or nothing) waits the
+/// default, so an odd header never turns a retryable response into a failure.
+fn retry_after(header: Option<&str>) -> Duration {
+    const DEFAULT: Duration = Duration::from_secs(2);
+    let Some(value) = header else {
+        return DEFAULT;
+    };
+    if let Ok(seconds) = value.parse::<u64>() {
+        return Duration::from_secs(seconds);
+    }
+    let Ok(at) = DateTime::parse_from_rfc2822(value) else {
+        return DEFAULT;
+    };
+    // A date in the past means "retry now".
+    (at.with_timezone(&Utc) - Utc::now())
+        .to_std()
+        .unwrap_or_default()
 }
 
 fn wait(delay: Duration, cancelled: &impl Fn() -> bool) -> anyhow::Result<()> {
@@ -589,6 +610,74 @@ mod tests {
                 ApiHttp::local(server.base.clone())
                     .pages::<u64>("token", "account", "clients", None, || false, |_| Ok(()))
                     .is_err()
+            );
+            assert_eq!(server.requests.lock().unwrap().len(), 1);
+        }
+    }
+
+    #[test]
+    fn http_retries_gateway_errors_and_accepts_retry_after_dates() {
+        for (status, retry_after) in [
+            (502, "0"),
+            (503, "Wed, 21 Oct 2015 07:28:00 GMT"),
+            (504, "0"),
+            (429, "Wed, 21 Oct 2015 07:28:00 GMT"),
+        ] {
+            let mut count = 0;
+            let server = Server::start(move |_| {
+                count += 1;
+                if count == 1 {
+                    Response {
+                        status,
+                        headers: vec![("Retry-After", retry_after.into())],
+                        body: vec![],
+                    }
+                } else {
+                    Response::json(json!({"clients":[1], "links":{"next":null}}))
+                }
+            });
+            ApiHttp::local(server.base.clone())
+                .pages::<u64>("token", "account", "clients", None, || false, |_| Ok(()))
+                .unwrap_or_else(|error| panic!("HTTP {status}: {error}"));
+            assert_eq!(server.requests.lock().unwrap().len(), 2, "HTTP {status}");
+        }
+    }
+
+    #[test]
+    fn an_unreadable_retry_after_waits_the_default() {
+        for value in [
+            "1.5",
+            "120 ",
+            "-1",
+            "Sunday, 06-Nov-94 08:49:37 GMT",
+            "Sun Nov  6 08:49:37 1994",
+        ] {
+            assert_eq!(
+                retry_after(Some(value)),
+                Duration::from_secs(2),
+                "{value:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn http_types_rejected_credentials_and_does_not_retry_them() {
+        for status in [401, 403] {
+            let server = Server::start(move |_| Response {
+                status,
+                headers: vec![],
+                body: vec![],
+            });
+            let error = ApiHttp::local(server.base.clone())
+                .pages::<u64>("token", "account", "clients", None, || false, |_| Ok(()))
+                .unwrap_err();
+            let typed = error.downcast_ref::<ApiImportError>();
+            assert!(
+                match status {
+                    401 => matches!(typed, Some(ApiImportError::ReconnectRequired)),
+                    _ => matches!(typed, Some(ApiImportError::Forbidden)),
+                },
+                "HTTP {status}: {error}"
             );
             assert_eq!(server.requests.lock().unwrap().len(), 1);
         }

@@ -262,6 +262,7 @@ fn read_csv_from(
             notes: get(&record, "notes"),
             billable: parse_bool(get(&record, "billable?").as_deref()),
             invoiced: parse_bool(get(&record, "invoiced?").as_deref()),
+            running: false,
 
             billable_rate: get(&record, "billable rate"),
             billable_amount: get(&record, "billable amount"),
