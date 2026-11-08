@@ -349,13 +349,99 @@ async fn failed_api_report(pool: PgPool, mode: ImportMode) {
     );
 }
 
+/// Stops a preview at the first time entries page (`cursor` absent) or the
+/// second, and returns the job as its last checkpoint left it.
+async fn interrupted_preview(
+    pool: &PgPool,
+    failing_page: Option<&'static str>,
+) -> crate::models::JobStatus {
+    let org = setup(pool).await;
+    let id = jobs::enqueue(
+        pool,
+        org,
+        &jobs::JobPayload::HarvestApi {
+            mode: ImportMode::DryRun,
+            sync: SyncScope::Full,
+        },
+        "phase-total",
+        crate::config::JobPolicy { max_attempts: 5 },
+    )
+    .await
+    .unwrap();
+    let server = Server::start(move |url| {
+        let entries = url.path().ends_with("/time_entries");
+        let cursor = url
+            .query_pairs()
+            .find(|(key, _)| key == "cursor")
+            .map(|(_, value)| value.into_owned());
+        if entries && cursor.as_deref() == failing_page {
+            return Response {
+                status: 500,
+                headers: vec![],
+                body: vec![],
+            };
+        }
+        let mut page = fixture_page(url, FirstEntry::Valid);
+        // Only the first page carries the total, as a cursor page may not.
+        if entries && cursor.is_none() {
+            let mut body: serde_json::Value = serde_json::from_slice(&page.body).unwrap();
+            body["total_entries"] = json!(2);
+            page.body = serde_json::to_vec(&body).unwrap();
+        }
+        page
+    });
+    let (lease, stop) = jobs::claim_lease_for_test(pool).await;
+    jobs::run_claimed(pool, &lease, stop, async {
+        let report = run_api_import_with_http(
+            pool,
+            org,
+            "USD",
+            &config(),
+            ImportMode::DryRun,
+            SyncScope::Full,
+            ApiHttp::local(server.base.clone()),
+            Some(&lease),
+        )
+        .await?;
+        job_report(&report)
+    })
+    .await
+    .unwrap();
+    jobs::status(pool, org, id).await.unwrap().unwrap()
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_running_job_saves_the_time_entry_total_from_the_first_page(pool: PgPool) {
+    let job = interrupted_preview(&pool, Some("two")).await;
+    assert_eq!(job.status, "queued");
+    assert_eq!(job.phase.as_deref(), Some("time_entries"));
+    assert_eq!(job.total_count, Some(2));
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_running_job_saves_the_catalog_total_once_downloaded(pool: PgPool) {
+    let job = interrupted_preview(&pool, None).await;
+    assert_eq!(job.status, "queued");
+    assert_eq!(job.phase.as_deref(), Some("catalog"));
+    // Two clients, a project, a task and a person.
+    assert_eq!(job.total_count, Some(5));
+    assert_eq!(job.processed_count, 5);
+}
+
 #[sqlx::test(migrations = "./migrations")]
 async fn rejected_credentials_finish_the_job_while_server_errors_retry(pool: PgPool) {
     let org = setup(&pool).await;
-    for (status, outcome, message) in [
-        (401, "failed", "reconnect Harvest"),
-        (403, "failed", "HTTP 403"),
-        (500, "queued", "HTTP 500"),
+    use crate::models::JobErrorKind;
+    for (status, outcome, message, kind) in [
+        (
+            401,
+            "failed",
+            "reconnect Harvest",
+            Some(JobErrorKind::ReconnectRequired),
+        ),
+        (403, "failed", "HTTP 403", Some(JobErrorKind::Forbidden)),
+        (500, "queued", "HTTP 500", Some(JobErrorKind::Unavailable)),
+        (404, "queued", "HTTP 404", None),
     ] {
         let id = jobs::enqueue(
             &pool,
@@ -398,6 +484,7 @@ async fn rejected_credentials_finish_the_job_while_server_errors_retry(pool: PgP
         .unwrap();
         let job = jobs::status(&pool, org, id).await.unwrap().unwrap();
         assert_eq!(job.status, outcome, "HTTP {status}");
+        assert_eq!(job.error_kind, kind, "HTTP {status}");
         let error = job.last_error.unwrap();
         assert!(error.contains(message), "HTTP {status}: {error}");
         // Clear the requeued job so the next case claims its own.

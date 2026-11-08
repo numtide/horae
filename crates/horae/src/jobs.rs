@@ -568,6 +568,35 @@ pub async fn commit_preview_in(
     Ok(Some(id))
 }
 
+/// What an API run reads from Harvest: everything, or the changes since the
+/// last sync. `None` for CSV and unreadable payloads.
+fn sync_scope(kind: &str, payload: &serde_json::Value) -> Option<SyncScope> {
+    match decode_payload(payload.clone()) {
+        Ok(JobPayload::HarvestApi { sync, .. }) if kind == "harvest_api_import" => Some(sync),
+        _ => None,
+    }
+}
+
+/// `horae_jobs.error_kind`, whose CHECK constraint lists the same values.
+fn error_kind_column(kind: crate::models::JobErrorKind) -> &'static str {
+    use crate::models::JobErrorKind;
+    match kind {
+        JobErrorKind::ReconnectRequired => "reconnect_required",
+        JobErrorKind::Forbidden => "forbidden",
+        JobErrorKind::Unavailable => "unavailable",
+    }
+}
+
+fn error_kind(column: Option<&str>) -> Option<crate::models::JobErrorKind> {
+    use crate::models::JobErrorKind;
+    match column? {
+        "reconnect_required" => Some(JobErrorKind::ReconnectRequired),
+        "forbidden" => Some(JobErrorKind::Forbidden),
+        "unavailable" => Some(JobErrorKind::Unavailable),
+        _ => None,
+    }
+}
+
 fn retry_availability(
     kind: &str,
     state: &str,
@@ -649,7 +678,7 @@ pub async fn status<'e, E: sqlx::PgExecutor<'e>>(
 ) -> anyhow::Result<Option<crate::models::JobStatus>> {
     let row = sqlx::query!(
         r#"SELECT id, kind, status, phase, processed_count, total_count,
-                  COALESCE(checkpoint->'report', report) AS report, last_error,
+                  COALESCE(checkpoint->'report', report) AS report, last_error, error_kind,
                   created_at as "created_at!: chrono::DateTime<chrono::Utc>",
                   finished_at as "finished_at: chrono::DateTime<chrono::Utc>",
                   payload, account_generation,
@@ -688,6 +717,7 @@ pub async fn status<'e, E: sqlx::PgExecutor<'e>>(
             source,
             commit_availability,
             committed_as: r.committed_as,
+            sync: sync_scope(&r.kind, &r.payload),
             retry_availability: retry_availability(
                 &r.kind,
                 &r.status,
@@ -704,6 +734,7 @@ pub async fn status<'e, E: sqlx::PgExecutor<'e>>(
             total_count: r.total_count,
             report: r.report,
             last_error: r.last_error,
+            error_kind: error_kind(r.error_kind.as_deref()),
             created_at: r.created_at,
             finished_at: r.finished_at,
         }
@@ -718,7 +749,7 @@ pub async fn list<'e, E: sqlx::PgExecutor<'e>>(
 ) -> anyhow::Result<Vec<crate::models::JobStatus>> {
     let rows = sqlx::query!(
         r#"SELECT id, kind, status, phase, processed_count, total_count,
-                  COALESCE(checkpoint->'report', report) AS report, last_error,
+                  COALESCE(checkpoint->'report', report) AS report, last_error, error_kind,
                   created_at as "created_at!: chrono::DateTime<chrono::Utc>",
                   finished_at as "finished_at: chrono::DateTime<chrono::Utc>",
                   payload, account_generation,
@@ -765,6 +796,7 @@ pub async fn list<'e, E: sqlx::PgExecutor<'e>>(
                 source,
                 commit_availability,
                 committed_as: r.committed_as,
+                sync: sync_scope(&r.kind, &r.payload),
                 retry_availability: retry_availability(
                     &r.kind,
                     &r.status,
@@ -781,6 +813,7 @@ pub async fn list<'e, E: sqlx::PgExecutor<'e>>(
                 total_count: r.total_count,
                 report: r.report,
                 last_error: r.last_error,
+                error_kind: error_kind(r.error_kind.as_deref()),
                 created_at: r.created_at,
                 finished_at: r.finished_at,
             }
@@ -834,7 +867,7 @@ pub async fn retry_in(
     let result = sqlx::query!(
         r#"UPDATE horae_jobs
               SET status = 'queued', available_at = now(), lease_until = NULL,
-                  attempts = 0, worker_id = NULL, last_error = NULL, phase = NULL,
+                  attempts = 0, worker_id = NULL, last_error = NULL, error_kind = NULL, phase = NULL,
                   claim_token = NULL, cancellation_requested = false,
                   finished_at = NULL, updated_at = now()
             WHERE id = $1 AND org_id = $2 AND status IN ('failed', 'cancelled')
@@ -1133,6 +1166,7 @@ async fn fail_claimed(
                           finished_at = CASE WHEN cancellation_requested OR $5 OR attempts >= max_attempts THEN now() ELSE NULL END,
                           lease_until = NULL, worker_id = NULL, claim_token = NULL,
                           last_error = CASE WHEN cancellation_requested THEN NULL ELSE $1 END,
+                          error_kind = CASE WHEN cancellation_requested THEN NULL ELSE $6 END,
                           updated_at = now()
                     WHERE id = $2 AND org_id = $3 AND claim_token = $4 AND status = 'running'
                       AND lease_until > clock_timestamp()"#,
@@ -1140,6 +1174,8 @@ async fn fail_claimed(
                 lease.id, lease.org_id, lease.token,
                 // Retrying a revoked or under-privileged connection cannot succeed.
                 crate::importers::harvest::ApiImportError::is_permanent(error),
+                crate::importers::harvest::ApiImportError::job_error_kind(error)
+                    .map(error_kind_column),
     ).execute(pool).await?;
     Ok(())
 }

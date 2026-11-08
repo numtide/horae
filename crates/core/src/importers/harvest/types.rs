@@ -157,7 +157,24 @@ pub enum RowOutcome {
         /// Set when the failure concerns a person, so reports can group it.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         person: Option<PersonError>,
+        /// Set for a time entry problem the report groups by kind.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        entry_kind: Option<EntryErrorKind>,
     },
+}
+
+/// Why a time entry was not imported, for problems that recur across many
+/// entries. The row's reason keeps its own detail (the hours, the refusal).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EntryErrorKind {
+    /// The timer is still running in Harvest; a later sync brings it.
+    TimerRunning,
+    /// Harvest has negative hours, which Horae does not store.
+    NegativeHours,
+    /// The entry changed in Horae (edited, submitted, approved) after import,
+    /// so the Harvest edit was not applied.
+    ChangedInHorae,
 }
 
 /// Why a record failed because of its person, and who that person is.
@@ -350,6 +367,8 @@ pub struct RowError {
     pub reason: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub person: Option<PersonError>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_kind: Option<EntryErrorKind>,
 }
 
 /// The result of an import run, returned by every surface (server fn + CLI). A
@@ -443,6 +462,7 @@ impl ImportReport {
             source_location,
             reason,
             person,
+            entry_kind,
         } = outcome
         {
             self.row_errors.push(RowError {
@@ -450,6 +470,7 @@ impl ImportReport {
                 entity,
                 reason: reason.clone(),
                 person: person.clone(),
+                entry_kind: *entry_kind,
             });
         }
     }
@@ -520,6 +541,7 @@ mod tests {
             source_location: "record 1".into(),
             reason: "invalid date".into(),
             person: None,
+            entry_kind: None,
         };
         report.record(EntityType::TimeEntry, &error);
         let summary = report.summary;
@@ -556,6 +578,7 @@ mod tests {
                 source_location: format!("{}:1", entity.as_str()),
                 reason: "bad row".into(),
                 person: None,
+                entry_kind: None,
             },
         )
     }

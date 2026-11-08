@@ -59,6 +59,9 @@ impl JobLease {
     /// changes commit together under the same cancellation and ownership fence.
     /// The public report contains only these confirmed outcomes, even if a later
     /// batch fails or the final attempt's lease expires.
+    ///
+    /// `total_count` belongs to `phase`: the records that phase handles, when
+    /// known. It is not in the unit of `processed_count`, which spans phases.
     pub(crate) async fn save_checkpoint(
         &self,
         connection: &mut PgConnection,
@@ -66,11 +69,12 @@ impl JobLease {
         report: &serde_json::Value,
         phase: &str,
         processed_count: i64,
+        total_count: Option<i64>,
     ) -> anyhow::Result<()> {
         let updated = sqlx::query!(
             r#"UPDATE horae_jobs
                   SET checkpoint = $1, phase = $2, processed_count = $3, report = $7,
-                      updated_at = clock_timestamp()
+                      total_count = $8, updated_at = clock_timestamp()
                 WHERE id = $4 AND org_id = $5 AND claim_token = $6
                   AND status = 'running' AND NOT cancellation_requested
                   AND lease_until > clock_timestamp()"#,
@@ -81,6 +85,7 @@ impl JobLease {
             self.org_id,
             self.token,
             report,
+            total_count,
         )
         .execute(connection)
         .await?;

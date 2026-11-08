@@ -186,6 +186,9 @@ pub enum ApiImportError {
         "Harvest refused access (HTTP 403) — reconnect Harvest as a user who can see all clients, projects, people and time entries"
     )]
     Forbidden,
+    /// Harvest timed out or answered with a server error; worth retrying.
+    #[error("{0}")]
+    Unavailable(String),
     #[error(transparent)]
     Other(anyhow::Error),
 }
@@ -205,6 +208,17 @@ impl ApiImportError {
             error.downcast_ref::<Self>(),
             Some(Self::NotConnected | Self::ReconnectRequired | Self::Forbidden)
         )
+    }
+
+    /// What a failed job attempt shows the administrator, if Harvest caused it.
+    pub(crate) fn job_error_kind(error: &anyhow::Error) -> Option<crate::models::JobErrorKind> {
+        use crate::models::JobErrorKind;
+        match error.downcast_ref::<Self>()? {
+            Self::ReconnectRequired => Some(JobErrorKind::ReconnectRequired),
+            Self::Forbidden => Some(JobErrorKind::Forbidden),
+            Self::Unavailable(_) => Some(JobErrorKind::Unavailable),
+            Self::Busy | Self::NotConnected | Self::Other(_) => None,
+        }
     }
 }
 

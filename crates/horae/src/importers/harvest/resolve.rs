@@ -21,7 +21,8 @@ use fields::{ClientFields, ProjectFields, TaskFields};
 use horae_core::importers::harvest::convert;
 use horae_core::importers::harvest::keys;
 use horae_core::importers::harvest::types::{
-    EntityType, PersonError, PersonErrorKind, PersonOutcome, RowOutcome, SourceKind, SourceRow,
+    EntityType, EntryErrorKind, PersonError, PersonErrorKind, PersonOutcome, RowOutcome,
+    SourceKind, SourceRow,
 };
 use uuid::Uuid;
 
@@ -30,6 +31,7 @@ use uuid::Uuid;
 pub struct RowFailure {
     pub reason: String,
     pub person: Option<PersonError>,
+    pub entry_kind: Option<EntryErrorKind>,
 }
 
 impl RowFailure {
@@ -37,6 +39,15 @@ impl RowFailure {
         Self {
             reason: reason.into(),
             person: None,
+            entry_kind: None,
+        }
+    }
+
+    /// A time entry failure the report groups by `kind`.
+    pub fn entry(kind: EntryErrorKind, reason: impl Into<String>) -> Self {
+        Self {
+            entry_kind: Some(kind),
+            ..Self::new(reason)
         }
     }
 
@@ -54,6 +65,7 @@ impl RowFailure {
                 email: email.map(str::to_owned),
                 name: name.map(str::to_owned).filter(|n| !n.is_empty()),
             }),
+            entry_kind: None,
         }
     }
 }

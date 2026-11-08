@@ -36,10 +36,17 @@ fn agent() -> ureq::Agent {
 fn refresh_error(error: ureq::Error) -> anyhow::Error {
     match error {
         ureq::Error::Status(400 | 401, _) => super::ApiImportError::ReconnectRequired.into(),
+        ureq::Error::Status(status, _) if status >= 500 => super::ApiImportError::Unavailable(
+            format!("Harvest token refresh failed with HTTP {status}"),
+        )
+        .into(),
         ureq::Error::Status(status, _) => {
             anyhow::anyhow!("Harvest token refresh failed with HTTP {status}")
         }
-        ureq::Error::Transport(_) => anyhow::anyhow!("Harvest token refresh failed or timed out"),
+        ureq::Error::Transport(_) => {
+            super::ApiImportError::Unavailable("Harvest token refresh failed or timed out".into())
+                .into()
+        }
     }
 }
 

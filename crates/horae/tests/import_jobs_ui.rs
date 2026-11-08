@@ -308,6 +308,8 @@ fn job(id: u128, status: &str) -> models::JobStatus {
         source: Some(SourceKind::Csv),
         commit_availability: models::CommitAvailability::UnavailableState,
         committed_as: None,
+        error_kind: None,
+        sync: None,
     }
 }
 
@@ -346,6 +348,7 @@ fn errored_report(mode: ImportMode, errors: usize) -> ImportReport {
                 source_location: format!("record {line}"),
                 reason: "invalid date".into(),
                 person: None,
+                entry_kind: None,
             },
         );
     }
@@ -720,9 +723,15 @@ async fn errors_are_grouped_on_the_server_with_a_job_scoped_download() {
             groups: vec![models::ErrorGroup {
                 entity: EntityType::TimeEntry,
                 kind: None,
+                entry_kind: None,
                 reason: "invalid date".into(),
                 count: 2,
-                samples: vec!["record 1".into(), "record 2".into()],
+                samples: ["record 1", "record 2"]
+                    .map(|location| models::ErrorSample {
+                        location: location.into(),
+                        reason: "invalid date".into(),
+                    })
+                    .into(),
             }],
             omitted_errors: 4,
             ..models::ErrorSummary::default()

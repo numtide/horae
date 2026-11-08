@@ -8,7 +8,8 @@
 //! resolved parents, users and project-task links promoted into the run cache.
 
 use horae_core::importers::harvest::types::{
-    EntityType, PersonErrorKind, PersonOutcome, ReportPerson, RowOutcome, SourceKind, SourceRow,
+    EntityType, EntryErrorKind, PersonErrorKind, PersonOutcome, ReportPerson, RowOutcome,
+    SourceKind, SourceRow,
 };
 use horae_core::importers::harvest::{convert, keys};
 use sqlx::{Acquire, Postgres, Transaction};
@@ -38,7 +39,10 @@ pub async fn apply_row(
         return errored(
             EntityType::TimeEntry,
             row,
-            RowFailure::new("timer still running in Harvest"),
+            RowFailure::entry(
+                EntryErrorKind::TimerRunning,
+                "timer still running in Harvest",
+            ),
         );
     }
     for (entity, id) in [
@@ -226,7 +230,13 @@ async fn apply_time_entry(
     user_id: Uuid,
     row: &SourceRow,
 ) -> Result<(RowOutcome, Option<String>), RowFailure> {
-    let minutes_i64 = convert::hours_to_minutes(&row.hours)?;
+    let minutes_i64 = convert::hours_to_minutes(&row.hours).map_err(|error| match error {
+        convert::ConvertError::Negative(hours) => RowFailure::entry(
+            EntryErrorKind::NegativeHours,
+            format!("negative hours: {hours}"),
+        ),
+        other => other.into(),
+    })?;
     let minutes = i32::try_from(minutes_i64)
         .map_err(|_| RowFailure::new(format!("duration {minutes_i64} minutes out of range")))?;
     // Notes are stored trimmed with the shared whitespace set, so an exact
@@ -290,12 +300,14 @@ async fn apply_time_entry(
             return Ok((outcome, None));
         }
         if mapped.open != Some(true) {
-            return Err(RowFailure::new(
+            return Err(RowFailure::entry(
+                EntryErrorKind::ChangedInHorae,
                 "entry is no longer open in Horae; not updated from Harvest",
             ));
         }
         if mapped.edited != Some(false) {
-            return Err(RowFailure::new(
+            return Err(RowFailure::entry(
+                EntryErrorKind::ChangedInHorae,
                 "entry was changed in Horae (edited, reopened or voided) after import; not updated from Harvest",
             ));
         }
@@ -450,7 +462,8 @@ async fn update_time_entry(
     .fetch_all(&mut **sp)
     .await?;
     if !covered.is_empty() {
-        return Err(RowFailure::new(
+        return Err(RowFailure::entry(
+            EntryErrorKind::ChangedInHorae,
             "entry's date is in a period submitted for approval in Horae; not updated from Harvest",
         ));
     }
@@ -487,7 +500,8 @@ async fn update_time_entry(
     .execute(&mut **sp)
     .await?;
     if written.rows_affected() != 1 {
-        return Err(RowFailure::new(
+        return Err(RowFailure::entry(
+            EntryErrorKind::ChangedInHorae,
             "entry changed in Horae during the import; not updated from Harvest",
         ));
     }
@@ -573,6 +587,7 @@ fn errored(entity: EntityType, row: &SourceRow, failure: RowFailure) -> RowResul
                 source_location: row.source_location.clone(),
                 reason: failure.reason,
                 person: failure.person,
+                entry_kind: failure.entry_kind,
             },
         )],
         person: None,

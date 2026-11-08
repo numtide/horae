@@ -416,6 +416,7 @@ fn map_api_error(e: crate::importers::harvest::ApiImportError) -> ServerFnError 
         ApiImportError::ReconnectRequired | ApiImportError::Forbidden | ApiImportError::Busy => {
             err(CONFLICT, e)
         }
+        ApiImportError::Unavailable(_) => err(INTERNAL_ERROR, e),
         ApiImportError::Other(ref inner)
             if matches!(
                 inner.downcast_ref(),

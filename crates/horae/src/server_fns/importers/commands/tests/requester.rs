@@ -253,7 +253,7 @@ async fn original_requester_foreign_key_preserves_tenant_and_known_identity(pool
 async fn legacy_content(pool: &PgPool) -> serde_json::Value {
     sqlx::query_scalar!(
         r#"SELECT jsonb_build_array(
-            (SELECT jsonb_agg(to_jsonb(j) - 'original_requester_id' ORDER BY id) FROM horae_jobs j),
+            (SELECT jsonb_agg(to_jsonb(j) - 'original_requester_id' - 'error_kind' ORDER BY id) FROM horae_jobs j),
             (SELECT jsonb_agg(to_jsonb(u) ORDER BY job_id) FROM horae_job_uploads u),
             (SELECT jsonb_agg(to_jsonb(c) ORDER BY id) FROM horae_job_report_error_chunks c),
             (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer' ORDER BY id) FROM users u)
@@ -309,6 +309,14 @@ async fn requester_migration_preserves_unknown_authors_in_all_job_states(pool: P
     .await
     .unwrap();
     assert_eq!(issuers, 0);
+    // Nor is a job's error kind: a retained failure keeps only its text.
+    let kinds = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM horae_jobs WHERE error_kind IS NOT NULL"#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(kinds, 0);
     for id in jobs {
         assert_eq!(requester(&pool, id).await, None);
     }

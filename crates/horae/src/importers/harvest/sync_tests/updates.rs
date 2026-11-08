@@ -6,6 +6,7 @@ use super::super::api_source::http::{
 };
 use super::*;
 use crate::jobs;
+use horae_core::importers::harvest::types::EntryErrorKind;
 
 /// Run one durable API job whose only time entry is `entry` (id 10, on
 /// 2026-01-01 unless `entry` sets `spent_date`).
@@ -119,6 +120,25 @@ fn reasons(report: &ImportReport) -> Vec<&str> {
         .collect()
 }
 
+fn kinds(report: &ImportReport) -> Vec<Option<EntryErrorKind>> {
+    report
+        .row_errors
+        .iter()
+        .map(|error| error.entry_kind)
+        .collect()
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn negative_hours_are_reported_with_their_value(pool: PgPool) {
+    let org = setup(&pool).await;
+    for mode in [ImportMode::DryRun, ImportMode::Commit] {
+        let report = sync(&pool, org, mode, json!({"hours":-0.5,"updated_at":day(3)})).await;
+        assert_eq!(reasons(&report), ["negative hours: -0.5"]);
+        assert_eq!(kinds(&report), [Some(EntryErrorKind::NegativeHours)]);
+    }
+    assert!(stored(&pool, org).await.is_empty());
+}
+
 #[sqlx::test(migrations = "./migrations")]
 async fn running_timer_is_reported_until_it_stops(pool: PgPool) {
     let org = setup(&pool).await;
@@ -130,6 +150,7 @@ async fn running_timer_is_reported_until_it_stops(pool: PgPool) {
     )
     .await;
     assert_eq!(reasons(&running), ["timer still running in Harvest"]);
+    assert_eq!(kinds(&running), [Some(EntryErrorKind::TimerRunning)]);
     assert_eq!(running.summary.time_entries.created, 0);
     assert!(stored(&pool, org).await.is_empty());
 
@@ -243,6 +264,7 @@ async fn later_harvest_edits_never_overwrite_submitted_or_horae_edited_entries(p
         for mode in [ImportMode::DryRun, ImportMode::Commit] {
             let report = sync(&pool, org, mode, json!({"hours":8,"updated_at":day(5)})).await;
             assert_eq!(reasons(&report), [reason]);
+            assert_eq!(kinds(&report), [Some(EntryErrorKind::ChangedInHorae)]);
             assert_eq!(stored(&pool, org).await, before);
         }
     }

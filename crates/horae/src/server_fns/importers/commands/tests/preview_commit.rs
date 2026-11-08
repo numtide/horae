@@ -273,6 +273,7 @@ fn unmatched(location: &str, email: &str) -> RowError {
             email: Some(email.into()),
             name: Some("Dana Dev".into()),
         }),
+        entry_kind: None,
     }
 }
 
@@ -294,6 +295,7 @@ async fn a_summary_groups_archived_and_inline_errors_for_administrators(pool: Pg
                 source_location: error.source_location.clone(),
                 reason: error.reason.clone(),
                 person: error.person.clone(),
+                entry_kind: error.entry_kind,
             },
         );
         serde_json::to_writer(&mut chunk, error).unwrap();
@@ -306,6 +308,7 @@ async fn a_summary_groups_archived_and_inline_errors_for_administrators(pool: Pg
             source_location: "row 3".into(),
             reason: "bad hours".into(),
             person: None,
+            entry_kind: None,
         },
     );
     finish(&pool, job, &report).await;
@@ -341,7 +344,14 @@ async fn a_summary_groups_archived_and_inline_errors_for_administrators(pool: Pg
     let groups: Vec<_> = summary
         .groups
         .iter()
-        .map(|group| (group.kind, group.count, group.samples.clone()))
+        .map(|group| {
+            let locations: Vec<_> = group
+                .samples
+                .iter()
+                .map(|sample| sample.location.clone())
+                .collect();
+            (group.kind, group.count, locations)
+        })
         .collect();
     assert_eq!(
         groups,

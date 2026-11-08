@@ -33,9 +33,17 @@ pub(in crate::importers::harvest) struct PageCursor {
     anchor: Url,
     distance: u64,
     window: u64,
+    /// Harvest's `total_entries` from the first page that had it, kept for
+    /// progress after a resume, when the first page is not read again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    total: Option<u64>,
 }
 
 impl PageCursor {
+    pub(in crate::importers::harvest) fn total(&self) -> Option<u64> {
+        self.total
+    }
+
     fn advance(&self, next: Option<Url>) -> anyhow::Result<Self> {
         let mut advanced = self.clone();
         if let Some(next) = &next {
@@ -136,6 +144,7 @@ impl ApiHttp {
             next: Some(url),
             distance: 0,
             window: 1,
+            total: None,
         })
     }
 
@@ -168,6 +177,7 @@ impl ApiHttp {
             let mut page: serde_json::Value =
                 serde_json::from_slice(&body).context("invalid Harvest page JSON")?;
             let next = next_url(&page, url)?;
+            let total = cursor.total.or_else(|| page.get("total_entries")?.as_u64());
             let items = page
                 .get_mut(collection)
                 .and_then(serde_json::Value::as_array_mut)
@@ -184,7 +194,8 @@ impl ApiHttp {
             drop(page);
             drop(body);
             ensure!(!cancelled(), "Harvest import cancelled");
-            let advanced = cursor.advance(next)?;
+            let mut advanced = cursor.advance(next)?;
+            advanced.total = total;
             consume(records, &advanced)?;
             *cursor = advanced;
         }
@@ -232,10 +243,12 @@ impl ApiHttp {
                 }
                 Err(ureq::Error::Status(429 | 502 | 503 | 504, response)) if attempt < 6 => {
                     let delay = retry_after(response.header("Retry-After"));
-                    ensure!(
-                        delay <= MAX_RETRY_WAIT,
-                        "Harvest asked to wait more than five minutes; retry later"
-                    );
+                    if delay > MAX_RETRY_WAIT {
+                        return Err(ApiImportError::Unavailable(
+                            "Harvest asked to wait more than five minutes; retry later".into(),
+                        )
+                        .into());
+                    }
                     wait(delay, cancelled)?;
                 }
                 Err(ureq::Error::Status(401, _)) => {
@@ -245,12 +258,21 @@ impl ApiHttp {
                 // Do not return provider-controlled URLs/bodies or transport
                 // debug output through the user-visible import error.
                 Err(ureq::Error::Status(status, _)) => {
-                    bail!("Harvest request failed with HTTP {status}")
+                    let message = format!("Harvest request failed with HTTP {status}");
+                    if status >= 500 || status == 429 {
+                        return Err(ApiImportError::Unavailable(message).into());
+                    }
+                    bail!(message)
                 }
-                Err(ureq::Error::Transport(_)) => bail!("Harvest request failed or timed out"),
+                Err(ureq::Error::Transport(_)) => {
+                    return Err(ApiImportError::Unavailable(
+                        "Harvest request failed or timed out".into(),
+                    )
+                    .into());
+                }
             }
         }
-        bail!("Harvest request exhausted retries")
+        Err(ApiImportError::Unavailable("Harvest request exhausted retries".into()).into())
     }
 }
 

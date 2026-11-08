@@ -39,7 +39,9 @@ pub(super) fn ErrorGroups(job_id: Uuid, groups: Vec<ErrorGroup>, omitted: u64) -
                                     }
                                 }
                                 td { class: "text-mono whitespace-nowrap", "{group.count}" }
-                                td { class: "text-mono text-xs", "{group.samples.join(\", \")}" }
+                                td { class: "text-mono text-xs",
+                                    {group.samples.iter().map(|sample| sample.location.as_str()).collect::<Vec<_>>().join(", ")}
+                                }
                             }
                         }
                     }

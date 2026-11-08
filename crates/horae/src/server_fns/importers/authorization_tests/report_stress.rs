@@ -93,6 +93,7 @@ async fn large_report_streams_over_http_without_buffering_the_archive(pool: PgPo
         source_location: "stress record".into(),
         reason: String::new(),
         person: None,
+        entry_kind: None,
     };
     error.reason = "x".repeat(CHUNK - 1 - serde_json::to_vec(&error).unwrap().len());
     let mut expected_line = serde_json::to_vec(&error).unwrap();
@@ -106,6 +107,7 @@ async fn large_report_streams_over_http_without_buffering_the_archive(pool: PgPo
                 source_location: error.source_location.clone(),
                 reason: error.reason.clone(),
                 person: None,
+                entry_kind: None,
             },
         );
         let mut tx = pool.begin().await.unwrap();

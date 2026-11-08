@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, kind, status, phase, processed_count, total_count,\n                  COALESCE(checkpoint->'report', report) AS report, last_error,\n                  created_at as \"created_at!: chrono::DateTime<chrono::Utc>\",\n                  finished_at as \"finished_at: chrono::DateTime<chrono::Utc>\",\n                  payload, account_generation,\n                  COALESCE((SELECT g.account_generation FROM harvest_connection_generations g\n                            WHERE g.org_id = horae_jobs.org_id), 0) AS \"current_generation!\",\n                  EXISTS(SELECT 1 FROM horae_job_uploads u\n                         WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS \"has_upload!\",\n                  EXISTS(SELECT 1 FROM horae_jobs n\n                         WHERE n.org_id = horae_jobs.org_id AND n.kind = horae_jobs.kind\n                           AND (n.created_at, n.id) > (horae_jobs.created_at, horae_jobs.id)\n                           AND n.status NOT IN ('cancelled', 'failed')\n                           AND n.idempotency_key IS DISTINCT FROM 'preview-commit:' || horae_jobs.id) AS \"newer_import!\",\n                  (SELECT c.id FROM horae_jobs c\n                    WHERE c.org_id = horae_jobs.org_id AND c.kind = horae_jobs.kind\n                      AND c.idempotency_key = 'preview-commit:' || horae_jobs.id) AS committed_as\n             FROM horae_jobs\n            WHERE id = $1 AND org_id = $2",
+  "query": "SELECT id, kind, status, phase, processed_count, total_count,\n                  COALESCE(checkpoint->'report', report) AS report, last_error, error_kind,\n                  created_at as \"created_at!: chrono::DateTime<chrono::Utc>\",\n                  finished_at as \"finished_at: chrono::DateTime<chrono::Utc>\",\n                  payload, account_generation,\n                  COALESCE((SELECT g.account_generation FROM harvest_connection_generations g\n                            WHERE g.org_id = horae_jobs.org_id), 0) AS \"current_generation!\",\n                  EXISTS(SELECT 1 FROM horae_job_uploads u\n                         WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS \"has_upload!\",\n                  EXISTS(SELECT 1 FROM horae_jobs n\n                         WHERE n.org_id = horae_jobs.org_id AND n.kind = horae_jobs.kind\n                           AND (n.created_at, n.id) > (horae_jobs.created_at, horae_jobs.id)\n                           AND n.status NOT IN ('cancelled', 'failed')\n                           AND n.idempotency_key IS DISTINCT FROM 'preview-commit:' || horae_jobs.id) AS \"newer_import!\",\n                  (SELECT c.id FROM horae_jobs c\n                    WHERE c.org_id = horae_jobs.org_id AND c.kind = horae_jobs.kind\n                      AND c.idempotency_key = 'preview-commit:' || horae_jobs.id) AS committed_as\n             FROM horae_jobs\n            WHERE id = $1 AND org_id = $2",
   "describe": {
     "columns": [
       {
@@ -45,41 +45,46 @@
       },
       {
         "ordinal": 8,
+        "name": "error_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
         "name": "created_at!: chrono::DateTime<chrono::Utc>",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "finished_at: chrono::DateTime<chrono::Utc>",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "payload",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "account_generation",
         "type_info": "Int8"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "current_generation!",
         "type_info": "Int8"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "has_upload!",
         "type_info": "Bool"
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "newer_import!",
         "type_info": "Bool"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "committed_as",
         "type_info": "Uuid"
       }
@@ -99,6 +104,7 @@
       true,
       null,
       true,
+      true,
       false,
       true,
       false,
@@ -109,5 +115,5 @@
       null
     ]
   },
-  "hash": "b4a5e10350818ce962b722fa41b631ce2da32c5e9658c0f31219d99450391aeb"
+  "hash": "9004c4cfd52a3ee0e7ccadd2a0b6ffa43743a82869a3b95e5048251f8e2b8070"
 }

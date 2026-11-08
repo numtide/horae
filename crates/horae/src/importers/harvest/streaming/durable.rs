@@ -102,6 +102,11 @@ impl Checkpoint {
         phase: &str,
     ) -> anyhow::Result<()> {
         let (report, count) = super::super::job_report(&self.report)?;
+        let total = match phase {
+            "catalog" => Some(u64::try_from(self.parent_count())?),
+            "time_entries" => self.download.page.total(),
+            _ => None,
+        };
         lease
             .save_checkpoint(
                 connection,
@@ -109,6 +114,7 @@ impl Checkpoint {
                 &report,
                 phase,
                 count,
+                total.map(i64::try_from).transpose()?,
             )
             .await
     }
