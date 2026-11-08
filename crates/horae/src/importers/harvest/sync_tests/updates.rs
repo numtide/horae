@@ -289,3 +289,52 @@ async fn a_submit_racing_an_update_keeps_the_submitted_entry(pool: PgPool) {
     );
     assert_eq!(entry(&pool, org).await, (60, "submitted".into(), None));
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_horae_edit_from_an_older_transaction_still_counts_as_edited(pool: PgPool) {
+    let org = setup(&pool).await;
+    sync(
+        &pool,
+        org,
+        ImportMode::Commit,
+        json!({"hours":1,"updated_at":day(3)}),
+    )
+    .await;
+    // `updated_at` is the transaction's start time, so this edit is stamped
+    // earlier than the importer's update that commits before it.
+    let mut web = pool.begin().await.unwrap();
+    sqlx::query!("SELECT now()")
+        .fetch_one(&mut *web)
+        .await
+        .unwrap();
+    sync(
+        &pool,
+        org,
+        ImportMode::Commit,
+        json!({"hours":2,"updated_at":day(4)}),
+    )
+    .await;
+    sqlx::query!(
+        "UPDATE time_entries SET notes = 'mine' WHERE org_id = $1",
+        org
+    )
+    .execute(&mut *web)
+    .await
+    .unwrap();
+    web.commit().await.unwrap();
+    let report = sync(
+        &pool,
+        org,
+        ImportMode::Commit,
+        json!({"hours":3,"updated_at":day(5)}),
+    )
+    .await;
+    assert_eq!(
+        reasons(&report),
+        ["entry was edited in Horae after import; not updated from Harvest"]
+    );
+    assert_eq!(
+        entry(&pool, org).await,
+        (120, "open".into(), Some("mine".into()))
+    );
+}

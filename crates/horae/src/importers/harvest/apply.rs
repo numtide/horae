@@ -237,14 +237,17 @@ async fn apply_time_entry(
         .map(keys::trim_ws)
         .filter(|n| !n.is_empty());
 
-    // Provenance first.
+    // Provenance first. `updated_at` is a transaction start time, so an edit
+    // can be stamped earlier than the importer's last write: any difference
+    // counts as an edit, not only a later one.
     if let Some(hid) = row.harvest_time_entry_id
         && let Some(mapped) = sqlx::query!(
             r#"SELECT m.horae_id,
                       m.harvest_updated_at AS "harvest_updated_at: chrono::DateTime<chrono::Utc>",
                       te.id AS "entry_id?",
                       te.state = 'open' AS "open?",
-                      te.updated_at > COALESCE(m.horae_updated_at, te.created_at) AS "edited?"
+                      te.updated_at IS DISTINCT FROM COALESCE(m.horae_updated_at, te.created_at)
+                        AS "edited?"
                FROM harvest_import_map AS m
                LEFT JOIN time_entries AS te ON te.org_id = m.org_id AND te.id = m.horae_id
                WHERE m.org_id = $1
