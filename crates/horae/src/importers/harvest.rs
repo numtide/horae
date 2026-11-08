@@ -356,10 +356,8 @@ async fn run_api_import_with_http(
         }
     };
 
-    // Transparent refresh when the access token is at or past expiry (FR-024).
-    if let Some(expiry) = conn.token_expires_at
-        && expiry <= Utc::now()
-    {
+    // Transparent refresh before the access token expires (FR-024).
+    if oauth::needs_refresh(conn.token_expires_at, Utc::now()) {
         let cfg_owned = cfg.clone();
         let refresh_token = conn.refresh_token.clone();
         let (returned_connection, refreshed) = blocking_import_call(connection, move || {

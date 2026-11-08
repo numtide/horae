@@ -42,6 +42,15 @@ fn refresh_error(error: ureq::Error) -> anyhow::Error {
     }
 }
 
+/// Margin for refreshing before expiry. A data-API 401 ends the job as
+/// "reconnect", so the token must outlive the run, rate-limit waits included.
+const REFRESH_AHEAD: Duration = Duration::days(1);
+
+/// Whether the stored access token must be refreshed before a run starts.
+pub fn needs_refresh(expires_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> bool {
+    expires_at.is_some_and(|expiry| expiry <= now + REFRESH_AHEAD)
+}
+
 /// Build the authorization-code URL to redirect the admin to. `state` is the
 /// per-start nonce the callback validates.
 pub fn authorize_url(cfg: &HarvestConfig, state: &str) -> String {
@@ -235,6 +244,20 @@ mod tests {
                 reconnect,
                 "{mapped}"
             );
+        }
+    }
+
+    #[test]
+    fn a_token_that_would_expire_during_the_run_is_refreshed_first() {
+        let now = Utc::now();
+        for (expires_at, refresh) in [
+            (None, false),
+            (Some(now - Duration::minutes(1)), true),
+            (Some(now + Duration::hours(1)), true),
+            (Some(now + Duration::hours(23)), true),
+            (Some(now + Duration::days(2)), false),
+        ] {
+            assert_eq!(needs_refresh(expires_at, now), refresh, "{expires_at:?}");
         }
     }
 
