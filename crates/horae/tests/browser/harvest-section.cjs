@@ -51,7 +51,11 @@ const user = email => ({
   const failures = [];
   const errors = [];
   let commits, additions, summaries, statusReads;
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => {
+    // Leaving a page that still follows a running job aborts its status poll.
+    if (error.message.trim() === 'The operation was aborted.') return;
+    errors.push(error.message);
+  });
   const reset = () => { commits = 0; additions = []; summaries = 0; statusReads = 0; };
   reset();
   // Only API calls: the section's own page URLs contain "harvest" too.
@@ -153,7 +157,8 @@ const user = email => ({
       assert.deepEqual(additions, [{ emails: ['dana@example.com'], activation: 'Deactivated' }]);
       await page.getByTestId('add-all-people').click();
       await expect(page.getByText('1 already had an account', { exact: false })).toBeVisible();
-      await expect(page.getByText('Already in Horae')).toBeVisible();
+      // The entity table has an "Already in Horae" column too.
+      await expect(page.getByRole('region', { name: 'People not imported' }).getByText('Already in Horae')).toBeVisible();
       assert.deepEqual(additions[1], { emails: ['sam@example.com'], activation: 'Deactivated' });
       await expect(page.getByTestId('preview-again')).toHaveAttribute('href', '/admin/importers/harvest/csv');
     });
