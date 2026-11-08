@@ -1961,7 +1961,11 @@ tbody tr:hover { background: var(--color-row-hover); }
   border-radius: var(--radius-lg);
   transition: background 0.14s ease, border-color 0.14s ease, transform 0.08s ease;
 }
-.imp-source:hover { background: var(--color-bg-tertiary); border-color: var(--color-border-input); }
+/* A card, not a link: the global a:hover would otherwise underline and tint its text. */
+.imp-source:hover {
+  background: var(--color-bg-tertiary); border-color: var(--color-border-input);
+  color: var(--color-text); text-decoration: none;
+}
 .imp-source-off { opacity: 0.55; cursor: default; }
 .imp-source-off:hover { background: var(--color-bg-secondary); border-color: var(--color-border); }
 .imp-source-icon {
