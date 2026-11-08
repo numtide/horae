@@ -35,8 +35,8 @@ pub(super) fn HistoryTable(jobs: Vec<JobStatus>) -> Element {
                                     span { class: "text-xs text-faint ml-2", "{presentation::source_label(&job.kind)}" }
                                 }
                             }
-                            td { class: "text-sm", "{result(job)}" }
-                            td { class: "text-sm text-secondary", "{status(job)}" }
+                            td { class: "text-sm whitespace-nowrap", "{result(job)}" }
+                            td { class: "text-sm text-secondary whitespace-nowrap", "{status(job)}" }
                             td { class: "text-right whitespace-nowrap",
                                 Link { to: Route::HarvestRun { id: job.id }, "data-testid": "run-{job.id}",
                                     if job.commit_availability == CommitAvailability::Available { "Review and import" } else { "Open" }
