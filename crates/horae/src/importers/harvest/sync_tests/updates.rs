@@ -15,6 +15,16 @@ async fn sync(
     mode: ImportMode,
     entry: serde_json::Value,
 ) -> ImportReport {
+    sync_pages(pool, org, mode, vec![entry]).await
+}
+
+/// Like `sync`, with Harvest listing entry 10 once per page, as each of `pages`.
+async fn sync_pages(
+    pool: &PgPool,
+    org: Uuid,
+    mode: ImportMode,
+    pages: Vec<serde_json::Value>,
+) -> ImportReport {
     jobs::enqueue(
         pool,
         org,
@@ -29,13 +39,25 @@ async fn sync(
     .unwrap();
     let server = Server::start(move |url| {
         let collection = url.path().rsplit('/').next().unwrap();
+        let mut next = None;
         let items = match collection {
             "clients" => json!([{"id":1,"name":"Client","currency":"USD"}]),
             "projects" => json!([{"id":2,"name":"Project","client":{"id":1}}]),
             "tasks" => json!([{"id":3,"name":"Task"}]),
             "users" => json!([{"id":4,"email":"known@example.com"}]),
             "time_entries" => {
-                let mut entry = entry.clone();
+                let page: usize = url
+                    .query_pairs()
+                    .find(|(key, _)| key == "cursor")
+                    .map_or(0, |(_, value)| value.parse().unwrap());
+                if page + 1 < pages.len() {
+                    let mut url = url.clone();
+                    url.query_pairs_mut()
+                        .clear()
+                        .append_pair("cursor", &(page + 1).to_string());
+                    next = Some(url.to_string());
+                }
+                let mut entry = pages[page].clone();
                 let fields = json!({"id":10,"spent_date":"2026-01-01","project":{"id":2},
                                     "task":{"id":3},"user":{"id":4}});
                 for (key, value) in fields.as_object().unwrap() {
@@ -46,7 +68,7 @@ async fn sync(
             }
             _ => panic!("unexpected collection {collection}"),
         };
-        Response::json(json!({collection:items,"links":{"next":null}}))
+        Response::json(json!({collection:items,"links":{"next":next}}))
     });
     let mut report = None;
     let (lease, stop) = jobs::claim_lease_for_test(pool).await;
@@ -393,4 +415,26 @@ async fn later_harvest_edits_never_touch_a_submitted_period(pool: PgPool) {
             assert_eq!(entry(&pool, org).await, (60, "open".into(), None));
         }
     }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn preview_and_commit_agree_on_a_repeated_update(pool: PgPool) {
+    let org = setup(&pool).await;
+    sync(
+        &pool,
+        org,
+        ImportMode::Commit,
+        json!({"hours":1,"updated_at":day(3)}),
+    )
+    .await;
+    // Harvest lists the same newer version on two pages.
+    let pages = vec![json!({"hours":2,"updated_at":day(5)}); 2];
+    let counts = |report: &ImportReport| {
+        let entries = &report.summary.time_entries;
+        (entries.updated, entries.skipped, report.row_errors.len())
+    };
+    let preview = sync_pages(&pool, org, ImportMode::DryRun, pages.clone()).await;
+    let commit = sync_pages(&pool, org, ImportMode::Commit, pages).await;
+    assert_eq!(counts(&commit), (1, 1, 0));
+    assert_eq!(counts(&preview), counts(&commit));
 }

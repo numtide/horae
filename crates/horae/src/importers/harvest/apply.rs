@@ -259,13 +259,15 @@ async fn apply_time_entry(
         .fetch_optional(&mut **sp)
         .await?
     {
-        // A durable preview restores the mapping of an entry it simulated on an
-        // earlier page without that entry, which it rolled back.
+        // A durable preview rolls back each page, so the version it simulated
+        // writing on an earlier page (a create or an update) is newer than the
+        // stored one. `simulated` alone marks an entry this preview created.
+        let known = mapped.harvest_updated_at.max(cache.simulated_entry(hid));
         let simulated = cache
             .simulated_entry(hid)
             .filter(|_| mapped.harvest_updated_at.is_none());
         let changed = matches!(
-            (row.harvest_updated_at, mapped.harvest_updated_at.or(simulated)),
+            (row.harvest_updated_at, known),
             (Some(new), Some(old)) if new > old
         );
         // An unchanged entry, or one deleted in Horae, keeps today's behaviour:
