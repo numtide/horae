@@ -419,6 +419,104 @@ async fn a_running_job_saves_the_time_entry_total_from_the_first_page(pool: PgPo
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn a_resumed_job_keeps_the_time_entry_total_it_read_before(pool: PgPool) {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let org = setup(&pool).await;
+    let id = jobs::enqueue(
+        &pool,
+        org,
+        &jobs::JobPayload::HarvestApi {
+            mode: ImportMode::DryRun,
+            sync: SyncScope::Full,
+        },
+        "resumed-total",
+        crate::config::JobPolicy { max_attempts: 5 },
+    )
+    .await
+    .unwrap();
+    // Three entry pages; only the first carries the total. Attempt n fails
+    // on page n + 1, so the second attempt resumes past the first page.
+    let attempt = Arc::new(AtomicUsize::new(1));
+    let failing = attempt.clone();
+    let server = Server::start(move |url| {
+        if !url.path().ends_with("/time_entries") {
+            return fixture_page(url, FirstEntry::Valid);
+        }
+        let page: usize = url
+            .query_pairs()
+            .find(|(key, _)| key == "cursor")
+            .map_or(1, |(_, value)| value.parse().unwrap());
+        if page == failing.load(Ordering::SeqCst) + 1 {
+            return Response {
+                status: 500,
+                headers: vec![],
+                body: vec![],
+            };
+        }
+        let next = (page < 3).then(|| {
+            let mut next = url.clone();
+            next.query_pairs_mut()
+                .clear()
+                .append_pair("cursor", &(page + 1).to_string());
+            next.to_string()
+        });
+        let mut body = json!({
+            "time_entries": [{
+                "id": 10 + page, "spent_date": "2026-01-01", "hours": 1,
+                "project": {"id": 2}, "task": {"id": 3}, "user": {"id": 4},
+                "updated_at": day(3)
+            }],
+            "links": {"next": next}
+        });
+        if page == 1 {
+            body["total_entries"] = json!(3);
+        }
+        Response::json(body)
+    });
+    for run in 1..=2 {
+        attempt.store(run, Ordering::SeqCst);
+        // A failed attempt waits out its backoff; let the next one start now.
+        sqlx::query!(
+            "UPDATE horae_jobs SET available_at = now() WHERE id = $1",
+            id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let (lease, stop) = jobs::claim_lease_for_test(&pool).await;
+        jobs::run_claimed(&pool, &lease, stop, async {
+            let report = run_api_import_with_http(
+                &pool,
+                org,
+                "USD",
+                &config(),
+                ImportMode::DryRun,
+                SyncScope::Full,
+                ApiHttp::local(server.base.clone()),
+                Some(&lease),
+            )
+            .await?;
+            job_report(&report)
+        })
+        .await
+        .unwrap();
+        let job = jobs::status(&pool, org, id).await.unwrap().unwrap();
+        assert_eq!(job.status, "queued", "attempt {run}");
+        assert_eq!(job.phase.as_deref(), Some("time_entries"), "attempt {run}");
+        assert_eq!(job.total_count, Some(3), "attempt {run}");
+        let report: ImportReport = serde_json::from_value(job.report.unwrap()).unwrap();
+        // The second attempt did confirm page two, which has no total.
+        assert_eq!(
+            report.summary.time_entries.processed(),
+            run as u64,
+            "attempt {run}"
+        );
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn a_running_job_saves_the_catalog_total_once_downloaded(pool: PgPool) {
     let job = interrupted_preview(&pool, None).await;
     assert_eq!(job.status, "queued");

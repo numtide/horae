@@ -36,10 +36,12 @@ fn agent() -> ureq::Agent {
 fn refresh_error(error: ureq::Error) -> anyhow::Error {
     match error {
         ureq::Error::Status(400 | 401, _) => super::ApiImportError::ReconnectRequired.into(),
-        ureq::Error::Status(status, _) if status >= 500 => super::ApiImportError::Unavailable(
-            format!("Harvest token refresh failed with HTTP {status}"),
-        )
-        .into(),
+        ureq::Error::Status(status, _) if status >= 500 || status == 429 => {
+            super::ApiImportError::Unavailable(format!(
+                "Harvest token refresh failed with HTTP {status}"
+            ))
+            .into()
+        }
         ureq::Error::Status(status, _) => {
             anyhow::anyhow!("Harvest token refresh failed with HTTP {status}")
         }
@@ -231,19 +233,23 @@ mod tests {
             |code| ureq::Error::Status(code, ureq::Response::new(code, "status", "").unwrap());
         // Port 1 on loopback refuses the connection: a transport failure.
         let unreachable = ureq::get("http://127.0.0.1:1/").call().unwrap_err();
-        for (error, reconnect) in [
-            (status(400), true),
-            (status(401), true),
-            (status(500), false),
-            (status(503), false),
-            (unreachable, false),
+        // What the job shows: reconnect, try again later, or the plain error.
+        for (error, kind) in [
+            (status(400), "reconnect"),
+            (status(401), "reconnect"),
+            (status(429), "unavailable"),
+            (status(500), "unavailable"),
+            (status(503), "unavailable"),
+            (unreachable, "unavailable"),
+            (status(404), "other"),
         ] {
             let mapped = ApiImportError::from(refresh_error(error));
-            assert_eq!(
-                matches!(mapped, ApiImportError::ReconnectRequired),
-                reconnect,
-                "{mapped}"
-            );
+            let found = match mapped {
+                ApiImportError::ReconnectRequired => "reconnect",
+                ApiImportError::Unavailable(_) => "unavailable",
+                _ => "other",
+            };
+            assert_eq!(found, kind, "{mapped}");
         }
     }
 
