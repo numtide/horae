@@ -110,6 +110,10 @@ pub(super) fn RunPanel(
         "Finish the import"
     };
     let can_retry = job.retry_availability == RetryAvailability::Available;
+    let access_error = matches!(
+        job.error_kind,
+        Some(JobErrorKind::ReconnectRequired | JobErrorKind::Forbidden)
+    );
     let run_link = rsx! {
         if summary {
             Link { to: Route::HarvestRun { id }, class: "btn btn-ghost", "data-testid": "open-run", "Open the run" }
@@ -285,19 +289,20 @@ pub(super) fn RunPanel(
                                 },
                                 _ => rsx! {},
                             }
-                            if job.error_kind != Some(JobErrorKind::ReconnectRequired) || !api {
-                                if can_retry {
-                                    button { r#type: "button",
-                                        class: if job.error_kind == Some(JobErrorKind::Forbidden) { "btn btn-secondary" } else { "btn btn-primary" },
-                                        "data-testid": "retry-run".to_owned(),
-                                        disabled: busy(), onclick: move |_| act(Action::Retry), "{retry_label}"
-                                    }
-                                    if entries > 0 && job.error_kind != Some(JobErrorKind::Forbidden) {
-                                        span { class: "text-sm text-secondary", "Picks up from {presentation::count(entries)} time entries." }
-                                    }
-                                } else {
-                                    p { class: "text-sm text-faint", "{presentation::retry_reason(job.retry_availability)}" }
+                            // After an access error, reconnecting comes first; continuing
+                            // is still offered, since a reconnect to the same account
+                            // leaves this run as it was.
+                            if can_retry {
+                                button { r#type: "button",
+                                    class: if access_error { "btn btn-secondary" } else { "btn btn-primary" },
+                                    "data-testid": "retry-run".to_owned(),
+                                    disabled: busy(), onclick: move |_| act(Action::Retry), "{retry_label}"
                                 }
+                                if entries > 0 && !access_error {
+                                    span { class: "text-sm text-secondary", "Picks up from {presentation::count(entries)} time entries." }
+                                }
+                            } else {
+                                p { class: "text-sm text-faint", "{presentation::retry_reason(job.retry_availability)}" }
                             }
                             {run_link}
                         }

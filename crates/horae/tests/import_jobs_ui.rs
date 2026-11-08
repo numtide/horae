@@ -1099,6 +1099,31 @@ async fn a_refused_connection_turns_the_connection_line_red() {
 }
 
 #[tokio::test]
+async fn a_run_stopped_on_a_401_can_be_continued_after_reconnecting() {
+    let probe = Probe::default();
+    // A 401 leaves the credentials stored, so the page still reads connected,
+    // as it does again after reconnecting to the same account.
+    *probe.connection.borrow_mut() = ConnectionStatus {
+        configured: true,
+        connected: true,
+        account_id: Some("A".into()),
+        ..ConnectionStatus::default()
+    };
+    let mut run = job(1, "failed");
+    run.kind = "harvest_api_import".into();
+    run.source = Some(SourceKind::HarvestApi);
+    run.error_kind = Some(models::JobErrorKind::ReconnectRequired);
+    probe.history.borrow_mut().push(run);
+    let mut ui = Ui::at(&probe, "/admin/importers/harvest");
+    let html = ui.html();
+    assert!(html.contains("data-testid=\"reconnect\""), "{html}");
+    assert!(html.contains("Continue preview"), "{html}");
+    let _accepted = probe.action();
+    ui.click("retry-run");
+    assert_eq!(&*probe.retries.borrow(), &[Uuid::from_u128(1)]);
+}
+
+#[tokio::test]
 async fn an_incremental_import_reads_as_a_sync() {
     let probe = Probe::default();
     let mut report = ImportReport::new(SourceKind::HarvestApi, ImportMode::Commit);
