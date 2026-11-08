@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs SET status = 'failed' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e794df3a5da41a8be47c1adaa06a1c7ead1fd71b75c2ac73083fcf7e513b69e3"
+}

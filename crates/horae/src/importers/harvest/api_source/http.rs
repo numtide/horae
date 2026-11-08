@@ -9,6 +9,8 @@ use chrono::{DateTime, Utc};
 use openidconnect::url::Url;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
+use crate::importers::harvest::ApiImportError;
+
 #[cfg(test)]
 pub(in crate::importers::harvest) mod test_server;
 
@@ -236,6 +238,10 @@ impl ApiHttp {
                     );
                     wait(delay, cancelled)?;
                 }
+                Err(ureq::Error::Status(401, _)) => {
+                    return Err(ApiImportError::ReconnectRequired.into());
+                }
+                Err(ureq::Error::Status(403, _)) => return Err(ApiImportError::Forbidden.into()),
                 // Do not return provider-controlled URLs/bodies or transport
                 // debug output through the user-visible import error.
                 Err(ureq::Error::Status(status, _)) => {
@@ -629,6 +635,29 @@ mod tests {
                 .pages::<u64>("token", "account", "clients", None, || false, |_| Ok(()))
                 .unwrap_or_else(|error| panic!("HTTP {status}: {error}"));
             assert_eq!(server.requests.lock().unwrap().len(), 2, "HTTP {status}");
+        }
+    }
+
+    #[test]
+    fn http_types_rejected_credentials_and_does_not_retry_them() {
+        for status in [401, 403] {
+            let server = Server::start(move |_| Response {
+                status,
+                headers: vec![],
+                body: vec![],
+            });
+            let error = ApiHttp::local(server.base.clone())
+                .pages::<u64>("token", "account", "clients", None, || false, |_| Ok(()))
+                .unwrap_err();
+            let typed = error.downcast_ref::<ApiImportError>();
+            assert!(
+                match status {
+                    401 => matches!(typed, Some(ApiImportError::ReconnectRequired)),
+                    _ => matches!(typed, Some(ApiImportError::Forbidden)),
+                },
+                "HTTP {status}: {error}"
+            );
+            assert_eq!(server.requests.lock().unwrap().len(), 1);
         }
     }
 

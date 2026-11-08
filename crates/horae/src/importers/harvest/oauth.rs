@@ -18,6 +18,30 @@ use crate::config::HarvestConfig;
 /// Harvest identity host (authorize, token, accounts).
 const ID_HOST: &str = "https://id.getharvest.com";
 
+/// Matches the data client's read timeout, so a silent identity host cannot
+/// hold the import worker or the OAuth callback forever.
+const HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The agent for the token and account calls.
+pub fn agent() -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(10))
+        .timeout(HTTP_TIMEOUT)
+        .build()
+}
+
+/// Only the token endpoint refusing the grant means the connection is gone;
+/// a network failure or a 5xx is transient and the job retries it.
+fn refresh_error(error: ureq::Error) -> anyhow::Error {
+    match error {
+        ureq::Error::Status(400 | 401, _) => super::ApiImportError::ReconnectRequired.into(),
+        ureq::Error::Status(status, _) => {
+            anyhow::anyhow!("Harvest token refresh failed with HTTP {status}")
+        }
+        ureq::Error::Transport(_) => anyhow::anyhow!("Harvest token refresh failed or timed out"),
+    }
+}
+
 /// Build the authorization-code URL to redirect the admin to. `state` is the
 /// per-start nonce the callback validates.
 pub fn authorize_url(cfg: &HarvestConfig, state: &str) -> String {
@@ -85,8 +109,7 @@ pub fn exchange_code(
 }
 
 /// Refresh an expired access token with the stored refresh token (FR-024). A
-/// failure here means the connection is revoked/expired — the caller rejects the
-/// run with "reconnect Harvest".
+/// refused grant is `ReconnectRequired`; anything else is a retryable error.
 pub fn refresh(
     agent: &ureq::Agent,
     cfg: &HarvestConfig,
@@ -101,7 +124,7 @@ pub fn refresh(
             ("client_secret", &cfg.client_secret),
             ("grant_type", "refresh_token"),
         ])
-        .map_err(|e| anyhow::anyhow!("Harvest token refresh failed: {e}"))?
+        .map_err(refresh_error)?
         .into_string()?;
     let parsed: TokenBody = serde_json::from_str(&body)?;
     Ok(parsed.into_tokens())
@@ -190,5 +213,45 @@ mod tests {
                 "query values must round-trip for {value:?}",
             );
         }
+    }
+
+    #[test]
+    fn only_a_refused_grant_asks_for_a_reconnect() {
+        use crate::importers::harvest::ApiImportError;
+        let status =
+            |code| ureq::Error::Status(code, ureq::Response::new(code, "status", "").unwrap());
+        // Port 1 on loopback refuses the connection: a transport failure.
+        let unreachable = ureq::get("http://127.0.0.1:1/").call().unwrap_err();
+        for (error, reconnect) in [
+            (status(400), true),
+            (status(401), true),
+            (status(500), false),
+            (status(503), false),
+            (unreachable, false),
+        ] {
+            let mapped = ApiImportError::from(refresh_error(error));
+            assert_eq!(
+                matches!(mapped, ApiImportError::ReconnectRequired),
+                reconnect,
+                "{mapped}"
+            );
+        }
+    }
+
+    #[test]
+    fn token_requests_give_up_on_a_silent_server() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/", listener.local_addr().unwrap());
+        // Accept the connection and never answer it.
+        std::thread::spawn(move || {
+            let _held = listener.accept();
+            std::thread::sleep(std::time::Duration::from_secs(120));
+        });
+        let (done, result) = std::sync::mpsc::channel();
+        std::thread::spawn(move || done.send(agent().get(&url).call().is_err()));
+        assert_eq!(
+            result.recv_timeout(HTTP_TIMEOUT + std::time::Duration::from_secs(15)),
+            Ok(true)
+        );
     }
 }
