@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, kind, status, phase, processed_count, total_count,\n                  COALESCE(checkpoint->'report', report) AS report, last_error, error_kind,\n                  created_at as \"created_at!: chrono::DateTime<chrono::Utc>\",\n                  finished_at as \"finished_at: chrono::DateTime<chrono::Utc>\",\n                  payload, account_generation,\n                  COALESCE((SELECT g.account_generation FROM harvest_connection_generations g\n                            WHERE g.org_id = horae_jobs.org_id), 0) AS \"current_generation!\",\n                  EXISTS(SELECT 1 FROM horae_job_uploads u\n                         WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS \"has_upload!\",\n                  EXISTS(SELECT 1 FROM horae_jobs n\n                         WHERE n.org_id = horae_jobs.org_id AND n.kind = horae_jobs.kind\n                           AND (n.created_at, n.id) > (horae_jobs.created_at, horae_jobs.id)\n                           AND n.status NOT IN ('cancelled', 'failed')\n                           AND n.idempotency_key IS DISTINCT FROM 'preview-commit:' || horae_jobs.id) AS \"newer_import!\",\n                  (SELECT c.id FROM horae_jobs c\n                    WHERE c.org_id = horae_jobs.org_id AND c.kind = horae_jobs.kind\n                      AND c.idempotency_key = 'preview-commit:' || horae_jobs.id) AS committed_as\n             FROM horae_jobs\n            WHERE org_id = $1\n              AND ($3::uuid IS NULL OR (created_at, id) < (\n                  SELECT created_at, id FROM horae_jobs WHERE id = $3 AND org_id = $1\n              ))\n            ORDER BY created_at DESC, id DESC\n            LIMIT $2",
+  "query": "SELECT id, kind, status, phase, processed_count, total_count,\n                  COALESCE(checkpoint->'report', report) AS report, last_error,\n                  -- A cancelled job reports no cause, however it was cancelled.\n                  CASE WHEN status = 'cancelled' THEN NULL ELSE error_kind END AS error_kind,\n                  created_at as \"created_at!: chrono::DateTime<chrono::Utc>\",\n                  finished_at as \"finished_at: chrono::DateTime<chrono::Utc>\",\n                  payload, account_generation,\n                  COALESCE((SELECT g.account_generation FROM harvest_connection_generations g\n                            WHERE g.org_id = horae_jobs.org_id), 0) AS \"current_generation!\",\n                  EXISTS(SELECT 1 FROM horae_job_uploads u\n                         WHERE u.job_id = horae_jobs.id AND u.org_id = horae_jobs.org_id) AS \"has_upload!\",\n                  EXISTS(SELECT 1 FROM horae_jobs n\n                         WHERE n.org_id = horae_jobs.org_id AND n.kind = horae_jobs.kind\n                           AND (n.created_at, n.id) > (horae_jobs.created_at, horae_jobs.id)\n                           AND n.status NOT IN ('cancelled', 'failed')\n                           AND n.idempotency_key IS DISTINCT FROM 'preview-commit:' || horae_jobs.id) AS \"newer_import!\",\n                  (SELECT c.id FROM horae_jobs c\n                    WHERE c.org_id = horae_jobs.org_id AND c.kind = horae_jobs.kind\n                      AND c.idempotency_key = 'preview-commit:' || horae_jobs.id) AS committed_as\n             FROM horae_jobs\n            WHERE org_id = $1\n              AND ($3::uuid IS NULL OR (created_at, id) < (\n                  SELECT created_at, id FROM horae_jobs WHERE id = $3 AND org_id = $1\n              ))\n            ORDER BY created_at DESC, id DESC\n            LIMIT $2",
   "describe": {
     "columns": [
       {
@@ -105,7 +105,7 @@
       true,
       null,
       true,
-      true,
+      null,
       false,
       true,
       false,
@@ -116,5 +116,5 @@
       null
     ]
   },
-  "hash": "67667966ccd61e6045074a0d3b9231d29310583a7076db80dd5dc9291fe4bfa9"
+  "hash": "321db29868e782451884eb03e41795d9e5d0a35261f50d1862083ed2b9a46fb0"
 }

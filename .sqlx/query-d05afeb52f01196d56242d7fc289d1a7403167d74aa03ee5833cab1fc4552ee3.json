@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs SET error_kind = 'unavailable', last_error = 'HTTP 503',\n                        available_at = now() + interval '1 hour' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d05afeb52f01196d56242d7fc289d1a7403167d74aa03ee5833cab1fc4552ee3"
+}

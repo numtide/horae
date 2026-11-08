@@ -678,7 +678,9 @@ pub async fn status<'e, E: sqlx::PgExecutor<'e>>(
 ) -> anyhow::Result<Option<crate::models::JobStatus>> {
     let row = sqlx::query!(
         r#"SELECT id, kind, status, phase, processed_count, total_count,
-                  COALESCE(checkpoint->'report', report) AS report, last_error, error_kind,
+                  COALESCE(checkpoint->'report', report) AS report, last_error,
+                  -- A cancelled job reports no cause, however it was cancelled.
+                  CASE WHEN status = 'cancelled' THEN NULL ELSE error_kind END AS error_kind,
                   created_at as "created_at!: chrono::DateTime<chrono::Utc>",
                   finished_at as "finished_at: chrono::DateTime<chrono::Utc>",
                   payload, account_generation,
@@ -749,7 +751,9 @@ pub async fn list<'e, E: sqlx::PgExecutor<'e>>(
 ) -> anyhow::Result<Vec<crate::models::JobStatus>> {
     let rows = sqlx::query!(
         r#"SELECT id, kind, status, phase, processed_count, total_count,
-                  COALESCE(checkpoint->'report', report) AS report, last_error, error_kind,
+                  COALESCE(checkpoint->'report', report) AS report, last_error,
+                  -- A cancelled job reports no cause, however it was cancelled.
+                  CASE WHEN status = 'cancelled' THEN NULL ELSE error_kind END AS error_kind,
                   created_at as "created_at!: chrono::DateTime<chrono::Utc>",
                   finished_at as "finished_at: chrono::DateTime<chrono::Utc>",
                   payload, account_generation,
@@ -832,6 +836,8 @@ pub async fn cancel<'e, E: sqlx::PgExecutor<'e>>(
                   status = CASE WHEN status = 'queued' THEN 'cancelled' ELSE status END,
                   phase = 'cancelling',
                   finished_at = CASE WHEN status = 'queued' THEN now() ELSE finished_at END,
+                  -- A queued job ends here; a running one clears it in fail_claimed.
+                  error_kind = CASE WHEN status = 'queued' THEN NULL ELSE error_kind END,
                   updated_at = now()
             WHERE id = $1 AND org_id = $2 AND status IN ('queued', 'running')
               AND NOT cancellation_requested"#,
@@ -1233,6 +1239,47 @@ mod tests {
             ),
             RetryAvailability::Available
         );
+    }
+
+    #[sqlx::test]
+    async fn cancelling_a_job_waiting_to_retry_clears_its_error_kind(pool: sqlx::PgPool) {
+        let org_id = org(&pool).await;
+        let payload = JobPayload::HarvestApi {
+            mode: ImportMode::DryRun,
+            sync: SyncScope::Full,
+        };
+        // One job cancelled while queued, one the reaper finds cancelled
+        // after its lease expired; both failed an attempt with `unavailable`.
+        let mut ids = Vec::new();
+        for key in ["queued-retry", "abandoned-retry"] {
+            let id = enqueue(&pool, org_id, &payload, key, JobPolicy::default())
+                .await
+                .unwrap();
+            sqlx::query!(
+                "UPDATE horae_jobs SET error_kind = 'unavailable', last_error = 'HTTP 503',
+                        available_at = now() + interval '1 hour' WHERE id = $1",
+                id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            ids.push(id);
+        }
+        assert!(cancel(&pool, org_id, ids[0]).await.unwrap());
+        sqlx::query!(
+            "UPDATE horae_jobs SET status = 'running', cancellation_requested = true,
+                    lease_until = now() - interval '1 minute' WHERE id = $1",
+            ids[1]
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert!(claim(&pool, "reaper-test").await.unwrap().is_none());
+        for id in ids {
+            let job = status(&pool, org_id, id).await.unwrap().unwrap();
+            assert_eq!(job.status, "cancelled");
+            assert_eq!(job.error_kind, None, "{id}");
+        }
     }
 
     #[sqlx::test]
