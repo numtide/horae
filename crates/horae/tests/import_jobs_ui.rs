@@ -424,10 +424,17 @@ async fn a_run_page_follows_its_job_from_the_url() {
         let ui = open_run(&probe, snapshot);
         let html = ui.html();
         assert!(html.contains("12 of 30"), "{html}");
-        assert!(html.contains("Checking time entries"), "{html}");
+        // Only the phase is announced; the count is left to the progress bar.
         assert!(
-            html.contains("The last attempt failed. Horae will try again"),
+            html.contains("aria-live=\"polite\">Checking time entries</span>"),
             "{html}"
+        );
+        // A queued job waits for its next attempt; a running one is that
+        // attempt, so the last failure is no longer news.
+        assert_eq!(
+            html.contains("The last attempt failed. Horae will try again"),
+            state == "queued",
+            "{state}: {html}"
         );
         assert!(
             html.contains("You can leave this page; the preview keeps running"),
@@ -504,6 +511,8 @@ async fn a_stopped_run_says_what_to_do_for_each_error_kind() {
         assert!(html.contains(action), "{html}");
         assert!(html.contains("Nothing in Horae changed"), "{html}");
         assert!(!html.contains("raw provider text"), "{html}");
+        // A stopped preview can always be replaced by a new one.
+        assert!(html.contains("data-testid=\"new-preview\""), "{html}");
         if kind == models::JobErrorKind::Forbidden {
             assert!(html.contains("Harvest account 1000001"), "{html}");
         }
@@ -1187,15 +1196,13 @@ async fn the_harvest_page_shows_each_step_from_the_latest_api_run() {
         let ui = Ui::at(&probe, "/admin/importers/harvest");
         let html = ui.html();
         assert!(html.contains(text), "{html}");
-        for (n, state) in steps.iter().enumerate() {
-            assert!(
-                html.contains(&format!(
-                    "data-state=\"{state}\"><span class=\"himp-step-dot\">{}",
-                    n + 1
-                )),
-                "step {} {state}: {html}",
-                n + 1
-            );
+        // The state is told to assistive tech too, not by the dot's colour alone.
+        for (name, state) in ["Preview", "Import"].into_iter().zip(steps) {
+            let expected = match state {
+                "current" => "data-state=\"current\" aria-current=\"step\"".to_owned(),
+                _ => format!("data-state=\"done\" aria-label=\"{name}, done\""),
+            };
+            assert!(html.contains(&expected), "{name} {state}: {html}");
         }
     }
 }

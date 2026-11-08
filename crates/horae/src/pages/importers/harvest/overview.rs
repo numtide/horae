@@ -110,9 +110,17 @@ pub fn HarvestOverview() -> Element {
             ConnectionCard { connection: conn.clone(), refused, on_changed: changed }
             section { class: "card flex flex-col gap-6", aria_label: "Import from Harvest",
                 ol { class: "himp-steps", aria_label: "Import steps",
-                    li { class: "himp-step", "data-state": first, span { class: "himp-step-dot", "1" } "Preview" }
+                    li { class: "himp-step", "data-state": first,
+                        aria_current: (first == "current").then_some("step"),
+                        aria_label: (first == "done").then_some("Preview, done"),
+                        span { class: "himp-step-dot", "1" } "Preview"
+                    }
                     li { class: "himp-step-line", aria_hidden: "true" }
-                    li { class: "himp-step", "data-state": second, span { class: "himp-step-dot", "2" } "Import" }
+                    li { class: "himp-step", "data-state": second,
+                        aria_current: (second == "current").then_some("step"),
+                        aria_label: (second == "done").then_some("Import, done"),
+                        span { class: "himp-step-dot", "2" } "Import"
+                    }
                 }
                 match &step {
                     Step::Loading => rsx! { p { class: "text-sm text-secondary", role: "status", "Checking connection… CSV import remains available." } },

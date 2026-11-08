@@ -128,7 +128,9 @@ pub(super) fn RunPanel(
             }
             if job.is_active() {
                 RunProgress { job: job.clone(), report: report.clone() }
-                if job.last_error.is_some() {
+                // Only a queued job is waiting to be tried again; a running one is
+                // that attempt, and its last failure no longer applies.
+                if job.status == "queued" && job.last_error.is_some() {
                     div { class: "alert alert-warning",
                         if job.error_kind == Some(JobErrorKind::Unavailable) {
                             "Harvest didn't respond in time. Horae will try again in a moment and continue from where it stopped; you don't need to do anything."
@@ -304,6 +306,12 @@ pub(super) fn RunPanel(
                             } else {
                                 p { class: "text-sm text-faint", "{presentation::retry_reason(job.retry_availability)}" }
                             }
+                            if preview && api {
+                                button { r#type: "button", class: "btn btn-secondary", "data-testid": "new-preview".to_owned(),
+                                    disabled: busy(), onclick: move |_| act(Action::Start(ImportMode::DryRun, SyncScope::Full)),
+                                    "Start a new preview"
+                                }
+                            }
                             {run_link}
                         }
                     },
@@ -334,8 +342,9 @@ fn RunProgress(job: JobStatus, report: Option<ImportReport>) -> Element {
     rsx! {
         div { class: "flex flex-col gap-2",
             div { class: "flex items-center justify-between gap-3 flex-wrap text-sm text-secondary",
-                role: "status", aria_live: "polite",
-                span { "{label}" }
+                // Announce the phase, not the count: the page polls every second,
+                // and the progress bar already carries the numbers.
+                span { role: "status", aria_live: "polite", "{label}" }
                 match (progress.done, progress.total) {
                     (Some(done), Some(total)) => rsx! {
                         span { class: "text-mono", "data-testid": "run-count",
