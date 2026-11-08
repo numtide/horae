@@ -204,7 +204,7 @@ async fn later_harvest_edits_never_overwrite_submitted_or_horae_edited_entries(p
         ),
         (
             true,
-            "entry was edited in Horae after import; not updated from Harvest",
+            "entry was changed in Horae (edited, reopened or voided) after import; not updated from Harvest",
         ),
     ] {
         sqlx::query!("DELETE FROM harvest_import_map WHERE org_id = $1", org)
@@ -355,7 +355,9 @@ async fn a_horae_edit_from_an_older_transaction_still_counts_as_edited(pool: PgP
     .await;
     assert_eq!(
         reasons(&report),
-        ["entry was edited in Horae after import; not updated from Harvest"]
+        [
+            "entry was changed in Horae (edited, reopened or voided) after import; not updated from Harvest"
+        ]
     );
     assert_eq!(
         entry(&pool, org).await,

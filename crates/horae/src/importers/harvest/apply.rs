@@ -296,7 +296,7 @@ async fn apply_time_entry(
         }
         if mapped.edited != Some(false) {
             return Err(RowFailure::new(
-                "entry was edited in Horae after import; not updated from Harvest",
+                "entry was changed in Horae (edited, reopened or voided) after import; not updated from Harvest",
             ));
         }
         update_time_entry(
