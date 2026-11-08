@@ -212,6 +212,7 @@ pub(crate) async fn import_body_with_lease(
                         source_location: error.source_location,
                         reason: error.reason,
                         person: None,
+                        entry_kind: None,
                     },
                 ),
             }
@@ -239,6 +240,7 @@ pub(crate) async fn import_body_with_lease(
                         &report,
                         "time_entries",
                         processed,
+                        None,
                     )
                     .await?;
                 tx.commit().await?;

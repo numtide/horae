@@ -21,6 +21,7 @@ mod tests {
                 source_location: "record 2".into(),
                 reason: "invalid date".into(),
                 person: None,
+                entry_kind: None,
             },
         );
         report
@@ -65,6 +66,7 @@ mod tests {
                     email: None,
                     name: Some("No Mail".into()),
                 }),
+                entry_kind: None,
             },
         );
         report.people.push(ReportPerson {

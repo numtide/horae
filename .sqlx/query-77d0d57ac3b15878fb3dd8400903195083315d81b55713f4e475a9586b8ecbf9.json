@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs\n                      SET status = CASE WHEN cancellation_requested THEN 'cancelled'\n                                        WHEN $5 OR attempts >= max_attempts THEN 'failed' ELSE 'queued' END,\n                          available_at = now() + LEAST(power(2::double precision, LEAST(attempts, 9)), 300)::int * interval '1 second',\n                          finished_at = CASE WHEN cancellation_requested OR $5 OR attempts >= max_attempts THEN now() ELSE NULL END,\n                          lease_until = NULL, worker_id = NULL, claim_token = NULL,\n                          last_error = CASE WHEN cancellation_requested THEN NULL ELSE $1 END,\n                          error_kind = CASE WHEN cancellation_requested THEN NULL ELSE $6 END,\n                          updated_at = now()\n                    WHERE id = $2 AND org_id = $3 AND claim_token = $4 AND status = 'running'\n                      AND lease_until > clock_timestamp()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "77d0d57ac3b15878fb3dd8400903195083315d81b55713f4e475a9586b8ecbf9"
+}

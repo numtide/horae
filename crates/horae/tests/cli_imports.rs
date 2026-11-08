@@ -311,6 +311,7 @@ async fn executable_wait_and_failure_exit_codes_match_the_json_contract() {
                         source_location: "fixture".into(),
                         reason: "unknown user".into(),
                         person: None,
+                        entry_kind: None,
                     },
                 );
                 value["report"] = json!(report);

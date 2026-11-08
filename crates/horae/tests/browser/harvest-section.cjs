@@ -20,15 +20,17 @@ const report = mode => ({
   row_errors: [], error_archive: { count: 4, chunks: 1 },
 });
 const run = (id, mode, status = 'succeeded') => ({
-  id, kind: 'harvest_csv_import', status, phase: status === 'succeeded' ? null : 'time_entries',
+  id, kind: 'harvest_csv_import', status, phase: status === 'running' ? 'time_entries' : null, error_kind: null,
   processed_count: 12, total_count: null, report: status === 'queued' ? null : report(mode), last_error: null,
   created_at: '2026-09-15T10:30:00Z', finished_at: null, retry_availability: 'unavailable_state',
   mode, source: 'csv', commit_availability: mode === 'DryRun' ? 'available' : 'not_preview',
 });
 const summary = {
   groups: [
-    { entity: 'time_entry', kind: 'unmatched_email', reason: 'no Horae user matches email "dana@example.com"', count: 3, samples: ['row 2', 'row 3', 'row 4'] },
-    { entity: 'time_entry', kind: null, reason: 'invalid date', count: 1, samples: ['row 9'] },
+    { entity: 'time_entry', kind: 'unmatched_email', entry_kind: null, reason: 'no Horae user matches email "dana@example.com"', count: 3,
+      samples: ['row 2', 'row 3', 'row 4'].map(location => ({ location, reason: 'no Horae user matches email "dana@example.com"' })) },
+    { entity: 'time_entry', kind: null, entry_kind: 'negative_hours', reason: 'negative hours: -0.5', count: 1,
+      samples: [{ location: 'row 9', reason: 'negative hours: -0.5' }] },
   ],
   people: [
     { email: 'dana@example.com', name: 'Dana Dev', kind: 'unmatched_email', entries: 3 },
@@ -49,7 +51,12 @@ const user = email => ({
   const failures = [];
   const errors = [];
   let commits, additions, summaries, statusReads;
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => {
+    // Leaving a page that still follows a running job aborts its status poll.
+    // Match the name: Firefox and Chromium word the message differently.
+    if (error.name === 'AbortError') return;
+    errors.push(error.message);
+  });
   const reset = () => { commits = 0; additions = []; summaries = 0; statusReads = 0; };
   reset();
   // Only API calls: the section's own page URLs contain "harvest" too.
@@ -108,24 +115,27 @@ const user = email => ({
       await expect(page.getByText('Clockify')).toHaveCount(0);
       await page.getByTestId('choose-api').click();
       await page.waitForURL(`${base}/admin/importers/harvest`);
-      await expect(page.getByRole('heading', { name: 'Import from Harvest' })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: 'Harvest' })).toBeVisible();
       await expect(page.locator('.adm-link.active')).toHaveText('Importers');
       await page.getByTestId('all-runs').click();
       await page.waitForURL(/\/admin\/importers\/harvest\/runs\??$/);
       await page.getByTestId(`run-${previewId}`).click();
       await page.waitForURL(runUrl(previewId));
-      await expect(page.getByText('Preview complete — no business data changed')).toBeVisible();
+      await expect(page.getByText('15 records are ready')).toBeVisible();
       await page.reload();
-      await expect(page.getByText('Preview complete — no business data changed')).toBeVisible();
+      await expect(page.getByText('15 records are ready')).toBeVisible();
       await expect(page.getByTestId('commit-preview')).toBeVisible();
     });
 
     await check('a run groups its errors and lists the people to add', async () => {
       await page.goto(runUrl(previewId));
-      const errorsTable = page.getByRole('region', { name: 'Record errors' });
-      await expect(errorsTable.getByText('No Horae account has this email')).toBeVisible();
-      await expect(errorsTable.getByText('row 2, row 3, row 4')).toBeVisible();
-      await expect(errorsTable.getByRole('link', { name: 'Download all errors (NDJSON)' }))
+      const errorsTable = page.getByRole('region', { name: 'Needs your attention' });
+      await expect(errorsTable.getByText('Time entries: No Horae account has this email')).toBeVisible();
+      // The first group is open and lists its rows; the others open on demand.
+      await expect(errorsTable.getByRole('cell', { name: 'row 4' })).toBeVisible();
+      await errorsTable.getByText('Time entries with negative hours, skipped').click();
+      await expect(errorsTable.getByRole('cell', { name: 'negative hours: -0.5' })).toBeVisible();
+      await expect(errorsTable.getByRole('link', { name: 'Download every issue (NDJSON)' }))
         .toHaveAttribute('href', `/api/import/harvest/jobs/${previewId}/errors`);
       const people = page.getByRole('region', { name: 'People not imported' });
       await expect(people.getByText('dana@example.com')).toBeVisible();
@@ -148,7 +158,8 @@ const user = email => ({
       assert.deepEqual(additions, [{ emails: ['dana@example.com'], activation: 'Deactivated' }]);
       await page.getByTestId('add-all-people').click();
       await expect(page.getByText('1 already had an account', { exact: false })).toBeVisible();
-      await expect(page.getByText('Already in Horae')).toBeVisible();
+      // The entity table has an "Already in Horae" column too.
+      await expect(page.getByRole('region', { name: 'People not imported' }).getByText('Already in Horae')).toBeVisible();
       assert.deepEqual(additions[1], { emails: ['sam@example.com'], activation: 'Deactivated' });
       await expect(page.getByTestId('preview-again')).toHaveAttribute('href', '/admin/importers/harvest/csv');
     });
@@ -157,8 +168,8 @@ const user = email => ({
       await page.goto(runUrl(previewId));
       await page.getByTestId('commit-preview').click();
       await page.waitForURL(runUrl(commitId));
-      await expect(page.getByText('Waiting to start.')).toBeVisible();
-      await expect(page.getByTestId('run-mode')).toHaveText('Commit');
+      await expect(page.getByText('Waiting to start…')).toBeVisible();
+      await expect(page.getByTestId('run-badge')).toHaveText('Writing to Horae');
       assert.equal(commits, 1);
     });
 

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE horae_jobs SET status = 'running', cancellation_requested = true,\n                    lease_until = now() - interval '1 minute' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "29d82d2999153995250ff15e55933c89cbcfe32fa678a23f67a94df35d180edd"
+}

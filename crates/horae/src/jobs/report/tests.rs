@@ -53,6 +53,7 @@ async fn report_fragments_survive_until_the_owning_job_expires(pool: sqlx::PgPoo
             source_location: "CSV row 1".into(),
             reason: "invalid date ".repeat(2_000),
             person: None,
+            entry_kind: None,
         },
     );
     let mut tx = pool.begin().await.unwrap();
@@ -65,6 +66,7 @@ async fn report_fragments_survive_until_the_owning_job_expires(pool: sqlx::PgPoo
             &metadata,
             "time_entries",
             1,
+            None,
         )
         .await
         .unwrap();
@@ -135,6 +137,7 @@ async fn upgrading_legacy_reports_preserves_errors_and_fences_old_attempts(pool:
                     format!("Invalid date at record {index}")
                 },
                 person: None,
+                entry_kind: None,
             },
         );
     }
@@ -148,7 +151,14 @@ async fn upgrading_legacy_reports_preserves_errors_and_fences_old_attempts(pool:
     });
     let mut tx = pool.begin().await.unwrap();
     old_lease
-        .save_checkpoint(&mut tx, &checkpoint, &legacy_report, "time_entries", 1_000)
+        .save_checkpoint(
+            &mut tx,
+            &checkpoint,
+            &legacy_report,
+            "time_entries",
+            1_000,
+            None,
+        )
         .await
         .unwrap();
     tx.commit().await.unwrap();
@@ -238,7 +248,14 @@ async fn upgrading_legacy_reports_preserves_errors_and_fences_old_attempts(pool:
     );
     let mut tx = pool.begin().await.unwrap();
     let rejected = new_lease
-        .save_checkpoint(&mut tx, &checkpoint, &legacy_report, "time_entries", 1_000)
+        .save_checkpoint(
+            &mut tx,
+            &checkpoint,
+            &legacy_report,
+            "time_entries",
+            1_000,
+            None,
+        )
         .await
         .unwrap_err();
     assert!(rejected.to_string().contains("report_budget"));
@@ -306,6 +323,7 @@ async fn legacy_upgrade_preserves_job_states_and_existing_archives(pool: sqlx::P
                             source_location: "previously archived".into(),
                             reason: "keep this fragment".into(),
                             person: None,
+                            entry_kind: None,
                         },
                     );
                     expected.extend(report.row_errors.clone());
@@ -328,6 +346,7 @@ async fn legacy_upgrade_preserves_job_states_and_existing_archives(pool: sqlx::P
                         source_location: "legacy inline".into(),
                         reason: "legacy overflow ".repeat(2_000),
                         person: None,
+                        entry_kind: None,
                     },
                 );
                 expected.extend(report.row_errors.clone());
@@ -417,7 +436,7 @@ async fn legacy_upgrade_preserves_job_states_and_existing_archives(pool: sqlx::P
 
 async fn legacy_job_metadata(pool: &sqlx::PgPool, id: Uuid) -> serde_json::Value {
     sqlx::query_scalar!(
-        "SELECT to_jsonb(j) - ARRAY['report', 'checkpoint', 'claim_token', 'lease_until', 'updated_at', 'account_generation', 'original_requester_id'] AS \"metadata!\"
+        "SELECT to_jsonb(j) - ARRAY['report', 'checkpoint', 'claim_token', 'lease_until', 'updated_at', 'account_generation', 'original_requester_id', 'error_kind'] AS \"metadata!\"
          FROM horae_jobs j WHERE id = $1", id,
     ).fetch_one(pool).await.unwrap()
 }
@@ -446,6 +465,7 @@ async fn legacy_upgrade_preserves_a_concurrently_archived_workers_lease(pool: sq
             source_location: "legacy row".into(),
             reason: "invalid date ".repeat(2_000),
             person: None,
+            entry_kind: None,
         },
     );
     let expected_errors = report.row_errors.clone();
@@ -458,6 +478,7 @@ async fn legacy_upgrade_preserves_a_concurrently_archived_workers_lease(pool: sq
             &metadata,
             "time_entries",
             1,
+            None,
         )
         .await
         .unwrap();
@@ -483,7 +504,7 @@ async fn legacy_upgrade_preserves_a_concurrently_archived_workers_lease(pool: sq
         let metadata = serde_json::to_value(&report)?;
         let checkpoint = json!({"version": 2, "report": metadata, "cursor": 2});
         lease
-            .save_checkpoint(&mut writer, &checkpoint, &metadata, "time_entries", 2)
+            .save_checkpoint(&mut writer, &checkpoint, &metadata, "time_entries", 2, None)
             .await?;
         Ok::<_, anyhow::Error>(checkpoint)
     })
@@ -550,6 +571,7 @@ async fn oversized_legacy_job(pool: &sqlx::PgPool, org: Uuid) -> (Uuid, ImportRe
             source_location: "legacy row".into(),
             reason: "invalid date ".repeat(2_000),
             person: None,
+            entry_kind: None,
         },
     );
     let metadata = serde_json::to_value(&report).unwrap();
@@ -794,7 +816,7 @@ async fn legacy_converter_gate_allows_a_job_locked_workers_chunk_foreign_keys(po
         let metadata = serde_json::to_value(&report)?;
         let checkpoint = json!({"version": 2, "report": metadata, "cursor": 1});
         lease
-            .save_checkpoint(&mut writer, &checkpoint, &metadata, "time_entries", 1)
+            .save_checkpoint(&mut writer, &checkpoint, &metadata, "time_entries", 1, None)
             .await?;
         Ok::<_, anyhow::Error>(checkpoint)
     })

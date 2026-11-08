@@ -135,6 +135,7 @@ pub(super) async fn apply_batch(
                         source_location: format!("{} {id}", entity.as_str()),
                         reason: failure.reason,
                         person: failure.person,
+                        entry_kind: failure.entry_kind,
                     },
                 );
             }

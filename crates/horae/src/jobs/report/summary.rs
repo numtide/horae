@@ -3,22 +3,25 @@
 
 use std::collections::HashMap;
 
-use horae_core::importers::harvest::types::{EntityType, PersonErrorKind, RowError};
+use horae_core::importers::harvest::types::{
+    EntityType, EntryErrorKind, PersonErrorKind, RowError,
+};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
-use crate::models::{ErrorGroup, ErrorSummary, MissingPerson};
+use crate::models::{ErrorGroup, ErrorSample, ErrorSummary, MissingPerson};
 
 const SHOWN_GROUPS: usize = 50;
 const SHOWN_PEOPLE: usize = 500;
 /// Distinct groups and people tracked before the rest are only counted, so a
 /// run whose every reason differs still folds in bounded memory.
 const TRACKED: usize = 10_000;
-const SAMPLES: usize = 3;
+const SAMPLES: usize = 10;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 enum GroupKey {
     Person(EntityType, PersonErrorKind),
+    Entry(EntryErrorKind),
     Reason(EntityType, String),
 }
 
@@ -61,9 +64,10 @@ impl Summarizer {
         if let Some(person) = &error.person {
             self.add_person(error.entity, person);
         }
-        let key = match kind {
-            Some(kind) => GroupKey::Person(error.entity, kind),
-            None => GroupKey::Reason(error.entity, error.reason.clone()),
+        let key = match (kind, error.entry_kind) {
+            (Some(kind), _) => GroupKey::Person(error.entity, kind),
+            (None, Some(entry)) => GroupKey::Entry(entry),
+            (None, None) => GroupKey::Reason(error.entity, error.reason.clone()),
         };
         let tracked = self.groups.len();
         let group = match self.groups.get_mut(&key) {
@@ -71,7 +75,8 @@ impl Summarizer {
             None if tracked < TRACKED => self.groups.entry(key).or_insert(ErrorGroup {
                 entity: error.entity,
                 kind,
-                reason: error.reason,
+                entry_kind: error.entry_kind,
+                reason: error.reason.clone(),
                 count: 0,
                 samples: Vec::new(),
             }),
@@ -82,7 +87,10 @@ impl Summarizer {
         };
         group.count += 1;
         if group.samples.len() < SAMPLES {
-            group.samples.push(error.source_location);
+            group.samples.push(ErrorSample {
+                location: error.source_location,
+                reason: error.reason,
+            });
         }
     }
 
@@ -239,6 +247,7 @@ mod tests {
             entity,
             reason: reason.into(),
             person: None,
+            entry_kind: None,
         }
     }
 
@@ -282,7 +291,15 @@ mod tests {
             let summary = summary.finish().unwrap();
             assert_eq!(summary.groups.len(), 1, "chunk size {size}");
             assert_eq!(summary.groups[0].count, 7);
-            assert_eq!(summary.groups[0].samples, ["row 0", "row 1", "row 2"]);
+            let locations: Vec<_> = summary.groups[0]
+                .samples
+                .iter()
+                .map(|sample| sample.location.as_str())
+                .collect();
+            assert_eq!(
+                locations,
+                (0..7).map(|n| format!("row {n}")).collect::<Vec<_>>()
+            );
         }
     }
 
@@ -422,6 +439,53 @@ mod tests {
             Some("Sam"),
         ));
         assert_eq!(summary.finish().unwrap().people.len(), 3);
+    }
+
+    #[test]
+    fn entry_errors_group_by_kind_and_keep_each_rows_detail() {
+        let mut summary = Summarizer::default();
+        for (id, hours) in [(11, "-0.5"), (12, "-6.0")] {
+            summary.add(RowError {
+                entry_kind: Some(EntryErrorKind::NegativeHours),
+                ..error(
+                    EntityType::TimeEntry,
+                    &format!("time_entry {id}"),
+                    &format!("negative hours: {hours}"),
+                )
+            });
+        }
+        for reason in ["entry is no longer open", "entry was changed in Horae"] {
+            summary.add(RowError {
+                entry_kind: Some(EntryErrorKind::ChangedInHorae),
+                ..error(EntityType::TimeEntry, "time_entry 20", reason)
+            });
+        }
+        let summary = summary.finish().unwrap();
+        let groups: Vec<_> = summary
+            .groups
+            .iter()
+            .map(|group| (group.entry_kind, group.count))
+            .collect();
+        assert_eq!(
+            groups,
+            [
+                (Some(EntryErrorKind::ChangedInHorae), 2),
+                (Some(EntryErrorKind::NegativeHours), 2),
+            ]
+        );
+        assert_eq!(
+            summary.groups[1].samples,
+            [
+                ErrorSample {
+                    location: "time_entry 11".into(),
+                    reason: "negative hours: -0.5".into(),
+                },
+                ErrorSample {
+                    location: "time_entry 12".into(),
+                    reason: "negative hours: -6.0".into(),
+                },
+            ]
+        );
     }
 
     #[test]

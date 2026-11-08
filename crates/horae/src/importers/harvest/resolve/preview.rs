@@ -212,6 +212,7 @@ pub(in crate::importers::harvest) fn forget_lost_people(
                     email: Some(person.email),
                     name: None,
                 }),
+                entry_kind: None,
             },
         );
     }

@@ -68,6 +68,7 @@ async fn archived_job(pool: &PgPool) -> ArchivedJob {
             source_location: "CSV row 1".into(),
             reason: "x".repeat(super::CHUNK_BYTES * 33),
             person: None,
+            entry_kind: None,
         },
     );
     let mut expected = report.row_errors.clone();
@@ -80,6 +81,7 @@ async fn archived_job(pool: &PgPool) -> ArchivedJob {
             source_location: "CSV row 2".into(),
             reason: "inline at the captured checkpoint".into(),
             person: None,
+            entry_kind: None,
         },
     );
     expected.extend(report.row_errors.clone());
@@ -91,6 +93,7 @@ async fn archived_job(pool: &PgPool) -> ArchivedJob {
             &metadata,
             "time_entries",
             2,
+            None,
         )
         .await
         .unwrap();
@@ -497,6 +500,7 @@ async fn download_keeps_its_snapshot_when_later_progress_archives_the_inline_tai
             source_location: "CSV row 3".into(),
             reason: "later error ".repeat(1_000),
             person: None,
+            entry_kind: None,
         },
     );
     let mut tx = pool.begin().await.unwrap();

@@ -898,6 +898,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             source_location: "CSV line 3".into(),
             reason: "界,\"quoted\"\n".repeat(20_000),
             person: None,
+            entry_kind: None,
         },
     );
     let mut expected = report.row_errors.clone();
@@ -922,6 +923,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             source_location: "CSV line 4".into(),
             reason: "inline tail".into(),
             person: None,
+            entry_kind: None,
         },
     );
     expected.extend(report.row_errors.clone());
@@ -939,6 +941,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             source_location: "CSV line 4".into(),
             reason: "x".repeat(20_000),
             person: None,
+            entry_kind: None,
         },
     );
     let mut tx = pool.begin().await.unwrap();

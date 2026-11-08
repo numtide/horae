@@ -26,8 +26,11 @@ pub use client::Client;
 #[cfg(feature = "server")]
 pub use invoice::InvoiceLine;
 pub use invoice::{Invoice, InvoiceWithLines};
+#[cfg(feature = "server")]
+pub use jobs::ErrorSample;
 pub use jobs::{
-    CommitAvailability, ErrorGroup, ErrorSummary, JobStatus, MissingPerson, RetryAvailability,
+    CommitAvailability, ErrorGroup, ErrorSummary, JobErrorKind, JobStatus, MissingPerson,
+    RetryAvailability,
 };
 pub use organization::OrgBranding;
 #[cfg(any(feature = "server", test))]

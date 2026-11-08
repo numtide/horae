@@ -1,29 +1,30 @@
 use dioxus::prelude::*;
-use horae_core::importers::harvest::types::{ImportMode, ImportReport, SourceKind, SyncScope};
+use horae_core::importers::harvest::types::{
+    ImportReport, PersonOutcome, ReportPerson, SourceKind,
+};
 use uuid::Uuid;
 
 use super::back_links::BackLinks;
+use super::entity_table::EntityTable;
 use super::error_groups::ErrorGroups;
 use super::missing_people::MissingPeople;
-use super::report_summary::ReportSummary;
-use super::run_header::RunHeader;
-use super::{pause, presentation};
+use super::run_panel::RunPanel;
+use super::{Conn, pause, presentation, use_connection};
 use crate::models::JobStatus;
 use crate::route::Route;
 use crate::server_fns;
 
-/// A run's state, followed until it ends, then its report, grouped errors and
-/// the people it could not match.
+/// A run's state, followed until it ends, then what it changes in Horae and
+/// what needs the administrator's attention.
 #[component]
 pub(super) fn RunView(id: Uuid) -> Element {
     let navigator = use_navigator();
+    let status = use_connection();
     let mut job = use_signal(|| None::<Result<JobStatus, String>>);
     // Bumped to read the run again: after any action, a failed status read,
     // or the page coming back into view. A finished run is read once each
-    // time, so what it offers (commit, retry) never goes stale.
+    // time, so what it offers (import, retry) never goes stale.
     let mut follow = use_signal(|| 0_u64);
-    let mut busy = use_signal(|| false);
-    let mut action_error = use_signal(|| None::<String>);
 
     use_future(move || async move {
         let mut shown = document::eval(&WATCH_VISIBILITY.replace("RUN_ID", &id.to_string()));
@@ -75,91 +76,19 @@ pub(super) fn RunView(id: Uuid) -> Element {
                 .map_err(|e| e.to_string()),
         )
     });
-
-    let cancel = use_callback(move |_: ()| {
-        spawn(async move {
-            if *busy.peek() {
-                return;
-            }
-            busy.set(true);
-            action_error.set(None);
-            match server_fns::cancel_harvest_import_job(id).await {
-                Ok(run) => job.set(Some(Ok(run))),
-                Err(error) => action_error.set(Some(format!("Could not cancel import: {error}"))),
-            }
-            follow += 1;
-            busy.set(false);
-        });
-    });
-    let retry = use_callback(move |_: ()| {
-        spawn(async move {
-            if *busy.peek() {
-                return;
-            }
-            busy.set(true);
-            action_error.set(None);
-            match server_fns::retry_harvest_import_job(id).await {
-                Ok(run) => job.set(Some(Ok(run))),
-                Err(error) => action_error.set(Some(format!("Could not retry import: {error}"))),
-            }
-            follow += 1;
-            busy.set(false);
-        });
-    });
-    let commit = use_callback(move |_: ()| {
-        spawn(async move {
-            if *busy.peek() {
-                return;
-            }
-            busy.set(true);
-            action_error.set(None);
-            match server_fns::commit_harvest_import_preview(id).await {
-                Ok(run) => {
-                    navigator.push(Route::HarvestRun { id: run.id });
-                }
-                Err(error) => {
-                    action_error.set(Some(format!("Could not commit this preview: {error}")));
-                    // The refusal usually means the run's state moved on.
-                    follow += 1;
-                }
-            }
-            busy.set(false);
-        });
-    });
-    let resync = move |_| async move {
-        if *busy.peek() {
-            return;
+    let on_change = use_callback(move |started: Option<Uuid>| match started {
+        Some(run) => {
+            navigator.push(Route::HarvestRun { id: run });
         }
-        busy.set(true);
-        action_error.set(None);
-        let started = match server_fns::harvest_connection_status().await {
-            Ok(status) => server_fns::start_harvest_api_import(
-                ImportMode::Commit,
-                SyncScope::Incremental,
-                Some(status.account_generation),
-            )
-            .await
-            .map_err(|e| e.to_string()),
-            Err(e) => Err(e.to_string()),
-        };
-        match started {
-            Ok(run) => {
-                navigator.push(Route::HarvestRun { id: run.id });
-            }
-            Err(error) => {
-                action_error.set(Some(format!("Could not start the re-sync: {error}")));
-                follow += 1;
-            }
-        }
-        busy.set(false);
-    };
+        None => follow += 1,
+    });
 
     let snapshot = job.read();
     let run = match &*snapshot {
         None => {
             return rsx! {
                 div { class: "himp-page min-w-0", "data-run": "{id}",
-                    BackLinks {}
+                    BackLinks { here: "Run".to_owned() }
                     p { role: "status", "Loading run…" }
                 }
             };
@@ -167,7 +96,7 @@ pub(super) fn RunView(id: Uuid) -> Element {
         Some(Err(error)) => {
             return rsx! {
                 div { class: "himp-page min-w-0", "data-run": "{id}",
-                    BackLinks {}
+                    BackLinks { here: "Run".to_owned() }
                     div { class: "alert alert-danger mt-4", role: "alert",
                         p { "Status unavailable. The import may still be running." }
                         details { summary { "Details" } p { "{error}" } }
@@ -185,47 +114,43 @@ pub(super) fn RunView(id: Uuid) -> Element {
     };
     drop(snapshot);
     let partial = presentation::partial_report(&run.status);
-    let committed_api = run.source == Some(SourceKind::HarvestApi)
-        && run.mode == Some(ImportMode::Commit)
-        && run.status == "succeeded";
+    let title = presentation::run_label(&run);
+    let connection = Conn::from_resource(&status).ready().cloned();
+    let new_people: Vec<ReportPerson> = match &*report.read() {
+        Some(Ok(report)) => report
+            .people
+            .iter()
+            .filter(|person| person.outcome == PersonOutcome::Created)
+            .cloned()
+            .collect(),
+        _ => Vec::new(),
+    };
 
     rsx! {
         div { class: "himp-page min-w-0", "data-run": "{id}",
-            BackLinks {}
-            RunHeader { job: run.clone(), busy, on_cancel: cancel, on_retry: retry, on_commit: commit }
-            if let Some(error) = action_error() {
-                div { class: "alert alert-danger mt-4", role: "alert", "{error}" }
-            }
-            if run.is_active() {
-                div { class: "card mt-4 flex items-center gap-3 flex-wrap",
-                    span { class: "himp-spinner" }
-                    div { class: "text-sm font-semibold",
-                        div { role: "status", aria_live: "polite", aria_atomic: "true",
-                            "{presentation::state_label(&run.status)} · {presentation::phase_label(run.phase.as_deref())}"
-                            if run.status == "queued" { p { "Waiting to start." } }
-                            if run.phase.as_deref() == Some("cancelling") { p { "Cancellation requested; waiting for the current batch to finish." } }
-                        }
-                        div { class: "text-xs text-faint",
-                            "{run.processed_count} processed"
-                            if let Some(total) = run.total_count { " of {total}" }
-                        }
-                        if let Some(error) = &run.last_error {
-                            div { class: "text-xs text-warning", "Last attempt: {error}" }
-                        }
-                        p { class: "text-xs text-faint", "Leaving this page does not stop the import." }
+            BackLinks { here: title.to_owned() }
+            div { class: "page-header",
+                h1 { class: "page-title flex items-center gap-3 flex-wrap",
+                    "{title} of "
+                    time { class: "text-mono", datetime: run.created_at.to_rfc3339(),
+                        {run.created_at.format("%d %b %Y, %H:%M UTC").to_string()}
+                    }
+                    if run.source != Some(SourceKind::HarvestApi) {
+                        span { class: "text-secondary", "· {presentation::source_label(&run.kind)}" }
                     }
                 }
             }
-            if partial {
-                div { class: "alert alert-danger mt-4", role: "alert",
-                    p { if run.status == "cancelled" { "Import cancelled" } else { "Import failed" } }
-                    if let Some(error) = &run.last_error { p { "{error}" } }
-                    if run.report.is_some() { p { "{run.processed_count} processed in confirmed batches" } }
+            div { class: "card",
+                RunPanel {
+                    job: run.clone(),
+                    account: connection.as_ref().and_then(|s| s.account_id.clone()),
+                    generation: connection.as_ref().map(|s| s.account_generation),
+                    on_change,
                 }
             }
             match &*report.read() {
                 Some(Ok(report)) if !run.is_active() => rsx! {
-                    ReportSummary { report: report.clone(), partial }
+                    EntityTable { report: report.clone(), partial }
                 },
                 Some(Err(error)) => rsx! {
                     div { class: "alert alert-danger mt-4", role: "alert",
@@ -238,7 +163,7 @@ pub(super) fn RunView(id: Uuid) -> Element {
             match &*summary.read() {
                 Some(Some(Ok(summary))) => rsx! {
                     MissingPeople { people: summary.people.clone(), omitted: summary.omitted_people, source: run.source }
-                    ErrorGroups { job_id: id, groups: summary.groups.clone(), omitted: summary.omitted_errors }
+                    ErrorGroups { job_id: id, groups: summary.groups.clone(), omitted: summary.omitted_errors, new_people: new_people.clone() }
                 },
                 Some(Some(Err(error))) => rsx! {
                     div { class: "alert alert-danger mt-4", role: "alert",
@@ -248,22 +173,10 @@ pub(super) fn RunView(id: Uuid) -> Element {
                     }
                 },
                 Some(None) | None if finished_with_errors() => rsx! { p { class: "text-sm mt-4", role: "status", "Grouping errors…" } },
+                _ if !run.is_active() => rsx! {
+                    ErrorGroups { job_id: id, groups: Vec::new(), omitted: 0, new_people: new_people.clone() }
+                },
                 _ => rsx! {},
-            }
-            if committed_api {
-                div { class: "flex items-center gap-3 flex-wrap mt-4",
-                    button {
-                        r#type: "button",
-                        class: "btn btn-secondary",
-                        "data-testid": "resync".to_owned(),
-                        disabled: busy(),
-                        onclick: resync,
-                        "Re-sync changes"
-                    }
-                    span { class: "text-faint text-sm",
-                        "Incremental: only what changed since the last sync. Local edits are never overwritten."
-                    }
-                }
             }
         }
     }

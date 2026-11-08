@@ -163,6 +163,8 @@ fn job(status: &str) -> JobStatus {
         source: None,
         commit_availability: Default::default(),
         committed_as: None,
+        error_kind: None,
+        sync: None,
     }
 }
 
