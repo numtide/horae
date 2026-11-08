@@ -22,8 +22,9 @@ const ID_HOST: &str = "https://id.getharvest.com";
 /// hold the import worker or the OAuth callback forever.
 const HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
-/// The agent for the token and account calls.
-pub fn agent() -> ureq::Agent {
+/// The only agent for the token and account calls: callers cannot pass one
+/// without a timeout.
+fn agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
         .timeout_connect(std::time::Duration::from_secs(10))
         .timeout(HTTP_TIMEOUT)
@@ -96,12 +97,8 @@ impl TokenBody {
 }
 
 /// Exchange an authorization `code` for tokens (server-side, blocking).
-pub fn exchange_code(
-    agent: &ureq::Agent,
-    cfg: &HarvestConfig,
-    code: &str,
-) -> anyhow::Result<Tokens> {
-    let body = agent
+pub fn exchange_code(cfg: &HarvestConfig, code: &str) -> anyhow::Result<Tokens> {
+    let body = agent()
         .post(&format!("{ID_HOST}/api/v2/oauth2/token"))
         .set("Accept", "application/json")
         .send_form(&[
@@ -119,12 +116,8 @@ pub fn exchange_code(
 
 /// Refresh an expired access token with the stored refresh token (FR-024). A
 /// refused grant is `ReconnectRequired`; anything else is a retryable error.
-pub fn refresh(
-    agent: &ureq::Agent,
-    cfg: &HarvestConfig,
-    refresh_token: &str,
-) -> anyhow::Result<Tokens> {
-    let body = agent
+pub fn refresh(cfg: &HarvestConfig, refresh_token: &str) -> anyhow::Result<Tokens> {
+    let body = agent()
         .post(&format!("{ID_HOST}/api/v2/oauth2/token"))
         .set("Accept", "application/json")
         .send_form(&[
@@ -153,8 +146,8 @@ struct Account {
 
 /// Resolve the Harvest account id the tokens authorize (required on every data
 /// call). Prefers a Harvest-product account; falls back to the first listed.
-pub fn fetch_account_id(agent: &ureq::Agent, access_token: &str) -> anyhow::Result<String> {
-    let body = agent
+pub fn fetch_account_id(access_token: &str) -> anyhow::Result<String> {
+    let body = agent()
         .get(&format!("{ID_HOST}/api/v2/accounts"))
         .set("Authorization", &format!("Bearer {access_token}"))
         .set("User-Agent", "Horae Importer (support@horae.app)")
@@ -261,6 +254,8 @@ mod tests {
         }
     }
 
+    /// `agent()` is private and every token call builds it, so this covers the
+    /// refresh, the code exchange and the account lookup.
     #[test]
     fn token_requests_give_up_on_a_silent_server() {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();

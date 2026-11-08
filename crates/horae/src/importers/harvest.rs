@@ -361,7 +361,7 @@ async fn run_api_import_with_http(
         let cfg_owned = cfg.clone();
         let refresh_token = conn.refresh_token.clone();
         let (returned_connection, refreshed) = blocking_import_call(connection, move || {
-            oauth::refresh(&oauth::agent(), &cfg_owned, &refresh_token)
+            oauth::refresh(&cfg_owned, &refresh_token)
         })
         .await?;
         connection = returned_connection;
@@ -595,9 +595,8 @@ async fn complete_connect(
     // Exchange + account lookup off the async runtime (blocking ureq).
     let cfg_owned = cfg.clone();
     let (tokens, account_id) = tokio::task::spawn_blocking(move || {
-        let agent = oauth::agent();
-        let tokens = oauth::exchange_code(&agent, &cfg_owned, &code)?;
-        let account_id = oauth::fetch_account_id(&agent, &tokens.access_token)?;
+        let tokens = oauth::exchange_code(&cfg_owned, &code)?;
+        let account_id = oauth::fetch_account_id(&tokens.access_token)?;
         anyhow::Ok((tokens, account_id))
     })
     .await??;
