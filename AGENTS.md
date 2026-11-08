@@ -176,10 +176,11 @@ Rules on top of idiomatic Rust (see the `rust-best-practices` skill). These come
 
 Horae reproduces Harvest's behaviour and workflows, not Harvest itself. [`specs/harvest-parity.md`](specs/harvest-parity.md) tracks coverage and evidence.
 
-- Rebuild what a screen does from its observable behaviour and the public docs. Never copy Harvest's source, JS bundles, private endpoints, assets, logos, copy text or branding. Matching what a button does is parity; matching its sentence is copying. Short standard labels (Archive, Duplicate, Timesheet, Approvals) are generic, so reusing them is not copying.
+- Rebuild what a screen does from its observable behaviour and the public docs. Never copy Harvest's source, JS bundles, private endpoints, assets, logos, copy text or branding (the one exception, a logo that identifies an integration, is below). Matching what a button does is parity; matching its sentence is copying. Short standard labels (Archive, Duplicate, Timesheet, Approvals) are generic, so reusing them is not copying.
 - Work from the public help center and the public API docs, plus read-only browsing in a session the user has already signed in to (open a new tab; never reuse or alter the user's tabs). Never sign in on the user's behalf.
 - Never create, edit or delete data in the production Harvest account. Disposable fixtures are allowed only in the test (evidence) account the user designates, with the user's authorization for the task recorded in `specs/harvest-parity.md`. Never touch pre-existing business records, delivery, payments or account settings. Track fixtures by exact ID and clean them up, or record that they are deliberately retained.
 - Naming Harvest where Horae interoperates with it (the importer, the `/harvest/v2` compatibility API) is fine. Outside those places, the product's look, name and wording stay Horae's (`DESIGN.md`).
+- An external service's own logo may be shown only to identify Horae's integration with that service (for example, the Harvest importer). Serve it as a local asset, never alter it, and never use it as Horae's branding. Copying anything else stays forbidden.
 
 ## Repository Hygiene
 
