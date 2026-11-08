@@ -16,6 +16,10 @@ pub(super) fn ConnectionCard(
     /// The latest run found that Harvest no longer accepts the connection.
     #[props(default)]
     refused: bool,
+    /// A run on this page is queued or running. `active_imports` is read
+    /// only with the connection, so it misses a run started since.
+    #[props(default)]
+    importing: bool,
     on_changed: EventHandler<()>,
 ) -> Element {
     let navigator = use_navigator();
@@ -23,7 +27,12 @@ pub(super) fn ConnectionCard(
     let mut confirm_disconnect = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let change = use_signal(|| None::<ConnectionStatus>);
-    let loaded = connection.ready().cloned();
+    let loaded = connection.ready().cloned().map(|mut status| {
+        if importing {
+            status.active_imports = status.active_imports.max(1);
+        }
+        status
+    });
     let account = loaded.as_ref().and_then(|s| s.account_id.clone());
     let connected = loaded.as_ref().is_some_and(|s| s.connected);
     let refused = refused && connected;

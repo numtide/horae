@@ -95,6 +95,10 @@ pub fn HarvestOverview() -> Element {
             .find(|job| job.source == Some(SourceKind::HarvestApi))
             .cloned()
     });
+    // Followed live, unlike `active_imports`, which is read with the connection.
+    let importing = jobs
+        .as_ref()
+        .is_some_and(|jobs| jobs.iter().any(JobStatus::is_active));
     let refused = latest_api.as_ref().is_some_and(|job| {
         job.status == "failed" && job.error_kind == Some(JobErrorKind::ReconnectRequired)
     });
@@ -107,7 +111,7 @@ pub fn HarvestOverview() -> Element {
     rsx! {
         div { class: "himp-page min-w-0",
             BackLinks {}
-            ConnectionCard { connection: conn.clone(), refused, on_changed: changed }
+            ConnectionCard { connection: conn.clone(), refused, importing, on_changed: changed }
             section { class: "card flex flex-col gap-6", aria_label: "Import from Harvest",
                 ol { class: "himp-steps", aria_label: "Import steps",
                     li { class: "himp-step", "data-state": first,

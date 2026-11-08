@@ -1375,6 +1375,34 @@ fn account_change_explains_every_blocker() {
     }
 }
 
+#[tokio::test]
+async fn disconnect_waits_for_a_run_started_from_the_page() {
+    let probe = Probe::default();
+    // Read once at load, before any run: no active imports yet.
+    *probe.connection.borrow_mut() = ConnectionStatus {
+        configured: true,
+        connected: true,
+        account_id: Some("A".into()),
+        ..ConnectionStatus::default()
+    };
+    let mut ui = Ui::at(&probe, "/admin/importers/harvest");
+    assert!(!ui.html().contains("before disconnecting"), "{}", ui.html());
+    ui.click("preview-api");
+    let html = ui.html();
+    assert!(
+        html.contains("data-testid=\"disconnect-harvest\" aria-disabled=true>"),
+        "{html}"
+    );
+    assert!(html.contains("before disconnecting"), "{html}");
+    ui.click("disconnect-harvest");
+    assert!(
+        !ui.html()
+            .contains("Clients, projects and time already imported stay"),
+        "{}",
+        ui.html()
+    );
+}
+
 #[test]
 fn disconnect_waits_for_queued_and_running_imports() {
     for active in [0, 1] {
@@ -1584,6 +1612,8 @@ mod server_fns {
         submitted.push((mode, scope, generation));
         let mut snapshot = job(10 + submitted.len() as u128, "queued");
         snapshot.kind = "harvest_api_import".into();
+        // As on the server, the new run is the newest in the history.
+        probe.history.borrow_mut().insert(0, snapshot.clone());
         Ok(snapshot)
     }
 
