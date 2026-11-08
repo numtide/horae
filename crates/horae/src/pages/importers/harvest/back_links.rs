@@ -1,16 +1,21 @@
 use dioxus::prelude::*;
 
-use super::runs_cursor::RunsCursor;
 use crate::route::Route;
 
-/// The way back from a run: the Harvest overview and the full history.
+/// Importers / Harvest / `here`. Without `here`, Harvest is the current page.
 #[component]
-pub(super) fn BackLinks() -> Element {
+pub(super) fn BackLinks(#[props(default)] here: Option<String>) -> Element {
     rsx! {
-        div { class: "flex items-center gap-3 flex-wrap mb-6",
-            Link { to: Route::HarvestOverview {}, class: "imp-back text-primary text-sm", "data-testid": "back-to-harvest", "← Harvest" }
-            span { class: "text-faint text-sm", "·" }
-            Link { to: Route::HarvestRuns { before: RunsCursor::default() }, class: "imp-back text-secondary text-sm", "data-testid": "all-runs", "All runs" }
+        nav { aria_label: "Breadcrumb", class: "text-sm text-secondary mb-4",
+            Link { to: Route::ImporterIndex {}, "data-testid": "all-importers", "Importers" }
+            span { aria_hidden: "true", class: "px-2", "/" }
+            if let Some(here) = here {
+                Link { to: Route::HarvestOverview {}, "data-testid": "back-to-harvest", "Harvest" }
+                span { aria_hidden: "true", class: "px-2", "/" }
+                span { aria_current: "page", "{here}" }
+            } else {
+                span { aria_current: "page", "Harvest" }
+            }
         }
     }
 }

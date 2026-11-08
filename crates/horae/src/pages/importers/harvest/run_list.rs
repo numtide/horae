@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use uuid::Uuid;
 
-use super::presentation;
+use super::history_table::HistoryTable;
 use super::runs_cursor::RunsCursor;
 use crate::route::Route;
 use crate::server_fns;
@@ -30,18 +30,8 @@ pub(super) fn RunList(before: Option<Uuid>, limit: i64, #[props(default)] paged:
                 else { "No older runs." }
             } },
             Some(Ok(jobs)) => rsx! {
-                ul { class: "flex flex-col gap-3 mt-4", aria_busy: loading.to_string(),
-                    for job in jobs {
-                        li { key: "{job.id}", class: "flex items-center gap-3 flex-wrap",
-                            Link { to: Route::HarvestRun { id: job.id }, class: "btn btn-ghost btn-sm flex-wrap text-left himp-history",
-                                "data-testid": "run-{job.id}",
-                                span { "{presentation::source_label(&job.kind)}" }
-                                span { class: "badge badge-neutral badge-sm", "{presentation::mode_label(job.mode)}" }
-                                time { datetime: job.created_at.to_rfc3339(), class: "text-xs text-faint", {job.created_at.format("%d %b %Y, %H:%M UTC").to_string()} }
-                                span { class: "badge badge-neutral badge-sm", "{presentation::state_label(&job.status)}" }
-                            }
-                        }
-                    }
+                div { class: "mt-4", aria_busy: loading.to_string(),
+                    HistoryTable { jobs: jobs.clone() }
                 }
                 if paged && jobs.len() as i64 == limit && let Some(last) = jobs.last() {
                     Link { to: Route::HarvestRuns { before: RunsCursor(Some(last.id)) }, class: "btn btn-ghost btn-sm mt-4", "data-testid": "older-history", "Older runs" }

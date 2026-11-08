@@ -16,8 +16,12 @@ mod client_settings;
 mod connection_card;
 #[path = "harvest/csv.rs"]
 mod csv;
+#[path = "harvest/entity_table.rs"]
+mod entity_table;
 #[path = "harvest/error_groups.rs"]
 mod error_groups;
+#[path = "harvest/history_table.rs"]
+mod history_table;
 #[path = "harvest/missing_people.rs"]
 mod missing_people;
 #[path = "harvest/missing_person_row.rs"]
@@ -28,24 +32,18 @@ mod oauth;
 mod overview;
 #[path = "harvest/presentation.rs"]
 mod presentation;
-#[path = "harvest/report_summary.rs"]
-mod report_summary;
 #[path = "harvest/run.rs"]
 mod run;
-#[path = "harvest/run_header.rs"]
-mod run_header;
 #[path = "harvest/run_list.rs"]
 mod run_list;
+#[path = "harvest/run_panel.rs"]
+mod run_panel;
 #[path = "harvest/run_view.rs"]
 mod run_view;
 #[path = "harvest/runs.rs"]
 mod runs;
 #[path = "harvest/runs_cursor.rs"]
 mod runs_cursor;
-#[path = "harvest/stat_cell.rs"]
-mod stat_cell;
-#[path = "harvest/stat_tile.rs"]
-mod stat_tile;
 
 pub use csv::HarvestCsv;
 pub use oauth::HarvestOAuth;
@@ -85,6 +83,16 @@ impl Conn {
         }
     }
 
+    /// The badge class that goes with [`Self::label`].
+    pub(super) fn tone(&self) -> &'static str {
+        match self {
+            Self::Ready(s) if s.connected && s.token_expired => "badge-warning",
+            Self::Ready(s) if s.connected => "badge-success",
+            Self::Err(_) => "badge-danger",
+            _ => "badge-neutral",
+        }
+    }
+
     fn ready(&self) -> Option<&ConnectionStatus> {
         match self {
             Self::Ready(s) => Some(s),
@@ -116,5 +124,16 @@ async fn pause() {
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 }
 
+/// Hand the browser to Harvest to authorize (or re-authorize) Horae.
+async fn go_to_harvest() -> Result<(), ServerFnError> {
+    let url = server_fns::harvest_connect_start().await?;
+    let js = format!(
+        "window.location.href = {};",
+        serde_json::to_string(&url).unwrap_or_default()
+    );
+    let _ = document::eval(&js).await;
+    Ok(())
+}
+
 /// Shared subtitle of the source pages.
-const IMPORT_SUB: &str = "Bring your clients, projects, tasks, people and time entries across. Preview first; commit only after reviewing the results.";
+const IMPORT_SUB: &str = "Bring your clients, projects, tasks, people and time entries across. Preview first; import only after reviewing the results.";

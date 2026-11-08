@@ -24,6 +24,8 @@ use uuid::Uuid;
 
 #[path = "../src/pages/importers.rs"]
 mod importers;
+#[path = "../src/components/menu.rs"]
+pub mod menu;
 #[path = "../src/components/modal.rs"]
 pub mod modal;
 
@@ -55,7 +57,7 @@ mod models {
 }
 
 mod components {
-    pub use crate::modal;
+    pub use crate::{menu, modal};
 }
 
 /// The importer routes, as the app declares them.
@@ -67,8 +69,22 @@ mod route {
     use dioxus::prelude::*;
     use uuid::Uuid;
 
+    #[component]
+    fn ProjectList() -> Element {
+        rsx! { "projects" }
+    }
+
+    #[component]
+    fn AdminUsers() -> Element {
+        rsx! { "team" }
+    }
+
     #[derive(Routable, Clone, PartialEq)]
     pub enum Route {
+        #[route("/projects")]
+        ProjectList {},
+        #[route("/admin/users")]
+        AdminUsers {},
         #[route("/admin/importers")]
         ImporterIndex {},
         #[route("/admin/importers/harvest")]
@@ -374,6 +390,31 @@ fn the_index_lists_only_real_sources() {
     }
 }
 
+#[test]
+fn the_index_badge_has_the_harvest_pages_tone() {
+    for (connected, expired, tone) in [
+        (true, false, "badge-success"),
+        (true, true, "badge-warning"),
+        (false, false, "badge-neutral"),
+    ] {
+        let probe = Probe::default();
+        *probe.connection.borrow_mut() = ConnectionStatus {
+            configured: true,
+            connected,
+            token_expired: expired,
+            account_id: Some("A".into()),
+            ..ConnectionStatus::default()
+        };
+        let html = Ui::start(&probe).html();
+        assert!(
+            html.contains(&format!(
+                "class=\"badge {tone} badge-sm\" data-testid=\"index-connection-status\""
+            )),
+            "{html}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn a_run_page_follows_its_job_from_the_url() {
     for state in ["queued", "running"] {
@@ -382,19 +423,17 @@ async fn a_run_page_follows_its_job_from_the_url() {
         snapshot.last_error = Some("Temporary source failure".into());
         let ui = open_run(&probe, snapshot);
         let html = ui.html();
+        assert!(html.contains("12 of 30"), "{html}");
+        assert!(html.contains("Checking time entries"), "{html}");
         assert!(
-            html.contains("12 processed") && html.contains(" of 30"),
+            html.contains("The last attempt failed. Horae will try again"),
             "{html}"
         );
         assert!(
-            html.contains("Last attempt: Temporary source failure"),
+            html.contains("You can leave this page; the preview keeps running"),
             "{html}"
         );
-        assert!(
-            html.contains("Leaving this page does not stop the import"),
-            "{html}"
-        );
-        assert!(html.contains("Dry run"), "{html}");
+        assert!(html.contains("Nothing in Horae changes"), "{html}");
         assert_eq!(&*probe.requests.borrow(), &[Uuid::from_u128(1)]);
     }
 }
@@ -406,10 +445,69 @@ async fn progress_uses_observed_counts_and_readable_phase_without_an_eta() {
     snapshot.total_count = None;
     let ui = open_run(&probe, snapshot);
     let html = ui.html();
-    assert!(html.contains("Time entries"), "{html}");
-    assert!(html.contains("12 processed"), "{html}");
+    assert!(html.contains("Checking time entries"), "{html}");
+    assert!(html.contains("data-testid=\"run-count\">12<"), "{html}");
     assert!(!html.contains(" of 30"));
     assert!(!html.contains("time_entries"));
+}
+
+#[tokio::test]
+async fn an_import_writes_to_horae_and_says_what_cancel_keeps() {
+    let probe = Probe::default();
+    let mut snapshot = job(1, "running");
+    snapshot.mode = Some(ImportMode::Commit);
+    snapshot.phase = Some("catalog".into());
+    snapshot.processed_count = 180;
+    snapshot.total_count = Some(229);
+    let ui = open_run(&probe, snapshot);
+    let html = ui.html();
+    assert!(html.contains("Writing to Horae"), "{html}");
+    assert!(
+        html.contains("Writing clients, projects, tasks and people"),
+        "{html}"
+    );
+    assert!(html.contains("180 of 229"), "{html}");
+    assert!(html.contains("max=\"229\""), "{html}");
+    assert!(html.contains("what is already written stays"), "{html}");
+    assert!(html.contains("Cancel import"), "{html}");
+}
+
+#[tokio::test]
+async fn a_stopped_run_says_what_to_do_for_each_error_kind() {
+    for (kind, message, action) in [
+        (
+            models::JobErrorKind::ReconnectRequired,
+            "no longer accepts Horae",
+            "Reconnect Harvest",
+        ),
+        (
+            models::JobErrorKind::Forbidden,
+            "Ask a Harvest administrator",
+            "Reconnect as another user",
+        ),
+        (
+            models::JobErrorKind::Unavailable,
+            "respond after several tries",
+            "Continue preview",
+        ),
+    ] {
+        let probe = Probe::default();
+        probe.connection.borrow_mut().account_id = Some("1000001".into());
+        let mut snapshot = job(1, "failed");
+        snapshot.kind = "harvest_api_import".into();
+        snapshot.source = Some(SourceKind::HarvestApi);
+        snapshot.error_kind = Some(kind);
+        snapshot.last_error = Some("raw provider text".into());
+        let ui = open_run(&probe, snapshot);
+        let html = ui.html();
+        assert!(html.contains(message), "{html}");
+        assert!(html.contains(action), "{html}");
+        assert!(html.contains("Nothing in Horae changed"), "{html}");
+        assert!(!html.contains("raw provider text"), "{html}");
+        if kind == models::JobErrorKind::Forbidden {
+            assert!(html.contains("Harvest account 1000001"), "{html}");
+        }
+    }
 }
 
 #[tokio::test]
@@ -428,7 +526,11 @@ async fn a_failed_status_read_can_be_checked_again() {
     ui.click("resume-monitoring");
     response.send(Ok(Some(job(1, "cancelled")))).unwrap();
     ui.settle();
-    assert!(ui.html().contains("Import cancelled"), "{}", ui.html());
+    assert!(
+        ui.html().contains("Nothing in Horae changed"),
+        "{}",
+        ui.html()
+    );
     assert!(!ui.html().contains("Network unavailable"));
     assert_eq!(
         &*probe.requests.borrow(),
@@ -455,7 +557,7 @@ async fn a_finished_preview_commits_once_and_opens_the_commit_run() {
         ImportReport::new(SourceKind::Csv, ImportMode::DryRun),
     );
     let mut ui = open_run(&probe, preview);
-    assert!(ui.html().contains("Preview complete"), "{}", ui.html());
+    assert!(ui.html().contains("records are ready"), "{}", ui.html());
     let action = probe.action();
     ui.click("commit-preview");
     ui.click("commit-preview");
@@ -464,13 +566,14 @@ async fn a_finished_preview_commits_once_and_opens_the_commit_run() {
     let next = probe.request();
     let mut commit = job(2, "queued");
     commit.mode = Some(ImportMode::Commit);
+    commit.phase = None;
     action.send(Ok(commit.clone())).unwrap();
     ui.settle();
     next.send(Ok(Some(commit))).unwrap();
     ui.settle();
     let html = ui.html();
     assert!(html.contains("Waiting to start"), "{html}");
-    assert!(!html.contains("Preview complete"), "{html}");
+    assert!(!html.contains("records are ready"), "{html}");
     assert_eq!(
         &*probe.requests.borrow(),
         &[Uuid::from_u128(1), Uuid::from_u128(2)]
@@ -501,7 +604,7 @@ async fn a_refused_commit_is_explained() {
     reread.send(Ok(Some(replaced))).unwrap();
     ui.settle();
     let html = ui.html();
-    assert!(html.contains("Could not commit this preview"), "{html}");
+    assert!(html.contains("Could not import this preview"), "{html}");
     assert!(
         html.contains("A newer import from this source replaced this preview"),
         "{html}"
@@ -522,12 +625,12 @@ async fn a_committed_preview_links_to_its_commit() {
     preview.committed_as = Some(Uuid::from_u128(2));
     let ui = open_run(&probe, preview);
     let html = ui.html();
-    assert!(html.contains("This dry run was committed"), "{html}");
+    assert!(html.contains("This preview was imported"), "{html}");
     assert!(
         html.contains(&format!("href=\"{}\"", run_path(2))),
         "{html}"
     );
-    assert!(!html.contains("Commit this dry run"), "{html}");
+    assert!(!html.contains("Import into Horae"), "{html}");
     assert!(!html.contains("newer import"), "{html}");
 }
 
@@ -558,7 +661,7 @@ async fn a_preview_that_cannot_be_committed_says_why() {
         let ui = open_run(&probe, preview);
         let html = ui.html();
         assert!(html.contains(reason), "{html}");
-        assert!(!html.contains("Commit this dry run"), "{html}");
+        assert!(!html.contains("Import into Horae"), "{html}");
     }
 }
 
@@ -581,14 +684,16 @@ async fn retry_errors_are_visible_and_success_follows_the_run_again() {
     ui.settle();
     reread.send(Ok(Some(job(1, "failed")))).unwrap();
     ui.settle();
-    assert!(ui.html().contains("Could not retry import"));
+    assert!(ui.html().contains("Could not continue the preview"));
     let action = probe.action();
     let response = probe.request();
     ui.click("retry-run");
     action.send(Ok(job(1, "queued"))).unwrap();
     ui.settle();
-    assert!(ui.html().contains("Waiting to start"), "{}", ui.html());
-    assert!(!ui.html().contains("Could not retry import"));
+    response.send(Ok(Some(job(1, "queued")))).unwrap();
+    ui.settle();
+    assert!(!ui.html().contains("Could not continue the preview"));
+    let response = probe.request();
     response.send(Ok(Some(job(1, "running")))).unwrap();
     ui.settle();
     assert_eq!(
@@ -611,7 +716,7 @@ async fn cancellation_errors_are_visible_and_acceptance_does_not_acknowledge_com
     ui.settle();
     reread.send(Ok(Some(job(1, "running")))).unwrap();
     ui.settle();
-    assert!(ui.html().contains("Could not cancel import"));
+    assert!(ui.html().contains("Could not cancel the preview"));
     let action = probe.action();
     ui.click("cancel-import");
     let mut accepted = job(1, "running");
@@ -621,8 +726,9 @@ async fn cancellation_errors_are_visible_and_acceptance_does_not_acknowledge_com
     ui.settle();
     reread.send(Ok(Some(accepted))).unwrap();
     ui.settle();
-    assert!(ui.html().contains("Cancellation requested"));
-    assert!(!ui.html().contains("Import cancelled"));
+    assert!(ui.html().contains("Stopping after the current batch"));
+    assert!(ui.html().contains("Cancelling…"));
+    assert!(!ui.html().contains("Nothing in Horae changed"));
     assert_eq!(probe.cancellations.borrow().len(), 2);
 }
 
@@ -653,8 +759,8 @@ async fn blocked_retry_keeps_partial_reports_and_explains_the_missing_prerequisi
         let html = ui.html();
         assert!(html.contains(reason), "{html}");
         assert!(!html.contains("data-testid=\"retry-run\""), "{html}");
-        assert!(html.contains("Partial report"), "{html}");
-        assert!(!html.contains("Import complete"), "{html}");
+        assert!(html.contains("What it covered before it stopped"), "{html}");
+        assert!(!html.contains("Go to projects"), "{html}");
         assert!(probe.retries.borrow().is_empty());
     }
 }
@@ -674,19 +780,22 @@ async fn failed_and_cancelled_runs_show_partial_outcomes_without_success_actions
             snapshot.last_error = (state == "failed").then(|| "Source connection lost".to_string());
             let ui = open_run(&probe, snapshot);
             let html = ui.html();
-            assert!(html.contains("Partial report"), "{html}");
+            assert!(html.contains("What it covered before it stopped"), "{html}");
             assert!(html.contains("499"), "{html}");
             assert!(
                 html.contains(if state == "failed" {
                     "Source connection lost"
                 } else {
-                    "Import cancelled"
+                    "Cancelled"
                 }),
                 "{html}"
             );
-            assert!(!html.contains("Import complete"), "{html}");
-            assert!(!html.contains("Commit this dry run"), "{html}");
-            assert!(!html.contains("Re-sync changes"), "{html}");
+            if mode == ImportMode::Commit {
+                assert!(html.contains("499 records were written and stay"), "{html}");
+            }
+            assert!(!html.contains("Go to projects"), "{html}");
+            assert!(!html.contains("Import into Horae"), "{html}");
+            assert!(!html.contains("Sync changes"), "{html}");
         }
     }
 }
@@ -702,14 +811,32 @@ async fn result_copy_distinguishes_preview_zero_skipped_and_mixed_outcomes() {
             report.summary.time_entries.skipped = skipped;
             let ui = open_run(&probe, finished(1, mode, report));
             let html = ui.html();
+            let ready = created + updated;
             assert!(
                 html.contains(&format!(
-                    "{created} created · {updated} updated · {skipped} skipped · {errored} errored"
+                    "{ready} records {}",
+                    if mode == ImportMode::DryRun {
+                        "are ready"
+                    } else {
+                        "are in Horae"
+                    }
                 )),
                 "{html}"
             );
+            // Records already in Horae are neither ready nor skipped.
+            assert_eq!(
+                html.contains("will be skipped"),
+                mode == ImportMode::DryRun && errored > 0,
+                "{html}"
+            );
+            assert_eq!(
+                html.contains("were skipped"),
+                mode == ImportMode::Commit && errored > 0,
+                "{html}"
+            );
+            assert!(html.contains("Already in Horae"), "{html}");
             if mode == ImportMode::DryRun {
-                assert!(html.contains("No business data was written"), "{html}");
+                assert!(html.contains("Nothing imported yet"), "{html}");
             }
         }
     }
@@ -744,8 +871,11 @@ async fn errors_are_grouped_on_the_server_with_a_job_scoped_download() {
         let html = ui.html();
         assert_eq!(&*probe.summaries.borrow(), &[Uuid::from_u128(17)]);
         assert!(html.contains("invalid date"), "{html}");
-        assert!(html.contains("record 1, record 2"), "{html}");
-        assert!(html.contains("4 more errors"), "{html}");
+        assert!(
+            html.contains(">record 1<") && html.contains(">record 2<"),
+            "{html}"
+        );
+        assert!(html.contains("4 more issues"), "{html}");
         assert!(
             html.contains(&format!(
                 "/api/import/harvest/jobs/{}/errors",
@@ -754,9 +884,9 @@ async fn errors_are_grouped_on_the_server_with_a_job_scoped_download() {
             "{html}"
         );
         if state == "succeeded" {
-            assert!(html.contains("Import complete with 2 errors"), "{html}");
+            assert!(html.contains("2 were skipped"), "{html}");
         } else {
-            assert!(html.contains("Partial report"), "{html}");
+            assert!(html.contains("What it covered before it stopped"), "{html}");
         }
     }
 }
@@ -923,7 +1053,7 @@ async fn a_csv_preview_opens_its_run() {
 }
 
 #[tokio::test]
-async fn an_api_preview_is_bound_to_the_current_account_and_opens_its_run() {
+async fn an_api_preview_is_bound_to_the_current_account_and_followed_in_place() {
     let probe = Probe::default();
     *probe.connection.borrow_mut() = ConnectionStatus {
         configured: true,
@@ -934,13 +1064,115 @@ async fn an_api_preview_is_bound_to_the_current_account_and_opens_its_run() {
     };
     let mut ui = Ui::start(&probe);
     ui.click("choose-api");
-    let _pending_status = probe.request();
+    assert!(ui.html().contains("See what Harvest would bring in"));
     ui.click("preview-api");
     assert_eq!(
         &*probe.api_submissions.borrow(),
         &[(ImportMode::DryRun, SyncScope::Full, Some(2))]
     );
-    assert_eq!(&*probe.requests.borrow(), &[Uuid::from_u128(11)]);
+    // The Harvest page reads its runs again instead of leaving for the run.
+    assert!(probe.requests.borrow().is_empty());
+    assert_eq!(probe.history_cursors.borrow().len(), 2);
+}
+
+#[tokio::test]
+async fn a_refused_connection_turns_the_connection_line_red() {
+    let probe = Probe::default();
+    *probe.connection.borrow_mut() = ConnectionStatus {
+        configured: true,
+        connected: true,
+        account_id: Some("A".into()),
+        ..ConnectionStatus::default()
+    };
+    let mut run = job(1, "failed");
+    run.kind = "harvest_api_import".into();
+    run.source = Some(SourceKind::HarvestApi);
+    run.error_kind = Some(models::JobErrorKind::ReconnectRequired);
+    probe.history.borrow_mut().push(run);
+    let ui = Ui::at(&probe, "/admin/importers/harvest");
+    let html = ui.html();
+    assert!(
+        html.contains("badge-danger badge-sm\" data-testid=\"connection-status\">Access refused"),
+        "{html}"
+    );
+    assert!(html.contains("Reconnect Harvest"), "{html}");
+}
+
+#[tokio::test]
+async fn an_incremental_import_reads_as_a_sync() {
+    let probe = Probe::default();
+    let mut report = ImportReport::new(SourceKind::HarvestApi, ImportMode::Commit);
+    report.summary.time_entries.created = 214;
+    report.summary.time_entries.updated = 38;
+    let mut run = finished(1, ImportMode::Commit, report);
+    run.kind = "harvest_api_import".into();
+    run.source = Some(SourceKind::HarvestApi);
+    run.sync = Some(SyncScope::Incremental);
+    let html = open_run(&probe, run).html();
+    assert!(html.contains("Synced"), "{html}");
+    assert!(
+        html.contains("214 new and 38 updated entries from Harvest"),
+        "{html}"
+    );
+}
+
+#[tokio::test]
+async fn the_harvest_page_shows_each_step_from_the_latest_api_run() {
+    let connected = ConnectionStatus {
+        configured: true,
+        connected: true,
+        account_id: Some("A".into()),
+        ..ConnectionStatus::default()
+    };
+    let api = |mut run: models::JobStatus| {
+        run.kind = "harvest_api_import".into();
+        run.source = Some(SourceKind::HarvestApi);
+        run
+    };
+    let mut preview = api(finished(
+        1,
+        ImportMode::DryRun,
+        ImportReport::new(SourceKind::HarvestApi, ImportMode::DryRun),
+    ));
+    preview.report = Some(
+        serde_json::to_value({
+            let mut report = errored_report(ImportMode::DryRun, 7);
+            report.summary.time_entries.created = 21_293;
+            report
+        })
+        .unwrap(),
+    );
+    let mut importing = api(job(2, "running"));
+    importing.mode = Some(ImportMode::Commit);
+    importing.total_count = Some(21_529);
+    let mut imported = api(finished(
+        3,
+        ImportMode::Commit,
+        ImportReport::new(SourceKind::HarvestApi, ImportMode::Commit),
+    ));
+    imported.status = "succeeded".into();
+    for (run, text, steps) in [
+        (preview, "21,293 records are ready", ["done", "current"]),
+        (importing, "Writing to Horae", ["done", "current"]),
+        (imported, "Harvest is imported", ["done", "done"]),
+    ] {
+        let probe = Probe::default();
+        *probe.connection.borrow_mut() = connected.clone();
+        probe.history.borrow_mut().push(run);
+        let ui = Ui::at(&probe, "/admin/importers/harvest");
+        let html = ui.html();
+        assert!(html.contains(text), "{html}");
+        for (n, state) in steps.iter().enumerate() {
+            assert!(
+                html.contains(&format!(
+                    "data-state=\"{state}\"><span class=\"himp-step-dot\">{}",
+                    n + 1
+                )),
+                "step {} {state}: {html}",
+                n + 1
+            );
+        }
+    }
 }
 
 #[tokio::test]
@@ -971,13 +1203,13 @@ async fn history_labels_mode_source_and_date() {
             "harvest_api_import",
             Some(ImportMode::DryRun),
             "Harvest API",
-            "Dry run",
+            "Preview",
         ),
         (
             "harvest_csv_import",
             Some(ImportMode::Commit),
             "CSV file",
-            "Commit",
+            "Import",
         ),
         ("future_import", None, "Unknown source", "Mode unavailable"),
     ] {
@@ -1065,9 +1297,8 @@ fn account_change_confirmation_can_cancel_without_mutation_in_both_binding_state
         let mut ui = Ui::start(&probe);
         ui.click("choose-api");
         if !connected {
-            assert!(ui.html().contains("Reconnect original account"));
+            assert!(ui.html().contains("Reconnect Harvest"));
         }
-        ui.click("manage-connection");
         ui.click("change-account");
         let html = ui.html();
         assert!(
@@ -1099,7 +1330,6 @@ fn account_change_explains_every_blocker() {
         };
         let mut ui = Ui::start(&probe);
         ui.click("choose-api");
-        ui.click("manage-connection");
         let html = ui.html();
         assert!(html.contains(reason), "{html}");
         assert!(html.contains("disabled"));
@@ -1122,7 +1352,6 @@ fn account_change_is_busy_then_reports_recoverable_authorization_failure() {
     probe.change_responses.borrow_mut().push_back(receive);
     let mut ui = Ui::start(&probe);
     ui.click("choose-api");
-    ui.click("manage-connection");
     ui.click("change-account");
     ui.click("confirm-change-account");
     ui.click("confirm-change-account");
@@ -1143,7 +1372,7 @@ fn account_change_is_busy_then_reports_recoverable_authorization_failure() {
         html.contains("Account released. Use Connect Harvest"),
         "{html}"
     );
-    assert!(!html.contains("Reconnect original account"));
+    assert!(!html.contains("Reconnect Harvest"));
 }
 
 #[test]
@@ -1158,7 +1387,6 @@ fn stale_confirmation_keeps_the_dialog_and_shows_the_error() {
     probe.change_responses.borrow_mut().push_back(receive);
     let mut ui = Ui::start(&probe);
     ui.click("choose-api");
-    ui.click("manage-connection");
     ui.click("change-account");
     ui.click("confirm-change-account");
     send.send(Err(ServerFnError::new("Reload the importer")))
@@ -1427,7 +1655,7 @@ fn connection_picker_distinguishes_loading_unavailable_and_unconfigured() {
     send.send(Err(ServerFnError::new("check failed"))).unwrap();
     ui.settle();
     assert!(ui.html().contains("Could not check Harvest connection"));
-    ui.click("refresh-connection");
+    ui.click("recheck-connection");
     assert!(ui.html().contains("Set up the Harvest OAuth app"));
     assert!(!ui.html().contains("Connect Harvest</button>"));
 }
@@ -1451,12 +1679,19 @@ fn connection_management_groups_actions_and_never_promises_automatic_repair() {
         ui.click("choose-api");
         assert!(ui.html().contains(label));
         assert!(ui.html().contains("account-A"));
-        assert!(ui.html().contains("aria-expanded=\"false\""));
-        ui.click("manage-connection");
         let html = ui.html();
-        assert!(html.contains("aria-expanded=\"true\""));
-        assert!(html.contains("aria-controls=\"harvest-connection-management\""));
-        assert!(html.contains("Change account"));
+        // One Connection menu holds every connection action.
+        assert!(
+            html.contains("aria-controls=\"harvest-connection\""),
+            "{html}"
+        );
+        for item in [
+            "Check connection",
+            "OAuth app credentials",
+            "Change account",
+        ] {
+            assert!(html.contains(item), "{item}: {html}");
+        }
         assert_eq!(
             html.contains("data-testid=\"disconnect-harvest\""),
             connected
@@ -1479,11 +1714,17 @@ fn connection_actions_prevent_duplicate_submissions_and_keep_errors_local() {
         let mut ui = Ui::start(&probe);
         ui.click("choose-api");
         if connected {
-            ui.click("manage-connection");
             let (send, receive) = oneshot::channel();
             *probe.disconnect_response.borrow_mut() = Some(receive);
             ui.click("disconnect-harvest");
-            ui.click("disconnect-harvest");
+            // Disconnect asks first and states what stays.
+            assert!(
+                ui.html()
+                    .contains("Clients, projects and time already imported stay")
+            );
+            assert_eq!(*probe.disconnects.borrow(), 0);
+            ui.click("confirm-disconnect");
+            ui.click("confirm-disconnect");
             assert_eq!(*probe.disconnects.borrow(), 1);
             send.send(Err(ServerFnError::new("disconnect unavailable")))
                 .unwrap();
@@ -1519,7 +1760,10 @@ fn configured_unbound_connection_explains_read_only_access() {
     ui.click("choose-api");
     assert!(ui.html().contains("Not connected"));
     assert!(ui.html().contains("Connect Harvest"));
-    assert!(ui.html().contains("Read-only"));
+    assert!(
+        ui.html()
+            .contains("read-only, Horae never writes to Harvest")
+    );
     assert!(!ui.html().contains("data-testid=\"change-account\""));
 }
 
@@ -1540,7 +1784,7 @@ fn pending_connect_is_single_submission_and_failure_keeps_a_recovery_action() {
     ui.settle();
     assert!(ui.html().contains("Could not start Harvest connection"));
     assert!(ui.html().contains("Connect Harvest"));
-    assert!(ui.html().contains("<summary>Details</summary>"));
+    assert!(ui.html().contains("authorization unavailable"));
 }
 
 fn key_only() -> ClientSettings {

@@ -1,61 +1,124 @@
 use dioxus::prelude::*;
+use horae_core::importers::harvest::types::ReportPerson;
 use uuid::Uuid;
 
 use super::{entity_label, presentation};
 use crate::models::ErrorGroup;
 
-/// The run's errors, one row per problem with how often it happened and where.
+/// "Needs your attention": each problem once, with how often it happened and
+/// the rows behind it, plus the people the run adds to Horae.
 #[component]
-pub(super) fn ErrorGroups(job_id: Uuid, groups: Vec<ErrorGroup>, omitted: u64) -> Element {
-    if groups.is_empty() {
+pub(super) fn ErrorGroups(
+    job_id: Uuid,
+    groups: Vec<ErrorGroup>,
+    omitted: u64,
+    /// People new to Horae; listed so their emails can be checked.
+    new_people: Vec<ReportPerson>,
+) -> Element {
+    if groups.is_empty() && new_people.is_empty() {
         return rsx! {};
     }
     rsx! {
-        section { class: "card p-0 overflow-hidden mt-4", aria_label: "Record errors",
-            div { class: "flex items-center gap-3 p-4 bg-secondary",
-                h2 { class: "text-sm font-semibold", "Record errors" }
-                span { class: "badge badge-danger badge-sm", "{groups.len()} problems" }
-            }
-            div { class: "overflow-x-auto border-t",
-                table { class: "table",
-                    thead {
-                        tr {
-                            th { class: "whitespace-nowrap", "Entity" }
-                            th { class: "whitespace-nowrap", "Problem" }
-                            th { class: "whitespace-nowrap", "Count" }
-                            th { class: "whitespace-nowrap", "Examples" }
-                        }
+        section { class: "flex flex-col gap-3 mt-6", aria_labelledby: "attention-title",
+            div { class: "flex items-center justify-between gap-3 flex-wrap",
+                h2 { id: "attention-title", class: "himp-title", "Needs your attention" }
+                if !groups.is_empty() {
+                    a { class: "text-sm", href: format!("/api/import/harvest/jobs/{job_id}/errors"),
+                        "Download every issue (NDJSON)"
                     }
-                    tbody {
-                        for group in groups.iter() {
-                            tr {
-                                td { class: "whitespace-nowrap", "{entity_label(group.entity)}" }
-                                td {
-                                    if let Some(kind) = group.kind {
-                                        div { "{presentation::person_kind_label(kind)}" }
-                                        div { class: "text-xs text-faint", "{group.reason}" }
-                                    } else {
-                                        "{group.reason}"
+                }
+            }
+            div { class: "card p-0 overflow-hidden",
+                for (index, group) in groups.iter().enumerate() {
+                    details { key: "{index}", class: "himp-group", open: index == 0,
+                        summary {
+                            span { class: "himp-group-count text-warning", "{presentation::count(group.count)}" }
+                            span { class: "flex-1 flex flex-col gap-1",
+                                strong { "{heading(group)}" }
+                                span { class: "text-sm text-secondary", "{advice(group)}" }
+                            }
+                        }
+                        div { class: "overflow-x-auto px-5 pb-4",
+                            table { class: "table",
+                                thead {
+                                    tr {
+                                        th { scope: "col", "Record" }
+                                        th { scope: "col", "Detail" }
                                     }
                                 }
-                                td { class: "text-mono whitespace-nowrap", "{group.count}" }
-                                td { class: "text-mono text-xs",
-                                    {group.samples.iter().map(|sample| sample.location.as_str()).collect::<Vec<_>>().join(", ")}
+                                tbody {
+                                    for sample in group.samples.iter() {
+                                        tr {
+                                            td { class: "text-mono whitespace-nowrap", "{sample.location}" }
+                                            td { class: "text-sm", "{sample.reason}" }
+                                        }
+                                    }
+                                }
+                            }
+                            if group.count > group.samples.len() as u64 {
+                                p { class: "text-sm text-faint mt-2",
+                                    "{presentation::count(group.count - group.samples.len() as u64)} more are in the download."
                                 }
                             }
                         }
                     }
                 }
-            }
-            if omitted > 0 {
-                div { class: "p-4 border-t text-faint text-sm", "{omitted} more errors are in less frequent problems." }
-            }
-            div { class: "p-4 border-t",
-                a { class: "btn btn-secondary btn-sm",
-                    href: format!("/api/import/harvest/jobs/{job_id}/errors"),
-                    "Download all errors (NDJSON)"
+                if !new_people.is_empty() {
+                    details { class: "himp-group",
+                        summary {
+                            span { class: "himp-group-count text-secondary", "{presentation::count(new_people.len() as u64)}" }
+                            span { class: "flex-1 flex flex-col gap-1",
+                                strong { "People new to Horae, added as deactivated members" }
+                                span { class: "text-sm text-secondary",
+                                    "Their time comes across under their name. They can't sign in until you activate them on Team. Not an error; listed so you can check the emails."
+                                }
+                            }
+                        }
+                        div { class: "overflow-x-auto px-5 pb-4",
+                            table { class: "table",
+                                thead {
+                                    tr {
+                                        th { scope: "col", "Name" }
+                                        th { scope: "col", "Email" }
+                                    }
+                                }
+                                tbody {
+                                    for person in new_people.iter() {
+                                        tr {
+                                            td { "{person.name}" }
+                                            td { class: "text-mono text-sm", {person.email.clone().unwrap_or_default()} }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if omitted > 0 {
+                    p { class: "p-4 border-t text-faint text-sm",
+                        "{presentation::count(omitted)} more issues are in less frequent problems."
+                    }
                 }
             }
         }
+    }
+}
+
+fn heading(group: &ErrorGroup) -> String {
+    if let Some(kind) = group.entry_kind {
+        return presentation::entry_kind_text(kind).0.to_owned();
+    }
+    let what = entity_label(group.entity);
+    match group.kind {
+        Some(kind) => format!("{what}: {}", presentation::person_kind_label(kind)),
+        None => format!("{what}: {}", group.reason),
+    }
+}
+
+fn advice(group: &ErrorGroup) -> &'static str {
+    match (group.entry_kind, group.kind) {
+        (Some(kind), _) => presentation::entry_kind_text(kind).1,
+        (None, Some(kind)) => presentation::person_fix(kind),
+        (None, None) => "Not imported. Fix the record in Harvest, then preview again.",
     }
 }

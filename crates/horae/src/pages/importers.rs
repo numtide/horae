@@ -29,7 +29,7 @@ pub fn ImporterIndex() -> Element {
                     div { class: "flex-1 min-w-0",
                         div { class: "flex items-center gap-2 flex-wrap",
                             span { class: "text-sm font-semibold", "Harvest" }
-                            span { class: "badge badge-neutral badge-sm", "{connection.label()}" }
+                            span { class: "badge {connection.tone()} badge-sm", "data-testid": "index-connection-status", "{connection.label()}" }
                         }
                         div { class: "text-faint text-sm", "Read-only sync via the Harvest API." }
                     }
