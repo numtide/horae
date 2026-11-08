@@ -7,7 +7,8 @@ use super::super::api_source::http::{
 use super::*;
 use crate::jobs;
 
-/// Run one durable API job whose only time entry is `entry` (id 10).
+/// Run one durable API job whose only time entry is `entry` (id 10, on
+/// 2026-01-01 unless `entry` sets `spent_date`).
 async fn sync(
     pool: &PgPool,
     org: Uuid,
@@ -38,7 +39,8 @@ async fn sync(
                 let fields = json!({"id":10,"spent_date":"2026-01-01","project":{"id":2},
                                     "task":{"id":3},"user":{"id":4}});
                 for (key, value) in fields.as_object().unwrap() {
-                    entry[key] = value.clone();
+                    let entry = entry.as_object_mut().unwrap();
+                    entry.entry(key).or_insert_with(|| value.clone());
                 }
                 json!([entry])
             }
@@ -337,4 +339,58 @@ async fn a_horae_edit_from_an_older_transaction_still_counts_as_edited(pool: PgP
         entry(&pool, org).await,
         (120, "open".into(), Some("mine".into()))
     );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn later_harvest_edits_never_touch_a_submitted_period(pool: PgPool) {
+    let org = setup(&pool).await;
+    sync(
+        &pool,
+        org,
+        ImportMode::Commit,
+        json!({"hours":1,"updated_at":day(3)}),
+    )
+    .await;
+    let user = sqlx::query_scalar!("SELECT user_id FROM time_entries WHERE org_id = $1", org)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let date = |d| chrono::NaiveDate::from_ymd_opt(2026, 1, d).unwrap();
+    let moved = json!({"hours":1,"spent_date":"2026-01-14","updated_at":day(5)});
+    for (covered, edit) in [
+        // Changed in place, inside the covered week.
+        ((1, 7), json!({"hours":8,"updated_at":day(5)})),
+        // Moved out of the covered week.
+        ((1, 7), moved.clone()),
+        // Moved into the covered week.
+        ((12, 18), moved),
+    ] {
+        sqlx::query!("DELETE FROM approvals WHERE org_id = $1", org)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query!(
+            "INSERT INTO approvals (id, org_id, user_id, period_start, period_end)
+             VALUES ($1, $2, $3, $4, $5)",
+            Uuid::now_v7(),
+            org,
+            user,
+            date(covered.0) as chrono::NaiveDate,
+            date(covered.1) as chrono::NaiveDate,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        for mode in [ImportMode::DryRun, ImportMode::Commit] {
+            let report = sync(&pool, org, mode, edit.clone()).await;
+            assert_eq!(
+                reasons(&report),
+                [
+                    "entry's date is in a period submitted for approval in Horae; not updated from Harvest"
+                ],
+                "{covered:?} {edit}"
+            );
+            assert_eq!(entry(&pool, org).await, (60, "open".into(), None));
+        }
+    }
 }

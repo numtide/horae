@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id FROM approvals AS a, time_entries AS te\n         WHERE te.id = $1 AND a.org_id = te.org_id\n           AND ((a.user_id = te.user_id AND te.spent_date BETWEEN a.period_start AND a.period_end)\n             OR (a.user_id = $2 AND $3 BETWEEN a.period_start AND a.period_end))\n         ORDER BY a.id FOR SHARE OF a",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b4ca7aba9eb405814cae6ad3ff48f5da2d5d79c96cbbd923be760eda4671b201"
+}

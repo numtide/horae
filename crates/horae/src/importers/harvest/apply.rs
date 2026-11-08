@@ -426,7 +426,32 @@ async fn update_time_entry(
 ) -> Result<(), RowFailure> {
     horae_core::duration::check_daily_total(minutes.into())
         .map_err(|limit| RowFailure::new(limit.to_string()))?;
+    let old_user = sqlx::query_scalar!("SELECT user_id FROM time_entries WHERE id = $1", id)
+        .fetch_one(&mut **sp)
+        .await?;
     crate::db::lock_time_entry_write(sp, user_id).await?;
+    if old_user != user_id {
+        crate::db::lock_time_entry_write(sp, old_user).await?;
+    }
+    // Like a web edit, never write into or out of a submitted or approved
+    // period (reject deletes the approvals row).
+    let covered = sqlx::query_scalar!(
+        "SELECT a.id FROM approvals AS a, time_entries AS te
+         WHERE te.id = $1 AND a.org_id = te.org_id
+           AND ((a.user_id = te.user_id AND te.spent_date BETWEEN a.period_start AND a.period_end)
+             OR (a.user_id = $2 AND $3 BETWEEN a.period_start AND a.period_end))
+         ORDER BY a.id FOR SHARE OF a",
+        id,
+        user_id,
+        row.spent_date as chrono::NaiveDate,
+    )
+    .fetch_all(&mut **sp)
+    .await?;
+    if !covered.is_empty() {
+        return Err(RowFailure::new(
+            "entry's date is in a period submitted for approval in Horae; not updated from Harvest",
+        ));
+    }
     let before = sqlx::query_scalar!(
         r#"SELECT COALESCE(SUM(minutes), 0)::bigint as "total!" FROM time_entries
            WHERE user_id = $1 AND spent_date = $2"#,
