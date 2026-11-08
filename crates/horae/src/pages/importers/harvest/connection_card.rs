@@ -1,8 +1,8 @@
 use dioxus::prelude::*;
 use horae_core::importers::harvest::types::ConnectionStatus;
 
-use super::Conn;
 use super::change_account::ChangeAccount;
+use super::{Conn, HarvestLogo};
 use crate::components::menu::{Menu, MenuDivider};
 use crate::components::modal::Modal;
 use crate::route::Route;
@@ -64,7 +64,7 @@ pub(super) fn ConnectionCard(
     rsx! {
         header { class: "flex items-center justify-between gap-4 flex-wrap mb-6",
             div { class: "flex items-center gap-4 min-w-0",
-                span { class: "integration-logo harvest", aria_hidden: "true", "h" }
+                HarvestLogo { class: "integration-logo" }
                 div { class: "min-w-0",
                     h1 { class: "page-title", "Harvest" }
                     p { class: "text-sm text-secondary flex items-center gap-2 flex-wrap mt-1",

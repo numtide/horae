@@ -124,6 +124,15 @@ async fn pause() {
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 }
 
+/// Harvest's mark beside its name, where Horae imports from it. Decorative:
+/// the name next to it is the text alternative.
+#[component]
+pub(super) fn HarvestLogo(class: &'static str) -> Element {
+    rsx! {
+        img { class, src: asset!("/assets/harvest-logo.svg"), alt: "", width: "40", height: "40" }
+    }
+}
+
 /// Hand the browser to Harvest to authorize (or re-authorize) Horae.
 async fn go_to_harvest() -> Result<(), ServerFnError> {
     let url = server_fns::harvest_connect_start().await?;

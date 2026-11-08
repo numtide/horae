@@ -25,7 +25,7 @@ pub fn ImporterIndex() -> Element {
             }
             div { class: "flex flex-col gap-3",
                 Link { to: Route::HarvestOverview {}, class: "imp-source", "data-testid": "choose-api",
-                    span { class: "imp-source-icon imp-icon-harvest", "h" }
+                    harvest::HarvestLogo { class: "imp-source-icon" }
                     div { class: "flex-1 min-w-0",
                         div { class: "flex items-center gap-2 flex-wrap",
                             span { class: "text-sm font-semibold", "Harvest" }
