@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.horae_id,\n                      m.harvest_updated_at AS \"harvest_updated_at: chrono::DateTime<chrono::Utc>\",\n                      te.id AS \"entry_id?\",\n                      te.state = 'open' AS \"open?\",\n                      te.updated_at > COALESCE(m.horae_updated_at, te.created_at) AS \"edited?\"\n               FROM harvest_import_map AS m\n               LEFT JOIN time_entries AS te ON te.org_id = m.org_id AND te.id = m.horae_id\n               WHERE m.org_id = $1\n                 AND m.harvest_entity_type = 'time_entry'::harvest_entity_type\n                 AND m.harvest_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "horae_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "harvest_updated_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "entry_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "open?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "edited?",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "730b754c01508d521018389ca251f51358052a36a767800d5a67ca0fd6375661"
+}

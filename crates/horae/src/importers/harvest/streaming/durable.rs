@@ -414,6 +414,9 @@ pub(super) async fn apply(
                 if let Some(preview) = &checkpoint.preview {
                     let lost = preview.restore(&mut simulation, org_id, &page_ids).await?;
                     forget_lost_people(&mut checkpoint.cache, &mut checkpoint.report, lost);
+                    checkpoint
+                        .cache
+                        .set_simulated_entries(preview.versions(&page_ids));
                 }
                 apply_rows(
                     &mut simulation,

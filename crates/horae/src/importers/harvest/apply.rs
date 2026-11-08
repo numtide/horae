@@ -33,6 +33,14 @@ pub async fn apply_row(
     row: &SourceRow,
     source: SourceKind,
 ) -> RowResult {
+    // No provenance is written, so the next sync picks the entry up again.
+    if row.running {
+        return errored(
+            EntityType::TimeEntry,
+            row,
+            RowFailure::new("timer still running in Harvest"),
+        );
+    }
     for (entity, id) in [
         (EntityType::Client, row.harvest_client_id),
         (EntityType::Project, row.harvest_project_id),
@@ -183,7 +191,11 @@ async fn apply_within(
     Ok((outcomes, pending, person))
 }
 
-/// Insert (or skip) the time entry for a row.
+/// Insert, update or skip the time entry for a row.
+///
+/// A mapped entry whose Harvest `updated_at` moved forward is updated while it
+/// is still `open` and unedited in Horae; otherwise the row is an error that
+/// says why, and the Horae entry stays as it is.
 ///
 /// Identity depends on whether the row carries a Harvest id:
 ///
@@ -227,20 +239,72 @@ async fn apply_time_entry(
 
     // Provenance first.
     if let Some(hid) = row.harvest_time_entry_id
-        && let Some(id) =
-            super::provenance::lookup(&mut **sp, org.org_id, EntityType::TimeEntry, hid).await?
-    {
-        // Confirm/refresh the mapping and skip (idempotent, edit-robust).
-        super::provenance::upsert(
-            &mut **sp,
+        && let Some(mapped) = sqlx::query!(
+            r#"SELECT m.horae_id,
+                      m.harvest_updated_at AS "harvest_updated_at: chrono::DateTime<chrono::Utc>",
+                      te.id AS "entry_id?",
+                      te.state = 'open' AS "open?",
+                      te.updated_at > COALESCE(m.horae_updated_at, te.created_at) AS "edited?"
+               FROM harvest_import_map AS m
+               LEFT JOIN time_entries AS te ON te.org_id = m.org_id AND te.id = m.horae_id
+               WHERE m.org_id = $1
+                 AND m.harvest_entity_type = 'time_entry'::harvest_entity_type
+                 AND m.harvest_id = $2"#,
             org.org_id,
-            EntityType::TimeEntry,
             hid,
-            id,
-            row.harvest_updated_at,
+        )
+        .fetch_optional(&mut **sp)
+        .await?
+    {
+        // A durable preview restores the mapping of an entry it simulated on an
+        // earlier page without that entry, which it rolled back.
+        let simulated = cache
+            .simulated_entry(hid)
+            .filter(|_| mapped.harvest_updated_at.is_none());
+        let changed = matches!(
+            (row.harvest_updated_at, mapped.harvest_updated_at.or(simulated)),
+            (Some(new), Some(old)) if new > old
+        );
+        // An unchanged entry, or one deleted in Horae, keeps today's behaviour:
+        // confirm/refresh the mapping and skip.
+        if !changed || mapped.entry_id.is_none() {
+            super::provenance::upsert(
+                &mut **sp,
+                org.org_id,
+                EntityType::TimeEntry,
+                hid,
+                mapped.horae_id,
+                row.harvest_updated_at,
+            )
+            .await?;
+            let outcome = if changed && simulated.is_some() {
+                RowOutcome::Updated
+            } else {
+                RowOutcome::Skipped
+            };
+            return Ok((outcome, None));
+        }
+        if mapped.open != Some(true) {
+            return Err(RowFailure::new(
+                "entry is no longer open in Horae; not updated from Harvest",
+            ));
+        }
+        if mapped.edited != Some(false) {
+            return Err(RowFailure::new(
+                "entry was edited in Horae after import; not updated from Harvest",
+            ));
+        }
+        update_time_entry(
+            sp,
+            mapped.horae_id,
+            (project_id, task_id, user_id),
+            row,
+            minutes,
+            notes,
         )
         .await?;
-        return Ok((RowOutcome::Skipped, None));
+        record_entry(sp, org.org_id, hid, mapped.horae_id, row.harvest_updated_at).await?;
+        return Ok((RowOutcome::Updated, None));
     }
 
     // Natural key: (user, project, task, spent_date, minutes, notes).
@@ -298,15 +362,7 @@ async fn apply_time_entry(
     };
     if let Some(id) = existing {
         if let Some(hid) = row.harvest_time_entry_id {
-            super::provenance::upsert(
-                &mut **sp,
-                org.org_id,
-                EntityType::TimeEntry,
-                hid,
-                id,
-                row.harvest_updated_at,
-            )
-            .await?;
+            record_entry(sp, org.org_id, hid, id, row.harvest_updated_at).await?;
         }
         return Ok((RowOutcome::Skipped, entry_slot));
     }
@@ -350,17 +406,86 @@ async fn apply_time_entry(
     horae_core::duration::check_daily_change(after - i64::from(minutes), after)
         .map_err(|limit| RowFailure::new(limit.to_string()))?;
     if let Some(hid) = row.harvest_time_entry_id {
-        super::provenance::upsert(
-            &mut **sp,
-            org.org_id,
-            EntityType::TimeEntry,
-            hid,
-            id,
-            row.harvest_updated_at,
-        )
-        .await?;
+        record_entry(sp, org.org_id, hid, id, row.harvest_updated_at).await?;
     }
     Ok((RowOutcome::Created, entry_slot))
+}
+
+/// Rewrite an open entry with Harvest's newer version, under the same daily
+/// limit as an insert.
+async fn update_time_entry(
+    sp: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    (project_id, task_id, user_id): (Uuid, Uuid, Uuid),
+    row: &SourceRow,
+    minutes: i32,
+    notes: Option<&str>,
+) -> Result<(), RowFailure> {
+    horae_core::duration::check_daily_total(minutes.into())
+        .map_err(|limit| RowFailure::new(limit.to_string()))?;
+    crate::db::lock_time_entry_write(sp, user_id).await?;
+    let before = sqlx::query_scalar!(
+        r#"SELECT COALESCE(SUM(minutes), 0)::bigint as "total!" FROM time_entries
+           WHERE user_id = $1 AND spent_date = $2"#,
+        user_id,
+        row.spent_date as chrono::NaiveDate,
+    )
+    .fetch_one(&mut **sp)
+    .await?;
+    sqlx::query!(
+        "UPDATE time_entries
+            SET user_id = $2, project_id = $3, task_id = $4, spent_date = $5,
+                minutes = $6, notes = $7, billable = $8
+          WHERE id = $1",
+        id,
+        user_id,
+        project_id,
+        task_id,
+        row.spent_date as chrono::NaiveDate,
+        minutes,
+        notes,
+        row.billable,
+    )
+    .execute(&mut **sp)
+    .await?;
+    let after = sqlx::query_scalar!(
+        r#"SELECT COALESCE(SUM(minutes), 0)::bigint as "total!" FROM time_entries
+           WHERE user_id = $1 AND spent_date = $2"#,
+        user_id,
+        row.spent_date as chrono::NaiveDate,
+    )
+    .fetch_one(&mut **sp)
+    .await?;
+    horae_core::duration::check_daily_change(before, after)
+        .map_err(|limit| RowFailure::new(limit.to_string()))
+}
+
+/// Map a Harvest entry to the Horae entry just written or adopted, remembering
+/// that entry's `updated_at` so a later edit made in Horae can be told apart.
+async fn record_entry(
+    sp: &mut Transaction<'_, Postgres>,
+    org_id: Uuid,
+    harvest_id: i64,
+    horae_id: Uuid,
+    harvest_updated_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> sqlx::Result<()> {
+    sqlx::query!(
+        r#"INSERT INTO harvest_import_map
+             (org_id, harvest_entity_type, harvest_id, horae_id, harvest_updated_at, horae_updated_at)
+           SELECT $1, 'time_entry'::harvest_entity_type, $2, te.id, $4, te.updated_at
+           FROM time_entries AS te WHERE te.org_id = $1 AND te.id = $3
+           ON CONFLICT (org_id, harvest_entity_type, harvest_id)
+           DO UPDATE SET horae_id = EXCLUDED.horae_id,
+                         harvest_updated_at = EXCLUDED.harvest_updated_at,
+                         horae_updated_at = EXCLUDED.horae_updated_at"#,
+        org_id,
+        harvest_id,
+        horae_id,
+        harvest_updated_at as Option<chrono::DateTime<chrono::Utc>>,
+    )
+    .execute(&mut **sp)
+    .await?;
+    Ok(())
 }
 
 /// The run-cache key for an id-less entry's natural-key slot: the resolved ids

@@ -1,7 +1,8 @@
 //! Simulation identity across API pages, without publishing domain mutations.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgConnection;
 use uuid::Uuid;
@@ -15,6 +16,10 @@ use super::super::super::resolve::{
 pub(super) struct ApiPreview {
     parents: Option<ParentSnapshot>,
     entries: BTreeMap<i64, Uuid>,
+    /// Harvest `updated_at` per previewed entry, so an entry listed again with
+    /// a newer version counts as updated, as the committing run would count it.
+    #[serde(default)]
+    versions: BTreeMap<i64, DateTime<Utc>>,
 }
 
 impl ApiPreview {
@@ -29,20 +34,31 @@ impl ApiPreview {
         // Read after row savepoints finish: failed rows must not acquire a
         // simulated mapping that could turn a later retry into a false skip.
         let mappings = sqlx::query!(
-            "SELECT harvest_id, horae_id FROM harvest_import_map
-             WHERE org_id = $1 AND harvest_entity_type = 'time_entry'
-               AND harvest_id = ANY($2)",
+            r#"SELECT harvest_id, horae_id,
+                      harvest_updated_at AS "harvest_updated_at: DateTime<Utc>"
+               FROM harvest_import_map
+               WHERE org_id = $1 AND harvest_entity_type = 'time_entry'
+                 AND harvest_id = ANY($2)"#,
             org_id,
             page_ids,
         )
         .fetch_all(&mut *conn)
         .await?;
-        self.entries.extend(
-            mappings
-                .into_iter()
-                .map(|row| (row.harvest_id, row.horae_id)),
-        );
+        for row in mappings {
+            self.entries.insert(row.harvest_id, row.horae_id);
+            if let Some(version) = row.harvest_updated_at {
+                self.versions.insert(row.harvest_id, version);
+            }
+        }
         Ok(())
+    }
+
+    /// The versions of this page's entries that earlier pages simulated.
+    pub(super) fn versions(&self, page_ids: &[i64]) -> HashMap<i64, DateTime<Utc>> {
+        page_ids
+            .iter()
+            .filter_map(|id| Some((*id, *self.versions.get(id)?)))
+            .collect()
     }
 
     pub(super) async fn restore(
@@ -99,6 +115,7 @@ mod tests {
         let preview = ApiPreview {
             parents: None,
             entries: (0..10_000).map(|id| (id, Uuid::now_v7())).collect(),
+            versions: BTreeMap::new(),
         };
         let mut tx = pool.begin().await.unwrap();
         preview.restore(&mut tx, org, &[]).await.unwrap();

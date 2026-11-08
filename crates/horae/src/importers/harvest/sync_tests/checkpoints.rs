@@ -955,7 +955,9 @@ async fn durable_api_preview_preserves_adoptions_and_repeated_ids_across_recover
     );
     assert_eq!(report.error_count(), 0);
     assert_eq!(report.summary.time_entries.created, 2);
-    assert_eq!(report.summary.time_entries.skipped, 3);
+    // Entry 11 comes back on the last page with a newer `updated_at`.
+    assert_eq!(report.summary.time_entries.updated, 1);
+    assert_eq!(report.summary.time_entries.skipped, 2);
     let inline = run_api_import_with_http(
         &pool,
         org,

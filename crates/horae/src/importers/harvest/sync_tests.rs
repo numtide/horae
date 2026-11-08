@@ -8,6 +8,7 @@ mod checkpoints;
 mod paging;
 pub(super) mod people;
 mod scale;
+mod updates;
 
 /// Drive a CLI-submitted durable job through the production API adapter using
 /// the existing loopback Harvest fixture, with no production URL override.

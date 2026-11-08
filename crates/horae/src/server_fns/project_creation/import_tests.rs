@@ -328,6 +328,7 @@ async fn imports_preserve_finalized_project_configuration_and_restricted_access(
                             notes: None,
                             billable: true,
                             invoiced: true,
+                            running: false,
                             billable_rate: Some("99".into()),
                             billable_amount: None,
                             cost_rate: Some("999".into()),
