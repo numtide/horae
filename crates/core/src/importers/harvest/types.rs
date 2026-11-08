@@ -330,6 +330,15 @@ impl ConnectionStatus {
             None
         }
     }
+
+    /// Why Disconnect is unavailable, for presentation. The server refuses
+    /// only while a run holds the import session; a queued or retrying run
+    /// would fail later without the credentials, so the page waits for both.
+    pub fn disconnect_blocker(&self) -> Option<&'static str> {
+        (self.active_imports > 0).then_some(
+            "Finish or explicitly cancel queued and running Harvest imports before disconnecting.",
+        )
+    }
 }
 
 #[cfg(test)]
@@ -356,6 +365,24 @@ mod account_switch_tests {
         status.connected = true;
         status.token_expired = true;
         assert!(status.change_account_blocker().is_none());
+    }
+
+    #[test]
+    fn disconnecting_waits_for_queued_and_running_imports() {
+        let mut status = ConnectionStatus {
+            connected: true,
+            account_id: Some("original".into()),
+            has_provenance: true,
+            ..ConnectionStatus::default()
+        };
+        assert_eq!(status.disconnect_blocker(), None);
+        status.active_imports = 1;
+        assert!(
+            status
+                .disconnect_blocker()
+                .unwrap()
+                .contains("disconnecting")
+        );
     }
 }
 

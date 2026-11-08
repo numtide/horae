@@ -100,11 +100,17 @@ pub(super) fn ConnectionCard(
                                 button { r#type: "button", role: "menuitem", tabindex: "-1",
                                     class: if blocker.is_some() { "menu-item disabled" } else { "menu-item" },
                                     "data-testid": "change-account".to_owned(),
-                                    disabled: busy() || blocker.is_some(),
+                                    // aria-disabled, not disabled: menu.js skips disabled
+                                    // items, and the reason would never be read out.
+                                    disabled: busy(),
                                     aria_disabled: blocker.is_some(),
                                     onclick: {
                                         let mut change = change;
-                                        move |_| change.set(Some(status.clone()))
+                                        move |_| {
+                                            if blocker.is_none() {
+                                                change.set(Some(status.clone()));
+                                            }
+                                        }
                                     },
                                     "Change account…"
                                     span { class: "himp-menu-hint",
@@ -115,12 +121,27 @@ pub(super) fn ConnectionCard(
                             }
                         }
                         if connected {
-                            button { r#type: "button", role: "menuitem", tabindex: "-1", class: "menu-item danger",
-                                "data-testid": "disconnect-harvest".to_owned(),
-                                disabled: busy(),
-                                onclick: move |_| { error.set(None); confirm_disconnect.set(true); },
-                                "Disconnect…"
-                                span { class: "himp-menu-hint", "Imported data stays" }
+                            {
+                                let blocker = loaded.as_ref().and_then(ConnectionStatus::disconnect_blocker);
+                                rsx! {
+                                    button { r#type: "button", role: "menuitem", tabindex: "-1",
+                                        class: if blocker.is_some() { "menu-item disabled" } else { "menu-item danger" },
+                                        "data-testid": "disconnect-harvest".to_owned(),
+                                        disabled: busy(),
+                                        aria_disabled: blocker.is_some(),
+                                        onclick: move |_| {
+                                            if blocker.is_none() {
+                                                error.set(None);
+                                                confirm_disconnect.set(true);
+                                            }
+                                        },
+                                        "Disconnect…"
+                                        span { class: "himp-menu-hint",
+                                            if let Some(reason) = blocker { "Unavailable: {reason}" }
+                                            else { "Imported data stays" }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -135,20 +156,22 @@ pub(super) fn ConnectionCard(
         Modal { id: "harvest-disconnect", labelledby: "harvest-disconnect-title", open: confirm_disconnect(), busy: busy(),
             on_dismiss: dismiss,
             h2 { id: "harvest-disconnect-title", "Disconnect Harvest?" }
-            p {
-                "Horae deletes its access to Harvest"
-                if let Some(account) = &account { " account " span { class: "text-mono", "{account}" } }
-                ". Clients, projects and time already imported stay as they are."
-            }
-            p { class: "text-sm text-secondary", "You can reconnect later, but only to this same account." }
-            if let Some(message) = error() { p { role: "alert", class: "text-danger", "{message}" } }
-            div { class: "flex gap-3 flex-wrap justify-end mt-4",
-                button { r#type: "button", class: "btn btn-secondary", "data-testid": "cancel-disconnect".to_owned(),
-                    disabled: busy(), onclick: move |_| confirm_disconnect.set(false), "Cancel"
+            if confirm_disconnect() {
+                p {
+                    "Horae deletes its access to Harvest"
+                    if let Some(account) = &account { " account " span { class: "text-mono", "{account}" } }
+                    ". Clients, projects and time already imported stay as they are."
                 }
-                button { r#type: "button", class: "btn btn-danger", "data-testid": "confirm-disconnect".to_owned(),
-                    disabled: busy(), onclick: disconnect,
-                    if busy() { "Disconnecting…" } else { "Disconnect Harvest" }
+                p { class: "text-sm text-secondary", "You can reconnect later, but only to this same account." }
+                if let Some(message) = error() { p { role: "alert", class: "text-danger", "{message}" } }
+                div { class: "flex gap-3 flex-wrap justify-end mt-4",
+                    button { r#type: "button", class: "btn btn-secondary", "data-testid": "cancel-disconnect".to_owned(),
+                        disabled: busy(), onclick: move |_| confirm_disconnect.set(false), "Cancel"
+                    }
+                    button { r#type: "button", class: "btn btn-danger", "data-testid": "confirm-disconnect".to_owned(),
+                        disabled: busy(), onclick: disconnect,
+                        if busy() { "Disconnecting…" } else { "Disconnect Harvest" }
+                    }
                 }
             }
         }

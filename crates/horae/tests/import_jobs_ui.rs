@@ -1364,8 +1364,44 @@ fn account_change_explains_every_blocker() {
         ui.click("choose-api");
         let html = ui.html();
         assert!(html.contains(reason), "{html}");
-        assert!(html.contains("disabled"));
+        // Still focusable, so the arrow keys reach it and its reason is read.
+        assert!(
+            html.contains("data-testid=\"change-account\" aria-disabled=true>"),
+            "{html}"
+        );
+        ui.click("change-account");
+        assert!(!ui.html().contains("Change account and connect"));
         assert!(probe.changes.borrow().is_empty());
+    }
+}
+
+#[test]
+fn disconnect_waits_for_queued_and_running_imports() {
+    for active in [0, 1] {
+        let probe = Probe::default();
+        *probe.connection.borrow_mut() = ConnectionStatus {
+            configured: true,
+            connected: true,
+            account_id: Some("A".into()),
+            active_imports: active,
+            ..ConnectionStatus::default()
+        };
+        let mut ui = Ui::start(&probe);
+        ui.click("choose-api");
+        assert_eq!(
+            ui.html().contains("before disconnecting"),
+            active > 0,
+            "{}",
+            ui.html()
+        );
+        ui.click("disconnect-harvest");
+        assert_eq!(
+            ui.html()
+                .contains("Clients, projects and time already imported stay"),
+            active == 0,
+            "{}",
+            ui.html()
+        );
     }
 }
 
