@@ -1,6 +1,8 @@
 { perSystem, ... }:
 perSystem.self.default.overrideAttrs (_old: {
   pname = "horae-dioxus-lint";
+  # No commit in the version label, so a commit that changes no source keeps this cached.
+  HORAE_GIT_REV = "";
   # The crate's few dependencies build faster than the workspace artifacts unpack, and
   # alone they resolve different features, so the shared artifacts would not be reused.
   cargoArtifacts = null;

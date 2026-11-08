@@ -1,4 +1,6 @@
-{ pkgs, inputs, ... }:
+# `releaseTag` marks a release build (`v` + the crate version, which the build
+# checks); without it the app shows `dev` and the flake's commit.
+{ pkgs, inputs, releaseTag ? null, ... }:
 let
   inherit (pkgs) lib stdenv;
 
@@ -25,7 +27,7 @@ let
   cargoVendorDir = craneLib.vendorCargoDeps { inherit src; };
   common = {
     pname = "horae";
-    version = "0.1.0";
+    inherit ((lib.importTOML ../crates/horae/Cargo.toml).package) version;
     inherit src cargoVendorDir;
     doCheck = false;
     SQLX_OFFLINE = "true";
@@ -70,6 +72,9 @@ let
     '';
   });
 in
+# A dirty tree has no `rev`; it must not be labelled as a release.
+assert lib.assertMsg (releaseTag == null || inputs.self ? rev)
+  "releaseTag needs a clean checkout of the tagged commit";
 craneLib.mkCargoDerivation (common // {
   cargoArtifacts = releaseArtifacts;
   doInstallCargoArtifacts = false;
@@ -78,6 +83,11 @@ craneLib.mkCargoDerivation (common // {
   # Compile-time sqlx macros (query!, query_as!, …) resolve from the
   # .sqlx/ cache instead of requiring a live database connection.
   SQLX_OFFLINE = "true";
+
+  # The app's version label. Only this final build gets it, and the checks
+  # built from it clear it, so dependency artifacts and checks stay cached
+  # across commits that change no source.
+  HORAE_GIT_REV = inputs.self.shortRev or inputs.self.dirtyShortRev or "";
 
   nativeBuildInputs = dxInputs ++ [
     craneLib.removeReferencesToRustToolchainHook
@@ -110,4 +120,6 @@ craneLib.mkCargoDerivation (common // {
     description = "A self-hostable time tracking server";
     mainProgram = "horae";
   };
+} // lib.optionalAttrs (releaseTag != null) {
+  HORAE_RELEASE_TAG = releaseTag;
 })
