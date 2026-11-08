@@ -231,7 +231,7 @@ impl ApiHttp {
                     return Ok(bytes);
                 }
                 Err(ureq::Error::Status(429 | 502 | 503 | 504, response)) if attempt < 6 => {
-                    let delay = retry_after(response.header("Retry-After"))?;
+                    let delay = retry_after(response.header("Retry-After"));
                     ensure!(
                         delay <= MAX_RETRY_WAIT,
                         "Harvest asked to wait more than five minutes; retry later"
@@ -255,18 +255,23 @@ impl ApiHttp {
 }
 
 /// `Retry-After` is either delay seconds or an HTTP date (RFC 9110 §10.2.3).
-fn retry_after(header: Option<&str>) -> anyhow::Result<Duration> {
+/// Delay seconds or an RFC 2822 date; anything else (or nothing) waits the
+/// default, so an odd header never turns a retryable response into a failure.
+fn retry_after(header: Option<&str>) -> Duration {
+    const DEFAULT: Duration = Duration::from_secs(2);
     let Some(value) = header else {
-        return Ok(Duration::from_secs(2));
+        return DEFAULT;
     };
     if let Ok(seconds) = value.parse::<u64>() {
-        return Ok(Duration::from_secs(seconds));
+        return Duration::from_secs(seconds);
     }
-    let at = DateTime::parse_from_rfc2822(value).context("invalid Harvest Retry-After")?;
+    let Ok(at) = DateTime::parse_from_rfc2822(value) else {
+        return DEFAULT;
+    };
     // A date in the past means "retry now".
-    Ok((at.with_timezone(&Utc) - Utc::now())
+    (at.with_timezone(&Utc) - Utc::now())
         .to_std()
-        .unwrap_or_default())
+        .unwrap_or_default()
 }
 
 fn wait(delay: Duration, cancelled: &impl Fn() -> bool) -> anyhow::Result<()> {
@@ -635,6 +640,23 @@ mod tests {
                 .pages::<u64>("token", "account", "clients", None, || false, |_| Ok(()))
                 .unwrap_or_else(|error| panic!("HTTP {status}: {error}"));
             assert_eq!(server.requests.lock().unwrap().len(), 2, "HTTP {status}");
+        }
+    }
+
+    #[test]
+    fn an_unreadable_retry_after_waits_the_default() {
+        for value in [
+            "1.5",
+            "120 ",
+            "-1",
+            "Sunday, 06-Nov-94 08:49:37 GMT",
+            "Sun Nov  6 08:49:37 1994",
+        ] {
+            assert_eq!(
+                retry_after(Some(value)),
+                Duration::from_secs(2),
+                "{value:?}"
+            );
         }
     }
 
