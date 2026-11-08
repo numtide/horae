@@ -53,7 +53,8 @@ const user = email => ({
   let commits, additions, summaries, statusReads;
   page.on('pageerror', error => {
     // Leaving a page that still follows a running job aborts its status poll.
-    if (error.message.trim() === 'The operation was aborted.') return;
+    // Match the name: Firefox and Chromium word the message differently.
+    if (error.name === 'AbortError') return;
     errors.push(error.message);
   });
   const reset = () => { commits = 0; additions = []; summaries = 0; statusReads = 0; };
