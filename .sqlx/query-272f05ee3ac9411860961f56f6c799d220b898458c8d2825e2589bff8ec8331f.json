@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT ps.project_id, ps.org_id, o.timezone FROM project_settings ps\n             JOIN projects p ON p.id = ps.project_id AND p.org_id = ps.org_id\n             JOIN organizations o ON o.id = ps.org_id\n             WHERE ps.alert_enabled AND p.active AND ps.project_id > $1\n             ORDER BY ps.project_id LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "timezone",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "272f05ee3ac9411860961f56f6c799d220b898458c8d2825e2589bff8ec8331f"
+}

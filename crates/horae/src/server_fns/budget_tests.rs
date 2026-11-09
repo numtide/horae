@@ -865,15 +865,39 @@ async fn configured_alert_and_outbox_roll_back_together(pool: PgPool) {
 async fn configured_budget_sweep_recovers_missed_checks_without_duplicates(pool: PgPool) {
     let ids = configured(&pool).await;
     sqlx::query!("UPDATE project_settings SET alert_enabled = true, alert_threshold = 0 WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
-    let date = "2026-09-01".parse().unwrap();
-    super::budgets::sweep(&pool, date).await.unwrap();
-    super::budgets::sweep(&pool, date).await.unwrap();
+    let now = "2026-09-01T12:00:00Z".parse().unwrap();
+    super::budgets::sweep(&pool, now).await.unwrap();
+    super::budgets::sweep(&pool, now).await.unwrap();
     assert_eq!(
         sqlx::query_scalar!("SELECT count(*) FROM project_budget_notifications")
             .fetch_one(&pool)
             .await
             .unwrap(),
         Some(1)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn configured_budget_sweep_dates_the_period_in_the_workspace_zone(pool: PgPool) {
+    let ids = configured(&pool).await;
+    sqlx::query!("UPDATE project_settings SET alert_enabled = true, alert_threshold = 0, monthly_reset = true WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
+    sqlx::query!(
+        "UPDATE organizations SET timezone = 'Europe/Madrid' WHERE id = $1",
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    // 22:30 UTC on 31 August is already 00:30 on 1 September in Madrid.
+    super::budgets::sweep(&pool, "2026-08-31T22:30:00Z".parse().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(
+        sqlx::query_scalar!("SELECT period_key FROM project_budget_notifications")
+            .fetch_all(&pool)
+            .await
+            .unwrap(),
+        ["2026-09"]
     );
 }
 

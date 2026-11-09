@@ -15,6 +15,7 @@ server = [
   "horae-core/sqlx",
   "dioxus/server",
   "dep:tokio",
+  "dep:chrono-tz",
   "dep:axum",
   "dep:tower-http",
   "dep:sqlx",
@@ -107,6 +108,9 @@ ureq = { version = "2", optional = true }
 chacha20poly1305 = { version = "=0.10.1", features = [
   "getrandom",
 ], optional = true }
+# IANA time zones on chrono's own types, for each person's "today". Server-only:
+# the browser gets the current offset instead of the zone database.
+chrono-tz = { version = "0.10", optional = true }
 
 # web-only
 gloo-timers = { version = "0.3", features = ["futures"], optional = true }

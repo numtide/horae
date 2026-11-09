@@ -390,7 +390,9 @@ pub async fn start_timer(
         NewTimeEntry {
             project_id,
             task_id,
-            spent_date: chrono::Utc::now().date_naive(),
+            spent_date: crate::timezone::today_for_person(&state.db, user.id)
+                .await
+                .map_err(server_err)?,
             minutes: 0,
             notes: notes.as_deref(),
             billable: true,
