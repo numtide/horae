@@ -31,7 +31,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let cookie = api.cookie(ids.user_id).await;
     let restricted_cookie = api.cookie(restricted).await;
     let requester = json!({"org_id":ids.org_id,"user_id":ids.user_id});
-    let body = json!({"name":"  Created by current permissions  ","billable_default":true,
+    let body = json!({"name":"  Created by current permissions  ","billable_default":true, "is_default":false,
         "rate":{"action":"preserve"},"expected_requester":requester});
     assert_eq!(
         api.call("create_task", body.clone(), None, false)
@@ -65,7 +65,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         let stale = api
             .json(
                 "create_task",
-                json!({"name":"Stale project link", "billable_default":true,
+                json!({"name":"Stale project link", "billable_default":true, "is_default":false,
             "project_id":project,"rate":{"action":"preserve"},"expected_requester":requester}),
                 &cookie,
             )
@@ -140,7 +140,7 @@ async fn check_initial_rate(pool: &PgPool, api: &Api) {
     .unwrap();
     let cookie = api.cookie(ids.user_id).await;
     let body = json!({
-        "name":"Initial rate", "billable_default":true,
+        "name":"Initial rate", "billable_default":true, "is_default":false,
         "expected_requester":{"org_id":ids.org_id,"user_id":ids.user_id},
         "rate":{"action":"set","amount_cents":0,"currency":"EUR"}
     });

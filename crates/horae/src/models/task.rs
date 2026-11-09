@@ -24,6 +24,8 @@ pub enum TaskActivity {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TaskCursor {
+    /// The catalog lists common tasks before the others.
+    pub is_default: bool,
     pub name: String,
     pub id: Uuid,
 }
@@ -34,6 +36,8 @@ pub struct TaskCatalogEntry {
     pub id: Uuid,
     pub name: String,
     pub billable_default: bool,
+    /// A common task: the new-project form adds it to the task list.
+    pub is_default: bool,
     pub active: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_rate_cents: Option<i64>,

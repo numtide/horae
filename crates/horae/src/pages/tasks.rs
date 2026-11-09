@@ -8,6 +8,22 @@ use crate::server_fns;
 #[path = "tasks/editor.rs"]
 mod editor;
 
+/// (common, heading id, heading, explanation), in the server's listing order.
+const TASK_GROUPS: [(bool, &str, &str, &str); 2] = [
+    (
+        true,
+        "tasks-common",
+        "Common tasks",
+        "Added to every new project.",
+    ),
+    (
+        false,
+        "tasks-other",
+        "Other tasks",
+        "Added to a project from its task list.",
+    ),
+];
+
 const FORBIDDEN: u16 = 403;
 const UNAUTHORIZED: u16 = 401;
 
@@ -98,8 +114,15 @@ pub fn TaskCatalog() -> Element {
                 if page.tasks.is_empty() {
                     p { role: "status", class: "text-secondary", "No tasks match this filter. Try another filter." }
                 } else {
+                    // The server lists common tasks first, so a page holds the end of
+                    // one group and the start of the other at most.
+                    for (common, group_id, title, hint) in TASK_GROUPS {
+                        if page.tasks.iter().any(|task| task.is_default == common) {
+                    section { aria_labelledby: group_id, class: "mb-6",
+                    h2 { id: group_id, class: "text-lg font-semibold", {title} }
+                    p { class: "text-sm text-secondary mb-3", {hint} }
                     div { class: "table-container rounded-xl bg-secondary",
-                        table { aria_label: "Task catalog",
+                        table { aria_label: title,
                             thead { tr {
                                 th { scope: "col", "Task" }
                                 th { scope: "col", "Billable by default" }
@@ -107,7 +130,7 @@ pub fn TaskCatalog() -> Element {
                                 th { scope: "col", "Status" }
                                 if page.can_edit { th { scope: "col", "Actions" } }
                             } }
-                            tbody { for task in &page.tasks {
+                            tbody { for task in page.tasks.iter().filter(|task| task.is_default == common) {
                                 tr { key: "{task.id}",
                                     td { "{task.name}" }
                                     td { if task.billable_default { "Yes" } else { "No" } }
@@ -125,6 +148,9 @@ pub fn TaskCatalog() -> Element {
                                     } }
                                 }
                             } }
+                        }
+                    }
+                    }
                         }
                     }
                 }

@@ -82,6 +82,7 @@ async fn project_membership_and_task_callers_wait_before_authorizing(pool: PgPoo
                     actor.id,
                     "Blocked task",
                     true,
+                    false,
                     &TaskRateEdit::Preserve {},
                 )
                 .await

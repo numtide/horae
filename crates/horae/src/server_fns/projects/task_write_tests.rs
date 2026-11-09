@@ -37,9 +37,16 @@ async fn initial_task_rate_requires_global_financial_and_task_authority(pool: Pg
                 currency: "EUR".into(),
             },
         ] {
-            let result =
-                create_catalog_task(&pool, ids.org_id, ids.user_id, "Denied rate", true, &rate)
-                    .await;
+            let result = create_catalog_task(
+                &pool,
+                ids.org_id,
+                ids.user_id,
+                "Denied rate",
+                true,
+                false,
+                &rate,
+            )
+            .await;
             assert!(
                 matches!(
                     result,
@@ -71,6 +78,7 @@ async fn initial_task_rate_commits_with_service_payload(pool: PgPool) {
             ids.user_id,
             "With initial rate",
             true,
+            false,
             &TaskRateEdit::Set {
                 amount_cents: amount,
                 currency: " eur ".into(),
@@ -137,6 +145,7 @@ async fn initial_task_rate_rechecks_financial_authority_and_currency_after_wait(
                 ids.user_id,
                 "Stale creation",
                 true,
+                false,
                 &TaskRateEdit::Set {
                     amount_cents: 0,
                     currency: "EUR".into(),
@@ -194,6 +203,7 @@ async fn project_edit_authority_does_not_create_global_tasks(pool: PgPool) {
         ids.user_id,
         "Unauthorized catalog task",
         true,
+        false,
         &TaskRateEdit::Preserve {},
     )
     .await;
@@ -254,6 +264,7 @@ async fn task_creation_fails_closed_for_unavailable_actor_permissions(pool: PgPo
             ids.user_id,
             "Unavailable actor",
             true,
+            false,
             &TaskRateEdit::Preserve {},
         )
         .await;
@@ -301,6 +312,7 @@ async fn task_creation_rechecks_revoked_grants_after_organization_wait(pool: PgP
             ids.user_id,
             "Revoked task",
             true,
+            false,
             &TaskRateEdit::Preserve {},
         )
         .await
@@ -345,6 +357,7 @@ async fn global_task_creation_accepts_current_grant_without_legacy_manager(pool:
         ids.user_id,
         "  Canonical task  ",
         true,
+        false,
         &TaskRateEdit::Preserve {},
     )
     .await
@@ -364,6 +377,7 @@ async fn global_task_creation_does_not_inherit_legacy_administrator_authority(po
         ids.user_id,
         "Forbidden task",
         true,
+        false,
         &TaskRateEdit::Preserve {},
     )
     .await;
@@ -405,6 +419,7 @@ async fn global_task_creation_rejects_unknown_policy_without_inserting(pool: PgP
         ids.user_id,
         "Unknown-policy task",
         true,
+        false,
         &TaskRateEdit::Preserve {},
     )
     .await;
