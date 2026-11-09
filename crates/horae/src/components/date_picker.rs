@@ -36,7 +36,7 @@ pub fn DatePicker(
     first_day: Weekday,
     onpick: EventHandler<NaiveDate>,
 ) -> Element {
-    let today = chrono::Utc::now().date_naive();
+    let today = crate::components::today::today();
     // The month on screen. The arrows move it without changing what is picked,
     // so it is local state, seeded from `selected` when the panel mounts.
     let mut month = use_signal(|| selected.with_day(1).unwrap_or(selected));

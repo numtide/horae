@@ -22,7 +22,7 @@ pub fn Gallery() -> Element {
     let mut agreed = use_signal(|| false);
     let mut plan = use_signal(|| "Manager".to_string());
     let mut combo = use_signal(String::new);
-    let mut picked = use_signal(|| chrono::Utc::now().date_naive());
+    let mut picked = use_signal(crate::components::today::today);
 
     rsx! {
         div {

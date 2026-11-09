@@ -71,8 +71,10 @@ pub mod form;
 pub mod icons;
 #[path = "../src/components/table.rs"]
 pub mod table;
+#[path = "../src/components/today.rs"]
+pub mod today;
 mod components {
-    pub use super::{badge, controls, debounce, form, icons, table};
+    pub use super::{badge, controls, debounce, form, icons, table, today};
 }
 #[path = "../src/pages/reports.rs"]
 mod reports;

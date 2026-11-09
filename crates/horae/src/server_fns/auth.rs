@@ -10,12 +10,33 @@ use super::*;
 #[server]
 pub async fn get_me() -> Result<crate::models::user::CurrentUser, ServerFnError> {
     let user = require_user().await?;
+    let state = crate::state::global_state().await;
+    current_user(&state.db, user).await
+}
+
+#[cfg(feature = "server")]
+pub(super) async fn current_user(
+    db: &sqlx::PgPool,
+    user: User,
+) -> Result<crate::models::user::CurrentUser, ServerFnError> {
+    let zones = sqlx::query!(
+        "SELECT u.timezone, o.timezone AS workspace
+         FROM users u JOIN organizations o ON o.id = u.org_id WHERE u.id = $1",
+        user.id
+    )
+    .fetch_one(db)
+    .await
+    .map_err(server_err)?;
+    let effective = zones.timezone.as_deref().unwrap_or(&zones.workspace);
     Ok(crate::models::user::CurrentUser {
         id: user.id,
         org_id: user.org_id,
         email: user.email,
         name: user.name,
         org_role: user.org_role,
+        utc_offset_seconds: crate::timezone::utc_offset_seconds(effective, chrono::Utc::now()),
+        timezone: zones.timezone,
+        workspace_timezone: zones.workspace,
     })
 }
 

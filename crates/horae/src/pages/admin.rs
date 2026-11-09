@@ -10,6 +10,9 @@ use crate::server_fns;
 
 mod people;
 mod permission_editor;
+mod workspace;
+
+pub use workspace::WorkspaceSettings;
 
 #[component]
 pub fn AdminUsers() -> Element {

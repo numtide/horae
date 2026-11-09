@@ -18,6 +18,14 @@ pub fn AppLayout() -> Element {
     use_running_timer_provider();
     // Who is signed in and what they may do, read by the rail and most pages.
     use_session_provider();
+    let me = crate::components::session::use_session().me;
+    let offset = use_memo(move || {
+        me.read()
+            .as_ref()
+            .and_then(|me| me.as_ref().ok())
+            .map(|me| me.utc_offset_seconds)
+    });
+    use_context_provider(|| crate::components::today::UtcOffset(offset));
 
     // Owned here (not in the sidebar) so the shell class can narrow the content
     // area together with the rail, and the edge handle can resize it.

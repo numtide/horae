@@ -11,6 +11,7 @@ use crate::components::badge::Badge;
 use crate::components::controls::Segmented;
 use crate::components::session::{use_session, use_week_start};
 use crate::components::table::DataTable;
+use crate::components::today::today;
 use crate::route::Route;
 use crate::server_fns;
 
@@ -32,11 +33,6 @@ fn period_label(start: NaiveDate, end: NaiveDate) -> String {
         start.format("%d %b %Y")
     };
     format!("{first} – {}", end.format("%d %b %Y"))
-}
-
-/// Today's date, by the same UTC convention as the timesheet and reports.
-fn today() -> NaiveDate {
-    chrono::Utc::now().date_naive()
 }
 
 /// The configured week containing the address's date, or today's when the

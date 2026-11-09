@@ -277,6 +277,9 @@ mod server_fns {
             email: "admin@example.test".into(),
             name: "Admin".into(),
             org_role,
+            timezone: None,
+            workspace_timezone: "UTC".into(),
+            utc_offset_seconds: 0,
         }
     }
 
@@ -396,6 +399,8 @@ mod route {
         #[layout(AdminShell)]
         #[route("/admin/users")]
         AdminUsers {},
+        #[route("/admin/workspace")]
+        WorkspaceSettings {},
         #[route("/admin/importers")]
         ImporterIndex {},
         #[route("/admin/audit")]
@@ -435,6 +440,11 @@ mod route {
             )));
         });
         rsx! { "Importer panel" }
+    }
+
+    #[component]
+    fn WorkspaceSettings() -> Element {
+        rsx! { "Workspace settings panel" }
     }
 
     #[component]

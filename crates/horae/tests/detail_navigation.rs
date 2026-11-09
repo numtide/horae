@@ -899,6 +899,9 @@ mod server_fns {
             email: format!("user-{id}@example.test"),
             name: format!("User-{id}"),
             org_role: role,
+            timezone: None,
+            workspace_timezone: "UTC".into(),
+            utc_offset_seconds: 0,
         }
     }
 

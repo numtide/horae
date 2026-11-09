@@ -5,6 +5,7 @@ use crate::components::theme::Theme;
 use crate::server_fns;
 
 mod own_permissions;
+mod profile;
 
 #[component]
 pub fn Settings() -> Element {
@@ -36,8 +37,9 @@ pub fn Settings() -> Element {
             div { class: "page-header",
                 h1 { class: "page-title", "Settings" }
             }
+            profile::ProfileSection {}
             div { class: "card",
-                h2 { class: "card-title", "General" }
+                h2 { class: "card-title", "Appearance" }
                 FormGroup { label: "Theme", hint: "Choose how Horae looks on this device.",
                     Select {
                         options: theme_options,

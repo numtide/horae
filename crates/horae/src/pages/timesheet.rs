@@ -161,7 +161,7 @@ pub struct Anchor(pub NaiveDate);
 
 impl Default for Anchor {
     fn default() -> Self {
-        Anchor(chrono::Utc::now().date_naive())
+        Anchor(crate::components::today::today())
     }
 }
 
@@ -281,7 +281,7 @@ fn TimesheetContent(
     mut requester: Signal<Option<PermissionRequester>>,
     mut last_context: Signal<Option<TimesheetWriteContext>>,
 ) -> Element {
-    let today = chrono::Utc::now().date_naive();
+    let today = crate::components::today::today();
     // View, week, selected day and calendar span all derive from the URL
     // (/timesheet/<view>/<date>?span=<span>), so switching views, changing the
     // calendar span or navigating is shareable and works with the browser's

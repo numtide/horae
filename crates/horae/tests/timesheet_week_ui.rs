@@ -59,8 +59,10 @@ pub mod modal;
 pub mod no_tracking;
 #[path = "../src/components/select_field.rs"]
 pub mod select_field;
+#[path = "../src/components/today.rs"]
+pub mod today;
 mod components {
-    pub use super::{controls, date_picker, menu, modal, no_tracking, select_field};
+    pub use super::{controls, date_picker, menu, modal, no_tracking, select_field, today};
 
     /// The shell's week start and a viewer who cannot manage projects, without
     /// the rest of the session.

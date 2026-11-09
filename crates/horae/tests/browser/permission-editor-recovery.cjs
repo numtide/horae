@@ -196,9 +196,10 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     assert.ok(!requests.slice(readStart).some(path => /^\/api\/(list_people|list_users|list_tasks|load_permission_editor|list_permission_subjects)/.test(path)));
     // A legacy admin role grants no directory read once canonical grants apply.
     await expect(railTeam).toHaveCount(0);
-    // Importers is still open to that legacy admin, so Administration leads there.
-    await expectUserMenu('/admin/importers');
-    await expect(page.locator('.adm-main .page-title')).toHaveText('Importers');
+    // Workspace settings and Importers are still open to that legacy admin, so
+    // Administration leads to the first of them.
+    await expectUserMenu('/admin/workspace');
+    await expect(page.locator('.adm-main .page-title')).toHaveText('Workspace settings');
     // A plain member with floor grants has no admin section, so no entry.
     sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`);
     await page.reload();

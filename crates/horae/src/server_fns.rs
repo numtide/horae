@@ -504,6 +504,7 @@ pub(crate) use permissions::{
     PermissionStorageError, StoredPersonPermissions, load_person_permissions,
 };
 mod plugins;
+mod profile;
 mod project_creation;
 mod project_managers;
 mod projects;
@@ -525,6 +526,7 @@ pub use invoices::*;
 pub use organization::*;
 pub use permission_editor::*;
 pub use plugins::*;
+pub use profile::*;
 pub use project_creation::*;
 pub use projects::*;
 pub use reports::*;

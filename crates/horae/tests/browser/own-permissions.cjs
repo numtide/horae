@@ -42,7 +42,8 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
     await page.goto(`${base}/settings`);
     await expect(section).toContainText('Detailed permissions are not enabled');
-    await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Profile', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Appearance', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Plugins', exact: true })).toBeVisible();
 
     sql(`BEGIN;

@@ -57,7 +57,7 @@ pub(super) fn DateField(
             for generation in [opening()] {
                 DatePicker {
                     key: "{generation}",
-                    selected: selected.unwrap_or_else(|| chrono::Utc::now().date_naive()),
+                    selected: selected.unwrap_or_else(crate::components::today::today),
                     onpick: move |day: NaiveDate| onchange.call(day.to_string()),
                 }
             }
