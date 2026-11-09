@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
+use horae_core::types::OrgRole;
 
 use crate::components::admin_shell::first_admin_route;
 use crate::components::avatar::Avatar;
@@ -9,6 +10,7 @@ use crate::components::session::{Session, use_session};
 use crate::components::timer_widget::TimerWidget;
 use crate::components::version_info::VersionInfo;
 use crate::models::own_permissions::OwnPermissions;
+use crate::models::task::opens_task_catalog;
 use crate::pages::timesheet::{Anchor, CalSpan, ViewMode};
 use crate::route::Route;
 
@@ -19,8 +21,12 @@ use crate::route::Route;
 pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Element {
     // A refresh keeps the last answer, so the rail does not flicker while it runs.
     let session = use_session();
-    let is_admin = matches!(&*session.me.read(), Some(Ok(me)) if me.is_admin());
-    let sections = nav_sections(nav_access(session.permissions.read().as_ref(), is_admin));
+    let role = match &*session.me.read() {
+        Some(Ok(me)) => Some(me.org_role),
+        _ => None,
+    };
+    let is_admin = role == Some(OrgRole::Admin);
+    let sections = nav_sections(nav_access(session.permissions.read().as_ref(), role));
     let version_block = show_version(session.permissions.read().as_ref(), is_admin);
     rsx! {
         aside { id: "app-navigation", class: "app-sidebar", aria_label: "Navigation",
@@ -222,24 +228,25 @@ struct NavAccess {
     tasks: bool,
 }
 
-/// Policy zero keeps Clients for everyone and Team for legacy admins; failed or
-/// unknown permission state hides every gated row.
+/// Policy zero keeps Clients for everyone, Team for legacy admins and Tasks for
+/// legacy admins and managers; `role` is `None` until the identity loads. Failed
+/// or unknown permission state hides every gated row.
 fn nav_access(
     own: Option<&Result<Option<OwnPermissions>, ServerFnError>>,
-    is_admin: bool,
+    role: Option<OrgRole>,
 ) -> NavAccess {
     match own {
         Some(Ok(None)) => NavAccess {
-            people: is_admin,
+            people: role == Some(OrgRole::Admin),
             clients: true,
-            tasks: false,
+            tasks: role.is_some_and(|role| opens_task_catalog(Some(role), false)),
         },
         Some(Ok(Some(access))) if access.catalog_version == PERMISSION_CATALOG_VERSION => {
             NavAccess {
                 people: access.grants.contains(&Permission::PeopleReadAll)
                     || access.grants.contains(&Permission::PeopleReadManaged),
                 clients: access.grants.contains(&Permission::ClientReadAll),
-                tasks: access.grants.contains(&Permission::TaskReadAll),
+                tasks: opens_task_catalog(None, access.grants.contains(&Permission::TaskReadAll)),
             }
         }
         _ => NavAccess::default(),
@@ -340,14 +347,14 @@ mod tests {
         }
     }
 
-    fn access(own: Result<Option<OwnPermissions>, ServerFnError>, is_admin: bool) -> NavAccess {
-        nav_access(Some(&own), is_admin)
+    fn access(own: Result<Option<OwnPermissions>, ServerFnError>, role: OrgRole) -> NavAccess {
+        nav_access(Some(&own), Some(role))
     }
 
     fn granted(grants: Vec<Permission>) -> NavAccess {
         access(
             Ok(Some(canonical(grants, PERMISSION_CATALOG_VERSION))),
-            false,
+            OrgRole::Member,
         )
     }
 
@@ -390,20 +397,34 @@ mod tests {
     }
 
     #[test]
-    fn policy_zero_offers_clients_to_everyone_and_team_to_admins() {
-        let member = NavAccess {
-            people: false,
+    fn policy_zero_offers_clients_to_everyone_team_to_admins_and_tasks_to_managers() {
+        let only = |people, tasks| NavAccess {
+            people,
             clients: true,
-            tasks: false,
+            tasks,
         };
-        assert_eq!(access(Ok(None), false), member);
+        assert_eq!(access(Ok(None), OrgRole::Admin), only(true, true));
+        assert_eq!(access(Ok(None), OrgRole::Manager), only(false, true));
+        assert_eq!(access(Ok(None), OrgRole::Member), only(false, false));
+    }
+
+    #[test]
+    fn policy_zero_without_an_identity_hides_team_and_tasks() {
         assert_eq!(
-            access(Ok(None), true),
+            nav_access(Some(&Ok(None)), None),
             NavAccess {
-                people: true,
-                ..member
+                people: false,
+                clients: true,
+                tasks: false,
             }
         );
+    }
+
+    #[test]
+    fn canonical_tasks_row_follows_task_read_all_not_the_legacy_role() {
+        let own = |grants| Ok(Some(canonical(grants, PERMISSION_CATALOG_VERSION)));
+        assert!(access(own(vec![Permission::TaskReadAll]), OrgRole::Member).tasks);
+        assert!(!access(own(Vec::new()), OrgRole::Admin).tasks);
     }
 
     #[test]
@@ -445,15 +466,19 @@ mod tests {
             Permission::ClientReadAll,
             Permission::TaskReadAll,
         ];
-        assert_eq!(nav_access(None, true), NavAccess::default(), "loading");
         assert_eq!(
-            access(Err(ServerFnError::new("unavailable")), true),
+            nav_access(None, Some(OrgRole::Admin)),
+            NavAccess::default(),
+            "loading"
+        );
+        assert_eq!(
+            access(Err(ServerFnError::new("unavailable")), OrgRole::Admin),
             NavAccess::default()
         );
         assert_eq!(
             access(
                 Ok(Some(canonical(everything, PERMISSION_CATALOG_VERSION + 1))),
-                true
+                OrgRole::Admin
             ),
             NavAccess::default(),
             "newer catalog"
@@ -487,9 +512,9 @@ mod tests {
                         is_administrator,
                         ..canonical(grants.clone(), version)
                     };
-                    for is_admin in [false, true] {
+                    for role in [OrgRole::Member, OrgRole::Manager, OrgRole::Admin] {
                         assert_eq!(
-                            access(Ok(Some(own.clone())), is_admin),
+                            access(Ok(Some(own.clone())), role),
                             NavAccess::default(),
                             "version {version}, grants {mask:#06b}"
                         );
