@@ -3,6 +3,7 @@ use chrono::{DateTime, TimeZone};
 use horae_core::importers::harvest::types::PersonErrorKind;
 use serde_json::json;
 
+mod api_ids;
 mod archived_clients;
 mod checkpoints;
 mod paging;

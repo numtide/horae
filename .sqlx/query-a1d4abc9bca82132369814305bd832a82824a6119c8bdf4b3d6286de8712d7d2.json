@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.number, a.from_harvest\n           FROM harvest_import_map m\n           JOIN api_ids a ON a.org_id = m.org_id AND a.horae_id = m.horae_id\n             AND a.kind::text = $2\n           WHERE m.harvest_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "number",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "from_harvest",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "a1d4abc9bca82132369814305bd832a82824a6119c8bdf4b3d6286de8712d7d2"
+}

@@ -141,7 +141,37 @@ async fn every_alias_serves_the_canonical_response(pool: PgPool) {
     assert_eq!(projects["total_entries"], 1);
 }
 
-// ── Numbering (migration 0056) ──────────────────────────────────────────────
+#[sqlx::test(migrations = "./migrations")]
+async fn amounts_use_the_currencys_own_decimals(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    sqlx::query!(
+        "UPDATE projects SET currency = 'JPY', budget_kind = 'amount', budget_amount_cents = 100000
+         WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let app = signed_in(&pool, ids.user_id).await;
+
+    let (_, body) = request(&app, &format!("/harvest/v2/projects/{}", ids.project_id)).await;
+
+    assert!(body.contains(r#""budget":1000,"#), "{body}");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_member_filtering_by_an_unknown_person_is_refused(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Member).await;
+    let app = signed_in(&pool, ids.user_id).await;
+
+    // As for a colleague's number: a member's filter names only themselves,
+    // and the answer must not tell an unknown person from a real one.
+    let (status, _) = request(&app, "/harvest/v2/time_entries?user_id=999999").await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+// ── Numbering (migrations 0057–0059) ────────────────────────────────────────
 
 #[sqlx::test(migrations = "./migrations")]
 async fn every_organization_has_an_account_id(pool: PgPool) {
@@ -161,22 +191,30 @@ async fn every_organization_has_an_account_id(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn numbers_count_up_per_organization_and_kind(pool: PgPool) {
+async fn numbers_count_up_per_kind_in_creation_order(pool: PgPool) {
     let first = seed(&pool, OrgRole::Admin).await;
     let second = seed(&pool, OrgRole::Admin).await;
     let entry = time_entry(&pool, &first, EntryState::Open).await;
-    let later = time_entry(&pool, &first, EntryState::Open).await;
+    let later = time_entry(&pool, &second, EntryState::Open).await;
 
-    assert_eq!(api_id(&pool, "client", first.client_id).await, 1);
-    assert_eq!(api_id(&pool, "client", second.client_id).await, 1);
-    assert_eq!(api_id(&pool, "time_entry", entry).await, 1);
-    assert_eq!(api_id(&pool, "time_entry", later).await, 2);
+    let clients = (
+        api_id(&pool, "client", first.client_id).await,
+        api_id(&pool, "client", second.client_id).await,
+    );
+    let entries = (
+        api_id(&pool, "time_entry", entry).await,
+        api_id(&pool, "time_entry", later).await,
+    );
+
+    assert!(clients.0 < clients.1, "{clients:?}");
+    assert!(entries.0 < entries.1, "{entries:?}");
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn a_deleted_records_number_is_not_reused(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
+    let deleted = api_id(&pool, "time_entry", entry).await;
     sqlx::query!("DELETE FROM time_entries WHERE id = $1", entry)
         .execute(&pool)
         .await
@@ -184,7 +222,51 @@ async fn a_deleted_records_number_is_not_reused(pool: PgPool) {
 
     let next = time_entry(&pool, &ids, EntryState::Open).await;
 
-    assert_eq!(api_id(&pool, "time_entry", next).await, 2);
+    assert!(api_id(&pool, "time_entry", next).await > deleted);
+}
+
+/// Two creators whose snapshots predate each other's commit still get numbers:
+/// allocation must not depend on what the transaction's snapshot can see.
+#[sqlx::test(migrations = "./migrations")]
+async fn concurrent_creators_get_numbers_at_every_isolation_level(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    for level in ["REPEATABLE READ", "SERIALIZABLE"] {
+        let mut first = pool.begin().await.unwrap();
+        let mut second = pool.begin().await.unwrap();
+        for tx in [&mut first, &mut second] {
+            // Numbering must not wait on the other creator either: fail, not hang.
+            sqlx::raw_sql(&format!(
+                "SET TRANSACTION ISOLATION LEVEL {level}; SET LOCAL lock_timeout = '5s'"
+            ))
+            .execute(&mut **tx)
+            .await
+            .unwrap();
+            // The snapshot is taken by the first query, before either insert.
+            sqlx::query!("SELECT 1 AS one")
+                .fetch_one(&mut **tx)
+                .await
+                .unwrap();
+        }
+        let mut created = Vec::new();
+        for tx in [&mut first, &mut second] {
+            let id = Uuid::now_v7();
+            sqlx::query!(
+                "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Racer', 'EUR')",
+                id,
+                ids.org_id
+            )
+            .execute(&mut **tx)
+            .await
+            .unwrap_or_else(|error| panic!("{level}: {error}"));
+            created.push(id);
+        }
+        first.commit().await.unwrap();
+        second.commit().await.unwrap();
+
+        let a = api_id(&pool, "client", created[0]).await;
+        let b = api_id(&pool, "client", created[1]).await;
+        assert_ne!(a, b, "{level}");
+    }
 }
 
 /// The importer creates a record and maps its Harvest id in one transaction.
@@ -229,17 +311,39 @@ async fn an_imported_record_keeps_its_harvest_id(pool: PgPool) {
     .unwrap();
 
     assert_eq!(api_id(&pool, "client", imported).await, 4_200_000);
-    assert_eq!(api_id(&pool, "client", native).await, 4_200_001);
+    // Native numbers come from their own sequence, far below Harvest's ids.
+    assert!(api_id(&pool, "client", native).await < 4_200_000);
 }
 
 #[sqlx::test(migrations = "./migrations")]
 async fn a_harvest_id_held_by_another_record_gets_a_fresh_number(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
-    // The seeded client holds number 1.
+    let held = api_id(&pool, "client", ids.client_id).await;
 
-    let imported = import_client(&pool, ids.org_id, 1).await;
+    let imported = import_client(&pool, ids.org_id, held).await;
 
-    assert_eq!(api_id(&pool, "client", imported).await, 2);
+    let number = api_id(&pool, "client", imported).await;
+    assert_ne!(number, held);
+    assert_eq!(api_id(&pool, "client", ids.client_id).await, held);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_native_record_skips_a_number_a_harvest_record_holds(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let next = api_id(&pool, "client", ids.client_id).await + 1;
+    import_client(&pool, ids.org_id, next).await;
+    let native = Uuid::now_v7();
+
+    sqlx::query!(
+        "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Native', 'EUR')",
+        native,
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(api_id(&pool, "client", native).await > next);
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -258,5 +362,82 @@ async fn a_record_clients_already_know_keeps_its_number_when_matched(pool: PgPoo
     .await
     .unwrap();
 
-    assert_eq!(api_id(&pool, "client", ids.client_id).await, 1);
+    assert_ne!(api_id(&pool, "client", ids.client_id).await, 4_200_000);
+}
+
+/// Records that exist when the numbering is deployed: imported ones take their
+/// Harvest ids, the rest are numbered in creation order, skipping those.
+#[sqlx::test(migrations = false)]
+async fn the_backfill_numbers_existing_records(pool: PgPool) {
+    let mut before = sqlx::migrate!("./migrations");
+    before.migrations = before
+        .iter()
+        .filter(|m| m.version < 57)
+        .cloned()
+        .collect::<Vec<_>>()
+        .into();
+    before.run(&pool).await.unwrap();
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let mut natives = vec![ids.client_id];
+    for _ in 0..3 {
+        let id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Native', 'EUR')",
+            id,
+            ids.org_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        natives.push(id);
+    }
+    let imported = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Imported', 'EUR')",
+        imported,
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    // Harvest id 2 is a number a native client would otherwise take.
+    sqlx::query!(
+        "INSERT INTO harvest_import_map (org_id, harvest_entity_type, harvest_id, horae_id)
+         VALUES ($1, 'client', 2, $2)",
+        ids.org_id,
+        imported
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+
+    assert_eq!(api_id(&pool, "client", imported).await, 2);
+    let mut numbers = Vec::new();
+    for id in &natives {
+        numbers.push(api_id(&pool, "client", *id).await);
+    }
+    // Creation order, except the one whose turn fell on Harvest's 2: it waits
+    // for the next free number.
+    assert_eq!(numbers, [1, 5, 3, 4]);
+    let from_harvest = sqlx::query_scalar!(
+        "SELECT count(*) FROM api_ids WHERE from_harvest AND horae_id = $1",
+        imported
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(from_harvest, Some(1));
+    // A record created after the backfill continues the same sequence.
+    let later = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Later', 'EUR')",
+        later,
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(api_id(&pool, "client", later).await, 6);
 }

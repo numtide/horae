@@ -1,5 +1,5 @@
 //! Integer ids on the Harvest wire (FR-015–FR-018). Numbers live in `api_ids`
-//! and are allocated by triggers when a record is inserted (migration 0056);
+//! and are allocated by triggers when a record is inserted (migration 0058);
 //! responses read them with the SQL function `api_number`.
 
 use sqlx::PgPool;
