@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organizations SET invoice_notes = 'Thank you for your business.' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "704ea647818ab6954662bb41797a7b6d22aacd7f807919f1834006a6f0bb0940"
+}

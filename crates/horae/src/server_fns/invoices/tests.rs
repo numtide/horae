@@ -2087,3 +2087,37 @@ async fn a_legacy_entry_over_the_limit_is_invoiced_and_voided(pool: PgPool) {
     assert_eq!((stored.minutes, stored.state), (20_000, EntryState::Open));
     crate::server_fns::test_seed::assert_minutes_cannot_rise(&pool, entry).await;
 }
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn new_invoices_start_with_the_organization_default_notes(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Manager).await;
+    time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "UPDATE projects SET rate_cents = 10000 WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE organizations SET invoice_notes = 'Thank you for your business.' WHERE id = $1",
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let day = "2026-09-07".parse().unwrap();
+    let result = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
+        .await
+        .unwrap();
+    let stored = sqlx::query_scalar!(
+        "SELECT notes FROM invoices WHERE id = $1",
+        result.invoice.id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let expected = Some("Thank you for your business.".to_owned());
+    assert_eq!((result.invoice.notes, stored), (expected.clone(), expected));
+}
