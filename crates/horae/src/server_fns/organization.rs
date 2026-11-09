@@ -125,6 +125,27 @@ async fn update_org_branding_record(
     if !role.is_manager_or_above() {
         return Err(forbidden("Manager access required"));
     }
+    for value in [
+        &branding.provider_name,
+        &branding.provider_address,
+        &branding.provider_tax_id,
+        &branding.provider_email,
+        &branding.provider_phone,
+        &branding.bank_name,
+        &branding.bank_iban,
+        &branding.bank_bic,
+        &branding.bank_routing,
+        &branding.bank_account,
+        &branding.invoice_notes,
+        &branding.invoice_payment_terms,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Some(message) = crate::models::branding_value_error(value) {
+            return Err(err(BAD_REQUEST, message));
+        }
+    }
 
     let branding = sqlx::query_as!(
         OrgBranding,

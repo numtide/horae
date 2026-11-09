@@ -452,3 +452,67 @@ async fn failed_branding_write_rolls_back_and_releases_authority(pool: PgPool) {
         (requested, false, before)
     );
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn branding_refuses_a_value_the_invoice_pdf_cannot_print(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let longest = "x".repeat(crate::models::organization::MAX_BRANDING_VALUE_BYTES);
+    let accepted = OrgBranding {
+        invoice_notes: Some(longest.clone()),
+        ..default_branding()
+    };
+    update_org_branding_record(&pool, ids.org_id, ids.user_id, &accepted)
+        .await
+        .unwrap();
+    let before = row_version(&pool, ids.org_id).await;
+    for refused in [longest + "x", "Nul\0byte".into()] {
+        let requested = OrgBranding {
+            bank_account: Some(refused),
+            ..accepted.clone()
+        };
+        let result = update_org_branding_record(&pool, ids.org_id, ids.user_id, &requested).await;
+        assert!(
+            matches!(
+                result,
+                Err(ServerFnError::ServerError {
+                    code: BAD_REQUEST,
+                    ..
+                })
+            ),
+            "{result:?}"
+        );
+        assert_eq!(row_version(&pool, ids.org_id).await, before);
+    }
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn detailed_permissions_leave_branding_to_managers_and_admins(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Member).await;
+    sqlx::query!(
+        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (role, allowed) in [
+        (OrgRole::Member, false),
+        (OrgRole::Manager, true),
+        (OrgRole::Admin, true),
+    ] {
+        sqlx::query!(
+            "UPDATE users SET org_role = $2 WHERE id = $1",
+            ids.user_id,
+            role as OrgRole,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let requested = OrgBranding {
+            provider_name: Some(format!("Saved by {role:?}")),
+            ..default_branding()
+        };
+        let result = update_org_branding_record(&pool, ids.org_id, ids.user_id, &requested).await;
+        assert_eq!(result.is_ok(), allowed, "{role:?}: {result:?}");
+    }
+}
