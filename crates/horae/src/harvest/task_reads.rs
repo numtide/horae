@@ -26,7 +26,8 @@ pub(super) async fn read(
         r#"WITH visible AS MATERIALIZED (
              SELECT t.id,t.name,t.active,t.billable_default,
                     CASE WHEN (CASE WHEN $7 THEN legacy.can_view_rates ELSE $9 END)
-                      THEN t.default_rate_cents END default_rate_cents
+                      THEN t.default_rate_cents END default_rate_cents,
+                    t.default_rate_currency
              FROM tasks t
              LEFT JOIN task_read_access legacy ON legacy.org_id=t.org_id
                AND legacy.task_id=t.id AND legacy.user_id=$2
@@ -37,7 +38,8 @@ pub(super) async fn read(
              SELECT * FROM visible ORDER BY name,id LIMIT $5 OFFSET $6
            )
            SELECT totals.total AS "total!",api_number($1,'task',t.id) AS "id?",t.name AS "name?",
-                  t.active AS "active?",t.billable_default AS "billable_default?",t.default_rate_cents
+                  t.active AS "active?",t.billable_default AS "billable_default?",t.default_rate_cents,
+                  t.default_rate_currency
            FROM totals LEFT JOIN page t ON true ORDER BY t.name,t.id"#,
         caller.org_id,
         caller.user_id,
@@ -58,10 +60,11 @@ pub(super) async fn read(
         .total;
     let mut rows = Vec::with_capacity(records.len());
     for record in records {
-        let Some(id) = record.id else { continue };
+        // Only the row of an empty page has no name.
+        let Some(name) = record.name else { continue };
         rows.push(TaskRow {
-            id,
-            name: record.name.ok_or_else(|| internal("Missing task name"))?,
+            id: record.id.ok_or_else(|| internal("Missing api number"))?,
+            name,
             active: record
                 .active
                 .ok_or_else(|| internal("Missing task activity"))?,
@@ -69,6 +72,7 @@ pub(super) async fn read(
                 .billable_default
                 .ok_or_else(|| internal("Missing task billing flag"))?,
             default_rate_cents: record.default_rate_cents,
+            default_rate_currency: record.default_rate_currency,
         });
     }
     access.tx.commit().await.map_err(internal)?;

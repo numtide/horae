@@ -129,6 +129,7 @@ async fn users_me(user: AuthUser, State(db): State<PgPool>) -> ApiResult<Harvest
         r#"SELECT api_number(org_id, 'user', id) AS "id!", name, email, active,
          org_role::text AS "org_role!: String",
          cost_rate_cents, billable_rate_cents,
+         (SELECT default_currency FROM organizations o WHERE o.id = org_id) AS "org_currency!",
          created_at as "created_at: chrono::DateTime<chrono::Utc>"
          FROM users WHERE id = $1"#,
         user.user_id,
@@ -179,9 +180,11 @@ struct TimeEntryRow {
     task_name: String,
     client_id: i64,
     client_name: String,
-    // Rates
+    // Rates: billing in the project's currency, cost in the organization's.
     billable_rate_cents: Option<i64>,
     user_cost_rate_cents: Option<i64>,
+    project_currency: String,
+    org_currency: String,
     budget_kind: Option<String>,
 }
 
@@ -243,11 +246,11 @@ fn time_entry_row_to_harvest(
         billable_rate: row
             .billable_rate_cents
             .filter(|_| can_view_rates)
-            .map(Amount),
+            .map(|cents| Amount::new(cents, &row.project_currency)),
         cost_rate: row
             .user_cost_rate_cents
             .filter(|_| can_view_rates)
-            .map(Amount),
+            .map(|cents| Amount::new(cents, &row.org_currency)),
         created_at: row.created_at.to_rfc3339(),
         updated_at: row.updated_at.to_rfc3339(),
         user: HarvestRef {
@@ -352,6 +355,7 @@ async fn time_entries_page(
                ) END) END AS "billable_rate_cents?",
                CASE WHEN viewer.org_role = 'admin' OR (viewer.org_role = 'manager' AND mc.id IS NULL)
                  THEN COALESCE(mc.cost_rate_cents, u.cost_rate_cents) END AS user_cost_rate_cents,
+               p.currency AS project_currency, o.default_currency AS org_currency,
                CASE WHEN access.can_view_progress THEN p.budget_kind::text END AS "budget_kind?: String"
          FROM time_entries te
          JOIN users viewer ON viewer.id = $10 AND viewer.org_id = te.org_id AND viewer.active
@@ -447,6 +451,7 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
                ) END) END AS "billable_rate_cents?",
                CASE WHEN viewer.org_role = 'admin' OR (viewer.org_role = 'manager' AND mc.id IS NULL)
                  THEN COALESCE(mc.cost_rate_cents, u.cost_rate_cents) END AS user_cost_rate_cents,
+               p.currency AS project_currency, o.default_currency AS org_currency,
                CASE WHEN access.can_view_progress THEN p.budget_kind::text END AS "budget_kind?: String"
          FROM time_entries te
          JOIN users viewer ON viewer.id = $4 AND viewer.org_id = te.org_id AND viewer.active
@@ -501,6 +506,7 @@ struct ProjectRow {
     budget_kind: String,
     budget_amount_cents: Option<i64>,
     budget_minutes: Option<i64>,
+    currency: String,
     starts_on: Option<NaiveDate>,
     ends_on: Option<NaiveDate>,
     created_at: DateTime<Utc>,
@@ -523,7 +529,9 @@ fn project_row_to_harvest(row: &ProjectRow) -> HarvestProject {
     };
     let budget = match row.budget_kind.as_str() {
         "hours" => row.budget_minutes.map(|m| Budget::Hours(Hours(m))),
-        "amount" => row.budget_amount_cents.map(|c| Budget::Amount(Amount(c))),
+        "amount" => row
+            .budget_amount_cents
+            .map(|c| Budget::Amount(Amount::new(c, &row.currency))),
         _ => None,
     };
 
@@ -669,6 +677,8 @@ struct TaskRow {
     active: bool,
     billable_default: bool,
     default_rate_cents: Option<i64>,
+    /// Unknown for some imported catalog rates; written with two decimals.
+    default_rate_currency: Option<String>,
 }
 
 fn task_row_to_harvest(row: &TaskRow) -> HarvestTask {
@@ -677,7 +687,9 @@ fn task_row_to_harvest(row: &TaskRow) -> HarvestTask {
         name: row.name.clone(),
         is_active: row.active,
         billable_by_default: row.billable_default,
-        default_hourly_rate: row.default_rate_cents.map(Amount),
+        default_hourly_rate: row
+            .default_rate_cents
+            .map(|cents| Amount::new(cents, row.default_rate_currency.as_deref().unwrap_or(""))),
         created_at: String::new(), // tasks table has no created_at
         updated_at: String::new(),
     }
@@ -733,6 +745,8 @@ struct UserRow {
     org_role: String,
     cost_rate_cents: Option<i64>,
     billable_rate_cents: Option<i64>,
+    /// A person's rates are in the organization's currency.
+    org_currency: String,
     created_at: DateTime<Utc>,
 }
 
@@ -750,8 +764,12 @@ fn user_row_to_harvest(row: &UserRow) -> HarvestUser {
         email: row.email.clone(),
         is_active: row.active,
         is_admin: row.org_role == "admin",
-        cost_rate: row.cost_rate_cents.map(Amount),
-        default_hourly_rate: row.billable_rate_cents.map(Amount),
+        cost_rate: row
+            .cost_rate_cents
+            .map(|cents| Amount::new(cents, &row.org_currency)),
+        default_hourly_rate: row
+            .billable_rate_cents
+            .map(|cents| Amount::new(cents, &row.org_currency)),
         created_at: row.created_at.to_rfc3339(),
         updated_at: row.created_at.to_rfc3339(), // no updated_at column
     }
@@ -799,6 +817,7 @@ async fn users_page(
         r#"SELECT api_number(org_id, 'user', id) AS "id!", name, email, active,
          org_role::text AS "org_role!: String",
          cost_rate_cents, billable_rate_cents,
+         (SELECT default_currency FROM organizations o WHERE o.id = org_id) AS "org_currency!",
          created_at as "created_at: chrono::DateTime<chrono::Utc>"
          FROM users
          WHERE org_id = $1
@@ -852,6 +871,11 @@ mod tests {
     // This API rides the same session cookie as the SPA, so these assert that it
     // applies the same policy: rates and other people's rows need a manager.
 
+    /// Seeded projects and organizations bill in euros.
+    fn eur(cents: i64) -> Amount {
+        Amount::new(cents, "EUR")
+    }
+
     fn caller(ids: &SeedIds, org_role: OrgRole) -> AuthUser {
         AuthUser {
             user_id: ids.user_id,
@@ -903,10 +927,10 @@ mod tests {
         assert_eq!((entry.billable_rate, entry.cost_rate), (None, None));
         assert_eq!(
             (
-                page.data["time_entries"][0].billable_rate,
-                page.data["time_entries"][0].cost_rate
+                &page.data["time_entries"][0].billable_rate,
+                &page.data["time_entries"][0].cost_rate
             ),
-            (None, None)
+            (&None, &None)
         );
         assert_eq!(entry.hours, Hours(60));
     }
@@ -959,16 +983,12 @@ mod tests {
                 .unwrap();
             let Json(detail) = time_entry_by_id(&pool, &caller, id).await.unwrap();
             assert_eq!(
-                (entry.billable_rate, entry.hours, entry.cost_rate),
-                (
-                    Some(Amount(expected.0)),
-                    Hours(expected.1),
-                    Some(Amount(1200))
-                )
+                (&entry.billable_rate, entry.hours, &entry.cost_rate),
+                (&Some(eur(expected.0)), Hours(expected.1), &Some(eur(1200)))
             );
             assert_eq!(
-                (detail.billable_rate, detail.hours, detail.cost_rate),
-                (entry.billable_rate, entry.hours, entry.cost_rate)
+                (&detail.billable_rate, detail.hours, &detail.cost_rate),
+                (&entry.billable_rate, entry.hours, &entry.cost_rate)
             );
         }
     }
@@ -1001,9 +1021,9 @@ mod tests {
         sqlx::query!("INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode) VALUES ($1,$2,$3,$4,'person')", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id)
             .execute(&pool).await.unwrap();
         for (mode, expected) in [
-            ("person", Amount(4000)),
-            ("task", Amount(5000)),
-            ("project", Amount(3500)),
+            ("person", eur(4000)),
+            ("task", eur(5000)),
+            ("project", eur(3500)),
         ] {
             sqlx::query!(
                 "UPDATE project_settings SET rate_mode = $2 WHERE project_id = $1",
@@ -1019,15 +1039,15 @@ mod tests {
                 .unwrap();
             assert_eq!(
                 (
-                    entry.billable_rate,
-                    page.data["time_entries"][0].billable_rate
+                    &entry.billable_rate,
+                    &page.data["time_entries"][0].billable_rate
                 ),
-                (Some(expected), Some(expected)),
+                (&Some(expected.clone()), &Some(expected)),
                 "selected mode: {mode}"
             );
             assert_eq!(
-                (entry.cost_rate, page.data["time_entries"][0].cost_rate),
-                (Some(Amount(1500)), Some(Amount(1500)))
+                (&entry.cost_rate, &page.data["time_entries"][0].cost_rate),
+                (&Some(eur(1500)), &Some(eur(1500)))
             );
         }
     }
@@ -1069,11 +1089,11 @@ mod tests {
         .await
         .unwrap();
         for (task, assignment, expected) in [
-            (None, None, Amount(3500)),
-            (None, Some(4000), Amount(4000)),
-            (Some(5000), Some(4000), Amount(5000)),
-            (Some(0), Some(4000), Amount(0)),
-            (None, Some(0), Amount(0)),
+            (None, None, eur(3500)),
+            (None, Some(4000), eur(4000)),
+            (Some(5000), Some(4000), eur(5000)),
+            (Some(0), Some(4000), eur(0)),
+            (None, Some(0), eur(0)),
         ] {
             sqlx::query!(
                 "UPDATE project_tasks SET rate_cents = $2 WHERE project_id = $1",
@@ -1095,7 +1115,7 @@ mod tests {
             let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
                 .await
                 .unwrap();
-            assert_eq!(entry.billable_rate, Some(expected));
+            assert_eq!(entry.billable_rate, Some(expected.clone()));
             assert_eq!(page.data["time_entries"][0].billable_rate, Some(expected));
         }
         let invoice_id = Uuid::now_v7();
@@ -1115,11 +1135,8 @@ mod tests {
         let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
             .await
             .unwrap();
-        assert_eq!(entry.billable_rate, Some(Amount(1234)));
-        assert_eq!(
-            page.data["time_entries"][0].billable_rate,
-            Some(Amount(1234))
-        );
+        assert_eq!(entry.billable_rate, Some(eur(1234)));
+        assert_eq!(page.data["time_entries"][0].billable_rate, Some(eur(1234)));
     }
 
     #[sqlx::test(migrations = "./migrations")]
@@ -1272,7 +1289,7 @@ mod tests {
 
         let users = &page.data["users"];
         assert_eq!(users.len(), 2);
-        assert!(users.iter().any(|u| u.cost_rate == Some(Amount(12345))));
+        assert!(users.iter().any(|u| u.cost_rate == Some(eur(12345))));
     }
 
     #[sqlx::test(migrations = "./migrations")]

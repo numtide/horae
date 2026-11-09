@@ -53,10 +53,11 @@ pub(super) async fn read(
         .total;
     let mut rows = Vec::with_capacity(records.len());
     for record in records {
-        let Some(id) = record.id else { continue };
+        // Only the row of an empty page has no name.
+        let Some(name) = record.name else { continue };
         rows.push(ClientRow {
-            id,
-            name: record.name.ok_or_else(|| internal("Missing client name"))?,
+            id: record.id.ok_or_else(|| internal("Missing api number"))?,
+            name,
             active: record
                 .active
                 .ok_or_else(|| internal("Missing client activity"))?,
