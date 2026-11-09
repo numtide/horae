@@ -36,11 +36,10 @@
   implementation choices, and are kept. Horae's own storage, code layout and libraries do not
   appear in the spec. The constitution amendment names one existing function only to show which
   path the rule protects.
-- Instead of `[NEEDS CLARIFICATION]` markers, three open questions (OQ-1 OAuth2 provider, OQ-2
-  integer numbering, OQ-3 account id) carry options and a recommended default. The requirements
-  that depend on them are marked provisional, following the pattern of spec 020. Nine lower-impact
-  decisions (D-1 to D-9) are recorded with defaults.
+- The three open questions (OQ-1 OAuth2 provider, OQ-2 integer numbering, OQ-3 account id) and
+  the nine lower-impact decisions (D-1 to D-9) were decided by the maintainer on 2026-11-09 and
+  are recorded under *Clarifications*.
 - The constitution amendment needs the maintainer's approval before delivery step 3 (writes).
   Unit conversion (steps 1–3) relies on the Principle I clarification.
-- `harvest-parity.md` needs a decision row authorizing this scope change. It is not edited by
-  this specification.
+- `harvest-parity.md` row D-020 records the approved scope change and the GET-only
+  reference-account authorization.

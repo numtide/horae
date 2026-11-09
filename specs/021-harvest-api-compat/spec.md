@@ -15,8 +15,8 @@ API v2."
 
 Extends the read-only Harvest-compatible API of
 [001](../001-time-tracking-invoicing/contracts/harvest-api.md). Changes the scope row "Existing
-integrations and API" in [harvest-parity.md](../harvest-parity.md), which today allows regression
-coverage only and no write endpoints. Interacts with
+integrations and API" in [harvest-parity.md](../harvest-parity.md), which allowed regression
+coverage only and no write endpoints; the maintainer approved the wider scope as D-020. Interacts with
 [020 multi-tenant subdomains](https://github.com/numtide/horae/tree/spec/multi-tenant-subdomains/specs/020-multi-tenant-subdomains)
 (not merged). The evidence is in [research.md](research.md).
 
@@ -49,9 +49,9 @@ add a base-URL option are recommended to the maintainer as a separate, outward-f
 
 ## Open Questions
 
-Each lists options and a recommended default. Requirements that depend on one are marked
-*(provisional: OQ-n)* and follow the recommended default so the rest of the specification is
-complete. The maintainer's answer replaces them.
+**Resolved on 2026-11-09**: the maintainer chose option (a) for all three (see *Clarifications*).
+The options are kept as the record of what was weighed. Requirements that depended on one are
+marked *(OQ-n)*.
 
 - **OQ-1: Horae as an OAuth2 identity provider for Harvest clients.** About a third of the
   open-source clients sign in with OAuth2. All of them have Harvest's identity host built in and
@@ -81,7 +81,7 @@ complete. The maintainer's answer replaces them.
     import one Harvest account (020 OQ-3 allows that), and names a Harvest account inside Horae.
 
 Further decisions with a recommended default are under *Decisions with defaults*; they are less
-consequential and are recorded there rather than marked provisional.
+consequential and are recorded there.
 
 ## Clarifications
 
@@ -94,6 +94,24 @@ consequential and are recorded there rather than marked provisional.
   empty and the company's feature flags say they are off (FR-043).
 - Q: Must the API reuse Horae's permission and domain rules? → A: Yes. Every write runs the same
   operation, rules and permission checks as the equivalent action in the web app (FR-030).
+
+### Session 2026-11-09 (maintainer decisions)
+
+- Q: OQ-1, should Horae be an OAuth2 provider? → A: (a) Personal access tokens first, OAuth2
+  later (US6 stays, last in the delivery order).
+- Q: OQ-2, which integer does each record get? → A: (a) Imported records keep their Harvest id;
+  everything else gets the next free number for its kind; a collision gets a fresh number and is
+  reported.
+- Q: OQ-3, what is the account id? → A: (a) A Horae-assigned number per organization.
+- Q: D-6, does starting a timer stop the running one, in the web app too? → A: Yes.
+- Q: D-8, open base-URL pull requests in third-party projects? → A: No. Patches needed to point a
+  suite client at Horae stay inside this repository's test suite and are not sent upstream.
+- Q: D-9, may reference responses be recorded from the test (evidence) Harvest account? → A: Yes,
+  with GET requests only, to record response and error shapes. The authorization is row D-020 in
+  `harvest-parity.md`. No real account name or id is written into the repository.
+- Q: The other defaults D-1 to D-7? → A: Accepted as written.
+- Q: The constitution amendment? → A: Still pending the maintainer's approval; not applied. The
+  plan's Constitution Check stays pending on it.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -129,7 +147,7 @@ and a PHP library) and see them succeed and decode every id as an integer.
 1. **Given** a record seen through the API, **When** the same record is requested again later,
    by any client, **Then** it has the same integer id.
 1. **Given** a record imported from Harvest, **When** a client asks for it, **Then** its id is its
-   original Harvest id *(provisional: OQ-2)*.
+   original Harvest id *(OQ-2)*.
 
 ______________________________________________________________________
 
@@ -253,7 +271,7 @@ member token and see each write refused.
 
 ______________________________________________________________________
 
-### User Story 6 - Sign in to a Harvest OAuth2 client with Horae (Priority: P3, provisional: OQ-1)
+### User Story 6 - Sign in to a Harvest OAuth2 client with Horae (Priority: P3, OQ-1)
 
 A person runs an OAuth2-only tool (a forked Singer tap, a macOS menu-bar app) that has been
 pointed at Horae's identity endpoints and registered with Horae. The tool sends them to Horae.
@@ -334,7 +352,7 @@ ______________________________________________________________________
 #### Accounts and tenants
 
 - **FR-010**: Each organization MUST have one integer account id that never changes and is never
-  reused *(provisional: OQ-3)*. Administrators MUST see it beside the token list.
+  reused *(OQ-3)*. Administrators MUST see it beside the token list.
 - **FR-011**: A request whose account id is not the token owner's organization MUST be refused as
   unauthorized. A request with no account id MUST be served for the token's own organization.
 - **FR-012**: Under multi-tenancy (020), the request's host MUST select the tenant first. A token
@@ -347,7 +365,7 @@ ______________________________________________________________________
   kind and organization, never changes and is never reused. Primary keys stay UUID v7.
 - **FR-016**: A record imported from Harvest MUST keep its original Harvest id as its integer id.
   If that number is already held by another record of the same kind, the record gets a fresh
-  number and the importer reports the change *(provisional: OQ-2)*.
+  number and the importer reports the change *(OQ-2)*.
 - **FR-017**: Every record that exists when this feature is deployed MUST receive its number at
   deployment, and every new record when it is created.
 - **FR-018**: Every id in a request (path, filter or body) MUST be accepted as an integer. For a
@@ -429,7 +447,7 @@ ______________________________________________________________________
   and 100 per 15 minutes for reports. Operators can change both. Over the limit, the answer is
   429 with a `Retry-After` header and a `retry_after` field in the body.
 
-#### OAuth2 provider *(provisional: OQ-1, US6)*
+#### OAuth2 provider *(OQ-1, US6)*
 
 - **FR-060**: Administrators MUST be able to register OAuth2 clients with a name and redirect
   addresses, and see and revoke them.
@@ -452,14 +470,13 @@ ______________________________________________________________________
   "works" is a measured, named list rather than a claim.
 - **FR-073**: Response shapes MUST additionally be checked field by field against reference
   responses that describe Harvest's documented shapes (names, types, nullability). The reference
-  responses are written by hand from the public documentation, or recorded from the test
-  (evidence) Harvest account only if the maintainer authorizes that (see *Decisions with
-  defaults*, D-9).
+  responses are recorded from the test (evidence) Harvest account with GET requests only, as
+  authorized in D-9. Where no recording exists yet, they are written by hand from the public
+  documentation. Recorded files carry no real account name, account id, person or business data.
 
 ### Decisions with defaults
 
-These are recorded with the default this specification follows; the maintainer can change any of
-them without reshaping the feature.
+The maintainer accepted D-1 to D-7 as written, and decided D-8 and D-9 on 2026-11-09.
 
 - **D-1 Existing UUID consumers.** Switch responses to integers in one release, and accept UUIDs
   in paths and filters for a transition period (FR-018). Alternative: a versioned path. Not
@@ -475,14 +492,15 @@ them without reshaping the feature.
   *Assumptions*.
 - **D-6 Starting a timer while another runs.** Stop the running one, as Harvest clients expect.
   Today Horae refuses with a conflict. This changes the web app's behaviour too, because the
-  operation is shared.
+  operation is shared. Confirmed by the maintainer.
 - **D-7 Cookie writes.** Writes need a token. Session-cookie reads stay for compatibility.
-- **D-8 Upstream base-URL patches.** Recommend that the maintainer open small pull requests adding
-  a base-URL option to the tools listed in [research.md §1.7](research.md#17-conclusion-on-reach).
-  They are outward-facing and not part of this repository's work.
-- **D-9 Recording reference responses.** Write the reference shapes by hand from the public docs.
-  Recording from the test (evidence) Harvest account would make them exact, but it needs the
-  maintainer's authorization recorded in `harvest-parity.md` and only read requests.
+- **D-8 Upstream base-URL patches.** Not opened. The maintainer decided against pull requests in
+  third-party projects. A suite client that needs a base-URL change gets it from a patch kept in
+  this repository's test suite.
+- **D-9 Recording reference responses.** Authorized: record reference shapes from the test
+  (evidence) Harvest account, with GET requests only, including error responses. Recorded on
+  `harvest-parity.md` as D-020. Recordings are scrubbed of account names, account ids, people and
+  business data before they are committed.
 
 ### Key Entities
 
@@ -531,8 +549,8 @@ them without reshaping the feature.
   The plan confirms which build offline.
 
 - Harvest's error body shapes and its exact hours precision are not documented. The defaults in
-  FR-024 and D-5 follow commonly observed behaviour and are verified before release, from public
-  examples or (if authorized) from the test account.
+  FR-024 and D-5 follow commonly observed behaviour and are verified before release with GET
+  requests to the test account (D-9).
 
 - Horae stays single-organization in deployment until 020 lands. FR-012 then takes effect with no
   change to the API's contract.
@@ -565,7 +583,7 @@ many surveyed clients each step unlocks ([research.md §1.5](research.md#15-most
 1. **Catalogue and report reads** (FR-044 items 2–4). Assignments, teammates, users by id,
    reports, invoices, tags.
 1. **Catalogue writes and invoice status** (FR-033, FR-034).
-1. **OAuth2 provider** (FR-060–FR-062), if OQ-1 keeps it.
+1. **OAuth2 provider** (FR-060–FR-062), last, as OQ-1 decided.
 
 Steps 1–3 depend on the constitution amendment for writes (step 3) and for the unit conversion
 (steps 1–3 already replace today's floating-point output). The suite grows with each step
