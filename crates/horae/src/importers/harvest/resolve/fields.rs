@@ -27,6 +27,7 @@ pub struct TaskFields<'a> {
     pub harvest_task_id: Option<i64>,
     pub task_name: &'a str,
     pub task_billable_default: bool,
+    pub task_is_default: bool,
     pub task_active: bool,
     pub billable_rate: Option<&'a str>,
     pub rate_currency: Option<&'a str>,
@@ -67,6 +68,8 @@ impl<'a> From<&'a SourceRow> for TaskFields<'a> {
             harvest_task_id: row.harvest_task_id,
             task_name: &row.task_name,
             task_billable_default: row.task_billable_default,
+            // Time entries and the CSV export do not say whether a task is common.
+            task_is_default: false,
             task_active: true,
             billable_rate: row.billable_rate.as_deref(),
             rate_currency: row.currency.as_deref(),

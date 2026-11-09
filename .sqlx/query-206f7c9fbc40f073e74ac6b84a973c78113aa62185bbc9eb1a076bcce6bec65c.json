@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT name, is_default, EXISTS (SELECT 1 FROM project_tasks pt WHERE pt.task_id = t.id) AS \"linked!\"\n         FROM tasks t WHERE org_id = $1 AND name IN ('Task', 'Unused task') ORDER BY name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_default",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "linked!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "206f7c9fbc40f073e74ac6b84a973c78113aa62185bbc9eb1a076bcce6bec65c"
+}

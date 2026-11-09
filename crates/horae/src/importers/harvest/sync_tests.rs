@@ -312,11 +312,27 @@ async fn parent_catalog_preserves_metadata_and_counts_each_entity_once(pool: PgP
     ])).unwrap();
     source.tasks = serde_json::from_value(json!([
         {"id":3,"name":"Task","billable_by_default":false,"default_hourly_rate":42.25,"is_active":false},
-        {"id":9,"name":"Unused task","default_hourly_rate":0}
+        {"id":9,"name":"Unused task","default_hourly_rate":0,"is_default":true}
     ])).unwrap();
     let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &source, day(4))
         .await
         .unwrap();
+    let common = sqlx::query!(
+        "SELECT name, is_default, EXISTS (SELECT 1 FROM project_tasks pt WHERE pt.task_id = t.id) AS \"linked!\"
+         FROM tasks t WHERE org_id = $1 AND name IN ('Task', 'Unused task') ORDER BY name",
+        org
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        common
+            .iter()
+            .map(|task| (task.name.as_str(), task.is_default, task.linked))
+            .collect::<Vec<_>>(),
+        [("Task", false, true), ("Unused task", true, false)],
+        "Harvest's common flag is kept, and a common task is linked only where Harvest assigned it"
+    );
     assert_eq!(report.error_count(), 0);
     assert_eq!(
         (

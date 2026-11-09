@@ -250,6 +250,7 @@ async fn resolve_parent(
                 harvest_task_id: Some(task.id),
                 task_name: &task.name,
                 task_billable_default: task.billable_by_default,
+                task_is_default: task.is_default,
                 task_active: task.is_active,
                 billable_rate: rate.as_deref(),
                 // The task catalog response does not identify its currency.

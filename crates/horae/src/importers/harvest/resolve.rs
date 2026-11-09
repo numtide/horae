@@ -558,8 +558,8 @@ pub async fn resolve_task(
         });
     let id = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, active, default_rate_currency)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, active, default_rate_currency, is_default)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
         id,
         org.org_id,
         name,
@@ -567,6 +567,7 @@ pub async fn resolve_task(
         default_rate_cents,
         row.task_active,
         rate_currency,
+        row.task_is_default,
     )
     .execute(&mut *conn)
     .await?;
