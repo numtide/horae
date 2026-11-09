@@ -1,7 +1,7 @@
 use super::*;
-#[cfg(feature = "server")]
-use crate::models::task::TaskCatalogEntry;
 use crate::models::task::{TaskActivity, TaskCatalogPage, TaskCursor};
+#[cfg(feature = "server")]
+use crate::models::task::{TaskCatalogEntry, opens_task_catalog};
 
 #[server]
 pub async fn load_task_catalog(
@@ -25,15 +25,31 @@ async fn fetch_task_catalog(
     let mut access = read_access::ReadAccess::begin(pool, requester.org_id, requester.user_id)
         .await?
         .ok_or_else(|| forbidden("Task catalog access is unavailable"))?;
-    if !access.has(Permission::TaskReadAll) {
+    let policy_zero_role = if access.legacy() {
+        Some(
+            sqlx::query_scalar!(
+                r#"SELECT org_role as "org_role: OrgRole" FROM users WHERE org_id=$1 AND id=$2"#,
+                requester.org_id,
+                requester.user_id,
+            )
+            .fetch_one(&mut *access.tx)
+            .await
+            .map_err(server_err)?,
+        )
+    } else {
+        None
+    };
+    if !opens_task_catalog(policy_zero_role, access.has(Permission::TaskReadAll)) {
         return Err(forbidden("Task catalog access is unavailable"));
     }
     if after.is_some_and(|cursor| cursor.name.contains('\0')) {
         return Err(err(BAD_REQUEST, "Invalid task catalog cursor"));
     }
-    let can_edit = access.has(Permission::TaskWriteAll);
-    let can_read_rates = access.has(Permission::BillableRateReadAll);
-    let can_edit_rates = can_edit && access.has(Permission::BillableRateWriteAll);
+    // A legacy reader is an admin or manager, who may already edit tasks and rates.
+    let legacy = policy_zero_role.is_some();
+    let can_edit = legacy || access.has(Permission::TaskWriteAll);
+    let can_read_rates = legacy || access.has(Permission::BillableRateReadAll);
+    let can_edit_rates = can_edit && (legacy || access.has(Permission::BillableRateWriteAll));
     let rate_currency = if can_edit_rates {
         Some(sqlx::query_scalar!(
             "SELECT upper(btrim(default_currency)) AS \"currency!\" FROM organizations WHERE id=$1",
@@ -175,6 +191,49 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    /// Policy zero opens the catalog to the legacy roles that may already edit
+    /// it, with rates, and keeps it closed to members.
+    #[sqlx::test(migrations = "./migrations")]
+    #[serial_test::serial]
+    async fn policy_zero_opens_the_catalog_to_admins_and_managers_only(pool: PgPool) {
+        for (role, allowed) in [
+            (OrgRole::Admin, true),
+            (OrgRole::Manager, true),
+            (OrgRole::Member, false),
+        ] {
+            let ids = seed(&pool, role).await;
+            let requester = PermissionRequester {
+                org_id: ids.org_id,
+                user_id: ids.user_id,
+            };
+            let page = fetch_task_catalog(&pool, requester, TaskActivity::All, None).await;
+            if !allowed {
+                assert!(
+                    matches!(
+                        page,
+                        Err(ServerFnError::ServerError {
+                            code: FORBIDDEN,
+                            ..
+                        })
+                    ),
+                    "{role:?}"
+                );
+                continue;
+            }
+            let page = page.unwrap();
+            assert_eq!(
+                page.tasks.iter().map(|task| task.id).collect::<Vec<_>>(),
+                [ids.task_id],
+                "{role:?}"
+            );
+            assert!(
+                page.can_edit && page.can_read_rates && page.can_edit_rates,
+                "{role:?}"
+            );
+            assert!(page.rate_currency.is_some(), "{role:?}");
+        }
     }
 
     #[sqlx::test(migrations = "./migrations")]

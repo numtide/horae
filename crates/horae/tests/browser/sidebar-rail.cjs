@@ -24,14 +24,14 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await (await ready).finished();
     const sidebar = page.locator('.app-sidebar');
     // Harvest's sections and order. The seed runs policy zero, which grants a
-    // legacy admin Team and Clients but not Tasks (task-catalog.cjs covers Tasks).
+    // legacy admin Team, Clients and Tasks (task-catalog.cjs covers the catalog).
     const sections = () => sidebar.evaluate(el => [...el.querySelectorAll('.sidebar-section')].map(section => [
       section.textContent,
       [...section.nextElementSibling.querySelectorAll('.nav-item-label')].map(label => label.textContent),
     ]));
     await expect.poll(sections).toEqual([
       ['Track', ['Timesheet']],
-      ['Organize', ['Team', 'Clients', 'Projects']],
+      ['Organize', ['Team', 'Clients', 'Projects', 'Tasks']],
       ['Bill', ['Invoices']],
       ['Review', ['Approvals', 'Reports']],
     ]);
@@ -86,9 +86,9 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
       const r = row.querySelector('svg').getBoundingClientRect();
       return { label: getComputedStyle(row.querySelector('.nav-item-label')).display, width: r.width, cx: r.x + r.width / 2, paths: row.querySelector('svg').childElementCount };
     }));
-    assert.equal(glyphs.length, 7, JSON.stringify(glyphs));
+    assert.equal(glyphs.length, 8, JSON.stringify(glyphs));
     // With labels hidden, each row still has an accessible name and a tooltip.
-    for (const name of ['Timesheet', 'Team', 'Clients', 'Projects', 'Invoices', 'Approvals', 'Reports']) {
+    for (const name of ['Timesheet', 'Team', 'Clients', 'Projects', 'Tasks', 'Invoices', 'Approvals', 'Reports']) {
       const link = sidebar.getByRole('link', { name, exact: true });
       await expect(link).toBeVisible();
       await expect(link).toHaveAttribute('title', name);

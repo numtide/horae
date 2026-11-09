@@ -78,6 +78,8 @@ pub enum Route {
     EditProject { id: Uuid, return_to: EditReturn },
     #[route("/projects/:id")]
     ProjectDetail { id: Uuid },
+    #[route("/tasks")]
+    TaskCatalog {},
     #[route("/approvals?:week")]
     Approvals { week: String },
     #[route("/reports")]
@@ -91,8 +93,6 @@ pub enum Route {
     #[layout(AdminShell)]
     #[route("/admin/users")]
     AdminUsers {},
-    #[route("/admin/tasks")]
-    TaskCatalog {},
     #[route("/admin/importers")]
     ImporterIndex {},
     // The OAuth callback reports a failed connection in the query.
@@ -198,6 +198,12 @@ mod tests {
             assert!(matches_navigation(&section, &route));
             assert!(!matches_navigation(&Route::ClientList {}, &route));
         }
+    }
+
+    #[test]
+    fn task_catalog_lives_at_tasks() {
+        assert_eq!(Route::TaskCatalog {}.to_string(), "/tasks");
+        assert!("/tasks".parse::<Route>().unwrap() == Route::TaskCatalog {});
     }
 
     #[test]

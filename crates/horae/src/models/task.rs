@@ -1,7 +1,16 @@
+use horae_core::types::OrgRole;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::permission_editor::PermissionRequester;
+
+/// Who may open the task catalog, shared by the catalog's server check and the
+/// navigation. `policy_zero_role` is the person's legacy role when detailed
+/// permissions are off: admins and managers, who may already edit tasks, read
+/// the catalog. Otherwise `TaskReadAll` decides.
+pub fn opens_task_catalog(policy_zero_role: Option<OrgRole>, has_task_read_all: bool) -> bool {
+    policy_zero_role.map_or(has_task_read_all, OrgRole::is_manager_or_above)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
