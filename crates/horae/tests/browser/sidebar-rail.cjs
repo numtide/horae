@@ -86,9 +86,9 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
       const r = row.querySelector('svg').getBoundingClientRect();
       return { label: getComputedStyle(row.querySelector('.nav-item-label')).display, width: r.width, cx: r.x + r.width / 2, paths: row.querySelector('svg').childElementCount };
     }));
-    assert.equal(glyphs.length, 7, JSON.stringify(glyphs));
+    assert.equal(glyphs.length, 8, JSON.stringify(glyphs));
     // With labels hidden, each row still has an accessible name and a tooltip.
-    for (const name of ['Timesheet', 'Team', 'Clients', 'Projects', 'Invoices', 'Approvals', 'Reports']) {
+    for (const name of ['Timesheet', 'Team', 'Clients', 'Projects', 'Tasks', 'Invoices', 'Approvals', 'Reports']) {
       const link = sidebar.getByRole('link', { name, exact: true });
       await expect(link).toBeVisible();
       await expect(link).toHaveAttribute('title', name);
