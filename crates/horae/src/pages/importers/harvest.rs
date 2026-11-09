@@ -12,6 +12,10 @@ mod back_links;
 mod change_account;
 #[path = "harvest/client_settings.rs"]
 mod client_settings;
+#[path = "harvest/connect_banner.rs"]
+mod connect_banner;
+#[path = "harvest/connect_outcome.rs"]
+mod connect_outcome;
 #[path = "harvest/connection_card.rs"]
 mod connection_card;
 #[path = "harvest/csv.rs"]
@@ -32,6 +36,10 @@ mod oauth;
 mod overview;
 #[path = "harvest/presentation.rs"]
 mod presentation;
+#[path = "harvest/redirect_url_field.rs"]
+mod redirect_url_field;
+#[path = "harvest/registered_redirect.rs"]
+mod registered_redirect;
 #[path = "harvest/run.rs"]
 mod run;
 #[path = "harvest/run_list.rs"]
@@ -45,6 +53,7 @@ mod runs;
 #[path = "harvest/runs_cursor.rs"]
 mod runs_cursor;
 
+pub use connect_outcome::{ConnectOutcome, SecretFocus};
 pub use csv::HarvestCsv;
 pub use oauth::HarvestOAuth;
 pub use overview::HarvestOverview;

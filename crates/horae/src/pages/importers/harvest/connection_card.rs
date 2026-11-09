@@ -97,7 +97,7 @@ pub(super) fn ConnectionCard(
                     }
                     button { r#type: "button", role: "menuitem", tabindex: "-1", class: "menu-item",
                         "data-testid": "harvest-oauth-app".to_owned(),
-                        onclick: move |_| { navigator.push(Route::HarvestOAuth {}); },
+                        onclick: move |_| { navigator.push(Route::HarvestOAuth { focus: Default::default() }); },
                         "OAuth app credentials"
                         span { class: "himp-menu-hint", "Client ID and secret used to connect" }
                     }
