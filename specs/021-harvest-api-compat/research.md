@@ -385,3 +385,140 @@ Of the 135 operations on the API host:
 - **Missing with the domain in place: about 68.** This includes the invoice messages, whose
   status changes exist but whose email delivery does not.
 - **Done: 0.** The cross-cutting gaps apply to every existing endpoint.
+
+## 4. Planning decisions (Phase 0)
+
+Each entry records the decision the plan follows, why, and what else was weighed. The
+maintainer's answers to OQ-1 to OQ-3 and D-1 to D-9 are in spec.md *Clarifications*.
+
+### R-1 Token format and storage
+
+- **Decision**: a token is 32 random bytes from the operating system, encoded as base64url with
+  a fixed `horae_pat_` prefix. Horae stores the SHA-256 digest of the whole string and its first
+  eight characters for display. Lookup is by digest.
+- **Rationale**: a 256-bit random secret needs no slow hash; SHA-256 of it cannot be reversed,
+  which is what FR-002 and SC-006 ask. `sha2` is already in `Cargo.lock` (through
+  `openidconnect`), so it becomes a direct dependency without a new download. The prefix lets
+  secret scanners and people recognise the token. No surveyed client parses Harvest's token
+  format; every one sends it as an opaque string.
+- **Alternatives**: Argon2 (meant for low-entropy passwords, and slows every request); storing
+  the token encrypted (a stolen database plus key would reveal it).
+
+### R-2 Integer ids
+
+- **Decision**: one table, `api_ids`, maps `(org_id, kind, number)` to a Horae UUID, with a
+  `from_harvest` flag. Numbers are per organization and per kind. A migration backfills every
+  existing record: first the rows in `harvest_import_map` with their Harvest id, then every other
+  record in `created_at`, id order from `max(number) + 1`. Writes allocate in the same transaction
+  as the insert, under a per-organization-and-kind advisory lock. The importer writes its Harvest
+  id when it creates or matches a record; a collision with a native record gets the next number
+  and a report line (OQ-2).
+- **Rationale**: one table keeps the domain tables unchanged (no `bigint` column on every table)
+  and keeps Principle III's UUID keys as the only primary identity. The import map already holds
+  the Harvest ids, so the backfill is a query.
+- **Alternatives**: a `bigint` identity column on each table (touches every table and every
+  insert; can't keep Harvest ids without overriding identity values); hashing UUIDs into 53-bit
+  integers (collisions; no Harvest id reuse).
+
+### R-3 Account id
+
+- **Decision**: `organizations.api_account_id bigint NOT NULL UNIQUE`, from a sequence, assigned
+  in the same migration. Shown on the token page.
+- **Rationale**: OQ-3 (a). A sequence never reuses a value.
+
+### R-4 Exact decimals on the wire
+
+- **Decision**: conversions live in `horae-core` (`api_decimal` module): minutes to hours text
+  rounded half up to two decimals; hours text to minutes rounded half up, reusing
+  `decimal::scale_decimal`; minor units to major-unit text at the currency's exponent; major-unit
+  text to minor units, refusing extra digits. The server emits these as JSON numbers through
+  `serde_json::value::RawValue` (`raw_value` feature) and reads them the same way, so no `f64`
+  appears. Property tests check that every stored value round-trips (SC-005).
+- **Rationale**: Principle I and the proposed clarification. `raw_value` writes a numeric
+  literal verbatim without changing how the rest of the program parses JSON.
+- **Alternatives**: `arbitrary_precision` (changes every `serde_json::Number` in the app);
+  sending strings (breaks typed clients that expect numbers).
+
+### R-5 Writes through the shared operation
+
+- **Decision**: `server_fns::time_entries::commands::apply` becomes `pub(crate)` and is called by
+  the Harvest handlers with the token's person and organization. Its `ServerFnError` codes map to
+  Harvest statuses: validation 400 → 422, 403, 404, and conflicts stay 409 (the test account
+  answers the daily cap with 409; see `harvest-parity.md`, 2026-11-05). The status for a locked
+  or approved entry is not documented and is confirmed by recording (R-11). Restart becomes `TimesheetCommand::RestartTimer { entry_id }`. `StartTimer` and
+  `RestartTimer` stop the person's running timer inside the same transaction (D-6), for the web
+  app too. Catalogue writes call the existing server functions' inner operations the same way.
+- **Rationale**: the amendment's "second transport, not a second path". Today's code already
+  takes the actor and organization explicitly.
+- **Blocked by**: the constitution amendment (not approved). No write handler lands before it.
+
+### R-6 Authentication extractor
+
+- **Decision**: the Harvest extractor accepts, in order: `Authorization: Bearer`, the
+  `access_token` query parameter, then the session cookie (reads only, D-7). With a token it
+  checks `Harvest-Account-Id` (header or `account_id` query) against the organization's account
+  id when present. `User-Agent` is not required (FR-008). Writes refuse a cookie-only request with
+  401\.
+- **Rationale**: matches what the surveyed clients send (research §1.6).
+
+### R-7 Rate limits
+
+- **Decision**: an in-memory fixed window per token in `AppState`: 100 requests per 15 seconds,
+  and 100 per 15 minutes for report endpoints. A refusal is 429 with `Retry-After` and a JSON body
+  carrying `retry_after` (the Raycast client reads it). Limits are per process.
+- **Rationale**: Horae is deployed as one process; no new dependency or table. If it ever runs
+  several replicas, the limit per process is still a bound.
+- **Alternatives**: `tower_governor` (a dependency for a 30-line counter); a PostgreSQL counter (a
+  write on every request).
+
+### R-8 Pagination and links
+
+- **Decision**: page-based lists keep their envelope with `per_page` 1–2000, default 2000 (D-4);
+  the 19 catalogue lists also accept `cursor`, an opaque base64url encoding of the last
+  `(updated_at, id)` seen, and fill `page`, `total_pages` and `total_entries` as well. Links are
+  absolute, built from the request's `Host` and `X-Forwarded-Proto`, so they follow the tenant
+  host once 020 lands.
+- **Rationale**: research §2 (cursor docs contradict themselves; filling every field satisfies
+  both readings).
+
+### R-9 Update times
+
+- **Decision**: add `created_at` and `updated_at` to `tasks`, and `updated_at` to `projects`,
+  `clients` and `users`, maintained by the existing `set_updated_at()` trigger. Backfill
+  `updated_at` from `created_at` (tasks from the import map's time or the migration time).
+  `updated_since` filters on these columns.
+- **Rationale**: FR-023. A trigger catches every write path, including the importer.
+- **Caveat**: the migration snapshot tests compare whole rows; exclude the new columns there.
+
+### R-10 Compatibility suite in Nix
+
+- **Decision**: `nix/checks/harvest-compat.nix` starts PostgreSQL and the server as
+  `nix/checks/tests.nix` does, seeds an organization, issues a token through the CLI test seed,
+  and runs each client against it. Clients are fetched as fixed-output derivations, so the check
+  itself has no network. The first clients: becoded/go-harvest (Go), minutes-harvest (Rust),
+  hrvst-cli (Node), harvest-tui and dedene (patched base URL). Patches live under
+  `nix/checks/harvest-compat/patches/` and are never sent upstream (D-8). PHP and Java libraries
+  are added once their builds are confirmed offline.
+- **Rationale**: FR-070 to FR-072. Go, Rust and Node have mature offline builders in nixpkgs.
+- **Unconfirmed**: that each pinned client still builds with today's nixpkgs. The first task of
+  step 1 checks this and drops a client that doesn't, recording why.
+
+### R-11 Reference responses (D-9)
+
+- **Decision**: a recording script, `scripts/harvest-record.sh`, sends only GET requests to the
+  test (evidence) Harvest account, using `HARVEST_ACCESS_TOKEN` and `HARVEST_ACCOUNT_ID` from the
+  environment. It refuses any other method, never writes those values to disk, and scrubs each
+  response before writing it to `crates/horae/tests/fixtures/harvest_reference/`. Names, emails,
+  notes, account and record ids and amounts become placeholders of the same JSON type, and
+  numbers keep their count of decimals. It records one success response per implemented endpoint
+  and the errors a GET can produce: 401, 403, 404 and 422 for an invalid `per_page`. It does not
+  provoke 429.
+- **Status**: blocked. No credentials for the test account were available to this session.
+  Until they are, reference shapes are written by hand from the public docs (FR-073).
+
+### R-12 Module layout
+
+- **Decision**: convert `crates/horae/src/harvest/mod.rs` to `harvest.rs` plus `harvest/` in
+  step 1, since this feature rewrites most of it. New files: `harvest/token_auth.rs`,
+  `harvest/ids.rs`, `harvest/errors.rs`, `harvest/rate_limit.rs`, `harvest/time_entry_writes.rs`,
+  `harvest/company.rs`, `harvest/assignments.rs`, `harvest/reports.rs`, `harvest/invoices.rs`.
