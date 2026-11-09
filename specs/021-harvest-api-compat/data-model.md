@@ -28,7 +28,6 @@ copied onto the token.
 
 | Column | Type | Rule |
 | --- | --- | --- |
-| `id` | uuid PK | v7 |
 | `org_id` | uuid FK organizations | |
 | `kind` | `api_id_kind` enum | `client`, `project`, `task`, `time_entry`, `user`, `project_assignment`, `task_assignment`, `invoice`, `invoice_line_item`, `tag` |
 | `number` | bigint | > 0 |
@@ -36,10 +35,20 @@ copied onto the token.
 | `from_harvest` | boolean | true when `number` is the record's Harvest id (FR-016) |
 | `created_at` | timestamptz | |
 
-Unique `(org_id, kind, number)` and unique `(org_id, kind, horae_id)`. A number is never reused,
-also after the record is deleted: the row stays and a deleted record's number is not handed out
-again. New numbers are `max(number) + 1` per organization and kind, allocated under a
+Primary key `(org_id, kind, number)` and unique `(org_id, kind, horae_id)`: a mapping table keyed
+by what it maps, like `harvest_import_map`, so it has no UUID of its own. A number is never
+reused, also after the record is deleted: the row stays and a deleted record's number is not
+handed out again. New numbers are `max(number) + 1` per organization and kind, allocated under a
 transaction-level advisory lock on `(org_id, kind)` in the transaction that creates the record.
+
+Allocation is an `AFTER INSERT` trigger on each numbered table, so every insert path (server
+functions, importer, CLI, seed, tests) numbers its records without a call of its own. A trigger
+on `harvest_import_map` gives a record created in the same transaction its Harvest id, unless
+another record of the kind holds that number; a record that existed before keeps its number.
+`api_number(org, kind, uuid)` reads a number for responses.
+
+Step 1 numbers the kinds its reads expose: clients, projects, tasks, time entries and users. The
+other kinds get their trigger and backfill with the step that first exposes them.
 
 Backfill (migration): for each kind, insert the `harvest_import_map` rows with
 `from_harvest = true`, then every other record by `(created_at, id)` from the next free number.

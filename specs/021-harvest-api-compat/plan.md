@@ -21,15 +21,16 @@ arithmetic only (R-4). A Nix check runs real open-source clients against a Horae
 **Language/Version**: Rust (workspace toolchain from the Nix dev shell), Dioxus 0.7.9 fullstack
 
 **Primary Dependencies**: axum 0.8, sqlx 0.8 (compile-time macros), serde_json with the
-`raw_value` feature (new feature, no new crate), `sha2` (already in `Cargo.lock`, becomes a
-direct dependency), the OS random source already used through `chacha20poly1305`
+`arbitrary_precision` feature the `server` build already enables (exact decimal numbers),
+`sha2` (already in `Cargo.lock`, becomes a direct dependency in step 2), the OS random source
+already used through `chacha20poly1305`
 
 **Storage**: PostgreSQL. New tables `api_tokens`, `api_ids`; new columns
 `organizations.api_account_id` and `updated_at` on tasks, projects, clients, users
 ([data-model.md](data-model.md))
 
-**Testing**: `cargo test -p horae-core` (unit and proptest for `api_decimal` and restart rules),
-`#[sqlx::test]` integration tests for the API, a new `harvest-compat` Nix check that runs
+**Testing**: `cargo test -p horae-core` (properties for the wire decimals and unit tests for the
+restart rules), `#[sqlx::test]` router tests for the API in `crates/horae/src/harvest/`, a new `harvest-compat` Nix check that runs
 third-party clients, and the existing browser checks for the token page
 
 **Target Platform**: Linux server plus the WASM client (the token page)
@@ -58,8 +59,9 @@ request.
 - **I. Exactness**: Pass. Storage and computation stay integer. Today's API converts through
   `f64`; this plan replaces that with integer-only decimal text (R-4), which the 5.0.0 paragraph on
   decimal wire formats states explicitly.
-- **II. Domain Purity**: Pass. `api_decimal` and the restart and start-stops-running rules live in
-  `horae-core` with no I/O dependencies.
+- **II. Domain Purity**: Pass. The decimal conversions (`duration::format_hours2`,
+  `convert::hours_to_minutes`, `money::format_cents_plain`, `money::parse_cents`) and the restart
+  and start-stops-running rules live in `horae-core` with no I/O dependencies.
 - **III. Single Datastore**: Pass. New tables have UUID v7 keys and `org_id`; PostgreSQL only.
   Integer ids are a mapping table, not new primary keys (R-2).
 - **IV. Mutations Through Server Functions**: Pass. Under 5.0.0 the Harvest-compatible API may
@@ -98,7 +100,6 @@ specs/021-harvest-api-compat/
 ### Source Code
 
 ```text
-crates/core/src/api_decimal.rs                    # minutes⇄hours text, minor units⇄major text
 crates/core/src/time_entry_timer.rs               # restart eligibility, start-stops-running rule
 crates/horae/migrations/0056_api_ids_and_account_id.sql
 crates/horae/migrations/0057_api_tokens.sql
@@ -110,7 +111,8 @@ crates/horae/src/harvest/
 ├── ids.rs               # integer id lookup and allocation
 ├── errors.rs            # Harvest error bodies and status mapping
 ├── rate_limit.rs        # per-token windows in AppState
-├── decimal_json.rs      # RawValue wrappers over api_decimal
+├── decimal_json.rs      # Hours and Amount as exact JSON numbers
+├── api_tests.rs         # router tests per step, beside pagination_tests.rs
 ├── pagination.rs        # page and cursor envelopes, absolute links
 ├── time_entry_writes.rs # step 3
 ├── company.rs, assignments.rs           # step 3
@@ -121,7 +123,6 @@ crates/horae/src/server_fns/time_entries/commands.rs   # apply → pub(crate); R
 crates/horae/src/models/scoped_time.rs            # TimesheetCommand::RestartTimer
 crates/horae/src/importers/harvest/…              # write api_ids with the Harvest id (OQ-2)
 crates/horae/src/pages/settings/api_tokens.rs     # token section of personal settings
-crates/horae/tests/harvest_api.rs + harvest_api/  # integration tests per step
 crates/horae/tests/fixtures/harvest_reference/    # scrubbed recordings (R-11) or hand-written shapes
 nix/checks/harvest-compat.nix                     # the suite (R-10)
 nix/checks/harvest-compat/{clients,patches}/      # pinned clients and local base-URL patches
@@ -136,9 +137,9 @@ layout in step 1 because the feature rewrites most of it. Integration tests get 
 
 One pull request per delivery step (spec *Delivery order*), each rebased on the previous:
 
-1. The approved constitution amendment, integer ids and account id, `api_decimal` replacing
-   `f64` in reads, suite skeleton.
-1. Personal access tokens, error bodies, aliases, rate limits, token page.
+1. The approved constitution amendment, integer ids and account id, exact decimals
+   replacing `f64` in reads, error bodies, path aliases, suite skeleton.
+1. Personal access tokens, rate limits, token page.
 1. Time-entry writes, restart, D-6, `company`, project assignments.
 1. Pagination and sync fidelity, `updated_at` columns.
 1. Catalogue and report reads.
