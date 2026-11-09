@@ -50,7 +50,6 @@ struct Probe {
     org_requests: Rc<Cell<usize>>,
     panel_mounts: Rc<Cell<usize>>,
     audit: bool,
-    tasks: bool,
     importers: bool,
     own_error: bool,
     future_catalog: bool,
@@ -70,9 +69,7 @@ impl Probe {
 }
 
 fn app(probe: Probe) -> Element {
-    let path = if probe.tasks {
-        "/admin/tasks"
-    } else if probe.importers {
+    let path = if probe.importers {
         "/admin/importers"
     } else if probe.audit {
         "/admin/audit"
@@ -399,8 +396,6 @@ mod route {
         #[layout(AdminShell)]
         #[route("/admin/users")]
         AdminUsers {},
-        #[route("/admin/tasks")]
-        TaskCatalog {},
         #[route("/admin/importers")]
         ImporterIndex {},
         #[route("/admin/audit")]
@@ -432,16 +427,6 @@ mod route {
 
     #[component]
     fn ImporterIndex() -> Element {
-        rsx! { "Importer panel" }
-    }
-
-    #[component]
-    fn PermissionAudit() -> Element {
-        rsx! { "Permission audit panel" }
-    }
-
-    #[component]
-    fn TaskCatalog() -> Element {
         use_hook(|| {
             consume_context::<Probe>().panel.set(Some((
                 navigator(),
@@ -449,33 +434,12 @@ mod route {
                 consume_context::<super::session::Session>(),
             )));
         });
-        rsx! { "Task catalog panel" }
+        rsx! { "Importer panel" }
     }
-}
 
-#[tokio::test]
-async fn task_catalog_navigation_is_independent_of_people_and_legacy_roles() {
-    for (role, grants, allowed) in [
-        (OrgRole::Member, vec![Permission::TaskReadAll], true),
-        (OrgRole::Admin, vec![Permission::PeopleReadAll], false),
-        (OrgRole::Admin, vec![Permission::BillableRateReadAll], false),
-    ] {
-        let probe = Probe {
-            tasks: true,
-            canonical: Some((false, grants)),
-            ..Probe::default()
-        };
-        let reply = probe.request();
-        let mut dom = start(&probe);
-        reply
-            .send(Ok(User(role)))
-            .unwrap_or_else(|_| panic!("identity request dropped"));
-        settle(&mut dom);
-        let html = dioxus::ssr::render(&dom);
-        assert_eq!(html.contains("Task catalog panel"), allowed);
-        if allowed {
-            assert!(!html.contains("/admin/users"));
-        }
+    #[component]
+    fn PermissionAudit() -> Element {
+        rsx! { "Permission audit panel" }
     }
 }
 
@@ -631,7 +595,10 @@ fn people_and_tasks_admin() -> (Probe, VirtualDom) {
         .send(Ok(User(OrgRole::Admin)))
         .unwrap_or_else(|_| panic!("identity request dropped"));
     settle(&mut dom);
-    assert!(dioxus::ssr::render(&dom).contains("Administrative panel"));
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Administrative panel"), "{html}");
+    // Tasks lives in the main rail, even for someone who may read it.
+    assert!(!html.contains("Tasks"), "{html}");
     (probe, dom)
 }
 
@@ -639,7 +606,7 @@ fn people_and_tasks_admin() -> (Probe, VirtualDom) {
 async fn switching_sections_keeps_the_workspace_and_reads_the_session_once() {
     let (probe, mut dom) = people_and_tasks_admin();
     for (to, panel) in [
-        (route::Route::TaskCatalog {}, "Task catalog panel"),
+        (route::Route::ImporterIndex {}, "Importer panel"),
         (route::Route::AdminUsers {}, "Administrative panel"),
     ] {
         // Navigate from whichever panel is open; the previous one has unmounted.

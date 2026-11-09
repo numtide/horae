@@ -78,6 +78,10 @@ pub enum Route {
     EditProject { id: Uuid, return_to: EditReturn },
     #[route("/projects/:id")]
     ProjectDetail { id: Uuid },
+    #[route("/tasks")]
+    TaskCatalog {},
+    // The catalog used to live under Administration; keep old links working.
+    #[redirect("/admin/tasks", || Route::TaskCatalog {})]
     #[route("/approvals?:week")]
     Approvals { week: String },
     #[route("/reports")]
@@ -91,8 +95,6 @@ pub enum Route {
     #[layout(AdminShell)]
     #[route("/admin/users")]
     AdminUsers {},
-    #[route("/admin/tasks")]
-    TaskCatalog {},
     #[route("/admin/importers")]
     ImporterIndex {},
     // The OAuth callback reports a failed connection in the query.
@@ -197,6 +199,14 @@ mod tests {
             assert_eq!(route.to_string(), path);
             assert!(matches_navigation(&section, &route));
             assert!(!matches_navigation(&Route::ClientList {}, &route));
+        }
+    }
+
+    #[test]
+    fn task_catalog_lives_at_tasks_and_old_admin_links_redirect_there() {
+        assert_eq!(Route::TaskCatalog {}.to_string(), "/tasks");
+        for path in ["/tasks", "/admin/tasks"] {
+            assert!(path.parse::<Route>().unwrap() == Route::TaskCatalog {}, "{path}");
         }
     }
 

@@ -11,7 +11,6 @@ use crate::server_fns;
 #[derive(Clone, Copy, PartialEq)]
 enum Section {
     People,
-    Tasks,
     Audit,
     Importers,
 }
@@ -19,7 +18,6 @@ enum Section {
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct WorkspaceAccess {
     people: bool,
-    tasks: bool,
     audit: bool,
     importers: bool,
 }
@@ -28,7 +26,6 @@ impl WorkspaceAccess {
     fn allows(self, section: Section) -> bool {
         match section {
             Section::People => self.people,
-            Section::Tasks => self.tasks,
             Section::Audit => self.audit,
             Section::Importers => self.importers,
         }
@@ -57,7 +54,6 @@ fn workspace_access(
     if section == Section::Importers && own.is_err() {
         return Some(Ok(WorkspaceAccess {
             people: false,
-            tasks: false,
             audit: false,
             importers: legacy_admin,
         }));
@@ -66,13 +62,11 @@ fn workspace_access(
         Some(own) => WorkspaceAccess {
             people: own.grants.contains(&Permission::PeopleReadAll)
                 || own.grants.contains(&Permission::PeopleReadManaged),
-            tasks: own.grants.contains(&Permission::TaskReadAll),
             audit: own.is_administrator,
             importers: legacy_admin,
         },
         None => WorkspaceAccess {
             people: legacy_admin,
-            tasks: false,
             audit: false,
             importers: legacy_admin,
         },
@@ -91,7 +85,6 @@ pub(crate) fn first_admin_route(
     let access = workspace_access(Section::Importers, own, me)?.ok()?;
     [
         (access.people, Route::AdminUsers {}),
-        (access.tasks, Route::TaskCatalog {}),
         (access.importers, Route::ImporterIndex {}),
         (access.audit, Route::PermissionAudit {}),
     ]
@@ -104,14 +97,14 @@ pub(crate) fn first_admin_route(
 /// so the main rail stays put and this owns only the content panel (per the
 /// design's admin settings shell). Each section has its own access boundary.
 ///
-/// Only sections with a real destination are listed — Team, Tasks,
-/// Importers (Harvest), and the permission audit log. Other sections are deferred
+/// Only sections with a real destination are listed — Team, Importers
+/// (Harvest), and the permission audit log. Tasks has its own page in the main
+/// rail, as in Harvest. Other sections are deferred
 /// until they have a backend.
 #[component]
 pub fn AdminShell() -> Element {
     let section = match use_route::<Route>() {
         Route::AdminUsers {} => Section::People,
-        Route::TaskCatalog {} => Section::Tasks,
         Route::PermissionAudit {} => Section::Audit,
         _ => Section::Importers,
     };
@@ -198,11 +191,10 @@ fn AdminWorkspace(access: WorkspaceAccess) -> Element {
                         }
                     }
 
-                    if access.people || access.tasks {
+                    if access.people {
                         div { class: "adm-group-label", "Workspace" }
                         nav { class: "flex flex-col gap-1 mb-5",
                             if access.people { AdmLink { to: Route::AdminUsers {}, label: "Team" } }
-                            if access.tasks { AdmLink { to: Route::TaskCatalog {}, label: "Tasks" } }
                         }
                     }
 
@@ -265,10 +257,9 @@ mod tests {
         }))
     }
 
-    fn access(people: bool, tasks: bool, audit: bool, importers: bool) -> WorkspaceAccess {
+    fn access(people: bool, audit: bool, importers: bool) -> WorkspaceAccess {
         WorkspaceAccess {
             people,
-            tasks,
             audit,
             importers,
         }
@@ -289,11 +280,11 @@ mod tests {
         let manager = user(OrgRole::Manager);
         assert_eq!(
             workspace_access(Section::People, Some(&own), Some(&admin)),
-            Some(Ok(access(true, false, false, true)))
+            Some(Ok(access(true, false, true)))
         );
         assert_eq!(
             workspace_access(Section::People, Some(&own), Some(&manager)),
-            Some(Ok(access(false, false, false, false)))
+            Some(Ok(access(false, false, false)))
         );
     }
 
@@ -306,8 +297,8 @@ mod tests {
             PERMISSION_CATALOG_VERSION,
         );
         assert_eq!(
-            workspace_access(Section::Tasks, Some(&own), Some(&member)),
-            Some(Ok(access(true, true, true, false)))
+            workspace_access(Section::People, Some(&own), Some(&member)),
+            Some(Ok(access(true, true, false)))
         );
     }
 
@@ -327,7 +318,7 @@ mod tests {
             );
             assert_eq!(
                 workspace_access(Section::Importers, Some(own), Some(&admin)),
-                Some(Ok(access(false, false, false, true)))
+                Some(Ok(access(false, false, true)))
             );
         }
         let no_identity = Err(ServerFnError::new("unauthorized"));
@@ -349,8 +340,9 @@ mod tests {
         let path = |p: &str| Some(p.to_string());
         assert_eq!(first(&Ok(None), &admin), path("/admin/users"));
         assert_eq!(first(&Ok(None), &member), None);
-        let tasks = canonical(vec![Permission::TaskReadAll], true, version);
-        assert_eq!(first(&tasks, &member), path("/admin/tasks"));
+        // Tasks is in the main rail, so the task grant alone opens no admin section.
+        let tasks = canonical(vec![Permission::TaskReadAll], false, version);
+        assert_eq!(first(&tasks, &member), None);
         let floor = canonical(Vec::new(), false, version);
         assert_eq!(first(&floor, &admin), path("/admin/importers"));
         assert_eq!(first(&floor, &member), None);

@@ -42,11 +42,13 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
+    // The catalog's old Administration address still leads to it.
     await page.goto(`${base}/admin/tasks`);
+    await page.waitForURL(`${base}/tasks`);
     const row = page.getByRole('row').filter({ hasText: 'Catalog browser task' });
     await expect(row).toContainText('USD 80.00');
     await expect(row.getByRole('cell', { name: 'USD 80.00', exact: true })).toHaveCSS('white-space', 'nowrap');
-    await expect(page.locator('.adm-nav')).not.toContainText('Team');
+    await expect(page.locator('.adm-nav')).toHaveCount(0);
     // Task reads without people or client reads: Organize offers Projects and Tasks only.
     const organize = page.locator('.app-sidebar .sidebar-section').filter({ hasText: 'Organize' }).locator('+ .sidebar-group .nav-item-label');
     await expect(organize).toHaveText(['Projects', 'Tasks']);
