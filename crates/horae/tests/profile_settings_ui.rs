@@ -276,6 +276,40 @@ async fn saving_sends_the_name_and_zone_and_rereads_the_session() {
 }
 
 #[tokio::test]
+async fn a_name_saved_with_stray_spaces_counts_as_saved() {
+    let probe = Probe::new();
+    let mut dom = mount(profile_app, &probe);
+    type_into(&mut dom, "profile-name", "  Ana Ruiz ");
+    click(&mut dom, "profile-save");
+    let html = html(&dom);
+    assert!(html.contains("Profile saved."), "{html}");
+    assert!(disabled(&html, "profile-save"), "{html}");
+    assert!(disabled(&html, "profile-cancel"), "{html}");
+}
+
+/// The opening tag of the element whose id is `id`.
+fn tag<'a>(html: &'a str, id: &str) -> &'a str {
+    let at = html
+        .find(&format!("id=\"{id}\""))
+        .expect("element rendered");
+    let start = html[..at].rfind('<').unwrap();
+    &html[start..at + html[at..].find('>').unwrap()]
+}
+
+#[tokio::test]
+async fn a_refused_zone_is_described_on_the_zone_field() {
+    let probe = Probe::new();
+    probe.refuse_next(400, "Choose a time zone from the list");
+    let mut dom = mount(profile_app, &probe);
+    pick(&mut dom, "Asia/Tokyo");
+    click(&mut dom, "profile-save");
+    let html = html(&dom);
+    let described = "aria-describedby=\"profile-error\"";
+    assert!(tag(&html, "profile-timezone").contains(described), "{html}");
+    assert!(!tag(&html, "profile-name").contains(described), "{html}");
+}
+
+#[tokio::test]
 async fn the_workspace_default_is_saved_as_no_zone_of_ones_own() {
     let probe = Probe::new();
     probe.me.borrow_mut().timezone = Some("Asia/Tokyo".into());
@@ -386,7 +420,8 @@ mod server_fns {
             .push((name.clone(), timezone.clone()));
         refusal(&probe)?;
         let mut me = probe.me.borrow_mut();
-        me.name = name;
+        // As the server stores it.
+        me.name = name.trim().to_owned();
         me.timezone = timezone;
         Ok(())
     }

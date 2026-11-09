@@ -31,6 +31,11 @@ pub struct ProfileOptions {
     pub zones: Vec<String>,
 }
 
+/// Whether a trimmed profile name is one the server stores.
+pub fn profile_name_is_valid(name: &str) -> bool {
+    (1..=200).contains(&name.chars().count()) && !name.contains('\0')
+}
+
 impl CurrentUser {
     pub fn is_admin(&self) -> bool {
         self.org_role == OrgRole::Admin

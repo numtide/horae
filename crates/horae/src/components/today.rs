@@ -23,10 +23,12 @@ pub fn today() -> NaiveDate {
         .then(try_consume_context::<UtcOffset>)
         .flatten()
         .and_then(|UtcOffset(offset)| offset());
-    match offset {
-        Some(seconds) => (Utc::now() + Duration::seconds(seconds.into())).date_naive(),
-        None => before_session(),
-    }
+    offset.map_or_else(before_session, today_at)
+}
+
+/// Today's date in a zone `offset_seconds` ahead of UTC.
+pub fn today_at(offset_seconds: i32) -> NaiveDate {
+    (Utc::now() + Duration::seconds(offset_seconds.into())).date_naive()
 }
 
 /// Before the session loads (the first redirect from `/` happens then) the

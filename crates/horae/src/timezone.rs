@@ -10,11 +10,29 @@ pub(crate) fn parse(name: &str) -> Option<Tz> {
     name.parse().ok()
 }
 
-/// Every zone name a person or organization may choose, in the database's order.
+/// The zone names the pickers offer: `Area/City` zones and `UTC`, in the
+/// database's order. Legacy aliases (`US/Pacific`, `EST5EDT`) and the
+/// sign-inverted `Etc/GMT±N` are left out, though [`parse`] still accepts them.
+///
+/// shortcut: chrono-tz does not mark backward links, so renamed cities such as
+/// `Asia/Calcutta` are still listed; filter them if people pick them by mistake.
 pub(crate) fn names() -> Vec<String> {
+    const AREAS: [&str; 9] = [
+        "Africa/",
+        "America/",
+        "Antarctica/",
+        "Asia/",
+        "Atlantic/",
+        "Australia/",
+        "Europe/",
+        "Indian/",
+        "Pacific/",
+    ];
     chrono_tz::TZ_VARIANTS
         .iter()
-        .map(|zone| zone.name().to_owned())
+        .map(|zone| zone.name())
+        .filter(|name| *name == "UTC" || AREAS.iter().any(|area| name.starts_with(area)))
+        .map(str::to_owned)
         .collect()
 }
 
@@ -120,5 +138,17 @@ mod tests {
         assert!(parse("europe/madrid").is_none());
         assert!(parse("+02:00").is_none());
         assert!(parse("").is_none());
+    }
+
+    #[test]
+    fn the_picker_offers_cities_and_utc_but_any_name_still_parses() {
+        let names = names();
+        for offered in ["Europe/Madrid", "America/New_York", "UTC"] {
+            assert!(names.iter().any(|name| name == offered), "{offered}");
+        }
+        for legacy in ["US/Pacific", "EST5EDT", "GMT0", "Etc/GMT+5"] {
+            assert!(!names.iter().any(|name| name == legacy), "{legacy}");
+            assert!(parse(legacy).is_some(), "{legacy} must stay valid");
+        }
     }
 }

@@ -281,7 +281,6 @@ fn TimesheetContent(
     mut requester: Signal<Option<PermissionRequester>>,
     mut last_context: Signal<Option<TimesheetWriteContext>>,
 ) -> Element {
-    let today = crate::components::today::today();
     // View, week, selected day and calendar span all derive from the URL
     // (/timesheet/<view>/<date>?span=<span>), so switching views, changing the
     // calendar span or navigating is shareable and works with the browser's
@@ -362,6 +361,19 @@ fn TimesheetContent(
             .as_ref()
             .map(|(start, date, _)| (*start, *date))
     });
+    // The person's today, not the viewer's: the server dates a timer started
+    // on their sheet in their zone. A held week keeps it while the next loads.
+    let subject_today = use_memo(move || {
+        let offset = match current_sheet.read().as_ref() {
+            Some(Ok(page)) => Some(page.subject_utc_offset_seconds),
+            _ => admitted
+                .read()
+                .as_ref()
+                .map(|(.., page)| page.subject_utc_offset_seconds),
+        };
+        offset.map(crate::components::today::today_at)
+    });
+    let today = subject_today().unwrap_or_else(crate::components::today::today);
     // Resources retain their previous value during a refresh. Do not render
     // those rows or derive totals until the complete new window is admitted;
     // a held week is display only, as every write needs the current context.
@@ -617,7 +629,7 @@ fn TimesheetContent(
         let Some(date) = *add_open.read() else {
             return false;
         };
-        editing.read().is_none() && date == today && add_start.read().is_none()
+        editing.read().is_none() && subject_today() == Some(date) && add_start.read().is_none()
     });
     let timer_mode = use_memo(move || {
         matches!(

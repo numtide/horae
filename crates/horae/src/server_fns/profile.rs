@@ -9,14 +9,31 @@ use crate::models::user::ProfileOptions;
 pub async fn get_profile_options() -> Result<ProfileOptions, ServerFnError> {
     let user = require_user().await?;
     let state = crate::state::global_state().await;
-    let issuer = sqlx::query_scalar!("SELECT oidc_issuer FROM users WHERE id = $1", user.id)
-        .fetch_one(&state.db)
-        .await
-        .map_err(server_err)?;
+    let row = sqlx::query!(
+        "SELECT u.oidc_issuer, u.timezone, o.timezone AS workspace_timezone
+         FROM users u JOIN organizations o ON o.id = u.org_id WHERE u.id = $1",
+        user.id
+    )
+    .fetch_one(&state.db)
+    .await
+    .map_err(server_err)?;
     Ok(ProfileOptions {
-        sign_in: issuer.as_deref().map(issuer_host),
-        zones: crate::timezone::names(),
+        sign_in: row.oidc_issuer.as_deref().map(issuer_host),
+        zones: zone_choices(row.timezone.into_iter().chain([row.workspace_timezone])),
     })
+}
+
+/// The picker's zones plus any `current` one it leaves out (an alias saved
+/// before, or imported), so the field can still show it.
+#[cfg(feature = "server")]
+fn zone_choices(current: impl IntoIterator<Item = String>) -> Vec<String> {
+    let mut zones = crate::timezone::names();
+    for zone in current {
+        if !zones.contains(&zone) {
+            zones.push(zone);
+        }
+    }
+    zones
 }
 
 /// Change the signed-in person's display name and time zone (`None` follows the
@@ -63,7 +80,7 @@ pub(super) async fn update_profile_record(
     timezone: Option<&str>,
 ) -> Result<(), ServerFnError> {
     let name = name.trim();
-    if !(1..=200).contains(&name.chars().count()) || name.contains('\0') {
+    if !crate::models::user::profile_name_is_valid(name) {
         return Err(err(BAD_REQUEST, "Enter a name of 1 to 200 characters"));
     }
     let timezone = timezone.map(zone).transpose()?;

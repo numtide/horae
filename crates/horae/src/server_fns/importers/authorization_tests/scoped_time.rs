@@ -111,6 +111,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     });
     let mut expected_sheet = expected.clone();
     expected_sheet["subject"] = json!({"id":target,"name":"Test User"});
+    expected_sheet["subject_utc_offset_seconds"] = json!(0);
     expected_sheet["policy"] = json!("scoped");
     assert_eq!(
         api.json("load_timesheet_page", sheet_request.clone(), &cookie)

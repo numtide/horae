@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::components::form::{FormGroup, Input};
 use crate::components::select_field::SelectField;
 use crate::components::session::use_session;
-use crate::models::user::{CurrentUser, ProfileOptions};
+use crate::models::user::{CurrentUser, ProfileOptions, profile_name_is_valid};
 use crate::server_fns;
 
 /// The signed-in person's name and time zone, with the identity they cannot
@@ -45,8 +45,13 @@ fn ProfileForm(
     let query = use_signal(String::new);
     let mut saving = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
+    // The id of the control a refused save names, so only it is marked invalid.
+    let mut invalid = use_signal(|| None::<&'static str>);
     let mut saved = use_signal(|| false);
-    let changed = *name.read() != me.name || *zone.read() != saved_zone;
+    // The server trims the name, so stray spaces alone are no change.
+    let changed = name.read().trim() != me.name || *zone.read() != saved_zone;
+    let error_for =
+        move |control: &str| (invalid() == Some(control)).then(|| "profile-error".to_string());
 
     let (sign_in, zones) = match &*options.read() {
         Some(Ok(options)) => (
@@ -83,8 +88,10 @@ fn ProfileForm(
         }
         saving.set(true);
         error.set(None);
+        invalid.set(None);
         saved.set(false);
         let (new_name, new_zone) = (name(), zone());
+        let name_is_valid = profile_name_is_valid(new_name.trim());
         spawn(async move {
             let new_zone = (!new_zone.is_empty()).then_some(new_zone);
             match server_fns::update_own_profile(new_name, new_zone).await {
@@ -96,7 +103,16 @@ fn ProfileForm(
                     code: BAD_REQUEST,
                     message,
                     ..
-                }) => error.set(Some(message)),
+                }) => {
+                    // Only the name and the zone are checked; a valid name
+                    // means the zone was refused.
+                    invalid.set(Some(if name_is_valid {
+                        "profile-timezone"
+                    } else {
+                        "profile-name"
+                    }));
+                    error.set(Some(message));
+                }
                 Err(_) => error.set(Some("Could not save your profile. Try again.".into())),
             }
             saving.set(false);
@@ -108,13 +124,14 @@ fn ProfileForm(
             name.set(saved_name.clone());
             zone.set(saved_zone.clone());
             error.set(None);
+            invalid.set(None);
         }
     };
 
     rsx! {
         FormGroup { label: "Name", id: "profile-name",
             Input { id: "profile-name", value: name(), disabled: saving(),
-                error_id: error().map(|_| "profile-error".to_string()),
+                error_id: error_for("profile-name"),
                 oninput: edit_name,
             }
         }
@@ -133,6 +150,7 @@ fn ProfileForm(
             hint: "Decides which day is today on your timesheet and when you start a timer.",
             SelectField { id: "profile-timezone", label: "time zone", options: zone_options,
                 selected: zone(), query, pending, onselect: pick_zone,
+                error_id: error_for("profile-timezone"),
             }
         }
         if let Some(message) = error() {

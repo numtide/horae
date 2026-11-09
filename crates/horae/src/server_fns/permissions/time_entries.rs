@@ -161,10 +161,12 @@ pub(crate) async fn sheet(
         },
     )
     .await?;
+    let zone = crate::timezone::person_zone(&mut *tx, subject_id).await?;
     tx.commit().await?;
     Ok(TimesheetPage {
         requester,
         subject,
+        subject_utc_offset_seconds: crate::timezone::utc_offset_seconds(&zone, chrono::Utc::now()),
         policy,
         entries: page.entries,
         next_after: page.next_after,

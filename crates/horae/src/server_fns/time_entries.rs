@@ -383,27 +383,38 @@ pub async fn start_timer(
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
+    let entry =
+        start_timer_record(&state.db, user.id, project_id, task_id, notes.as_deref()).await?;
+    dispatch_time_entry_event(&entry, TimeEntryEvent::Created).await;
+    Ok(entry)
+}
 
-    let entry = insert_time_entry(
-        &state.db,
-        user.id,
+/// A running entry on the person's today, in their own zone.
+#[cfg(feature = "server")]
+async fn start_timer_record(
+    db: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+    task_id: uuid::Uuid,
+    notes: Option<&str>,
+) -> Result<TimeEntry, ServerFnError> {
+    insert_time_entry(
+        db,
+        user_id,
         NewTimeEntry {
             project_id,
             task_id,
-            spent_date: crate::timezone::today_for_person(&state.db, user.id)
+            spent_date: crate::timezone::today_for_person(db, user_id)
                 .await
                 .map_err(server_err)?,
             minutes: 0,
-            notes: notes.as_deref(),
+            notes,
             billable: true,
             start_minute: None,
             is_running: true,
         },
     )
-    .await?;
-
-    dispatch_time_entry_event(&entry, TimeEntryEvent::Created).await;
-    Ok(entry)
+    .await
 }
 
 /// Stop a running timer and record elapsed minutes, clamped to what is left of
@@ -544,7 +555,7 @@ mod activity_tests;
 mod tests {
     use super::{
         CONFLICT, NewTimeEntry, OrgRole, fetch_time_entry_contexts, insert_time_entry,
-        normalize_start,
+        normalize_start, start_timer_record,
     };
     use crate::server_fns::test_seed::seed;
     use dioxus::prelude::ServerFnError;
@@ -575,6 +586,32 @@ mod tests {
             start_minute: None,
             is_running: false,
         }
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn a_timer_is_dated_in_the_persons_zone(pool: PgPool) {
+        use chrono::Timelike;
+        let ids = linked_seed(&pool, OrgRole::Admin).await;
+        // UTC+14 or UTC−12, whichever is on another date than UTC right now.
+        let (zone, hours) = if chrono::Utc::now().hour() >= 11 {
+            ("Pacific/Kiritimati", 14)
+        } else {
+            ("Etc/GMT+12", -12)
+        };
+        sqlx::query!(
+            "UPDATE users SET timezone = $2 WHERE id = $1",
+            ids.user_id,
+            zone
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let day = || (chrono::Utc::now() + chrono::Duration::hours(hours)).date_naive();
+        let before = day();
+        let entry = start_timer_record(&pool, ids.user_id, ids.project_id, ids.task_id, None)
+            .await
+            .unwrap();
+        assert!([before, day()].contains(&entry.spent_date), "{entry:?}");
     }
 
     #[sqlx::test(migrations = "./migrations")]

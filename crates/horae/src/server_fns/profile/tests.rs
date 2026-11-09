@@ -242,6 +242,13 @@ async fn the_session_carries_both_zones_and_the_effective_offset(pool: PgPool) {
 }
 
 #[test]
+fn a_saved_alias_stays_among_the_choices_once() {
+    let zones = zone_choices(["Etc/GMT+5".to_owned(), "Europe/Madrid".to_owned()]);
+    assert_eq!(zones.iter().filter(|z| *z == "Etc/GMT+5").count(), 1);
+    assert_eq!(zones.iter().filter(|z| *z == "Europe/Madrid").count(), 1);
+}
+
+#[test]
 fn issuer_host_drops_scheme_and_path() {
     assert_eq!(
         issuer_host("https://sso.example.com/realms/acme"),
