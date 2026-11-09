@@ -450,7 +450,7 @@ maintainer's answers to OQ-1 to OQ-3 and D-1 to D-9 are in spec.md *Clarificatio
   app too. Catalogue writes call the existing server functions' inner operations the same way.
 - **Rationale**: the amendment's "second transport, not a second path". Today's code already
   takes the actor and organization explicitly.
-- **Blocked by**: the constitution amendment (not approved). No write handler lands before it.
+- **Blocked by**: the constitution amendment, approved on 2026-11-09 (constitution 5.0.0).
 
 ### R-6 Authentication extractor
 

@@ -48,39 +48,33 @@ of them most
 
 ## Constitution Check
 
-*GATE: checked before Phase 0 and after Phase 1. Checked against constitution 4.0.0.*
+*GATE: checked before Phase 0 and after Phase 1. Checked against constitution 5.0.0.*
 
-**Status: PENDING the proposed amendment** ([constitution-amendment.md](constitution-amendment.md),
-4.0.0 → 5.0.0). The maintainer has not approved it. Steps 1, 2, 4 and 5 can be checked against
-4.0.0 as it stands except for the decimal conversion; steps 3, 6 and 7 cannot pass without the
-amendment.
+**Status: PASS.** The maintainer approved the amendment
+([constitution-amendment.md](constitution-amendment.md)) on 2026-11-09, and
+`.specify/memory/constitution.md` is at 5.0.0 with it applied verbatim, in the step-1 pull
+request.
 
-- **I. Exactness**: PENDING. Storage and computation stay integer. Today's API already converts
-  through `f64`, which 2.0.0's follow-up left unassessed. This plan replaces that with integer-only
-  decimal text (R-4). That is within the rule, but the amendment's clarifying paragraph is what
-  makes it explicit for an external decimal contract. Re-check when the amendment is decided.
+- **I. Exactness**: Pass. Storage and computation stay integer. Today's API converts through
+  `f64`; this plan replaces that with integer-only decimal text (R-4), which the 5.0.0 paragraph on
+  decimal wire formats states explicitly.
 - **II. Domain Purity**: Pass. `api_decimal` and the restart and start-stops-running rules live in
   `horae-core` with no I/O dependencies.
 - **III. Single Datastore**: Pass. New tables have UUID v7 keys and `org_id`; PostgreSQL only.
   Integer ids are a mapping table, not new primary keys (R-2).
-- **IV. Mutations Through Server Functions**: **PENDING, blocks steps 3, 6 and 7.** Under 4.0.0
-  the compatibility API "MUST NOT become a second mutation path". The amendment redefines the rule
-  as "through the shared mutation operations server functions call" and lets this API call them
-  with a hashed, person-bound token. Until it is approved, no write endpoint is implemented.
-  Steps 1, 2, 4 and 5 add no mutation through the API: token issue and revocation are server
-  functions (contracts/api-tokens.md), the `last_used_at` stamp is bookkeeping on the token row,
-  and integer-id allocation happens inside the operations that already create records.
-  - Open point for the maintainer: whether the `last_used_at` stamp on a read request counts as a
-    mutation under 4.0.0. The plan treats it as authentication bookkeeping, like the session store
-    the cookie layer already writes on every request.
+- **IV. Mutations Through Server Functions**: Pass. Under 5.0.0 the Harvest-compatible API may
+  call the shared mutation operations server functions call, with the actor resolved from a
+  hashed, person-bound token. Steps 3, 6 and 7 write only through those operations and refuse
+  cookie-only callers. Token issue and revocation are server functions (contracts/api-tokens.md);
+  integer-id allocation happens inside the operations that already create records. The
+  `last_used_at` stamp on a read request is authentication bookkeeping on the token row, like the
+  session store the cookie layer already writes on every request.
 - **V. Reproducible Builds & Formatting Gate**: Pass. `nix fmt`, clippy, the `.sqlx` cache check,
   the Dioxus lint ratchet, and the new suite inside `nix flake check`. Third-party clients are
   fixed-output derivations.
 - **Data constraints**: Pass. UUID v7, `org_id` everywhere, Postgres only.
 
-Re-check after design: unchanged. Principle IV and the Principle I clarification stay pending;
-nothing else changed. Complexity Tracking records the one deviation that depends on the
-amendment.
+Re-check after design: unchanged.
 
 ## Project Structure
 
@@ -93,7 +87,7 @@ specs/021-harvest-api-compat/
 ├── research.md                # §1–3 survey and gaps, §4 planning decisions (R-1–R-12)
 ├── data-model.md
 ├── quickstart.md
-├── constitution-amendment.md  # proposed, not approved
+├── constitution-amendment.md  # approved 2026-11-09, applied as 5.0.0
 ├── contracts/
 │   ├── harvest-api-v2.md      # the API contract, replacing 001's step by step
 │   └── api-tokens.md          # token server functions and UI
@@ -142,19 +136,19 @@ layout in step 1 because the feature rewrites most of it. Integration tests get 
 
 One pull request per delivery step (spec *Delivery order*), each rebased on the previous:
 
-1. Integer ids and account id, `api_decimal` replacing `f64` in reads, suite skeleton.
+1. The approved constitution amendment, integer ids and account id, `api_decimal` replacing
+   `f64` in reads, suite skeleton.
 1. Personal access tokens, error bodies, aliases, rate limits, token page.
-1. **Waits for the amendment.** Time-entry writes, restart, D-6, `company`, project assignments.
+1. Time-entry writes, restart, D-6, `company`, project assignments.
 1. Pagination and sync fidelity, `updated_at` columns.
 1. Catalogue and report reads.
-1. **Waits for the amendment.** Catalogue writes and invoice status.
-1. **Waits for the amendment.** OAuth2 provider.
+1. Catalogue writes and invoice status.
+1. OAuth2 provider.
 
 The recorder (R-11) is its own small pull request whenever test-account credentials are
 provided; its fixtures then replace the hand-written shapes.
 
 ## Complexity Tracking
 
-| Deviation | Why needed | Simpler alternative rejected because |
-| --- | --- | --- |
-| The Harvest-compatible API mutates data (steps 3, 6, 7), against Principle IV 4.0.0 | Harvest clients write time over HTTP with a bearer token and cannot call server functions | Read-only stays compliant but meets none of US2, US5 or US6, which are most of the surveyed clients' use. Resolved only by the proposed amendment; not implemented before it is approved |
+No deviation. The one this plan carried (API writes against Principle IV 4.0.0) is resolved by
+the approved 5.0.0 amendment.

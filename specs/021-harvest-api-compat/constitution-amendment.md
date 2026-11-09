@@ -1,7 +1,7 @@
-# Proposed constitution amendment for 021 Harvest API compatibility
+# Constitution amendment for 021 Harvest API compatibility
 
-**Status**: Proposed. Needs the maintainer's approval. `.specify/memory/constitution.md` is not
-changed by this specification.
+**Status**: Approved by the maintainer on 2026-11-09 and applied verbatim to
+`.specify/memory/constitution.md` as 5.0.0. The text below is the record of the proposal.
 
 **Version change**: 4.0.0 → 5.0.0 (MAJOR: Principle IV is redefined). If 020's amendment lands
 first, this becomes the next MAJOR after it, and the two texts are merged; they touch different

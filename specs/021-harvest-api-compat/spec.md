@@ -5,9 +5,9 @@ ordered pull requests under *Delivery order*
 
 **Created**: 2026-11-09
 
-**Status**: Draft. Depends on a constitution amendment
-([constitution-amendment.md](constitution-amendment.md)) that needs the maintainer's approval
-before any write endpoint is implemented.
+**Status**: In progress. The constitution amendment it depends on
+([constitution-amendment.md](constitution-amendment.md)) was approved on 2026-11-09 (constitution
+5.0.0).
 
 **Input**: User description: "The whole Harvest ecosystem should work without problems against
 Horae: apps, timers, browser extensions, integrations, scripts and libraries written for Harvest
@@ -110,8 +110,8 @@ consequential and are recorded there.
   with GET requests only, to record response and error shapes. The authorization is row D-020 in
   `harvest-parity.md`. No real account name or id is written into the repository.
 - Q: The other defaults D-1 to D-7? → A: Accepted as written.
-- Q: The constitution amendment? → A: Still pending the maintainer's approval; not applied. The
-  plan's Constitution Check stays pending on it.
+- Q: The constitution amendment? → A: Approved verbatim on 2026-11-09 and applied as constitution
+  5.0.0 in the step-1 pull request.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -585,8 +585,8 @@ many surveyed clients each step unlocks ([research.md §1.5](research.md#15-most
 1. **Catalogue writes and invoice status** (FR-033, FR-034).
 1. **OAuth2 provider** (FR-060–FR-062), last, as OQ-1 decided.
 
-Steps 1–3 depend on the constitution amendment for writes (step 3) and for the unit conversion
-(steps 1–3 already replace today's floating-point output). The suite grows with each step
+Steps 1–3 relied on the constitution amendment (approved, 5.0.0) for writes (step 3) and for the
+unit conversion (steps 1–3 replace today's floating-point output). The suite grows with each step
 (FR-070–FR-073).
 
 ## Out of scope

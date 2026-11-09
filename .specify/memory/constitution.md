@@ -1,5 +1,39 @@
 <!--
 Sync Impact Report
+- Version change: 4.0.0 → 5.0.0
+- Bump rationale: MAJOR. Principle IV's opening rule is redefined from "through Dioxus `#[server]`
+  functions" to "through the shared mutation operations those functions call", and the
+  Harvest-compatible API may call those operations. Approved by the maintainer on 2026-11-09
+  (specs/021-harvest-api-compat/constitution-amendment.md, applied verbatim).
+- Modified principles:
+  - I. Exactness: adds a clarifying paragraph on decimal wire formats (exact integer-arithmetic
+    conversion to and from decimal text). The rule is unchanged; on its own this would be a PATCH.
+  - IV. Mutations Through Server Functions: title unchanged. The opening rule is redefined; adds
+    the bounded "Harvest-compatible API" clause (token-resolved actor, hashed tokens bound to one
+    person in one organization, no writes outside the shared operations, no cookie-only
+    mutation, token issue and revocation through server functions). The two existing exceptions
+    are unchanged. The rationale gains one sentence.
+- Added sections: none
+- Removed sections: none
+- Templates checked:
+  - .specify/templates/plan-template.md: Constitution Check takes its gates from this file ✅ (no change)
+  - .specify/templates/spec-template.md: no mandatory-section change ✅
+  - .specify/templates/tasks-template.md: no new principle-driven task type ✅
+  - .specify/templates/constitution-template.md: placeholder template, not a project copy ✅ (no change)
+  - AGENTS.md: its Architecture paragraph calls the Harvest API read-only and lists two API
+    surfaces. That stays true until the API's first write endpoint lands; it is updated with that
+    implementation, not with this amendment ✅ (no change here)
+  - README.md: links the constitution only ✅ (no change)
+- Follow-up:
+  - specs/001-time-tracking-invoicing/contracts/harvest-api.md says the API is strictly read-only;
+    021's contract supersedes it when the time-entry writes land.
+  - specs/harvest-parity.md scopes "Existing integrations and API" to regression coverage with no
+    write endpoints; it needs a decision row recording this approval.
+  - The multi-tenant amendment (spec/multi-tenant-subdomains) also proposes 4.0.0 → 5.0.0; it
+    rebases onto this version and becomes 6.0.0.
+-->
+<!--
+Sync Impact Report (4.0.0)
 - Version change: 3.0.0 → 4.0.0
 - Bump rationale: MAJOR. Principle IV is redefined a second time: the sign-in callback becomes a
   second bounded mutation path beside `horae user link-oidc`. The governance rule makes a principle
@@ -115,6 +149,15 @@ convert one integer-minute value to hours (minutes ÷ 60) as the final step that
   fractional-hours value or round trip back to minutes may be claimed unless a test proves it.
 - The exception does not extend to money, text or CSV output, APIs, domain logic or storage.
 
+**Decimal wire formats (not an exception)**: an interface whose external contract requires
+decimal hours or decimal major currency units, such as the Harvest-compatible API, MAY write and
+read those decimals as text converted exactly from and to the stored integers, using integer
+arithmetic only. Hours are written rounded half up to two decimals and read back rounded half up
+to whole minutes. Amounts are written with the currency's own number of decimals and refused on
+input when they carry more. Totals are computed in integers before conversion; the decimal
+values are never summed, compared or stored. Floating point remains forbidden for these
+conversions.
+
 **Rationale**: Billing and invoicing are financial operations; floating-point accumulation produces
 rounding drift that corrupts totals and erodes trust. Integer representation makes correctness verifiable.
 The XLSX library's numeric-cell API takes an `f64`, so the value is converted at that call; most
@@ -141,10 +184,25 @@ index-friendly identifiers; retaining `org_id` preserves an obvious future path.
 
 ### IV. Mutations Through Server Functions
 
-All data mutations MUST go through Dioxus `#[server]` functions (session-authenticated, role-checked),
-except as the two narrow exceptions below. The UI MUST NOT issue ad-hoc client-side fetches for
-data reads or writes. Additional non-mutating surfaces (e.g. a read-only compatibility API, exports)
-are permitted but MUST NOT become a second mutation path.
+All data mutations MUST go through Horae's shared mutation operations: the authorized,
+validated domain operations that Dioxus `#[server]` functions call. Each operation takes the
+acting person and organization, checks their role and permissions, and applies every rule for
+that change. The two narrow exceptions below are the only writes outside them. The UI MUST NOT
+issue ad-hoc client-side fetches for data reads or writes; it calls server functions.
+
+**Harvest-compatible API (a second transport, not a second path)**: the Harvest-compatible API
+MAY invoke the same mutation operations a server function invokes for the equivalent action,
+with the actor resolved from a personal access token or an OAuth2 access token that Horae
+issued, stored only as a hash, and bound to one person in one organization.
+
+- It MUST NOT write to the datastore except through those operations, and MUST NOT hold its own
+  copy of any validation, permission or state rule.
+- A token MUST NOT grant more than its owner could do in the web app at the moment of the
+  request.
+- A request authenticated only by a session cookie MUST NOT mutate.
+- Token issue and revocation are themselves mutations and go through server functions.
+
+Other additional surfaces (exports, health, plugin hosts) are permitted but MUST NOT mutate.
 
 **Local operator identity binding (first exception)**: the local `horae user link-oidc` command
 MAY bind an OIDC issuer and subject to one existing user account by writing to the datastore
@@ -184,7 +242,9 @@ when the provider never asserts a verified email, so this one binding step is al
 nowhere else. The sign-in callback likewise runs before any session exists, so no server function
 can bind or create the account that the session will belong to; its authority is the validated
 token together with the operator's own configuration, and it is limited to the least-privileged
-account Horae has.
+account Horae has. The Harvest-compatible API serves clients that cannot call server functions.
+Letting it call the same operations, rather than its own SQL, keeps authorization and validation
+in one place, which is what this principle protects.
 
 ### V. Reproducible Builds & Formatting Gate
 
@@ -221,4 +281,4 @@ added principles or materially expanded guidance, PATCH for clarifications. Ever
 Check gate MUST verify compliance before Phase 0, and again after design. Unjustified violations block
 merge. Runtime working guidance for agents lives in `AGENTS.md`.
 
-**Version**: 4.0.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-11-06
+**Version**: 5.0.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-11-09

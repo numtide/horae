@@ -10,9 +10,9 @@ round trips (SC-005); integration tests follow the repo's `#[sqlx::test]` + `#[s
 
 **Gates**:
 
-- 🔒 **AMENDMENT**: the task writes data through the Harvest-compatible API. Do not start it until
-  the maintainer approves [constitution-amendment.md](constitution-amendment.md) and
-  `.specify/memory/constitution.md` is updated to 5.0.0. Applies to all of US2, US5 and US6.
+- 🔒 **AMENDMENT**: the task writes data through the Harvest-compatible API. It needed the
+  maintainer's approval of [constitution-amendment.md](constitution-amendment.md); approved on
+  2026-11-09 and applied as constitution 5.0.0 in step 1. Applies to all of US2, US5 and US6.
 - ⛔ **CREDENTIALS**: needs `HARVEST_ACCESS_TOKEN` and `HARVEST_ACCOUNT_ID` for the test
   (evidence) Harvest account, from the maintainer. GET requests only (D-9, `harvest-parity.md`
   D-020). Never write the values or the account's name into the repository.
@@ -105,7 +105,7 @@ and timer in the web app (SC-003); quickstart §3.
 
 ### Implementation for User Story 2
 
-- [ ] T034 [US2] 🔒 Apply the approved amendment text to `.specify/memory/constitution.md` with its Sync Impact Report, through the `speckit-constitution` skill, in this step's pull request only after the maintainer's approval
+- [x] T034 [US2] 🔒 Apply the approved amendment text to `.specify/memory/constitution.md` with its Sync Impact Report (done in step 1, 5.0.0)
 - [ ] T035 [US2] Implement `crates/core/src/time_entry_timer.rs` and export it from `crates/core/src/lib.rs`
 - [ ] T036 [US2] Add `TimesheetCommand::RestartTimer { entry_id }` in `crates/horae/src/models/scoped_time.rs`, and in `crates/horae/src/server_fns/time_entries/commands.rs` handle it and make `StartTimer`/`RestartTimer` stop the running timer in the same transaction; replace the "a timer is already running" refusal in `crates/horae/src/server_fns/time_entries.rs`
 - [ ] T037 [US2] Make `commands::apply` `pub(crate)` and expose a small wrapper that takes `(org, actor)` from the token extractor and builds the `TimesheetWriteContext` the same way the server function does, in `crates/horae/src/server_fns/time_entries/commands.rs`
@@ -219,6 +219,5 @@ Delivery order (spec): Phase 2 (step 1) → US1 (step 2) → US2 + T041–T042 (
 
 1. **MVP**: Phases 1–3. Every token-based client can read Horae with integer ids and exact
    numbers. Stop and validate with quickstart §1–2 and the suite.
-1. Ask the maintainer for the amendment decision before Phase 4. If it is refused, US2, US5 and
-   US6 are dropped and the API stays read-only; US3 and US4 still proceed.
+1. The amendment was approved before Phase 4 (2026-11-09), so US2, US5 and US6 proceed.
 1. Each later phase is one pull request that leaves the API working and the suite green.
