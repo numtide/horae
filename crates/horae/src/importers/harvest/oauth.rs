@@ -68,6 +68,19 @@ pub struct TokenRefused {
     pub status: u16,
 }
 
+/// The token endpoint was rate limited or failing (429 or 5xx): Harvest did
+/// not judge the request, so it is not a refusal.
+#[derive(Debug, thiserror::Error)]
+#[error("Harvest token endpoint unavailable (HTTP {status})")]
+pub struct TokenUnavailable {
+    pub status: u16,
+}
+
+/// Whether a token endpoint status means "try later" rather than "refused".
+fn unavailable(status: u16) -> bool {
+    status >= 500 || status == 429
+}
+
 impl TokenRefused {
     fn read(status: u16, response: ureq::Response) -> Self {
         #[derive(Deserialize)]
@@ -104,7 +117,7 @@ fn refresh_error(error: ureq::Error) -> anyhow::Error {
             );
             super::ApiImportError::ReconnectRequired.into()
         }
-        ureq::Error::Status(status, _) if status >= 500 || status == 429 => {
+        ureq::Error::Status(status, _) if unavailable(status) => {
             super::ApiImportError::Unavailable(format!(
                 "Harvest token refresh failed with HTTP {status}"
             ))
@@ -174,7 +187,7 @@ impl TokenBody {
 }
 
 /// Exchange an authorization `code` for tokens (server-side, blocking). A
-/// refusal is a [`TokenRefused`].
+/// refusal is a [`TokenRefused`]; a 429 or 5xx is a [`TokenUnavailable`].
 pub fn exchange_code(cfg: &HarvestConfig, code: &str) -> anyhow::Result<Tokens> {
     exchange_code_at(&format!("{ID_HOST}{TOKEN_PATH}"), cfg, code)
 }
@@ -193,6 +206,9 @@ fn exchange_code_at(token_url: &str, cfg: &HarvestConfig, code: &str) -> anyhow:
             ("grant_type", "authorization_code"),
         ])
         .map_err(|e| match e {
+            ureq::Error::Status(status, _) if unavailable(status) => {
+                TokenUnavailable { status }.into()
+            }
             ureq::Error::Status(status, response) => TokenRefused::read(status, response).into(),
             ureq::Error::Transport(e) => anyhow::anyhow!("Harvest token exchange failed: {e}"),
         })?
@@ -421,6 +437,22 @@ mod tests {
             let refused = error.downcast_ref::<TokenRefused>().unwrap();
             assert_eq!((refused.code, refused.status), (OAuthError::Other, 400));
             assert!(!format!("{error:?}").contains("private"), "{body}");
+        }
+    }
+
+    #[test]
+    fn an_unavailable_token_endpoint_is_not_a_refusal() {
+        for status in [429, 500, 503] {
+            let url = fake_token_endpoint(status, refusal("invalid_grant"));
+            let error = exchange_code_at(&url, &cfg(), "the-code").unwrap_err();
+            assert!(error.downcast_ref::<TokenRefused>().is_none(), "{status}");
+            let unavailable = error.downcast_ref::<TokenUnavailable>().unwrap();
+            assert_eq!(unavailable.status, status);
+            assert_eq!(
+                error.to_string(),
+                format!("Harvest token endpoint unavailable (HTTP {status})")
+            );
+            assert!(!format!("{error:?}").contains("private"), "{status}");
         }
     }
 

@@ -530,6 +530,11 @@ async fn oauth_callback(
 /// for another redirect URL the same `invalid_grant` as an expired one, so the
 /// code-expired message also names the redirect URL.
 fn connect_failure(error: &anyhow::Error) -> ConnectFailure {
+    if let Some(unavailable) = error.downcast_ref::<oauth::TokenUnavailable>() {
+        return ConnectFailure::Other {
+            status: Some(unavailable.status),
+        };
+    }
     match error.downcast_ref::<oauth::TokenRefused>() {
         Some(refused) => match refused.code {
             oauth::OAuthError::InvalidClient => ConnectFailure::InvalidClient,
@@ -578,6 +583,17 @@ fn authorized_code(
     params: &CallbackParams,
     stored_state: Option<&str>,
 ) -> Result<String, (ConnectFailure, &'static str)> {
+    // State first, errors included (RFC 6749 §4.1.2.1 returns it with them):
+    // only this session's own attempt may say how it ended.
+    let state = |reason| (ConnectFailure::State, reason);
+    let stored = stored_state.ok_or(state("no state stored for this session"))?;
+    let returned = params
+        .state
+        .as_deref()
+        .ok_or(state("callback missing state"))?;
+    if returned != stored {
+        return Err(state("state mismatch (possible CSRF)"));
+    }
     // Only RFC 6749 §4.1.2.1 codes are matched; anything else Harvest sends
     // stays out of the log and the redirect.
     match params.error.as_deref() {
@@ -595,15 +611,6 @@ fn authorized_code(
                 "provider returned an error",
             ));
         }
-    }
-    let state = |reason| (ConnectFailure::State, reason);
-    let stored = stored_state.ok_or(state("no state stored for this session"))?;
-    let returned = params
-        .state
-        .as_deref()
-        .ok_or(state("callback missing state"))?;
-    if returned != stored {
-        return Err(state("state mismatch (possible CSRF)"));
     }
     params.code.clone().ok_or((
         ConnectFailure::Other { status: None },
@@ -763,6 +770,22 @@ mod oauth_callback_tests {
     }
 
     #[test]
+    fn a_provider_error_without_this_sessions_state_is_a_state_failure() {
+        for (returned, stored) in [
+            (None, Some("nonce")),
+            (Some("attacker"), Some("nonce")),
+            (Some("nonce"), None),
+        ] {
+            let p = params(Some("access_denied"), returned, None);
+            assert_eq!(
+                rejection(&p, stored),
+                ConnectFailure::State,
+                "{returned:?} {stored:?}"
+            );
+        }
+    }
+
+    #[test]
     fn valid_state_but_missing_code_is_rejected() {
         let p = params(None, Some("nonce"), None);
         assert_eq!(
@@ -791,6 +814,10 @@ mod oauth_callback_tests {
             (
                 refused(OAuthError::Other, 403),
                 ConnectFailure::Other { status: Some(403) },
+            ),
+            (
+                anyhow::Error::from(oauth::TokenUnavailable { status: 503 }),
+                ConnectFailure::Other { status: Some(503) },
             ),
             (
                 anyhow::anyhow!("Harvest accounts lookup failed"),
