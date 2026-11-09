@@ -4,9 +4,11 @@
 
 use dioxus::prelude::*;
 use horae_core::importers::harvest::client::{
-    CALLBACK_PATH, ClientSettings, ClientSource, DISCONNECT_UNCONFIRMED, save_disconnects,
+    ClientSettings, ClientSource, DISCONNECT_UNCONFIRMED, save_disconnects,
 };
 
+use super::connect_outcome::SecretFocus;
+use super::redirect_url_field::{RedirectUrlField, redirect_url, use_origin};
 use crate::route::Route;
 use crate::server_fns;
 
@@ -23,28 +25,22 @@ enum Change {
 pub(super) fn HarvestOAuthApp(
     /// Whether Harvest is connected, so a disconnecting change asks first.
     connected: bool,
+    /// Opened from a refused connection: focus an empty secret field.
+    #[props(default)]
+    focus_secret: bool,
     on_changed: EventHandler<()>,
 ) -> Element {
     let mut settings = use_resource(server_fns::harvest_client_settings);
-    let mut origin = use_signal(String::new);
+    let navigator = use_navigator();
+    let origin = use_origin();
     let mut client_id = use_signal(String::new);
     let mut secret = use_signal(String::new);
-    let mut replacing = use_signal(|| false);
+    // Opened to paste a new secret: show the field instead of the stored one.
+    let mut replacing = use_signal(|| focus_secret);
     let mut confirming = use_signal(|| None::<Change>);
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
-    let mut copied = use_signal(|| false);
 
-    use_effect(move || {
-        spawn(async move {
-            if let Ok(current) = document::eval("return window.location.origin;")
-                .join::<String>()
-                .await
-            {
-                origin.set(current);
-            }
-        });
-    });
     // Start the form from the saved client ID, and again after each change.
     use_effect(move || {
         if let Some(Ok(loaded)) = &*settings.read() {
@@ -52,14 +48,7 @@ pub(super) fn HarvestOAuthApp(
         }
     });
 
-    // The value Harvest must have registered: the one in effect, or this
-    // instance's own callback for a first save.
-    let redirect = move |current: &ClientSettings| {
-        current
-            .redirect_url
-            .clone()
-            .unwrap_or_else(|| format!("{}{CALLBACK_PATH}", origin()))
-    };
+    let redirect = move |current: &ClientSettings| redirect_url(current, &origin());
 
     let submit = move |change: Change, current: ClientSettings| async move {
         if *busy.peek() {
@@ -92,6 +81,12 @@ pub(super) fn HarvestOAuthApp(
             Ok(_) => {
                 secret.set(String::new());
                 replacing.set(false);
+                if focus_secret {
+                    // Otherwise a reload reopens the empty secret field.
+                    navigator.replace(Route::HarvestOAuth {
+                        focus: SecretFocus(false),
+                    });
+                }
                 settings.restart();
                 on_changed.call(());
             }
@@ -136,8 +131,8 @@ pub(super) fn HarvestOAuthApp(
         .as_deref()
         .and_then(|at| at.get(..10))
         .map(|date| format!("stored {date}"));
-    let show_stored_secret = current.secret_set && current.secret_readable && !replacing();
-    let copy_url = redirect_url.clone();
+    let show_stored_secret =
+        current.secret_set && current.secret_readable && !(replacing() && editable);
     let save_current = current.clone();
     let remove_current = current.clone();
     let confirm_current = current.clone();
@@ -146,7 +141,7 @@ pub(super) fn HarvestOAuthApp(
         div { class: "flex flex-col gap-5",
             div {
                 Link {
-                    to: Route::HarvestOverview {},
+                    to: Route::HarvestOverview { outcome: Default::default() },
                     class: "imp-back text-primary text-sm",
                     "data-testid": "harvest-oauth-back",
                     "← Back to Harvest"
@@ -174,27 +169,7 @@ pub(super) fn HarvestOAuthApp(
                     }
                     div {
                         label { class: LABEL, r#for: "harvest-redirect-url", "Redirect URI" }
-                        div { class: "input-group",
-                            input {
-                                id: "harvest-redirect-url",
-                                class: "input-group-field text-mono text-xs truncate",
-                                readonly: true,
-                                value: "{redirect_url}",
-                            }
-                            button {
-                                r#type: "button",
-                                class: "btn btn-secondary btn-sm",
-                                onclick: move |_| {
-                                    let js = format!(
-                                        "navigator.clipboard.writeText({});",
-                                        serde_json::to_string(&copy_url).unwrap_or_default()
-                                    );
-                                    document::eval(&js);
-                                    copied.set(true);
-                                },
-                                if copied() { "Copied" } else { "Copy" }
-                            }
-                        }
+                        RedirectUrlField { url: redirect_url }
                         p { class: "form-hint",
                             if current.redirect_from_environment {
                                 "Set by HORAE_HARVEST_REDIRECT_URL. Register it in Harvest exactly as shown."
@@ -257,6 +232,11 @@ pub(super) fn HarvestOAuthApp(
                                 disabled: !editable || busy(),
                                 value: "{secret}",
                                 oninput: move |event| secret.set(event.value()),
+                                onmounted: move |event| async move {
+                                    if focus_secret {
+                                        let _ = event.set_focus(true).await;
+                                    }
+                                },
                             }
                         }
                         p { class: "form-hint",

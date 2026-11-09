@@ -9,8 +9,8 @@ use crate::pages::{
     clients::{ClientDetail, ClientList},
     gallery::Gallery,
     importers::{
-        HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns, ImporterIndex,
-        RunsCursor,
+        ConnectOutcome, HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns,
+        ImporterIndex, RunsCursor, SecretFocus,
     },
     invoices::{InvoiceDetail, InvoiceList, NewInvoiceForClient},
     new_project::{EditProject, NewProject, NewProjectForClient},
@@ -95,10 +95,11 @@ pub enum Route {
     TaskCatalog {},
     #[route("/admin/importers")]
     ImporterIndex {},
-    #[route("/admin/importers/harvest")]
-    HarvestOverview {},
-    #[route("/admin/importers/harvest/oauth")]
-    HarvestOAuth {},
+    // The OAuth callback reports a failed connection in the query.
+    #[route("/admin/importers/harvest?:..outcome")]
+    HarvestOverview { outcome: ConnectOutcome },
+    #[route("/admin/importers/harvest/oauth?:..focus")]
+    HarvestOAuth { focus: SecretFocus },
     #[route("/admin/importers/harvest/csv")]
     HarvestCsv {},
     #[route("/admin/importers/harvest/runs?:..before")]
@@ -138,8 +139,8 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
             | (Route::InvoiceList {}, Route::NewInvoiceForClient { .. })
             | (
                 Route::ImporterIndex {},
-                Route::HarvestOverview {}
-                    | Route::HarvestOAuth {}
+                Route::HarvestOverview { .. }
+                    | Route::HarvestOAuth { .. }
                     | Route::HarvestCsv {}
                     | Route::HarvestRuns { .. }
                     | Route::HarvestRun { .. }
@@ -151,6 +152,7 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
 mod tests {
     use super::*;
     use crate::pages::new_project::edit_return_route;
+    use horae_core::importers::harvest::client::ConnectFailure;
 
     #[test]
     fn timesheet_routes_preserve_selected_person_in_every_view() {
@@ -205,11 +207,33 @@ mod tests {
             ("/admin/importers".to_owned(), Route::ImporterIndex {}),
             (
                 "/admin/importers/harvest".to_owned(),
-                Route::HarvestOverview {},
+                Route::HarvestOverview {
+                    outcome: ConnectOutcome::default(),
+                },
+            ),
+            (
+                "/admin/importers/harvest?connect_error=other&status=400".to_owned(),
+                Route::HarvestOverview {
+                    outcome: ConnectOutcome(Some(ConnectFailure::Other { status: Some(400) })),
+                },
+            ),
+            (
+                "/admin/importers/harvest?connect_error=invalid_client".to_owned(),
+                Route::HarvestOverview {
+                    outcome: ConnectOutcome(Some(ConnectFailure::InvalidClient)),
+                },
             ),
             (
                 "/admin/importers/harvest/oauth".to_owned(),
-                Route::HarvestOAuth {},
+                Route::HarvestOAuth {
+                    focus: SecretFocus::default(),
+                },
+            ),
+            (
+                "/admin/importers/harvest/oauth?focus=secret".to_owned(),
+                Route::HarvestOAuth {
+                    focus: SecretFocus(true),
+                },
             ),
             (
                 "/admin/importers/harvest/csv".to_owned(),
@@ -242,13 +266,16 @@ mod tests {
             );
             assert!(!matches_navigation(&Route::ClientList {}, &route), "{path}");
         }
-        // The OAuth callback returns to the overview with its outcome.
+        // A success, and the callback's old failure link, carry no outcome.
         for path in [
             "/admin/importers/harvest?connected=1",
             "/admin/importers/harvest?error=1",
         ] {
             assert!(
-                path.parse::<Route>().unwrap() == Route::HarvestOverview {},
+                path.parse::<Route>().unwrap()
+                    == Route::HarvestOverview {
+                        outcome: ConnectOutcome::default()
+                    },
                 "{path}"
             );
         }

@@ -8,7 +8,10 @@ use crate::route::Route;
 #[path = "importers/harvest.rs"]
 mod harvest;
 
-pub use harvest::{HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns, RunsCursor};
+pub use harvest::{
+    ConnectOutcome, HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns, RunsCursor,
+    SecretFocus,
+};
 
 /// The sources Horae imports from: the Harvest API and a Harvest CSV export.
 #[component]
@@ -24,7 +27,7 @@ pub fn ImporterIndex() -> Element {
                 "Bring data in from another tracker. Start with a preview before importing business data."
             }
             div { class: "flex flex-col gap-3",
-                Link { to: Route::HarvestOverview {}, class: "imp-source", "data-testid": "choose-api",
+                Link { to: Route::HarvestOverview { outcome: Default::default() }, class: "imp-source", "data-testid": "choose-api",
                     harvest::HarvestLogo { class: "imp-source-icon" }
                     div { class: "flex-1 min-w-0",
                         div { class: "flex items-center gap-2 flex-wrap",

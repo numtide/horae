@@ -166,9 +166,94 @@ fn valid_redirect_url(url: &str) -> bool {
         && (secure || matches!(host, "localhost" | "127.0.0.1" | "[::1]"))
 }
 
+/// Why a Harvest connection attempt ended without a connection, as the
+/// callback reports it to the Harvest page in `?connect_error=`. Each value is
+/// fixed and secret-free: nothing Harvest sent other than the HTTP status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectFailure {
+    /// The token endpoint refused the client ID or secret.
+    InvalidClient,
+    /// Harvest reported that the redirect URL is not the registered one.
+    RedirectMismatch,
+    /// The token endpoint refused the authorization code (`invalid_grant`).
+    CodeExpired,
+    /// The admin cancelled on Harvest's consent page.
+    Denied,
+    /// The callback's `state` did not match the attempt this session started.
+    State,
+    /// Anything else; `status` is the token endpoint's HTTP status when it
+    /// answered at all.
+    Other { status: Option<u16> },
+}
+
+impl ConnectFailure {
+    /// The query the callback appends to the Harvest page's URL.
+    pub fn query(self) -> String {
+        let reason = match self {
+            Self::InvalidClient => "invalid_client",
+            Self::RedirectMismatch => "redirect_mismatch",
+            Self::CodeExpired => "code_expired",
+            Self::Denied => "denied",
+            Self::State => "state",
+            Self::Other {
+                status: Some(status),
+            } => return format!("connect_error=other&status={status}"),
+            Self::Other { status: None } => "other",
+        };
+        format!("connect_error={reason}")
+    }
+
+    /// Read [`Self::query`] back; any other query is no failure.
+    pub fn parse(query: &str) -> Option<Self> {
+        let mut reason = None;
+        let mut status = None;
+        for (key, value) in query.split('&').filter_map(|pair| pair.split_once('=')) {
+            match key {
+                "connect_error" => reason = Some(value),
+                "status" => status = value.parse().ok(),
+                _ => {}
+            }
+        }
+        Some(match reason? {
+            "invalid_client" => Self::InvalidClient,
+            "redirect_mismatch" => Self::RedirectMismatch,
+            "code_expired" => Self::CodeExpired,
+            "denied" => Self::Denied,
+            "state" => Self::State,
+            _ => Self::Other { status },
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn connect_failures_round_trip_through_the_query() {
+        for failure in [
+            ConnectFailure::InvalidClient,
+            ConnectFailure::RedirectMismatch,
+            ConnectFailure::CodeExpired,
+            ConnectFailure::Denied,
+            ConnectFailure::State,
+            ConnectFailure::Other { status: None },
+            ConnectFailure::Other { status: Some(400) },
+        ] {
+            assert_eq!(ConnectFailure::parse(&failure.query()), Some(failure));
+        }
+    }
+
+    #[test]
+    fn other_queries_are_no_connect_failure() {
+        for query in ["", "connected=1", "error=1", "status=400", "connect_error"] {
+            assert_eq!(ConnectFailure::parse(query), None, "{query:?}");
+        }
+        assert_eq!(
+            ConnectFailure::parse("connect_error=<script>"),
+            Some(ConnectFailure::Other { status: None })
+        );
+    }
 
     const URL: &str = "https://horae.example.com/auth/harvest/callback";
 

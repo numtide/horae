@@ -2,6 +2,8 @@ use dioxus::prelude::*;
 use horae_core::importers::harvest::types::{ImportMode, ImportReport, SourceKind, SyncScope};
 
 use super::back_links::BackLinks;
+use super::connect_banner::ConnectBanner;
+use super::connect_outcome::ConnectOutcome;
 use super::connection_card::ConnectionCard;
 use super::history_table::HistoryTable;
 use super::run_panel::RunPanel;
@@ -14,7 +16,7 @@ use crate::server_fns;
 /// The Harvest page: the connection, the two steps (Preview → Import) with
 /// the current run's progress in place, and the latest runs.
 #[component]
-pub fn HarvestOverview() -> Element {
+pub fn HarvestOverview(outcome: ConnectOutcome) -> Element {
     let mut status = use_connection();
     let mut history = use_signal(|| None::<Result<Vec<JobStatus>, String>>);
     // Bumped to read the runs again after an action.
@@ -72,19 +74,21 @@ pub fn HarvestOverview() -> Element {
             busy.set(false);
         });
     };
-    let connect = move |_| async move {
-        if *busy.peek() {
-            return;
-        }
-        busy.set(true);
-        error.set(None);
-        if let Err(e) = go_to_harvest().await {
-            error.set(Some(format!(
-                "Could not start Harvest connection. Try connecting again. {e}"
-            )));
-        }
-        busy.set(false);
-    };
+    let connect = use_callback(move |_: ()| {
+        spawn(async move {
+            if *busy.peek() {
+                return;
+            }
+            busy.set(true);
+            error.set(None);
+            if let Err(e) = go_to_harvest().await {
+                error.set(Some(format!(
+                    "Could not start Harvest connection. Try connecting again. {e}"
+                )));
+            }
+            busy.set(false);
+        });
+    });
 
     let jobs = match &*history.read() {
         Some(Ok(jobs)) => Some(jobs.clone()),
@@ -113,6 +117,9 @@ pub fn HarvestOverview() -> Element {
             BackLinks {}
             ConnectionCard { connection: conn.clone(), refused, importing, on_changed: changed }
             section { class: "card flex flex-col gap-6", aria_label: "Import from Harvest",
+                if let Some(failure) = outcome.0 {
+                    ConnectBanner { failure, busy: busy(), on_connect: connect }
+                }
                 ol { class: "himp-steps", aria_label: "Import steps",
                     li { class: "himp-step", "data-state": first,
                         aria_current: (first == "current").then_some("step"),
@@ -145,7 +152,7 @@ pub fn HarvestOverview() -> Element {
                             h2 { class: "himp-title", "Set up the Harvest OAuth app" }
                             p { class: "text-sm text-secondary", "Set up the Harvest OAuth app before connecting, or import a CSV export." }
                             div { class: "flex gap-4 items-center flex-wrap",
-                                Link { to: Route::HarvestOAuth {}, class: "btn btn-primary", "data-testid": "setup-harvest-oauth", "Set up OAuth app" }
+                                Link { to: Route::HarvestOAuth { focus: Default::default() }, class: "btn btn-primary", "data-testid": "setup-harvest-oauth", "Set up OAuth app" }
                                 {csv_link}
                             }
                         }
@@ -161,7 +168,7 @@ pub fn HarvestOverview() -> Element {
                             }
                             div { class: "flex gap-4 items-center flex-wrap",
                                 button { r#type: "button", class: "btn btn-primary", "data-testid": "connect-harvest".to_owned(),
-                                    disabled: busy(), onclick: connect,
+                                    disabled: busy(), onclick: move |_| connect.call(()),
                                     if busy() { "Connecting…" } else if *bound { "Reconnect Harvest" } else { "Connect Harvest" }
                                 }
                                 {csv_link}

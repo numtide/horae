@@ -9,14 +9,17 @@ server function calls `require_admin` (013 FR-002).
 |---|---|
 | `/admin/importers` | `ImporterIndex`: Harvest API and Harvest CSV only, with the connection badge |
 | `/admin/importers/harvest` | `HarvestOverview`: connection card, preview, latest 5 runs |
-| `/admin/importers/harvest/oauth` | `HarvestOAuth`: OAuth client settings |
+| `/admin/importers/harvest/oauth?focus=secret` | `HarvestOAuth`: OAuth client settings; `focus=secret` opens an empty, focused secret field |
 | `/admin/importers/harvest/csv` | `HarvestCsv`: file picker, preview |
 | `/admin/importers/harvest/runs?before={id}` | `HarvestRuns`: 20 runs a page; `before` is the last run of the previous page, absent for the newest |
 | `/admin/importers/harvest/runs/{id}` | `HarvestRun`: header and actions, progress, summary, error groups, people not imported |
 
 Starting a preview, a commit or a re-sync opens the new run's page; a retry stays on its run. The
-OAuth callback redirects to `/admin/importers/harvest?connected=1` on success and
-`/admin/importers/harvest?error=1` on failure.
+OAuth callback redirects to `/admin/importers/harvest?connected=1` on success and to
+`/admin/importers/harvest?connect_error={reason}` on failure, where `reason` is one of
+`invalid_client`, `redirect_mismatch`, `code_expired`, `denied`, `state` or `other` (with
+`&status={http}` when Harvest's token endpoint answered). The page shows one dismissable banner
+for it; dismissing drops the query. The old `?error=1` reads as no outcome.
 
 ## Server functions
 

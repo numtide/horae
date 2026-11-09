@@ -63,8 +63,8 @@ mod components {
 /// The importer routes, as the app declares them.
 mod route {
     use crate::importers::{
-        HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns, ImporterIndex,
-        RunsCursor,
+        ConnectOutcome, HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns,
+        ImporterIndex, RunsCursor, SecretFocus,
     };
     use dioxus::prelude::*;
     use uuid::Uuid;
@@ -87,10 +87,10 @@ mod route {
         AdminUsers {},
         #[route("/admin/importers")]
         ImporterIndex {},
-        #[route("/admin/importers/harvest")]
-        HarvestOverview {},
-        #[route("/admin/importers/harvest/oauth")]
-        HarvestOAuth {},
+        #[route("/admin/importers/harvest?:..outcome")]
+        HarvestOverview { outcome: ConnectOutcome },
+        #[route("/admin/importers/harvest/oauth?:..focus")]
+        HarvestOAuth { focus: SecretFocus },
         #[route("/admin/importers/harvest/csv")]
         HarvestCsv {},
         #[route("/admin/importers/harvest/runs?:..before")]
@@ -158,7 +158,7 @@ impl Probe {
 #[derive(Props, Clone)]
 struct AppProps {
     probe: Probe,
-    path: String,
+    history: Rc<MemoryHistory>,
 }
 
 impl PartialEq for AppProps {
@@ -169,10 +169,10 @@ impl PartialEq for AppProps {
 
 fn app(props: AppProps) -> Element {
     use_context_provider(|| props.probe.clone());
-    let path = props.path.clone();
+    let history = props.history.clone();
     rsx! {
         HistoryProvider {
-            history: move |_| Rc::new(MemoryHistory::with_initial_path(path.clone())) as Rc<dyn History>,
+            history: move |_| history.clone() as Rc<dyn History>,
             Router::<route::Route> {}
         }
     }
@@ -180,6 +180,7 @@ fn app(props: AppProps) -> Element {
 
 struct Ui {
     dom: VirtualDom,
+    history: Rc<MemoryHistory>,
     targets: HashMap<String, ElementId>,
 }
 
@@ -190,14 +191,16 @@ impl Ui {
 
     fn at(probe: &Probe, path: &str) -> Self {
         set_event_converter(Box::new(SerializedHtmlEventConverter));
+        let history = Rc::new(MemoryHistory::with_initial_path(path));
         let mut ui = Self {
             dom: VirtualDom::new_with_props(
                 app,
                 AppProps {
                     probe: probe.clone(),
-                    path: path.into(),
+                    history: history.clone(),
                 },
             ),
+            history,
             targets: HashMap::new(),
         };
         let mutations = ui.dom.rebuild_to_vec().edits;
@@ -251,6 +254,11 @@ impl Ui {
 
     fn html(&self) -> String {
         dioxus::ssr::render(&self.dom)
+    }
+
+    /// The router's current path and query.
+    fn path(&self) -> String {
+        self.history.current_route()
     }
 
     fn form_event(&mut self, event_name: &str, name: &str, value: &str) {
@@ -380,7 +388,11 @@ fn the_index_lists_only_real_sources() {
         html.contains("Harvest") && html.contains("CSV file"),
         "{html}"
     );
-    assert!(html.contains("href=\"/admin/importers/harvest\""), "{html}");
+    // An empty whole-query argument still renders its `?`.
+    assert!(
+        html.contains("href=\"/admin/importers/harvest?\""),
+        "{html}"
+    );
     assert!(
         html.contains("href=\"/admin/importers/harvest/csv\""),
         "{html}"
@@ -2124,4 +2136,248 @@ fn environment_client_and_missing_key_read_as_locked() {
     let html = ui.html();
     assert!(html.contains("HORAE_HARVEST_ENC_KEY"), "{html}");
     assert!(!html.contains("data-testid=\"save-harvest-client\""));
+}
+
+const STORED_REDIRECT: &str = "https://horae.example/auth/harvest/callback";
+
+fn stored_client() -> ClientSettings {
+    ClientSettings {
+        source: ClientSource::Stored,
+        client_id: Some("app".into()),
+        secret_set: true,
+        secret_readable: true,
+        redirect_url: Some(STORED_REDIRECT.into()),
+        ..key_only()
+    }
+}
+
+/// The Harvest page as the OAuth callback leaves it after `query`.
+fn after_callback(query: &str) -> (Probe, Ui) {
+    let probe = Probe::default();
+    probe.connection.borrow_mut().configured = true;
+    *probe.client.borrow_mut() = stored_client();
+    let ui = Ui::at(&probe, &format!("/admin/importers/harvest?{query}"));
+    (probe, ui)
+}
+
+#[test]
+fn each_connect_failure_says_what_happened_and_offers_its_fix() {
+    for (query, sentence, action) in [
+        (
+            "connect_error=invalid_client",
+            "Harvest didn&#39;t accept Horae&#39;s OAuth app credentials.",
+            "fix-oauth-secret",
+        ),
+        (
+            "connect_error=redirect_mismatch",
+            "The redirect URL doesn&#39;t match the one registered in your Harvest app.",
+            "harvest-developers",
+        ),
+        (
+            "connect_error=code_expired",
+            "The authorization expired before Horae could use it.",
+            "banner-connect",
+        ),
+        (
+            "connect_error=denied",
+            "You cancelled the connection in Harvest.",
+            "banner-connect",
+        ),
+        (
+            "connect_error=state",
+            "The connection couldn&#39;t be verified. Start it again from this page.",
+            "banner-connect",
+        ),
+        (
+            "connect_error=other&status=400",
+            "Harvest refused the connection (HTTP 400).",
+            "banner-connect",
+        ),
+        (
+            "connect_error=other",
+            "Horae couldn&#39;t finish connecting to Harvest.",
+            "banner-connect",
+        ),
+    ] {
+        let (_, ui) = after_callback(query);
+        let html = ui.html();
+        assert!(html.contains(sentence), "{query}: {html}");
+        assert!(
+            html.contains(&format!("data-testid=\"{action}\"")),
+            "{query}: {html}"
+        );
+        let role = if query == "connect_error=denied" {
+            "role=\"status\""
+        } else {
+            "role=\"alert\""
+        };
+        assert!(
+            opening_tag(&html, "data-testid=\"connect-banner\"").contains(role),
+            "{query}: only real errors are alerts: {html}"
+        );
+    }
+}
+
+/// The opening tag of the element carrying `attribute`.
+fn opening_tag<'a>(html: &'a str, attribute: &str) -> &'a str {
+    let at = html
+        .find(attribute)
+        .unwrap_or_else(|| panic!("missing {attribute}: {html}"));
+    let start = html[..at].rfind('<').unwrap();
+    let end = at + html[at..].find('>').unwrap();
+    &html[start..=end]
+}
+
+#[test]
+fn an_unavailable_harvest_is_not_called_a_refusal() {
+    for status in [503, 429] {
+        let (_, ui) = after_callback(&format!("connect_error=other&status={status}"));
+        let html = ui.html();
+        assert!(
+            html.contains(&format!(
+                "Harvest is unavailable right now (HTTP {status})."
+            )),
+            "{html}"
+        );
+        assert!(html.contains("Try again in a few minutes."), "{html}");
+        assert!(!html.contains("refused"), "{html}");
+    }
+}
+
+#[test]
+fn no_banner_without_a_connect_failure() {
+    for query in ["connected=1", "error=1"] {
+        let (_, ui) = after_callback(query);
+        assert!(!ui.html().contains("connect-banner"), "{query}");
+    }
+}
+
+#[test]
+fn a_dismissed_banner_does_not_come_back() {
+    let (_, mut ui) = after_callback("connect_error=state");
+    ui.click("dismiss-connect-banner");
+    assert_eq!(
+        ui.path(),
+        route::Route::HarvestOverview {
+            outcome: Default::default()
+        }
+        .to_string()
+    );
+    let html = ui.html();
+    assert!(!html.contains("couldn&#39;t be verified"), "{html}");
+    assert!(html.contains("Connect Harvest"), "{html}");
+}
+
+#[test]
+fn the_banner_reconnects_in_place() {
+    let (probe, mut ui) = after_callback("connect_error=code_expired");
+    ui.click("banner-connect");
+    assert_eq!(*probe.connects.borrow(), 1);
+}
+
+#[test]
+fn refused_credentials_open_the_oauth_app_ready_for_a_new_secret() {
+    let (_, mut ui) = after_callback("connect_error=invalid_client");
+    assert!(
+        ui.html().contains("A blank secret keeps the stored one"),
+        "{}",
+        ui.html()
+    );
+    ui.click("fix-oauth-secret");
+    let html = ui.html();
+    assert!(html.contains("Harvest OAuth2 app"), "{html}");
+    // The stored secret is not shown: the field to paste a new one is.
+    assert!(html.contains("id=\"harvest-client-secret\""), "{html}");
+    assert!(!html.contains("data-testid=\"replace-harvest-secret\""));
+}
+
+#[test]
+fn refused_environment_credentials_are_fixed_by_the_operator() {
+    let probe = Probe::default();
+    probe.connection.borrow_mut().configured = true;
+    *probe.client.borrow_mut() = ClientSettings {
+        source: ClientSource::Environment,
+        client_id: Some("env-app".into()),
+        secret_set: true,
+        secret_readable: true,
+        ..key_only()
+    };
+    let ui = Ui::at(
+        &probe,
+        "/admin/importers/harvest?connect_error=invalid_client",
+    );
+    let html = ui.html();
+    assert!(html.contains("HORAE_HARVEST_CLIENT_SECRET"), "{html}");
+    assert!(
+        !html.contains("A blank secret keeps the stored one"),
+        "{html}"
+    );
+}
+
+#[test]
+fn a_saved_secret_leaves_the_focus_query_behind() {
+    let probe = Probe::default();
+    *probe.client.borrow_mut() = stored_client();
+    let mut ui = Ui::at(&probe, "/admin/importers/harvest/oauth?focus=secret");
+    ui.type_into("harvest-client-secret", "new-secret");
+    ui.click("save-harvest-client");
+    assert_eq!(probe.client_saves.borrow().len(), 1);
+    assert_eq!(
+        ui.path(),
+        route::Route::HarvestOAuth {
+            focus: Default::default()
+        }
+        .to_string()
+    );
+}
+
+#[test]
+fn a_redirect_mismatch_shows_the_url_to_register() {
+    let (_, ui) = after_callback("connect_error=redirect_mismatch");
+    let html = ui.html();
+    assert!(html.contains(STORED_REDIRECT), "{html}");
+    assert!(html.contains("data-testid=\"copy-redirect-url\""), "{html}");
+    // The banner has no <label>, so the field names itself.
+    assert!(
+        opening_tag(&html, "id=\"harvest-redirect-url\"").contains("aria-label=\"Redirect URL\""),
+        "{html}"
+    );
+    assert!(
+        html.contains("https://id.getharvest.com/developers"),
+        "{html}"
+    );
+}
+
+#[test]
+fn an_expired_code_also_points_at_the_redirect_url() {
+    let (_, ui) = after_callback("connect_error=code_expired");
+    assert!(ui.html().contains("redirect URL"), "{}", ui.html());
+}
+
+#[test]
+fn the_oauth_app_always_shows_the_redirect_url_it_will_use() {
+    let probe = Probe::default();
+    probe.connection.borrow_mut().configured = true;
+    *probe.client.borrow_mut() = stored_client();
+    let ui = Ui::at(&probe, "/admin/importers/harvest/oauth");
+    let html = ui.html();
+    assert!(html.contains(STORED_REDIRECT), "{html}");
+    assert!(html.contains("data-testid=\"copy-redirect-url\""), "{html}");
+    assert!(html.contains("must match exactly"), "{html}");
+}
+
+#[test]
+fn an_environment_secret_stays_locked_when_opened_for_a_new_secret() {
+    let probe = Probe::default();
+    *probe.client.borrow_mut() = ClientSettings {
+        source: ClientSource::Environment,
+        client_id: Some("env-app".into()),
+        secret_set: true,
+        secret_readable: true,
+        ..key_only()
+    };
+    let ui = Ui::at(&probe, "/admin/importers/harvest/oauth?focus=secret");
+    let html = ui.html();
+    assert!(html.contains("set in the environment"), "{html}");
+    assert!(!html.contains("id=\"harvest-client-secret\""), "{html}");
 }

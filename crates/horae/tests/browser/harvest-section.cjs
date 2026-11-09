@@ -114,7 +114,7 @@ const user = email => ({
       await expect(page.getByText('Toggl Track')).toHaveCount(0);
       await expect(page.getByText('Clockify')).toHaveCount(0);
       await page.getByTestId('choose-api').click();
-      await page.waitForURL(`${base}/admin/importers/harvest`);
+      await page.waitForURL(/\/admin\/importers\/harvest\??$/);
       await expect(page.getByRole('heading', { level: 1, name: 'Harvest' })).toBeVisible();
       await expect(page.locator('.adm-link.active')).toHaveText('Importers');
       await page.getByTestId('all-runs').click();

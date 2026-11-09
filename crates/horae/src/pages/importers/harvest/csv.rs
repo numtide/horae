@@ -48,7 +48,7 @@ pub fn HarvestCsv() -> Element {
             div { class: "flex items-center gap-3 flex-wrap mb-6",
                 Link { to: Route::ImporterIndex {}, class: "imp-back text-primary text-sm", "data-testid": "all-importers", "← All importers" }
                 span { class: "text-faint text-sm", "·" }
-                Link { to: Route::HarvestOverview {}, class: "imp-back text-secondary text-sm", "data-testid": "use-api", "Use the Harvest API instead" }
+                Link { to: Route::HarvestOverview { outcome: Default::default() }, class: "imp-back text-secondary text-sm", "data-testid": "use-api", "Use the Harvest API instead" }
             }
             match file.read().as_ref() {
                 None => rsx! {

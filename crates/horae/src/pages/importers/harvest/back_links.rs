@@ -10,7 +10,7 @@ pub(super) fn BackLinks(#[props(default)] here: Option<String>) -> Element {
             Link { to: Route::ImporterIndex {}, "data-testid": "all-importers", "Importers" }
             span { aria_hidden: "true", class: "px-2", "/" }
             if let Some(here) = here {
-                Link { to: Route::HarvestOverview {}, "data-testid": "back-to-harvest", "Harvest" }
+                Link { to: Route::HarvestOverview { outcome: Default::default() }, "data-testid": "back-to-harvest", "Harvest" }
                 span { aria_hidden: "true", class: "px-2", "/" }
                 span { aria_current: "page", "{here}" }
             } else {

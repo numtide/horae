@@ -76,7 +76,9 @@ pub(super) fn MissingPeople(
     }
     let preview_again = match source {
         Some(SourceKind::Csv) => Route::HarvestCsv {},
-        _ => Route::HarvestOverview {},
+        _ => Route::HarvestOverview {
+            outcome: Default::default(),
+        },
     };
     rsx! {
         section { class: "card p-0 overflow-hidden mt-4", aria_label: "People not imported",
