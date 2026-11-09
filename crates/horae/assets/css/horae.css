@@ -372,7 +372,7 @@ h1, h2, h3, h4, h5, h6 {
 .app-shell > .mobile-nav-toggle { display: none; }
 
 /* Brand row */
-.sidebar-brand { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-6); }
+.sidebar-brand { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-5); }
 .sidebar-brand-name {
   font-family: var(--font-family-display); font-size: var(--font-size-2xl); font-weight: 600;
   letter-spacing: -0.01em; color: var(--color-text);
@@ -478,7 +478,8 @@ h1, h2, h3, h4, h5, h6 {
 .sidebar-timer-form-actions .btn { flex: 1; }
 
 /* Sections */
-.sidebar-group { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-6); }
+/* --space-5, not 6: the admin rail with Tasks and the version block still fits an 800px-tall screen. */
+.sidebar-group { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-5); }
 .sidebar-section {
   /* 10.5px is an intentional micro-label, smaller than --font-size-xs */
   font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
