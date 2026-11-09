@@ -1,6 +1,8 @@
 use serde::Serialize;
 use std::collections::HashMap;
 
+use super::decimal_json::{Amount, Hours};
+
 // ── Pagination envelope ─────────────────────────────────────────────────────
 
 #[derive(Serialize)]
@@ -102,13 +104,13 @@ pub struct HarvestLinks {
 
 #[derive(Serialize, Clone)]
 pub struct HarvestRef {
-    pub id: String,
+    pub id: i64,
     pub name: String,
 }
 
 #[derive(Serialize, Clone)]
 pub struct HarvestProjectRef {
-    pub id: String,
+    pub id: i64,
     pub name: String,
     pub code: Option<String>,
 }
@@ -117,10 +119,10 @@ pub struct HarvestProjectRef {
 
 #[derive(Serialize)]
 pub struct HarvestTimeEntry {
-    pub id: String,
+    pub id: i64,
     pub spent_date: String,
-    pub hours: f64,
-    pub rounded_hours: f64,
+    pub hours: Hours,
+    pub rounded_hours: Hours,
     /// Wall-clock start/end (Harvest tracks by start/end times); null when the
     /// entry is duration-only (no start time).
     pub started_time: Option<String>,
@@ -136,9 +138,9 @@ pub struct HarvestTimeEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub budgeted: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub billable_rate: Option<f64>,
+    pub billable_rate: Option<Amount>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cost_rate: Option<f64>,
+    pub cost_rate: Option<Amount>,
     pub created_at: String,
     pub updated_at: String,
     pub user: HarvestRef,
@@ -152,14 +154,14 @@ pub struct HarvestTimeEntry {
 
 #[derive(Serialize)]
 pub struct HarvestProject {
-    pub id: String,
+    pub id: i64,
     pub name: String,
     pub code: Option<String>,
     pub is_active: bool,
     pub is_billable: bool,
     pub bill_by: String,
     pub budget_by: String,
-    pub budget: Option<f64>,
+    pub budget: Option<Budget>,
     pub starts_on: Option<String>,
     pub ends_on: Option<String>,
     pub created_at: String,
@@ -167,11 +169,20 @@ pub struct HarvestProject {
     pub client: HarvestRef,
 }
 
+/// A project budget in its own unit: hours for an hours budget, money for an
+/// amount budget.
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(untagged)]
+pub enum Budget {
+    Hours(Hours),
+    Amount(Amount),
+}
+
 // ── Client ──────────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]
 pub struct HarvestClient {
-    pub id: String,
+    pub id: i64,
     pub name: String,
     pub is_active: bool,
     pub address: Option<String>,
@@ -184,12 +195,12 @@ pub struct HarvestClient {
 
 #[derive(Serialize)]
 pub struct HarvestTask {
-    pub id: String,
+    pub id: i64,
     pub name: String,
     pub is_active: bool,
     pub billable_by_default: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_hourly_rate: Option<f64>,
+    pub default_hourly_rate: Option<Amount>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -198,14 +209,14 @@ pub struct HarvestTask {
 
 #[derive(Serialize)]
 pub struct HarvestUser {
-    pub id: String,
+    pub id: i64,
     pub first_name: String,
     pub last_name: String,
     pub email: String,
     pub is_active: bool,
     pub is_admin: bool,
-    pub cost_rate: Option<f64>,
-    pub default_hourly_rate: Option<f64>,
+    pub cost_rate: Option<Amount>,
+    pub default_hourly_rate: Option<Amount>,
     pub created_at: String,
     pub updated_at: String,
 }

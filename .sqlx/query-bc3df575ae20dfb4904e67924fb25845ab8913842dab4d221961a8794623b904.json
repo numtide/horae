@@ -1,12 +1,12 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, email, active, org_role::text AS \"org_role!: String\",\n         cost_rate_cents, billable_rate_cents,\n         created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n         FROM users WHERE id = $1",
+  "query": "SELECT api_number(org_id, 'user', id) AS \"id!\", name, email, active,\n         org_role::text AS \"org_role!: String\",\n         cost_rate_cents, billable_rate_cents,\n         created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n         FROM users WHERE id = $1",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
-        "type_info": "Uuid"
+        "name": "id!",
+        "type_info": "Int8"
       },
       {
         "ordinal": 1,
@@ -50,7 +50,7 @@
       ]
     },
     "nullable": [
-      false,
+      null,
       false,
       false,
       false,
@@ -60,5 +60,5 @@
       false
     ]
   },
-  "hash": "d11936a9e5f0352299303047935b3a9bceb106c1399e80c11c0176027332a299"
+  "hash": "bc3df575ae20dfb4904e67924fb25845ab8913842dab4d221961a8794623b904"
 }

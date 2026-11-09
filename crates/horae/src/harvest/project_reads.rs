@@ -9,7 +9,14 @@ pub(super) async fn read(
     project_id: Option<Uuid>,
     limit: i64,
     offset: i64,
-) -> Result<(i64, Vec<ProjectRow>), (StatusCode, String)> {
+) -> Result<(i64, Vec<ProjectRow>), ApiError> {
+    let client_id = ids::filter(
+        db,
+        caller.org_id,
+        Kind::Client,
+        filters.client_id.as_deref(),
+    )
+    .await?;
     let mut access = ProjectReadAccess::begin(db, caller.org_id, caller.user_id)
         .await
         .map_err(|error| match error {
@@ -47,13 +54,13 @@ pub(super) async fn read(
            ), totals AS (SELECT COUNT(*) total FROM visible), page AS (
              SELECT * FROM visible ORDER BY name,id LIMIT $7 OFFSET $8
            )
-           SELECT totals.total AS "total!",p.id AS "id?",p.name AS "name?",p.code,
+           SELECT totals.total AS "total!",api_number($1,'project',p.id) AS "id?",p.name AS "name?",p.code,
                   p.project_type AS "project_type?",p.active AS "active?",p.budget_kind AS "budget_kind?",
                   p.budget_amount_cents,p.budget_minutes,p.starts_on AS "starts_on?: chrono::NaiveDate",
                   p.ends_on AS "ends_on?: chrono::NaiveDate",p.created_at AS "created_at?: chrono::DateTime<chrono::Utc>",
-                  p.client_id AS "client_id?",p.client_name AS "client_name?"
+                  api_number($1,'client',p.client_id) AS "client_id?",p.client_name AS "client_name?"
            FROM totals LEFT JOIN page p ON true ORDER BY p.name,p.id"#,
-        caller.org_id, caller.user_id, filters.is_active, filters.client_id,
+        caller.org_id, caller.user_id, filters.is_active, client_id,
         filters.updated_since as Option<DateTime<Utc>>, project_id, limit, offset,
         access.legacy(), access.has(Permission::ProjectReadAll), access.has(Permission::ProjectReadManaged),
         access.has(Permission::BillableRateReadAll), access.has(Permission::BillableRateReadManaged),

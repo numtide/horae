@@ -9,7 +9,7 @@ pub(super) async fn read(
     task_id: Option<Uuid>,
     limit: i64,
     offset: i64,
-) -> Result<(i64, Vec<TaskRow>), (StatusCode, String)> {
+) -> Result<(i64, Vec<TaskRow>), ApiError> {
     let mut access = ProjectReadAccess::begin(db, caller.org_id, caller.user_id)
         .await
         .map_err(|error| match error {
@@ -36,7 +36,7 @@ pub(super) async fn read(
            ), totals AS (SELECT COUNT(*) total FROM visible), page AS (
              SELECT * FROM visible ORDER BY name,id LIMIT $5 OFFSET $6
            )
-           SELECT totals.total AS "total!",t.id AS "id?",t.name AS "name?",
+           SELECT totals.total AS "total!",api_number($1,'task',t.id) AS "id?",t.name AS "name?",
                   t.active AS "active?",t.billable_default AS "billable_default?",t.default_rate_cents
            FROM totals LEFT JOIN page t ON true ORDER BY t.name,t.id"#,
         caller.org_id,

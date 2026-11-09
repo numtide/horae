@@ -43,7 +43,7 @@ pub fn router(dev_login: bool) -> Router {
 /// Redirect unauthenticated page navigations to the login screen.
 ///
 /// Only plain page loads are guarded: `GET` requests that accept HTML and fall
-/// outside the public paths (`/auth/*`, `/api/*`, `/harvest/*`, `/health`,
+/// outside the public paths (`/auth/*`, `/api/*`, `/harvest/*`, `/v2/*`, `/health`,
 /// `/favicon.ico`).
 /// Assets, server-function calls, and the Harvest API pass through untouched, and
 /// excluding `/auth/*` keeps the login page reachable (no redirect loop). Data is
@@ -56,6 +56,7 @@ pub async fn login_redirect_guard(session: Session, request: Request, next: Next
     let public = path.starts_with("/auth/")
         || path.starts_with("/api/")
         || path.starts_with("/harvest/")
+        || path.starts_with("/v2/")
         || path == "/health"
         || path == "/favicon.ico";
     let is_page = request.method() == Method::GET

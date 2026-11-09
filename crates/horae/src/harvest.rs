@@ -1,13 +1,18 @@
-// Read-only Harvest-style subset, mounted at /harvest/v2. Session auth, UUID
-// identifiers, and incomplete filters require client adaptation; see the
-// compatibility matrix in specs/001-time-tracking-invoicing/contracts/harvest-api.md.
+// Read-only Harvest API v2 subset, mounted at /harvest/v2 with the aliases /v2
+// and /api/v2. Integer ids and exact decimals; session auth for now. The
+// contract is specs/021-harvest-api-compat/contracts/harvest-api-v2.md.
 
 mod auth;
 mod client_reads;
+mod decimal_json;
+mod errors;
+mod ids;
 mod project_reads;
 mod task_reads;
 mod types;
 
+#[cfg(test)]
+mod api_tests;
 #[cfg(test)]
 mod pagination_tests;
 
@@ -15,7 +20,7 @@ use axum::{
     Json, Router,
     extract::{OriginalUri, Path, Query, State},
     http::StatusCode,
-    routing::get,
+    routing::{MethodRouter, get},
 };
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::Deserialize;
@@ -23,49 +28,58 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use auth::AuthUser;
+use decimal_json::{Amount, Hours};
+use errors::ApiError;
+use ids::Kind;
 use types::*;
 
 pub fn router(db: PgPool) -> Router {
+    let routes: [(&str, MethodRouter<PgPool>); 10] = [
+        ("/users/me", get(users_me)),
+        ("/time_entries", get(list_time_entries)),
+        ("/time_entries/{id}", get(get_time_entry)),
+        ("/projects", get(list_projects)),
+        ("/projects/{id}", get(get_project)),
+        ("/clients", get(list_clients)),
+        ("/clients/{id}", get(get_client)),
+        ("/tasks", get(list_tasks)),
+        ("/tasks/{id}", get(get_task)),
+        ("/users", get(list_users)),
+    ];
+    let mut api = Router::new();
+    for (path, handler) in routes {
+        // A `.json` suffix is served like the bare path (FR-026). Ids drop it
+        // themselves (`ids::resolve`), so only the fixed paths need a twin.
+        if !path.contains('{') {
+            api = api.route(&format!("{path}.json"), handler.clone());
+        }
+        api = api.route(path, handler);
+    }
     Router::new()
-        .nest(
-            "/harvest/v2",
-            Router::new()
-                .route("/users/me", get(users_me))
-                .route("/time_entries", get(list_time_entries))
-                .route("/time_entries/{id}", get(get_time_entry))
-                .route("/projects", get(list_projects))
-                .route("/projects/{id}", get(get_project))
-                .route("/clients", get(list_clients))
-                .route("/clients/{id}", get(get_client))
-                .route("/tasks", get(list_tasks))
-                .route("/tasks/{id}", get(get_task))
-                .route("/users", get(list_users)),
-        )
+        .nest("/harvest/v2", api.clone())
+        .nest("/v2", api.clone())
+        .nest("/api/v2", api)
         .with_state(db)
 }
 
 // ── Error helper ────────────────────────────────────────────────────────────
 
-type ApiResult<T> = Result<Json<T>, (axum::http::StatusCode, String)>;
+type ApiResult<T> = Result<Json<T>, ApiError>;
 
-fn internal(e: impl std::fmt::Display) -> (axum::http::StatusCode, String) {
-    tracing::error!("Harvest API error: {e}");
-    (
-        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-        format!("Internal error: {e}"),
-    )
+fn internal(e: impl std::fmt::Display) -> ApiError {
+    ApiError::internal(e)
 }
 
-fn not_found() -> (axum::http::StatusCode, String) {
-    (axum::http::StatusCode::NOT_FOUND, "Not found".to_string())
+fn not_found() -> ApiError {
+    ApiError::not_found()
 }
 
 /// The caller is signed in but not senior enough for this collection. Kept
 /// distinct from [`not_found`] on purpose: a 404 would tell a Harvest client the
 /// org holds no such data, and the login guard deliberately never redirects
 /// under `/harvest/`, so 403 is the only honest answer here.
-fn forbidden(msg: &str) -> (axum::http::StatusCode, String) {
-    (StatusCode::FORBIDDEN, msg.to_string())
+fn forbidden(msg: &str) -> ApiError {
+    ApiError::forbidden(msg)
 }
 
 /// The `user_id` a time-entry query may read, given what the caller asked for.
@@ -77,7 +91,7 @@ fn forbidden(msg: &str) -> (axum::http::StatusCode, String) {
 fn scoped_user_filter(
     caller: &AuthUser,
     requested: Option<Uuid>,
-) -> Result<Option<Uuid>, (axum::http::StatusCode, String)> {
+) -> Result<Option<Uuid>, ApiError> {
     if caller.org_role.is_manager_or_above() {
         return Ok(requested);
     }
@@ -93,24 +107,17 @@ fn scoped_user_filter(
 
 /// Numbered pagination shared by all list endpoints, with a bounded page size
 /// and a checked PostgreSQL bigint offset. Returns `(page, per_page, offset)`.
-fn page_window(
-    page: Option<i64>,
-    per_page: Option<i64>,
-) -> Result<(i64, i64, i64), (StatusCode, String)> {
+fn page_window(page: Option<i64>, per_page: Option<i64>) -> Result<(i64, i64, i64), ApiError> {
     let page = page.unwrap_or(1);
     let per_page = per_page.unwrap_or(100);
     if page < 1 || !(1..=100).contains(&per_page) {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "page must be positive and per_page must be between 1 and 100".to_owned(),
+        return Err(ApiError::unprocessable(
+            "page must be positive and per_page must be between 1 and 100",
         ));
     }
-    let offset = (page - 1).checked_mul(per_page).ok_or_else(|| {
-        (
-            StatusCode::BAD_REQUEST,
-            "Pagination offset is too large".to_owned(),
-        )
-    })?;
+    let offset = (page - 1)
+        .checked_mul(per_page)
+        .ok_or_else(|| ApiError::unprocessable("Pagination offset is too large"))?;
     Ok((page, per_page, offset))
 }
 
@@ -119,7 +126,8 @@ fn page_window(
 async fn users_me(user: AuthUser, State(db): State<PgPool>) -> ApiResult<HarvestUser> {
     let row: UserRow = sqlx::query_as!(
         UserRow,
-        r#"SELECT id, name, email, active, org_role::text AS "org_role!: String",
+        r#"SELECT api_number(org_id, 'user', id) AS "id!", name, email, active,
+         org_role::text AS "org_role!: String",
          cost_rate_cents, billable_rate_cents,
          created_at as "created_at: chrono::DateTime<chrono::Utc>"
          FROM users WHERE id = $1"#,
@@ -136,8 +144,8 @@ async fn users_me(user: AuthUser, State(db): State<PgPool>) -> ApiResult<Harvest
 
 #[derive(Deserialize)]
 pub struct TimeEntryFilters {
-    pub user_id: Option<Uuid>,
-    pub project_id: Option<Uuid>,
+    pub user_id: Option<String>,
+    pub project_id: Option<String>,
     pub from: Option<NaiveDate>,
     pub to: Option<NaiveDate>,
     pub is_running: Option<bool>,
@@ -148,7 +156,7 @@ pub struct TimeEntryFilters {
 
 #[derive(sqlx::FromRow)]
 struct TimeEntryRow {
-    id: Uuid,
+    id: i64,
     spent_date: NaiveDate,
     minutes: i32,
     start_minute: Option<i32>,
@@ -162,14 +170,14 @@ struct TimeEntryRow {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     // Joined fields
-    user_id: Uuid,
+    user_id: i64,
     user_name: String,
-    project_id: Uuid,
+    project_id: i64,
     project_name: String,
     project_code: Option<String>,
-    task_id: Uuid,
+    task_id: i64,
     task_name: String,
-    client_id: Uuid,
+    client_id: i64,
     client_name: String,
     // Rates
     billable_rate_cents: Option<i64>,
@@ -184,14 +192,16 @@ fn time_entry_row_to_harvest(
     caller_role: horae_core::types::OrgRole,
 ) -> HarvestTimeEntry {
     let can_view_rates = caller_role.is_manager_or_above();
-    let hours = row.minutes as f64 / 60.0;
-    let rounded_hours = horae_core::rounding::effective_minutes(
-        row.minutes as u32,
-        row.rounded_minutes.map(|minutes| minutes as u32),
-        org_round_min,
-        org_round_dir,
-    ) as f64
-        / 60.0;
+    let hours = Hours(row.minutes.into());
+    let rounded_hours = Hours(
+        horae_core::rounding::effective_minutes(
+            row.minutes as u32,
+            row.rounded_minutes.map(|minutes| minutes as u32),
+            org_round_min,
+            org_round_dir,
+        )
+        .into(),
+    );
     let is_locked = matches!(row.state.as_str(), "submitted" | "approved" | "invoiced");
     let locked_reason = match row.state.as_str() {
         "submitted" => Some("Pending Approval".to_string()),
@@ -215,7 +225,7 @@ fn time_entry_row_to_harvest(
         .map(|m| horae_core::time_of_day::format_12h((m + row.minutes) as u16));
 
     HarvestTimeEntry {
-        id: row.id.to_string(),
+        id: row.id,
         spent_date: row.spent_date.to_string(),
         hours,
         rounded_hours,
@@ -233,28 +243,28 @@ fn time_entry_row_to_harvest(
         billable_rate: row
             .billable_rate_cents
             .filter(|_| can_view_rates)
-            .map(|c| c as f64 / 100.0),
+            .map(Amount),
         cost_rate: row
             .user_cost_rate_cents
             .filter(|_| can_view_rates)
-            .map(|c| c as f64 / 100.0),
+            .map(Amount),
         created_at: row.created_at.to_rfc3339(),
         updated_at: row.updated_at.to_rfc3339(),
         user: HarvestRef {
-            id: row.user_id.to_string(),
+            id: row.user_id,
             name: row.user_name.clone(),
         },
         client: HarvestRef {
-            id: row.client_id.to_string(),
+            id: row.client_id,
             name: row.client_name.clone(),
         },
         project: HarvestProjectRef {
-            id: row.project_id.to_string(),
+            id: row.project_id,
             name: row.project_name.clone(),
             code: row.project_code.clone(),
         },
         task: HarvestRef {
-            id: row.task_id.to_string(),
+            id: row.task_id,
             name: row.task_name.clone(),
         },
         approval_status: approval_status.to_string(),
@@ -279,7 +289,16 @@ async fn time_entries_page(
     filters: TimeEntryFilters,
 ) -> ApiResult<HarvestPagination<HarvestTimeEntry>> {
     let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
-    let user_id_filter = scoped_user_filter(caller, filters.user_id)?;
+    let requested_user =
+        ids::filter(db, caller.org_id, Kind::User, filters.user_id.as_deref()).await?;
+    let user_id_filter = scoped_user_filter(caller, requested_user)?;
+    let project_id = ids::filter(
+        db,
+        caller.org_id,
+        Kind::Project,
+        filters.project_id.as_deref(),
+    )
+    .await?;
     let (round_min, round_dir) = crate::db::org_rounding(db, caller.org_id)
         .await
         .map_err(internal)?;
@@ -298,7 +317,7 @@ async fn time_entries_page(
            AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)",
         caller.org_id,
         user_id_filter,
-        filters.project_id,
+        project_id,
         filters.from as Option<NaiveDate>,
         filters.to as Option<NaiveDate>,
         filters.is_running,
@@ -312,7 +331,7 @@ async fn time_entries_page(
 
     let rows = sqlx::query_as!(
         TimeEntryRow,
-        r#"SELECT te.id,
+        r#"SELECT api_number(te.org_id, 'time_entry', te.id) AS "id!",
                te.spent_date as "spent_date: chrono::NaiveDate",
                te.minutes, te.start_minute, te.rounded_minutes, te.notes,
                (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as "billable!", te.is_running,
@@ -320,10 +339,11 @@ async fn time_entries_page(
                te.state::text AS "state!: String", te.invoice_id,
                te.created_at as "created_at: chrono::DateTime<chrono::Utc>",
                te.updated_at as "updated_at: chrono::DateTime<chrono::Utc>",
-               te.user_id, u.name AS user_name,
-               te.project_id, p.name AS project_name, p.code AS project_code,
-               te.task_id, t.name AS task_name,
-               p.client_id, c.name AS client_name,
+               api_number(te.org_id, 'user', te.user_id) AS "user_id!", u.name AS user_name,
+               api_number(te.org_id, 'project', te.project_id) AS "project_id!",
+               p.name AS project_name, p.code AS project_code,
+               api_number(te.org_id, 'task', te.task_id) AS "task_id!", t.name AS task_name,
+               api_number(te.org_id, 'client', p.client_id) AS "client_id!", c.name AS client_name,
                CASE WHEN viewer.org_role IN ('admin', 'manager') THEN COALESCE(line.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
                  THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
@@ -357,7 +377,7 @@ async fn time_entries_page(
          LIMIT $8 OFFSET $9"#,
         caller.org_id,
         user_id_filter,
-        filters.project_id,
+        project_id,
         filters.from as Option<NaiveDate>,
         filters.to as Option<NaiveDate>,
         filters.is_running,
@@ -388,8 +408,9 @@ async fn time_entries_page(
 async fn get_time_entry(
     user: AuthUser,
     State(db): State<PgPool>,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
 ) -> ApiResult<HarvestTimeEntry> {
+    let id = ids::path(&db, user.org_id, Kind::TimeEntry, &id).await?;
     time_entry_by_id(&db, &user, id).await
 }
 
@@ -405,7 +426,7 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
 
     let row = sqlx::query_as!(
         TimeEntryRow,
-        r#"SELECT te.id,
+        r#"SELECT api_number(te.org_id, 'time_entry', te.id) AS "id!",
                te.spent_date as "spent_date: chrono::NaiveDate",
                te.minutes, te.start_minute, te.rounded_minutes, te.notes,
                (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as "billable!", te.is_running,
@@ -413,10 +434,11 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
                te.state::text AS "state!: String", te.invoice_id,
                te.created_at as "created_at: chrono::DateTime<chrono::Utc>",
                te.updated_at as "updated_at: chrono::DateTime<chrono::Utc>",
-               te.user_id, u.name AS user_name,
-               te.project_id, p.name AS project_name, p.code AS project_code,
-               te.task_id, t.name AS task_name,
-               p.client_id, c.name AS client_name,
+               api_number(te.org_id, 'user', te.user_id) AS "user_id!", u.name AS user_name,
+               api_number(te.org_id, 'project', te.project_id) AS "project_id!",
+               p.name AS project_name, p.code AS project_code,
+               api_number(te.org_id, 'task', te.task_id) AS "task_id!", t.name AS task_name,
+               api_number(te.org_id, 'client', p.client_id) AS "client_id!", c.name AS client_name,
                CASE WHEN viewer.org_role IN ('admin', 'manager') THEN COALESCE(line.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
                  THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
@@ -464,14 +486,14 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
 #[derive(Default, Deserialize)]
 pub struct ProjectFilters {
     pub is_active: Option<bool>,
-    pub client_id: Option<Uuid>,
+    pub client_id: Option<String>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
     pub updated_since: Option<DateTime<Utc>>,
 }
 
 struct ProjectRow {
-    id: Uuid,
+    id: i64,
     name: String,
     code: Option<String>,
     project_type: String,
@@ -482,7 +504,7 @@ struct ProjectRow {
     starts_on: Option<NaiveDate>,
     ends_on: Option<NaiveDate>,
     created_at: DateTime<Utc>,
-    client_id: Uuid,
+    client_id: i64,
     client_name: String,
 }
 
@@ -500,13 +522,13 @@ fn project_row_to_harvest(row: &ProjectRow) -> HarvestProject {
         _ => "none",
     };
     let budget = match row.budget_kind.as_str() {
-        "hours" => row.budget_minutes.map(|m| m as f64 / 60.0),
-        "amount" => row.budget_amount_cents.map(|c| c as f64 / 100.0),
+        "hours" => row.budget_minutes.map(|m| Budget::Hours(Hours(m))),
+        "amount" => row.budget_amount_cents.map(|c| Budget::Amount(Amount(c))),
         _ => None,
     };
 
     HarvestProject {
-        id: row.id.to_string(),
+        id: row.id,
         name: row.name.clone(),
         code: row.code.clone(),
         is_active: row.active,
@@ -519,7 +541,7 @@ fn project_row_to_harvest(row: &ProjectRow) -> HarvestProject {
         created_at: row.created_at.to_rfc3339(),
         updated_at: row.created_at.to_rfc3339(), // projects table has no updated_at
         client: HarvestRef {
-            id: row.client_id.to_string(),
+            id: row.client_id,
             name: row.client_name.clone(),
         },
     }
@@ -550,8 +572,9 @@ async fn list_projects(
 async fn get_project(
     user: AuthUser,
     State(db): State<PgPool>,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
 ) -> ApiResult<HarvestProject> {
+    let id = ids::path(&db, user.org_id, Kind::Project, &id).await?;
     let (_, rows) =
         project_reads::read(&db, &user, &ProjectFilters::default(), Some(id), 1, 0).await?;
     let row = rows.first().ok_or_else(not_found)?;
@@ -570,7 +593,7 @@ pub struct ClientFilters {
 
 #[derive(sqlx::FromRow)]
 struct ClientRow {
-    id: Uuid,
+    id: i64,
     name: String,
     active: bool,
     address: Option<String>,
@@ -580,7 +603,7 @@ struct ClientRow {
 
 fn client_row_to_harvest(row: &ClientRow) -> HarvestClient {
     HarvestClient {
-        id: row.id.to_string(),
+        id: row.id,
         name: row.name.clone(),
         is_active: row.active,
         address: row.address.clone(),
@@ -618,8 +641,9 @@ async fn list_clients(
 async fn get_client(
     user: AuthUser,
     State(db): State<PgPool>,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
 ) -> ApiResult<HarvestClient> {
+    let id = ids::path(&db, user.org_id, Kind::Client, &id).await?;
     let (_, rows) =
         client_reads::read(&db, &user, &ClientFilters::default(), Some(id), 1, 0).await?;
     let row = rows.first().ok_or_else(not_found)?;
@@ -640,7 +664,7 @@ pub struct TaskFilters {
 
 #[derive(sqlx::FromRow)]
 struct TaskRow {
-    id: Uuid,
+    id: i64,
     name: String,
     active: bool,
     billable_default: bool,
@@ -649,11 +673,11 @@ struct TaskRow {
 
 fn task_row_to_harvest(row: &TaskRow) -> HarvestTask {
     HarvestTask {
-        id: row.id.to_string(),
+        id: row.id,
         name: row.name.clone(),
         is_active: row.active,
         billable_by_default: row.billable_default,
-        default_hourly_rate: row.default_rate_cents.map(|c| c as f64 / 100.0),
+        default_hourly_rate: row.default_rate_cents.map(Amount),
         created_at: String::new(), // tasks table has no created_at
         updated_at: String::new(),
     }
@@ -680,8 +704,9 @@ async fn list_tasks(
 async fn get_task(
     user: AuthUser,
     State(db): State<PgPool>,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
 ) -> ApiResult<HarvestTask> {
+    let id = ids::path(&db, user.org_id, Kind::Task, &id).await?;
     let (_, rows) = task_reads::read(&db, &user, &TaskFilters::default(), Some(id), 1, 0).await?;
     let row = rows.first().ok_or_else(not_found)?;
 
@@ -701,7 +726,7 @@ pub struct UserFilters {
 
 #[derive(sqlx::FromRow)]
 struct UserRow {
-    id: Uuid,
+    id: i64,
     name: String,
     email: String,
     active: bool,
@@ -719,14 +744,14 @@ fn user_row_to_harvest(row: &UserRow) -> HarvestUser {
     };
 
     HarvestUser {
-        id: row.id.to_string(),
+        id: row.id,
         first_name: first,
         last_name: last,
         email: row.email.clone(),
         is_active: row.active,
         is_admin: row.org_role == "admin",
-        cost_rate: row.cost_rate_cents.map(|c| c as f64 / 100.0),
-        default_hourly_rate: row.billable_rate_cents.map(|c| c as f64 / 100.0),
+        cost_rate: row.cost_rate_cents.map(Amount),
+        default_hourly_rate: row.billable_rate_cents.map(Amount),
         created_at: row.created_at.to_rfc3339(),
         updated_at: row.created_at.to_rfc3339(), // no updated_at column
     }
@@ -771,7 +796,8 @@ async fn users_page(
 
     let rows = sqlx::query_as!(
         UserRow,
-        r#"SELECT id, name, email, active, org_role::text AS "org_role!: String",
+        r#"SELECT api_number(org_id, 'user', id) AS "id!", name, email, active,
+         org_role::text AS "org_role!: String",
          cost_rate_cents, billable_rate_cents,
          created_at as "created_at: chrono::DateTime<chrono::Utc>"
          FROM users
@@ -882,7 +908,7 @@ mod tests {
             ),
             (None, None)
         );
-        assert_eq!(entry.hours, 1.0);
+        assert_eq!(entry.hours, Hours(60));
     }
 
     #[sqlx::test(migrations = "./migrations")]
@@ -923,17 +949,22 @@ mod tests {
         assert_eq!(entries.len(), 3);
         for entry in entries {
             let expected = match entry.task.name.as_str() {
-                "Design" => (80.0, 1.25),
-                "Review" => (0.0, 0.5),
-                "Dev" => (30.0, 1.0),
+                "Design" => (8000, 75),
+                "Review" => (0, 30),
+                "Dev" => (3000, 60),
                 name => panic!("unexpected imported task: {name}"),
             };
-            let Json(detail) = time_entry_by_id(&pool, &caller, entry.id.parse().unwrap())
+            let id = ids::path(&pool, ids.org_id, Kind::TimeEntry, &entry.id.to_string())
                 .await
                 .unwrap();
+            let Json(detail) = time_entry_by_id(&pool, &caller, id).await.unwrap();
             assert_eq!(
                 (entry.billable_rate, entry.hours, entry.cost_rate),
-                (Some(expected.0), expected.1, Some(12.0))
+                (
+                    Some(Amount(expected.0)),
+                    Hours(expected.1),
+                    Some(Amount(1200))
+                )
             );
             assert_eq!(
                 (detail.billable_rate, detail.hours, detail.cost_rate),
@@ -969,7 +1000,11 @@ mod tests {
             .execute(&pool).await.unwrap();
         sqlx::query!("INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode) VALUES ($1,$2,$3,$4,'person')", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id)
             .execute(&pool).await.unwrap();
-        for (mode, expected) in [("person", 40.0), ("task", 50.0), ("project", 35.0)] {
+        for (mode, expected) in [
+            ("person", Amount(4000)),
+            ("task", Amount(5000)),
+            ("project", Amount(3500)),
+        ] {
             sqlx::query!(
                 "UPDATE project_settings SET rate_mode = $2 WHERE project_id = $1",
                 ids.project_id,
@@ -992,7 +1027,7 @@ mod tests {
             );
             assert_eq!(
                 (entry.cost_rate, page.data["time_entries"][0].cost_rate),
-                (Some(15.0), Some(15.0))
+                (Some(Amount(1500)), Some(Amount(1500)))
             );
         }
     }
@@ -1034,11 +1069,11 @@ mod tests {
         .await
         .unwrap();
         for (task, assignment, expected) in [
-            (None, None, 35.0),
-            (None, Some(4000), 40.0),
-            (Some(5000), Some(4000), 50.0),
-            (Some(0), Some(4000), 0.0),
-            (None, Some(0), 0.0),
+            (None, None, Amount(3500)),
+            (None, Some(4000), Amount(4000)),
+            (Some(5000), Some(4000), Amount(5000)),
+            (Some(0), Some(4000), Amount(0)),
+            (None, Some(0), Amount(0)),
         ] {
             sqlx::query!(
                 "UPDATE project_tasks SET rate_cents = $2 WHERE project_id = $1",
@@ -1080,8 +1115,11 @@ mod tests {
         let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
             .await
             .unwrap();
-        assert_eq!(entry.billable_rate, Some(12.34));
-        assert_eq!(page.data["time_entries"][0].billable_rate, Some(12.34));
+        assert_eq!(entry.billable_rate, Some(Amount(1234)));
+        assert_eq!(
+            page.data["time_entries"][0].billable_rate,
+            Some(Amount(1234))
+        );
     }
 
     #[sqlx::test(migrations = "./migrations")]
@@ -1106,7 +1144,7 @@ mod tests {
                 .unwrap();
             assert!(!entry.billable);
             assert!(!page.data["time_entries"][0].billable);
-            assert_eq!(entry.hours, 1.0);
+            assert_eq!(entry.hours, Hours(60));
         }
     }
 
@@ -1144,8 +1182,8 @@ mod tests {
             let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
                 .await
                 .unwrap();
-            assert_eq!(entry.hours, 8.0 / 60.0);
-            assert_eq!(entry.rounded_hours, f64::from(expected) / 60.0);
+            assert_eq!(entry.hours, Hours(8));
+            assert_eq!(entry.rounded_hours, Hours(expected.into()));
             assert_eq!(
                 page.data["time_entries"][0].rounded_hours,
                 entry.rounded_hours
@@ -1167,7 +1205,7 @@ mod tests {
     fn refused<T>(result: ApiResult<T>, leak: &str) -> StatusCode {
         match result {
             Ok(_) => panic!("{leak}"),
-            Err((status, _)) => status,
+            Err(error) => error.status,
         }
     }
 
@@ -1234,7 +1272,7 @@ mod tests {
 
         let users = &page.data["users"];
         assert_eq!(users.len(), 2);
-        assert!(users.iter().any(|u| u.cost_rate == Some(123.45)));
+        assert!(users.iter().any(|u| u.cost_rate == Some(Amount(12345))));
     }
 
     #[sqlx::test(migrations = "./migrations")]
@@ -1254,7 +1292,10 @@ mod tests {
 
         let entries = &page.data["time_entries"];
         assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].user.id, ids.user_id.to_string());
+        assert_eq!(
+            entries[0].user.id,
+            pagination_tests::api_id(&pool, "user", ids.user_id).await
+        );
         assert_eq!(entries[0].notes.as_deref(), Some("mine"));
         // The envelope has to agree with the rows, or a client pages into
         // entries it is never shown.
@@ -1287,7 +1328,7 @@ mod tests {
         insert_entry(&pool, &ids, other, "theirs").await;
 
         let filters = TimeEntryFilters {
-            user_id: Some(other),
+            user_id: Some(other.to_string()),
             ..no_time_entry_filters()
         };
         let status = refused(
@@ -1328,6 +1369,9 @@ mod tests {
         let Json(entry) = time_entry_by_id(&pool, &caller(&ids, OrgRole::Manager), theirs)
             .await
             .expect("a manager was refused an entry in their own org");
-        assert_eq!(entry.id, theirs.to_string());
+        assert_eq!(
+            entry.id,
+            pagination_tests::api_id(&pool, "time_entry", theirs).await
+        );
     }
 }

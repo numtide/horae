@@ -6,9 +6,9 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 #[serial_test::serial]
 async fn client_api_allows_read_only_grants_without_legacy_management(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::ClientReadAll]).await;
-    walk(&app, "clients", "is_active=true", &[ids.client_id]).await;
+    walk(&pool, &app, "clients", "is_active=true", &[ids.client_id]).await;
     let detail = page(&app, &format!("/harvest/v2/clients/{}", ids.client_id)).await;
-    assert_eq!(detail["id"], ids.client_id.to_string());
+    assert_eq!(detail["id"], api_id(&pool, "client", ids.client_id).await);
     assert_eq!(detail["name"], "Acme");
     for field in [
         "tax_id",
@@ -56,7 +56,7 @@ async fn client_api_preserves_filters_counts_and_foreign_id_denial(pool: PgPool)
         .execute(&pool)
         .await
         .unwrap();
-    walk(&app, "clients", "is_active=false", &[ids.client_id]).await;
+    walk(&pool, &app, "clients", "is_active=false", &[ids.client_id]).await;
     for query in ["is_active=true", "updated_since=2100-01-01T00%3A00%3A00Z"] {
         assert_eq!(
             page(&app, &format!("/harvest/v2/clients?{query}")).await["total_entries"],

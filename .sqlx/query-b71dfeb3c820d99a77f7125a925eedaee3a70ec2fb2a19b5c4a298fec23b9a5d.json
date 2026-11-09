@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT api_account_id FROM organizations WHERE id = ANY($1) ORDER BY api_account_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "api_account_id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b71dfeb3c820d99a77f7125a925eedaee3a70ec2fb2a19b5c4a298fec23b9a5d"
+}

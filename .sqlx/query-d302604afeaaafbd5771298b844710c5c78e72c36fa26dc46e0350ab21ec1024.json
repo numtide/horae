@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "WITH visible AS MATERIALIZED (\n             SELECT id,name,active,address,currency,created_at FROM clients\n             WHERE org_id=$1 AND $5\n               AND ($2::bool IS NULL OR active=$2)\n               AND ($3::timestamptz IS NULL OR created_at >= $3)\n               AND ($4::uuid IS NULL OR id=$4)\n           ), totals AS (SELECT COUNT(*) total FROM visible), page AS (\n             SELECT * FROM visible ORDER BY name,id LIMIT $6 OFFSET $7\n           )\n           SELECT totals.total AS \"total!\",c.id AS \"id?\",c.name AS \"name?\",\n                  c.active AS \"active?\",c.address,c.currency AS \"currency?\",\n                  c.created_at AS \"created_at?: chrono::DateTime<chrono::Utc>\"\n           FROM totals LEFT JOIN page c ON true ORDER BY c.name,c.id",
+  "query": "WITH visible AS MATERIALIZED (\n             SELECT id,name,active,address,currency,created_at FROM clients\n             WHERE org_id=$1 AND $5\n               AND ($2::bool IS NULL OR active=$2)\n               AND ($3::timestamptz IS NULL OR created_at >= $3)\n               AND ($4::uuid IS NULL OR id=$4)\n           ), totals AS (SELECT COUNT(*) total FROM visible), page AS (\n             SELECT * FROM visible ORDER BY name,id LIMIT $6 OFFSET $7\n           )\n           SELECT totals.total AS \"total!\",api_number($1,'client',c.id) AS \"id?\",c.name AS \"name?\",\n                  c.active AS \"active?\",c.address,c.currency AS \"currency?\",\n                  c.created_at AS \"created_at?: chrono::DateTime<chrono::Utc>\"\n           FROM totals LEFT JOIN page c ON true ORDER BY c.name,c.id",
   "describe": {
     "columns": [
       {
@@ -11,7 +11,7 @@
       {
         "ordinal": 1,
         "name": "id?",
-        "type_info": "Uuid"
+        "type_info": "Int8"
       },
       {
         "ordinal": 2,
@@ -52,7 +52,7 @@
     },
     "nullable": [
       null,
-      false,
+      null,
       false,
       false,
       true,
@@ -60,5 +60,5 @@
       false
     ]
   },
-  "hash": "0574b2ae32e7f4df176d2bc39f263c8444e4cb526a8bd4f93199ebf633045590"
+  "hash": "d302604afeaaafbd5771298b844710c5c78e72c36fa26dc46e0350ab21ec1024"
 }
