@@ -115,6 +115,30 @@ pub fn format_cents_plain(cents: i64) -> String {
     )
 }
 
+/// An amount in major units with the currency's own number of decimals (ISO
+/// 4217), for wire formats such as the Harvest API: `JPY 1000`, `EUR 10.00`,
+/// `BHD 10.000`. Horae stores every currency in hundredths, so a zero-decimal
+/// currency keeps its two decimals when the stored amount has hundredths:
+/// exactness comes first.
+pub fn format_major_units(cents: i64, currency: &str) -> String {
+    let plain = format_cents_plain(cents);
+    match currency_decimals(currency) {
+        0 if cents % 100 == 0 => plain[..plain.len() - 3].to_owned(),
+        3 => plain + "0",
+        _ => plain,
+    }
+}
+
+/// ISO 4217 minor-unit digits; every currency not listed has two.
+fn currency_decimals(currency: &str) -> u8 {
+    match currency.trim() {
+        "BHD" | "IQD" | "JOD" | "KWD" | "LYD" | "OMR" | "TND" => 3,
+        "BIF" | "CLP" | "DJF" | "GNF" | "ISK" | "JPY" | "KMF" | "KRW" | "PYG" | "RWF" | "UGX"
+        | "VND" | "VUV" | "XAF" | "XOF" | "XPF" => 0,
+        _ => 2,
+    }
+}
+
 /// Display a project budget in its own unit: money for an amount budget, hours
 /// for an hours budget, empty for no budget.
 pub fn format_budget(
@@ -138,6 +162,32 @@ pub fn format_budget(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn major_units_use_the_currencys_own_decimals() {
+        assert_eq!(format_major_units(123_456, "EUR"), "1234.56");
+        assert_eq!(format_major_units(100_000, "JPY"), "1000");
+        assert_eq!(format_major_units(-100, "KRW"), "-1");
+        assert_eq!(format_major_units(1_230, "BHD"), "12.300");
+        assert_eq!(format_major_units(-5, "KWD"), "-0.050");
+    }
+
+    #[test]
+    fn a_zero_decimal_currency_keeps_stored_hundredths() {
+        assert_eq!(format_major_units(100_050, "JPY"), "1000.50");
+    }
+
+    #[test]
+    fn major_units_parse_back_to_the_same_hundredths() {
+        for (cents, currency) in [(i64::MAX, "BHD"), (i64::MIN, "JPY"), (7, "USD")] {
+            let text = format_major_units(cents, currency);
+            let two_places = match text.split_once('.') {
+                Some((whole, frac)) => format!("{whole}.{}", &frac[..2]),
+                None => text.clone(),
+            };
+            assert_eq!(parse_cents(&two_places).unwrap(), cents, "{text}");
+        }
+    }
 
     #[test]
     fn currency_totals_are_exact_per_currency_and_ordered_by_code() {
