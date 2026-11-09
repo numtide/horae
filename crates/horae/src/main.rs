@@ -312,6 +312,12 @@ fn main() -> anyhow::Result<()> {
                             )
                         }),
                     )
+                    // The task catalog moved out of Administration; old links and
+                    // bookmarks land on its new address.
+                    .route(
+                        "/admin/tasks",
+                        get(|| async { axum::response::Redirect::permanent("/tasks") }),
+                    )
                     .route("/api/reports/export/csv", get(reports::export_csv))
                     .route("/api/reports/export/xlsx", get(reports::export_xlsx))
                     .route(

@@ -80,8 +80,6 @@ pub enum Route {
     ProjectDetail { id: Uuid },
     #[route("/tasks")]
     TaskCatalog {},
-    // The catalog used to live under Administration; keep old links working.
-    #[redirect("/admin/tasks", || Route::TaskCatalog {})]
     #[route("/approvals?:week")]
     Approvals { week: String },
     #[route("/reports")]
@@ -202,12 +200,11 @@ mod tests {
         }
     }
 
+    /// `/admin/tasks` is redirected by the server (see `Commands::Serve`).
     #[test]
-    fn task_catalog_lives_at_tasks_and_old_admin_links_redirect_there() {
+    fn task_catalog_lives_at_tasks() {
         assert_eq!(Route::TaskCatalog {}.to_string(), "/tasks");
-        for path in ["/tasks", "/admin/tasks"] {
-            assert!(path.parse::<Route>().unwrap() == Route::TaskCatalog {}, "{path}");
-        }
+        assert!("/tasks".parse::<Route>().unwrap() == Route::TaskCatalog {});
     }
 
     #[test]
