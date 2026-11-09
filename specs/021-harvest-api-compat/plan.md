@@ -101,9 +101,11 @@ specs/021-harvest-api-compat/
 
 ```text
 crates/core/src/time_entry_timer.rs               # restart eligibility, start-stops-running rule
-crates/horae/migrations/0056_api_ids_and_account_id.sql
-crates/horae/migrations/0057_api_tokens.sql
-crates/horae/migrations/0058_catalogue_updated_at.sql
+crates/horae/migrations/0057_api_account_id.sql   # 0056 is taken by the time-zone branch
+crates/horae/migrations/0058_api_ids.sql
+crates/horae/migrations/0059_api_ids_backfill.sql
+crates/horae/migrations/<next>_api_tokens.sql     # step 2
+crates/horae/migrations/<next>_catalogue_updated_at.sql   # step 4
 crates/horae/src/harvest.rs                       # was harvest/mod.rs (R-12); router and aliases
 crates/horae/src/harvest/
 ├── auth.rs              # extractor: bearer, query, account id, cookie for reads

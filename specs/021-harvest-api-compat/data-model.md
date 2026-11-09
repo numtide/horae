@@ -38,8 +38,12 @@ copied onto the token.
 Primary key `(org_id, kind, number)` and unique `(org_id, kind, horae_id)`: a mapping table keyed
 by what it maps, like `harvest_import_map`, so it has no UUID of its own. A number is never
 reused, also after the record is deleted: the row stays and a deleted record's number is not
-handed out again. New numbers are `max(number) + 1` per organization and kind, allocated under a
-transaction-level advisory lock on `(org_id, kind)` in the transaction that creates the record.
+handed out again. New numbers come from one sequence per kind (`api_ids_<kind>_seq`), skipping a
+number an imported record holds as its Harvest id. `nextval` takes no lock and ignores the
+transaction's snapshot, so numbering works at every isolation level and creators never wait on
+each other (an earlier `max + 1` under an advisory lock failed under REPEATABLE READ). Numbers are
+unique per organization and kind, as FR-015 requires; they are also distinct across
+organizations, and do not start at 1 in each.
 
 Allocation is an `AFTER INSERT` trigger on each numbered table, so every insert path (server
 functions, importer, CLI, seed, tests) numbers its records without a call of its own. A trigger
@@ -50,8 +54,12 @@ another record of the kind holds that number; a record that existed before keeps
 Step 1 numbers the kinds its reads expose: clients, projects, tasks, time entries and users. The
 other kinds get their trigger and backfill with the step that first exposes them.
 
-Backfill (migration): for each kind, insert the `harvest_import_map` rows with
-`from_harvest = true`, then every other record by `(created_at, id)` from the next free number.
+Migrations: `0057` adds the account id on its own (an identity column rewrites `organizations`
+under ACCESS EXCLUSIVE, released at its commit); `0058` adds the table, sequences and triggers;
+`0059` backfills with no DDL, so writes continue meanwhile. Backfill: for each kind, insert the
+`harvest_import_map` rows with `from_harvest = true`, then every other record by
+`(created_at, id)` from the kind's sequence; a record whose turn falls on a Harvest id gets the
+next free number after the pass.
 `user_assignments` and `task_assignments` have no Harvest ids in the map and are numbered fresh.
 
 ## Changed tables

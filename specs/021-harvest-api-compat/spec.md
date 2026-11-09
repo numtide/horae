@@ -366,6 +366,12 @@ ______________________________________________________________________
 - **FR-016**: A record imported from Harvest MUST keep its original Harvest id as its integer id.
   If that number is already held by another record of the same kind, the record gets a fresh
   number and the importer reports the change *(OQ-2)*.
+  - *Implementation note (step 1)*: "imported" means created by the import. A record the import
+    only matches (it existed in Horae before) keeps the number it already has, because FR-015's
+    "never changes" wins: clients may already know that number. The report line for a collision
+    is not implemented yet (tasks.md T015); until it is, a collision keeps the fresh number
+    silently, so FR-016 is only partly met. Native numbers come from a sequence per kind that
+    starts at 1, far below Harvest's ids, so collisions are rare in practice.
 - **FR-017**: Every record that exists when this feature is deployed MUST receive its number at
   deployment, and every new record when it is created.
 - **FR-018**: Every id in a request (path, filter or body) MUST be accepted as an integer. For a

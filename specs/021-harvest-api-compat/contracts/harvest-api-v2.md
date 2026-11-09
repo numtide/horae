@@ -45,6 +45,8 @@ Provisional until recorded from the test account (research R-11). The text is Ho
 - Hours: JSON number, minutes ÷ 60 rounded half up to 2 decimals. Input accepts any decimal and
   rounds half up to whole minutes.
 - Money: JSON number in major units with the currency's own decimals (JPY 0, EUR 2, BHD 3).
+  Horae stores every currency in hundredths, so a zero-decimal amount that has hundredths keeps
+  them (`JPY 1000.50`) rather than lose them. A task rate of unknown currency has two decimals.
   Input with more decimals than the currency allows is 422.
 - No floating point on either side (research R-4).
 
