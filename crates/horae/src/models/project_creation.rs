@@ -348,6 +348,8 @@ pub struct CreationOptions {
     pub email_available: bool,
     pub clients: Vec<CreationClient>,
     pub tasks: Vec<CreationTask>,
+    /// Active common tasks, which a new project's task list starts with.
+    pub common_tasks: Vec<CreationTask>,
     pub people: Vec<CreationPerson>,
     pub more_clients: bool,
     pub more_tasks: bool,

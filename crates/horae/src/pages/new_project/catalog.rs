@@ -33,6 +33,7 @@ pub(super) async fn options(
         email_available: result.email_available,
         clients: result.clients,
         tasks: result.tasks,
+        common_tasks: Vec::new(),
         more_clients: result.more_clients,
         more_tasks: result.more_tasks,
         people: Vec::new(),

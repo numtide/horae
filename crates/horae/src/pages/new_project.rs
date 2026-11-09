@@ -100,6 +100,13 @@ pub fn NewProject(#[props(default)] client_context: Option<String>) -> Element {
             {
                 options.clients.push(client);
             }
+            if draft.is_none() {
+                for task in &defaults.common_tasks {
+                    if !options.tasks.iter().any(|item| item.id == task.id) {
+                        options.tasks.push(task.clone());
+                    }
+                }
+            }
             if let Some(draft) = &draft {
                 let task_ids: Vec<_> = draft
                     .form
@@ -307,7 +314,7 @@ fn ProjectEditor(
     let existing = use_signal(|| existing);
     let editing = existing.read().is_some();
     let editor_context = existing.read().as_ref().and_then(editor_context);
-    let mut state = use_signal(|| DraftState::new(draft, client_context));
+    let mut state = use_signal(|| DraftState::new(draft, client_context, &options.common_tasks));
     let form = use_signal(|| {
         existing.peek().as_ref().map_or_else(
             || state.peek().saved.clone(),

@@ -346,6 +346,48 @@ async fn creation_options_are_scoped_bounded_and_redact_manager_costs(pool: PgPo
 }
 
 #[sqlx::test(migrations = "./migrations")]
+async fn creation_options_offer_active_common_tasks_of_this_organization_only(pool: PgPool) {
+    use crate::models::project_creation::CreationSearch;
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, OrgRole::Admin).await;
+    let (common, archived) = (Uuid::now_v7(), Uuid::now_v7());
+    sqlx::query!(
+        "INSERT INTO tasks (id,org_id,name,billable_default,is_default,active,default_rate_cents,default_rate_currency)
+         VALUES ($1,$3,'Meetings',false,true,true,4000,'EUR'), ($2,$3,'Old common',true,true,false,NULL,NULL)",
+        common,
+        archived,
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE tasks SET is_default=true WHERE id=$1",
+        foreign.task_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let options = super::load_creation_options(
+        &pool,
+        ids.user_id,
+        ids.org_id,
+        &CreationSearch::default(),
+        false,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        options
+            .common_tasks
+            .iter()
+            .map(|task| (task.id, task.billable, task.default_rate_cents))
+            .collect::<Vec<_>>(),
+        [(common, false, Some(4000))]
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
 async fn finalization_persists_task_access_and_project_only_financial_overrides(pool: PgPool) {
     use crate::models::project_creation::{ProjectTaskInput, TaskAccess, TaskSource};
     use horae_core::project::{BudgetMode, RateMode};
