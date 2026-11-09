@@ -18,6 +18,8 @@ mod connect_banner;
 mod connect_outcome;
 #[path = "harvest/connection_card.rs"]
 mod connection_card;
+#[path = "harvest/credentials_hint.rs"]
+mod credentials_hint;
 #[path = "harvest/csv.rs"]
 mod csv;
 #[path = "harvest/entity_table.rs"]

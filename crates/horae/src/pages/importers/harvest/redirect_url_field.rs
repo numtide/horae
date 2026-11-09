@@ -45,6 +45,8 @@ pub(super) fn RedirectUrlField(url: String) -> Element {
         div { class: "input-group",
             input {
                 id: "harvest-redirect-url",
+                // The banner shows it without a <label>.
+                aria_label: "Redirect URL",
                 class: "input-group-field text-mono text-xs truncate",
                 readonly: true,
                 value: "{url}",

@@ -7,6 +7,7 @@ use horae_core::importers::harvest::client::{
     ClientSettings, ClientSource, DISCONNECT_UNCONFIRMED, save_disconnects,
 };
 
+use super::connect_outcome::SecretFocus;
 use super::redirect_url_field::{RedirectUrlField, redirect_url, use_origin};
 use crate::route::Route;
 use crate::server_fns;
@@ -30,6 +31,7 @@ pub(super) fn HarvestOAuthApp(
     on_changed: EventHandler<()>,
 ) -> Element {
     let mut settings = use_resource(server_fns::harvest_client_settings);
+    let navigator = use_navigator();
     let origin = use_origin();
     let mut client_id = use_signal(String::new);
     let mut secret = use_signal(String::new);
@@ -79,6 +81,12 @@ pub(super) fn HarvestOAuthApp(
             Ok(_) => {
                 secret.set(String::new());
                 replacing.set(false);
+                if focus_secret {
+                    // Otherwise a reload reopens the empty secret field.
+                    navigator.replace(Route::HarvestOAuth {
+                        focus: SecretFocus(false),
+                    });
+                }
                 settings.restart();
                 on_changed.call(());
             }

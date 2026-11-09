@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use horae_core::importers::harvest::client::ConnectFailure;
 
 use super::connect_outcome::SecretFocus;
+use super::credentials_hint::CredentialsHint;
 use super::registered_redirect::RegisteredRedirect;
 use crate::route::Route;
 
@@ -18,6 +19,11 @@ pub(super) fn ConnectBanner(
 ) -> Element {
     let navigator = use_navigator();
     let denied = failure == ConnectFailure::Denied;
+    // Rate limited or failing: Harvest never judged the request.
+    let unavailable = matches!(
+        failure,
+        ConnectFailure::Other { status: Some(status) } if status >= 500 || status == 429
+    );
     let title = match failure {
         ConnectFailure::InvalidClient => {
             "Harvest didn't accept Horae's OAuth app credentials.".to_owned()
@@ -32,6 +38,9 @@ pub(super) fn ConnectBanner(
         ConnectFailure::State => {
             "The connection couldn't be verified. Start it again from this page.".to_owned()
         }
+        ConnectFailure::Other {
+            status: Some(status),
+        } if unavailable => format!("Harvest is unavailable right now (HTTP {status})."),
         ConnectFailure::Other {
             status: Some(status),
         } => format!("Harvest refused the connection (HTTP {status})."),
@@ -56,9 +65,7 @@ pub(super) fn ConnectBanner(
                     p { class: "banner-title", "{title}" }
                     match failure {
                         ConnectFailure::InvalidClient => rsx! {
-                            p { class: "banner-detail",
-                                "Check the client ID and secret. A blank secret keeps the stored one, so if you regenerated it in Harvest, paste the new one."
-                            }
+                            CredentialsHint {}
                         },
                         ConnectFailure::RedirectMismatch => rsx! {
                             p { class: "banner-detail",
@@ -69,6 +76,9 @@ pub(super) fn ConnectBanner(
                             p { class: "banner-detail",
                                 "Connect again. If it keeps happening, check the redirect URL in your Harvest app: Harvest reports a mismatch the same way."
                             }
+                        },
+                        ConnectFailure::Other { .. } if unavailable => rsx! {
+                            p { class: "banner-detail", "Try again in a few minutes." }
                         },
                         ConnectFailure::Other { .. } => rsx! {
                             p { class: "banner-detail", "Try again. The server log has the details." }
