@@ -20,6 +20,8 @@ cleanup() {
   pg_ctl -D "$PGDATA" -m fast stop >/dev/null 2>&1 || true
   if [[ $result != 0 && -f "$test_dir/server.log" ]]; then
     tail -100 "$test_dir/server.log"
+  elif [[ $result == 0 ]]; then
+    rm -rf "$test_dir"
   fi
   exit "$result"
 }

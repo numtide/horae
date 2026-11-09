@@ -51,7 +51,9 @@ impl ApiError {
 impl From<ServerFnError> for ApiError {
     fn from(error: ServerFnError) -> Self {
         match error {
-            ServerFnError::ServerError { message, code, .. } if (400..500).contains(&code) => {
+            ServerFnError::ServerError { message, code, .. }
+                if StatusCode::from_u16(code).is_ok_and(|status| status.is_client_error()) =>
+            {
                 let status = match StatusCode::from_u16(code) {
                     Ok(StatusCode::BAD_REQUEST) | Err(_) => StatusCode::UNPROCESSABLE_ENTITY,
                     Ok(status) => status,
