@@ -17,6 +17,10 @@ mod preparation;
 mod editing;
 #[path = "invoices/recovery.rs"]
 mod recovery;
+#[path = "invoices/settings.rs"]
+mod settings;
+
+pub use settings::InvoiceSettings;
 
 /// The badge class for an invoice status — one convention for list and detail.
 pub(super) fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
@@ -61,12 +65,20 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
     let mut show_form = use_signal(|| client_context.is_some());
     let busy = use_signal(|| false);
     let navigator = use_navigator();
+    let session = crate::components::session::use_session();
+    let configures = settings::edits_invoice_settings(match &*session.me.read() {
+        Some(Ok(me)) => Some(me.org_role),
+        _ => None,
+    });
 
     rsx! {
         div {
             div { class: "page-header",
                 h1 { class: "page-title", "Invoices" }
                 div { class: "page-actions",
+                    if configures {
+                        Link { to: Route::InvoiceSettings {}, class: "btn btn-secondary", "Settings" }
+                    }
                     if storage.ready() {
                     button {
                         class: "btn btn-primary",
