@@ -42,9 +42,7 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
-    // The catalog's old Administration address still leads to it.
-    await page.goto(`${base}/admin/tasks`);
-    await page.waitForURL(`${base}/tasks`);
+    await page.goto(`${base}/tasks`);
     const row = page.getByRole('row').filter({ hasText: 'Catalog browser task' });
     await expect(row).toContainText('USD 80.00');
     await expect(row.getByRole('cell', { name: 'USD 80.00', exact: true })).toHaveCSS('white-space', 'nowrap');

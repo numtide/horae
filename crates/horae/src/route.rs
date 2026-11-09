@@ -200,7 +200,6 @@ mod tests {
         }
     }
 
-    /// `/admin/tasks` is redirected by the server (see `Commands::Serve`).
     #[test]
     fn task_catalog_lives_at_tasks() {
         assert_eq!(Route::TaskCatalog {}.to_string(), "/tasks");
