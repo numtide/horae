@@ -29,6 +29,7 @@ mod sync_tests;
 pub(crate) use sync_tests::complete_cli_api_fixture;
 
 use chrono::Utc;
+use horae_core::importers::harvest::client::ConnectFailure;
 #[cfg(test)]
 use horae_core::importers::harvest::types::SourceKind;
 use horae_core::importers::harvest::types::{EntityType, ImportMode, SourceRow, SyncScope};
@@ -492,7 +493,9 @@ async fn oauth_callback(
         .and_then(|encoded| serde_json::from_str::<OAuthAttempt>(&encoded).ok());
 
     let dest_ok = "/admin/importers/harvest?connected=1";
-    let dest_err = "/admin/importers/harvest?error=1";
+    let dest_err = |failure: ConnectFailure| {
+        Redirect::to(&format!("/admin/importers/harvest?{}", failure.query())).into_response()
+    };
 
     // Validate `state` and extract the code; a missing/mismatched state or error
     // yields no code, so we never reach the exchange (research.md §10).
@@ -501,14 +504,14 @@ async fn oauth_callback(
         stored.as_ref().map(|attempt| attempt.nonce.as_str()),
     ) {
         Ok(code) => code,
-        Err(reason) => {
+        Err((failure, reason)) => {
             tracing::warn!("Harvest callback rejected before exchange: {reason}");
-            return Redirect::to(dest_err).into_response();
+            return dest_err(failure);
         }
     };
 
     let Some(attempt) = stored else {
-        return Redirect::to(dest_err).into_response();
+        return dest_err(ConnectFailure::State);
     };
     match complete_connect(&session, code, &attempt).await {
         Ok(()) => Redirect::to(dest_ok).into_response(),
@@ -517,8 +520,25 @@ async fn oauth_callback(
                 return response;
             }
             tracing::error!("Harvest connect failed: {e}");
-            Redirect::to(dest_err).into_response()
+            dest_err(connect_failure(&e))
         }
+    }
+}
+
+/// What the Harvest page is told about a failed exchange or account lookup.
+/// Harvest documents no token errors, and RFC 6749 §5.2 gives a code issued
+/// for another redirect URL the same `invalid_grant` as an expired one, so the
+/// code-expired message also names the redirect URL.
+fn connect_failure(error: &anyhow::Error) -> ConnectFailure {
+    match error.downcast_ref::<oauth::TokenRefused>() {
+        Some(refused) => match refused.code {
+            oauth::OAuthError::InvalidClient => ConnectFailure::InvalidClient,
+            oauth::OAuthError::InvalidGrant => ConnectFailure::CodeExpired,
+            _ => ConnectFailure::Other {
+                status: Some(refused.status),
+            },
+        },
+        None => ConnectFailure::Other { status: None },
     }
 }
 
@@ -553,19 +573,42 @@ fn connection_policy_response(error: &anyhow::Error) -> Option<axum::response::R
 /// authorization code only when the provider reported no error, a `state` was
 /// stored for this session, and the returned `state` matches it exactly. A
 /// missing or mismatched `state` is rejected **without** the code (CSRF, FR-022).
+/// A rejection carries what the page is told and what the log says.
 fn authorized_code(
     params: &CallbackParams,
     stored_state: Option<&str>,
-) -> Result<String, &'static str> {
-    if params.error.is_some() {
-        return Err("provider returned an error");
+) -> Result<String, (ConnectFailure, &'static str)> {
+    // Only RFC 6749 §4.1.2.1 codes are matched; anything else Harvest sends
+    // stays out of the log and the redirect.
+    match params.error.as_deref() {
+        None => {}
+        Some("access_denied") => return Err((ConnectFailure::Denied, "admin denied access")),
+        Some("invalid_redirect_uri" | "redirect_uri_mismatch") => {
+            return Err((
+                ConnectFailure::RedirectMismatch,
+                "provider rejected the redirect URL",
+            ));
+        }
+        Some(_) => {
+            return Err((
+                ConnectFailure::Other { status: None },
+                "provider returned an error",
+            ));
+        }
     }
-    let stored = stored_state.ok_or("no state stored for this session")?;
-    let returned = params.state.as_deref().ok_or("callback missing state")?;
+    let state = |reason| (ConnectFailure::State, reason);
+    let stored = stored_state.ok_or(state("no state stored for this session"))?;
+    let returned = params
+        .state
+        .as_deref()
+        .ok_or(state("callback missing state"))?;
     if returned != stored {
-        return Err("state mismatch (possible CSRF)");
+        return Err(state("state mismatch (possible CSRF)"));
     }
-    params.code.clone().ok_or("callback missing code")
+    params.code.clone().ok_or((
+        ConnectFailure::Other { status: None },
+        "callback missing code",
+    ))
 }
 
 /// Exchange the code, resolve the account id, and persist the encrypted tokens
@@ -686,30 +729,75 @@ mod oauth_callback_tests {
     #[test]
     fn mismatched_state_is_rejected_without_a_code() {
         let p = params(None, Some("attacker"), Some("the-code"));
-        assert!(authorized_code(&p, Some("nonce")).is_err());
+        assert_eq!(rejection(&p, Some("nonce")), ConnectFailure::State);
+    }
+
+    fn rejection(p: &CallbackParams, stored: Option<&str>) -> ConnectFailure {
+        authorized_code(p, stored).unwrap_err().0
     }
 
     #[test]
     fn missing_stored_state_is_rejected() {
         let p = params(None, Some("nonce"), Some("the-code"));
-        assert!(authorized_code(&p, None).is_err());
+        assert_eq!(rejection(&p, None), ConnectFailure::State);
     }
 
     #[test]
     fn missing_returned_state_is_rejected() {
         let p = params(None, None, Some("the-code"));
-        assert!(authorized_code(&p, Some("nonce")).is_err());
+        assert_eq!(rejection(&p, Some("nonce")), ConnectFailure::State);
     }
 
     #[test]
-    fn provider_error_is_rejected_before_exchange() {
-        let p = params(Some("access_denied"), Some("nonce"), Some("the-code"));
-        assert!(authorized_code(&p, Some("nonce")).is_err());
+    fn provider_errors_are_rejected_before_exchange() {
+        for (error, failure) in [
+            ("access_denied", ConnectFailure::Denied),
+            ("invalid_redirect_uri", ConnectFailure::RedirectMismatch),
+            ("redirect_uri_mismatch", ConnectFailure::RedirectMismatch),
+            ("server_error", ConnectFailure::Other { status: None }),
+            ("<private>", ConnectFailure::Other { status: None }),
+        ] {
+            let p = params(Some(error), Some("nonce"), Some("the-code"));
+            assert_eq!(rejection(&p, Some("nonce")), failure, "{error}");
+        }
     }
 
     #[test]
     fn valid_state_but_missing_code_is_rejected() {
         let p = params(None, Some("nonce"), None);
-        assert!(authorized_code(&p, Some("nonce")).is_err());
+        assert_eq!(
+            rejection(&p, Some("nonce")),
+            ConnectFailure::Other { status: None }
+        );
+    }
+
+    #[test]
+    fn a_refused_exchange_tells_the_page_why() {
+        use oauth::{OAuthError, TokenRefused};
+        let refused = |code, status| anyhow::Error::from(TokenRefused { code, status });
+        for (error, failure) in [
+            (
+                refused(OAuthError::InvalidClient, 401),
+                ConnectFailure::InvalidClient,
+            ),
+            (
+                refused(OAuthError::InvalidGrant, 400),
+                ConnectFailure::CodeExpired,
+            ),
+            (
+                refused(OAuthError::InvalidRequest, 400),
+                ConnectFailure::Other { status: Some(400) },
+            ),
+            (
+                refused(OAuthError::Other, 403),
+                ConnectFailure::Other { status: Some(403) },
+            ),
+            (
+                anyhow::anyhow!("Harvest accounts lookup failed"),
+                ConnectFailure::Other { status: None },
+            ),
+        ] {
+            assert_eq!(connect_failure(&error), failure, "{error}");
+        }
     }
 }

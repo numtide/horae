@@ -31,11 +31,79 @@ fn agent() -> ureq::Agent {
         .build()
 }
 
+/// The OAuth `error` code of a token endpoint refusal (RFC 6749 §5.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OAuthError {
+    InvalidClient,
+    InvalidGrant,
+    InvalidRequest,
+    UnauthorizedClient,
+    UnsupportedGrantType,
+    InvalidScope,
+    /// A code outside RFC 6749, or a body that is not an OAuth error.
+    Other,
+}
+
+impl std::fmt::Display for OAuthError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::InvalidClient => "invalid_client",
+            Self::InvalidGrant => "invalid_grant",
+            Self::InvalidRequest => "invalid_request",
+            Self::UnauthorizedClient => "unauthorized_client",
+            Self::UnsupportedGrantType => "unsupported_grant_type",
+            Self::InvalidScope => "invalid_scope",
+            Self::Other => "unrecognised error",
+        })
+    }
+}
+
+/// The token endpoint answered with an error status. Only the OAuth code and
+/// the status are kept: the description, the body and the request can carry
+/// details that must not reach a log or the browser.
+#[derive(Debug, thiserror::Error)]
+#[error("token exchange refused ({code}, HTTP {status})")]
+pub struct TokenRefused {
+    pub code: OAuthError,
+    pub status: u16,
+}
+
+impl TokenRefused {
+    fn read(status: u16, response: ureq::Response) -> Self {
+        #[derive(Deserialize)]
+        struct ErrorBody {
+            error: String,
+        }
+        let code = response
+            .into_string()
+            .ok()
+            .and_then(|body| serde_json::from_str::<ErrorBody>(&body).ok())
+            .map_or(OAuthError::Other, |body| match body.error.as_str() {
+                "invalid_client" => OAuthError::InvalidClient,
+                "invalid_grant" => OAuthError::InvalidGrant,
+                "invalid_request" => OAuthError::InvalidRequest,
+                "unauthorized_client" => OAuthError::UnauthorizedClient,
+                "unsupported_grant_type" => OAuthError::UnsupportedGrantType,
+                "invalid_scope" => OAuthError::InvalidScope,
+                _ => OAuthError::Other,
+            });
+        Self { code, status }
+    }
+}
+
 /// Only the token endpoint refusing the grant means the connection is gone;
 /// a network failure or a 5xx is transient and the job retries it.
 fn refresh_error(error: ureq::Error) -> anyhow::Error {
     match error {
-        ureq::Error::Status(400 | 401, _) => super::ApiImportError::ReconnectRequired.into(),
+        ureq::Error::Status(status @ (400 | 401), response) => {
+            let refused = TokenRefused::read(status, response);
+            tracing::warn!(
+                "Harvest token refresh refused ({}, HTTP {})",
+                refused.code,
+                refused.status
+            );
+            super::ApiImportError::ReconnectRequired.into()
+        }
         ureq::Error::Status(status, _) if status >= 500 || status == 429 => {
             super::ApiImportError::Unavailable(format!(
                 "Harvest token refresh failed with HTTP {status}"
@@ -105,10 +173,17 @@ impl TokenBody {
     }
 }
 
-/// Exchange an authorization `code` for tokens (server-side, blocking).
+/// Exchange an authorization `code` for tokens (server-side, blocking). A
+/// refusal is a [`TokenRefused`].
 pub fn exchange_code(cfg: &HarvestConfig, code: &str) -> anyhow::Result<Tokens> {
+    exchange_code_at(&format!("{ID_HOST}{TOKEN_PATH}"), cfg, code)
+}
+
+const TOKEN_PATH: &str = "/api/v2/oauth2/token";
+
+fn exchange_code_at(token_url: &str, cfg: &HarvestConfig, code: &str) -> anyhow::Result<Tokens> {
     let body = agent()
-        .post(&format!("{ID_HOST}/api/v2/oauth2/token"))
+        .post(token_url)
         .set("Accept", "application/json")
         .send_form(&[
             ("code", code),
@@ -117,7 +192,10 @@ pub fn exchange_code(cfg: &HarvestConfig, code: &str) -> anyhow::Result<Tokens> 
             ("redirect_uri", &cfg.redirect_url),
             ("grant_type", "authorization_code"),
         ])
-        .map_err(|e| anyhow::anyhow!("Harvest token exchange failed: {e}"))?
+        .map_err(|e| match e {
+            ureq::Error::Status(status, response) => TokenRefused::read(status, response).into(),
+            ureq::Error::Transport(e) => anyhow::anyhow!("Harvest token exchange failed: {e}"),
+        })?
         .into_string()?;
     let parsed: TokenBody = serde_json::from_str(&body)?;
     Ok(parsed.into_tokens())
@@ -126,8 +204,12 @@ pub fn exchange_code(cfg: &HarvestConfig, code: &str) -> anyhow::Result<Tokens> 
 /// Refresh an expired access token with the stored refresh token (FR-024). A
 /// refused grant is `ReconnectRequired`; anything else is a retryable error.
 pub fn refresh(cfg: &HarvestConfig, refresh_token: &str) -> anyhow::Result<Tokens> {
+    refresh_at(&format!("{ID_HOST}{TOKEN_PATH}"), cfg, refresh_token)
+}
+
+fn refresh_at(token_url: &str, cfg: &HarvestConfig, refresh_token: &str) -> anyhow::Result<Tokens> {
     let body = agent()
-        .post(&format!("{ID_HOST}/api/v2/oauth2/token"))
+        .post(token_url)
         .set("Accept", "application/json")
         .send_form(&[
             ("refresh_token", refresh_token),
@@ -250,6 +332,109 @@ mod tests {
                 _ => "other",
             };
             assert_eq!(found, kind, "{mapped}");
+        }
+    }
+
+    /// What a fake token endpoint puts beside the error code, none of which
+    /// may reach an error, a log line or the browser.
+    const PRIVATE: [&str; 3] = ["private-description", "private-uri", "private-state"];
+
+    /// A token endpoint that answers one request with `status` and `body`.
+    fn fake_token_endpoint(status: u16, body: &'static str) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!(
+            "http://{}/api/v2/oauth2/token",
+            listener.local_addr().unwrap()
+        );
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0; 4096];
+            let _ = stream.read(&mut request);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 {status} Refused\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            // Closing with unread request bytes would reset the connection
+            // before the client reads the answer.
+            let _ = stream.shutdown(std::net::Shutdown::Write);
+            let _ = std::io::copy(&mut stream, &mut std::io::sink());
+        });
+        url
+    }
+
+    fn refusal(code: &str) -> &'static str {
+        format!(
+            r#"{{"error":"{code}","error_description":"private-description","error_uri":"private-uri","state":"private-state"}}"#
+        )
+        .leak()
+    }
+
+    #[test]
+    fn a_refused_exchange_reports_only_the_oauth_code_and_status() {
+        for (status, code, expected) in [
+            (401, "invalid_client", OAuthError::InvalidClient),
+            (400, "invalid_grant", OAuthError::InvalidGrant),
+            (400, "invalid_request", OAuthError::InvalidRequest),
+            (400, "unauthorized_client", OAuthError::UnauthorizedClient),
+            (
+                400,
+                "unsupported_grant_type",
+                OAuthError::UnsupportedGrantType,
+            ),
+            (400, "invalid_scope", OAuthError::InvalidScope),
+            (400, "something_new", OAuthError::Other),
+        ] {
+            let url = fake_token_endpoint(status, refusal(code));
+            let error = exchange_code_at(&url, &cfg(), "the-code").unwrap_err();
+            let refused = error.downcast_ref::<TokenRefused>().unwrap();
+            assert_eq!((refused.code, refused.status), (expected, status), "{code}");
+            let shown = format!("{error} {error:?} {error:#}");
+            for private in PRIVATE.iter().chain(&["the-code", "secret"]) {
+                assert!(!shown.contains(private), "{code} leaked {private}: {shown}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_log_line_names_the_code_and_status() {
+        let url = fake_token_endpoint(401, refusal("invalid_client"));
+        let error = exchange_code_at(&url, &cfg(), "the-code").unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "token exchange refused (invalid_client, HTTP 401)"
+        );
+        let url = fake_token_endpoint(400, refusal("something_new"));
+        let error = exchange_code_at(&url, &cfg(), "the-code").unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "token exchange refused (unrecognised error, HTTP 400)"
+        );
+    }
+
+    #[test]
+    fn an_unparseable_refusal_keeps_only_the_status() {
+        for body in ["<html>private-description</html>", "", r#"{"error":7}"#] {
+            let url = fake_token_endpoint(400, body);
+            let error = exchange_code_at(&url, &cfg(), "the-code").unwrap_err();
+            let refused = error.downcast_ref::<TokenRefused>().unwrap();
+            assert_eq!((refused.code, refused.status), (OAuthError::Other, 400));
+            assert!(!format!("{error:?}").contains("private"), "{body}");
+        }
+    }
+
+    #[test]
+    fn a_refused_refresh_still_asks_for_a_reconnect() {
+        use crate::importers::harvest::ApiImportError;
+        for (status, code) in [(400, "invalid_grant"), (401, "invalid_client")] {
+            let url = fake_token_endpoint(status, refusal(code));
+            let error = refresh_at(&url, &cfg(), "the-refresh-token").unwrap_err();
+            assert!(!format!("{error:?}").contains("private"));
+            assert!(matches!(
+                ApiImportError::from(error),
+                ApiImportError::ReconnectRequired
+            ));
         }
     }
 
