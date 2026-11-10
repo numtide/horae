@@ -3,7 +3,7 @@ use crate::models::user::{PersonRate, PersonRates};
 use crate::server_fns::test_seed::seed;
 use crate::server_fns::users::rates::{read_person_rates, write_person_rates};
 use horae_core::permissions::catalog::{
-    PERMISSION_CATALOG_VERSION, Permission, PermissionSelection,
+    BuiltInProfile, PERMISSION_CATALOG_VERSION, Permission, PermissionSelection,
 };
 use horae_core::permissions::rates::RateEdit;
 use sqlx::PgPool;
@@ -272,14 +272,12 @@ async fn policy_one_rate_grants_need_people_access_and_never_cover_oneself(pool:
     let managed = person(&pool, ids.org_id, OrgRole::Member).await;
     let actor = person(&pool, ids.org_id, OrgRole::Manager).await;
 
-    policy_one(
-        &pool,
-        ids.org_id,
-        actor,
-        &[BillableRateReadAll, CostRateReadAll],
-        &[managed],
-    )
-    .await;
+    // Accounting reads both rates org-wide but holds no People grant, so it
+    // sees no one's rates: rates need people access.
+    let accounting = BuiltInProfile::Accounting.direct_permissions();
+    assert!(accounting.contains(&BillableRateReadAll) && accounting.contains(&CostRateReadAll));
+    assert!(!accounting.contains(&PeopleReadAll) && !accounting.contains(&PeopleReadManaged));
+    policy_one(&pool, ids.org_id, actor, accounting, &[managed]).await;
     assert_eq!(observe(&pool, ids.org_id, actor, managed).await, None);
 
     policy_one(
