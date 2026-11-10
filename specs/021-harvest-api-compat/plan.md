@@ -110,6 +110,7 @@ crates/horae/migrations/0062_harvest_ids_check.sql  # then 0063: NOT NULL and un
 crates/horae/migrations/0063_harvest_ids_not_null.sql
 crates/horae/migrations/<next>_api_tokens.sql     # step 2
 crates/horae/migrations/<next>_catalogue_updated_at.sql   # step 4
+crates/harvest/src/v2/compat.rs                # horae-harvest: response shapes, Hours and Amount as exact JSON numbers
 crates/horae/src/harvest.rs                       # was harvest/mod.rs (R-12); router and aliases
 crates/horae/src/harvest/
 ├── auth.rs              # extractor: bearer, query, account id, cookie for reads
@@ -117,7 +118,6 @@ crates/horae/src/harvest/
 ├── ids.rs               # integer id → record lookup (harvest_id columns)
 ├── errors.rs            # Harvest error bodies and status mapping
 ├── rate_limit.rs        # per-token windows in AppState
-├── decimal_json.rs      # Hours and Amount as exact JSON numbers
 ├── api_tests.rs         # router tests per step, beside pagination_tests.rs
 ├── pagination.rs        # page and cursor envelopes, absolute links
 ├── time_entry_writes.rs # step 3
@@ -178,8 +178,9 @@ future `/api/v1`, not Harvest-specific. Until the multi-tenant split of accounts
 lands, an account is a `users` row and has exactly one membership.
 
 **Crates.** Database-free Harvest pieces live in `horae-harvest` (`crates/harvest`): the compat
-API's output types and exact decimals (today `harvest/types.rs`, `harvest/decimal_json.rs`),
-sharing resource types with the importer where the schema is the same. Handlers, id resolution
+API's response shapes and exact decimals in `v2::compat` (`crates/harvest/src/v2/compat.rs`,
+moved there from the app's `harvest/types.rs` and `harvest/decimal_json.rs`), beside the
+importer's `v2` resource types; they share a type only where the schema is the same. Handlers, id resolution
 (`harvest/ids.rs`), reads and anything with sqlx stay in the app crate.
 
 ## PR split

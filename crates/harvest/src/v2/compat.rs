@@ -1,7 +1,53 @@
-use serde::Serialize;
+//! The Harvest-compatible API's response shapes (the app serves them under
+//! `/harvest/v2`), with hours and money as exact JSON numbers: written from
+//! integer minutes and minor units as decimal text, never through `f64`
+//! (Constitution I, decimal wire formats). This crate enables serde_json's
+//! `arbitrary_precision`, so a `Number` parsed from that text is written back
+//! verbatim.
+
+use horae_core::duration::format_hours2;
+use horae_core::money::format_major_units;
+use serde::{Serialize, Serializer};
 use std::collections::HashMap;
 
-use super::decimal_json::{Amount, Hours};
+/// Integer minutes, written as hours rounded half up to two decimals.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Hours(pub i64);
+
+/// Integer minor units, written in major units with the currency's own
+/// decimals (`money::format_major_units`). An unknown currency gets two.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Amount {
+    pub cents: i64,
+    pub currency: String,
+}
+
+impl Amount {
+    pub fn new(cents: i64, currency: &str) -> Self {
+        Self {
+            cents,
+            currency: currency.to_owned(),
+        }
+    }
+}
+
+fn number<S: Serializer>(text: String, serializer: S) -> Result<S::Ok, S::Error> {
+    text.parse::<serde_json::Number>()
+        .map_err(serde::ser::Error::custom)?
+        .serialize(serializer)
+}
+
+impl Serialize for Hours {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        number(format_hours2(self.0), serializer)
+    }
+}
+
+impl Serialize for Amount {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        number(format_major_units(self.cents, &self.currency), serializer)
+    }
+}
 
 // ── Pagination envelope ─────────────────────────────────────────────────────
 
@@ -67,8 +113,8 @@ impl<T: Serialize> HarvestPagination<T> {
     /// delimiters, Unicode, and repeated extension parameters.
     pub fn with_query(mut self, query: Option<&str>) -> Self {
         let Some(query) = query else { return self };
-        let mut encoded = openidconnect::url::form_urlencoded::Serializer::new(String::new());
-        for (key, value) in openidconnect::url::form_urlencoded::parse(query.as_bytes()) {
+        let mut encoded = url::form_urlencoded::Serializer::new(String::new());
+        for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
             if key != "page" && key != "per_page" {
                 encoded.append_pair(&key, &value);
             }
@@ -219,4 +265,29 @@ pub struct HarvestUser {
     pub default_hourly_rate: Option<Amount>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hours_and_amounts_are_exact_json_numbers() {
+        let json = serde_json::to_string(&(
+            Hours(1),
+            Hours(90),
+            Amount::new(1234, "EUR"),
+            Amount::new(-5, "USD"),
+            Amount::new(100_000, "JPY"),
+            Amount::new(1234, "BHD"),
+        ))
+        .unwrap();
+        assert_eq!(json, "[0.02,1.50,12.34,-0.05,1000,12.340]");
+    }
+
+    #[test]
+    fn large_amounts_keep_every_digit() {
+        let json = serde_json::to_string(&Amount::new(i64::MAX, "EUR")).unwrap();
+        assert_eq!(json, "92233720368547758.07");
+    }
 }

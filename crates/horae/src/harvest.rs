@@ -4,12 +4,10 @@
 
 mod auth;
 mod client_reads;
-mod decimal_json;
 mod errors;
 pub(crate) mod ids;
 mod project_reads;
 mod task_reads;
-mod types;
 
 #[cfg(test)]
 mod api_tests;
@@ -28,10 +26,9 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use auth::AuthUser;
-use decimal_json::{Amount, Hours};
 use errors::ApiError;
+use horae_harvest::v2::compat::*;
 use ids::Kind;
-use types::*;
 
 pub fn router(db: PgPool) -> Router {
     let routes: [(&str, MethodRouter<PgPool>); 10] = [
