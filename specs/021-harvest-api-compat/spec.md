@@ -362,16 +362,17 @@ ______________________________________________________________________
 #### Integer ids
 
 - **FR-015**: Every record exposed by the API MUST have an integer id. It is unique within its
-  kind and organization, never changes and is never reused. Primary keys stay UUID v7.
+  kind and organization and never changes, and a number never names another record: a deleted
+  record's number is not given to another one (an imported record deleted and imported again
+  gets its Harvest id back). Primary keys stay UUID v7.
 - **FR-016**: A record imported from Harvest MUST keep its original Harvest id as its integer id.
   If that number is already held by another record of the same kind, the record gets a fresh
   number and the importer reports the change *(OQ-2)*.
   - *Implementation note (step 1)*: "imported" means created by the import. A record the import
     only matches (it existed in Horae before) keeps the number it already has, because FR-015's
-    "never changes" wins: clients may already know that number. The report line for a collision
-    is not implemented yet (tasks.md T015); until it is, a collision keeps the fresh number
-    silently, so FR-016 is only partly met. Native numbers come from a sequence per kind that
-    starts at 1, far below Harvest's ids, so collisions are rare in practice.
+    "never changes" wins: clients may already know that number. On a collision the import report
+    lists the record with its Harvest id and its new id (`IdNotice`). Native numbers come from a
+    sequence per kind that starts at 1, far below Harvest's ids, so collisions are rare.
 - **FR-017**: Every record that exists when this feature is deployed MUST receive its number at
   deployment, and every new record when it is created.
 - **FR-018**: Every id in a request (path, filter or body) MUST be accepted as an integer. For a
@@ -510,11 +511,12 @@ The maintainer accepted D-1 to D-7 as written, and decided D-8 and D-9 on 2026-1
 
 ### Key Entities
 
-- **Personal access token**: belongs to one person in one organization. It has a name, a hash,
+- **Personal access token**: belongs to one account; each request names the organization
+  (`Harvest-Account-Id`) and acts as the account's membership there (plan.md *Layering*). It has a name, a hash,
   a creation time, an optional expiry, a last-use time and a revocation time.
 - **Account id**: an integer per organization, stable and never reused.
-- **Integer id**: per organization, per kind of record, links one integer to one record. It is
-  stable and never reused, and it records whether the number came from Harvest.
+- **Integer id**: the `harvest_id` column of each exposed record, unique per organization and
+  kind. It is stable and never names another record.
 - **OAuth2 client** *(OQ-1)*: name, redirect addresses, secret hash, registering administrator.
 - **OAuth2 grant** *(OQ-1)*: a person's approval of a client for an organization, with its
   single-use codes and its expiring, rotating access and refresh tokens, all stored as hashes.
@@ -573,7 +575,7 @@ The maintainer accepted D-1 to D-7 as written, and decided D-8 and D-9 on 2026-1
 Each step is one or a few small pull requests and leaves the API working. The order follows how
 many surveyed clients each step unlocks ([research.md §1.5](research.md#15-most-called-endpoints)).
 
-1. **Integer ids and account id** (FR-010, FR-015–FR-018). The numbering table, backfill,
+1. **Integer ids and account id** (FR-010, FR-015–FR-018). The `harvest_id` columns, backfill,
    importer reuse of Harvest ids and responses in integers. The suite skeleton runs with one
    library client using session reads. Unlocks typed clients for reads.
 1. **Personal access tokens** (FR-001–FR-008, FR-011, FR-024–FR-026, FR-050). Token management

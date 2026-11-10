@@ -406,19 +406,20 @@ maintainer's answers to OQ-1 to OQ-3 and D-1 to D-9 are in spec.md *Clarificatio
 
 ### R-2 Integer ids
 
-- **Decision**: one table, `api_ids`, maps `(org_id, kind, number)` to a Horae UUID, with a
-  `from_harvest` flag. Numbers are per organization and per kind. A migration backfills every
-  existing record: first the rows in `harvest_import_map` with their Harvest id, then every other
-  record in `created_at`, id order from `max(number) + 1`. Writes allocate in the same transaction
-  as the insert, under a per-organization-and-kind advisory lock. The importer writes its Harvest
-  id when it creates or matches a record; a collision with a native record gets the next number
-  and a report line (OQ-2).
-- **Rationale**: one table keeps the domain tables unchanged (no `bigint` column on every table)
-  and keeps Principle III's UUID keys as the only primary identity. The import map already holds
-  the Harvest ids, so the backfill is a query.
-- **Alternatives**: a `bigint` identity column on each table (touches every table and every
-  insert; can't keep Harvest ids without overriding identity values); hashing UUIDs into 53-bit
-  integers (collisions; no Harvest id reuse).
+- **Decision** (revised in step 1): a `harvest_id bigint` column on each exposed table, unique
+  per organization, filled by a `BEFORE INSERT` trigger from one global sequence per kind when
+  the insert gives none. The importer passes the Harvest id in its creating insert when it is
+  free; on a collision it passes none and the report lists the change (OQ-2). A migration
+  backfills existing records with `UPDATE`: import-map ids first, then creation order.
+- **Rationale**: responses read the id from rows the queries already join (a 2000-entry page
+  measured 2.4 ms against 21 ms through a mapping table, 63 ms against 1.1 s at offset 100,000),
+  inserts need no extra row, and the importer, not a trigger, knows when it could not keep a
+  Harvest id, so it can report it. The trigger means no other insert path changes. UUID v7 stays
+  the only primary identity (Principle III).
+- **Alternatives**: the first step-1 design, a mapping table `api_ids` with triggers (a second
+  index pair per record, a lookup per id in every response, and the Harvest-id decision hidden in
+  a trigger); `bigint` primary keys (a Principle III amendment and 45 foreign keys); hashing
+  UUIDs into 53-bit integers (collisions; no Harvest id reuse).
 
 ### R-3 Account id
 

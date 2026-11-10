@@ -52,7 +52,10 @@ Provisional until recorded from the test account (research R-11). The text is Ho
 
 ## Ids (step 1, FR-015–FR-018)
 
-Integers, per organization and kind. Imported records use their Harvest id. During the
+Integers, per organization and kind: each record's `harvest_id`, the id in this API (Horae's
+own identity stays the UUID). Imported records use their Harvest id when no record of the kind
+has it; otherwise they get a fresh id and the import report says so. A number never names
+another record. During the
 transition period (D-1) a UUID is also accepted wherever an id is accepted; responses carry
 integers only.
 

@@ -20,47 +20,57 @@ minutes and money integer minor units (Principle I); the API converts at the edg
 | `last_used_at` | timestamptz NULL | updated at most once a minute per token (FR-005) |
 | `revoked_at` | timestamptz NULL | set once; a revoked token is refused |
 
+Tokens belong to the account (plan.md *Layering*): each request names its organization with
+`Harvest-Account-Id`, which resolves to the account's membership there. While an account is a
+`users` row with one membership, `org_id` is that membership's organization; step 2 revisits the
+column against 020's accounts and memberships.
+
 A token authenticates only while: not revoked, not expired, and its owner is active in `org_id`.
 Its permissions are read from the owner's current role and grants on every request; nothing is
 copied onto the token.
 
-### `api_ids` (delivery step 1)
+### `harvest_id` columns (delivery step 1)
 
-| Column | Type | Rule |
-| --- | --- | --- |
-| `org_id` | uuid FK organizations | |
-| `kind` | `api_id_kind` enum | `client`, `project`, `task`, `time_entry`, `user`, `project_assignment`, `task_assignment`, `invoice`, `invoice_line_item`, `tag` |
-| `number` | bigint | > 0 |
-| `horae_id` | uuid | the record |
-| `from_harvest` | boolean | true when `number` is the record's Harvest id (FR-016) |
-| `created_at` | timestamptz | |
+`harvest_id bigint NOT NULL` on `clients`, `projects`, `tasks`, `time_entries` and `users`, unique
+per `(org_id, harvest_id)`: **the id in the Harvest-compatible API; Horae's identity is `id`
+(UUID v7).** It is the `id` a client of `/harvest/v2` sees for every record, native or
+imported, and the number it sends back in paths and filters. Later steps add the column to the
+kinds they expose (assignments, invoices, invoice lines, tags).
 
-Primary key `(org_id, kind, number)` and unique `(org_id, kind, horae_id)`: a mapping table keyed
-by what it maps, like `harvest_import_map`, so it has no UUID of its own. A number is never
-reused, also after the record is deleted: the row stays and a deleted record's number is not
-handed out again. New numbers come from one sequence per kind (`api_ids_<kind>_seq`), skipping a
-number an imported record holds as its Harvest id. `nextval` takes no lock and ignores the
-transaction's snapshot, so numbering works at every isolation level and creators never wait on
-each other (an earlier `max + 1` under an advisory lock failed under REPEATABLE READ). Numbers are
-unique per organization and kind, as FR-015 requires; they are also distinct across
-organizations, and do not start at 1 in each.
+- **Native records**: the column has no default. A `BEFORE INSERT` trigger
+  (`harvest_id_assign`) fills it when the insert gives none, from one global sequence per kind
+  (`<table>_harvest_id_seq`), skipping a number another record of the kind in the organization
+  has or that `harvest_import_map` holds as a Harvest id. `nextval` takes no lock and ignores the
+  snapshot, so creators never wait on each other at any isolation level. Numbers are unique per
+  organization and kind (FR-015); they are distinct across organizations too, and do not start
+  at 1 in each.
+- **Imported records**: the importer passes the record's Harvest id in its creating insert when
+  no record of the kind in the organization has it. When one does, it passes nothing (the
+  trigger numbers the record) and the import report gets an `IdNotice` (FR-016). A record the
+  import only matches keeps its own number.
+- **A number never names another record.** Sequence numbers are never handed out twice, and a
+  Harvest id in the map stays reserved after its record is deleted, so only that record can come
+  back with it.
 
-Allocation is an `AFTER INSERT` trigger on each numbered table, so every insert path (server
-functions, importer, CLI, seed, tests) numbers its records without a call of its own. A trigger
-on `harvest_import_map` gives a record created in the same transaction its Harvest id, unless
-another record of the kind holds that number; a record that existed before keeps its number.
-`api_number(org, kind, uuid)` reads a number for responses.
+Migrations: `0058` renames `harvest_import_map.harvest_id` to `harvest_import_id` (the id the
+record had in Harvest), so the two never read alike. `0059` adds the columns, sequences, the
+trigger and plain lookup indexes; the unique indexes come only after the backfill, because an
+`UPDATE` of a column in a unique index takes `FOR UPDATE` row locks, which wait for the
+`FOR KEY SHARE` locks of every insert's foreign-key checks: with them the backfill stopped new
+time entries and deadlocked with them. `0059` also makes `set_updated_at` and the project edit
+revision trigger skip a session that sets `horae.backfill`, so numbering is not an edit (the
+importer compares `updated_at` to detect edits made in Horae). `0060` backfills without a
+transaction, in batches of 10,000 rows in id order (UUID v7, creation order), each committed
+with `horae.backfill` set locally; per batch, imported records take their Harvest id, the rest
+the next sequence numbers, a record whose turn falls on a held number the next free one. A rerun
+resumes. `0061` adds `CHECK (harvest_id IS NOT NULL) NOT VALID`; `0062` validates it (no write
+lock), builds the unique indexes (writes to the table wait for the build), drops the lookup
+indexes, sets `NOT NULL` from the valid check without a scan and drops the check.
 
-Step 1 numbers the kinds its reads expose: clients, projects, tasks, time entries and users. The
-other kinds get their trigger and backfill with the step that first exposes them.
-
-Migrations: `0057` adds the account id on its own (an identity column rewrites `organizations`
-under ACCESS EXCLUSIVE, released at its commit); `0058` adds the table, sequences and triggers;
-`0059` backfills with no DDL, so writes continue meanwhile. Backfill: for each kind, insert the
-`harvest_import_map` rows with `from_harvest = true`, then every other record by
-`(created_at, id)` from the kind's sequence; a record whose turn falls on a Harvest id gets the
-next free number after the pass.
-`user_assignments` and `task_assignments` have no Harvest ids in the map and are numbered fresh.
+Measured on 1M time entries (200 people, 5,000 projects, 100,000 imported): `0059` 0.26 s,
+`0060` 114 s, `0061` 0.04 s, `0062` 0.73 s. During `0060` a read, an edit of an old entry and a
+new entry each waited at most 0.3–0.7 s (one batch); during `0062` an edit or insert waited at
+most 0.56 s.
 
 ## Changed tables
 
@@ -69,7 +79,8 @@ next free number after the pass.
 | `organizations` | `api_account_id bigint NOT NULL UNIQUE` from sequence `organizations_api_account_id_seq` (OQ-3) | 1 |
 | `tasks` | `created_at`, `updated_at timestamptz NOT NULL DEFAULT now()`, trigger `set_updated_at` | 4 |
 | `projects`, `clients`, `users` | `updated_at timestamptz NOT NULL DEFAULT now()`, backfilled from `created_at`, trigger `set_updated_at` | 4 |
-| `harvest_import_map` | unchanged; read by the backfill and by the importer's id reuse | 1 |
+| `harvest_import_map` | `harvest_id` renamed to `harvest_import_id`; read by the backfill and the trigger | 1 |
+| `clients`, `projects`, `tasks`, `time_entries`, `users` | `harvest_id bigint NOT NULL`, unique per organization (above) | 1 |
 
 The migration snapshot tests compare whole rows; the new columns are excluded there.
 
