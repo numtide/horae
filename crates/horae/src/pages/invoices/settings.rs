@@ -20,6 +20,14 @@ pub(crate) fn edits_invoice_settings(role: Option<OrgRole>) -> bool {
     role.is_some_and(OrgRole::is_manager_or_above)
 }
 
+/// The server's own message, without Dioxus's "error running server function" wrapper.
+fn message_of(error: ServerFnError) -> String {
+    match error {
+        ServerFnError::ServerError { message, .. } => message,
+        other => other.to_string(),
+    }
+}
+
 struct Field {
     id: &'static str,
     label: &'static str,
@@ -135,13 +143,15 @@ impl Card {
         }
     }
 
-    /// `saved` with this card's fields taken from `draft`, blank fields cleared,
-    /// so saving one card never sends another card's unsaved edits.
+    /// `saved` with this card's fields taken from `draft`, trimmed and blank
+    /// ones cleared, so saving one card never sends another card's unsaved edits.
     fn request(self, saved: &OrgBranding, draft: &OrgBranding) -> OrgBranding {
         let (mut request, mut draft) = (saved.clone(), draft.clone());
         for field in self.fields() {
             let value = (field.value)(&mut draft).take();
-            *(field.value)(&mut request) = value.filter(|value| !value.trim().is_empty());
+            *(field.value)(&mut request) = value
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty());
         }
         request
     }
@@ -175,7 +185,7 @@ pub fn InvoiceSettings() -> Element {
                         "Invoice settings are available to managers and administrators. Ask an Administrator if you need access."
                     }
                 },
-                Some(Err(error)) => rsx! { div { class: "alert alert-danger", role: "alert", "{error}" } },
+                Some(Err(error)) => rsx! { div { class: "alert alert-danger", role: "alert", {message_of(error.clone())} } },
             }
         }
     }
@@ -232,7 +242,7 @@ fn SettingsCard(card: Card, saved: Signal<OrgBranding>, draft: Signal<OrgBrandin
                     saved.set(stored);
                     notice.set(true);
                 }
-                Err(failure) => error.set(Some(failure.to_string())),
+                Err(failure) => error.set(Some(message_of(failure))),
             }
             busy.set(false);
         });
@@ -420,11 +430,11 @@ mod tests {
     }
 
     #[test]
-    fn saving_a_card_sends_only_its_own_edits_and_clears_blank_values() {
+    fn saving_a_card_sends_only_its_own_trimmed_edits_and_clears_blank_values() {
         let saved = branding();
         let draft = OrgBranding {
             provider_name: Some("  ".into()),
-            provider_email: Some("billing@example.com".into()),
+            provider_email: Some("  billing@example.com\n".into()),
             bank_name: Some("Unsaved bank".into()),
             ..saved.clone()
         };
@@ -436,6 +446,16 @@ mod tests {
                 ..saved
             }
         );
+    }
+
+    #[test]
+    fn a_refused_save_shows_the_server_message_alone() {
+        let refused = ServerFnError::ServerError {
+            message: "Manager access required".into(),
+            code: FORBIDDEN,
+            details: None,
+        };
+        assert_eq!(message_of(refused), "Manager access required");
     }
 
     #[test]
