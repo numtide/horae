@@ -917,7 +917,10 @@ mod server_fns {
         unreachable!("detail navigation never opens invoice settings")
     }
 
-    pub async fn update_org_branding(_branding: OrgBranding) -> Result<OrgBranding, ServerFnError> {
+    pub async fn update_org_branding(
+        _branding: OrgBranding,
+        _expected: OrgBranding,
+    ) -> Result<OrgBranding, ServerFnError> {
         unreachable!("detail navigation never opens invoice settings")
     }
 

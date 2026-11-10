@@ -27,12 +27,93 @@ async fn row_version(pool: &PgPool, org_id: uuid::Uuid) -> Option<String> {
         .unwrap()
 }
 
+async fn stored(pool: &PgPool, org_id: uuid::Uuid) -> OrgBranding {
+    sqlx::query_as!(
+        OrgBranding,
+        r#"SELECT provider_name, provider_address, provider_tax_id,
+                  provider_email, provider_phone,
+                  bank_name, bank_iban, bank_bic, bank_routing, bank_account,
+                  invoice_notes, invoice_payment_terms
+           FROM organizations WHERE id = $1"#,
+        org_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// A save edited from the current row, as a page that just loaded sends it.
+async fn save(
+    pool: &PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+    branding: &OrgBranding,
+) -> Result<(OrgBranding, bool), ServerFnError> {
+    let expected = stored(pool, org_id).await;
+    update_org_branding_record(pool, org_id, actor_id, &expected, branding).await
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_save_edited_from_an_older_snapshot_is_refused_and_keeps_the_newer_values(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let opened = stored(&pool, ids.org_id).await;
+    let newer = OrgBranding {
+        bank_iban: Some("ES91 2100 0418 4502 0005 1332".into()),
+        ..opened.clone()
+    };
+    save(&pool, ids.org_id, ids.user_id, &newer).await.unwrap();
+    let before = row_version(&pool, ids.org_id).await;
+    let phone_fix = OrgBranding {
+        provider_phone: Some("+34 600 000 000".into()),
+        ..opened.clone()
+    };
+    let result =
+        update_org_branding_record(&pool, ids.org_id, ids.user_id, &opened, &phone_fix).await;
+    assert!(
+        matches!(
+            result,
+            Err(ServerFnError::ServerError { code: CONFLICT, .. })
+        ),
+        "{result:?}"
+    );
+    assert_eq!(
+        (
+            stored(&pool, ids.org_id).await,
+            row_version(&pool, ids.org_id).await
+        ),
+        (newer, before)
+    );
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn a_stored_value_too_long_to_print_does_not_block_saving_other_fields(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let overlong = "x".repeat(crate::models::organization::MAX_BRANDING_VALUE_BYTES + 1);
+    // Saved through the API before values were checked.
+    sqlx::query!(
+        "UPDATE organizations SET invoice_notes = $2 WHERE id = $1",
+        ids.org_id,
+        overlong,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let requested = OrgBranding {
+        provider_name: Some("Acme".into()),
+        ..stored(&pool, ids.org_id).await
+    };
+    let (returned, changed) = save(&pool, ids.org_id, ids.user_id, &requested)
+        .await
+        .unwrap();
+    assert_eq!((changed, returned), (true, requested));
+}
+
 #[sqlx::test(migrations = "./migrations")]
 async fn unchanged_branding_preserves_the_row(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let branding = default_branding();
     let before = row_version(&pool, ids.org_id).await;
-    let (returned, changed) = update_org_branding_record(&pool, ids.org_id, ids.user_id, &branding)
+    let (returned, changed) = save(&pool, ids.org_id, ids.user_id, &branding)
         .await
         .unwrap();
     assert_eq!(
@@ -62,20 +143,18 @@ async fn each_branding_field_changes_once_including_null_and_empty(pool: PgPool)
         for value in [Some("Changed"), Some(""), None] {
             fields[field] = serde_json::to_value(value).unwrap();
             let requested: OrgBranding = serde_json::from_value(fields.clone()).unwrap();
-            let (returned, changed) =
-                update_org_branding_record(&pool, ids.org_id, ids.user_id, &requested)
-                    .await
-                    .unwrap();
+            let (returned, changed) = save(&pool, ids.org_id, ids.user_id, &requested)
+                .await
+                .unwrap();
             assert_eq!(
                 (changed, &returned),
                 (true, &requested),
                 "{field}: {value:?}"
             );
             let before = row_version(&pool, ids.org_id).await;
-            let (repeated, changed) =
-                update_org_branding_record(&pool, ids.org_id, ids.user_id, &requested)
-                    .await
-                    .unwrap();
+            let (repeated, changed) = save(&pool, ids.org_id, ids.user_id, &requested)
+                .await
+                .unwrap();
             assert_eq!(
                 (changed, repeated, row_version(&pool, ids.org_id).await),
                 (false, requested, before),
@@ -85,8 +164,14 @@ async fn each_branding_field_changes_once_including_null_and_empty(pool: PgPool)
     }
 }
 
-async fn competing_edit(pool: &PgPool, requested_name: Option<&str>) -> (OrgBranding, bool) {
+/// A save opened before a competing edit, which commits while the save waits
+/// for the row. Returns the save's result and the row's name afterwards.
+async fn competing_edit(
+    pool: &PgPool,
+    requested_name: Option<&str>,
+) -> (Result<(OrgBranding, bool), ServerFnError>, Option<String>) {
     let ids = seed(pool, OrgRole::Admin).await;
+    let opened = stored(pool, ids.org_id).await;
     let mut first = pool.begin().await.unwrap();
     let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
         .fetch_one(&mut *first)
@@ -105,31 +190,31 @@ async fn competing_edit(pool: &PgPool, requested_name: Option<&str>) -> (OrgBran
     let run_pool = pool.clone();
     let mut run = tokio::task::JoinSet::new();
     run.spawn(async move {
-        update_org_branding_record(&run_pool, ids.org_id, ids.user_id, &requested).await
+        update_org_branding_record(&run_pool, ids.org_id, ids.user_id, &opened, &requested).await
     });
     wait_for_blocked(pool, blocker).await;
     first.commit().await.unwrap();
-    tokio::time::timeout(Duration::from_secs(5), run.join_next())
+    let result = tokio::time::timeout(Duration::from_secs(5), run.join_next())
         .await
         .unwrap()
         .unwrap()
-        .unwrap()
-        .unwrap()
+        .unwrap();
+    (result, stored(pool, ids.org_id).await.provider_name)
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn repeating_a_competing_branding_edit_does_not_report_a_change(pool: PgPool) {
-    let (branding, changed) = competing_edit(&pool, Some("Changed")).await;
-    assert_eq!(
-        (changed, branding.provider_name.as_deref()),
-        (false, Some("Changed"))
-    );
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn restoring_branding_after_a_competing_edit_reports_a_change(pool: PgPool) {
-    let (branding, changed) = competing_edit(&pool, None).await;
-    assert_eq!((changed, branding), (true, default_branding()));
+async fn a_save_waiting_on_a_competing_edit_is_refused_whatever_it_requested(pool: PgPool) {
+    for requested in [Some("Changed"), None] {
+        let (result, name) = competing_edit(&pool, requested).await;
+        assert!(
+            matches!(
+                result,
+                Err(ServerFnError::ServerError { code: CONFLICT, .. })
+            ),
+            "{requested:?}: {result:?}"
+        );
+        assert_eq!(name.as_deref(), Some("Changed"), "{requested:?}");
+    }
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -138,6 +223,7 @@ async fn missing_organization_is_not_an_unchanged_update(pool: PgPool) {
         &pool,
         uuid::Uuid::now_v7(),
         uuid::Uuid::now_v7(),
+        &default_branding(),
         &default_branding(),
     )
     .await
@@ -178,7 +264,7 @@ async fn branding_requires_current_tenant_bound_authority_even_for_noops(pool: P
                 provider_name: name.map(str::to_owned),
                 ..default_branding()
             };
-            let result = update_org_branding_record(&pool, ids.org_id, actor, &requested).await;
+            let result = save(&pool, ids.org_id, actor, &requested).await;
             assert!(
                 matches!(
                     result,
@@ -235,9 +321,7 @@ async fn branding_rechecks_authority_after_the_organization_wait(pool: PgPool) {
             };
             let run_pool = run_pool.clone();
             let mut run = tokio::task::JoinSet::new();
-            run.spawn(async move {
-                update_org_branding_record(&run_pool, ids.org_id, ids.user_id, &requested).await
-            });
+            run.spawn(async move { save(&run_pool, ids.org_id, ids.user_id, &requested).await });
             wait_for_blocked(&pool, blocker).await;
             sqlx::query!(
                 "UPDATE users SET org_role = $2, active = $3 WHERE id = $1",
@@ -301,9 +385,7 @@ async fn branding_rechecks_authority_after_an_actor_only_wait(pool: PgPool) {
         .unwrap();
         let db = pool.clone();
         let mut run = tokio::task::JoinSet::new();
-        run.spawn(async move {
-            update_org_branding_record(&db, ids.org_id, ids.user_id, &default_branding()).await
-        });
+        run.spawn(async move { save(&db, ids.org_id, ids.user_id, &default_branding()).await });
         wait_for_blocked(&pool, blocker).await;
         revoke.commit().await.unwrap();
         let result = tokio::time::timeout(Duration::from_secs(5), run.join_next())
@@ -347,9 +429,7 @@ async fn branding_holds_actor_authority_until_its_write_commits(pool: PgPool) {
     let db = pool.clone();
     let submitted = requested.clone();
     let mut write = tokio::task::JoinSet::new();
-    write.spawn(async move {
-        update_org_branding_record(&db, ids.org_id, ids.user_id, &submitted).await
-    });
+    write.spawn(async move { save(&db, ids.org_id, ids.user_id, &submitted).await });
     wait_for_blocked(&pool, blocker).await;
     let writer = sqlx::query_scalar!(
         "SELECT pid AS \"pid!\" FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid))",
@@ -383,8 +463,7 @@ async fn branding_holds_actor_authority_until_its_write_commits(pool: PgPool) {
         .unwrap()
         .unwrap()
         .unwrap();
-    let result =
-        update_org_branding_record(&pool, ids.org_id, ids.user_id, &default_branding()).await;
+    let result = save(&pool, ids.org_id, ids.user_id, &default_branding()).await;
     assert!(
         matches!(
             result,
@@ -412,7 +491,7 @@ async fn failed_branding_write_rolls_back_and_releases_authority(pool: PgPool) {
         provider_name: Some("Must roll back".into()),
         ..default_branding()
     };
-    let result = update_org_branding_record(&pool, ids.org_id, ids.user_id, &requested).await;
+    let result = save(&pool, ids.org_id, ids.user_id, &requested).await;
     assert!(result.is_err());
     assert_eq!(row_version(&pool, ids.org_id).await, before);
     // Transaction drop queues rollback; wait for completion, not a scheduler tick.
@@ -437,16 +516,14 @@ async fn failed_branding_write_rolls_back_and_releases_authority(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-    let (returned, changed) =
-        update_org_branding_record(&pool, ids.org_id, ids.user_id, &requested)
-            .await
-            .unwrap();
+    let (returned, changed) = save(&pool, ids.org_id, ids.user_id, &requested)
+        .await
+        .unwrap();
     assert_eq!((returned, changed), (requested.clone(), true));
     let before = row_version(&pool, ids.org_id).await;
-    let (returned, changed) =
-        update_org_branding_record(&pool, ids.org_id, ids.user_id, &requested)
-            .await
-            .unwrap();
+    let (returned, changed) = save(&pool, ids.org_id, ids.user_id, &requested)
+        .await
+        .unwrap();
     assert_eq!(
         (returned, changed, row_version(&pool, ids.org_id).await),
         (requested, false, before)
@@ -461,7 +538,7 @@ async fn branding_refuses_a_value_the_invoice_pdf_cannot_print(pool: PgPool) {
         invoice_notes: Some(longest.clone()),
         ..default_branding()
     };
-    update_org_branding_record(&pool, ids.org_id, ids.user_id, &accepted)
+    save(&pool, ids.org_id, ids.user_id, &accepted)
         .await
         .unwrap();
     let before = row_version(&pool, ids.org_id).await;
@@ -470,7 +547,7 @@ async fn branding_refuses_a_value_the_invoice_pdf_cannot_print(pool: PgPool) {
             bank_account: Some(refused),
             ..accepted.clone()
         };
-        let result = update_org_branding_record(&pool, ids.org_id, ids.user_id, &requested).await;
+        let result = save(&pool, ids.org_id, ids.user_id, &requested).await;
         assert!(
             matches!(
                 result,
@@ -512,7 +589,7 @@ async fn detailed_permissions_leave_branding_to_managers_and_admins(pool: PgPool
             provider_name: Some(format!("Saved by {role:?}")),
             ..default_branding()
         };
-        let result = update_org_branding_record(&pool, ids.org_id, ids.user_id, &requested).await;
+        let result = save(&pool, ids.org_id, ids.user_id, &requested).await;
         assert_eq!(result.is_ok(), allowed, "{role:?}: {result:?}");
     }
 }

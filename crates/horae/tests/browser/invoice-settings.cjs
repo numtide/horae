@@ -86,6 +86,19 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
     await expect(page.getByLabel('Company name', { exact: true })).toHaveValue('Acme Studio S.L.');
     console.log('PASS: inline validation, blank values cleared and saved values survive a reload');
 
+    // Someone else saves the IBAN while this page is open: a later save here must not restore it.
+    sql(`UPDATE organizations SET bank_iban='DE89 3704 0044 0532 0130 00' WHERE id='${org}'`);
+    await page.getByLabel('Phone', { exact: true }).fill('+34 600 000 000');
+    await company.getByRole('button', { name: 'Save company information' }).click();
+    await expect(company.getByRole('alert')).toContainText('Someone changed these settings');
+    await expect(company.getByRole('alert')).not.toContainText('error running server function');
+    await expect(page.getByLabel('Phone', { exact: true })).toHaveValue('+34 600 000 000');
+    assert.equal(branding('bank_iban'), 'DE89 3704 0044 0532 0130 00');
+    assert.equal(branding('provider_phone'), before.provider_phone ?? '<null>');
+    await page.reload();
+    await expect(page.getByLabel('IBAN', { exact: true })).toHaveValue('DE89 3704 0044 0532 0130 00');
+    console.log('PASS: a save from a stale page is refused and keeps the newer values');
+
     // Members neither see the action nor get the form from a direct link.
     sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`);
     await asRole('member');

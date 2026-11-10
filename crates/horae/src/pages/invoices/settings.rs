@@ -229,10 +229,11 @@ fn SettingsCard(card: Card, saved: Signal<OrgBranding>, draft: Signal<OrgBrandin
         if invalid.peek().is_some() {
             return;
         }
-        let request = card.request(&saved.peek(), &draft.peek());
+        let expected = saved.peek().clone();
+        let request = card.request(&expected, &draft.peek());
         busy.set(true);
         spawn(async move {
-            match server_fns::update_org_branding(request).await {
+            match server_fns::update_org_branding(request, expected).await {
                 Ok(stored) => {
                     let (mut current, mut from_server) = (draft.peek().clone(), stored.clone());
                     for field in card.fields() {
@@ -242,6 +243,7 @@ fn SettingsCard(card: Card, saved: Signal<OrgBranding>, draft: Signal<OrgBrandin
                     saved.set(stored);
                     notice.set(true);
                 }
+                // A conflict keeps the draft; the message says how to recover.
                 Err(failure) => error.set(Some(message_of(failure))),
             }
             busy.set(false);
