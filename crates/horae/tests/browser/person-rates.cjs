@@ -85,7 +85,7 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
       UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'; COMMIT;`);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${base}/admin/users`);
-    await page.getByRole('button', { name: 'Edit rates for Rates Person', exact: true }).click();
+    await page.getByRole('button', { name: 'Rates for Rates Person', exact: true }).click();
     await expect(dialog.locator('#person-billable-rate')).toHaveText('120.00');
     await expect(dialog.getByText('Cost rate', { exact: false })).toHaveCount(0);
     await expect(dialog.getByRole('button', { name: 'Save rates', exact: true })).toHaveCount(0);

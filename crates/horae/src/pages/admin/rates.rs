@@ -53,11 +53,12 @@ fn RatesForm(
                 p { class: "modal-body", role: "status", "Loading rates…" }
             };
         }
-        Some(Err(_)) => {
+        Some(Err(failure)) => {
+            let message = load_failure(failure);
             return rsx! {
                 h2 { id: "person-rates-title", class: "modal-title", "Rates for {person.name}" }
                 div { class: "modal-body",
-                    p { role: "alert", class: "alert alert-danger", "You can't view this person's rates." }
+                    p { role: "alert", class: "alert alert-danger", "{message}" }
                 }
                 div { class: "px-6 pb-6 flex justify-end",
                     button { r#type: "button", class: "btn btn-secondary", onclick: move |_| on_close.call(()), "Close" }
@@ -104,7 +105,7 @@ fn RatesEditor(
                 busy.set(false);
                 match result {
                     Ok(_) => { on_saved.call("Rates saved.".into()); on_close.call(()); }
-                    Err(failure) => error.set(Some(failure.to_string())),
+                    Err(failure) => error.set(Some(save_failure(&failure))),
                 }
             });
         },
@@ -116,11 +117,11 @@ fn RatesEditor(
                 }
                 if let Some(rate) = rates.billable {
                     RateField { id: "person-billable-rate", label: format!("Default billable rate ({currency})"), rate, value: billable, busy: busy(),
-                        hint: format!("Used for this person's time on projects billed by person rate (or with no rate settings) that have no rate of their own for them and bill in {currency}. Uninvoiced time, budgets and reports use the new rate; invoices already created keep their amounts. New project teams show it as the suggested rate.") }
+                        hint: format!("Used for this person's time on projects billed by person rate (or with no rate settings) that have no rate of their own for them and bill in {currency}. Uninvoiced time, budgets and reports use the current rate; invoices already created keep their amounts. New project teams show it as the suggested rate.") }
                 }
                 if let Some(rate) = rates.cost {
                     RateField { id: "person-cost-rate", label: format!("Cost rate ({currency})"), rate, value: cost, busy: busy(),
-                        hint: "Used to cost this person's time in reports on projects without a project cost rate for them, past time included.".to_string() }
+                        hint: "Used to cost this person's time in reports and in the Harvest-compatible time entry API on projects without a project cost rate for them, past time included. New project teams show it as the suggested cost rate.".to_string() }
                 }
             }
             div { class: "px-6 pb-6 flex flex-wrap justify-end gap-3",
@@ -154,11 +155,41 @@ fn RateField(
             }
         } else {
             div { class: "form-group",
-                p { class: "form-label", "{label}" }
-                p { id, "{display(rate.cents)}" }
+                p { id: "{id}-label", class: "form-label", "{label}" }
+                p { id, aria_labelledby: "{id}-label", "{display(rate.cents)}" }
                 p { class: "form-hint", "{hint}" }
             }
         }
+    }
+}
+
+const FORBIDDEN: u16 = 403;
+const BAD_REQUEST: u16 = 400;
+const CONFLICT: u16 = 409;
+
+fn load_failure(error: &ServerFnError) -> String {
+    match error {
+        ServerFnError::ServerError {
+            code: FORBIDDEN, ..
+        } => "You can't view this person's rates.".into(),
+        ServerFnError::ServerError {
+            code: CONFLICT,
+            message,
+            ..
+        } => message.clone(),
+        _ => "Couldn't load rates. Close this and try again.".into(),
+    }
+}
+
+/// The server's own sentence for refusals written to be read; a generic one otherwise.
+fn save_failure(error: &ServerFnError) -> String {
+    match error {
+        ServerFnError::ServerError {
+            code: BAD_REQUEST | FORBIDDEN | CONFLICT,
+            message,
+            ..
+        } => message.clone(),
+        _ => "Couldn't save rates. Try again.".into(),
     }
 }
 
@@ -240,5 +271,40 @@ mod tests {
         });
         assert_eq!(edit_of("1", read_only), Ok(RateEdit::Unchanged));
         assert_eq!(edit_of("1", None), Ok(RateEdit::Unchanged));
+    }
+
+    fn server(code: u16, message: &str) -> ServerFnError {
+        ServerFnError::ServerError {
+            code,
+            message: message.into(),
+            details: None,
+        }
+    }
+
+    #[test]
+    fn refusals_show_their_own_sentence_and_other_failures_a_generic_one() {
+        let stale = "The workspace currency changed. Reload and enter the rates again.";
+        assert_eq!(save_failure(&server(CONFLICT, stale)), stale);
+        assert_eq!(
+            save_failure(&server(BAD_REQUEST, "A rate cannot be negative")),
+            "A rate cannot be negative"
+        );
+        assert_eq!(
+            save_failure(&server(500, "pool timed out")),
+            "Couldn't save rates. Try again."
+        );
+
+        assert_eq!(
+            load_failure(&server(FORBIDDEN, "Current rate access is required")),
+            "You can't view this person's rates."
+        );
+        assert_eq!(
+            load_failure(&server(CONFLICT, "Your session changed. Reload this page.")),
+            "Your session changed. Reload this page."
+        );
+        assert_eq!(
+            load_failure(&server(500, "pool timed out")),
+            "Couldn't load rates. Close this and try again."
+        );
     }
 }

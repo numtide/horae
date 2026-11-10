@@ -49,7 +49,7 @@ pub async fn update_person_rates(
 async fn rate_actor(expected: PermissionRequester) -> Result<User, ServerFnError> {
     let actor = require_user().await?;
     if expected.org_id != actor.org_id || expected.user_id != actor.id {
-        return Err(forbidden("Your session changed. Reload this page."));
+        return Err(conflict("Your session changed. Reload this page."));
     }
     Ok(actor)
 }

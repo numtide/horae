@@ -108,7 +108,7 @@ pub(super) fn CanonicalPeople(
                                             td { div { class: "flex flex-wrap gap-2",
                                                 if can_view_rates {
                                                     button { id: "people-rates-{entry.id}", r#type: "button", class: "btn btn-secondary btn-sm",
-                                                        aria_label: "Edit rates for {entry.name}",
+                                                        aria_label: "Rates for {entry.name}",
                                                         onclick: {
                                                             let target = RatesTarget { id: entry.id, name: entry.name.clone(), requester: loaded.requester };
                                                             move |_| rates_target.set(Some(target.clone()))
