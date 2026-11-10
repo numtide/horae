@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO harvest_import_map\n             (org_id, harvest_entity_type, harvest_id, horae_id, harvest_updated_at)\n           VALUES ($1, $2::harvest_entity_type, $3, $4, $5)\n           ON CONFLICT (org_id, harvest_entity_type, harvest_id)\n           DO UPDATE SET horae_id = EXCLUDED.horae_id,\n                         harvest_updated_at = EXCLUDED.harvest_updated_at",
+  "query": "INSERT INTO harvest_import_map\n             (org_id, harvest_entity_type, harvest_import_id, horae_id, harvest_updated_at)\n           VALUES ($1, $2::harvest_entity_type, $3, $4, $5)\n           ON CONFLICT (org_id, harvest_entity_type, harvest_import_id)\n           DO UPDATE SET horae_id = EXCLUDED.horae_id,\n                         harvest_updated_at = EXCLUDED.harvest_updated_at",
   "describe": {
     "columns": [],
     "parameters": {
@@ -27,5 +27,5 @@
     },
     "nullable": []
   },
-  "hash": "d595ec668c59b980be3c2c973eafa0215816e1f962c79ad729f6039f794171c6"
+  "hash": "4aad333e696ab13a06e57e13ce5dad358c64b1f839883355ee97e50ca88940cf"
 }

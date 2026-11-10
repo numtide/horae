@@ -692,9 +692,9 @@ pub async fn resolve_person(
         // people in Harvest.
         if outcome == PersonOutcome::Matched
             && let Some(other) = sqlx::query_scalar!(
-                "SELECT harvest_id FROM harvest_import_map
+                "SELECT harvest_import_id FROM harvest_import_map
                  WHERE org_id = $1 AND harvest_entity_type = 'person'
-                   AND horae_id = $2 AND harvest_id <> $3
+                   AND horae_id = $2 AND harvest_import_id <> $3
                  LIMIT 1",
                 org_id,
                 id,

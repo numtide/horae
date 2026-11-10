@@ -41,7 +41,7 @@ async fn fixture(pool: &PgPool) -> SeedIds {
     .await
     .unwrap();
     sqlx::query!(
-        "INSERT INTO harvest_import_map (org_id, harvest_entity_type, harvest_id, horae_id)
+        "INSERT INTO harvest_import_map (org_id, harvest_entity_type, harvest_import_id, horae_id)
          VALUES ($1, 'project', 42, $2)",
         ids.org_id,
         ids.project_id,

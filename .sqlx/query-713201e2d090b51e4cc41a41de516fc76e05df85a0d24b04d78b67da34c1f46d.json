@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT m.horae_id,\n                      m.harvest_updated_at AS \"harvest_updated_at: chrono::DateTime<chrono::Utc>\",\n                      te.id AS \"entry_id?\",\n                      te.state = 'open' AS \"open?\",\n                      te.updated_at IS DISTINCT FROM COALESCE(m.horae_updated_at, te.created_at)\n                        AS \"edited?\"\n               FROM harvest_import_map AS m\n               LEFT JOIN time_entries AS te ON te.org_id = m.org_id AND te.id = m.horae_id\n               WHERE m.org_id = $1\n                 AND m.harvest_entity_type = 'time_entry'::harvest_entity_type\n                 AND m.harvest_id = $2",
+  "query": "SELECT m.horae_id,\n                      m.harvest_updated_at AS \"harvest_updated_at: chrono::DateTime<chrono::Utc>\",\n                      te.id AS \"entry_id?\",\n                      te.state = 'open' AS \"open?\",\n                      te.updated_at IS DISTINCT FROM COALESCE(m.horae_updated_at, te.created_at)\n                        AS \"edited?\"\n               FROM harvest_import_map AS m\n               LEFT JOIN time_entries AS te ON te.org_id = m.org_id AND te.id = m.horae_id\n               WHERE m.org_id = $1\n                 AND m.harvest_entity_type = 'time_entry'::harvest_entity_type\n                 AND m.harvest_import_id = $2",
   "describe": {
     "columns": [
       {
@@ -43,5 +43,5 @@
       null
     ]
   },
-  "hash": "d1fc7855fbf606c7926022da2953d0d86b05fc4687fa642bc5edadf4ce2ff4c8"
+  "hash": "713201e2d090b51e4cc41a41de516fc76e05df85a0d24b04d78b67da34c1f46d"
 }

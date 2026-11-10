@@ -400,13 +400,14 @@ async fn the_backfill_numbers_existing_records(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    // Harvest id 2 is a number a native client would otherwise take.
-    sqlx::query!(
+    // Harvest id 2 is a number a native client would otherwise take. Runtime
+    // SQL: the column has the name it had before migration 0058.
+    sqlx::query(
         "INSERT INTO harvest_import_map (org_id, harvest_entity_type, harvest_id, horae_id)
          VALUES ($1, 'client', 2, $2)",
-        ids.org_id,
-        imported
     )
+    .bind(ids.org_id)
+    .bind(imported)
     .execute(&pool)
     .await
     .unwrap();

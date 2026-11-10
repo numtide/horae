@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT harvest_import_id FROM harvest_import_map\n                 WHERE org_id = $1 AND harvest_entity_type = 'person'\n                   AND horae_id = $2 AND harvest_import_id <> $3\n                 LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harvest_import_id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c092705716d021e75308e2b49c6479522893cff44ac237109912a3f7b10d1b4d"
+}

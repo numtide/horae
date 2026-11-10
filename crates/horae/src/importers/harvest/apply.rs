@@ -262,7 +262,7 @@ async fn apply_time_entry(
                LEFT JOIN time_entries AS te ON te.org_id = m.org_id AND te.id = m.horae_id
                WHERE m.org_id = $1
                  AND m.harvest_entity_type = 'time_entry'::harvest_entity_type
-                 AND m.harvest_id = $2"#,
+                 AND m.harvest_import_id = $2"#,
             org.org_id,
             hid,
         )
@@ -528,10 +528,10 @@ async fn record_entry(
 ) -> sqlx::Result<()> {
     sqlx::query!(
         r#"INSERT INTO harvest_import_map
-             (org_id, harvest_entity_type, harvest_id, horae_id, harvest_updated_at, horae_updated_at)
+             (org_id, harvest_entity_type, harvest_import_id, horae_id, harvest_updated_at, horae_updated_at)
            SELECT $1, 'time_entry'::harvest_entity_type, $2, te.id, $4, te.updated_at
            FROM time_entries AS te WHERE te.org_id = $1 AND te.id = $3
-           ON CONFLICT (org_id, harvest_entity_type, harvest_id)
+           ON CONFLICT (org_id, harvest_entity_type, harvest_import_id)
            DO UPDATE SET horae_id = EXCLUDED.horae_id,
                          harvest_updated_at = EXCLUDED.harvest_updated_at,
                          horae_updated_at = EXCLUDED.horae_updated_at"#,

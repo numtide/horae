@@ -20,10 +20,10 @@ BEGIN
   LOOP
     EXECUTE format($sql$
       INSERT INTO api_ids (org_id, kind, number, horae_id, from_harvest)
-      SELECT DISTINCT ON (m.org_id, m.horae_id) m.org_id, %L, m.harvest_id, m.horae_id, true
+      SELECT DISTINCT ON (m.org_id, m.horae_id) m.org_id, %L, m.harvest_import_id, m.horae_id, true
       FROM harvest_import_map m JOIN %I r ON r.id = m.horae_id AND r.org_id = m.org_id
-      WHERE m.harvest_entity_type = %L AND m.harvest_id > 0
-      ORDER BY m.org_id, m.horae_id, m.created_at, m.harvest_id
+      WHERE m.harvest_entity_type = %L AND m.harvest_import_id > 0
+      ORDER BY m.org_id, m.horae_id, m.created_at, m.harvest_import_id
       ON CONFLICT DO NOTHING
     $sql$, k.kind, k.tbl, k.harvest_type);
 

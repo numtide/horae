@@ -92,15 +92,15 @@ DECLARE
   END::api_id_kind;
 BEGIN
   -- An entity type with no API kind is mapped without a number.
-  IF v_kind IS NULL OR NEW.harvest_id <= 0 THEN
+  IF v_kind IS NULL OR NEW.harvest_import_id <= 0 THEN
     RETURN NULL;
   END IF;
-  UPDATE api_ids SET number = NEW.harvest_id, from_harvest = true
+  UPDATE api_ids SET number = NEW.harvest_import_id, from_harvest = true
   WHERE org_id = NEW.org_id AND kind = v_kind AND horae_id = NEW.horae_id
     AND NOT from_harvest AND created_at = now()
     AND NOT EXISTS (
       SELECT 1 FROM api_ids
-      WHERE org_id = NEW.org_id AND kind = v_kind AND number = NEW.harvest_id
+      WHERE org_id = NEW.org_id AND kind = v_kind AND number = NEW.harvest_import_id
     );
   RETURN NULL;
 END

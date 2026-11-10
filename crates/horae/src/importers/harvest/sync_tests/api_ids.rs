@@ -34,7 +34,7 @@ async fn number(pool: &PgPool, kind: &str, harvest_id: i64) -> Option<(i64, bool
            FROM harvest_import_map m
            JOIN api_ids a ON a.org_id = m.org_id AND a.horae_id = m.horae_id
              AND a.kind::text = $2
-           WHERE m.harvest_id = $1"#,
+           WHERE m.harvest_import_id = $1"#,
         harvest_id,
         kind,
     )

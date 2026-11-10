@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT a.number, a.from_harvest\n           FROM harvest_import_map m\n           JOIN api_ids a ON a.org_id = m.org_id AND a.horae_id = m.horae_id\n             AND a.kind::text = $2\n           WHERE m.harvest_id = $1",
+  "query": "SELECT a.number, a.from_harvest\n           FROM harvest_import_map m\n           JOIN api_ids a ON a.org_id = m.org_id AND a.horae_id = m.horae_id\n             AND a.kind::text = $2\n           WHERE m.harvest_import_id = $1",
   "describe": {
     "columns": [
       {
@@ -25,5 +25,5 @@
       false
     ]
   },
-  "hash": "a1d4abc9bca82132369814305bd832a82824a6119c8bdf4b3d6286de8712d7d2"
+  "hash": "07a2927a1b859414874d819c1757db38c41fc646dc266eba3d24af9e062e36ed"
 }

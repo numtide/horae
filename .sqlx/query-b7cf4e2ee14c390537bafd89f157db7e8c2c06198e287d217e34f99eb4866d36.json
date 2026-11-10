@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT harvest_id, horae_id,\n                      harvest_updated_at AS \"harvest_updated_at: DateTime<Utc>\"\n               FROM harvest_import_map\n               WHERE org_id = $1 AND harvest_entity_type = 'time_entry'\n                 AND harvest_id = ANY($2)",
+  "query": "SELECT harvest_import_id, horae_id,\n                      harvest_updated_at AS \"harvest_updated_at: DateTime<Utc>\"\n               FROM harvest_import_map\n               WHERE org_id = $1 AND harvest_entity_type = 'time_entry'\n                 AND harvest_import_id = ANY($2)",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "harvest_id",
+        "name": "harvest_import_id",
         "type_info": "Int8"
       },
       {
@@ -31,5 +31,5 @@
       true
     ]
   },
-  "hash": "7b12b266a1081d0da0f26fa0210682d9d17d99482e477c7cd6f0b51af60f33ea"
+  "hash": "b7cf4e2ee14c390537bafd89f157db7e8c2c06198e287d217e34f99eb4866d36"
 }

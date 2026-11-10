@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT horae_id FROM harvest_import_map\n           WHERE org_id = $1\n             AND harvest_entity_type = $2::harvest_entity_type\n             AND harvest_id = $3",
+  "query": "SELECT horae_id FROM harvest_import_map\n           WHERE org_id = $1\n             AND harvest_entity_type = $2::harvest_entity_type\n             AND harvest_import_id = $3",
   "describe": {
     "columns": [
       {
@@ -33,5 +33,5 @@
       false
     ]
   },
-  "hash": "e7c9639c2241063f25a15e7b506325ed552568995dac6b8ace1a919540147dbb"
+  "hash": "9c97632c0b9a5ef61444db7e1835bb4a5fca6de4cf673772854528708c8a6381"
 }
