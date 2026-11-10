@@ -35,6 +35,15 @@ impl JobLease {
         if serde_json::to_vec(&report)?.len() <= REPORT_BYTES / 2 {
             return Ok(());
         }
+        // Only row errors are archived; a report without them (people and id
+        // notices only) stays whole if it fits the database budget.
+        if report.row_errors.is_empty() {
+            anyhow::ensure!(
+                serde_json::to_vec(report)?.len() <= REPORT_BYTES,
+                "report metadata exceeds its budget"
+            );
+            return Ok(());
+        }
         let live = sqlx::query_scalar!(
             r#"SELECT id FROM horae_jobs
                WHERE id = $1 AND org_id = $2 AND claim_token = $3

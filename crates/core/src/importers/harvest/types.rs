@@ -408,9 +408,10 @@ pub struct IdNotice {
     pub api_id: i64,
 }
 
-/// Notices a report keeps; the rest are only counted, so an old Harvest account
-/// whose ids overlap Horae's cannot grow the report without bound.
-pub const ID_NOTICES_KEPT: usize = 100;
+/// Notices a report keeps; the rest are only counted. Notices are never
+/// archived, so they count against the report's 16 KiB budget for good: 20
+/// take about 1.4 KB.
+pub const ID_NOTICES_KEPT: usize = 20;
 
 /// The result of an import run, returned by every surface (server fn + CLI). A
 /// pure data type so it crosses the `#[server]` boundary and compiles on the web
