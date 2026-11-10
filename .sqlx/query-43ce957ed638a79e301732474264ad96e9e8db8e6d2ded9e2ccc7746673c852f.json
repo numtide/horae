@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT te.updated_at AS \"updated_at: chrono::DateTime<chrono::Utc>\", p.edit_revision\n               FROM time_entries te JOIN projects p ON p.id = te.project_id WHERE te.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "updated_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "edit_revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "43ce957ed638a79e301732474264ad96e9e8db8e6d2ded9e2ccc7746673c852f"
+}

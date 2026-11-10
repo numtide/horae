@@ -25,8 +25,18 @@ fn parser_input() -> impl Strategy<Value = String> {
 
 mod duration {
     use super::*;
-    use horae_core::duration::{format_decimal, format_hhmm, parse};
+    use horae_core::duration::{format_decimal, format_hhmm, format_hours2, parse};
     use horae_core::importers::harvest::convert::{hours_to_minutes, money_to_cents};
+
+    /// The Harvest API's wire hours ("H.dd", half up) read back to the same
+    /// minutes for every duration up to 1,000 days, so a client that echoes an
+    /// entry's hours never changes it. Enumerated: the domain is small.
+    #[test]
+    fn api_hours_round_trip_for_every_minute_up_to_a_thousand_days() {
+        for minutes in 0..=1_440_000 {
+            assert_eq!(hours_to_minutes(&format_hours2(minutes)), Ok(minutes));
+        }
+    }
 
     proptest! {
         /// Shown "H:MM" parses back to the same minutes, so saving an entry
@@ -290,6 +300,9 @@ mod money {
             }
             let shown = format_cents(cents, "EUR");
             prop_assert_eq!(parse_cents(shown.strip_prefix("EUR ").unwrap()).unwrap(), cents);
+            // A third decimal is refused rather than rounded, so an API amount
+            // never lands a fraction of a cent off.
+            prop_assert!(parse_cents(&(plain.clone() + "1")).is_err());
         }
 
         /// Each currency's total is the exact sum of that currency's amounts

@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO projects (id, org_id, client_id, code, name, currency, starts_on, ends_on, active, harvest_id)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (org_id, harvest_id) DO NOTHING RETURNING harvest_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harvest_id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Bpchar",
+        "Date",
+        "Date",
+        "Bool",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "967ca06368917a8467f6c28f42a561211fa8d18abf3fe40d8d321220fff5af1a"
+}

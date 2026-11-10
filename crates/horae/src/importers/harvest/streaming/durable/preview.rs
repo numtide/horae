@@ -34,20 +34,20 @@ impl ApiPreview {
         // Read after row savepoints finish: failed rows must not acquire a
         // simulated mapping that could turn a later retry into a false skip.
         let mappings = sqlx::query!(
-            r#"SELECT harvest_id, horae_id,
+            r#"SELECT harvest_import_id, horae_id,
                       harvest_updated_at AS "harvest_updated_at: DateTime<Utc>"
                FROM harvest_import_map
                WHERE org_id = $1 AND harvest_entity_type = 'time_entry'
-                 AND harvest_id = ANY($2)"#,
+                 AND harvest_import_id = ANY($2)"#,
             org_id,
             page_ids,
         )
         .fetch_all(&mut *conn)
         .await?;
         for row in mappings {
-            self.entries.insert(row.harvest_id, row.horae_id);
+            self.entries.insert(row.harvest_import_id, row.horae_id);
             if let Some(version) = row.harvest_updated_at {
-                self.versions.insert(row.harvest_id, version);
+                self.versions.insert(row.harvest_import_id, version);
             }
         }
         Ok(())
@@ -81,12 +81,12 @@ impl ApiPreview {
             .map(|(&harvest_id, &horae_id)| (harvest_id, horae_id))
             .unzip();
         sqlx::query!(
-            "INSERT INTO harvest_import_map (org_id, harvest_entity_type, harvest_id, horae_id)
-             SELECT $1, 'time_entry', ids.harvest_id, ids.horae_id
-             FROM unnest($2::bigint[], $3::uuid[]) AS ids(harvest_id, horae_id)
+            "INSERT INTO harvest_import_map (org_id, harvest_entity_type, harvest_import_id, horae_id)
+             SELECT $1, 'time_entry', ids.harvest_import_id, ids.horae_id
+             FROM unnest($2::bigint[], $3::uuid[]) AS ids(harvest_import_id, horae_id)
              LEFT JOIN time_entries te ON te.org_id = $1 AND te.id = ids.horae_id
-             WHERE te.id IS NOT NULL OR ids.harvest_id = ANY($4)
-             ON CONFLICT (org_id, harvest_entity_type, harvest_id) DO NOTHING",
+             WHERE te.id IS NOT NULL OR ids.harvest_import_id = ANY($4)
+             ON CONFLICT (org_id, harvest_entity_type, harvest_import_id) DO NOTHING",
             org_id,
             &harvest_ids,
             &horae_ids,
@@ -139,7 +139,7 @@ mod tests {
             .await
             .unwrap();
         let restored = sqlx::query_scalar!(
-            "SELECT harvest_id FROM harvest_import_map WHERE org_id = $1 ORDER BY harvest_id",
+            "SELECT harvest_import_id FROM harvest_import_map WHERE org_id = $1 ORDER BY harvest_import_id",
             org,
         )
         .fetch_all(&mut *tx)

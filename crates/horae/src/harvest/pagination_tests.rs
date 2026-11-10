@@ -11,7 +11,20 @@ mod client_permissions;
 mod project_permissions;
 mod task_permissions;
 
-async fn signed_in(pool: &PgPool, user_id: Uuid) -> Router {
+/// The integer id the API shows for a record.
+pub(super) async fn api_id(pool: &PgPool, kind: &str, horae_id: Uuid) -> i64 {
+    let kind = match kind {
+        "client" => ids::Kind::Client,
+        "project" => ids::Kind::Project,
+        "task" => ids::Kind::Task,
+        "time_entry" => ids::Kind::TimeEntry,
+        "user" => ids::Kind::User,
+        other => panic!("no API kind {other}"),
+    };
+    ids::number(pool, kind, horae_id).await
+}
+
+pub(super) async fn signed_in(pool: &PgPool, user_id: Uuid) -> Router {
     let session = Session::new(None, Arc::new(MemoryStore::default()), None);
     crate::auth::session::set_session_user_id(&session, user_id)
         .await
@@ -19,7 +32,7 @@ async fn signed_in(pool: &PgPool, user_id: Uuid) -> Router {
     router(pool.clone()).layer(Extension(session))
 }
 
-async fn request(app: &Router, uri: &str) -> (StatusCode, String) {
+pub(super) async fn request(app: &Router, uri: &str) -> (StatusCode, String) {
     let response = app
         .clone()
         .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
@@ -32,7 +45,7 @@ async fn request(app: &Router, uri: &str) -> (StatusCode, String) {
     (status, String::from_utf8(body.to_vec()).unwrap())
 }
 
-async fn page(app: &Router, uri: &str) -> Value {
+pub(super) async fn page(app: &Router, uri: &str) -> Value {
     let (status, body) = request(app, uri).await;
     assert_eq!(status, StatusCode::OK, "{uri}: {body}");
     serde_json::from_str(&body).unwrap()
@@ -45,7 +58,16 @@ fn query_pairs(link: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-async fn walk(app: &Router, resource: &str, query: &str, expected: &[Uuid]) {
+async fn walk(pool: &PgPool, app: &Router, resource: &str, query: &str, expected: &[Uuid]) {
+    let kind = match resource {
+        "time_entries" => "time_entry",
+        other => other.strip_suffix('s').unwrap(),
+    };
+    let mut numbers = Vec::new();
+    for id in expected {
+        numbers.push(api_id(pool, kind, *id).await);
+    }
+    let expected = numbers;
     let first_uri = format!("/harvest/v2/{resource}?per_page=1&{query}");
     let filters = query_pairs(&first_uri);
     let mut uri = first_uri.clone();
@@ -58,8 +80,8 @@ async fn walk(app: &Router, resource: &str, query: &str, expected: &[Uuid]) {
         assert_eq!(body["per_page"], 1);
         let rows = body[resource].as_array().unwrap();
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0]["id"], expected_id.to_string(), "{resource}");
-        seen.push(rows[0]["id"].as_str().unwrap().to_owned());
+        assert_eq!(rows[0]["id"], *expected_id, "{resource}");
+        seen.push(*expected_id);
         for key in ["first", "last", "next", "previous"] {
             if let Some(link) = body["links"][key].as_str() {
                 assert!(link.starts_with(&format!("/harvest/v2/{resource}?")));
@@ -81,8 +103,8 @@ async fn walk(app: &Router, resource: &str, query: &str, expected: &[Uuid]) {
             assert!(body["links"]["next"].is_null());
             let first = page(app, body["links"]["first"].as_str().unwrap()).await;
             let last = page(app, body["links"]["last"].as_str().unwrap()).await;
-            assert_eq!(first[resource][0]["id"], expected[0].to_string());
-            assert_eq!(last[resource][0]["id"], expected_id.to_string());
+            assert_eq!(first[resource][0]["id"], expected[0]);
+            assert_eq!(last[resource][0]["id"], *expected_id);
         }
     }
 }
@@ -145,8 +167,8 @@ async fn harvest_pagination_catalog_links_preserve_filters_and_break_name_ties(p
         if resource == "projects" {
             query.push_str(&format!("&client_id={}", ids.client_id));
         }
-        walk(&app, resource, &query, &expected).await;
-        walk(&app, resource, "is_active=false", &[inactive]).await;
+        walk(&pool, &app, resource, &query, &expected).await;
+        walk(&pool, &app, resource, "is_active=false", &[inactive]).await;
         let future = page(
             &app,
             &format!("/harvest/v2/{resource}?updated_since=2100-01-01T00%3A00%3A00Z"),
@@ -197,7 +219,7 @@ async fn harvest_pagination_time_entries_keep_the_filtered_set_and_date_ties(poo
         "user_id={}&project_id={}&from=2026-09-07&to=2026-09-07&is_running=false&updated_since=2020-01-01T00%3A00%3A00%2B01%3A00",
         ids.user_id, ids.project_id
     );
-    walk(&app, "time_entries", &query, &expected).await;
+    walk(&pool, &app, "time_entries", &query, &expected).await;
     for filter in [
         format!("user_id={}", other.user_id),
         format!("project_id={}", other.project_id),
@@ -218,19 +240,24 @@ async fn harvest_pagination_rejects_invalid_windows_on_every_collection(pool: Pg
     let ids = seed(&pool, OrgRole::Manager).await;
     let app = signed_in(&pool, ids.user_id).await;
     for resource in ["time_entries", "projects", "clients", "tasks", "users"] {
-        for query in [
-            "page=0",
-            "page=-1",
-            "per_page=0",
-            "per_page=-1",
-            "per_page=101",
-            "page=9223372036854775807&per_page=100",
-            "page=9223372036854775808",
-            "page=nope",
+        // A window outside the bounds is Harvest's 422; a value that is not
+        // an integer at all is still refused by the query parser with 400.
+        for (query, expected) in [
+            ("page=0", StatusCode::UNPROCESSABLE_ENTITY),
+            ("page=-1", StatusCode::UNPROCESSABLE_ENTITY),
+            ("per_page=0", StatusCode::UNPROCESSABLE_ENTITY),
+            ("per_page=-1", StatusCode::UNPROCESSABLE_ENTITY),
+            ("per_page=101", StatusCode::UNPROCESSABLE_ENTITY),
+            (
+                "page=9223372036854775807&per_page=100",
+                StatusCode::UNPROCESSABLE_ENTITY,
+            ),
+            ("page=9223372036854775808", StatusCode::BAD_REQUEST),
+            ("page=nope", StatusCode::BAD_REQUEST),
         ] {
             let uri = format!("/harvest/v2/{resource}?{query}");
             let (status, body) = request(&app, &uri).await;
-            assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}: {body}");
+            assert_eq!(status, expected, "{uri}: {body}");
         }
     }
 }
@@ -247,18 +274,42 @@ fn harvest_pagination_total_pages_does_not_overflow() {
 async fn harvest_pagination_malformed_filters_are_client_errors(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let app = signed_in(&pool, ids.user_id).await;
-    for uri in [
-        "/harvest/v2/time_entries?user_id=not-a-uuid",
-        "/harvest/v2/time_entries?project_id=not-a-uuid",
-        "/harvest/v2/time_entries?from=2026-02-30",
-        "/harvest/v2/time_entries?to=yesterday",
-        "/harvest/v2/time_entries?updated_since=not-a-timestamp",
-        "/harvest/v2/projects?client_id=not-a-uuid",
-        "/harvest/v2/projects?updated_since=not-a-timestamp",
-        "/harvest/v2/clients?updated_since=not-a-timestamp",
+    for (uri, expected) in [
+        (
+            "/harvest/v2/time_entries?user_id=not-an-id",
+            StatusCode::UNPROCESSABLE_ENTITY,
+        ),
+        (
+            "/harvest/v2/time_entries?project_id=not-an-id",
+            StatusCode::UNPROCESSABLE_ENTITY,
+        ),
+        (
+            "/harvest/v2/time_entries?from=2026-02-30",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/harvest/v2/time_entries?to=yesterday",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/harvest/v2/time_entries?updated_since=not-a-timestamp",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/harvest/v2/projects?client_id=not-an-id",
+            StatusCode::UNPROCESSABLE_ENTITY,
+        ),
+        (
+            "/harvest/v2/projects?updated_since=not-a-timestamp",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/harvest/v2/clients?updated_since=not-a-timestamp",
+            StatusCode::BAD_REQUEST,
+        ),
     ] {
         let (status, body) = request(&app, uri).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}: {body}");
+        assert_eq!(status, expected, "{uri}: {body}");
     }
 }
 
@@ -327,7 +378,7 @@ async fn harvest_pagination_router_preserves_session_and_tenant_guards(pool: PgP
     let app = signed_in(&pool, ids.user_id).await;
     assert_eq!(
         page(&app, "/harvest/v2/users/me").await["id"],
-        ids.user_id.to_string()
+        api_id(&pool, "user", ids.user_id).await
     );
     assert_eq!(
         request(&app, "/harvest/v2/users").await.0,
@@ -342,16 +393,23 @@ async fn harvest_pagination_router_preserves_session_and_tenant_guards(pool: PgP
         .0,
         StatusCode::FORBIDDEN
     );
-    walk(&app, "time_entries", "is_running=false", &[own_entry]).await;
-    for (resource, own, foreign) in [
-        ("time_entries", own_entry, other_entry),
-        ("projects", ids.project_id, other.project_id),
-        ("clients", ids.client_id, other.client_id),
-        ("tasks", ids.task_id, other.task_id),
+    walk(
+        &pool,
+        &app,
+        "time_entries",
+        "is_running=false",
+        &[own_entry],
+    )
+    .await;
+    for (resource, kind, own, foreign) in [
+        ("time_entries", "time_entry", own_entry, other_entry),
+        ("projects", "project", ids.project_id, other.project_id),
+        ("clients", "client", ids.client_id, other.client_id),
+        ("tasks", "task", ids.task_id, other.task_id),
     ] {
         assert_eq!(
             page(&app, &format!("/harvest/v2/{resource}/{own}")).await["id"],
-            own.to_string()
+            api_id(&pool, kind, own).await
         );
         assert_eq!(
             request(&app, &format!("/harvest/v2/{resource}/{foreign}"))
@@ -414,7 +472,7 @@ async fn harvest_project_progress_permissions_cover_counts_pages_and_details(poo
     // Project privacy never takes away the owner's timesheet identity.
     assert_eq!(
         page(&app, &format!("/harvest/v2/time_entries/{own_entry}")).await["project"]["id"],
-        ids.project_id.to_string()
+        api_id(&pool, "project", ids.project_id).await
     );
     for lead in [false, true] {
         sqlx::query!(
@@ -438,7 +496,7 @@ async fn harvest_project_progress_permissions_cover_counts_pages_and_details(poo
         .execute(&pool)
         .await
         .unwrap();
-        walk(&app, "projects", "is_active=true", &[ids.project_id]).await;
+        walk(&pool, &app, "projects", "is_active=true", &[ids.project_id]).await;
         let body = page(&app, &detail).await;
         assert_eq!(body["budget"], 10.0);
         assert!(body.get("rate_cents").is_none());
@@ -472,6 +530,7 @@ async fn harvest_project_progress_permissions_cover_counts_pages_and_details(poo
         .await
         .unwrap();
         walk(
+            &pool,
             &app,
             "projects",
             "is_active=true",
@@ -537,7 +596,7 @@ async fn harvest_task_access_filters_counts_and_preserves_rate_free_history(pool
     .execute(&pool)
     .await
     .unwrap();
-    walk(&app, "tasks", "is_active=true", &[ids.task_id]).await;
+    walk(&pool, &app, "tasks", "is_active=true", &[ids.task_id]).await;
     for body in [
         page(&app, &format!("/harvest/v2/tasks/{}", ids.task_id)).await,
         page(&app, "/harvest/v2/tasks").await["tasks"][0].clone(),
@@ -564,7 +623,7 @@ async fn harvest_task_access_filters_counts_and_preserves_rate_free_history(pool
         page(&app, "/harvest/v2/tasks?is_active=true").await["total_entries"],
         0
     );
-    walk(&app, "tasks", "is_active=false", &[ids.task_id]).await;
+    walk(&pool, &app, "tasks", "is_active=false", &[ids.task_id]).await;
     assert_eq!(
         request(&app, &format!("/harvest/v2/tasks/{}", other.task_id))
             .await
@@ -580,7 +639,7 @@ async fn harvest_task_access_filters_counts_and_preserves_rate_free_history(pool
         .execute(&pool)
         .await
         .unwrap();
-        walk(&app, "tasks", "", &[ids.task_id, hidden]).await;
+        walk(&pool, &app, "tasks", "", &[ids.task_id, hidden]).await;
         assert_eq!(
             page(&app, &format!("/harvest/v2/tasks/{}", ids.task_id)).await["default_hourly_rate"],
             12.34

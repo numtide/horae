@@ -105,25 +105,25 @@ async fn additive_migration_preserves_populated_legacy_records(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    // `oidc_issuer`, `timezone` and `tasks.is_default` are added by later
-    // migrations; the issuer is checked separately and the zone starts NULL.
+    // `oidc_issuer`, `timezone`, `tasks.is_default` and `harvest_id` are added by
+    // later migrations; the issuer is checked separately and the zone starts NULL.
     let before = sqlx::query_scalar!(
-        "SELECT jsonb_build_object('users', (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer' - 'timezone') FROM users u),
+        "SELECT jsonb_build_object('users', (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer' - 'timezone' - 'harvest_id') FROM users u),
          'assignments', (SELECT jsonb_agg(a) FROM assignments a),
-         'clients', (SELECT jsonb_agg(c) FROM clients c),
-         'projects', (SELECT jsonb_agg(p) FROM projects p),
-         'tasks', (SELECT jsonb_agg(to_jsonb(t) - 'is_default') FROM tasks t))"
+         'clients', (SELECT jsonb_agg(to_jsonb(c) - 'harvest_id') FROM clients c),
+         'projects', (SELECT jsonb_agg(to_jsonb(p) - 'harvest_id') FROM projects p),
+         'tasks', (SELECT jsonb_agg(to_jsonb(t) - 'is_default' - 'harvest_id') FROM tasks t))"
     )
     .fetch_one(&pool)
     .await
     .unwrap();
     sqlx::migrate!("./migrations").run(&pool).await.unwrap();
     let after = sqlx::query_scalar!(
-        "SELECT jsonb_build_object('users', (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer' - 'timezone') FROM users u),
+        "SELECT jsonb_build_object('users', (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer' - 'timezone' - 'harvest_id') FROM users u),
          'assignments', (SELECT jsonb_agg(a) FROM assignments a),
-         'clients', (SELECT jsonb_agg(c) FROM clients c),
-         'projects', (SELECT jsonb_agg(p) FROM projects p),
-         'tasks', (SELECT jsonb_agg(to_jsonb(t) - 'is_default') FROM tasks t))"
+         'clients', (SELECT jsonb_agg(to_jsonb(c) - 'harvest_id') FROM clients c),
+         'projects', (SELECT jsonb_agg(to_jsonb(p) - 'harvest_id') FROM projects p),
+         'tasks', (SELECT jsonb_agg(to_jsonb(t) - 'is_default' - 'harvest_id') FROM tasks t))"
     )
     .fetch_one(&pool)
     .await

@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 
 use horae_core::importers::harvest::keys;
 use horae_core::importers::harvest::types::{
-    EntityType, PersonErrorKind, PersonOutcome, ReportPerson, RowOutcome,
+    EntityType, IdNotice, PersonErrorKind, PersonOutcome, ReportPerson, RowOutcome,
 };
 use sqlx::{Acquire, Postgres, Transaction};
 
@@ -37,7 +37,7 @@ impl Parent<'_> {
 /// What a resolved catalog record contributes once its savepoint commits.
 enum Applied {
     Parents(Vec<(EntityType, Resolved)>),
-    Person(resolve::UserKey, ReportPerson),
+    Person(resolve::UserKey, ReportPerson, Option<IdNotice>),
 }
 
 /// Normalized emails that more than one Harvest person uses. Matching either
@@ -106,12 +106,15 @@ pub(super) async fn apply_batch(
                 for (kind, resolved) in resolved {
                     super::apply::fold(&mut outcomes, &mut pending, kind, resolved);
                 }
+                for notice in std::mem::take(&mut pending.notices) {
+                    report.note_id(notice);
+                }
                 cache.merge(pending);
                 for (kind, outcome) in outcomes {
                     report.record(kind, &outcome);
                 }
             }
-            Ok(Applied::Person(key, person)) => {
+            Ok(Applied::Person(key, person, notice)) => {
                 sp.commit().await?;
                 cache.merge(PendingCache {
                     user: Some((key, person.horae_id)),
@@ -125,6 +128,9 @@ pub(super) async fn apply_batch(
                     },
                 );
                 report.people.push(person);
+                if let Some(notice) = notice {
+                    report.note_id(notice);
+                }
             }
             Err(failure) => {
                 sp.rollback().await?;
@@ -175,7 +181,8 @@ async fn resolve_person(
         email,
         name: &name,
     };
-    let (key, horae_id, outcome) = resolve::resolve_person(conn, org.org_id, &fields).await?;
+    let (key, horae_id, outcome, notice) =
+        resolve::resolve_person(conn, org.org_id, &fields).await?;
     Ok(Applied::Person(
         key,
         ReportPerson {
@@ -190,6 +197,7 @@ async fn resolve_person(
             outcome,
             harvest_active: Some(user.is_active),
         },
+        notice,
     ))
 }
 

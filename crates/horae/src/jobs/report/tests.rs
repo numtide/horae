@@ -1,5 +1,6 @@
 use horae_core::importers::harvest::types::{
-    EntityType, ImportMode, ImportReport, RowError, RowOutcome, SourceKind,
+    EntityType, ID_NOTICES_KEPT, IdNotice, ImportMode, ImportReport, PersonOutcome, ReportPerson,
+    RowError, RowOutcome, SourceKind,
 };
 use sqlx::migrate::Migrate;
 use uuid::Uuid;
@@ -843,4 +844,71 @@ async fn legacy_converter_gate_allows_a_job_locked_workers_chunk_foreign_keys(po
         Some(checkpoint)
     );
     assert_converted_errors(&pool, org, id, &expected).await;
+}
+
+/// A clean import of an account whose Harvest ids collide often has nothing to
+/// archive; its checkpoint must still save, with the notices bounded.
+#[sqlx::test]
+#[serial_test::serial]
+async fn a_report_with_notices_and_people_but_no_errors_checkpoints(pool: sqlx::PgPool) {
+    let org_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO organizations (id, name) VALUES ($1, 'Jobs test')",
+        org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    jobs::enqueue(
+        &pool,
+        org_id,
+        &jobs::JobPayload::HarvestCsv {
+            mode: ImportMode::Commit,
+        },
+        "notices",
+        JobPolicy::default(),
+    )
+    .await
+    .unwrap();
+    let (lease, _stop) = jobs::claim_lease_for_test(&pool).await;
+    let mut report = ImportReport::new(SourceKind::HarvestApi, ImportMode::Commit);
+    for n in 0..12 {
+        report.record(EntityType::Person, &RowOutcome::Created);
+        report.people.push(ReportPerson {
+            harvest_id: Some(5_000_000 + n),
+            horae_id: Uuid::now_v7(),
+            email: Some(format!("person{n}@example.com")),
+            name: format!("Person Number {n}"),
+            outcome: PersonOutcome::Created,
+            harvest_active: Some(true),
+        });
+    }
+    for n in 0..150 {
+        report.record(EntityType::TimeEntry, &RowOutcome::Created);
+        report.note_id(IdNotice {
+            entity: EntityType::TimeEntry,
+            harvest_id: 1_000_000_000 + n,
+            api_id: Some(2_000_000 + n),
+        });
+    }
+
+    let mut tx = pool.begin().await.unwrap();
+    lease.archive_report(&mut tx, &mut report).await.unwrap();
+    let metadata = serde_json::to_value(&report).unwrap();
+    lease
+        .save_checkpoint(
+            &mut tx,
+            &serde_json::json!({ "version": 2, "report": metadata }),
+            &metadata,
+            "time_entries",
+            162,
+            None,
+        )
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    assert_eq!(report.id_notices.len(), ID_NOTICES_KEPT);
+    assert_eq!(report.omitted_id_notices, 150 - ID_NOTICES_KEPT as u64);
+    assert_eq!(report.archived_error_chunks(), 0);
 }

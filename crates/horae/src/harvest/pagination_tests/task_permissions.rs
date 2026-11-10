@@ -6,9 +6,9 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 #[serial_test::serial]
 async fn task_api_uses_canonical_catalog_scope_for_count_list_and_direct_id(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::TaskReadAll]).await;
-    walk(&app, "tasks", "is_active=true", &[ids.task_id]).await;
+    walk(&pool, &app, "tasks", "is_active=true", &[ids.task_id]).await;
     let detail = page(&app, &format!("/harvest/v2/tasks/{}", ids.task_id)).await;
-    assert_eq!(detail["id"], ids.task_id.to_string());
+    assert_eq!(detail["id"], api_id(&pool, "task", ids.task_id).await);
     assert!(detail.get("default_hourly_rate").is_none());
 }
 
@@ -69,7 +69,7 @@ async fn task_api_filters_archived_tasks_and_preserves_total_past_last_page(pool
         .execute(&pool)
         .await
         .unwrap();
-    walk(&app, "tasks", "is_active=false", &[ids.task_id]).await;
+    walk(&pool, &app, "tasks", "is_active=false", &[ids.task_id]).await;
     let empty = page(&app, "/harvest/v2/tasks?is_active=true").await;
     assert_eq!(empty["total_entries"], 0);
     let beyond = page(&app, "/harvest/v2/tasks?is_active=false&per_page=1&page=2").await;

@@ -3,6 +3,7 @@ use chrono::{DateTime, TimeZone};
 use horae_core::importers::harvest::types::PersonErrorKind;
 use serde_json::json;
 
+mod api_ids;
 mod archived_clients;
 mod checkpoints;
 mod paging;
@@ -396,7 +397,7 @@ async fn parent_catalog_preserves_metadata_and_counts_each_entity_once(pool: PgP
         .unwrap(),
         Some(0)
     );
-    let stamp = sqlx::query_scalar!(r#"SELECT harvest_updated_at as "harvest_updated_at: DateTime<Utc>" FROM harvest_import_map WHERE org_id = $1 AND harvest_entity_type = 'client' AND harvest_id = 1"#, org).fetch_one(&pool).await.unwrap();
+    let stamp = sqlx::query_scalar!(r#"SELECT harvest_updated_at as "harvest_updated_at: DateTime<Utc>" FROM harvest_import_map WHERE org_id = $1 AND harvest_entity_type = 'client' AND harvest_import_id = 1"#, org).fetch_one(&pool).await.unwrap();
     assert_eq!(stamp, Some(day(1)));
 }
 

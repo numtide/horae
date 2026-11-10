@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Gone', 'USD')\n         RETURNING harvest_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "harvest_id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "66d446d7a1dbff1ad6ec57753a2286bff8e33356a8880968088b9baac6aadf00"
+}

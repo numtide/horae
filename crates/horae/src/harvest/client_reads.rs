@@ -9,7 +9,7 @@ pub(super) async fn read(
     client_id: Option<Uuid>,
     limit: i64,
     offset: i64,
-) -> Result<(i64, Vec<ClientRow>), (StatusCode, String)> {
+) -> Result<(i64, Vec<ClientRow>), ApiError> {
     let mut access = ProjectReadAccess::begin(db, caller.org_id, caller.user_id)
         .await
         .map_err(|error| match error {
@@ -24,7 +24,7 @@ pub(super) async fn read(
     // Count and page share one source snapshot, including exhausted pages.
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
-             SELECT id,name,active,address,currency,created_at FROM clients
+             SELECT id,harvest_id,name,active,address,currency,created_at FROM clients
              WHERE org_id=$1 AND $5
                AND ($2::bool IS NULL OR active=$2)
                AND ($3::timestamptz IS NULL OR created_at >= $3)
@@ -32,7 +32,7 @@ pub(super) async fn read(
            ), totals AS (SELECT COUNT(*) total FROM visible), page AS (
              SELECT * FROM visible ORDER BY name,id LIMIT $6 OFFSET $7
            )
-           SELECT totals.total AS "total!",c.id AS "id?",c.name AS "name?",
+           SELECT totals.total AS "total!",c.harvest_id AS "id?",c.name AS "name?",
                   c.active AS "active?",c.address,c.currency AS "currency?",
                   c.created_at AS "created_at?: chrono::DateTime<chrono::Utc>"
            FROM totals LEFT JOIN page c ON true ORDER BY c.name,c.id"#,
@@ -53,10 +53,11 @@ pub(super) async fn read(
         .total;
     let mut rows = Vec::with_capacity(records.len());
     for record in records {
-        let Some(id) = record.id else { continue };
+        // Only the row of an empty page has no name.
+        let Some(name) = record.name else { continue };
         rows.push(ClientRow {
-            id,
-            name: record.name.ok_or_else(|| internal("Missing client name"))?,
+            id: record.id.ok_or_else(|| internal("Missing api number"))?,
+            name,
             active: record
                 .active
                 .ok_or_else(|| internal("Missing client activity"))?,

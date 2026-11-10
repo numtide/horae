@@ -62,8 +62,8 @@ async fn accounts(pool: &PgPool, org: Uuid) -> serde_json::Value {
 
 async fn person_links(pool: &PgPool, org: Uuid) -> Vec<i64> {
     sqlx::query_scalar!(
-        "SELECT harvest_id FROM harvest_import_map
-         WHERE org_id = $1 AND harvest_entity_type = 'person' ORDER BY harvest_id",
+        "SELECT harvest_import_id FROM harvest_import_map
+         WHERE org_id = $1 AND harvest_entity_type = 'person' ORDER BY harvest_import_id",
         org,
     )
     .fetch_all(pool)

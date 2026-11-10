@@ -116,6 +116,10 @@ pub(super) fn RunView(id: Uuid) -> Element {
     let partial = presentation::partial_report(&run.status);
     let title = presentation::run_label(&run);
     let connection = Conn::from_resource(&status).ready().cloned();
+    let (id_notices, omitted_id_notices) = match &*report.read() {
+        Some(Ok(report)) => (report.id_notices.clone(), report.omitted_id_notices),
+        _ => (Vec::new(), 0),
+    };
     let new_people: Vec<ReportPerson> = match &*report.read() {
         Some(Ok(report)) => report
             .people
@@ -163,7 +167,7 @@ pub(super) fn RunView(id: Uuid) -> Element {
             match &*summary.read() {
                 Some(Some(Ok(summary))) => rsx! {
                     MissingPeople { people: summary.people.clone(), omitted: summary.omitted_people, source: run.source }
-                    ErrorGroups { job_id: id, groups: summary.groups.clone(), omitted: summary.omitted_errors, new_people: new_people.clone() }
+                    ErrorGroups { job_id: id, groups: summary.groups.clone(), omitted: summary.omitted_errors, new_people: new_people.clone(), id_notices: id_notices.clone(), omitted_id_notices }
                 },
                 Some(Some(Err(error))) => rsx! {
                     div { class: "alert alert-danger mt-4", role: "alert",
@@ -174,7 +178,7 @@ pub(super) fn RunView(id: Uuid) -> Element {
                 },
                 Some(None) | None if finished_with_errors() => rsx! { p { class: "text-sm mt-4", role: "status", "Grouping errors…" } },
                 _ if !run.is_active() => rsx! {
-                    ErrorGroups { job_id: id, groups: Vec::new(), omitted: 0, new_people: new_people.clone() }
+                    ErrorGroups { job_id: id, groups: Vec::new(), omitted: 0, new_people: new_people.clone(), id_notices: id_notices.clone(), omitted_id_notices }
                 },
                 _ => rsx! {},
             }

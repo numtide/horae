@@ -8,8 +8,8 @@ pub use horae_core::importers::harvest::types::ImportReport;
 mod tests {
     use super::*;
     use horae_core::importers::harvest::types::{
-        EntityCounts, EntityType, ImportMode, PersonError, PersonErrorKind, PersonOutcome,
-        ReportPerson, RowOutcome, SourceKind,
+        EntityCounts, EntityType, IdNotice, ImportMode, PersonError, PersonErrorKind,
+        PersonOutcome, ReportPerson, RowOutcome, SourceKind,
     };
 
     fn report() -> ImportReport {
@@ -50,6 +50,27 @@ mod tests {
         assert!(report.people.is_empty());
         assert_eq!(report.row_errors[0].person, None);
         assert!(report.reconciles());
+    }
+
+    #[test]
+    fn id_notices_round_trip_and_stay_off_the_wire_when_empty() {
+        let quiet = report();
+        assert!(
+            serde_json::to_value(&quiet)
+                .unwrap()
+                .get("id_notices")
+                .is_none()
+        );
+
+        let mut noted = report();
+        noted.note_id(IdNotice {
+            entity: EntityType::Project,
+            harvest_id: 3,
+            api_id: Some(41),
+        });
+        let loaded: ImportReport =
+            serde_json::from_value(serde_json::to_value(&noted).unwrap()).unwrap();
+        assert_eq!(loaded, noted);
     }
 
     #[test]

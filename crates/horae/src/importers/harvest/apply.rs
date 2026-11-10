@@ -8,7 +8,7 @@
 //! resolved parents, users and project-task links promoted into the run cache.
 
 use horae_core::importers::harvest::types::{
-    EntityType, EntryErrorKind, PersonErrorKind, PersonOutcome, ReportPerson, RowOutcome,
+    EntityType, EntryErrorKind, IdNotice, PersonErrorKind, PersonOutcome, ReportPerson, RowOutcome,
     SourceKind, SourceRow,
 };
 use horae_core::importers::harvest::{convert, keys};
@@ -22,6 +22,8 @@ pub struct RowResult {
     pub outcomes: Vec<(EntityType, RowOutcome)>,
     /// The person a committed CSV row resolved for the first time in the run.
     pub person: Option<ReportPerson>,
+    /// Records the committed row created without their Harvest id as API id.
+    pub notices: Vec<IdNotice>,
 }
 
 /// Apply one source row within its own savepoint. On success returns the entity
@@ -88,10 +90,15 @@ pub async fn apply_row(
     };
 
     match apply_within(&mut sp, cache, org, row, source).await {
-        Ok((outcomes, pending, person)) => match sp.commit().await {
+        Ok((outcomes, mut pending, person)) => match sp.commit().await {
             Ok(()) => {
+                let notices = std::mem::take(&mut pending.notices);
                 cache.merge(pending);
-                RowResult { outcomes, person }
+                RowResult {
+                    outcomes,
+                    person,
+                    notices,
+                }
             }
             Err(e) => errored(
                 EntityType::TimeEntry,
@@ -185,10 +192,16 @@ async fn apply_within(
     });
 
     // Time entry — the record proper.
-    let (te_outcome, entry_slot) =
-        apply_time_entry(sp, cache, org, project_id, task_id, user_id, row)
-            .await
-            .map_err(|e| (EntityType::TimeEntry, e))?;
+    let (te_outcome, entry_slot) = apply_time_entry(
+        sp,
+        cache,
+        org,
+        (project_id, task_id, user_id),
+        row,
+        &mut pending.notices,
+    )
+    .await
+    .map_err(|e| (EntityType::TimeEntry, e))?;
     outcomes.push((EntityType::TimeEntry, te_outcome));
     pending.entry_slot = entry_slot;
 
@@ -225,10 +238,9 @@ async fn apply_time_entry(
     sp: &mut Transaction<'_, Postgres>,
     cache: &RunCache,
     org: OrgDefaults<'_>,
-    project_id: Uuid,
-    task_id: Uuid,
-    user_id: Uuid,
+    (project_id, task_id, user_id): (Uuid, Uuid, Uuid),
     row: &SourceRow,
+    notices: &mut Vec<IdNotice>,
 ) -> Result<(RowOutcome, Option<String>), RowFailure> {
     let minutes_i64 = convert::hours_to_minutes(&row.hours).map_err(|error| match error {
         convert::ConvertError::Negative(hours) => RowFailure::entry(
@@ -262,7 +274,7 @@ async fn apply_time_entry(
                LEFT JOIN time_entries AS te ON te.org_id = m.org_id AND te.id = m.horae_id
                WHERE m.org_id = $1
                  AND m.harvest_entity_type = 'time_entry'::harvest_entity_type
-                 AND m.harvest_id = $2"#,
+                 AND m.harvest_import_id = $2"#,
             org.org_id,
             hid,
         )
@@ -390,10 +402,20 @@ async fn apply_time_entry(
         .map_err(|limit| RowFailure::new(limit.to_string()))?;
     crate::db::lock_time_entry_write(sp, user_id).await?;
     let id = Uuid::now_v7();
-    sqlx::query!(
+    let mut wanted = resolve::free_harvest_id(
+        sp,
+        org.org_id,
+        EntityType::TimeEntry,
+        row.harvest_time_entry_id,
+    )
+    .await?;
+    // A record that took the number since the check makes this insert do
+    // nothing; the next attempt leaves the number to the trigger.
+    let api_id = loop {
+        let inserted = sqlx::query_scalar!(
         "INSERT INTO time_entries
-           (id, org_id, user_id, project_id, task_id, spent_date, minutes, notes, billable)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+           (id, org_id, user_id, project_id, task_id, spent_date, minutes, notes, billable, harvest_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (org_id, harvest_id) DO NOTHING RETURNING harvest_id",
         id,
         org.org_id,
         user_id,
@@ -403,9 +425,21 @@ async fn apply_time_entry(
         minutes,
         notes,
         row.billable,
+        wanted,
     )
-    .execute(&mut **sp)
+    .fetch_optional(&mut **sp)
     .await?;
+        match (inserted, wanted) {
+            (Some(api_id), _) => break api_id,
+            (None, Some(_)) => wanted = None,
+            (None, None) => return Err(RowFailure::new("no free id for the record")),
+        }
+    };
+    notices.extend(resolve::id_notice(
+        EntityType::TimeEntry,
+        row.harvest_time_entry_id,
+        api_id,
+    ));
     // An import spans thousands of person-days in one transaction, too many to
     // hold a day lock each, so it sums the day without one; the savepoint
     // drops the row if it grew the day past the limit.
@@ -528,10 +562,10 @@ async fn record_entry(
 ) -> sqlx::Result<()> {
     sqlx::query!(
         r#"INSERT INTO harvest_import_map
-             (org_id, harvest_entity_type, harvest_id, horae_id, harvest_updated_at, horae_updated_at)
+             (org_id, harvest_entity_type, harvest_import_id, horae_id, harvest_updated_at, horae_updated_at)
            SELECT $1, 'time_entry'::harvest_entity_type, $2, te.id, $4, te.updated_at
            FROM time_entries AS te WHERE te.org_id = $1 AND te.id = $3
-           ON CONFLICT (org_id, harvest_entity_type, harvest_id)
+           ON CONFLICT (org_id, harvest_entity_type, harvest_import_id)
            DO UPDATE SET horae_id = EXCLUDED.horae_id,
                          harvest_updated_at = EXCLUDED.harvest_updated_at,
                          horae_updated_at = EXCLUDED.horae_updated_at"#,
@@ -577,6 +611,7 @@ pub(super) fn fold(
     if let Some(e) = resolved.cache_entry {
         pending.parents.push(e);
     }
+    pending.notices.extend(resolved.notice);
 }
 
 fn errored(entity: EntityType, row: &SourceRow, failure: RowFailure) -> RowResult {
@@ -591,5 +626,6 @@ fn errored(entity: EntityType, row: &SourceRow, failure: RowFailure) -> RowResul
             },
         )],
         person: None,
+        notices: Vec::new(),
     }
 }

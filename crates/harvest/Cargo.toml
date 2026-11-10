@@ -11,8 +11,13 @@ test-support = []
 [dependencies]
 anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
+# Pure domain formatting for the compat API's hours and amounts.
+horae-core = { path = "../core" }
 serde = { version = "1", features = ["derive"] }
-# Harvest hours and rates must keep their exact JSON decimals.
+# Exact JSON decimals both ways: Harvest's hours and rates are read as
+# written, and `v2::compat` writes hours and amounts from decimal text, which
+# would round through f64 without this feature. Feature unification turns it
+# on for every target that links this crate.
 serde_json = { version = "1", features = ["arbitrary_precision"] }
 thiserror = "2"
 tracing = "0.1"

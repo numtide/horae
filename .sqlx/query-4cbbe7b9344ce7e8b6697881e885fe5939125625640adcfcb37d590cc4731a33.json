@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO harvest_import_map (org_id, harvest_entity_type, harvest_import_id, horae_id)\n         VALUES ($1, 'project', 42, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4cbbe7b9344ce7e8b6697881e885fe5939125625640adcfcb37d590cc4731a33"
+}

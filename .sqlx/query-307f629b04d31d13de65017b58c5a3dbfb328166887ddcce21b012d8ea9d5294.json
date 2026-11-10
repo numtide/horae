@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE clients SET harvest_id = NULL WHERE org_id = $1 AND name IN ('Bulk 2', 'Bulk 3', 'Bulk 4')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "307f629b04d31d13de65017b58c5a3dbfb328166887ddcce21b012d8ea9d5294"
+}

@@ -53,9 +53,9 @@ pub(super) async fn canonical(
 #[serial_test::serial]
 async fn canonical_project_reader_uses_list_count_and_detail_without_legacy_role(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;
-    walk(&app, "projects", "is_active=true", &[ids.project_id]).await;
+    walk(&pool, &app, "projects", "is_active=true", &[ids.project_id]).await;
     let detail = page(&app, &format!("/harvest/v2/projects/{}", ids.project_id)).await;
-    assert_eq!(detail["id"], ids.project_id.to_string());
+    assert_eq!(detail["id"], api_id(&pool, "project", ids.project_id).await);
     assert!(detail["budget"].is_null());
 }
 
@@ -113,7 +113,7 @@ async fn canonical_project_api_managed_scope_requires_current_designation(pool: 
         "INSERT INTO project_management_assignments (id,org_id,manager_id,project_id) VALUES ($1,$2,$3,$4)",
         edge, ids.org_id, ids.user_id, ids.project_id,
     ).execute(&pool).await.unwrap();
-    walk(&app, "projects", "is_active=true", &[ids.project_id]).await;
+    walk(&pool, &app, "projects", "is_active=true", &[ids.project_id]).await;
     assert!(!page(&app, &detail_uri).await["budget"].is_null());
     sqlx::query!(
         "DELETE FROM project_management_assignments WHERE id=$1",
@@ -196,7 +196,7 @@ async fn canonical_project_api_retains_filtered_total_past_last_page(pool: PgPoo
         "is_active=true&client_id={}&updated_since=2000-01-01T00:00:00Z",
         ids.client_id
     );
-    walk(&app, "projects", &filter, &[ids.project_id, second]).await;
+    walk(&pool, &app, "projects", &filter, &[ids.project_id, second]).await;
     let past = page(
         &app,
         &format!("/harvest/v2/projects?{filter}&per_page=1&page=3"),
@@ -212,7 +212,10 @@ async fn canonical_project_api_retains_filtered_total_past_last_page(pool: PgPoo
     assert_eq!(future["total_entries"], 0);
     let archive = page(&app, "/harvest/v2/projects?is_active=false").await;
     assert_eq!(archive["total_entries"], 1);
-    assert_eq!(archive["projects"][0]["id"], archived.to_string());
+    assert_eq!(
+        archive["projects"][0]["id"],
+        api_id(&pool, "project", archived).await
+    );
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -237,8 +240,8 @@ async fn canonical_project_api_shared_member_keeps_hours_but_not_money(pool: PgP
     .execute(&pool)
     .await
     .unwrap();
-    assert_eq!(page(&app, &detail_uri).await["budget"].to_string(), "10.0");
-    walk(&app, "projects", "is_active=true", &[ids.project_id]).await;
+    assert_eq!(page(&app, &detail_uri).await["budget"].to_string(), "10.00");
+    walk(&pool, &app, "projects", "is_active=true", &[ids.project_id]).await;
     sqlx::query!("INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode,report_visibility) VALUES ($1,$2,$3,$4,'project','managers')", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id).execute(&pool).await.unwrap();
     assert_eq!(page(&app, "/harvest/v2/projects").await["total_entries"], 0);
     assert_eq!(request(&app, &detail_uri).await.0, StatusCode::NOT_FOUND);

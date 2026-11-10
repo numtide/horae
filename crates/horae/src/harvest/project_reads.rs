@@ -9,7 +9,14 @@ pub(super) async fn read(
     project_id: Option<Uuid>,
     limit: i64,
     offset: i64,
-) -> Result<(i64, Vec<ProjectRow>), (StatusCode, String)> {
+) -> Result<(i64, Vec<ProjectRow>), ApiError> {
+    let client_id = ids::filter(
+        db,
+        caller.org_id,
+        Kind::Client,
+        filters.client_id.as_deref(),
+    )
+    .await?;
     let mut access = ProjectReadAccess::begin(db, caller.org_id, caller.user_id)
         .await
         .map_err(|error| match error {
@@ -24,12 +31,13 @@ pub(super) async fn read(
     // Count and page must use the same visible set, including out-of-range pages.
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
-             SELECT p.id,p.name,p.code,p.project_type::text project_type,p.active,
+             SELECT p.id,p.harvest_id,p.name,p.code,p.project_type::text project_type,p.active,
                     p.budget_kind::text budget_kind,
                     CASE WHEN $9 OR $12 OR ($13 AND management.id IS NOT NULL)
                       THEN p.budget_amount_cents END budget_amount_cents,
                     CASE WHEN $9 OR p.budget_kind='hours' THEN p.budget_minutes END budget_minutes,
-                    p.starts_on,p.ends_on,p.created_at,p.client_id,c.name client_name
+                    p.currency::text currency,
+                    p.starts_on,p.ends_on,p.created_at,p.client_id,c.harvest_id client_harvest_id,c.name client_name
              FROM projects p JOIN clients c ON c.id=p.client_id AND c.org_id=p.org_id
              LEFT JOIN project_read_access legacy ON legacy.org_id=p.org_id
                AND legacy.project_id=p.id AND legacy.user_id=$2
@@ -47,13 +55,13 @@ pub(super) async fn read(
            ), totals AS (SELECT COUNT(*) total FROM visible), page AS (
              SELECT * FROM visible ORDER BY name,id LIMIT $7 OFFSET $8
            )
-           SELECT totals.total AS "total!",p.id AS "id?",p.name AS "name?",p.code,
+           SELECT totals.total AS "total!",p.harvest_id AS "id?",p.name AS "name?",p.code,
                   p.project_type AS "project_type?",p.active AS "active?",p.budget_kind AS "budget_kind?",
-                  p.budget_amount_cents,p.budget_minutes,p.starts_on AS "starts_on?: chrono::NaiveDate",
+                  p.budget_amount_cents,p.budget_minutes,p.currency AS "currency?",p.starts_on AS "starts_on?: chrono::NaiveDate",
                   p.ends_on AS "ends_on?: chrono::NaiveDate",p.created_at AS "created_at?: chrono::DateTime<chrono::Utc>",
-                  p.client_id AS "client_id?",p.client_name AS "client_name?"
+                  p.client_harvest_id AS "client_id?",p.client_name AS "client_name?"
            FROM totals LEFT JOIN page p ON true ORDER BY p.name,p.id"#,
-        caller.org_id, caller.user_id, filters.is_active, filters.client_id,
+        caller.org_id, caller.user_id, filters.is_active, client_id,
         filters.updated_since as Option<DateTime<Utc>>, project_id, limit, offset,
         access.legacy(), access.has(Permission::ProjectReadAll), access.has(Permission::ProjectReadManaged),
         access.has(Permission::BillableRateReadAll), access.has(Permission::BillableRateReadManaged),
@@ -64,12 +72,11 @@ pub(super) async fn read(
         .total;
     let mut rows = Vec::with_capacity(records.len());
     for record in records {
-        let Some(id) = record.id else { continue };
+        // Only the row of an empty page has no name.
+        let Some(name) = record.name else { continue };
         rows.push(ProjectRow {
-            id,
-            name: record
-                .name
-                .ok_or_else(|| internal("Missing project name"))?,
+            id: record.id.ok_or_else(|| internal("Missing api number"))?,
+            name,
             code: record.code,
             project_type: record
                 .project_type
@@ -82,6 +89,9 @@ pub(super) async fn read(
                 .ok_or_else(|| internal("Missing budget kind"))?,
             budget_amount_cents: record.budget_amount_cents,
             budget_minutes: record.budget_minutes,
+            currency: record
+                .currency
+                .ok_or_else(|| internal("Missing project currency"))?,
             starts_on: record.starts_on,
             ends_on: record.ends_on,
             created_at: record

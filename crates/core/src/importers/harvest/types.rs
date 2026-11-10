@@ -398,6 +398,23 @@ pub struct RowError {
     pub entry_kind: Option<EntryErrorKind>,
 }
 
+/// A record created from Harvest that could not take its Harvest id as its id
+/// in the Harvest-compatible API (because another record has it, or a native
+/// insert could reach it), so it got `api_id` instead (FR-016).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IdNotice {
+    pub entity: EntityType,
+    pub harvest_id: i64,
+    /// `None` in a preview: the number it would get is only known on import.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_id: Option<i64>,
+}
+
+/// Notices a report keeps; the rest are only counted. Notices are never
+/// archived, so they count against the report's 16 KiB budget for good: 20
+/// take about 1.4 KB.
+pub const ID_NOTICES_KEPT: usize = 20;
+
 /// The result of an import run, returned by every surface (server fn + CLI). A
 /// pure data type so it crosses the `#[server]` boundary and compiles on the web
 /// target as well as the server.
@@ -413,8 +430,17 @@ pub struct ImportReport {
     /// the source, not by its entries.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub people: Vec<ReportPerson>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub id_notices: Vec<IdNotice>,
+    /// Notices past [`ID_NOTICES_KEPT`].
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub omitted_id_notices: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     error_archive: Option<ErrorArchive>,
+}
+
+fn is_zero(count: &u64) -> bool {
+    *count == 0
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -433,6 +459,10 @@ struct ImportReportWire {
     row_errors: Vec<RowError>,
     #[serde(default)]
     people: Vec<ReportPerson>,
+    #[serde(default)]
+    id_notices: Vec<IdNotice>,
+    #[serde(default)]
+    omitted_id_notices: u64,
     error_archive: Option<ErrorArchive>,
 }
 
@@ -459,6 +489,8 @@ impl TryFrom<ImportReportWire> for ImportReport {
             summary: wire.summary,
             row_errors: wire.row_errors,
             people: wire.people,
+            id_notices: wire.id_notices,
+            omitted_id_notices: wire.omitted_id_notices,
             error_archive: wire.error_archive,
         };
         if !report.reconciles() {
@@ -477,7 +509,20 @@ impl ImportReport {
             summary: ImportSummary::default(),
             row_errors: Vec::new(),
             people: Vec::new(),
+            id_notices: Vec::new(),
+            omitted_id_notices: 0,
             error_archive: None,
+        }
+    }
+
+    pub fn note_id(&mut self, mut notice: IdNotice) {
+        if self.mode == ImportMode::DryRun {
+            notice.api_id = None;
+        }
+        if self.id_notices.len() < ID_NOTICES_KEPT {
+            self.id_notices.push(notice);
+        } else {
+            self.omitted_id_notices += 1;
         }
     }
 
@@ -590,6 +635,23 @@ mod tests {
         assert!(report.reconciles());
         report.summary.clients.errored += 1;
         assert!(!report.reconciles());
+    }
+
+    #[test]
+    fn id_notices_are_kept_up_to_a_limit_and_the_rest_counted() {
+        let mut report = ImportReport::new(SourceKind::HarvestApi, ImportMode::Commit);
+        let notice = |harvest_id| IdNotice {
+            entity: EntityType::Client,
+            harvest_id,
+            api_id: Some(harvest_id + 1),
+        };
+        for harvest_id in 0..ID_NOTICES_KEPT as i64 + 2 {
+            report.note_id(notice(harvest_id));
+        }
+
+        assert_eq!(report.id_notices.len(), ID_NOTICES_KEPT);
+        assert_eq!(report.id_notices[0], notice(0));
+        assert_eq!(report.omitted_id_notices, 2);
     }
 
     #[test]

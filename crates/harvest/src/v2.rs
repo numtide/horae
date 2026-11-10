@@ -1,4 +1,7 @@
-//! Harvest v2 JSON shapes (only the fields the importer consumes).
+//! Harvest v2 JSON shapes: the fields the importer consumes here, and in
+//! [`compat`] the shapes Horae's Harvest-compatible API writes.
+
+pub mod compat;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
