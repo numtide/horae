@@ -49,18 +49,25 @@ pub fn Toggle(
 }
 
 /// A checkbox with a label. Controlled via `checked`.
-/// Optional `id` and `error_id` associate a field-specific validation message.
+/// Optional `id` and `error_id` associate a field-specific validation message;
+/// `hint_id` associates help text without marking the field invalid.
 #[component]
 pub fn Checkbox(
     checked: bool,
     label: String,
     #[props(default)] id: String,
     #[props(default)] error_id: Option<String>,
+    #[props(default)] hint_id: Option<String>,
     #[props(default)] mixed: bool,
     #[props(default)] compact: bool,
     #[props(default)] disabled: bool,
     #[props(default)] onclick: EventHandler<MouseEvent>,
 ) -> Element {
+    let described_by = [error_id.as_deref(), hint_id.as_deref()]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" ");
     rsx! {
         button {
             r#type: "button",
@@ -68,7 +75,7 @@ pub fn Checkbox(
             role: "checkbox",
             id: if !id.is_empty() { "{id}" },
             aria_invalid: error_id.as_ref().map(|_| "true"),
-            aria_describedby: error_id,
+            aria_describedby: (!described_by.is_empty()).then_some(described_by),
             aria_label: label.clone(),
             "aria-checked": if mixed { "mixed" } else if checked { "true" } else { "false" },
             disabled,

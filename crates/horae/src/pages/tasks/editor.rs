@@ -112,8 +112,8 @@ fn TaskForm(
                 div { class: "flex flex-col gap-3",
                     Checkbox { id: "task-billable", label: "Billable by default", checked: billable(), disabled: busy(), onclick: move |_| billable.set(!billable()) }
                     div {
-                        Checkbox { id: "task-common", label: "Common task", checked: common(), disabled: busy(), onclick: toggle_common }
-                        p { class: "form-hint", "Added to every new project." }
+                        Checkbox { id: "task-common", hint_id: "task-common-hint".to_string(), label: "Common task", checked: common(), disabled: busy(), onclick: toggle_common }
+                        p { id: "task-common-hint", class: "form-hint", "While active, it is added to every new project." }
                     }
                 }
                 p { class: "form-hint", "Changes to defaults apply when adding the task to projects; existing project settings stay unchanged." }

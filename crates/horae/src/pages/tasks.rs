@@ -14,7 +14,7 @@ const TASK_GROUPS: [(bool, &str, &str, &str); 2] = [
         true,
         "tasks-common",
         "Common tasks",
-        "Added to every new project.",
+        "Active common tasks are added to every new project.",
     ),
     (
         false,

@@ -445,7 +445,14 @@ async fn catalog_groups_common_tasks_and_editor_sends_the_common_flag() {
     ui.click(&format!("tasks-edit-{}", common.id));
     let html = ui.html();
     let checkbox = &html[html.find(r#"id="task-common""#).unwrap()..];
-    assert!(checkbox[..checkbox.find('>').unwrap()].contains(r#"aria-checked="true""#));
+    let checkbox = &checkbox[..checkbox.find('>').unwrap()];
+    assert!(checkbox.contains(r#"aria-checked="true""#));
+    assert!(
+        checkbox.contains(r#"aria-describedby="task-common-hint""#),
+        "the hint is announced with the checkbox: {checkbox}"
+    );
+    assert!(!checkbox.contains("aria-invalid"), "{checkbox}");
+    assert!(html.contains(r#"id="task-common-hint""#), "{html}");
 
     ui.click("tasks-new");
     ui.form_event("task-name", "input", "Meetings");
@@ -461,6 +468,24 @@ async fn catalog_groups_common_tasks_and_editor_sends_the_common_flag() {
             requester
         )
     );
+}
+
+#[tokio::test]
+async fn common_tasks_group_says_only_active_ones_join_new_projects() {
+    let probe = Probe::default();
+    let reply = probe.reply();
+    let mut ui = Harness::new(&probe);
+    let mut page = catalog(true, false);
+    page.tasks[0].is_default = true;
+    page.tasks[0].active = false;
+    reply.send(Ok(page)).unwrap();
+    ui.settle();
+    let html = ui.html();
+    assert!(
+        html.contains("Active common tasks are added to every new project."),
+        "{html}"
+    );
+    assert!(!html.contains(">Added to every new project."), "{html}");
 }
 
 #[tokio::test]
