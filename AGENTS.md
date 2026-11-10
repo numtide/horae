@@ -86,6 +86,14 @@ cargo run -p horae-dioxus-lint                  # Dioxus rules ratchet (or: nix 
 
 Integration tests (`crates/horae/tests/integration.rs`) use `#[sqlx::test]` — each spins up a throwaway database, so the DB role needs `CREATEDB` — and are marked `#[serial]`. `nix build` builds the package; `nix flake check` runs the whole suite against a PostgreSQL started inside the build sandbox (`nix/checks/tests.nix`), plus clippy, formatting, the `.sqlx` cache check, the Dioxus rules ratchet, and the NixOS e2e tests.
 
+### Build speed
+
+- Keep Cargo's incremental compilation on (the default). With `CARGO_INCREMENTAL=0`, rebuilding the server after a one-file change takes about 60 s instead of 18 s, and `cargo test --no-run` about 210 s instead of 60 s. When disk runs low, delete the worktree's `target/` instead.
+- `[profile.dev]` in the root `Cargo.toml` builds proc macros optimised (most of a rebuild of the `horae` crate is macro expansion: sqlx, `rsx!`, serde) and keeps line tables only, so backtraces still show file:line. The `test` profile inherits it.
+- The bottleneck is the `horae` crate and its unit-test binary (`--bin horae`), not linking: rustc already links with its bundled `rust-lld`, and mold saves about 1 s. Filter tests with `--bin horae` or `--test <file>` to build only what you run.
+- `cargo build` and `cargo test` resolve different features (the dev-dependencies enable some), so running both compiles dioxus, sqlx and typst twice in one `target/`.
+- No shared compiler cache is configured: sccache can't cache the incremental `horae` crate, which dominates a cold build, so a fresh worktree saved nothing measurable.
+
 ### sqlx query cache
 
 All SQL queries use compile-time checked macros (`sqlx::query!`, `sqlx::query_as!`, `sqlx::query_scalar!`). These validate SQL against the database schema at compile time, catching typos, type mismatches, and schema drift before the code runs.

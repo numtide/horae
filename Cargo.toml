@@ -16,6 +16,15 @@ resolver = "2"
 # Temporary response-body error backport; provenance and removal in vendor/PATCHES.md.
 dioxus-fullstack = { path = "vendor/dioxus-fullstack-0.7.9" }
 
+# Local builds and tests. Proc macros (sqlx, rsx!, serde) run on every build of
+# the horae crate, so optimising them shortens macro expansion; line tables keep
+# file:line backtraces without the full debug info that slows codegen and linking.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.build-override]
+opt-level = 3
+
 [profile.release]
 opt-level = 3
 lto = "thin"
