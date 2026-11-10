@@ -13,6 +13,7 @@ default = []
 server = [
   "serde_json/arbitrary_precision",
   "horae-core/sqlx",
+  "dep:horae-harvest",
   "dioxus/server",
   "dep:tokio",
   "dep:axum",
@@ -55,6 +56,7 @@ futures-util = "0.3"
 wasm-bindgen = "=0.2.126"
 
 # server-only
+horae-harvest = { path = "../harvest", optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 axum = { version = "0.8", features = ["macros", "multipart"], optional = true }
 tower-http = { version = "0.6", features = [
@@ -99,8 +101,8 @@ toml = { version = "0.8", optional = true }
 # Blocking HTTP client for the `horae_http_post` plugin host function. extism host
 # functions are synchronous, so a blocking client avoids bridging to the async
 # runtime. rustls (default) keeps the build free of a system OpenSSL dependency.
-# Also used by the Harvest importer's API + OAuth calls (via spawn_blocking),
-# matching the OIDC stack's blocking-ureq pattern.
+# The Harvest importer's API + OAuth calls use horae-harvest's own ureq 2
+# dependency (the same lockfile entry), not this one.
 ureq = { version = "2", optional = true }
 # AEAD (XChaCha20-Poly1305) sealing the Harvest OAuth tokens at rest. Audited
 # RustCrypto crate; pinned. `getrandom` gives the OS RNG for per-message nonces.
@@ -113,6 +115,7 @@ gloo-timers = { version = "0.3", features = ["futures"], optional = true }
 
 [dev-dependencies]
 dioxus-html = { version = "0.7", features = ["serialize"] }
+horae-harvest = { path = "../harvest", features = ["test-support"] }
 proptest = { version = "1", default-features = false, features = ["std"] }
 serial_test = "3"
 tempfile = "3"

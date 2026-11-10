@@ -23,6 +23,8 @@ perSystem.self.default.overrideAttrs (old: {
 
     # horae-core: pure domain tests — no database required.
     cargo nextest run -p horae-core --test-threads "$NIX_BUILD_CORES"
+    # horae-harvest: Harvest's v2 types and client against loopback fixtures.
+    cargo nextest run -p horae-harvest --test-threads "$NIX_BUILD_CORES"
 
     # The rest of the suite is #[sqlx::test]: every test creates a throwaway
     # database — so the role needs CREATEDB, which `postgres` has as a
