@@ -13,14 +13,15 @@ mod task_permissions;
 
 /// The integer id the API shows for a record.
 pub(super) async fn api_id(pool: &PgPool, kind: &str, horae_id: Uuid) -> i64 {
-    sqlx::query_scalar!(
-        "SELECT number FROM api_ids WHERE kind::text = $1 AND horae_id = $2",
-        kind,
-        horae_id
-    )
-    .fetch_one(pool)
-    .await
-    .unwrap()
+    let kind = match kind {
+        "client" => ids::Kind::Client,
+        "project" => ids::Kind::Project,
+        "task" => ids::Kind::Task,
+        "time_entry" => ids::Kind::TimeEntry,
+        "user" => ids::Kind::User,
+        other => panic!("no API kind {other}"),
+    };
+    ids::number(pool, kind, horae_id).await
 }
 
 pub(super) async fn signed_in(pool: &PgPool, user_id: Uuid) -> Router {

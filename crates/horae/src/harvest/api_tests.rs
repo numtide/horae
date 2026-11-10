@@ -269,110 +269,93 @@ async fn concurrent_creators_get_numbers_at_every_isolation_level(pool: PgPool) 
     }
 }
 
-/// The importer creates a record and maps its Harvest id in one transaction.
-async fn import_client(pool: &PgPool, org_id: Uuid, harvest_id: i64) -> Uuid {
+async fn insert_client(pool: &PgPool, org_id: Uuid, harvest_id: Option<i64>) -> Uuid {
     let id = Uuid::now_v7();
-    let mut tx = pool.begin().await.unwrap();
     sqlx::query!(
-        "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Imported', 'EUR')",
+        "INSERT INTO clients (id, org_id, name, currency, harvest_id) VALUES ($1, $2, 'Client', 'EUR', $3)",
         id,
-        org_id
-    )
-    .execute(&mut *tx)
-    .await
-    .unwrap();
-    crate::importers::harvest::provenance::upsert(
-        &mut *tx,
         org_id,
-        horae_core::importers::harvest::types::EntityType::Client,
-        harvest_id,
-        id,
-        None,
+        harvest_id
     )
+    .execute(pool)
     .await
     .unwrap();
-    tx.commit().await.unwrap();
     id
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn an_imported_record_keeps_its_harvest_id(pool: PgPool) {
+async fn a_given_harvest_id_is_kept(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
 
-    let imported = import_client(&pool, ids.org_id, 4_200_000).await;
-    let native = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Native', 'EUR')",
-        native,
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let imported = insert_client(&pool, ids.org_id, Some(4_200_000)).await;
+    let native = insert_client(&pool, ids.org_id, None).await;
 
     assert_eq!(api_id(&pool, "client", imported).await, 4_200_000);
-    // Native numbers come from their own sequence, far below Harvest's ids.
+    // Native ids come from the kind's sequence, far below Harvest's.
     assert!(api_id(&pool, "client", native).await < 4_200_000);
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn a_harvest_id_held_by_another_record_gets_a_fresh_number(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
-    let held = api_id(&pool, "client", ids.client_id).await;
-
-    let imported = import_client(&pool, ids.org_id, held).await;
-
-    let number = api_id(&pool, "client", imported).await;
-    assert_ne!(number, held);
-    assert_eq!(api_id(&pool, "client", ids.client_id).await, held);
-}
-
-#[sqlx::test(migrations = "./migrations")]
-async fn a_native_record_skips_a_number_a_harvest_record_holds(pool: PgPool) {
+async fn a_native_record_skips_an_id_another_record_has(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let next = api_id(&pool, "client", ids.client_id).await + 1;
-    import_client(&pool, ids.org_id, next).await;
-    let native = Uuid::now_v7();
+    insert_client(&pool, ids.org_id, Some(next)).await;
 
-    sqlx::query!(
-        "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Native', 'EUR')",
-        native,
-        ids.org_id
+    let native = insert_client(&pool, ids.org_id, None).await;
+
+    assert!(api_id(&pool, "client", native).await > next);
+}
+
+/// A number never names another record: an imported record's Harvest id stays
+/// reserved after the record is deleted, so it can come back with it.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_native_record_skips_a_harvest_id_the_import_map_holds(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let next = api_id(&pool, "client", ids.client_id).await + 1;
+    crate::importers::harvest::provenance::upsert(
+        &pool,
+        ids.org_id,
+        horae_core::importers::harvest::types::EntityType::Client,
+        next,
+        Uuid::now_v7(),
+        None,
     )
-    .execute(&pool)
     .await
     .unwrap();
+
+    let native = insert_client(&pool, ids.org_id, None).await;
 
     assert!(api_id(&pool, "client", native).await > next);
 }
 
 #[sqlx::test(migrations = "./migrations")]
-async fn a_record_clients_already_know_keeps_its_number_when_matched(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+async fn ids_are_unique_per_organization_only(pool: PgPool) {
+    let first = seed(&pool, OrgRole::Admin).await;
+    let second = seed(&pool, OrgRole::Admin).await;
+    let held = api_id(&pool, "client", first.client_id).await;
 
-    // A later import matches the existing client instead of creating one.
-    crate::importers::harvest::provenance::upsert(
-        &pool,
-        ids.org_id,
-        horae_core::importers::harvest::types::EntityType::Client,
-        4_200_000,
-        ids.client_id,
-        None,
+    let same = insert_client(&pool, second.org_id, Some(held)).await;
+    let duplicate = sqlx::query!(
+        "INSERT INTO clients (id, org_id, name, currency, harvest_id) VALUES ($1, $2, 'Twin', 'EUR', $3)",
+        Uuid::now_v7(),
+        first.org_id,
+        held
     )
-    .await
-    .unwrap();
+    .execute(&pool)
+    .await;
 
-    assert_ne!(api_id(&pool, "client", ids.client_id).await, 4_200_000);
+    assert_eq!(api_id(&pool, "client", same).await, held);
+    assert!(duplicate.is_err());
 }
 
-/// Records that exist when the numbering is deployed: imported ones take their
+/// Records that exist when the column is deployed: imported ones take their
 /// Harvest ids, the rest are numbered in creation order, skipping those.
 #[sqlx::test(migrations = false)]
 async fn the_backfill_numbers_existing_records(pool: PgPool) {
     let mut before = sqlx::migrate!("./migrations");
     before.migrations = before
         .iter()
-        .filter(|m| m.version < 57)
+        .filter(|m| m.version < 59)
         .cloned()
         .collect::<Vec<_>>()
         .into();
@@ -400,14 +383,13 @@ async fn the_backfill_numbers_existing_records(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    // Harvest id 2 is a number a native client would otherwise take. Runtime
-    // SQL: the column has the name it had before migration 0058.
-    sqlx::query(
-        "INSERT INTO harvest_import_map (org_id, harvest_entity_type, harvest_id, horae_id)
+    // Harvest id 2 is a number a native client would otherwise take.
+    sqlx::query!(
+        "INSERT INTO harvest_import_map (org_id, harvest_entity_type, harvest_import_id, horae_id)
          VALUES ($1, 'client', 2, $2)",
+        ids.org_id,
+        imported
     )
-    .bind(ids.org_id)
-    .bind(imported)
     .execute(&pool)
     .await
     .unwrap();
@@ -422,23 +404,39 @@ async fn the_backfill_numbers_existing_records(pool: PgPool) {
     // Creation order, except the one whose turn fell on Harvest's 2: it waits
     // for the next free number.
     assert_eq!(numbers, [1, 5, 3, 4]);
-    let from_harvest = sqlx::query_scalar!(
-        "SELECT count(*) FROM api_ids WHERE from_harvest AND horae_id = $1",
-        imported
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(from_harvest, Some(1));
     // A record created after the backfill continues the same sequence.
-    let later = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Later', 'EUR')",
-        later,
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let later = insert_client(&pool, ids.org_id, None).await;
     assert_eq!(api_id(&pool, "client", later).await, 6);
+}
+
+/// Numbering existing records is not an edit: it must not move what the
+/// importer and the project editor read to detect one.
+#[sqlx::test(migrations = false)]
+async fn the_backfill_leaves_edit_stamps_alone(pool: PgPool) {
+    let mut before = sqlx::migrate!("./migrations");
+    before.migrations = before
+        .iter()
+        .filter(|m| m.version < 59)
+        .cloned()
+        .collect::<Vec<_>>()
+        .into();
+    before.run(&pool).await.unwrap();
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let entry = time_entry(&pool, &ids, EntryState::Open).await;
+    let stamps = || async {
+        sqlx::query!(
+            r#"SELECT te.updated_at AS "updated_at: chrono::DateTime<chrono::Utc>", p.edit_revision
+               FROM time_entries te JOIN projects p ON p.id = te.project_id WHERE te.id = $1"#,
+            entry
+        )
+        .fetch_one(&pool)
+        .await
+        .map(|row| (row.updated_at, row.edit_revision))
+        .unwrap()
+    };
+    let original = stamps().await;
+
+    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+
+    assert_eq!(stamps().await, original);
 }

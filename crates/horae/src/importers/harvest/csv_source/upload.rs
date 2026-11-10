@@ -205,6 +205,9 @@ pub(crate) async fn import_body_with_lease(
                         checkpoint.report.record(*entity, outcome);
                     }
                     checkpoint.report.people.extend(result.person);
+                    for notice in result.notices {
+                        checkpoint.report.note_id(notice);
+                    }
                 }
                 Err(error) => checkpoint.report.record(
                     EntityType::TimeEntry,

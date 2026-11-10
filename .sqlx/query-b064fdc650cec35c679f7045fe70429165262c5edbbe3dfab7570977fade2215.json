@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO tasks (id, org_id, harvest_id, name, billable_default, default_rate_cents, default_rate_currency, active)\n             SELECT id, org_id, harvest_id, name, billable_default, default_rate_cents, default_rate_currency, active\n             FROM jsonb_populate_recordset(NULL::tasks, $1) WHERE org_id = $2\n             ON CONFLICT (id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b064fdc650cec35c679f7045fe70429165262c5edbbe3dfab7570977fade2215"
+}

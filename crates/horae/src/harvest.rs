@@ -6,7 +6,7 @@ mod auth;
 mod client_reads;
 mod decimal_json;
 mod errors;
-mod ids;
+pub(crate) mod ids;
 mod project_reads;
 mod task_reads;
 mod types;
@@ -126,7 +126,7 @@ fn page_window(page: Option<i64>, per_page: Option<i64>) -> Result<(i64, i64, i6
 async fn users_me(user: AuthUser, State(db): State<PgPool>) -> ApiResult<HarvestUser> {
     let row: UserRow = sqlx::query_as!(
         UserRow,
-        r#"SELECT api_number(org_id, 'user', id) AS "id!", name, email, active,
+        r#"SELECT harvest_id AS id, name, email, active,
          org_role::text AS "org_role!: String",
          cost_rate_cents, billable_rate_cents,
          (SELECT default_currency FROM organizations o WHERE o.id = org_id) AS "org_currency!",
@@ -334,7 +334,7 @@ async fn time_entries_page(
 
     let rows = sqlx::query_as!(
         TimeEntryRow,
-        r#"SELECT api_number(te.org_id, 'time_entry', te.id) AS "id!",
+        r#"SELECT te.harvest_id AS id,
                te.spent_date as "spent_date: chrono::NaiveDate",
                te.minutes, te.start_minute, te.rounded_minutes, te.notes,
                (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as "billable!", te.is_running,
@@ -342,11 +342,11 @@ async fn time_entries_page(
                te.state::text AS "state!: String", te.invoice_id,
                te.created_at as "created_at: chrono::DateTime<chrono::Utc>",
                te.updated_at as "updated_at: chrono::DateTime<chrono::Utc>",
-               api_number(te.org_id, 'user', te.user_id) AS "user_id!", u.name AS user_name,
-               api_number(te.org_id, 'project', te.project_id) AS "project_id!",
+               u.harvest_id AS user_id, u.name AS user_name,
+               p.harvest_id AS project_id,
                p.name AS project_name, p.code AS project_code,
-               api_number(te.org_id, 'task', te.task_id) AS "task_id!", t.name AS task_name,
-               api_number(te.org_id, 'client', p.client_id) AS "client_id!", c.name AS client_name,
+               t.harvest_id AS task_id, t.name AS task_name,
+               c.harvest_id AS client_id, c.name AS client_name,
                CASE WHEN viewer.org_role IN ('admin', 'manager') THEN COALESCE(line.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
                  THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
@@ -430,7 +430,7 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
 
     let row = sqlx::query_as!(
         TimeEntryRow,
-        r#"SELECT api_number(te.org_id, 'time_entry', te.id) AS "id!",
+        r#"SELECT te.harvest_id AS id,
                te.spent_date as "spent_date: chrono::NaiveDate",
                te.minutes, te.start_minute, te.rounded_minutes, te.notes,
                (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as "billable!", te.is_running,
@@ -438,11 +438,11 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
                te.state::text AS "state!: String", te.invoice_id,
                te.created_at as "created_at: chrono::DateTime<chrono::Utc>",
                te.updated_at as "updated_at: chrono::DateTime<chrono::Utc>",
-               api_number(te.org_id, 'user', te.user_id) AS "user_id!", u.name AS user_name,
-               api_number(te.org_id, 'project', te.project_id) AS "project_id!",
+               u.harvest_id AS user_id, u.name AS user_name,
+               p.harvest_id AS project_id,
                p.name AS project_name, p.code AS project_code,
-               api_number(te.org_id, 'task', te.task_id) AS "task_id!", t.name AS task_name,
-               api_number(te.org_id, 'client', p.client_id) AS "client_id!", c.name AS client_name,
+               t.harvest_id AS task_id, t.name AS task_name,
+               c.harvest_id AS client_id, c.name AS client_name,
                CASE WHEN viewer.org_role IN ('admin', 'manager') THEN COALESCE(line.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
                  THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
@@ -814,7 +814,7 @@ async fn users_page(
 
     let rows = sqlx::query_as!(
         UserRow,
-        r#"SELECT api_number(org_id, 'user', id) AS "id!", name, email, active,
+        r#"SELECT harvest_id AS id, name, email, active,
          org_role::text AS "org_role!: String",
          cost_rate_cents, billable_rate_cents,
          (SELECT default_currency FROM organizations o WHERE o.id = org_id) AS "org_currency!",

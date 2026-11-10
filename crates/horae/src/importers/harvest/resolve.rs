@@ -21,7 +21,7 @@ use fields::{ClientFields, ProjectFields, TaskFields};
 use horae_core::importers::harvest::convert;
 use horae_core::importers::harvest::keys;
 use horae_core::importers::harvest::types::{
-    EntityType, EntryErrorKind, PersonError, PersonErrorKind, PersonOutcome, RowOutcome,
+    EntityType, EntryErrorKind, IdNotice, PersonError, PersonErrorKind, PersonOutcome, RowOutcome,
     SourceKind, SourceRow,
 };
 use uuid::Uuid;
@@ -114,6 +114,8 @@ pub struct PendingCache {
     /// [`RunCache::entry_slot_offset`]); bumped on commit so the next identical
     /// row in the run maps to the next stored entry instead of the same one.
     pub entry_slot: Option<String>,
+    /// Reported once the row commits; never merged into the run cache.
+    pub notices: Vec<IdNotice>,
 }
 
 /// Successful resolutions for one organization/run, plus consumed id-less
@@ -259,6 +261,8 @@ pub struct Resolved {
     pub outcome: Option<RowOutcome>,
     /// Entry to add to the run cache once the row's savepoint commits.
     pub cache_entry: Option<(ParentKind, String, Uuid)>,
+    /// Set when a created record could not keep its Harvest id as its API id.
+    pub notice: Option<IdNotice>,
 }
 
 impl Resolved {
@@ -267,6 +271,7 @@ impl Resolved {
             id,
             outcome: None,
             cache_entry: None,
+            notice: None,
         }
     }
 
@@ -275,14 +280,16 @@ impl Resolved {
             id,
             outcome: Some(RowOutcome::Skipped),
             cache_entry: Some((kind, key, id)),
+            notice: None,
         }
     }
 
-    fn created(kind: ParentKind, key: String, id: Uuid) -> Self {
+    fn created(kind: ParentKind, key: String, id: Uuid, notice: Option<IdNotice>) -> Self {
         Self {
             id,
             outcome: Some(RowOutcome::Created),
             cache_entry: Some((kind, key, id)),
+            notice,
         }
     }
 }
@@ -310,6 +317,37 @@ async fn upsert_provenance_if_api(
         super::provenance::upsert(conn, org_id, entity, hid, horae_id, updated_at).await?;
     }
     Ok(())
+}
+
+/// The API id (`harvest_id`) to insert a record created from Harvest with: its
+/// Harvest id, or `None` for the next number when another record of the kind
+/// already has it (or the source has no ids).
+pub(super) async fn free_harvest_id(
+    conn: &mut sqlx::PgConnection,
+    org_id: Uuid,
+    entity: EntityType,
+    harvest_id: Option<i64>,
+) -> sqlx::Result<Option<i64>> {
+    let Some(harvest_id) = harvest_id.filter(|id| *id > 0) else {
+        return Ok(None);
+    };
+    let holder = crate::harvest::ids::record(&mut *conn, org_id, entity.into(), harvest_id).await?;
+    Ok(holder.is_none().then_some(harvest_id))
+}
+
+/// The report line for a record whose API id is not its Harvest id (FR-016).
+pub(super) fn id_notice(
+    entity: EntityType,
+    harvest_id: Option<i64>,
+    api_id: i64,
+) -> Option<IdNotice> {
+    harvest_id
+        .filter(|harvest_id| *harvest_id != api_id)
+        .map(|harvest_id| IdNotice {
+            entity,
+            harvest_id,
+            api_id,
+        })
 }
 
 /// Convert an optional decimal rate string to cents.
@@ -371,17 +409,20 @@ pub async fn resolve_client(
     }
     let currency = currency_or(row.currency, org.default_currency);
     let id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO clients (id, org_id, name, currency, address, active)
-         VALUES ($1, $2, $3, $4, $5, $6)",
+    let wanted =
+        free_harvest_id(conn, org.org_id, EntityType::Client, row.harvest_client_id).await?;
+    let api_id = sqlx::query_scalar!(
+        "INSERT INTO clients (id, org_id, name, currency, address, active, harvest_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING harvest_id",
         id,
         org.org_id,
         name,
         currency,
         row.client_address,
         row.client_active,
+        wanted,
     )
-    .execute(&mut *conn)
+    .fetch_one(&mut *conn)
     .await?;
     upsert_provenance_if_api(
         conn,
@@ -392,7 +433,12 @@ pub async fn resolve_client(
         row.harvest_updated_at,
     )
     .await?;
-    Ok(Resolved::created(ParentKind::Client, ck, id))
+    Ok(Resolved::created(
+        ParentKind::Client,
+        ck,
+        id,
+        id_notice(EntityType::Client, row.harvest_client_id, api_id),
+    ))
 }
 
 /// Resolve or create the project for a row (client already resolved).
@@ -476,9 +522,16 @@ pub async fn resolve_project(
     }
     let client_currency = client.currency;
     let id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO projects (id, org_id, client_id, code, name, currency, starts_on, ends_on, active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+    let wanted = free_harvest_id(
+        conn,
+        org.org_id,
+        EntityType::Project,
+        row.harvest_project_id,
+    )
+    .await?;
+    let api_id = sqlx::query_scalar!(
+        "INSERT INTO projects (id, org_id, client_id, code, name, currency, starts_on, ends_on, active, harvest_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING harvest_id",
         id,
         org.org_id,
         client_id,
@@ -488,8 +541,9 @@ pub async fn resolve_project(
         row.project_starts_on as Option<chrono::NaiveDate>,
         row.project_ends_on as Option<chrono::NaiveDate>,
         row.project_active,
+        wanted,
     )
-    .execute(&mut *conn)
+    .fetch_one(&mut *conn)
     .await?;
     upsert_provenance_if_api(
         conn,
@@ -500,7 +554,12 @@ pub async fn resolve_project(
         row.harvest_updated_at,
     )
     .await?;
-    Ok(Resolved::created(ParentKind::Project, ck, id))
+    Ok(Resolved::created(
+        ParentKind::Project,
+        ck,
+        id,
+        id_notice(EntityType::Project, row.harvest_project_id, api_id),
+    ))
 }
 
 /// Resolve or create the org-level task for a row.
@@ -557,9 +616,10 @@ pub async fn resolve_task(
                 && value.bytes().all(|byte| byte.is_ascii_uppercase())
         });
     let id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, active, default_rate_currency, is_default)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+    let wanted = free_harvest_id(conn, org.org_id, EntityType::Task, row.harvest_task_id).await?;
+    let api_id = sqlx::query_scalar!(
+        "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, active, default_rate_currency, is_default, harvest_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING harvest_id",
         id,
         org.org_id,
         name,
@@ -568,8 +628,9 @@ pub async fn resolve_task(
         row.task_active,
         rate_currency,
         row.task_is_default,
+        wanted,
     )
-    .execute(&mut *conn)
+    .fetch_one(&mut *conn)
     .await?;
     upsert_provenance_if_api(
         conn,
@@ -580,7 +641,12 @@ pub async fn resolve_task(
         row.harvest_updated_at,
     )
     .await?;
-    Ok(Resolved::created(ParentKind::Task, ck, id))
+    Ok(Resolved::created(
+        ParentKind::Task,
+        ck,
+        id,
+        id_notice(EntityType::Task, row.harvest_task_id, api_id),
+    ))
 }
 
 /// Ensure a retained project link exists (FR-009), without restoring archived
@@ -657,7 +723,7 @@ pub async fn resolve_person(
     conn: &mut sqlx::PgConnection,
     org_id: Uuid,
     person: &PersonFields<'_>,
-) -> Result<(UserKey, Uuid, PersonOutcome), RowFailure> {
+) -> Result<(UserKey, Uuid, PersonOutcome, Option<IdNotice>), RowFailure> {
     let email = keys::normalize(person.email);
     let key = UserKey::Email(email.clone());
     if let Some(hid) = person.harvest_id
@@ -672,7 +738,7 @@ pub async fn resolve_person(
         .await?
         .is_some()
     {
-        return Ok((key, id, PersonOutcome::Matched));
+        return Ok((key, id, PersonOutcome::Matched, None));
     }
     let matches = sqlx::query_scalar!(
         "SELECT id FROM users WHERE org_id = $1 AND harvest_norm(email) = $2 LIMIT 2",
@@ -681,9 +747,9 @@ pub async fn resolve_person(
     )
     .fetch_all(&mut *conn)
     .await?;
-    let (id, outcome) = match matches.as_slice() {
-        [id] => (*id, PersonOutcome::Matched),
-        [] => create_person(conn, org_id, person.email, person.name).await?,
+    let (id, outcome, notice) = match matches.as_slice() {
+        [id] => (*id, PersonOutcome::Matched, None),
+        [] => create_person(conn, org_id, person.email, person.name, person.harvest_id).await?,
         _ => return Err(ambiguous_person(person.email, person.name)),
     };
     if let Some(hid) = person.harvest_id {
@@ -715,7 +781,7 @@ pub async fn resolve_person(
         }
         super::provenance::upsert(&mut *conn, org_id, EntityType::Person, hid, id, None).await?;
     }
-    Ok((key, id, outcome))
+    Ok((key, id, outcome, notice))
 }
 
 fn ambiguous_person(email: &str, name: &str) -> RowFailure {
@@ -741,7 +807,8 @@ async fn create_person(
     org_id: Uuid,
     email: &str,
     name: &str,
-) -> Result<(Uuid, PersonOutcome), RowFailure> {
+    harvest_id: Option<i64>,
+) -> Result<(Uuid, PersonOutcome, Option<IdNotice>), RowFailure> {
     // The import needs to know whose account holds the email, not only that
     // one does, so it reads them under the shared lock itself, also ignoring
     // surrounding whitespace.
@@ -754,7 +821,7 @@ async fn create_person(
     .await?;
     match existing.as_slice() {
         [] => {}
-        [user] if user.org_id == org_id => return Ok((user.id, PersonOutcome::Matched)),
+        [user] if user.org_id == org_id => return Ok((user.id, PersonOutcome::Matched, None)),
         [_, _] if existing.iter().all(|user| user.org_id == org_id) => {
             return Err(ambiguous_person(email, name));
         }
@@ -763,18 +830,24 @@ async fn create_person(
     let name = keys::trim_ws(name);
     let name = if name.is_empty() { email } else { name };
     let id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role, active)
-         VALUES ($1, $2, $3, $4, 'member', false)",
+    let wanted = free_harvest_id(conn, org_id, EntityType::Person, harvest_id).await?;
+    let api_id = sqlx::query_scalar!(
+        "INSERT INTO users (id, org_id, email, name, org_role, active, harvest_id)
+         VALUES ($1, $2, $3, $4, 'member', false, $5) RETURNING harvest_id",
         id,
         org_id,
         email,
         name,
+        wanted,
     )
-    .execute(&mut *conn)
+    .fetch_one(&mut *conn)
     .await
     .map_err(|error| match &error {
-        sqlx::Error::Database(db) if db.is_unique_violation() => email_in_use(email, name),
+        sqlx::Error::Database(db)
+            if db.is_unique_violation() && db.constraint() != Some("users_harvest_id") =>
+        {
+            email_in_use(email, name)
+        }
         _ => error.into(),
     })?;
     let event = crate::plugin::AppEvent::UserCreated {
@@ -792,7 +865,11 @@ async fn create_person(
     crate::jobs::enqueue_outbox(&mut *conn, org_id, "user_created", event)
         .await
         .map_err(|e| RowFailure::new(e.to_string()))?;
-    Ok((id, PersonOutcome::Created))
+    Ok((
+        id,
+        PersonOutcome::Created,
+        id_notice(EntityType::Person, harvest_id, api_id),
+    ))
 }
 
 fn email_in_use(email: &str, name: &str) -> RowFailure {
@@ -876,7 +953,8 @@ pub async fn resolve_user(
     match (matches.as_slice(), email) {
         ([id], _) => Ok((key, *id, csv_outcome(PersonOutcome::Matched))),
         ([], Some(email)) if source == SourceKind::Csv => {
-            let (id, outcome) = create_person(conn, org_id, email, name.unwrap_or(email)).await?;
+            let (id, outcome, _) =
+                create_person(conn, org_id, email, name.unwrap_or(email), None).await?;
             Ok((key, id, csv_outcome(outcome)))
         }
         ([], _) => Err(RowFailure::person(
@@ -930,6 +1008,7 @@ mod checkpoint_tests {
             person: Some(email_user),
             project_task: Some((project, task)),
             entry_slot: Some("identical-entry".into()),
+            notices: Vec::new(),
         });
         cache.merge(PendingCache {
             user: Some((UserKey::FullName("same-key".into()), named_user)),

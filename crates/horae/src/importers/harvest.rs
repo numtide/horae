@@ -143,6 +143,9 @@ async fn apply_rows<S: RowSource>(
             report.record(*entity, outcome);
         }
         report.people.extend(result.person);
+        for notice in result.notices {
+            report.note_id(notice);
+        }
     }
 
     debug_assert!(report.reconciles());

@@ -256,7 +256,7 @@ async fn legacy_content(pool: &PgPool) -> serde_json::Value {
             (SELECT jsonb_agg(to_jsonb(j) - 'original_requester_id' - 'error_kind' ORDER BY id) FROM horae_jobs j),
             (SELECT jsonb_agg(to_jsonb(u) ORDER BY job_id) FROM horae_job_uploads u),
             (SELECT jsonb_agg(to_jsonb(c) ORDER BY id) FROM horae_job_report_error_chunks c),
-            (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer' - 'timezone' ORDER BY id) FROM users u)
+            (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer' - 'timezone' - 'harvest_id' ORDER BY id) FROM users u)
         ) AS "content!""#
     )
     .fetch_one(pool)

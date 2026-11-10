@@ -24,7 +24,7 @@ pub(super) async fn read(
     // Count and page share one source snapshot, including exhausted pages.
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
-             SELECT id,name,active,address,currency,created_at FROM clients
+             SELECT id,harvest_id,name,active,address,currency,created_at FROM clients
              WHERE org_id=$1 AND $5
                AND ($2::bool IS NULL OR active=$2)
                AND ($3::timestamptz IS NULL OR created_at >= $3)
@@ -32,7 +32,7 @@ pub(super) async fn read(
            ), totals AS (SELECT COUNT(*) total FROM visible), page AS (
              SELECT * FROM visible ORDER BY name,id LIMIT $6 OFFSET $7
            )
-           SELECT totals.total AS "total!",api_number($1,'client',c.id) AS "id?",c.name AS "name?",
+           SELECT totals.total AS "total!",c.harvest_id AS "id?",c.name AS "name?",
                   c.active AS "active?",c.address,c.currency AS "currency?",
                   c.created_at AS "created_at?: chrono::DateTime<chrono::Utc>"
            FROM totals LEFT JOIN page c ON true ORDER BY c.name,c.id"#,

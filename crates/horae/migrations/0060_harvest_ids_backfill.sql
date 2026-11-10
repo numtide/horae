@@ -1,56 +1,80 @@
--- Number the records that exist when api_ids is deployed (FR-017).
+-- no-transaction
+-- Number the records that exist when `harvest_id` is deployed (FR-017).
 --
--- No DDL here, so writes are not blocked while it runs: records created
--- meanwhile were already numbered by 0058's triggers, and every insert below
--- skips a record or number that is taken. Imported records first, with their
--- Harvest ids; then every other record in creation order from its kind's
--- sequence, skipping numbers Harvest ids hold.
+-- In batches of 10,000 rows in id order (UUID v7, so creation order), each
+-- committed on its own, so a row stays locked only for its batch and reads,
+-- inserts and edits continue. No DDL. Records created meanwhile were already
+-- numbered by 0059's trigger; a rerun after a failure resumes where it stopped.
+-- In each batch: imported records take their Harvest id; then the rest take
+-- the kind's next sequence numbers in order, skipping one another record has
+-- or the import map holds; a record whose turn fell on such a number takes the
+-- next free one.
+--
+-- One statement, so the DO block runs outside a transaction block and may
+-- commit.
 DO $$
 DECLARE
   k record;
-  r record;
+  batch uuid[];
+  last_id uuid;
 BEGIN
   FOR k IN SELECT * FROM (VALUES
-    ('client', 'clients', 'client', 'r.created_at, r.id'),
-    ('project', 'projects', 'project', 'r.created_at, r.id'),
-    ('task', 'tasks', 'task', 'r.id'),  -- tasks have no created_at; ids are v7
-    ('time_entry', 'time_entries', 'time_entry', 'r.created_at, r.id'),
-    ('user', 'users', 'person', 'r.created_at, r.id')
-  ) AS kinds(kind, tbl, harvest_type, creation_order)
+    ('clients', 'client'),
+    ('projects', 'project'),
+    ('tasks', 'task'),
+    ('time_entries', 'time_entry'),
+    ('users', 'person')
+  ) AS kinds(tbl, harvest_type)
   LOOP
-    EXECUTE format($sql$
-      INSERT INTO api_ids (org_id, kind, number, horae_id, from_harvest)
-      SELECT DISTINCT ON (m.org_id, m.horae_id) m.org_id, %L, m.harvest_import_id, m.horae_id, true
-      FROM harvest_import_map m JOIN %I r ON r.id = m.horae_id AND r.org_id = m.org_id
-      WHERE m.harvest_entity_type = %L AND m.harvest_import_id > 0
-      ORDER BY m.org_id, m.horae_id, m.created_at, m.harvest_import_id
-      ON CONFLICT DO NOTHING
-    $sql$, k.kind, k.tbl, k.harvest_type);
-
-    -- One set-based pass; a record whose number a Harvest id holds is left
-    -- for the loop below.
-    EXECUTE format($sql$
-      INSERT INTO api_ids (org_id, kind, number, horae_id)
-      SELECT org_id, %1$L, nextval(%4$L::regclass), id
-      FROM (
-        SELECT r.org_id, r.id FROM %2$I r
-        WHERE NOT EXISTS (
-          SELECT 1 FROM api_ids a WHERE a.org_id = r.org_id AND a.kind = %1$L AND a.horae_id = r.id
-        )
-        ORDER BY %3$s
-      ) pending
-      ON CONFLICT DO NOTHING
-    $sql$, k.kind, k.tbl, k.creation_order, format('api_ids_%s_seq', k.kind));
-
-    FOR r IN EXECUTE format($sql$
-      SELECT r.org_id, r.id FROM %2$I r
-      WHERE NOT EXISTS (
-        SELECT 1 FROM api_ids a WHERE a.org_id = r.org_id AND a.kind = %1$L AND a.horae_id = r.id
-      )
-      ORDER BY %3$s
-    $sql$, k.kind, k.tbl, k.creation_order)
+    last_id := '00000000-0000-0000-0000-000000000000';
     LOOP
-      PERFORM api_id_allocate(r.org_id, k.kind::api_id_kind, r.id);
+      EXECUTE format(
+        'SELECT array_agg(id ORDER BY id) FROM (
+           SELECT id FROM %I WHERE id > $1 AND harvest_id IS NULL ORDER BY id LIMIT 10000
+         ) b', k.tbl)
+        INTO batch USING last_id;
+      EXIT WHEN batch IS NULL;
+      last_id := batch[array_upper(batch, 1)];
+      -- Local to this batch's transaction, so it never outlives the backfill.
+      PERFORM set_config('horae.backfill', 'on', true);
+
+      EXECUTE format($sql$
+        UPDATE %1$I r SET harvest_id = m.harvest_import_id
+        FROM (
+          SELECT DISTINCT ON (org_id, horae_id) org_id, horae_id, harvest_import_id
+          FROM harvest_import_map
+          WHERE harvest_entity_type = %2$L AND harvest_import_id > 0 AND horae_id = ANY($1)
+          ORDER BY org_id, horae_id, created_at, harvest_import_id
+        ) m
+        WHERE r.id = m.horae_id AND r.org_id = m.org_id AND r.harvest_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM %1$I o WHERE o.org_id = r.org_id AND o.harvest_id = m.harvest_import_id
+          )
+      $sql$, k.tbl, k.harvest_type) USING batch;
+
+      EXECUTE format($sql$
+        UPDATE %1$I r SET harvest_id = n.number
+        FROM (
+          SELECT id, nextval(%3$L::regclass) AS number
+          FROM (
+            SELECT id FROM %1$I WHERE id = ANY($1) AND harvest_id IS NULL ORDER BY id
+          ) pending
+        ) n
+        WHERE r.id = n.id
+          AND NOT EXISTS (
+            SELECT 1 FROM harvest_import_map m
+            WHERE m.org_id = r.org_id AND m.harvest_entity_type = %2$L
+              AND m.harvest_import_id = n.number
+          )
+          AND NOT EXISTS (SELECT 1 FROM %1$I o WHERE o.org_id = r.org_id AND o.harvest_id = n.number)
+      $sql$, k.tbl, k.harvest_type, k.tbl || '_harvest_id_seq') USING batch;
+
+      EXECUTE format($sql$
+        UPDATE %1$I SET harvest_id = harvest_id_next(%1$L::regclass, %3$L::regclass, %2$L, org_id)
+        WHERE id = ANY($1) AND harvest_id IS NULL
+      $sql$, k.tbl, k.harvest_type, k.tbl || '_harvest_id_seq') USING batch;
+
+      COMMIT;
     END LOOP;
   END LOOP;
 END

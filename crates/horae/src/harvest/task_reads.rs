@@ -24,7 +24,7 @@ pub(super) async fn read(
     // Count and rows share the authorized snapshot, even beyond the last page.
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
-             SELECT t.id,t.name,t.active,t.billable_default,
+             SELECT t.id,t.harvest_id,t.name,t.active,t.billable_default,
                     CASE WHEN (CASE WHEN $7 THEN legacy.can_view_rates ELSE $9 END)
                       THEN t.default_rate_cents END default_rate_cents,
                     t.default_rate_currency
@@ -37,7 +37,7 @@ pub(super) async fn read(
            ), totals AS (SELECT COUNT(*) total FROM visible), page AS (
              SELECT * FROM visible ORDER BY name,id LIMIT $5 OFFSET $6
            )
-           SELECT totals.total AS "total!",api_number($1,'task',t.id) AS "id?",t.name AS "name?",
+           SELECT totals.total AS "total!",t.harvest_id AS "id?",t.name AS "name?",
                   t.active AS "active?",t.billable_default AS "billable_default?",t.default_rate_cents,
                   t.default_rate_currency
            FROM totals LEFT JOIN page t ON true ORDER BY t.name,t.id"#,

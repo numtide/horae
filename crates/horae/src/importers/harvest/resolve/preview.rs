@@ -44,19 +44,19 @@ impl ParentSnapshot {
         Ok(Self {
             clients: sqlx::query_scalar!(
                 r#"SELECT COALESCE(jsonb_agg(to_jsonb(r)), '[]'::jsonb) AS "rows!"
-                   FROM (SELECT id, org_id, name, currency, address, active FROM clients
+                   FROM (SELECT id, org_id, harvest_id, name, currency, address, active FROM clients
                          WHERE org_id = $1 AND id = ANY($2)) r"#,
                 org_id, &clients,
             ).fetch_one(&mut *conn).await?,
             projects: sqlx::query_scalar!(
                 r#"SELECT COALESCE(jsonb_agg(to_jsonb(r)), '[]'::jsonb) AS "rows!"
-                   FROM (SELECT id, org_id, client_id, code, name, currency, starts_on, ends_on, active
+                   FROM (SELECT id, org_id, harvest_id, client_id, code, name, currency, starts_on, ends_on, active
                          FROM projects WHERE org_id = $1 AND id = ANY($2)) r"#,
                 org_id, &projects,
             ).fetch_one(&mut *conn).await?,
             tasks: sqlx::query_scalar!(
                 r#"SELECT COALESCE(jsonb_agg(to_jsonb(r)), '[]'::jsonb) AS "rows!"
-                   FROM (SELECT id, org_id, name, billable_default, default_rate_cents, default_rate_currency, active, is_default
+                   FROM (SELECT id, org_id, harvest_id, name, billable_default, default_rate_cents, default_rate_currency, active, is_default
                          FROM tasks WHERE org_id = $1 AND id = ANY($2)) r"#,
                 org_id, &tasks,
             ).fetch_one(&mut *conn).await?,
@@ -75,7 +75,7 @@ impl ParentSnapshot {
             // Matched accounts are captured too; restoring them is a no-op.
             users: sqlx::query_scalar!(
                 r#"SELECT COALESCE(jsonb_agg(to_jsonb(r)), '[]'::jsonb) AS "rows!"
-                   FROM (SELECT id, org_id, email, name, org_role, active FROM users
+                   FROM (SELECT id, org_id, harvest_id, email, name, org_role, active FROM users
                          WHERE org_id = $1 AND id = ANY($2)) r"#,
                 org_id, &users,
             ).fetch_one(&mut *conn).await?,
@@ -104,8 +104,8 @@ impl ParentSnapshot {
         // the simulated person is then reported as lost instead of failing
         // later entries.
         sqlx::query!(
-            "INSERT INTO users (id, org_id, email, name, org_role, active)
-             SELECT r.id, r.org_id, r.email, r.name, r.org_role, r.active
+            "INSERT INTO users (id, org_id, harvest_id, email, name, org_role, active)
+             SELECT r.id, r.org_id, r.harvest_id, r.email, r.name, r.org_role, r.active
              FROM jsonb_populate_recordset(NULL::users, $1) r
              WHERE r.org_id = $2
                AND NOT EXISTS (
@@ -128,8 +128,8 @@ impl ParentSnapshot {
         .fetch_all(&mut *conn)
         .await?;
         sqlx::query!(
-            "INSERT INTO clients (id, org_id, name, currency, address, active)
-             SELECT id, org_id, name, currency, address, active
+            "INSERT INTO clients (id, org_id, harvest_id, name, currency, address, active)
+             SELECT id, org_id, harvest_id, name, currency, address, active
              FROM jsonb_populate_recordset(NULL::clients, $1) WHERE org_id = $2
              ON CONFLICT (id) DO NOTHING",
             &self.clients,
@@ -141,8 +141,8 @@ impl ParentSnapshot {
         // thousands of simulated rows. Scalar lookups keep ownership checks
         // from becoming full-catalog nested loops under those estimates.
         sqlx::query!(
-            "INSERT INTO projects (id, org_id, client_id, code, name, currency, starts_on, ends_on, active)
-             SELECT r.id, r.org_id, r.client_id, r.code, r.name, r.currency, r.starts_on, r.ends_on, r.active
+            "INSERT INTO projects (id, org_id, harvest_id, client_id, code, name, currency, starts_on, ends_on, active)
+             SELECT r.id, r.org_id, r.harvest_id, r.client_id, r.code, r.name, r.currency, r.starts_on, r.ends_on, r.active
              FROM jsonb_populate_recordset(NULL::projects, $1) r
              WHERE r.org_id = $2
                AND (SELECT org_id FROM clients WHERE id = r.client_id) = $2
@@ -150,9 +150,9 @@ impl ParentSnapshot {
             &self.projects, org_id,
         ).execute(&mut *conn).await?;
         sqlx::query!(
-            "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, default_rate_currency, active, is_default)
+            "INSERT INTO tasks (id, org_id, harvest_id, name, billable_default, default_rate_cents, default_rate_currency, active, is_default)
              -- Checkpoints saved before is_default existed lack the field.
-             SELECT id, org_id, name, billable_default, default_rate_cents, default_rate_currency, active, COALESCE(is_default, false)
+             SELECT id, org_id, harvest_id, name, billable_default, default_rate_cents, default_rate_currency, active, COALESCE(is_default, false)
              FROM jsonb_populate_recordset(NULL::tasks, $1) WHERE org_id = $2
              ON CONFLICT (id) DO NOTHING",
             &self.tasks,
