@@ -6,7 +6,7 @@
 -- kind of UUID (an old seed or fixture) is numbered by its id, not its age.
 -- Each batch is committed so a row stays locked only for its batch and reads,
 -- inserts and edits continue. No DDL. Records created meanwhile were already
--- numbered by 0059's trigger; a rerun after a failure resumes where it stopped.
+-- numbered by 0060's trigger; a rerun after a failure resumes where it stopped.
 -- In each batch: imported records take their Harvest id; then the rest take
 -- the kind's next sequence numbers in order, skipping one another record has
 -- or the import map holds; a record whose turn fell on such a number takes the

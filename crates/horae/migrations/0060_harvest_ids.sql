@@ -9,7 +9,7 @@
 -- as its Harvest id. So a number never names another record, also after the
 -- record it named is deleted.
 --
--- Existing rows are numbered by 0060; 0061 and 0062 make the column NOT NULL
+-- Existing rows are numbered by 0061; 0062 and 0063 make the column NOT NULL
 -- and unique.
 
 CREATE FUNCTION harvest_id_next(
@@ -72,21 +72,21 @@ CREATE SEQUENCE tasks_harvest_id_seq;
 CREATE SEQUENCE time_entries_harvest_id_seq;
 CREATE SEQUENCE users_harvest_id_seq;
 
--- For the trigger's lookups until 0062 replaces them with unique indexes. Not
+-- For the trigger's lookups until 0063 replaces them with unique indexes. Not
 -- unique yet on purpose: an UPDATE of a column in a unique index takes a
 -- FOR UPDATE row lock, which waits for every FOR KEY SHARE an insert's
 -- foreign-key check holds, so the backfill would stop new time entries and
 -- could deadlock with them. Sequence numbers and Harvest ids are distinct by
--- construction; 0062 proves it when it builds the unique index.
+-- construction; 0063 proves it when it builds the unique index.
 CREATE INDEX clients_harvest_id_lookup ON clients (org_id, harvest_id);
 CREATE INDEX projects_harvest_id_lookup ON projects (org_id, harvest_id);
 CREATE INDEX tasks_harvest_id_lookup ON tasks (org_id, harvest_id);
 CREATE INDEX time_entries_harvest_id_lookup ON time_entries (org_id, harvest_id);
 CREATE INDEX users_harvest_id_lookup ON users (org_id, harvest_id);
 
--- The backfill (0060) sets `horae.backfill` for each batch: adding the API id
+-- The backfill (0061) sets `horae.backfill` for each batch: adding the API id
 -- is not an edit, so it must not move `updated_at` (the importer compares it
--- to detect an edit made in Horae) or a project's edit revision. 0062 restores
+-- to detect an edit made in Horae) or a project's edit revision. 0063 restores
 -- both bodies.
 CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger
 LANGUAGE plpgsql AS $$

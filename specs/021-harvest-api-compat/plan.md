@@ -102,12 +102,12 @@ specs/021-harvest-api-compat/
 
 ```text
 crates/core/src/time_entry_timer.rs               # restart eligibility, start-stops-running rule
-crates/horae/migrations/0057_api_account_id.sql   # 0056 is taken by the time-zone branch
-crates/horae/migrations/0058_harvest_import_id.sql  # harvest_import_map.harvest_id renamed
-crates/horae/migrations/0059_harvest_ids.sql        # harvest_id columns, sequences, trigger, lookup indexes
-crates/horae/migrations/0060_harvest_ids_backfill.sql
-crates/horae/migrations/0061_harvest_ids_check.sql  # then 0062: NOT NULL and unique indexes
-crates/horae/migrations/0062_harvest_ids_not_null.sql
+crates/horae/migrations/0058_api_account_id.sql   # 0056 is time zones (#353), 0057 Common tasks
+crates/horae/migrations/0059_harvest_import_id.sql  # harvest_import_map.harvest_id renamed
+crates/horae/migrations/0060_harvest_ids.sql        # harvest_id columns, sequences, trigger, lookup indexes
+crates/horae/migrations/0061_harvest_ids_backfill.sql
+crates/horae/migrations/0062_harvest_ids_check.sql  # then 0063: NOT NULL and unique indexes
+crates/horae/migrations/0063_harvest_ids_not_null.sql
 crates/horae/migrations/<next>_api_tokens.sql     # step 2
 crates/horae/migrations/<next>_catalogue_updated_at.sql   # step 4
 crates/horae/src/harvest.rs                       # was harvest/mod.rs (R-12); router and aliases

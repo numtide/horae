@@ -171,7 +171,7 @@ async fn a_member_filtering_by_an_unknown_person_is_refused(pool: PgPool) {
     assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
-// ── Numbering (migrations 0057–0059) ────────────────────────────────────────
+// ── Numbering (migrations 0058–0060) ────────────────────────────────────────
 
 #[sqlx::test(migrations = "./migrations")]
 async fn every_organization_has_an_account_id(pool: PgPool) {
@@ -355,7 +355,7 @@ async fn the_backfill_numbers_existing_records(pool: PgPool) {
     let mut before = sqlx::migrate!("./migrations");
     before.migrations = before
         .iter()
-        .filter(|m| m.version < 59)
+        .filter(|m| m.version < 60)
         .cloned()
         .collect::<Vec<_>>()
         .into();
@@ -416,7 +416,7 @@ async fn the_backfill_leaves_edit_stamps_alone(pool: PgPool) {
     let mut before = sqlx::migrate!("./migrations");
     before.migrations = before
         .iter()
-        .filter(|m| m.version < 59)
+        .filter(|m| m.version < 60)
         .cloned()
         .collect::<Vec<_>>()
         .into();
@@ -452,12 +452,12 @@ async fn migrate_before(pool: &PgPool, version: i64) {
     before.run(pool).await.unwrap();
 }
 
-/// 0060 run again after a partial run, as after a crash mid-backfill: rows it
+/// 0061 run again after a partial run, as after a crash mid-backfill: rows it
 /// already numbered keep their numbers, the rest are numbered. It also spans
 /// more than one batch and picks the first map row of a record mapped twice.
 #[sqlx::test(migrations = false)]
 async fn the_backfill_resumes_and_spans_batches(pool: PgPool) {
-    migrate_before(&pool, 59).await;
+    migrate_before(&pool, 60).await;
     let ids = seed(&pool, OrgRole::Admin).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
@@ -487,7 +487,7 @@ async fn the_backfill_resumes_and_spans_batches(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    migrate_before(&pool, 61).await;
+    migrate_before(&pool, 62).await;
     let numbered = || async {
         sqlx::query!(
             r#"SELECT count(*) AS "all!", count(harvest_id) AS "numbered!",
@@ -535,7 +535,7 @@ async fn the_backfill_resumes_and_spans_batches(pool: PgPool) {
     .unwrap();
     let backfill = sqlx::migrate!("./migrations")
         .iter()
-        .find(|m| m.version == 60)
+        .find(|m| m.version == 61)
         .unwrap()
         .sql
         .clone();
@@ -556,7 +556,7 @@ async fn the_backfill_resumes_and_spans_batches(pool: PgPool) {
 
 #[sqlx::test(migrations = false)]
 async fn a_duplicate_number_stops_the_unique_index_with_a_readable_error(pool: PgPool) {
-    migrate_before(&pool, 62).await;
+    migrate_before(&pool, 63).await;
     let ids = seed(&pool, OrgRole::Admin).await;
     let held = api_id(&pool, "client", ids.client_id).await;
     insert_client(&pool, ids.org_id, Some(held)).await;
@@ -573,7 +573,7 @@ async fn a_duplicate_number_stops_the_unique_index_with_a_readable_error(pool: P
     );
 }
 
-/// The backfill's flag only mattered during 0060; afterwards nothing can skip
+/// The backfill's flag only mattered during 0061; afterwards nothing can skip
 /// the stamps.
 #[sqlx::test(migrations = "./migrations")]
 async fn the_backfill_flag_no_longer_skips_edit_stamps(pool: PgPool) {

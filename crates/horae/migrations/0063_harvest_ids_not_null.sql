@@ -1,5 +1,5 @@
 -- VALIDATE scans under SHARE UPDATE EXCLUSIVE. The unique indexes replace
--- 0059's lookup indexes; each build takes a SHARE lock, and since this file is
+-- 0060's lookup indexes; each build takes a SHARE lock, and since this file is
 -- one transaction those locks are held until it commits: reads continue, writes
 -- to the five tables wait for the whole file (0.73 s at 1M time entries). SET
 -- NOT NULL then proves the column full from the valid check instead of
@@ -8,7 +8,7 @@
 
 -- A duplicate number would make an index build fail with a bare constraint
 -- error; name the first one instead. sqlx refuses to start an older image once
--- 0059 is applied, so the fix is forward: renumber the duplicate and restart.
+-- 0060 is applied, so the fix is forward: renumber the duplicate and restart.
 DO $$
 DECLARE
   k record;

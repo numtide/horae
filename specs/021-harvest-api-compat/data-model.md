@@ -57,18 +57,18 @@ kinds they expose (assignments, invoices, invoice lines, tags).
   back with it. The importer never takes a number the sequence has handed out, so a deleted
   native record's number stays unused too.
 
-Migrations: `0058` renames `harvest_import_map.harvest_id` to `harvest_import_id` (the id the
-record had in Harvest), so the two never read alike. `0059` adds the columns, sequences, the
+Migrations: `0059` renames `harvest_import_map.harvest_id` to `harvest_import_id` (the id the
+record had in Harvest), so the two never read alike. `0060` adds the columns, sequences, the
 trigger and plain lookup indexes; the unique indexes come only after the backfill, because an
 `UPDATE` of a column in a unique index takes `FOR UPDATE` row locks, which wait for the
 `FOR KEY SHARE` locks of every insert's foreign-key checks: with them the backfill stopped new
-time entries and deadlocked with them. `0059` also makes `set_updated_at` and the project edit
+time entries and deadlocked with them. `0060` also makes `set_updated_at` and the project edit
 revision trigger skip a session that sets `horae.backfill`, so numbering is not an edit (the
-importer compares `updated_at` to detect edits made in Horae). `0060` backfills without a
+importer compares `updated_at` to detect edits made in Horae). `0061` backfills without a
 transaction, in batches of 10,000 rows in id order (UUID v7, creation order), each committed
 with `horae.backfill` set locally; per batch, imported records take their Harvest id, the rest
 the next sequence numbers, a record whose turn falls on a held number the next free one. A rerun
-resumes. `0061` adds `CHECK (harvest_id IS NOT NULL) NOT VALID`; `0062` validates it (no write
+resumes. `0062` adds `CHECK (harvest_id IS NOT NULL) NOT VALID`; `0063` validates it (no write
 lock), builds the unique indexes, drops the lookup indexes, sets `NOT NULL` from the valid check
 without a scan, drops the check and restores `set_updated_at` and the edit revision trigger to
 their original bodies, so `horae.backfill` no longer means anything. The file is one transaction:
@@ -76,9 +76,9 @@ writes to the five tables wait for all of it. It first names any duplicate numbe
 organization, number) with the statement that fixes it; sqlx then refuses older images, so the
 fix is forward.
 
-Measured on 1M time entries (200 people, 5,000 projects, 100,000 imported): `0059` 0.26 s,
-`0060` 114 s, `0061` 0.04 s, `0062` 0.73 s. During `0060` a read, an edit of an old entry and a
-new entry each waited at most 0.3–0.7 s (one batch); during `0062` an edit or insert waited at
+Measured on 1M time entries (200 people, 5,000 projects, 100,000 imported): `0060` 0.26 s,
+`0061` 114 s, `0062` 0.04 s, `0063` 0.73 s. During `0061` a read, an edit of an old entry and a
+new entry each waited at most 0.3–0.7 s (one batch); during `0063` an edit or insert waited at
 most 0.56 s.
 
 ## Changed tables
