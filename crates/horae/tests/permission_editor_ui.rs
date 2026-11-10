@@ -34,14 +34,20 @@ mod components {
 pub mod people_model;
 #[path = "../src/models/permission_editor.rs"]
 pub mod permission_editor_model;
+#[path = "../src/models/user.rs"]
+#[allow(dead_code)]
+pub mod user_model;
 mod models {
     pub use super::people_model as people;
     pub use super::permission_editor_model as permission_editor;
+    pub use super::user_model as user;
 }
 #[path = "../src/pages/admin/people.rs"]
 mod people;
 #[path = "../src/pages/admin/permission_editor.rs"]
 mod permission_editor;
+#[path = "../src/pages/admin/rates.rs"]
+mod rates;
 use permission_editor_model::*;
 
 type PreviewReply = oneshot::Receiver<Result<ProfilePreview, ServerFnError>>;
@@ -206,7 +212,7 @@ fn app(probe: Probe) -> Element {
             .then_some((probe.editor.user_id, probe.editor.requester))
     });
     if let Some(can_edit_permissions) = probe.directory {
-        return rsx! { people::CanonicalPeople { can_edit_permissions, on_saved: move |changed| probe.saved.borrow_mut().push(changed) } };
+        return rsx! { people::CanonicalPeople { can_edit_permissions, can_view_rates: false, on_saved: move |changed| probe.saved.borrow_mut().push(changed) } };
     }
     rsx! { permission_editor::PermissionEditorDialog {
         person, on_saved: move |changed| probe.saved.borrow_mut().push(changed),
@@ -1863,6 +1869,23 @@ async fn switching_accounts_or_workspaces_does_not_load_or_erase_the_original_re
 
 mod server_fns {
     use super::*;
+
+    pub async fn load_person_rates(
+        _person_id: Uuid,
+        _expected_requester: PermissionRequester,
+    ) -> Result<models::user::PersonRates, ServerFnError> {
+        unreachable!("the directory tests never open the rates dialog")
+    }
+
+    pub async fn update_person_rates(
+        _person_id: Uuid,
+        _expected_requester: PermissionRequester,
+        _currency: String,
+        _billable: horae_core::permissions::rates::RateEdit,
+        _cost: horae_core::permissions::rates::RateEdit,
+    ) -> Result<models::user::PersonRates, ServerFnError> {
+        unreachable!("the directory tests never open the rates dialog")
+    }
 
     pub async fn list_people(
         activity: people_model::PeopleActivity,

@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
 use super::permission_editor::PermissionEditorDialog;
+use super::rates::{PersonRatesDialog, RatesTarget};
 use crate::components::badge::Badge;
 use crate::components::table::DataTable;
 use crate::models::people::{PeopleActivity, PeopleCursor};
@@ -8,7 +9,15 @@ use crate::models::permission_editor::PermissionRequester;
 use crate::server_fns;
 
 #[component]
-pub(super) fn CanonicalPeople(can_edit_permissions: bool, on_saved: EventHandler<bool>) -> Element {
+pub(super) fn CanonicalPeople(
+    can_edit_permissions: bool,
+    can_view_rates: bool,
+    on_saved: EventHandler<bool>,
+) -> Element {
+    let mut rates_target = use_signal(|| None::<RatesTarget>);
+    let mut rates_notice = use_signal(|| None::<String>);
+    let on_rates_saved = use_callback(move |message: String| rates_notice.set(Some(message)));
+    let actions = can_edit_permissions || can_view_rates;
     let mut activity = use_signal(|| PeopleActivity::Active);
     let mut cursors = use_signal(|| vec![None::<PeopleCursor>]);
     let mut requester = use_signal(|| None::<PermissionRequester>);
@@ -47,6 +56,9 @@ pub(super) fn CanonicalPeople(can_edit_permissions: bool, on_saved: EventHandler
                 }
             }
         }
+        if let Some(message) = rates_notice() {
+            p { class: "text-sm text-secondary mb-4", role: "status", "{message}" }
+        }
         div { class: "flex flex-wrap items-center gap-3 mb-4",
             label { r#for: "people-activity", class: "form-label", "Show" }
             select { id: "people-activity", class: "form-input", disabled: !ready,
@@ -81,7 +93,7 @@ pub(super) fn CanonicalPeople(can_edit_permissions: bool, on_saved: EventHandler
                                 th { scope: "col", "Name" }
                                 th { scope: "col", "Email" }
                                 th { scope: "col", "Status" }
-                                if can_edit_permissions { th { scope: "col", "Actions" } }
+                                if actions { th { scope: "col", "Actions" } }
                             } }
                             tbody {
                                 for entry in &loaded.people {
@@ -92,14 +104,28 @@ pub(super) fn CanonicalPeople(can_edit_permissions: bool, on_saved: EventHandler
                                             if entry.active { Badge { variant: "success", "Active" } }
                                             else { Badge { variant: "neutral", "Archived" } }
                                         }
-                                        if can_edit_permissions {
-                                            td { button { id: "people-permissions-{entry.id}", r#type: "button", class: "btn btn-secondary btn-sm",
-                                                aria_label: "Edit permissions for {entry.name}",
-                                                onclick: {
-                                                    let selection = (entry.id, loaded.requester);
-                                                    move |_| person.set(Some(selection))
-                                                },
-                                                "Permissions"
+                                        if actions {
+                                            td { div { class: "flex flex-wrap gap-2",
+                                                if can_view_rates {
+                                                    button { id: "people-rates-{entry.id}", r#type: "button", class: "btn btn-secondary btn-sm",
+                                                        aria_label: "Edit rates for {entry.name}",
+                                                        onclick: {
+                                                            let target = RatesTarget { id: entry.id, name: entry.name.clone(), requester: loaded.requester };
+                                                            move |_| rates_target.set(Some(target.clone()))
+                                                        },
+                                                        "Rates"
+                                                    }
+                                                }
+                                                if can_edit_permissions {
+                                                    button { id: "people-permissions-{entry.id}", r#type: "button", class: "btn btn-secondary btn-sm",
+                                                        aria_label: "Edit permissions for {entry.name}",
+                                                        onclick: {
+                                                            let selection = (entry.id, loaded.requester);
+                                                            move |_| person.set(Some(selection))
+                                                        },
+                                                        "Permissions"
+                                                    }
+                                                }
                                             } }
                                         }
                                     }
@@ -119,5 +145,6 @@ pub(super) fn CanonicalPeople(can_edit_permissions: bool, on_saved: EventHandler
             }
         }
         PermissionEditorDialog { person, on_saved }
+        PersonRatesDialog { target: rates_target, on_saved: on_rates_saved }
     }
 }

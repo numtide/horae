@@ -10,6 +10,7 @@ use crate::server_fns;
 
 mod people;
 mod permission_editor;
+mod rates;
 mod workspace;
 
 pub use workspace::WorkspaceSettings;
@@ -55,8 +56,20 @@ pub fn AdminUsers() -> Element {
                         &horae_core::permissions::catalog::Permission::PeopleReadManaged,
                     )) =>
         {
+            use horae_core::permissions::catalog::Permission::{
+                BillableRateReadAll, BillableRateReadManaged, CostRateReadAll,
+            };
+            // Per-person access is decided when the dialog loads; with a
+            // managed-only grant, other people's rows show a refusal there.
+            let can_view_rates = [
+                BillableRateReadManaged,
+                BillableRateReadAll,
+                CostRateReadAll,
+            ]
+            .iter()
+            .any(|grant| access.grants.contains(grant));
             rsx! {
-                people::CanonicalPeople { can_edit_permissions: access.is_administrator, on_saved }
+                people::CanonicalPeople { can_edit_permissions: access.is_administrator, can_view_rates, on_saved }
             }
         }
         _ => rsx! {
@@ -90,6 +103,9 @@ fn LegacyAdminUsers() -> Element {
     let mut user_role = use_signal(|| "member".to_string());
     let user_error = use_signal(|| None::<String>);
     let mut row_error = use_signal(|| None::<String>);
+    let mut rates_target = use_signal(|| None::<rates::RatesTarget>);
+    let mut rates_notice = use_signal(|| None::<String>);
+    let on_rates_saved = use_callback(move |message: String| rates_notice.set(Some(message)));
 
     let mut show_task_form = use_signal(|| false);
     let mut task_name = use_signal(String::new);
@@ -122,6 +138,9 @@ fn LegacyAdminUsers() -> Element {
             // only banner, so their refusals need one of their own.
             if let Some(err) = row_error() {
                 div { class: "alert alert-danger", "{err}" }
+            }
+            if let Some(message) = rates_notice() {
+                p { class: "text-sm text-secondary mb-4", role: "status", "{message}" }
             }
 
             if show_user_form() {
@@ -230,7 +249,19 @@ fn LegacyAdminUsers() -> Element {
                                                             Badge { variant: "neutral", "Inactive" }
                                                         }
                                                     }
-                                                    td {
+                                                    td { div { class: "flex flex-wrap gap-2",
+                                                        button { id: "user-rates-{uid}", r#type: "button", class: "btn btn-secondary btn-sm",
+                                                            aria_label: "Edit rates for {user.name}",
+                                                            disabled: task_requester.is_none(),
+                                                            onclick: {
+                                                                let (id, name) = (user.id, user.name.clone());
+                                                                move |_| {
+                                                                    let Some(requester) = task_requester else { return; };
+                                                                    rates_target.set(Some(rates::RatesTarget { id, name: name.clone(), requester }));
+                                                                }
+                                                            },
+                                                            "Rates"
+                                                        }
                                                         button {
                                                             class: if is_active { "btn btn-secondary btn-sm" } else { "btn btn-primary btn-sm" },
                                                             onclick: {
@@ -249,7 +280,7 @@ fn LegacyAdminUsers() -> Element {
                                                             },
                                                             if is_active { "Deactivate" } else { "Activate" }
                                                         }
-                                                    }
+                                                    } }
                                                 }
                                             }
                                         }
@@ -259,6 +290,8 @@ fn LegacyAdminUsers() -> Element {
                         }
                 })}
             }
+
+            rates::PersonRatesDialog { target: rates_target, on_saved: on_rates_saved }
 
             // ── Tasks section ───────────────────────────────────────────
             div { class: "mt-8",
