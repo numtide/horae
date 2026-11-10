@@ -26,7 +26,9 @@ perSystem.self.default.overrideAttrs (old: {
 
     # Apply migrations then verify the .sqlx/ cache is up-to-date.
     cargo sqlx migrate run --source crates/horae/migrations
-    cargo sqlx prepare --workspace --check -- --features server --all-targets
+    # Same package set as checkArtifacts, so its dependency artifacts are reused.
+    cargo sqlx prepare --workspace --check -- \
+      --workspace --exclude horae-dioxus-lint --features server --all-targets
 
     pg_ctl -D "$PGDATA" stop
     runHook postBuild

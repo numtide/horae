@@ -4,8 +4,6 @@ perSystem.self.default.overrideAttrs (old: {
   cargoArtifacts = old.passthru.checkArtifacts;
   # No commit in the version label, so a commit that changes no source keeps this cached.
   HORAE_GIT_REV = "";
-  # Keep file/line backtraces without the large type/variable debug information.
-  CARGO_PROFILE_TEST_DEBUG = "line-tables-only";
   nativeBuildInputs = old.nativeBuildInputs ++ [
     pkgs.cargo-nextest
     pkgs.postgresql

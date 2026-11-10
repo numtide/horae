@@ -64,11 +64,12 @@ let
   checkArtifacts = craneLib.buildDepsOnly ((builtins.removeAttrs common [ "src" ]) // {
     inherit dummySrc;
     pname = "horae-checks";
-    # Match the test check's profile so its dependency artifacts stay reusable.
-    CARGO_PROFILE_TEST_DEBUG = "line-tables-only";
+    # horae-dioxus-lint turns on proc-macro2's span-locations, which would give
+    # every proc macro (and so every crate) different artifacts from the
+    # checks' `-p horae` builds. The dioxus-lint check builds it on its own.
     buildPhaseCargoCommand = ''
-      cargo check --locked --workspace --features server --all-targets
-      cargo test --locked --workspace --features server --no-run
+      cargo check --locked --workspace --exclude horae-dioxus-lint --features server --all-targets
+      cargo test --locked --workspace --exclude horae-dioxus-lint --features server --no-run
     '';
   });
 in
