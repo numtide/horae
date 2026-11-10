@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET timezone = CASE WHEN id = $1 THEN 'Etc/GMT-3' ELSE 'Etc/GMT+5' END WHERE org_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d2d51212955314938d9492c27f7b2e591b5829a9b7527210258ed65a8636db55"
+}

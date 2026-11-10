@@ -365,15 +365,11 @@ pub(crate) async fn check_project_budget(
     .await;
     match settings_org {
         Ok(Some(org_id)) => {
-            if budgets::enqueue_alerts(
-                &state.db,
-                org_id,
-                project_id,
-                chrono::Utc::now().date_naive(),
-            )
-            .await
-            .is_err()
-            {
+            let enqueued = match crate::timezone::today_for_org(&state.db, org_id).await {
+                Ok(today) => budgets::enqueue_alerts(&state.db, org_id, project_id, today).await,
+                Err(error) => Err(error.into()),
+            };
+            if enqueued.is_err() {
                 tracing::warn!(%project_id, "configured budget alert check failed");
             }
             return;
@@ -508,6 +504,7 @@ pub(crate) use permissions::{
     PermissionStorageError, StoredPersonPermissions, load_person_permissions,
 };
 mod plugins;
+mod profile;
 mod project_creation;
 mod project_managers;
 mod projects;
@@ -529,6 +526,7 @@ pub use invoices::*;
 pub use organization::*;
 pub use permission_editor::*;
 pub use plugins::*;
+pub use profile::*;
 pub use project_creation::*;
 pub use projects::*;
 pub use reports::*;

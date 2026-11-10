@@ -105,9 +105,10 @@ async fn additive_migration_preserves_populated_legacy_records(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    // `oidc_issuer` is added by a later migration, so it is checked separately.
+    // `oidc_issuer` and `timezone` are added by later migrations; the issuer is
+    // checked separately and the zone starts NULL.
     let before = sqlx::query_scalar!(
-        "SELECT jsonb_build_object('users', (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer') FROM users u),
+        "SELECT jsonb_build_object('users', (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer' - 'timezone') FROM users u),
          'assignments', (SELECT jsonb_agg(a) FROM assignments a),
          'clients', (SELECT jsonb_agg(c) FROM clients c),
          'projects', (SELECT jsonb_agg(p) FROM projects p),
@@ -118,7 +119,7 @@ async fn additive_migration_preserves_populated_legacy_records(pool: PgPool) {
     .unwrap();
     sqlx::migrate!("./migrations").run(&pool).await.unwrap();
     let after = sqlx::query_scalar!(
-        "SELECT jsonb_build_object('users', (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer') FROM users u),
+        "SELECT jsonb_build_object('users', (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer' - 'timezone') FROM users u),
          'assignments', (SELECT jsonb_agg(a) FROM assignments a),
          'clients', (SELECT jsonb_agg(c) FROM clients c),
          'projects', (SELECT jsonb_agg(p) FROM projects p),
@@ -129,7 +130,7 @@ async fn additive_migration_preserves_populated_legacy_records(pool: PgPool) {
     .unwrap();
     assert_eq!(after, before);
     let issuers = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM users WHERE oidc_issuer IS NOT NULL"#
+        r#"SELECT count(*) AS "count!" FROM users WHERE oidc_issuer IS NOT NULL OR timezone IS NOT NULL"#
     )
     .fetch_one(&pool)
     .await

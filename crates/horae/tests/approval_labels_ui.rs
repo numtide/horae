@@ -30,10 +30,12 @@ pub mod own_permissions_model;
 pub mod session;
 #[path = "../src/components/table.rs"]
 pub mod table;
+#[path = "../src/components/today.rs"]
+pub mod today;
 #[path = "../src/models/user.rs"]
 pub mod user_model;
 mod components {
-    pub use super::{avatar, badge, controls, session, table};
+    pub use super::{avatar, badge, controls, session, table, today};
 }
 mod models {
     pub use super::{own_permissions_model as own_permissions, user_model as user};
@@ -637,6 +639,9 @@ pub mod server_fns {
             } else {
                 OrgRole::Member
             },
+            timezone: None,
+            workspace_timezone: "UTC".into(),
+            utc_offset_seconds: 0,
         })
     }
 

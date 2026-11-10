@@ -266,7 +266,10 @@ pub(super) async fn apply(
     .fetch_all(&mut *tx)
     .await
     .map_err(server_err)?;
-    let today = Utc::now().date_naive();
+    // A timer is filed on the subject's own today, not the actor's.
+    let today = crate::timezone::today_for_person(&mut *tx, authority.subject)
+        .await
+        .map_err(server_err)?;
     match &command {
         TimesheetCommand::Create { entry } | TimesheetCommand::Update { entry, .. } => {
             dates.push(entry.spent_date)

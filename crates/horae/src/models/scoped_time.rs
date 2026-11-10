@@ -34,6 +34,9 @@ pub struct TimesheetQuery {
 pub struct TimesheetPage {
     pub requester: PermissionRequester,
     pub subject: TimesheetPerson,
+    /// Seconds the subject's zone is ahead of UTC: the server dates their
+    /// timers in it, so the sheet's "today" must be theirs too.
+    pub subject_utc_offset_seconds: i32,
     pub policy: TimesheetPolicy,
     pub entries: Vec<VisibleTimeEntry>,
     pub next_after: Option<TimeEntryCursor>,

@@ -11,7 +11,9 @@ pub async fn get_project_detail_view(
     let viewer = require_user().await?;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let state = crate::state::global_state().await;
-    let today = chrono::Utc::now().date_naive();
+    let today = crate::timezone::today_for_org(&state.db, viewer.org_id)
+        .await
+        .map_err(server_err)?;
     fetch(&state.db, &viewer, project_id, expected_requester, today).await
 }
 

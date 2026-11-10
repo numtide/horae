@@ -107,7 +107,7 @@ pub(super) fn ScopedReports(
     requester: PermissionRequester,
     on_check_access: EventHandler<()>,
 ) -> Element {
-    let today = chrono::Utc::now().date_naive();
+    let today = crate::components::today::today();
     let mut from = use_signal(move || today.with_day(1).unwrap_or(today).to_string());
     let mut to = use_signal(move || today.to_string());
     // Each typed date segment is a valid date, so reports load once typing

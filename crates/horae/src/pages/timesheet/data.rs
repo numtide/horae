@@ -114,6 +114,7 @@ mod tests {
                 id,
                 name: "Selected person".into(),
             },
+            subject_utc_offset_seconds: 0,
             policy: TimesheetPolicy::Scoped,
             entries: Vec::new(),
             next_after: None,

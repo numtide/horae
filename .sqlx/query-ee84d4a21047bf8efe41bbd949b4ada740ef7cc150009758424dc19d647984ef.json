@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.timezone, o.timezone AS workspace\n         FROM users u JOIN organizations o ON o.id = u.org_id WHERE u.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "timezone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "workspace",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "ee84d4a21047bf8efe41bbd949b4ada740ef7cc150009758424dc19d647984ef"
+}

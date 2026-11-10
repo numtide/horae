@@ -79,6 +79,15 @@ async fn sheet_selects_empty_managed_participant_without_widening_record_scope(p
     .execute(&pool)
     .await
     .unwrap();
+    // The sheet's today is the subject's (Etc/GMT-3 is UTC+3), not the viewer's.
+    sqlx::query!(
+        "UPDATE users SET timezone = CASE WHEN id = $1 THEN 'Etc/GMT-3' ELSE 'Etc/GMT+5' END WHERE org_id = $2",
+        target,
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let selected = query(Some(target));
     let empty = sheet(&pool, ids.org_id, ids.user_id, &selected)
         .await
@@ -86,6 +95,7 @@ async fn sheet_selects_empty_managed_participant_without_widening_record_scope(p
     assert_eq!(empty.policy, TimesheetPolicy::Scoped);
     assert_eq!(empty.requester.user_id, ids.user_id);
     assert_eq!(empty.subject.id, target);
+    assert_eq!(empty.subject_utc_offset_seconds, 3 * 3600);
     assert!(empty.entries.is_empty());
 
     let visible = time_entry(

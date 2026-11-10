@@ -117,7 +117,7 @@ pub fn Reports() -> Element {
 
 #[component]
 fn LegacyReports() -> Element {
-    let today = chrono::Utc::now().date_naive();
+    let today = crate::components::today::today();
     let month_start = today.with_day(1).unwrap_or(today);
 
     // Typing a date edits one segment at a time, and each edit is a valid date,

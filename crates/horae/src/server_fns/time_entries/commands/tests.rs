@@ -7,6 +7,7 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 mod daily_limit;
 mod guards;
 mod revocation;
+mod timezone;
 
 #[sqlx::test(migrations = "./migrations")]
 #[serial_test::serial]

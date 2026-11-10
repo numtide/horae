@@ -28,7 +28,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         let cookie = api.cookie(actor).await;
         let expected = json!({
             "id":actor,"org_id":ids.org_id,"name":"Test User",
-            "email":format!("{actor}@test.com"),"org_role":role
+            "email":format!("{actor}@test.com"),"org_role":role,
+            "timezone":null,"workspace_timezone":"UTC","utc_offset_seconds":0
         });
         for request in [
             json!({}),

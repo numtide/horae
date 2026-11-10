@@ -27,8 +27,12 @@ pub mod icons;
 pub mod modal;
 #[path = "../src/components/select_field.rs"]
 pub mod select_field;
+#[path = "../src/components/today.rs"]
+pub mod today;
 mod components {
-    pub use super::{avatar, controls, date_picker, debounce, form, icons, modal, select_field};
+    pub use super::{
+        avatar, controls, date_picker, debounce, form, icons, modal, select_field, today,
+    };
 }
 #[path = "../src/models/people.rs"]
 pub mod people;

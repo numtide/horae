@@ -13,6 +13,27 @@ pub struct CurrentUser {
     pub email: String,
     pub name: String,
     pub org_role: OrgRole,
+    /// The person's own IANA zone; `None` follows `workspace_timezone`.
+    pub timezone: Option<String>,
+    pub workspace_timezone: String,
+    /// How far the effective zone was ahead of UTC when this was read, so the
+    /// browser can tell today's date without a zone database.
+    pub utc_offset_seconds: i32,
+}
+
+/// What the Profile and Workspace settings offer besides the session's values.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProfileOptions {
+    /// Host of the identity provider the account is bound to; `None` for an
+    /// account that is not bound (development sign-in).
+    pub sign_in: Option<String>,
+    /// Every IANA zone name the server accepts.
+    pub zones: Vec<String>,
+}
+
+/// Whether a trimmed profile name is one the server stores.
+pub fn profile_name_is_valid(name: &str) -> bool {
+    (1..=200).contains(&name.chars().count()) && !name.contains('\0')
 }
 
 impl CurrentUser {

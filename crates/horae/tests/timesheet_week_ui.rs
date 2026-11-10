@@ -59,8 +59,10 @@ pub mod modal;
 pub mod no_tracking;
 #[path = "../src/components/select_field.rs"]
 pub mod select_field;
+#[path = "../src/components/today.rs"]
+pub mod today;
 mod components {
-    pub use super::{controls, date_picker, menu, modal, no_tracking, select_field};
+    pub use super::{controls, date_picker, menu, modal, no_tracking, select_field, today};
 
     /// The shell's week start and a viewer who cannot manage projects, without
     /// the rest of the session.
@@ -181,6 +183,8 @@ thread_local! {
     static NO_TRACKING: Cell<bool> = const { Cell::new(false) };
     /// While set, every command is refused.
     static FAIL_COMMANDS: Cell<bool> = const { Cell::new(false) };
+    /// Seconds the selected person's zone is ahead of UTC.
+    static SUBJECT_OFFSET: Cell<i32> = const { Cell::new(0) };
 }
 
 /// Answer the commands held in flight.
@@ -204,6 +208,7 @@ fn release(start: NaiveDate, entries: Vec<VisibleTimeEntry>) {
             id: ME,
             name: "Me".into(),
         },
+        subject_utc_offset_seconds: SUBJECT_OFFSET.get(),
         policy: TimesheetPolicy::LegacyOwn,
         entries,
         next_after: None,
@@ -981,4 +986,25 @@ async fn the_toolbar_keeps_the_last_choices_while_the_sheet_reloads() {
     assert!(html.contains("inert"), "{html}");
     assert!(html.contains(hint), "{html}");
     assert!(has(&html, "disabled"), "{html}");
+}
+
+#[tokio::test]
+async fn today_is_the_selected_persons_day_not_the_viewers() {
+    use chrono::Timelike;
+    // UTC+14 or UTC−12, whichever is on another date than UTC right now.
+    let hours: i32 = if chrono::Utc::now().hour() >= 11 {
+        14
+    } else {
+        -12
+    };
+    SUBJECT_OFFSET.set(hours * 3600);
+    let theirs = (chrono::Utc::now() + chrono::Duration::hours(hours.into())).date_naive();
+    let mut page = Page::open_in(ViewMode::Day);
+    page.go_to(theirs);
+    let their_monday =
+        theirs - chrono::Duration::days(theirs.weekday().num_days_from_monday().into());
+    release(their_monday, Vec::new());
+    page.settle();
+    let html = page.html();
+    assert!(html.contains("<span class=\"cur\">Today</span>"), "{html}");
 }

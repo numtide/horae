@@ -4,7 +4,7 @@ use uuid::Uuid;
 use crate::components::admin_shell::AdminShell;
 use crate::components::layout::AppLayout;
 use crate::pages::{
-    admin::AdminUsers,
+    admin::{AdminUsers, WorkspaceSettings},
     approvals::Approvals,
     clients::{ClientDetail, ClientList},
     gallery::Gallery,
@@ -95,6 +95,8 @@ pub enum Route {
     #[layout(AdminShell)]
     #[route("/admin/users")]
     AdminUsers {},
+    #[route("/admin/workspace")]
+    WorkspaceSettings {},
     #[route("/admin/importers")]
     ImporterIndex {},
     // The OAuth callback reports a failed connection in the query.

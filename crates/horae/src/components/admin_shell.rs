@@ -11,6 +11,7 @@ use crate::server_fns;
 #[derive(Clone, Copy, PartialEq)]
 enum Section {
     People,
+    Settings,
     Audit,
     Importers,
 }
@@ -26,9 +27,16 @@ impl WorkspaceAccess {
     fn allows(self, section: Section) -> bool {
         match section {
             Section::People => self.people,
+            Section::Settings => self.settings(),
             Section::Audit => self.audit,
             Section::Importers => self.importers,
         }
+    }
+
+    /// Workspace settings follow the importers' rule: the legacy Administrator
+    /// role, which `set_workspace_timezone` also requires.
+    fn settings(self) -> bool {
+        self.importers
     }
 }
 
@@ -50,8 +58,9 @@ fn workspace_access(
         Ok(own) => Ok(own.as_ref()),
         Err(_) => Err(()),
     };
-    // Importers stays reachable for legacy admins when permission state is unavailable.
-    if section == Section::Importers && own.is_err() {
+    // Importers and settings stay reachable for legacy admins when permission
+    // state is unavailable.
+    if matches!(section, Section::Importers | Section::Settings) && own.is_err() {
         return Some(Ok(WorkspaceAccess {
             people: false,
             audit: false,
@@ -85,6 +94,7 @@ pub(crate) fn first_admin_route(
     let access = workspace_access(Section::Importers, own, me)?.ok()?;
     [
         (access.people, Route::AdminUsers {}),
+        (access.settings(), Route::WorkspaceSettings {}),
         (access.importers, Route::ImporterIndex {}),
         (access.audit, Route::PermissionAudit {}),
     ]
@@ -105,6 +115,7 @@ pub(crate) fn first_admin_route(
 pub fn AdminShell() -> Element {
     let section = match use_route::<Route>() {
         Route::AdminUsers {} => Section::People,
+        Route::WorkspaceSettings {} => Section::Settings,
         Route::PermissionAudit {} => Section::Audit,
         _ => Section::Importers,
     };
@@ -191,10 +202,11 @@ fn AdminWorkspace(access: WorkspaceAccess) -> Element {
                         }
                     }
 
-                    if access.people {
+                    if access.people || access.settings() {
                         div { class: "adm-group-label", "Workspace" }
                         nav { class: "flex flex-col gap-1 mb-5",
                             if access.people { AdmLink { to: Route::AdminUsers {}, label: "Team" } }
+                            if access.settings() { AdmLink { to: Route::WorkspaceSettings {}, label: "Settings" } }
                         }
                     }
 
@@ -238,6 +250,9 @@ mod tests {
             email: "a@example.com".into(),
             name: "A".into(),
             org_role,
+            timezone: None,
+            workspace_timezone: "UTC".into(),
+            utc_offset_seconds: 0,
         })
     }
 
@@ -329,6 +344,29 @@ mod tests {
     }
 
     #[test]
+    fn workspace_settings_are_for_legacy_administrators_only() {
+        let admin = user(OrgRole::Admin);
+        let failed = Err(ServerFnError::new("unavailable"));
+        let all_grants = canonical(
+            vec![Permission::PeopleReadAll, Permission::TaskReadAll],
+            true,
+            PERMISSION_CATALOG_VERSION,
+        );
+        let legacy = Ok(None);
+        let (manager, member) = (user(OrgRole::Manager), user(OrgRole::Member));
+        for own in [&legacy, &failed, &all_grants] {
+            let allowed = |me| {
+                workspace_access(Section::Settings, Some(own), Some(me))
+                    .and_then(Result::ok)
+                    .is_some_and(|access| access.allows(Section::Settings))
+            };
+            assert!(allowed(&admin));
+            assert!(!allowed(&manager));
+            assert!(!allowed(&member));
+        }
+    }
+
+    #[test]
     fn first_admin_route_follows_sub_navigation_order() {
         let admin = user(OrgRole::Admin);
         let member = user(OrgRole::Member);
@@ -344,12 +382,12 @@ mod tests {
         let tasks = canonical(vec![Permission::TaskReadAll], false, version);
         assert_eq!(first(&tasks, &member), None);
         let floor = canonical(Vec::new(), false, version);
-        assert_eq!(first(&floor, &admin), path("/admin/importers"));
+        assert_eq!(first(&floor, &admin), path("/admin/workspace"));
         assert_eq!(first(&floor, &member), None);
         let administrator = canonical(Vec::new(), true, version);
         assert_eq!(first(&administrator, &member), path("/admin/audit"));
         let failed = Err(ServerFnError::new("unavailable"));
-        assert_eq!(first(&failed, &admin), path("/admin/importers"));
+        assert_eq!(first(&failed, &admin), path("/admin/workspace"));
         assert_eq!(first(&failed, &member), None);
         assert!(first_admin_route(None, Some(&admin)).is_none(), "loading");
     }

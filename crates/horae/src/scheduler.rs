@@ -18,7 +18,7 @@ pub fn spawn(state: &'static AppState) {
             if let Err(e) = sweep(state).await {
                 tracing::warn!("long-timer scheduler tick failed: {e}");
             }
-            if crate::server_fns::budgets::sweep(&state.db, chrono::Utc::now().date_naive())
+            if crate::server_fns::budgets::sweep(&state.db, chrono::Utc::now())
                 .await
                 .is_err()
             {
