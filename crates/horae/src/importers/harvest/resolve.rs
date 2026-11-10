@@ -409,11 +409,14 @@ pub async fn resolve_client(
     }
     let currency = currency_or(row.currency, org.default_currency);
     let id = Uuid::now_v7();
-    let wanted =
+    let mut wanted =
         free_harvest_id(conn, org.org_id, EntityType::Client, row.harvest_client_id).await?;
-    let api_id = sqlx::query_scalar!(
+    // A record that took the number since the check makes this insert do
+    // nothing; the next attempt leaves the number to the trigger.
+    let api_id = loop {
+        let inserted = sqlx::query_scalar!(
         "INSERT INTO clients (id, org_id, name, currency, address, active, harvest_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING harvest_id",
+         VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (org_id, harvest_id) DO NOTHING RETURNING harvest_id",
         id,
         org.org_id,
         name,
@@ -422,8 +425,14 @@ pub async fn resolve_client(
         row.client_active,
         wanted,
     )
-    .fetch_one(&mut *conn)
+    .fetch_optional(&mut *conn)
     .await?;
+        match (inserted, wanted) {
+            (Some(api_id), _) => break api_id,
+            (None, Some(_)) => wanted = None,
+            (None, None) => return Err(RowFailure::new("no free id for the record")),
+        }
+    };
     upsert_provenance_if_api(
         conn,
         org.org_id,
@@ -522,16 +531,19 @@ pub async fn resolve_project(
     }
     let client_currency = client.currency;
     let id = Uuid::now_v7();
-    let wanted = free_harvest_id(
+    let mut wanted = free_harvest_id(
         conn,
         org.org_id,
         EntityType::Project,
         row.harvest_project_id,
     )
     .await?;
-    let api_id = sqlx::query_scalar!(
+    // A record that took the number since the check makes this insert do
+    // nothing; the next attempt leaves the number to the trigger.
+    let api_id = loop {
+        let inserted = sqlx::query_scalar!(
         "INSERT INTO projects (id, org_id, client_id, code, name, currency, starts_on, ends_on, active, harvest_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING harvest_id",
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (org_id, harvest_id) DO NOTHING RETURNING harvest_id",
         id,
         org.org_id,
         client_id,
@@ -543,8 +555,14 @@ pub async fn resolve_project(
         row.project_active,
         wanted,
     )
-    .fetch_one(&mut *conn)
+    .fetch_optional(&mut *conn)
     .await?;
+        match (inserted, wanted) {
+            (Some(api_id), _) => break api_id,
+            (None, Some(_)) => wanted = None,
+            (None, None) => return Err(RowFailure::new("no free id for the record")),
+        }
+    };
     upsert_provenance_if_api(
         conn,
         org.org_id,
@@ -616,10 +634,14 @@ pub async fn resolve_task(
                 && value.bytes().all(|byte| byte.is_ascii_uppercase())
         });
     let id = Uuid::now_v7();
-    let wanted = free_harvest_id(conn, org.org_id, EntityType::Task, row.harvest_task_id).await?;
-    let api_id = sqlx::query_scalar!(
+    let mut wanted =
+        free_harvest_id(conn, org.org_id, EntityType::Task, row.harvest_task_id).await?;
+    // A record that took the number since the check makes this insert do
+    // nothing; the next attempt leaves the number to the trigger.
+    let api_id = loop {
+        let inserted = sqlx::query_scalar!(
         "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, active, default_rate_currency, is_default, harvest_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING harvest_id",
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (org_id, harvest_id) DO NOTHING RETURNING harvest_id",
         id,
         org.org_id,
         name,
@@ -630,8 +652,14 @@ pub async fn resolve_task(
         row.task_is_default,
         wanted,
     )
-    .fetch_one(&mut *conn)
+    .fetch_optional(&mut *conn)
     .await?;
+        match (inserted, wanted) {
+            (Some(api_id), _) => break api_id,
+            (None, Some(_)) => wanted = None,
+            (None, None) => return Err(RowFailure::new("no free id for the record")),
+        }
+    };
     upsert_provenance_if_api(
         conn,
         org.org_id,
@@ -830,26 +858,31 @@ async fn create_person(
     let name = keys::trim_ws(name);
     let name = if name.is_empty() { email } else { name };
     let id = Uuid::now_v7();
-    let wanted = free_harvest_id(conn, org_id, EntityType::Person, harvest_id).await?;
-    let api_id = sqlx::query_scalar!(
+    let mut wanted = free_harvest_id(conn, org_id, EntityType::Person, harvest_id).await?;
+    // A record that took the number since the check makes this insert do
+    // nothing; the next attempt leaves the number to the trigger.
+    let api_id = loop {
+        let inserted = sqlx::query_scalar!(
         "INSERT INTO users (id, org_id, email, name, org_role, active, harvest_id)
-         VALUES ($1, $2, $3, $4, 'member', false, $5) RETURNING harvest_id",
+         VALUES ($1, $2, $3, $4, 'member', false, $5) ON CONFLICT (org_id, harvest_id) DO NOTHING RETURNING harvest_id",
         id,
         org_id,
         email,
         name,
         wanted,
     )
-    .fetch_one(&mut *conn)
+    .fetch_optional(&mut *conn)
     .await
     .map_err(|error| match &error {
-        sqlx::Error::Database(db)
-            if db.is_unique_violation() && db.constraint() != Some("users_harvest_id") =>
-        {
-            email_in_use(email, name)
-        }
+        sqlx::Error::Database(db) if db.is_unique_violation() => email_in_use(email, name),
         _ => error.into(),
     })?;
+        match (inserted, wanted) {
+            (Some(api_id), _) => break api_id,
+            (None, Some(_)) => wanted = None,
+            (None, None) => return Err(RowFailure::new("no free id for the record")),
+        }
+    };
     let event = crate::plugin::AppEvent::UserCreated {
         occurred_at: Utc::now(),
         org_id,

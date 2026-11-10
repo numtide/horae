@@ -199,3 +199,52 @@ async fn a_preview_reports_the_ids_it_cannot_keep_and_writes_nothing(pool: PgPoo
         .unwrap();
     assert_eq!(clients, Some(1));
 }
+
+/// A native record that takes the number between the importer's check and its
+/// insert: the import waits for it, then numbers its own record afresh instead
+/// of failing it.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_harvest_id_taken_during_the_insert_gets_a_fresh_id(pool: PgPool) {
+    let org = setup(&pool).await;
+    let mut racer = pool.begin().await.unwrap();
+    sqlx::query!(
+        "INSERT INTO clients (id, org_id, name, currency, harvest_id)
+         VALUES ($1, $2, 'Racer', 'USD', 70001)",
+        Uuid::now_v7(),
+        org
+    )
+    .execute(&mut *racer)
+    .await
+    .unwrap();
+
+    let import = tokio::spawn({
+        let pool = pool.clone();
+        async move {
+            let data = data_with_ids();
+            apply_api_data(&pool, org, "USD", ImportMode::Commit, &data, day(4)).await
+        }
+    });
+    // The import's insert waits on the racer's uncommitted number.
+    while sqlx::query_scalar!(r#"SELECT count(*) AS "waiting!" FROM pg_locks WHERE NOT granted"#)
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        == 0
+    {
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    racer.commit().await.unwrap();
+    let report = import.await.unwrap().unwrap();
+
+    assert!(report.row_errors.is_empty(), "{:?}", report.row_errors);
+    let fresh = api_id(&pool, org, EntityType::Client, 70001).await.unwrap();
+    assert_ne!(fresh, 70001);
+    assert_eq!(
+        report.id_notices,
+        [IdNotice {
+            entity: EntityType::Client,
+            harvest_id: 70001,
+            api_id: fresh,
+        }]
+    );
+}

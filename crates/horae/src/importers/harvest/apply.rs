@@ -402,17 +402,20 @@ async fn apply_time_entry(
         .map_err(|limit| RowFailure::new(limit.to_string()))?;
     crate::db::lock_time_entry_write(sp, user_id).await?;
     let id = Uuid::now_v7();
-    let wanted = resolve::free_harvest_id(
+    let mut wanted = resolve::free_harvest_id(
         sp,
         org.org_id,
         EntityType::TimeEntry,
         row.harvest_time_entry_id,
     )
     .await?;
-    let api_id = sqlx::query_scalar!(
+    // A record that took the number since the check makes this insert do
+    // nothing; the next attempt leaves the number to the trigger.
+    let api_id = loop {
+        let inserted = sqlx::query_scalar!(
         "INSERT INTO time_entries
            (id, org_id, user_id, project_id, task_id, spent_date, minutes, notes, billable, harvest_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING harvest_id",
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (org_id, harvest_id) DO NOTHING RETURNING harvest_id",
         id,
         org.org_id,
         user_id,
@@ -424,8 +427,14 @@ async fn apply_time_entry(
         row.billable,
         wanted,
     )
-    .fetch_one(&mut **sp)
+    .fetch_optional(&mut **sp)
     .await?;
+        match (inserted, wanted) {
+            (Some(api_id), _) => break api_id,
+            (None, Some(_)) => wanted = None,
+            (None, None) => return Err(RowFailure::new("no free id for the record")),
+        }
+    };
     notices.extend(resolve::id_notice(
         EntityType::TimeEntry,
         row.harvest_time_entry_id,

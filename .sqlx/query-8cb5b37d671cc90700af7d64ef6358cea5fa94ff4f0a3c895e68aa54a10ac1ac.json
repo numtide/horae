@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO clients (id, org_id, name, currency, harvest_id)\n         VALUES ($1, $2, 'Racer', 'USD', 70001)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8cb5b37d671cc90700af7d64ef6358cea5fa94ff4f0a3c895e68aa54a10ac1ac"
+}

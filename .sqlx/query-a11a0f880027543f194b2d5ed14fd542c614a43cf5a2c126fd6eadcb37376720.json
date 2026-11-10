@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO clients (id, org_id, name, currency, address, active, harvest_id)\n         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING harvest_id",
+  "query": "INSERT INTO users (id, org_id, email, name, org_role, active, harvest_id)\n         VALUES ($1, $2, $3, $4, 'member', false, $5) ON CONFLICT (org_id, harvest_id) DO NOTHING RETURNING harvest_id",
   "describe": {
     "columns": [
       {
@@ -14,9 +14,7 @@
         "Uuid",
         "Uuid",
         "Text",
-        "Bpchar",
         "Text",
-        "Bool",
         "Int8"
       ]
     },
@@ -24,5 +22,5 @@
       false
     ]
   },
-  "hash": "e883b7814434695d12c6d9a78091349a76702294e73625b6d5e961879309483c"
+  "hash": "a11a0f880027543f194b2d5ed14fd542c614a43cf5a2c126fd6eadcb37376720"
 }
