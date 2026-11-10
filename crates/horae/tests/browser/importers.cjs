@@ -159,6 +159,23 @@ const groups = errors => ({
       await expect(page.getByRole('link', { name: 'Download all errors (NDJSON)' })).toBeVisible();
     });
 
+    await check('records that could not keep their Harvest id are listed with their new id', async () => {
+      selected = job('succeeded', 'Commit');
+      selected.kind = 'harvest_api_import'; selected.source = 'harvest_api';
+      selected.report.source = 'harvest_api';
+      selected.report.summary.clients.created = 1;
+      selected.report.id_notices = [{ entity: 'client', harvest_id: 70001, api_id: 12 }];
+      selected.report.omitted_id_notices = 3;
+      await visitRun();
+      const group = page.locator('details', { hasText: 'Records with a new id in the Harvest-compatible API' });
+      await expect(group).toBeVisible();
+      await group.locator('summary').click();
+      const row = group.getByRole('row', { name: /70001/ });
+      await expect(row).toContainText('Clients');
+      await expect(row).toContainText('12');
+      await expect(group.getByText('3 more are only counted.')).toBeVisible();
+    });
+
     await check('monitoring failure checks the same ID again without a new import', async () => {
       selected = job('running'); statusFailure = true;
       await visitRun(); await expect(page.getByTestId('resume-monitoring')).toBeVisible();
