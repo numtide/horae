@@ -149,19 +149,31 @@ follows these rules:
    UUID, hours → minutes, decimal → cents), calls a shared operation in the
    `*_record(tx, actor, input)` style the server functions already use, and translates the
    output. An operation the API needs and that exists only inside a server function is extracted
-   first; the server function then calls it.
+   first; the server function then calls it. The rule binds every write from step 3 on and every
+   read added from step 5 on. Step 1's reads predate it: `harvest.rs` still scopes users and time
+   entries itself (`scoped_user_filter`, the manager and member split). That is recorded debt, to
+   move into a shared read operation when step 5 touches those reads.
 1. **One `Actor` for every entry point.** A session, a token and later `/api/v1` all produce the
-   same thing: a membership in one organization with its permissions. Permissions stay in
-   `horae-core`.
+   same `horae_core::permissions::Actor` (person, organization, active), loaded by the
+   authorization service from a membership in one organization; its permissions are checked
+   in `horae-core`. A review checks that no entry point builds its own.
 1. **Operations return domain errors**; each adapter maps them to its own wire format
    (`harvest/errors.rs` for this API).
-1. **One pagination core.** Pagination and `updated_since` have one cursor-based core;
-   `/harvest/v2` exposes it as `page`/`per_page`.
+1. **One pagination core.** Each list is one ordered query (sort key, then `id`) with its filters
+   and `updated_since`, taking a keyset position (the last row's sort key and `id`) or an offset,
+   and a limit. `/harvest/v2` maps `page`/`per_page` to an offset into that same ordering and
+   `cursor` (step 4) to the keyset position, so both walk the same rows in the same order.
 
 **Tokens (step 2) belong to the account, not to an organization.** Each request names the
 organization with `Harvest-Account-Id` (= `organizations.api_account_id`), which resolves to the
-account's membership there; without the header, the account's only membership is used, and an
-account with several is refused. Tokens are Horae credentials, shared by `/harvest/v2` and the
+account's membership there. Without the header the account's only membership is used; an
+account with several is refused with 403 and
+`{"error": "account_required", "error_description": "…send Harvest-Account-Id…"}`, so a
+client that worked without the header gets an answer that names it once its account gains a
+second membership. Under multi-tenant hosting the request's host names the tenant and wins: the
+membership used is the one in the host's tenant, a header that names another organization is
+403, and a token whose account has no membership there is 401. A header-less token never acts
+in another tenant than the host's. Tokens are Horae credentials, shared by `/harvest/v2` and the
 future `/api/v1`, not Harvest-specific. Until the multi-tenant split of accounts and memberships
 lands, an account is a `users` row and has exactly one membership.
 

@@ -45,12 +45,17 @@ kinds they expose (assignments, invoices, invoice lines, tags).
   organization and kind (FR-015); they are distinct across organizations too, and do not start
   at 1 in each.
 - **Imported records**: the importer passes the record's Harvest id in its creating insert when
-  no record of the kind in the organization has it. When one does, it passes nothing (the
-  trigger numbers the record) and the import report gets an `IdNotice` (FR-016). A record the
-  import only matches keeps its own number.
+  no record of the kind in the organization has it and it is more than 10,000 above the kind's
+  sequence (`pg_sequence_last_value`). Otherwise it passes nothing (the trigger numbers the
+  record) and the import report gets an `IdNotice` (FR-016). A number at or below the sequence
+  may belong to a deleted record; the 10,000 margin means a native insert cannot reach the number
+  while the import holds it uncommitted. The insert is `ON CONFLICT (org_id, harvest_id) DO NOTHING`; if another record took the number meanwhile, it is repeated without one. A record
+  the import only matches keeps its own number. The report keeps the first 20 notices and counts
+  the rest; a preview's notices carry no new id, because it is only known on import.
 - **A number never names another record.** Sequence numbers are never handed out twice, and a
   Harvest id in the map stays reserved after its record is deleted, so only that record can come
-  back with it.
+  back with it. The importer never takes a number the sequence has handed out, so a deleted
+  native record's number stays unused too.
 
 Migrations: `0058` renames `harvest_import_map.harvest_id` to `harvest_import_id` (the id the
 record had in Harvest), so the two never read alike. `0059` adds the columns, sequences, the
@@ -64,8 +69,12 @@ transaction, in batches of 10,000 rows in id order (UUID v7, creation order), ea
 with `horae.backfill` set locally; per batch, imported records take their Harvest id, the rest
 the next sequence numbers, a record whose turn falls on a held number the next free one. A rerun
 resumes. `0061` adds `CHECK (harvest_id IS NOT NULL) NOT VALID`; `0062` validates it (no write
-lock), builds the unique indexes (writes to the table wait for the build), drops the lookup
-indexes, sets `NOT NULL` from the valid check without a scan and drops the check.
+lock), builds the unique indexes, drops the lookup indexes, sets `NOT NULL` from the valid check
+without a scan, drops the check and restores `set_updated_at` and the edit revision trigger to
+their original bodies, so `horae.backfill` no longer means anything. The file is one transaction:
+writes to the five tables wait for all of it. It first names any duplicate number (table,
+organization, number) with the statement that fixes it; sqlx then refuses older images, so the
+fix is forward.
 
 Measured on 1M time entries (200 people, 5,000 projects, 100,000 imported): `0059` 0.26 s,
 `0060` 114 s, `0061` 0.04 s, `0062` 0.73 s. During `0060` a read, an edit of an old entry and a

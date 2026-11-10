@@ -17,7 +17,7 @@ Harvest's public API v2 reference; this document records only where Horae differ
 | --- | --- |
 | `Authorization: Bearer <token>` | personal access token (OAuth2 access token from step 7) |
 | `access_token=<token>` query parameter | same |
-| `Harvest-Account-Id` header or `account_id` query | optional; when present it must equal the organization's account id, else 403 |
+| `Harvest-Account-Id` header or `account_id` query | names the organization (`organizations.api_account_id`). Optional while the token's account has one membership; with several and no header, 403 `account_required`. When present it must name one of the account's memberships, else 403; on a tenant host it must also be the host's tenant, else 403 (plan.md *Layering*) |
 | Session cookie | reads only (D-7) |
 | `User-Agent` | not required (FR-008) |
 
@@ -26,6 +26,7 @@ Harvest's public API v2 reference; this document records only where Horae differ
 | No credentials | 401 |
 | Unknown, revoked or expired token, or inactive owner | 401 |
 | Valid token, wrong account id | 403 |
+| Valid token, several memberships, no account id | 403 `account_required` |
 | Cookie only, on a write | 401 |
 | Permission denied by the owner's role or grants | 403 |
 
