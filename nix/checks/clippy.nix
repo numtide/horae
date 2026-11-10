@@ -13,6 +13,7 @@ perSystem.self.default.overrideAttrs (old: {
     runHook preBuild
     export HOME=$(mktemp -d)
     cargo clippy -p horae-core --all-targets -- -D warnings -W clippy::perf
+    cargo clippy -p horae-harvest --all-targets -- -D warnings -W clippy::perf
     cargo clippy -p horae --features server --all-targets -- -D warnings -W clippy::perf
     cargo clippy -p horae-dioxus-lint --all-targets -- -D warnings -W clippy::perf
     runHook postBuild
