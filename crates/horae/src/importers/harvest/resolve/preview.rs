@@ -56,7 +56,7 @@ impl ParentSnapshot {
             ).fetch_one(&mut *conn).await?,
             tasks: sqlx::query_scalar!(
                 r#"SELECT COALESCE(jsonb_agg(to_jsonb(r)), '[]'::jsonb) AS "rows!"
-                   FROM (SELECT id, org_id, name, billable_default, default_rate_cents, default_rate_currency, active
+                   FROM (SELECT id, org_id, name, billable_default, default_rate_cents, default_rate_currency, active, is_default
                          FROM tasks WHERE org_id = $1 AND id = ANY($2)) r"#,
                 org_id, &tasks,
             ).fetch_one(&mut *conn).await?,
@@ -150,8 +150,9 @@ impl ParentSnapshot {
             &self.projects, org_id,
         ).execute(&mut *conn).await?;
         sqlx::query!(
-            "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, default_rate_currency, active)
-             SELECT id, org_id, name, billable_default, default_rate_cents, default_rate_currency, active
+            "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, default_rate_currency, active, is_default)
+             -- Checkpoints saved before is_default existed lack the field.
+             SELECT id, org_id, name, billable_default, default_rate_cents, default_rate_currency, active, COALESCE(is_default, false)
              FROM jsonb_populate_recordset(NULL::tasks, $1) WHERE org_id = $2
              ON CONFLICT (id) DO NOTHING",
             &self.tasks,

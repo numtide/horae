@@ -42,6 +42,9 @@ pub struct ApiTask {
     pub billable_by_default: bool,
     #[serde(default = "yes")]
     pub is_active: bool,
+    /// Harvest's common task flag.
+    #[serde(default)]
+    pub is_default: bool,
     pub default_hourly_rate: Option<serde_json::Number>,
     pub updated_at: Option<DateTime<Utc>>,
 }

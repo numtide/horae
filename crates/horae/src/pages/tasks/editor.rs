@@ -60,6 +60,8 @@ fn TaskForm(
             .as_ref()
             .is_none_or(|task| task.billable_default)
     });
+    let mut common = use_signal(|| selection.task.as_ref().is_some_and(|task| task.is_default));
+    let toggle_common = use_callback(move |_: MouseEvent| common.set(!common()));
     let mut rate_action = use_signal(|| {
         if selection.task.is_none() {
             "set"
@@ -92,12 +94,12 @@ fn TaskForm(
                 _ => TaskRateEdit::Preserve {},
             };
             busy.set(true); error.set(None);
-            let edited_name = name(); let edited_billable = billable();
+            let edited_name = name(); let edited_billable = billable(); let edited_common = common();
             spawn(async move {
                 let (result, message) = if let Some(id) = task_id {
-                    (server_fns::update_task(id.to_string(), edited_name, edited_billable, rate, requester).await, "Task updated.")
+                    (server_fns::update_task(id.to_string(), edited_name, edited_billable, edited_common, rate, requester).await, "Task updated.")
                 } else {
-                    (server_fns::create_task(edited_name, edited_billable, rate, requester).await, "Task created.")
+                    (server_fns::create_task(edited_name, edited_billable, edited_common, rate, requester).await, "Task created.")
                 };
                 finish(result, busy, error, on_saved, on_denied, message);
             });
@@ -107,7 +109,13 @@ fn TaskForm(
                 FormGroup { id: "task-name", label: "Task name",
                     Input { id: "task-name", value: name(), disabled: busy(), oninput: move |event: FormEvent| name.set(event.value()) }
                 }
-                Checkbox { id: "task-billable", label: "Billable by default", checked: billable(), disabled: busy(), onclick: move |_| billable.set(!billable()) }
+                div { class: "flex flex-col gap-3",
+                    Checkbox { id: "task-billable", label: "Billable by default", checked: billable(), disabled: busy(), onclick: move |_| billable.set(!billable()) }
+                    div {
+                        Checkbox { id: "task-common", hint_id: "task-common-hint".to_string(), label: "Common task", checked: common(), disabled: busy(), onclick: toggle_common }
+                        p { id: "task-common-hint", class: "form-hint", "While active, it is added to every new project." }
+                    }
+                }
                 p { class: "form-hint", "Changes to defaults apply when adding the task to projects; existing project settings stay unchanged." }
                 if let Some(currency) = &selection.rate_currency {
                     if let Some(task) = &selection.task {

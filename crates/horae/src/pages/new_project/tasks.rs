@@ -84,14 +84,7 @@ pub(super) fn Tasks(
                 .is_some_and(|task| task.billable),
             TaskSource::New { .. } => true,
         };
-        draft.tasks.push(ProjectTaskInput {
-            id: Uuid::now_v7(),
-            source,
-            billable,
-            rate: String::new(),
-            budget: String::new(),
-            access: TaskAccess::Everyone,
-        });
+        draft.tasks.push(ProjectTaskInput::added(source, billable));
         error.set(None);
         query.set(String::new());
     });

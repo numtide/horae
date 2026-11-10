@@ -1,7 +1,9 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::models::project_creation::{DraftSaved, ProjectDraft, ProjectForm};
+use crate::models::project_creation::{
+    CreationTask, DraftSaved, ProjectDraft, ProjectForm, ProjectTaskInput, TaskSource,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct PendingSave {
@@ -21,9 +23,13 @@ pub(super) struct DraftState {
 }
 
 impl DraftState {
-    /// A client link prefills only a new form, and is its baseline: loading the
-    /// page must not save a draft the user never edited.
-    pub fn new(draft: Option<ProjectDraft>, client_context: Option<Uuid>) -> Self {
+    /// A client link and the common tasks prefill only a new form, and are its
+    /// baseline: loading the page must not save a draft the user never edited.
+    pub fn new(
+        draft: Option<ProjectDraft>,
+        client_context: Option<Uuid>,
+        common_tasks: &[CreationTask],
+    ) -> Self {
         match draft {
             Some(draft) => Self {
                 id: draft.id,
@@ -38,6 +44,15 @@ impl DraftState {
                 saved_at: None,
                 saved: ProjectForm {
                     client_id: client_context,
+                    tasks: common_tasks
+                        .iter()
+                        .map(|task| {
+                            ProjectTaskInput::added(
+                                TaskSource::Existing { task_id: task.id },
+                                task.billable,
+                            )
+                        })
+                        .collect(),
                     ..Default::default()
                 },
                 pending: None,
@@ -88,14 +103,17 @@ mod tests {
     #[test]
     fn context_prefills_only_a_new_form_without_fixing_its_currency() {
         let client = Uuid::now_v7();
-        let mut state = DraftState::new(None, Some(client));
+        let mut state = DraftState::new(None, Some(client), &[]);
         let mut form = state.saved.clone();
         assert_eq!(form.client_id, Some(client));
         assert_eq!(form.currency, None);
         assert!(!state.is_dirty(&form), "a prefill alone is not saved");
         form.name = "Edited".into();
         assert_eq!(state.request(&form).form.client_id, Some(client));
-        assert_eq!(DraftState::new(None, None).saved, ProjectForm::default());
+        assert_eq!(
+            DraftState::new(None, None, &[]).saved,
+            ProjectForm::default()
+        );
     }
 
     #[test]
@@ -113,7 +131,7 @@ mod tests {
                     ..Default::default()
                 },
             };
-            let state = DraftState::new(Some(draft.clone()), Some(context));
+            let state = DraftState::new(Some(draft.clone()), Some(context), &[]);
             assert_eq!(state.saved, draft.form);
             assert!(!state.is_dirty(&draft.form));
             assert_eq!(state.id, draft.id);
@@ -122,8 +140,61 @@ mod tests {
     }
 
     #[test]
+    fn common_tasks_prefill_only_a_new_form_with_their_defaults() {
+        use crate::models::project_creation::{CreationTask, TaskAccess, TaskSource};
+        let task = |billable| CreationTask {
+            id: Uuid::now_v7(),
+            name: "Common".into(),
+            billable,
+            default_rate_cents: Some(5000),
+            default_rate_currency: Some("EUR".into()),
+        };
+        let common = [task(true), task(false)];
+        let state = DraftState::new(None, None, &common);
+        let prefilled: Vec<_> = state
+            .saved
+            .tasks
+            .iter()
+            .map(|input| (input.source.clone(), input.billable, input.rate.as_str()))
+            .collect();
+        assert_eq!(
+            prefilled,
+            common
+                .iter()
+                .map(|task| (TaskSource::Existing { task_id: task.id }, task.billable, ""))
+                .collect::<Vec<_>>(),
+            "a blank rate inherits the task's default rate"
+        );
+        assert!(
+            state
+                .saved
+                .tasks
+                .iter()
+                .all(|input| input.access == TaskAccess::Everyone && input.budget.is_empty())
+        );
+        assert!(
+            !state.is_dirty(&state.saved.clone()),
+            "a prefill alone is not saved"
+        );
+
+        let draft = ProjectDraft {
+            id: Uuid::now_v7(),
+            revision: 1,
+            saved_at: Utc::now(),
+            form: ProjectForm::default(),
+        };
+        assert!(
+            DraftState::new(Some(draft), None, &common)
+                .saved
+                .tasks
+                .is_empty(),
+            "a restored draft keeps the tasks it was saved with"
+        );
+    }
+
+    #[test]
     fn an_empty_form_is_not_reported_as_saved() {
-        let state = DraftState::new(None, None);
+        let state = DraftState::new(None, None, &[]);
         assert!(state.saved_at.is_none());
         assert_eq!(state.revision, 0);
         assert!(!state.is_dirty(&ProjectForm::default()));
@@ -131,7 +202,7 @@ mod tests {
 
     #[test]
     fn a_retry_keeps_the_unacknowledged_payload_and_revision() {
-        let mut state = DraftState::new(None, None);
+        let mut state = DraftState::new(None, None, &[]);
         let first = ProjectForm {
             name: "First edit".into(),
             ..Default::default()
@@ -155,7 +226,7 @@ mod tests {
 
     #[test]
     fn a_mismatched_acknowledgement_does_not_lose_pending_input() {
-        let mut state = DraftState::new(None, None);
+        let mut state = DraftState::new(None, None, &[]);
         let form = ProjectForm {
             name: "Keep me".into(),
             ..Default::default()
@@ -178,7 +249,7 @@ mod tests {
 
     #[test]
     fn a_validation_rejection_allows_corrected_input_at_the_same_revision() {
-        let mut state = DraftState::new(None, None);
+        let mut state = DraftState::new(None, None, &[]);
         let bad = ProjectForm {
             name: "Invalid input".into(),
             ..Default::default()
@@ -205,7 +276,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        let state = DraftState::new(Some(draft.clone()), None);
+        let state = DraftState::new(Some(draft.clone()), None, &[]);
         assert_eq!(state.id, draft.id);
         assert_eq!(state.revision, 7);
         assert_eq!(state.saved_at, Some(draft.saved_at));

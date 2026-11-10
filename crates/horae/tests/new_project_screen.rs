@@ -111,6 +111,7 @@ impl Default for Probe {
                 email_available: false,
                 clients: vec![],
                 tasks: vec![],
+                common_tasks: vec![],
                 people: vec![],
                 more_clients: false,
                 more_tasks: false,
@@ -1467,6 +1468,46 @@ async fn enter_before_the_task_search_settles_adds_the_typed_task_once() {
         "{html}"
     );
     assert!(!html.contains("Remove task release preparation"));
+}
+
+#[tokio::test]
+async fn a_new_project_starts_with_the_common_tasks_and_they_can_be_removed() {
+    use project_creation::CreationTask;
+    let mut probe = Probe::default();
+    // Outside the first catalog page, so only the common list names it.
+    probe.options.common_tasks.push(CreationTask {
+        id: Uuid::now_v7(),
+        name: "Meetings".into(),
+        billable: false,
+        default_rate_cents: None,
+        default_rate_currency: None,
+    });
+    let mut dom = VirtualDom::new_with_props(app, probe.clone());
+    dom.rebuild_in_place();
+    settle(&mut dom);
+    let html = dioxus::ssr::render(&dom);
+    assert!(html.contains("Remove task Meetings"), "{html}");
+    assert!(
+        html.contains("No draft saved yet"),
+        "a prefill is not a saved draft"
+    );
+
+    let start = html.find("id=\"np-task-remove-").unwrap() + "id=\"".len();
+    let remove = &html[start..start + html[start..].find('"').unwrap()];
+    click(&mut dom, remove);
+    assert!(!dioxus::ssr::render(&dom).contains("Remove task Meetings"));
+
+    let mut restored = probe;
+    restored.draft = Some(ProjectDraft {
+        id: Uuid::now_v7(),
+        revision: 1,
+        saved_at: chrono::Utc::now(),
+        form: ProjectForm::default(),
+    });
+    assert!(
+        !render(restored).contains("Remove task Meetings"),
+        "a saved draft keeps its own task list"
+    );
 }
 
 #[tokio::test]

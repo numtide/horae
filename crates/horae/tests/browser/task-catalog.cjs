@@ -100,6 +100,21 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       }
     }
     await page.setViewportSize({ width: 1440, height: 900 });
+    await page.getByRole('button', { name: 'New task', exact: true }).click();
+    const common = page.getByRole('dialog', { name: 'New task', exact: true });
+    await common.getByLabel('Task name', { exact: true }).fill('Browser common task');
+    await common.getByRole('checkbox', { name: 'Common task', exact: true }).click();
+    await common.getByRole('button', { name: 'Save task', exact: true }).click();
+    await expect(common).not.toBeVisible();
+    createdTasks.push(sql(`SELECT id FROM tasks WHERE org_id='${actor.org_id}' AND name='Browser common task' AND is_default`));
+    await expect(page.getByRole('table', { name: 'Common tasks', exact: true }).getByRole('row').filter({ hasText: 'Browser common task' })).toHaveCount(1);
+    await expect(page.getByRole('table', { name: 'Other tasks', exact: true }).getByRole('row').filter({ hasText: 'Catalog browser task' })).toHaveCount(1);
+    if (evidence) await page.screenshot({ path: join(evidence, 'task-catalog-groups-1440.png'), fullPage: true });
+    await page.getByRole('table', { name: 'Common tasks', exact: true }).getByRole('button', { name: 'Edit Browser common task', exact: true }).click();
+    const commonEdit = page.getByRole('dialog', { name: 'Edit task', exact: true });
+    await expect(commonEdit.getByRole('checkbox', { name: 'Common task', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
+    await expect(commonEdit).not.toBeVisible();
     await row.getByRole('button').click();
     const dialog = page.getByRole('dialog', { name: 'Edit task', exact: true });
     await dialog.getByLabel('Default hourly rate', { exact: true }).selectOption('set');

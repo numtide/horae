@@ -104,7 +104,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .await
         .unwrap();
         let cookie = api.cookie(ids.user_id).await;
-        let request = json!({"task_id":ids.task_id,"name":"Renamed", "billable_default":true,
+        let request = json!({"task_id":ids.task_id,"name":"Renamed", "billable_default":true, "is_default":false,
             "rate":rate,"expected_requester":{"org_id":ids.org_id,"user_id":ids.user_id}});
         if case == "member_preserves" {
             assert_eq!(

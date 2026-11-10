@@ -36,7 +36,7 @@ type Request = (
     Option<TaskCursor>,
     Option<PermissionRequester>,
 );
-type Creation = (String, bool, TaskRateEdit, PermissionRequester);
+type Creation = (String, bool, bool, TaskRateEdit, PermissionRequester);
 #[derive(Clone, Default)]
 struct Probe {
     replies: Rc<RefCell<VecDeque<oneshot::Receiver<Response>>>>,
@@ -162,6 +162,7 @@ fn catalog(edit: bool, rates: bool) -> TaskCatalogPage {
             id: Uuid::now_v7(),
             name: "A private task".into(),
             billable_default: true,
+            is_default: false,
             active: true,
             default_rate_cents: rates.then_some(8000),
             default_rate_currency: rates.then(|| "USD".into()),
@@ -232,6 +233,7 @@ async fn creation_without_rates_keeps_validation_input_and_refreshes_after_succe
         (
             "New consulting task".into(),
             true,
+            false,
             TaskRateEdit::Preserve {},
             requester,
         )
@@ -275,7 +277,7 @@ async fn creation_validates_exact_rate_blocks_duplicate_submit_and_discards_revo
     ui.form_event("task-name", "input", "Exact initial rate");
     ui.form_event("task-edit-form", "submit", "");
     assert_eq!(
-        probe.creations.borrow_mut().pop().unwrap().2,
+        probe.creations.borrow_mut().pop().unwrap().3,
         TaskRateEdit::Preserve {},
         "A financial editor may leave the initial rate blank without setting zero"
     );
@@ -294,6 +296,7 @@ async fn creation_validates_exact_rate_blocks_duplicate_submit_and_discards_revo
         &[(
             "Exact initial rate".into(),
             true,
+            false,
             TaskRateEdit::Set {
                 amount_cents: 0,
                 currency: "EUR".into()
@@ -420,6 +423,72 @@ async fn name_edit_preserves_rates_and_keeps_input_on_validation_failure() {
 }
 
 #[tokio::test]
+async fn catalog_groups_common_tasks_and_editor_sends_the_common_flag() {
+    let probe = Probe::default();
+    let reply = probe.reply();
+    let mut ui = Harness::new(&probe);
+    let mut page = catalog(true, false);
+    let requester = page.requester;
+    let mut common = page.tasks[0].clone();
+    common.id = Uuid::now_v7();
+    common.name = "A common task".into();
+    common.is_default = true;
+    page.tasks.insert(0, common.clone());
+    reply.send(Ok(page)).unwrap();
+    ui.settle();
+    let html = ui.html();
+    let at = |text: &str| html.find(text).unwrap_or_else(|| panic!("{text}: {html}"));
+    assert!(at("Common tasks") < at("A common task"));
+    assert!(at("A common task") < at("Other tasks"));
+    assert!(at("Other tasks") < at("A private task"));
+
+    ui.click(&format!("tasks-edit-{}", common.id));
+    let html = ui.html();
+    let checkbox = &html[html.find(r#"id="task-common""#).unwrap()..];
+    let checkbox = &checkbox[..checkbox.find('>').unwrap()];
+    assert!(checkbox.contains(r#"aria-checked="true""#));
+    assert!(
+        checkbox.contains(r#"aria-describedby="task-common-hint""#),
+        "the hint is announced with the checkbox: {checkbox}"
+    );
+    assert!(!checkbox.contains("aria-invalid"), "{checkbox}");
+    assert!(html.contains(r#"id="task-common-hint""#), "{html}");
+
+    ui.click("tasks-new");
+    ui.form_event("task-name", "input", "Meetings");
+    ui.click("task-common");
+    ui.form_event("task-edit-form", "submit", "");
+    assert_eq!(
+        probe.creations.borrow()[0],
+        (
+            "Meetings".into(),
+            true,
+            true,
+            TaskRateEdit::Preserve {},
+            requester
+        )
+    );
+}
+
+#[tokio::test]
+async fn common_tasks_group_says_only_active_ones_join_new_projects() {
+    let probe = Probe::default();
+    let reply = probe.reply();
+    let mut ui = Harness::new(&probe);
+    let mut page = catalog(true, false);
+    page.tasks[0].is_default = true;
+    page.tasks[0].active = false;
+    reply.send(Ok(page)).unwrap();
+    ui.settle();
+    let html = ui.html();
+    assert!(
+        html.contains("Active common tasks are added to every new project."),
+        "{html}"
+    );
+    assert!(!html.contains(">Added to every new project."), "{html}");
+}
+
+#[tokio::test]
 async fn financial_editor_sends_explicit_zero_in_current_currency_and_explicit_clear() {
     let probe = Probe::default();
     let reply = probe.reply();
@@ -457,6 +526,7 @@ mod server_fns {
     pub async fn create_task(
         name: String,
         billable: bool,
+        common: bool,
         rate: TaskRateEdit,
         requester: PermissionRequester,
     ) -> Result<Task, ServerFnError> {
@@ -464,7 +534,7 @@ mod server_fns {
         probe
             .creations
             .borrow_mut()
-            .push((name, billable, rate, requester));
+            .push((name, billable, common, rate, requester));
         let receive = probe.creation_reply.borrow_mut().take();
         if let Some(receive) = receive {
             return receive.await.unwrap();
@@ -496,6 +566,7 @@ mod server_fns {
         id: String,
         _name: String,
         _billable: bool,
+        _common: bool,
         rate: TaskRateEdit,
         requester: PermissionRequester,
     ) -> Result<Task, ServerFnError> {

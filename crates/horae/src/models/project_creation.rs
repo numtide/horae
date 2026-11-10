@@ -162,6 +162,21 @@ pub struct ProjectTaskInput {
     pub access: TaskAccess,
 }
 
+impl ProjectTaskInput {
+    /// A task as the form adds it: a blank rate inherits the task's default,
+    /// with no budget and open to everyone on the project.
+    pub fn added(source: TaskSource, billable: bool) -> Self {
+        Self {
+            id: Uuid::now_v7(),
+            source,
+            billable,
+            rate: String::new(),
+            budget: String::new(),
+            access: TaskAccess::Everyone,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectMemberInput {
@@ -348,6 +363,8 @@ pub struct CreationOptions {
     pub email_available: bool,
     pub clients: Vec<CreationClient>,
     pub tasks: Vec<CreationTask>,
+    /// Active common tasks, which a new project's task list starts with.
+    pub common_tasks: Vec<CreationTask>,
     pub people: Vec<CreationPerson>,
     pub more_clients: bool,
     pub more_tasks: bool,

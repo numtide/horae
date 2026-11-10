@@ -56,6 +56,9 @@ mod task_edit_tests;
 #[cfg(all(test, feature = "server"))]
 mod task_activity_tests;
 
+#[cfg(all(test, feature = "server"))]
+mod common_task_tests;
+
 // ── Projects ─────────────────────────────────────────────────────────────────
 
 #[cfg(feature = "server")]
@@ -862,6 +865,7 @@ async fn tasks_for_viewer(
 pub async fn create_task(
     name: String,
     billable_default: bool,
+    is_default: bool,
     rate: TaskRateEdit,
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
@@ -875,6 +879,7 @@ pub async fn create_task(
         actor.id,
         &name,
         billable_default,
+        is_default,
         &rate,
     )
     .await?;
@@ -941,6 +946,7 @@ async fn create_catalog_task(
     actor_id: uuid::Uuid,
     name: &str,
     billable_default: bool,
+    is_default: bool,
     rate: &TaskRateEdit,
 ) -> Result<(Task, crate::plugin::event::TaskPayload), ServerFnError> {
     let name = name.trim();
@@ -955,8 +961,8 @@ async fn create_catalog_task(
     let id = uuid::Uuid::now_v7();
     let mut task = sqlx::query_as!(
         Task,
-        "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, default_rate_currency)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, default_rate_currency, is_default)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id, org_id, name, billable_default, default_rate_cents, active",
         id,
         org_id,
@@ -964,6 +970,7 @@ async fn create_catalog_task(
         billable_default,
         amount,
         currency,
+        is_default,
     )
     .fetch_one(&mut *tx)
     .await
@@ -984,6 +991,7 @@ pub async fn update_task(
     task_id: String,
     name: String,
     billable_default: bool,
+    is_default: bool,
     rate: TaskRateEdit,
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
@@ -999,6 +1007,7 @@ pub async fn update_task(
         task_id,
         &name,
         billable_default,
+        is_default,
         &rate,
     )
     .await?;
@@ -1015,6 +1024,7 @@ pub async fn update_task(
 }
 
 #[cfg(feature = "server")]
+#[allow(clippy::too_many_arguments)]
 async fn update_task_record(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
@@ -1022,6 +1032,7 @@ async fn update_task_record(
     task_id: uuid::Uuid,
     name: &str,
     billable_default: bool,
+    is_default: bool,
     rate: &TaskRateEdit,
 ) -> Result<(Task, Option<crate::plugin::event::TaskPayload>), ServerFnError> {
     let name = name.trim();
@@ -1039,12 +1050,12 @@ async fn update_task_record(
     let task = sqlx::query_as!(
         Task,
         "UPDATE tasks
-            SET name = $3, billable_default = $4,
+            SET name = $3, billable_default = $4, is_default = $8,
                 default_rate_cents = CASE WHEN $5 THEN default_rate_cents ELSE $6 END,
                 default_rate_currency = CASE WHEN $5 THEN default_rate_currency ELSE $7 END
           WHERE id = $1 AND org_id = $2
-            AND (name, billable_default, default_rate_cents, default_rate_currency)
-                IS DISTINCT FROM ($3, $4,
+            AND (name, billable_default, is_default, default_rate_cents, default_rate_currency)
+                IS DISTINCT FROM ($3, $4, $8,
                     CASE WHEN $5 THEN default_rate_cents ELSE $6 END,
                     CASE WHEN $5 THEN default_rate_currency ELSE $7 END)
          RETURNING id, org_id, name, billable_default, default_rate_cents, active",
@@ -1055,6 +1066,7 @@ async fn update_task_record(
         preserve,
         amount,
         currency,
+        is_default,
     )
     .fetch_optional(&mut *tx)
     .await

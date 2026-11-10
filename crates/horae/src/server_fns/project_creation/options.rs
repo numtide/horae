@@ -103,6 +103,17 @@ pub(super) async fn load_creation_options(
     .fetch_all(&mut *tx)
     .await
     .map_err(storage_error)?;
+    // A project holds at most 500 tasks, so that bounds the common ones too.
+    let common_tasks = sqlx::query_as!(
+        CreationTask,
+        "SELECT id, name, billable_default as billable, default_rate_cents, default_rate_currency FROM tasks
+         WHERE org_id = $1 AND active AND is_default
+         ORDER BY lower(name), id LIMIT 500",
+        org_id,
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(storage_error)?;
     let mut people = sqlx::query_as!(CreationPerson,
         "SELECT id, name, billable_rate_cents, CASE WHEN $4 THEN cost_rate_cents END as cost_rate_cents FROM users
          WHERE org_id = $1 AND active AND strpos(lower(name), lower($2)) > 0
@@ -137,6 +148,7 @@ pub(super) async fn load_creation_options(
         email_available,
         clients,
         tasks,
+        common_tasks,
         people,
         more_clients,
         more_tasks,

@@ -23,6 +23,7 @@ fn catalog() -> CreationOptions {
             default_rate_cents: None,
             default_rate_currency: None,
         }],
+        common_tasks: Vec::new(),
         people: vec![CreationPerson {
             id: Uuid::now_v7(),
             name: "Default teammate".into(),

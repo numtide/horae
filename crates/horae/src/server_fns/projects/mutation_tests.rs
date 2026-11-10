@@ -709,6 +709,7 @@ mod task {
                 ids.task_id,
                 name,
                 true,
+                false,
                 &rate,
             )
             .await
@@ -747,6 +748,7 @@ mod task {
                 ids.task_id,
                 name,
                 billable,
+                false,
                 &rate_edit(rate),
             )
             .await
@@ -760,6 +762,7 @@ mod task {
                 ids.task_id,
                 name,
                 billable,
+                false,
                 &rate_edit(rate),
             )
             .await
@@ -780,6 +783,7 @@ mod task {
             ids.task_id,
             name,
             true,
+            false,
             &TaskRateEdit::Preserve {},
         )
         .await
@@ -919,6 +923,7 @@ mod task {
                 id,
                 "Dev",
                 true,
+                false,
                 &TaskRateEdit::Preserve {},
             )
             .await
@@ -995,6 +1000,7 @@ mod task {
                         ids.task_id,
                         "Dev",
                         true,
+                        false,
                         &TaskRateEdit::Preserve {},
                     )
                     .await

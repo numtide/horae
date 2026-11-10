@@ -35,6 +35,7 @@ async fn task_name_editor_preserves_unknown_currency_and_hides_rate_even_on_noop
             ids.task_id,
             "  Renamed  ",
             true,
+            false,
             &TaskRateEdit::Preserve {},
         )
         .await
@@ -83,6 +84,7 @@ async fn task_rate_edit_does_not_rewrite_project_overrides_or_time_history(pool:
             ids.user_id,
             ids.task_id,
             "Catalog change",
+            false,
             false,
             &rate,
         )
@@ -143,6 +145,7 @@ async fn explicit_task_rate_noops_still_require_global_write_authority(pool: PgP
                 ids.task_id,
                 "Denied",
                 false,
+                false,
                 &edit,
             )
             .await;
@@ -200,9 +203,10 @@ async fn task_edit_validates_currency_amount_name_and_foreign_targets_atomically
             NOT_FOUND,
         ),
     ] {
-        let error = update_task_record(&pool, ids.org_id, ids.user_id, id, name, true, &rate)
-            .await
-            .unwrap_err();
+        let error =
+            update_task_record(&pool, ids.org_id, ids.user_id, id, name, true, false, &rate)
+                .await
+                .unwrap_err();
         assert!(
             matches!(error, ServerFnError::ServerError {code: actual, ..} if actual == code),
             "{error:?}"
@@ -246,6 +250,7 @@ async fn task_edit_observes_task_and_rate_revocation_after_organization_wait(poo
                 ids.task_id,
                 "Revoked",
                 true,
+                false,
                 &TaskRateEdit::Clear {},
             )
             .await
@@ -315,6 +320,7 @@ async fn task_rate_edit_refuses_stale_currency_after_organization_wait(pool: PgP
             ids.task_id,
             "Stale currency",
             true,
+            false,
             &set_rate(8000),
         )
         .await
@@ -374,6 +380,7 @@ async fn task_edit_holds_authority_while_waiting_for_task_and_commit(pool: PgPoo
             ids.task_id,
             "Authorized edit",
             true,
+            false,
             &TaskRateEdit::Preserve {},
         )
         .await
@@ -426,6 +433,7 @@ async fn task_edit_rejects_actor_deactivated_after_waiting_for_actor_lock(pool: 
             ids.task_id,
             "Inactive editor",
             true,
+            false,
             &TaskRateEdit::Preserve {},
         )
         .await

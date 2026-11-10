@@ -106,6 +106,12 @@ are created, previously imported parents are skipped, and only the error-free
 run can advance the watermark. A project with an unresolved client must not
 invent a placeholder client or leave behind partial provenance.
 
+A task the import creates takes Harvest's *common task* flag (`is_default`), and
+is not linked to projects Harvest did not assign it to. Like billable and the
+default rate, the flag is set only on creation: a task matched by provenance or
+name keeps its value. Tasks imported before Horae had the flag, and later
+changes in Harvest, need marking in the task editor.
+
 ## Scenario 4 — Re-sync is idempotent and edit-robust (US2, FR-011/FR-026, SC-002)
 
 Click **Preview import (dry run)** again, review the result, then **Commit this dry run** to repeat the full sync against unchanged data.
