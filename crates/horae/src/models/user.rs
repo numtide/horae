@@ -97,6 +97,24 @@ pub enum Activation {
     Deactivated,
 }
 
+/// A person's default rates, in the workspace's default currency. A rate the
+/// viewer may not read is `None` and says nothing about the stored value.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersonRates {
+    pub person_id: Uuid,
+    pub currency: String,
+    pub billable: Option<PersonRate>,
+    pub cost: Option<PersonRate>,
+}
+
+/// One readable rate: its amount in minor units (`None` when unset) and
+/// whether the viewer may change it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersonRate {
+    pub cents: Option<i64>,
+    pub editable: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct User {

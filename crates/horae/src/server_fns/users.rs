@@ -4,6 +4,9 @@ use super::*;
 use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage};
 use crate::models::user::{Activation, AddedPeople, NewPerson, UserListItem};
 
+mod rates;
+pub use rates::{load_person_rates, update_person_rates};
+
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 /// Read a bounded people-directory page under current canonical permissions.
@@ -477,4 +480,5 @@ mod tests {
     mod authority;
     mod concurrency;
     mod people;
+    mod rates;
 }

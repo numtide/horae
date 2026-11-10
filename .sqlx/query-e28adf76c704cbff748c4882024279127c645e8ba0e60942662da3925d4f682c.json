@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.billable_rate_cents, u.cost_rate_cents,\n                  upper(btrim(o.default_currency)) AS \"currency!\"\n           FROM users u JOIN organizations o ON o.id = u.org_id\n           WHERE u.org_id = $1 AND u.id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "billable_rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "cost_rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "currency!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "e28adf76c704cbff748c4882024279127c645e8ba0e60942662da3925d4f682c"
+}
