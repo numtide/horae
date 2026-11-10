@@ -10,6 +10,7 @@ use tower_sessions::{MemoryStore, Session};
 mod client_permissions;
 mod project_permissions;
 mod task_permissions;
+mod user_permissions;
 
 /// The integer id the API shows for a record.
 pub(super) async fn api_id(pool: &PgPool, kind: &str, horae_id: Uuid) -> i64 {
