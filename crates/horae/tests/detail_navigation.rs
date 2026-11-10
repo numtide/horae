@@ -50,6 +50,8 @@ mod edit_return;
 pub mod invoice;
 #[path = "../src/pages/invoices.rs"]
 mod invoices;
+#[path = "../src/models/organization.rs"]
+pub mod organization;
 #[path = "../src/models/own_permissions.rs"]
 pub mod own_permissions;
 #[path = "../src/models/permission_editor.rs"]
@@ -68,11 +70,12 @@ pub mod task;
 pub mod user;
 mod models {
     pub use super::{
-        client, invoice, own_permissions, permission_editor, project, project_creation,
-        project_managers, user,
+        client, invoice, organization, own_permissions, permission_editor, project,
+        project_creation, project_managers, user,
     };
     pub use super::{
         client::Client,
+        organization::{OrgBranding, branding_value_error},
         project::{
             Project, ProjectBudgetOverview, ProjectBudgetProgress, ProjectDetails, ProjectTagLink,
         },
@@ -160,7 +163,7 @@ mod route {
     pub use super::edit_return::EditReturn;
     use super::*;
     use clients::{ClientDetail, ClientList};
-    use invoices::{InvoiceDetail, InvoiceList, NewInvoiceForClient};
+    use invoices::{InvoiceDetail, InvoiceList, InvoiceSettings, NewInvoiceForClient};
     use projects::{ProjectDetail, ProjectList, ProjectsForClient};
 
     #[derive(Clone, PartialEq, Routable)]
@@ -174,6 +177,8 @@ mod route {
         InvoiceList {},
         #[route("/invoices/new/client/:client")]
         NewInvoiceForClient { client: String },
+        #[route("/invoices/settings")]
+        InvoiceSettings {},
         #[route("/invoices/:id")]
         InvoiceDetail { id: Uuid },
         #[route("/projects")]
@@ -881,6 +886,7 @@ mod server_fns {
     use assignment::Assignment;
     use client::Client;
     use invoice::{Invoice, InvoiceDetailView, InvoiceListItem, InvoiceWithLines};
+    use organization::OrgBranding;
     use project::Project;
     use task::Task;
     use user::CurrentUser;
@@ -905,6 +911,17 @@ mod server_fns {
     pub async fn get_my_permissions()
     -> Result<Option<super::own_permissions::OwnPermissions>, ServerFnError> {
         Ok(None)
+    }
+
+    pub async fn get_org_branding() -> Result<OrgBranding, ServerFnError> {
+        unreachable!("detail navigation never opens invoice settings")
+    }
+
+    pub async fn update_org_branding(
+        _branding: OrgBranding,
+        _expected: OrgBranding,
+    ) -> Result<OrgBranding, ServerFnError> {
+        unreachable!("detail navigation never opens invoice settings")
     }
 
     pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {

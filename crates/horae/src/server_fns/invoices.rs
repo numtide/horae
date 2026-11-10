@@ -635,11 +635,14 @@ async fn generate_invoice_with_request(
     }
     let total_cents = amounts.total_cents;
 
-    // Insert invoice-owned values; later project edits cannot alter this snapshot.
-    sqlx::query!(
+    // Insert invoice-owned values; later project or settings edits cannot alter
+    // this snapshot, including the organization's default notes.
+    let notes = sqlx::query_scalar!(
         r#"INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents,
-             po_number,discount_bps,tax1_bps,tax2_name,tax2_bps,discount_cents,tax1_cents,tax2_cents)
-           VALUES ($1, $2, $3, $4, 'draft', $5, $6, $7, $8, $9,$10,$11,$12,$13,$14,$15,$16)"#,
+             po_number,discount_bps,tax1_bps,tax2_name,tax2_bps,discount_cents,tax1_cents,tax2_cents,notes)
+           VALUES ($1, $2, $3, $4, 'draft', $5, $6, $7, $8, $9,$10,$11,$12,$13,$14,$15,$16,
+             (SELECT invoice_notes FROM organizations WHERE id = $2))
+           RETURNING notes"#,
         invoice_id,
         org_id,
         client_id,
@@ -651,7 +654,7 @@ async fn generate_invoice_with_request(
         settings.po_number, settings.discount_bps, settings.tax1_bps, settings.tax2_name,
         settings.tax2_bps, amounts.discount_cents, amounts.tax1_cents, amounts.tax2_cents,
     )
-    .execute(&mut *tx)
+    .fetch_one(&mut *tx)
     .await
     // The advisory lock makes a number collision between generate calls
     // impossible, but any other writer racing the UNIQUE (org_id, number)
@@ -756,7 +759,7 @@ async fn generate_invoice_with_request(
         discount_cents: amounts.discount_cents,
         tax1_cents: amounts.tax1_cents,
         tax2_cents: amounts.tax2_cents,
-        notes: None,
+        notes,
         created_at: now,
     };
 

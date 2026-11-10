@@ -203,6 +203,7 @@ read-only rows and other shared controls retain their existing layout.
 | `/projects/:id` | `ProjectDetail` | Project tasks + time entries |
 | `/time` | `TimeList` | Time entry list with filters |
 | `/invoices` | `InvoiceList` | Invoice table |
+| `/invoices/settings` | `InvoiceSettings` | Issuer, payment details and invoice defaults, one save per card (manager/admin) |
 | `/invoices/:id` | `InvoiceDetail` | Invoice line items |
 | `/admin/users` | `AdminUsers` | User management |
 | `/settings` | `Settings` | App + plugin settings |

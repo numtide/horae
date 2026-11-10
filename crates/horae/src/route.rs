@@ -12,7 +12,7 @@ use crate::pages::{
         ConnectOutcome, HarvestCsv, HarvestOAuth, HarvestOverview, HarvestRun, HarvestRuns,
         ImporterIndex, RunsCursor, SecretFocus,
     },
-    invoices::{InvoiceDetail, InvoiceList, NewInvoiceForClient},
+    invoices::{InvoiceDetail, InvoiceList, InvoiceSettings, NewInvoiceForClient},
     new_project::{EditProject, NewProject, NewProjectForClient},
     permission_audit::PermissionAudit,
     projects::{ProjectDetail, ProjectList, ProjectsForClient},
@@ -88,6 +88,8 @@ pub enum Route {
     InvoiceList {},
     #[route("/invoices/new/client/:client")]
     NewInvoiceForClient { client: String },
+    #[route("/invoices/settings")]
+    InvoiceSettings {},
     #[route("/invoices/:id")]
     InvoiceDetail { id: Uuid },
     #[layout(AdminShell)]
@@ -136,7 +138,10 @@ fn matches_navigation(to: &Route, current: &Route) -> bool {
                 | Route::ProjectsForClient { .. }
                 | Route::EditProject { .. }
         ) | (Route::ClientList {}, Route::ClientDetail { .. })
-            | (Route::InvoiceList {}, Route::NewInvoiceForClient { .. })
+            | (
+                Route::InvoiceList {},
+                Route::NewInvoiceForClient { .. } | Route::InvoiceSettings {}
+            )
             | (
                 Route::ImporterIndex {},
                 Route::HarvestOverview { .. }
@@ -198,6 +203,14 @@ mod tests {
             assert!(matches_navigation(&section, &route));
             assert!(!matches_navigation(&Route::ClientList {}, &route));
         }
+    }
+
+    #[test]
+    fn invoice_settings_live_under_invoices_and_keep_it_highlighted() {
+        let route: Route = "/invoices/settings".parse().unwrap();
+        assert!(route == Route::InvoiceSettings {});
+        assert_eq!(route.to_string(), "/invoices/settings");
+        assert!(matches_navigation(&Route::InvoiceList {}, &route));
     }
 
     #[test]

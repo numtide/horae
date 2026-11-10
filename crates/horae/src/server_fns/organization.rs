@@ -62,11 +62,15 @@ pub async fn get_org_branding() -> Result<OrgBranding, ServerFnError> {
 }
 
 #[server]
-pub async fn update_org_branding(branding: OrgBranding) -> Result<OrgBranding, ServerFnError> {
+pub async fn update_org_branding(
+    branding: OrgBranding,
+    expected: OrgBranding,
+) -> Result<OrgBranding, ServerFnError> {
     let manager = require_manager().await?;
     let state = crate::state::global_state().await;
     let (branding, changed) =
-        update_org_branding_record(&state.db, manager.org_id, manager.id, &branding).await?;
+        update_org_branding_record(&state.db, manager.org_id, manager.id, &expected, &branding)
+            .await?;
     if changed {
         state
             .plugins
@@ -87,8 +91,24 @@ async fn update_org_branding_record(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
+    expected: &OrgBranding,
     branding: &OrgBranding,
 ) -> Result<(OrgBranding, bool), ServerFnError> {
+    // Only edited values need checking: the rest must equal the stored row
+    // (enforced below), even one stored before values were checked.
+    for (value, previous) in branding_values(branding)
+        .into_iter()
+        .zip(branding_values(expected))
+    {
+        if let Some(message) = value
+            .as_deref()
+            .filter(|_| value != previous)
+            .and_then(crate::models::branding_value_error)
+        {
+            return Err(err(BAD_REQUEST, message));
+        }
+    }
+
     let mut tx = db.begin().await.map_err(server_err)?;
     sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
         .execute(&mut *tx)
@@ -124,6 +144,13 @@ async fn update_org_branding_record(
     .ok_or_else(|| forbidden("Active manager access required"))?;
     if !role.is_manager_or_above() {
         return Err(forbidden("Manager access required"));
+    }
+    // The request carries every column, so one edited from an older snapshot
+    // would silently restore values someone else saved since.
+    if before != *expected {
+        return Err(conflict(
+            "Someone changed these settings after you opened this page. Reload the page to see the current values; your unsaved edits will be lost.",
+        ));
     }
 
     let branding = sqlx::query_as!(
@@ -172,6 +199,24 @@ async fn update_org_branding_record(
     let changed = branding.is_some();
     tx.commit().await.map_err(server_err)?;
     Ok((branding.unwrap_or(before), changed))
+}
+
+#[cfg(feature = "server")]
+fn branding_values(branding: &OrgBranding) -> [&Option<String>; 12] {
+    [
+        &branding.provider_name,
+        &branding.provider_address,
+        &branding.provider_tax_id,
+        &branding.provider_email,
+        &branding.provider_phone,
+        &branding.bank_name,
+        &branding.bank_iban,
+        &branding.bank_bic,
+        &branding.bank_routing,
+        &branding.bank_account,
+        &branding.invoice_notes,
+        &branding.invoice_payment_terms,
+    ]
 }
 
 #[cfg(all(test, feature = "server"))]

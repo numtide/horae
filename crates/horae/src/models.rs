@@ -32,7 +32,7 @@ pub use jobs::{
     CommitAvailability, ErrorGroup, ErrorSummary, JobErrorKind, JobStatus, MissingPerson,
     RetryAvailability,
 };
-pub use organization::OrgBranding;
+pub use organization::{OrgBranding, branding_value_error};
 #[cfg(any(feature = "server", test))]
 pub use project::ProjectBudgetProgress;
 pub use project::{Project, ProjectBudgetOverview, ProjectDetails, ProjectTagLink};
