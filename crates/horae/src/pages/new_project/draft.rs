@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::models::project_creation::{
-    CreationTask, DraftSaved, ProjectDraft, ProjectForm, ProjectTaskInput, TaskAccess, TaskSource,
+    CreationTask, DraftSaved, ProjectDraft, ProjectForm, ProjectTaskInput, TaskSource,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -44,16 +44,13 @@ impl DraftState {
                 saved_at: None,
                 saved: ProjectForm {
                     client_id: client_context,
-                    // A blank rate inherits the task's default, as when added by hand.
                     tasks: common_tasks
                         .iter()
-                        .map(|task| ProjectTaskInput {
-                            id: Uuid::now_v7(),
-                            source: TaskSource::Existing { task_id: task.id },
-                            billable: task.billable,
-                            rate: String::new(),
-                            budget: String::new(),
-                            access: TaskAccess::Everyone,
+                        .map(|task| {
+                            ProjectTaskInput::added(
+                                TaskSource::Existing { task_id: task.id },
+                                task.billable,
+                            )
                         })
                         .collect(),
                     ..Default::default()

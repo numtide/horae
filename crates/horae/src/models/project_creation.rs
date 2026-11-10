@@ -162,6 +162,21 @@ pub struct ProjectTaskInput {
     pub access: TaskAccess,
 }
 
+impl ProjectTaskInput {
+    /// A task as the form adds it: a blank rate inherits the task's default,
+    /// with no budget and open to everyone on the project.
+    pub fn added(source: TaskSource, billable: bool) -> Self {
+        Self {
+            id: Uuid::now_v7(),
+            source,
+            billable,
+            rate: String::new(),
+            budget: String::new(),
+            access: TaskAccess::Everyone,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectMemberInput {
