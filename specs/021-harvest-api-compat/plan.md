@@ -25,8 +25,9 @@ arithmetic only (R-4). A Nix check runs real open-source clients against a Horae
 `sha2` (already in `Cargo.lock`, becomes a direct dependency in step 2), the OS random source
 already used through `chacha20poly1305`
 
-**Storage**: PostgreSQL. New tables `api_tokens`, `api_ids`; new columns
-`organizations.api_account_id` and `updated_at` on tasks, projects, clients, users
+**Storage**: PostgreSQL. New table `api_tokens`; new columns `organizations.api_account_id`,
+`harvest_id` (the id in this API) on each exposed table, and `updated_at` on tasks, projects,
+clients, users
 ([data-model.md](data-model.md))
 
 **Testing**: `cargo test -p horae-core` (properties for the wire decimals and unit tests for the
@@ -63,12 +64,12 @@ request.
   `convert::hours_to_minutes`, `money::format_cents_plain`, `money::parse_cents`) and the restart
   and start-stops-running rules live in `horae-core` with no I/O dependencies.
 - **III. Single Datastore**: Pass. New tables have UUID v7 keys and `org_id`; PostgreSQL only.
-  Integer ids are a mapping table, not new primary keys (R-2).
+  Integer ids are a `harvest_id` column beside the UUID primary key, not new primary keys (R-2).
 - **IV. Mutations Through Server Functions**: Pass. Under 5.0.0 the Harvest-compatible API may
   call the shared mutation operations server functions call, with the actor resolved from a
   hashed, person-bound token. Steps 3, 6 and 7 write only through those operations and refuse
   cookie-only callers. Token issue and revocation are server functions (contracts/api-tokens.md);
-  integer-id allocation happens inside the operations that already create records. The
+  integer ids are assigned by a trigger on the insert the operations already make. The
   `last_used_at` stamp on a read request is authentication bookkeeping on the token row, like the
   session store the cookie layer already writes on every request.
 - **V. Reproducible Builds & Formatting Gate**: Pass. `nix fmt`, clippy, the `.sqlx` cache check,
@@ -102,15 +103,18 @@ specs/021-harvest-api-compat/
 ```text
 crates/core/src/time_entry_timer.rs               # restart eligibility, start-stops-running rule
 crates/horae/migrations/0057_api_account_id.sql   # 0056 is taken by the time-zone branch
-crates/horae/migrations/0058_api_ids.sql
-crates/horae/migrations/0059_api_ids_backfill.sql
+crates/horae/migrations/0058_harvest_import_id.sql  # harvest_import_map.harvest_id renamed
+crates/horae/migrations/0059_harvest_ids.sql        # harvest_id columns, sequences, trigger, lookup indexes
+crates/horae/migrations/0060_harvest_ids_backfill.sql
+crates/horae/migrations/0061_harvest_ids_check.sql  # then 0062: NOT NULL and unique indexes
+crates/horae/migrations/0062_harvest_ids_not_null.sql
 crates/horae/migrations/<next>_api_tokens.sql     # step 2
 crates/horae/migrations/<next>_catalogue_updated_at.sql   # step 4
 crates/horae/src/harvest.rs                       # was harvest/mod.rs (R-12); router and aliases
 crates/horae/src/harvest/
 ├── auth.rs              # extractor: bearer, query, account id, cookie for reads
 ├── token_auth.rs        # token lookup, last-used stamp
-├── ids.rs               # integer id lookup and allocation
+├── ids.rs               # integer id → record lookup (harvest_id columns)
 ├── errors.rs            # Harvest error bodies and status mapping
 ├── rate_limit.rs        # per-token windows in AppState
 ├── decimal_json.rs      # Hours and Amount as exact JSON numbers
@@ -123,7 +127,7 @@ crates/horae/src/harvest/
 crates/horae/src/server_fns/api_tokens.rs         # contracts/api-tokens.md
 crates/horae/src/server_fns/time_entries/commands.rs   # apply → pub(crate); RestartTimer; D-6
 crates/horae/src/models/scoped_time.rs            # TimesheetCommand::RestartTimer
-crates/horae/src/importers/harvest/…              # write api_ids with the Harvest id (OQ-2)
+crates/horae/src/importers/harvest/…              # insert the Harvest id as harvest_id when free (OQ-2)
 crates/horae/src/pages/settings/api_tokens.rs     # token section of personal settings
 crates/horae/tests/fixtures/harvest_reference/    # scrubbed recordings (R-11) or hand-written shapes
 nix/checks/harvest-compat.nix                     # the suite (R-10)
@@ -134,6 +138,37 @@ scripts/harvest-record.sh                         # GET-only recorder for the te
 **Structure Decision**: extend the existing `harvest` module, converted to the `foo.rs` + `foo/`
 layout in step 1 because the feature rewrites most of it. Integration tests get their own
 `harvest_api` test target beside the existing ones in `crates/horae/tests/`.
+
+## Layering
+
+`/harvest/v2` is one adapter over Horae's operations. A native `/api/v1` and multi-tenant
+deployments (`specs/020-multi-tenant-subdomains`) will reuse the same operations, so every step
+follows these rules:
+
+1. **Handlers hold no business logic.** A `/harvest/v2` handler translates input (integer id →
+   UUID, hours → minutes, decimal → cents), calls a shared operation in the
+   `*_record(tx, actor, input)` style the server functions already use, and translates the
+   output. An operation the API needs and that exists only inside a server function is extracted
+   first; the server function then calls it.
+1. **One `Actor` for every entry point.** A session, a token and later `/api/v1` all produce the
+   same thing: a membership in one organization with its permissions. Permissions stay in
+   `horae-core`.
+1. **Operations return domain errors**; each adapter maps them to its own wire format
+   (`harvest/errors.rs` for this API).
+1. **One pagination core.** Pagination and `updated_since` have one cursor-based core;
+   `/harvest/v2` exposes it as `page`/`per_page`.
+
+**Tokens (step 2) belong to the account, not to an organization.** Each request names the
+organization with `Harvest-Account-Id` (= `organizations.api_account_id`), which resolves to the
+account's membership there; without the header, the account's only membership is used, and an
+account with several is refused. Tokens are Horae credentials, shared by `/harvest/v2` and the
+future `/api/v1`, not Harvest-specific. Until the multi-tenant split of accounts and memberships
+lands, an account is a `users` row and has exactly one membership.
+
+**Crates.** Database-free Harvest pieces live in `horae-harvest` (`crates/harvest`): the compat
+API's output types and exact decimals (today `harvest/types.rs`, `harvest/decimal_json.rs`),
+sharing resource types with the importer where the schema is the same. Handlers, id resolution
+(`harvest/ids.rs`), reads and anything with sqlx stay in the app crate.
 
 ## PR split
 
