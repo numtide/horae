@@ -110,7 +110,10 @@ fn RatesEditor(
         },
             div { class: "modal-body",
                 if let Some(message) = error() { p { id: "person-rates-error", role: "alert", class: "alert alert-danger", "{message}" } }
-                p { class: "form-hint", "Amounts are per hour in {currency}, the workspace currency. Leave a field empty for no rate. A change takes effect as soon as you save; there is no rate history." }
+                p { class: "form-hint",
+                    "Amounts are per hour in {currency}, the workspace currency."
+                    if editable { " Leave a field empty for no rate. A change takes effect as soon as you save; there is no rate history." }
+                }
                 if let Some(rate) = rates.billable {
                     RateField { id: "person-billable-rate", label: format!("Default billable rate ({currency})"), rate, value: billable, busy: busy(),
                         hint: format!("Used for this person's time on projects billed by person rate (or with no rate settings) that have no rate of their own for them and bill in {currency}. Uninvoiced time, budgets and reports use the new rate; invoices already created keep their amounts. New project teams show it as the suggested rate.") }
