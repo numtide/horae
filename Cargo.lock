@@ -3247,6 +3247,7 @@ dependencies = [
  "futures-util",
  "gloo-timers",
  "horae-core",
+ "horae-harvest",
  "openidconnect",
  "proptest",
  "rust_xlsxwriter",
@@ -3296,6 +3297,21 @@ dependencies = [
  "serde",
  "syn",
  "toml 0.8.23",
+]
+
+[[package]]
+name = "horae-harvest"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "ureq 2.12.1",
+ "url",
 ]
 
 [[package]]

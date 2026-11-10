@@ -198,7 +198,16 @@ impl From<anyhow::Error> for ApiImportError {
     /// Unwraps a typed failure raised below an `anyhow` boundary (the HTTP
     /// thread, the token refresh) so the job runner can still see its kind.
     fn from(error: anyhow::Error) -> Self {
-        error.downcast().unwrap_or_else(Self::Other)
+        let error = match error.downcast::<Self>() {
+            Ok(typed) => return typed,
+            Err(error) => error,
+        };
+        match error.downcast::<horae_harvest::Error>() {
+            Ok(horae_harvest::Error::Unauthorized) => Self::ReconnectRequired,
+            Ok(horae_harvest::Error::Forbidden) => Self::Forbidden,
+            Ok(horae_harvest::Error::Unavailable(message)) => Self::Unavailable(message),
+            Err(error) => Self::Other(error),
+        }
     }
 }
 
@@ -826,5 +835,33 @@ mod oauth_callback_tests {
         ] {
             assert_eq!(connect_failure(&error), failure, "{error}");
         }
+    }
+}
+
+#[cfg(test)]
+mod error_tests {
+    use super::ApiImportError;
+
+    #[test]
+    fn harvest_client_failures_become_their_import_errors() {
+        use anyhow::Context;
+        for (error, expected) in [
+            (horae_harvest::Error::Unauthorized, "reconnect"),
+            (horae_harvest::Error::Forbidden, "forbidden"),
+            (horae_harvest::Error::Unavailable("later".into()), "later"),
+        ] {
+            let wrapped = Err::<(), _>(error).context("fetching clients").unwrap_err();
+            let found = match ApiImportError::from(wrapped) {
+                ApiImportError::ReconnectRequired => "reconnect".into(),
+                ApiImportError::Forbidden => "forbidden".into(),
+                ApiImportError::Unavailable(message) => message,
+                other => panic!("unmapped: {other}"),
+            };
+            assert_eq!(found, expected);
+        }
+        assert!(matches!(
+            ApiImportError::from(anyhow::anyhow!("plain")),
+            ApiImportError::Other(_)
+        ));
     }
 }

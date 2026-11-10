@@ -6,13 +6,13 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, bail, ensure};
 use chrono::{DateTime, Utc};
-use openidconnect::url::Url;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use url::Url;
 
-use crate::importers::harvest::ApiImportError;
+use crate::Error;
 
-#[cfg(test)]
-pub(in crate::importers::harvest) mod test_server;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_server;
 
 const API_BASE: &str = "https://api.harvestapp.com/v2/";
 const PER_PAGE: usize = 100;
@@ -25,7 +25,7 @@ const MAX_RETRY_WAIT: Duration = Duration::from_secs(300);
 /// The next unconsumed page and Brent cycle state. Persist this with the page's
 /// committed work, never just because its HTTP download completed.
 #[derive(Clone, Serialize, Deserialize)]
-pub(in crate::importers::harvest) struct PageCursor {
+pub struct PageCursor {
     version: u8,
     // Explicit null means EOF; a missing field must not truncate an import.
     #[serde(deserialize_with = "Option::deserialize")]
@@ -40,7 +40,7 @@ pub(in crate::importers::harvest) struct PageCursor {
 }
 
 impl PageCursor {
-    pub(in crate::importers::harvest) fn total(&self) -> Option<u64> {
+    pub fn total(&self) -> Option<u64> {
         self.total
     }
 
@@ -63,7 +63,7 @@ impl PageCursor {
     }
 }
 
-pub(in crate::importers::harvest) struct ApiHttp {
+pub struct ApiHttp {
     agent: ureq::Agent,
     base: Url,
     interval: Duration,
@@ -71,7 +71,7 @@ pub(in crate::importers::harvest) struct ApiHttp {
 }
 
 impl ApiHttp {
-    pub(in crate::importers::harvest) fn new() -> anyhow::Result<Self> {
+    pub fn new() -> anyhow::Result<Self> {
         Ok(Self {
             agent: ureq::AgentBuilder::new()
                 .redirects(0)
@@ -86,15 +86,15 @@ impl ApiHttp {
         })
     }
 
-    #[cfg(test)]
-    pub(in crate::importers::harvest) fn local(base: Url) -> Self {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn local(base: Url) -> Self {
         assert_eq!(base.host_str(), Some("127.0.0.1"));
         let mut client = Self::new().unwrap();
         client.base = base;
         client
     }
 
-    pub(in crate::importers::harvest) fn pages<T: DeserializeOwned>(
+    pub fn pages<T: DeserializeOwned>(
         &mut self,
         access: &str,
         account: &str,
@@ -125,7 +125,7 @@ impl ApiHttp {
         Ok(self.base.join(collection)?)
     }
 
-    pub(in crate::importers::harvest) fn cursor(
+    pub fn cursor(
         &self,
         collection: &str,
         since: Option<DateTime<Utc>>,
@@ -148,7 +148,7 @@ impl ApiHttp {
         })
     }
 
-    pub(in crate::importers::harvest) fn pages_from<T: DeserializeOwned>(
+    pub fn pages_from<T: DeserializeOwned>(
         &mut self,
         access: &str,
         account: &str,
@@ -244,7 +244,7 @@ impl ApiHttp {
                 Err(ureq::Error::Status(429 | 502 | 503 | 504, response)) if attempt < 6 => {
                     let delay = retry_after(response.header("Retry-After"));
                     if delay > MAX_RETRY_WAIT {
-                        return Err(ApiImportError::Unavailable(
+                        return Err(Error::Unavailable(
                             "Harvest asked to wait more than five minutes; retry later".into(),
                         )
                         .into());
@@ -252,27 +252,26 @@ impl ApiHttp {
                     wait(delay, cancelled)?;
                 }
                 Err(ureq::Error::Status(401, _)) => {
-                    return Err(ApiImportError::ReconnectRequired.into());
+                    return Err(Error::Unauthorized.into());
                 }
-                Err(ureq::Error::Status(403, _)) => return Err(ApiImportError::Forbidden.into()),
+                Err(ureq::Error::Status(403, _)) => return Err(Error::Forbidden.into()),
                 // Do not return provider-controlled URLs/bodies or transport
                 // debug output through the user-visible import error.
                 Err(ureq::Error::Status(status, _)) => {
                     let message = format!("Harvest request failed with HTTP {status}");
                     if status >= 500 || status == 429 {
-                        return Err(ApiImportError::Unavailable(message).into());
+                        return Err(Error::Unavailable(message).into());
                     }
                     bail!(message)
                 }
                 Err(ureq::Error::Transport(_)) => {
-                    return Err(ApiImportError::Unavailable(
-                        "Harvest request failed or timed out".into(),
-                    )
-                    .into());
+                    return Err(
+                        Error::Unavailable("Harvest request failed or timed out".into()).into(),
+                    );
                 }
             }
         }
-        Err(ApiImportError::Unavailable("Harvest request exhausted retries".into()).into())
+        Err(Error::Unavailable("Harvest request exhausted retries".into()).into())
     }
 }
 
@@ -693,11 +692,11 @@ mod tests {
             let error = ApiHttp::local(server.base.clone())
                 .pages::<u64>("token", "account", "clients", None, || false, |_| Ok(()))
                 .unwrap_err();
-            let typed = error.downcast_ref::<ApiImportError>();
+            let typed = error.downcast_ref::<Error>();
             assert!(
                 match status {
-                    401 => matches!(typed, Some(ApiImportError::ReconnectRequired)),
-                    _ => matches!(typed, Some(ApiImportError::Forbidden)),
+                    401 => matches!(typed, Some(Error::Unauthorized)),
+                    _ => matches!(typed, Some(Error::Forbidden)),
                 },
                 "HTTP {status}: {error}"
             );

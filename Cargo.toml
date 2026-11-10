@@ -1,5 +1,10 @@
 [workspace]
-members = ["crates/horae", "crates/core", "crates/dioxus-lint"]
+members = [
+  "crates/horae",
+  "crates/core",
+  "crates/harvest",
+  "crates/dioxus-lint",
+]
 exclude = [
   "crates/test-plugins/echo-plugin",
   "crates/test-plugins/fail-plugin",

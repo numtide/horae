@@ -9,9 +9,9 @@ use std::sync::{
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use openidconnect::url::Url;
+use url::Url;
 
-pub(in crate::importers::harvest) struct Response {
+pub struct Response {
     pub status: u16,
     pub headers: Vec<(&'static str, String)>,
     pub body: Vec<u8>,
@@ -27,7 +27,7 @@ impl Response {
     }
 }
 
-pub(in crate::importers::harvest) struct Server {
+pub struct Server {
     pub base: Url,
     pub requests: Arc<Mutex<Vec<String>>>,
     pub count: Arc<AtomicUsize>,
