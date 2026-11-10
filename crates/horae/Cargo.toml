@@ -101,7 +101,8 @@ toml = { version = "0.8", optional = true }
 # Blocking HTTP client for the `horae_http_post` plugin host function. extism host
 # functions are synchronous, so a blocking client avoids bridging to the async
 # runtime. rustls (default) keeps the build free of a system OpenSSL dependency.
-# The Harvest importer's API + OAuth calls use it too, through horae-harvest.
+# The Harvest importer's API + OAuth calls use horae-harvest's own ureq 2
+# dependency (the same lockfile entry), not this one.
 ureq = { version = "2", optional = true }
 # AEAD (XChaCha20-Poly1305) sealing the Harvest OAuth tokens at rest. Audited
 # RustCrypto crate; pinned. `getrandom` gives the OS RNG for per-message nonces.

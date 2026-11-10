@@ -40,7 +40,8 @@ pub fn exchange_code(cfg: &HarvestConfig, code: &str) -> anyhow::Result<Tokens> 
 }
 
 /// Refresh an expired access token with the stored refresh token (FR-024). A
-/// refused grant becomes `ReconnectRequired`; anything else is a retryable error.
+/// refused grant is `horae_harvest::Error::Unauthorized`, which
+/// `ApiImportError::from` turns into `ReconnectRequired`.
 pub fn refresh(cfg: &HarvestConfig, refresh_token: &str) -> anyhow::Result<Tokens> {
     horae_harvest::oauth::refresh(&client(cfg), refresh_token)
 }

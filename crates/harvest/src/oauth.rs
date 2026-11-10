@@ -15,13 +15,27 @@ use url::form_urlencoded;
 
 use crate::Error;
 
-/// The registered Harvest OAuth2 app this server authenticates as.
-#[derive(Debug, Clone, Copy)]
+/// The registered Harvest OAuth2 app this server authenticates as. Its `Debug`
+/// hides the client secret, so logging a client cannot leak it.
+#[derive(Clone, Copy)]
 pub struct OAuthClient<'a> {
     pub client_id: &'a str,
     pub client_secret: &'a str,
     /// Must match the redirect URL registered on the Harvest OAuth2 app.
     pub redirect_url: &'a str,
+}
+
+/// Printed in place of a secret by the hand-written `Debug` impls.
+const REDACTED: &str = "[redacted]";
+
+impl std::fmt::Debug for OAuthClient<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OAuthClient")
+            .field("client_id", &self.client_id)
+            .field("client_secret", &REDACTED)
+            .field("redirect_url", &self.redirect_url)
+            .finish()
+    }
 }
 
 /// Harvest identity host (authorize, token, accounts).
@@ -152,8 +166,9 @@ pub fn authorize_url(cfg: &OAuthClient, state: &str) -> String {
     format!("{ID_HOST}/oauth2/authorize?{query}")
 }
 
-/// Tokens returned by the token endpoint (exchange or refresh).
-#[derive(Debug, Clone)]
+/// Tokens returned by the token endpoint (exchange or refresh). Its `Debug`
+/// hides both tokens.
+#[derive(Clone)]
 pub struct Tokens {
     pub access_token: String,
     pub refresh_token: String,
@@ -161,7 +176,19 @@ pub struct Tokens {
     pub scope: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+impl std::fmt::Debug for Tokens {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Tokens")
+            .field("access_token", &REDACTED)
+            .field("refresh_token", &REDACTED)
+            .field("expires_at", &self.expires_at)
+            .field("scope", &self.scope)
+            .finish()
+    }
+}
+
+/// No `Debug`: it holds both tokens and nothing needs to print it.
+#[derive(Deserialize)]
 struct TokenBody {
     access_token: String,
     refresh_token: String,
@@ -278,6 +305,29 @@ mod tests {
             client_secret: "secret",
             redirect_url: "https://horae.example.com/auth/harvest/callback",
         }
+    }
+
+    #[test]
+    fn harvest_secrets_stay_out_of_debug() {
+        let client = OAuthClient {
+            client_secret: "the-client-secret",
+            ..cfg()
+        };
+        let client = format!("{client:?} {client:#?}");
+        assert!(client.contains("abc123"), "{client}");
+        assert!(!client.contains("the-client-secret"), "{client}");
+        let tokens = Tokens {
+            access_token: "the-access-token".into(),
+            refresh_token: "the-refresh-token".into(),
+            expires_at: None,
+            scope: Some("harvest:all".into()),
+        };
+        let shown = format!("{tokens:?} {tokens:#?}");
+        assert!(shown.contains("harvest:all"), "{shown}");
+        assert!(
+            !shown.contains("the-access-token") && !shown.contains("the-refresh-token"),
+            "{shown}"
+        );
     }
 
     #[test]
