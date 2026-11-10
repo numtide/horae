@@ -5,7 +5,7 @@ const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const { mkdirSync } = require('node:fs');
 const { join } = require('node:path');
-const evidence = process.env.HORAE_PERSON_RATES_EVIDENCE;
+const evidence = process.env.HORAE_BROWSER_ARTIFACTS;
 if (evidence) mkdirSync(evidence, { recursive: true });
 const base = process.env.HORAE_TEST_URL;
 const target = new URL(base), database = new URL(process.env.DATABASE_URL);
@@ -23,13 +23,15 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
 
 (async () => {
   // Chromium in CI; HORAE_BROWSER=firefox for local evidence runs.
-  const engine = playwright[process.env.HORAE_BROWSER || 'chromium'];
-  const browser = await engine.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+  const name = process.env.HORAE_BROWSER || 'chromium';
+  const browser = await playwright[name].launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   const errors = [];
-  page.on('pageerror', error => errors.push(error.message));
+  // Firefox reports a fetch cut short by page.goto as a page error; Chromium does not.
+  const aborted = message => name === 'firefox' && message === 'NetworkError when attempting to fetch resource.';
+  page.on('pageerror', error => { if (!aborted(error.message)) errors.push(error.message); });
   try {
     sql(`INSERT INTO users (id,org_id,email,name,org_role,billable_rate_cents)
       VALUES ('${person}','${actor.org_id}','rates-person@example.com','Rates Person','member',9000)`);
@@ -79,7 +81,7 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     sql(`BEGIN;
       UPDATE users SET billable_rate_cents=12000 WHERE id='${person}';
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-        VALUES ('${state}','${actor.org_id}','${actor.id}',1,${array([...floor, 'people_read_all', 'billable_rate_read_managed', 'billable_rate_read_all'])},false,'individual');
+        VALUES ('${state}','${actor.org_id}','${actor.id}',1,${array([...floor, 'people_read_managed', 'people_read_all','billable_rate_read_managed', 'billable_rate_read_all'])},false,'individual');
       UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'; COMMIT;`);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${base}/admin/users`);
