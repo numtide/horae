@@ -1,8 +1,10 @@
 -- no-transaction
 -- Number the records that exist when `harvest_id` is deployed (FR-017).
 --
--- In batches of 10,000 rows in id order (UUID v7, so creation order), each
--- committed on its own, so a row stays locked only for its batch and reads,
+-- In batches of 10,000 rows in id order, each committed on its own. Horae
+-- creates its ids as UUID v7, so that is creation order; a row with another
+-- kind of UUID (an old seed or fixture) is numbered by its id, not its age.
+-- Each batch is committed so a row stays locked only for its batch and reads,
 -- inserts and edits continue. No DDL. Records created meanwhile were already
 -- numbered by 0059's trigger; a rerun after a failure resumes where it stopped.
 -- In each batch: imported records take their Harvest id; then the rest take

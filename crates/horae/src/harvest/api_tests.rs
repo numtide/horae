@@ -440,3 +440,159 @@ async fn the_backfill_leaves_edit_stamps_alone(pool: PgPool) {
 
     assert_eq!(stamps().await, original);
 }
+
+async fn migrate_before(pool: &PgPool, version: i64) {
+    let mut before = sqlx::migrate!("./migrations");
+    before.migrations = before
+        .iter()
+        .filter(|m| m.version < version)
+        .cloned()
+        .collect::<Vec<_>>()
+        .into();
+    before.run(pool).await.unwrap();
+}
+
+/// 0060 run again after a partial run, as after a crash mid-backfill: rows it
+/// already numbered keep their numbers, the rest are numbered. It also spans
+/// more than one batch and picks the first map row of a record mapped twice.
+#[sqlx::test(migrations = false)]
+async fn the_backfill_resumes_and_spans_batches(pool: PgPool) {
+    migrate_before(&pool, 59).await;
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let entry = time_entry(&pool, &ids, EntryState::Open).await;
+    sqlx::query!(
+        "INSERT INTO clients (id, org_id, name, currency)
+         SELECT gen_random_uuid(), $1, 'Bulk ' || g, 'EUR' FROM generate_series(1, 10050) g",
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let twice = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Twice', 'EUR')",
+        twice,
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO harvest_import_map (org_id, harvest_entity_type, harvest_import_id, horae_id, created_at)
+         VALUES ($1, 'client', 900009, $2, now() - interval '1 day'),
+                ($1, 'client', 900007, $2, now())",
+        ids.org_id,
+        twice
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    migrate_before(&pool, 61).await;
+    let numbered = || async {
+        sqlx::query!(
+            r#"SELECT count(*) AS "all!", count(harvest_id) AS "numbered!",
+                      count(DISTINCT harvest_id) AS "distinct!"
+               FROM clients WHERE org_id = $1"#,
+            ids.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+    let first = numbered().await;
+    assert_eq!((first.numbered, first.distinct), (first.all, first.all));
+    assert_eq!(api_id(&pool, "client", twice).await, 900009);
+    let entry_id = sqlx::query_scalar!(
+        r#"SELECT harvest_id AS "harvest_id?" FROM time_entries WHERE id = $1"#,
+        entry
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(entry_id.is_some());
+    let user_id = sqlx::query_scalar!(
+        r#"SELECT harvest_id AS "harvest_id?" FROM users WHERE id = $1"#,
+        ids.user_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(user_id.is_some());
+
+    let kept = sqlx::query_scalar!(
+        r#"SELECT harvest_id AS "harvest_id?" FROM clients WHERE org_id = $1 AND name = 'Bulk 1'"#,
+        ids.org_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE clients SET harvest_id = NULL WHERE org_id = $1 AND name IN ('Bulk 2', 'Bulk 3', 'Bulk 4')",
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let backfill = sqlx::migrate!("./migrations")
+        .iter()
+        .find(|m| m.version == 60)
+        .unwrap()
+        .sql
+        .clone();
+    sqlx::raw_sql(&backfill).execute(&pool).await.unwrap();
+
+    let again = numbered().await;
+    assert_eq!((again.numbered, again.distinct), (again.all, again.all));
+    let still = sqlx::query_scalar!(
+        r#"SELECT harvest_id AS "harvest_id?" FROM clients WHERE org_id = $1 AND name = 'Bulk 1'"#,
+        ids.org_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(still, kept);
+    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+}
+
+#[sqlx::test(migrations = false)]
+async fn a_duplicate_number_stops_the_unique_index_with_a_readable_error(pool: PgPool) {
+    migrate_before(&pool, 62).await;
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let held = api_id(&pool, "client", ids.client_id).await;
+    insert_client(&pool, ids.org_id, Some(held)).await;
+
+    let error = sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .unwrap_err()
+        .to_string();
+
+    assert!(
+        error.contains(&format!("2 records in clients share harvest_id {held}")),
+        "{error}"
+    );
+}
+
+/// The backfill's flag only mattered during 0060; afterwards nothing can skip
+/// the stamps.
+#[sqlx::test(migrations = "./migrations")]
+async fn the_backfill_flag_no_longer_skips_edit_stamps(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    let entry = time_entry(&pool, &ids, EntryState::Open).await;
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query!("SELECT set_config('horae.backfill', 'on', true) AS flag")
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+
+    let moved = sqlx::query_scalar!(
+        r#"UPDATE time_entries SET updated_at = '2000-01-01' WHERE id = $1
+           RETURNING updated_at > '2000-01-02' AS "moved!""#,
+        entry
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+
+    assert!(moved);
+}

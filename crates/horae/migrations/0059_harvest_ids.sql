@@ -84,9 +84,10 @@ CREATE INDEX tasks_harvest_id_lookup ON tasks (org_id, harvest_id);
 CREATE INDEX time_entries_harvest_id_lookup ON time_entries (org_id, harvest_id);
 CREATE INDEX users_harvest_id_lookup ON users (org_id, harvest_id);
 
--- The backfill (0060) sets `horae.backfill` for its session: adding the API id
+-- The backfill (0060) sets `horae.backfill` for each batch: adding the API id
 -- is not an edit, so it must not move `updated_at` (the importer compares it
--- to detect an edit made in Horae) or a project's edit revision.
+-- to detect an edit made in Horae) or a project's edit revision. 0062 restores
+-- both bodies.
 CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
