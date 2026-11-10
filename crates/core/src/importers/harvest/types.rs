@@ -399,13 +399,15 @@ pub struct RowError {
 }
 
 /// A record created from Harvest that could not take its Harvest id as its id
-/// in the Harvest-compatible API, because another record of its kind already
-/// has that id, so it got `api_id` instead (FR-016).
+/// in the Harvest-compatible API (because another record has it, or a native
+/// insert could reach it), so it got `api_id` instead (FR-016).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IdNotice {
     pub entity: EntityType,
     pub harvest_id: i64,
-    pub api_id: i64,
+    /// `None` in a preview: the number it would get is only known on import.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_id: Option<i64>,
 }
 
 /// Notices a report keeps; the rest are only counted. Notices are never
@@ -513,7 +515,10 @@ impl ImportReport {
         }
     }
 
-    pub fn note_id(&mut self, notice: IdNotice) {
+    pub fn note_id(&mut self, mut notice: IdNotice) {
+        if self.mode == ImportMode::DryRun {
+            notice.api_id = None;
+        }
         if self.id_notices.len() < ID_NOTICES_KEPT {
             self.id_notices.push(notice);
         } else {
@@ -638,7 +643,7 @@ mod tests {
         let notice = |harvest_id| IdNotice {
             entity: EntityType::Client,
             harvest_id,
-            api_id: harvest_id + 1,
+            api_id: Some(harvest_id + 1),
         };
         for harvest_id in 0..ID_NOTICES_KEPT as i64 + 2 {
             report.note_id(notice(harvest_id));

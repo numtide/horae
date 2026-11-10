@@ -888,7 +888,7 @@ async fn a_report_with_notices_and_people_but_no_errors_checkpoints(pool: sqlx::
         report.note_id(IdNotice {
             entity: EntityType::TimeEntry,
             harvest_id: 1_000_000_000 + n,
-            api_id: 2_000_000 + n,
+            api_id: Some(2_000_000 + n),
         });
     }
 

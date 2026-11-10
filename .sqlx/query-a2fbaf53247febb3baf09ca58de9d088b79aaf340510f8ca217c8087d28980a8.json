@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE time_entries SET updated_at = '2000-01-01' WHERE id = $1\n           RETURNING updated_at > '2000-01-02' AS \"moved!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "moved!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a2fbaf53247febb3baf09ca58de9d088b79aaf340510f8ca217c8087d28980a8"
+}

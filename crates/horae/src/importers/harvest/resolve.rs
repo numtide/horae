@@ -319,9 +319,18 @@ async fn upsert_provenance_if_api(
     Ok(())
 }
 
+/// How far above a kind's sequence a Harvest id must be to be kept; natives
+/// would need this many inserts of the kind during one import batch to reach it.
+const HARVEST_ID_GUARD: i64 = 10_000;
+
 /// The API id (`harvest_id`) to insert a record created from Harvest with: its
 /// Harvest id, or `None` for the next number when another record of the kind
-/// already has it (or the source has no ids).
+/// already has it (or the source has no ids). A number the kind's sequence has
+/// already handed out counts as taken even if its record was deleted, so it
+/// never names another record; this also counts other organizations' numbers,
+/// which only costs the record its Harvest id. So does a number less than
+/// [`HARVEST_ID_GUARD`] above the sequence: a native insert cannot reach it while
+/// this import holds it uncommitted, so neither side loses a race for it.
 pub(super) async fn free_harvest_id(
     conn: &mut sqlx::PgConnection,
     org_id: Uuid,
@@ -331,6 +340,22 @@ pub(super) async fn free_harvest_id(
     let Some(harvest_id) = harvest_id.filter(|id| *id > 0) else {
         return Ok(None);
     };
+    let sequence = match entity {
+        EntityType::Client => "clients_harvest_id_seq",
+        EntityType::Project => "projects_harvest_id_seq",
+        EntityType::Task => "tasks_harvest_id_seq",
+        EntityType::TimeEntry => "time_entries_harvest_id_seq",
+        EntityType::Person => "users_harvest_id_seq",
+    };
+    let handed_out = sqlx::query_scalar!(
+        r#"SELECT COALESCE(pg_sequence_last_value($1::text::regclass), 0) AS "last!""#,
+        sequence
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+    if harvest_id <= handed_out.saturating_add(HARVEST_ID_GUARD) {
+        return Ok(None);
+    }
     let holder = crate::harvest::ids::record(&mut *conn, org_id, entity.into(), harvest_id).await?;
     Ok(holder.is_none().then_some(harvest_id))
 }
@@ -346,7 +371,7 @@ pub(super) fn id_notice(
         .map(|harvest_id| IdNotice {
             entity,
             harvest_id,
-            api_id,
+            api_id: Some(api_id),
         })
 }
 

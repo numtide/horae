@@ -105,7 +105,7 @@ pub(super) fn ErrorGroups(
                             span { class: "flex-1 flex flex-col gap-1",
                                 strong { "Records with a new id in the Harvest-compatible API" }
                                 span { class: "text-sm text-secondary",
-                                    "Another record already had their Harvest id, so tools that use Horae's Harvest API find them under the new one. Not an error. A preview's new ids can still change."
+                                    "Their Harvest id was taken, or close to the numbers Horae gives its own records, so tools that use Horae's Harvest API find them under a new one. Not an error. A preview shows which records are affected; the new ids are set on import."
                                 }
                             }
                         }
@@ -120,10 +120,10 @@ pub(super) fn ErrorGroups(
                                 }
                                 tbody {
                                     for notice in id_notices.iter() {
-                                        tr {
+                                        tr { key: "{notice.entity:?}-{notice.harvest_id}",
                                             td { {entity_label(notice.entity)} }
                                             td { class: "text-mono", "{notice.harvest_id}" }
-                                            td { class: "text-mono", "{notice.api_id}" }
+                                            td { class: "text-mono", {notice.api_id.map_or_else(|| "on import".to_owned(), |id| id.to_string())} }
                                         }
                                     }
                                 }

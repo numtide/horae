@@ -66,7 +66,7 @@ mod tests {
         noted.note_id(IdNotice {
             entity: EntityType::Project,
             harvest_id: 3,
-            api_id: 41,
+            api_id: Some(41),
         });
         let loaded: ImportReport =
             serde_json::from_value(serde_json::to_value(&noted).unwrap()).unwrap();

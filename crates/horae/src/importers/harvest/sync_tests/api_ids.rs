@@ -165,7 +165,7 @@ async fn a_harvest_id_another_record_has_gets_a_fresh_id_and_a_report_line(pool:
         expected.push(IdNotice {
             entity,
             harvest_id,
-            api_id: fresh,
+            api_id: Some(fresh),
         });
     }
     assert_eq!(report.id_notices, expected);
@@ -244,7 +244,59 @@ async fn a_harvest_id_taken_during_the_insert_gets_a_fresh_id(pool: PgPool) {
         [IdNotice {
             entity: EntityType::Client,
             harvest_id: 70001,
-            api_id: fresh,
+            api_id: Some(fresh),
         }]
     );
+}
+
+/// A number never names another record: a deleted native record's number is
+/// not free for an import whose Harvest id happens to equal it. Nor is one just
+/// above the sequence, which a native insert could reach during the import.
+#[sqlx::test(migrations = "./migrations")]
+async fn a_deleted_native_records_number_is_not_given_to_an_import(pool: PgPool) {
+    let org = setup(&pool).await;
+    let gone = Uuid::now_v7();
+    let number = sqlx::query_scalar!(
+        "INSERT INTO clients (id, org_id, name, currency) VALUES ($1, $2, 'Gone', 'USD')
+         RETURNING harvest_id",
+        gone,
+        org
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    sqlx::query!("DELETE FROM clients WHERE id = $1", gone)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let data = HarvestData {
+        clients: serde_json::from_value(json!([
+            {"id":number,"name":"Client","currency":"USD"},
+            {"id":number + 5,"name":"Near","currency":"USD"}
+        ]))
+        .unwrap(),
+        projects: Vec::new(),
+        tasks: Vec::new(),
+        users: Vec::new(),
+        time_entries: Vec::new(),
+    };
+
+    let report = apply_api_data(&pool, org, "USD", ImportMode::Commit, &data, day(4))
+        .await
+        .unwrap();
+
+    assert!(report.row_errors.is_empty(), "{:?}", report.row_errors);
+    let fresh = api_id(&pool, org, EntityType::Client, number)
+        .await
+        .unwrap();
+    assert_ne!(fresh, number);
+    assert!(report.id_notices.contains(&IdNotice {
+        entity: EntityType::Client,
+        harvest_id: number,
+        api_id: Some(fresh),
+    }));
+    let near = api_id(&pool, org, EntityType::Client, number + 5)
+        .await
+        .unwrap();
+    assert_ne!(near, number + 5);
 }
