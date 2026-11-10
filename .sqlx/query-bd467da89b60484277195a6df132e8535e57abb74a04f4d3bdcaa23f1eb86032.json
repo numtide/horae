@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO tasks (id, org_id, harvest_id, name, billable_default, default_rate_cents, default_rate_currency, active, is_default)\n             -- Checkpoints saved before is_default existed lack the field.\n             SELECT id, org_id, harvest_id, name, billable_default, default_rate_cents, default_rate_currency, active, COALESCE(is_default, false)\n             FROM jsonb_populate_recordset(NULL::tasks, $1) WHERE org_id = $2\n             ON CONFLICT (id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bd467da89b60484277195a6df132e8535e57abb74a04f4d3bdcaa23f1eb86032"
+}
