@@ -261,7 +261,9 @@ pub struct HarvestUser {
     pub email: String,
     pub is_active: bool,
     pub is_admin: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cost_rate: Option<Amount>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub default_hourly_rate: Option<Amount>,
     pub created_at: String,
     pub updated_at: String,

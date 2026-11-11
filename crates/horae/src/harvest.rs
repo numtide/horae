@@ -8,6 +8,7 @@ mod errors;
 pub(crate) mod ids;
 mod project_reads;
 mod task_reads;
+mod user_access;
 
 #[cfg(test)]
 mod api_tests;
@@ -21,6 +22,7 @@ use axum::{
     routing::{MethodRouter, get},
 };
 use chrono::{DateTime, NaiveDate, Utc};
+use horae_core::types::OrgRole;
 use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -121,6 +123,8 @@ fn page_window(page: Option<i64>, per_page: Option<i64>) -> Result<(i64, i64, i6
 // ── /users/me ───────────────────────────────────────────────────────────────
 
 async fn users_me(user: AuthUser, State(db): State<PgPool>) -> ApiResult<HarvestUser> {
+    // Everyone reads their own identity; rates follow the same rule as /users.
+    let mut access = user_access::begin(&db, &user).await?;
     let row: UserRow = sqlx::query_as!(
         UserRow,
         r#"SELECT harvest_id AS id, name, email, active,
@@ -131,11 +135,12 @@ async fn users_me(user: AuthUser, State(db): State<PgPool>) -> ApiResult<Harvest
          FROM users WHERE id = $1"#,
         user.user_id,
     )
-    .fetch_one(&db)
+    .fetch_one(&mut *access.access.tx)
     .await
     .map_err(internal)?;
+    access.access.tx.commit().await.map_err(internal)?;
 
-    Ok(Json(user_row_to_harvest(&row)))
+    Ok(Json(user_row_to_harvest(&row, access.rates)))
 }
 
 // ── Time Entries ────────────────────────────────────────────────────────────
@@ -747,7 +752,9 @@ struct UserRow {
     created_at: DateTime<Utc>,
 }
 
-fn user_row_to_harvest(row: &UserRow) -> HarvestUser {
+/// Rates follow the SPA's legacy rule: billable for managers and
+/// administrators, cost for administrators, never by being the person.
+fn user_row_to_harvest(row: &UserRow, rates: user_access::RateView) -> HarvestUser {
     // Split "First Last" into first_name / last_name
     let (first, last) = match row.name.split_once(' ') {
         Some((f, l)) => (f.to_string(), l.to_string()),
@@ -763,9 +770,11 @@ fn user_row_to_harvest(row: &UserRow) -> HarvestUser {
         is_admin: row.org_role == "admin",
         cost_rate: row
             .cost_rate_cents
+            .filter(|_| rates.cost)
             .map(|cents| Amount::new(cents, &row.org_currency)),
         default_hourly_rate: row
             .billable_rate_cents
+            .filter(|_| rates.billable)
             .map(|cents| Amount::new(cents, &row.org_currency)),
         created_at: row.created_at.to_rfc3339(),
         updated_at: row.created_at.to_rfc3339(), // no updated_at column
@@ -782,17 +791,17 @@ async fn list_users(
     Ok(Json(page.with_query(uri.query())))
 }
 
-/// The org's people, pay rates included. Harvest's user object has no rate-free
-/// shape — a null `cost_rate` there means "no rate is configured". Unlike the
-/// SPA's identity-only list, this financial projection requires the existing
-/// Manager/Admin boundary. A member still reads their own `/users/me` record.
+/// The org's people, with the rates the caller may read and the others
+/// omitted. Without detailed permissions listing needs Manager/Admin; with
+/// them it needs `PeopleReadAll`. Everyone still reads their own `/users/me`.
 async fn users_page(
     db: &PgPool,
     caller: &AuthUser,
     filters: UserFilters,
 ) -> ApiResult<HarvestPagination<HarvestUser>> {
-    if !caller.org_role.is_manager_or_above() {
-        return Err(forbidden("Listing users requires manager access"));
+    let mut access = user_access::begin(db, caller).await?;
+    if !access.list {
+        return Err(forbidden("Listing users requires people access"));
     }
 
     let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
@@ -804,7 +813,7 @@ async fn users_page(
         caller.org_id,
         filters.is_active,
     )
-    .fetch_one(db)
+    .fetch_one(&mut *access.access.tx)
     .await
     .map_err(internal)?
     .unwrap_or(0);
@@ -826,11 +835,15 @@ async fn users_page(
         per_page,
         offset,
     )
-    .fetch_all(db)
+    .fetch_all(&mut *access.access.tx)
     .await
     .map_err(internal)?;
+    access.access.tx.commit().await.map_err(internal)?;
 
-    let items: Vec<HarvestUser> = rows.iter().map(user_row_to_harvest).collect();
+    let items: Vec<HarvestUser> = rows
+        .iter()
+        .map(|row| user_row_to_harvest(row, access.rates))
+        .collect();
 
     Ok(Json(HarvestPagination::new(
         "users",
@@ -1276,17 +1289,54 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "./migrations")]
-    async fn a_manager_lists_users_with_their_rates(pool: PgPool) {
+    async fn a_manager_lists_billable_rates_and_only_an_admin_cost_rates(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
-        colleague(&pool, &ids).await;
+        let other = colleague(&pool, &ids).await;
+        sqlx::query!(
+            "UPDATE users SET billable_rate_cents = 9000 WHERE id = $1",
+            other
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
 
         let Json(page) = users_page(&pool, &caller(&ids, OrgRole::Manager), no_user_filters())
             .await
             .expect("a manager was refused the user list");
-
         let users = &page.data["users"];
         assert_eq!(users.len(), 2);
-        assert!(users.iter().any(|u| u.cost_rate == Some(eur(12345))));
+        assert!(users.iter().all(|u| u.cost_rate.is_none()));
+        assert!(
+            users
+                .iter()
+                .any(|u| u.default_hourly_rate == Some(eur(9000)))
+        );
+
+        let Json(page) = users_page(&pool, &caller(&ids, OrgRole::Admin), no_user_filters())
+            .await
+            .unwrap();
+        assert!(
+            page.data["users"]
+                .iter()
+                .any(|u| u.cost_rate == Some(eur(12345)))
+        );
+    }
+
+    #[sqlx::test(migrations = "./migrations")]
+    async fn a_member_does_not_read_their_own_rates(pool: PgPool) {
+        let ids = seed(&pool, OrgRole::Member).await;
+        sqlx::query!(
+            "UPDATE users SET billable_rate_cents = 9000, cost_rate_cents = 4000 WHERE id = $1",
+            ids.user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let Json(me) = users_me(caller(&ids, OrgRole::Member), State(pool.clone()))
+            .await
+            .unwrap();
+        assert_eq!((me.default_hourly_rate, me.cost_rate), (None, None));
     }
 
     #[sqlx::test(migrations = "./migrations")]
