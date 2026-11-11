@@ -4,9 +4,12 @@
 //! clients, no projects, no tasks, no time entries. Demo content belongs to
 //! `horae seed`, which is for trying the app out, not for standing one up.
 
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+use crate::server_fns::provisioning;
 
 /// Create the organization and its first admin user.
 ///
@@ -39,9 +42,10 @@ pub async fn run(
 
     let org_id = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO organizations (id, name) VALUES ($1, $2)",
+        "INSERT INTO organizations (id, name, permission_policy_version) VALUES ($1, $2, $3)",
         org_id,
         org_name,
+        provisioning::NEW_ORGANIZATION_POLICY_VERSION,
     )
     .execute(&mut *tx)
     .await?;
@@ -57,6 +61,7 @@ pub async fn run(
     )
     .execute(&mut *tx)
     .await?;
+    provisioning::provision(&mut tx, org_id, user_id, BuiltInProfile::Administrator).await?;
 
     tx.commit().await?;
 

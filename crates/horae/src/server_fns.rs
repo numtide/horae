@@ -501,7 +501,7 @@ mod permission_editor;
 mod permissions;
 #[cfg(feature = "server")]
 pub(crate) use permissions::{
-    PermissionStorageError, StoredPersonPermissions, load_person_permissions,
+    PermissionStorageError, StoredPersonPermissions, load_person_permissions, provisioning,
 };
 mod plugins;
 mod profile;

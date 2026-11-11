@@ -177,6 +177,15 @@ fn main() -> anyhow::Result<()> {
                         )
                         .execute(&mut *tx)
                         .await?;
+                        // The operator's chosen role applies under either
+                        // policy; the server's create_user is narrower.
+                        server_fns::provisioning::provision(
+                            &mut tx,
+                            org_id,
+                            id,
+                            server_fns::provisioning::profile_for_role(org_role),
+                        )
+                        .await?;
                         tx.commit().await?;
 
                         println!("Created user: {} ({}) [{}]", name, email, role);

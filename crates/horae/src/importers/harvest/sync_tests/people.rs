@@ -7,6 +7,7 @@ use super::super::api_source::http::{
 use super::*;
 use crate::jobs;
 use horae_core::importers::harvest::types::{PersonOutcome, ReportPerson};
+use horae_core::permissions::catalog::BuiltInProfile;
 
 /// Every person case the people phase distinguishes, each with one entry.
 fn people_data() -> HarvestData {
@@ -147,6 +148,10 @@ async fn people_are_matched_or_created_and_their_entries_import(pool: PgPool) {
         (None, None)
     );
     assert_eq!((created.oidc_subject, created.oidc_issuer), (None, None));
+    assert_eq!(
+        crate::server_fns::test_seed::built_in_profile(&pool, org, created.id).await,
+        Some((BuiltInProfile::Member, false))
+    );
 
     // Everyone who existed before the import is exactly as they were.
     let after = accounts(&pool, org).await;

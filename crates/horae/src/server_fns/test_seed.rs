@@ -192,3 +192,35 @@ pub async fn assert_minutes_cannot_rise(pool: &PgPool, entry_id: Uuid) {
         "{raised}"
     );
 }
+
+/// The built-in profile a person's permission state holds, and whether it is
+/// the Administrator state. `None` when the person has no state, or one that
+/// came from a template or an individual selection.
+pub async fn built_in_profile(
+    pool: &PgPool,
+    org_id: Uuid,
+    user_id: Uuid,
+) -> Option<(horae_core::permissions::catalog::BuiltInProfile, bool)> {
+    let mut connection = pool.acquire().await.unwrap();
+    let state = crate::server_fns::load_person_permissions(&mut connection, org_id, user_id)
+        .await
+        .unwrap()?;
+    match state.source {
+        crate::models::permissions::PermissionSource::BuiltIn(profile) => {
+            assert_eq!(state.grants, profile.selection());
+            Some((profile, state.is_administrator))
+        }
+        _ => None,
+    }
+}
+
+/// Switch an organization to the scoped permission policy.
+pub async fn use_policy_one(pool: &PgPool, org_id: Uuid) {
+    sqlx::query!(
+        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
+        org_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}

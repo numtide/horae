@@ -89,6 +89,13 @@ async fn first_sign_in_creates_an_active_member_bound_to_the_identity(pool: PgPo
     );
     assert_eq!(user.org_role, OrgRole::Member);
     assert_eq!(
+        crate::server_fns::test_seed::built_in_profile(&pool, org_id, user.id).await,
+        Some((
+            horae_core::permissions::catalog::BuiltInProfile::Member,
+            false
+        ))
+    );
+    assert_eq!(
         (user.cost_rate_cents, user.billable_rate_cents),
         (None, None)
     );

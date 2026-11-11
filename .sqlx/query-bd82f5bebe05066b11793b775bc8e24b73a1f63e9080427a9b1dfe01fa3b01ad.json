@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id, email, name,\n                  org_role::text as \"org_role!: String\"\n           FROM users WHERE org_role = $1 AND active = true LIMIT 1",
+  "query": "SELECT u.id, u.org_id, u.email, u.name,\n                  u.org_role::text as \"org_role!: String\"\n           FROM users u\n           JOIN organizations o ON o.id = u.org_id\n           LEFT JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id\n           WHERE u.active\n             AND CASE WHEN o.permission_policy_version = 0 THEN u.org_role = $1\n                      ELSE coalesce(p.is_administrator, false) END\n           ORDER BY u.id LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -53,5 +53,5 @@
       null
     ]
   },
-  "hash": "de25d3fdacf19266c45852197f5af853b27b613e45bb7009e2288b10f16569a3"
+  "hash": "bd82f5bebe05066b11793b775bc8e24b73a1f63e9080427a9b1dfe01fa3b01ad"
 }

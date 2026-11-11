@@ -8,6 +8,8 @@ use horae_core::week::iso_week_monday;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::server_fns::provisioning;
+
 #[cfg(test)]
 mod tests;
 
@@ -58,11 +60,13 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
 
     // Organisation
     sqlx::query!(
-        "INSERT INTO organizations (id, name, default_currency, week_start, round_minutes, round_dir)
-         VALUES ($1, $2, 'EUR', 1, 15, $3)",
+        "INSERT INTO organizations (id, name, default_currency, week_start, round_minutes, round_dir,
+                                    permission_policy_version)
+         VALUES ($1, $2, 'EUR', 1, 15, $3, $4)",
         ORG_ID,
         "Demo Org",
         RoundDir::Nearest as RoundDir,
+        provisioning::NEW_ORGANIZATION_POLICY_VERSION,
     )
     .execute(&mut *tx)
     .await?;
@@ -76,6 +80,13 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
         OrgRole::Admin as OrgRole,
     )
     .execute(&mut *tx)
+    .await?;
+    provisioning::provision(
+        &mut tx,
+        ORG_ID,
+        ADMIN_ID,
+        provisioning::profile_for_role(OrgRole::Admin),
+    )
     .await?;
 
     // Clients

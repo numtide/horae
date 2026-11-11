@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"count!\" FROM users u\n           WHERE NOT EXISTS (SELECT 1 FROM person_permission_states p WHERE p.user_id = u.id)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5478f42fb9cd523f8f32f4411a14eba9fbcb6a4021329ed9f83b2e4bfc6a8d34"
+}

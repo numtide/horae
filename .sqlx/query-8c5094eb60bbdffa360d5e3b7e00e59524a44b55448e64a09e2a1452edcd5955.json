@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO person_permission_states\n           (id, org_id, user_id, catalog_version, grants, is_administrator, source, built_in_profile)\n         VALUES ($1, $2, $3, $4, $5, $6, 'built_in', $7)\n         ON CONFLICT (org_id, user_id) DO UPDATE SET\n           catalog_version = EXCLUDED.catalog_version, grants = EXCLUDED.grants,\n           is_administrator = EXCLUDED.is_administrator, source = 'built_in',\n           built_in_profile = EXCLUDED.built_in_profile, template_id = NULL,\n           applied_template_revision = NULL,\n           revision = person_permission_states.revision + 1\n         WHERE (person_permission_states.catalog_version, person_permission_states.grants,\n                person_permission_states.is_administrator, person_permission_states.source,\n                person_permission_states.built_in_profile)\n           IS DISTINCT FROM\n               (EXCLUDED.catalog_version, EXCLUDED.grants, EXCLUDED.is_administrator,\n                EXCLUDED.source, EXCLUDED.built_in_profile)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "TextArray",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8c5094eb60bbdffa360d5e3b7e00e59524a44b55448e64a09e2a1452edcd5955"
+}
