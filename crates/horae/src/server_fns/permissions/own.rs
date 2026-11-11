@@ -4,6 +4,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
+use horae_core::types::OrgRole;
 
 use super::{
     PermissionStorageError, ReadIsolation, begin_lock_only_read_async_commit,
@@ -28,15 +29,12 @@ pub(crate) async fn read(
     pool: &PgPool,
     org_id: Uuid,
     actor_id: Uuid,
-) -> Result<OwnPermissions, OwnPermissionsError> {
+) -> Result<Option<OwnPermissions>, OwnPermissionsError> {
     let mut tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
-    let access_revision = sqlx::query_scalar!(
-        "SELECT access_revision FROM organizations WHERE id = $1 FOR SHARE",
+    let organization = sqlx::query!(
+        "SELECT permission_policy_version, access_revision FROM organizations WHERE id = $1 FOR SHARE",
         org_id
-    )
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or(OwnPermissionsError::Forbidden)?;
+    ).fetch_optional(&mut *tx).await?.ok_or(OwnPermissionsError::Forbidden)?;
     let actor = sqlx::query_scalar!(
         "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
         org_id,
@@ -46,6 +44,14 @@ pub(crate) async fn read(
     .await?;
     if actor.is_none() {
         return Err(OwnPermissionsError::Forbidden);
+    }
+    match organization.permission_policy_version {
+        0 => {
+            tx.commit().await?;
+            return Ok(None);
+        }
+        1 => {}
+        _ => return Err(OwnPermissionsError::Unavailable),
     }
     let state = load_person_permissions(&mut tx, org_id, actor_id)
         .await?
@@ -62,21 +68,26 @@ pub(crate) async fn read(
         catalog_version: PERMISSION_CATALOG_VERSION,
         grants: state.grants.iter().collect(),
         is_administrator: state.is_administrator,
-        access_revision,
+        access_revision: organization.access_revision,
         person_revision: state.revision,
         managed_person_ids,
         managed_project_ids,
     };
     tx.commit().await?;
-    Ok(result)
+    Ok(Some(result))
 }
 
-/// Whether the person holds Administrator authority now. IDs must come from
-/// the session's active user.
+/// Whether the person holds Administrator authority now: the canonical flag
+/// under policy one, the legacy admin role under policy zero. IDs and role
+/// must come from the session's active user.
 pub(crate) async fn is_administrator(
     pool: &PgPool,
     org_id: Uuid,
     actor_id: Uuid,
+    legacy_role: OrgRole,
 ) -> Result<bool, OwnPermissionsError> {
-    Ok(read(pool, org_id, actor_id).await?.is_administrator)
+    Ok(match read(pool, org_id, actor_id).await? {
+        None => legacy_role == OrgRole::Admin,
+        Some(own) => own.is_administrator,
+    })
 }

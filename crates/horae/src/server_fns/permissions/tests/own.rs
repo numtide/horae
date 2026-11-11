@@ -40,6 +40,25 @@ async fn policy_one(
     ids
 }
 
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn own_permissions_legacy_mode_never_discloses_staging(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    assert_eq!(read(&pool, ids.org_id, ids.user_id).await.unwrap(), None);
+    state(&pool, &ids, BuiltInProfile::Administrator, true).await;
+    assert_eq!(read(&pool, ids.org_id, ids.user_id).await.unwrap(), None);
+    sqlx::query!("UPDATE person_permission_states SET grants = ARRAY['private_invalid_grant'] WHERE user_id = $1", ids.user_id).execute(&pool).await.unwrap();
+    assert_eq!(read(&pool, ids.org_id, ids.user_id).await.unwrap(), None);
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(matches!(
+        read(&pool, ids.org_id, ids.user_id).await,
+        Err(OwnPermissionsError::Forbidden)
+    ));
+}
+
 // `get_server_version` past its session lookup: the user as `require_user`
 // would load it, with the role stored for it.
 fn session_user(ids: &SeedIds, org_role: OrgRole) -> crate::models::User {
@@ -69,7 +88,18 @@ fn is_forbidden(result: Result<String, ServerFnError>) -> bool {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn server_version_follows_the_administrator_state(pool: PgPool) {
+async fn server_version_under_policy_zero_follows_the_legacy_role(pool: PgPool) {
+    let admin = seed(&pool, BuiltInProfile::Administrator).await;
+    let member = seed(&pool, BuiltInProfile::Member).await;
+    let version = server_version(&pool, &session_user(&admin, OrgRole::Admin)).await;
+    assert_eq!(version.unwrap(), crate::version::current());
+    let version = server_version(&pool, &session_user(&member, OrgRole::Member)).await;
+    assert!(is_forbidden(version));
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn server_version_under_policy_one_follows_the_canonical_flag(pool: PgPool) {
     let admin = policy_one(
         &pool,
         BuiltInProfile::Member,
@@ -86,7 +116,7 @@ async fn server_version_follows_the_administrator_state(pool: PgPool) {
     .await;
     let version = server_version(&pool, &session_user(&admin, OrgRole::Member)).await;
     assert_eq!(version.unwrap(), crate::version::current());
-    // The stored role grants nothing.
+    // The legacy role no longer grants anything once canonical state exists.
     let version = server_version(&pool, &session_user(&member, OrgRole::Admin)).await;
     assert!(is_forbidden(version));
 }
@@ -129,7 +159,7 @@ async fn own_permissions_preserve_exact_grants_and_independent_identity(pool: Pg
             .execute(&pool)
             .await
             .unwrap();
-            let result = read(&pool, ids.org_id, ids.user_id).await.unwrap();
+            let result = read(&pool, ids.org_id, ids.user_id).await.unwrap().unwrap();
             assert_eq!(result.grants, selection.iter().collect::<Vec<_>>());
             assert_eq!(result.is_administrator, administrator);
             assert_eq!(
@@ -148,7 +178,7 @@ async fn own_permissions_preserve_exact_grants_and_independent_identity(pool: Pg
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn own_permissions_deny_invalid_identity_and_state(pool: PgPool) {
+async fn own_permissions_deny_invalid_identity_policy_and_state(pool: PgPool) {
     let ids = fixture(&pool).await;
     let foreign = fixture(&pool).await;
     for (org, actor) in [
@@ -173,6 +203,24 @@ async fn own_permissions_deny_invalid_identity_and_state(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
+    sqlx::query!(
+        "UPDATE organizations SET permission_policy_version = 2 WHERE id = $1",
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(matches!(
+        read(&pool, ids.org_id, ids.user_id).await,
+        Err(OwnPermissionsError::Unavailable)
+    ));
+    sqlx::query!(
+        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     sqlx::query!("UPDATE person_permission_states SET grants = ARRAY['private_invalid_grant'] WHERE user_id = $1", ids.user_id).execute(&pool).await.unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id).await,
@@ -257,7 +305,7 @@ async fn own_permissions_scope_is_sorted_and_excludes_membership_and_other_manag
     sqlx::query!("INSERT INTO project_management_assignments (id, org_id, manager_id, project_id) VALUES ($1,$2,$3,$4)", Uuid::now_v7(), ids.org_id, other, ids.project_id).execute(&pool).await.unwrap();
     let foreign = fixture(&pool).await;
     sqlx::query!("INSERT INTO project_management_assignments (id, org_id, manager_id, project_id) VALUES ($1,$2,$3,$4)", Uuid::now_v7(), foreign.org_id, foreign.user_id, foreign.project_id).execute(&pool).await.unwrap();
-    let result = read(&pool, ids.org_id, ids.user_id).await.unwrap();
+    let result = read(&pool, ids.org_id, ids.user_id).await.unwrap().unwrap();
     let mut expected = vec![first, second];
     expected.sort();
     assert_eq!(result.managed_person_ids, expected);
@@ -270,7 +318,7 @@ async fn own_permissions_scope_is_sorted_and_excludes_membership_and_other_manag
         sqlx::query!("INSERT INTO project_management_assignments (id, org_id, manager_id, project_id) VALUES ($1,$2,$3,$4)", Uuid::now_v7(), ids.org_id, ids.user_id, *project).execute(&pool).await.unwrap();
     }
     let before = sqlx::query_scalar!("SELECT jsonb_build_object('org',(SELECT to_jsonb(o) FROM organizations o WHERE id=$1),'state',(SELECT jsonb_agg(s ORDER BY user_id) FROM person_permission_states s WHERE org_id=$1),'people',(SELECT jsonb_agg(p ORDER BY id) FROM person_management_assignments p WHERE org_id=$1),'projects',(SELECT jsonb_agg(p ORDER BY id) FROM project_management_assignments p WHERE org_id=$1),'receipts',(SELECT count(*) FROM permission_change_receipts WHERE org_id=$1))", ids.org_id).fetch_one(&pool).await.unwrap();
-    let result = read(&pool, ids.org_id, ids.user_id).await.unwrap();
+    let result = read(&pool, ids.org_id, ids.user_id).await.unwrap().unwrap();
     assert_eq!(result.managed_project_ids, expected_projects);
     let after = sqlx::query_scalar!("SELECT jsonb_build_object('org',(SELECT to_jsonb(o) FROM organizations o WHERE id=$1),'state',(SELECT jsonb_agg(s ORDER BY user_id) FROM person_permission_states s WHERE org_id=$1),'people',(SELECT jsonb_agg(p ORDER BY id) FROM person_management_assignments p WHERE org_id=$1),'projects',(SELECT jsonb_agg(p ORDER BY id) FROM project_management_assignments p WHERE org_id=$1),'receipts',(SELECT count(*) FROM permission_change_receipts WHERE org_id=$1))", ids.org_id).fetch_one(&pool).await.unwrap();
     assert_eq!(after, before);
@@ -347,7 +395,7 @@ async fn own_permissions_reload_after_winning_gate_under_repeatable_read_default
         if deactivate {
             assert!(matches!(result, Err(OwnPermissionsError::Forbidden)));
         } else {
-            let result = result.unwrap();
+            let result = result.unwrap().unwrap();
             assert_eq!(
                 result.grants,
                 BuiltInProfile::Accounting
@@ -398,7 +446,8 @@ async fn own_permissions_reader_retains_actor_activity_until_snapshot_is_loaded(
             .await
             .unwrap()
             .unwrap()
-            .is_ok()
+            .unwrap()
+            .is_some()
     );
     tokio::time::timeout(std::time::Duration::from_secs(5), revoke)
         .await

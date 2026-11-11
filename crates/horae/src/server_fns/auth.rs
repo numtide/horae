@@ -104,8 +104,7 @@ pub async fn list_permission_audit(
     })
 }
 
-/// Explain the session person's scoped permissions. Always `Some`; the option
-/// goes when the pages that read it stop handling the legacy policy.
+/// Explain the session person's scoped permissions, or None before activation.
 /// This display snapshot cannot authorize later requests or select another user.
 #[server]
 pub async fn get_my_permissions()
@@ -122,7 +121,6 @@ pub async fn get_my_permissions()
     let state = crate::state::global_state().await;
     super::permissions::own::read(&state.db, user.org_id, user.id)
         .await
-        .map(Some)
         .map_err(|error| match error {
             super::permissions::own::OwnPermissionsError::Forbidden => {
                 forbidden("Current active identity is required")
@@ -148,17 +146,18 @@ pub(crate) async fn server_version(
     pool: &sqlx::PgPool,
     user: &crate::models::User,
 ) -> Result<String, ServerFnError> {
-    let administrator = super::permissions::own::is_administrator(pool, user.org_id, user.id)
-        .await
-        .map_err(|error| match error {
-            super::permissions::own::OwnPermissionsError::Forbidden => {
-                forbidden("Current active identity is required")
-            }
-            error => {
-                tracing::error!(%error, "Unable to check administrator authority");
-                server_err("Version is unavailable")
-            }
-        })?;
+    let administrator =
+        super::permissions::own::is_administrator(pool, user.org_id, user.id, user.org_role)
+            .await
+            .map_err(|error| match error {
+                super::permissions::own::OwnPermissionsError::Forbidden => {
+                    forbidden("Current active identity is required")
+                }
+                error => {
+                    tracing::error!(%error, "Unable to check administrator authority");
+                    server_err("Version is unavailable")
+                }
+            })?;
     if !administrator {
         return Err(forbidden("Administrator authority is required"));
     }
