@@ -224,7 +224,11 @@ async fn queued(
     crate::server_fns::test_seed::SeedIds,
     crate::jobs::OutboxEvent,
 ) {
-    let ids = crate::server_fns::test_seed::seed(pool, horae_core::types::OrgRole::Manager).await;
+    let ids = crate::ops::testing::seed_profile(
+        pool,
+        horae_core::permissions::catalog::BuiltInProfile::ExecutiveManager,
+    )
+    .await;
     sqlx::query!(
         "UPDATE projects SET budget_kind = 'hours', budget_minutes = 100 WHERE id = $1",
         ids.project_id
@@ -347,6 +351,86 @@ async fn revoked_recipient_does_not_receive_a_pending_email(pool: sqlx::PgPool) 
     assert!(row.delivered_at.is_none());
     assert!(row.failed_at.is_some());
     assert!(!PathBuf::from(format!("{}.called", stub.program.display())).exists());
+}
+
+/// A pending alert is withheld from anyone who can no longer read the project,
+/// whatever else ties them to it: a tracking assignment as lead, the project's
+/// creator, or a manager designation without the managed-read grant.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn recipient_without_project_read_never_receives_budget_figures(pool: sqlx::PgPool) {
+    use horae_core::permissions::catalog::Permission;
+    // (grants, designated manager of the project)
+    for (grants, designated) in [
+        (&[][..], true),
+        (&[Permission::ProjectReadManaged][..], false),
+    ] {
+        let stub = Stub::new("touch \"$0.called\"\ncat > /dev/null");
+        let (ids, event) = queued(&pool).await;
+        sqlx::query!(
+            "INSERT INTO assignments (id,project_id,user_id,role) VALUES ($1,$2,$3,'lead')",
+            Uuid::now_v7(),
+            ids.project_id,
+            ids.user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        if designated {
+            sqlx::query!(
+                "INSERT INTO project_management_assignments (id,org_id,project_id,manager_id) VALUES ($1,$2,$3,$4)",
+                Uuid::now_v7(),
+                ids.org_id,
+                ids.project_id,
+                ids.user_id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        crate::ops::testing::set_grants(&mut pool.acquire().await.unwrap(), &ids, grants)
+            .await
+            .unwrap();
+        deliver(&pool, &stub.config, &event).await.unwrap();
+        assert!(!PathBuf::from(format!("{}.called", stub.program.display())).exists());
+        let row = sqlx::query!(
+            "SELECT delivered_at,failed_at,last_error FROM horae_outbox WHERE id = $1",
+            event.id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(row.delivered_at.is_none());
+        assert!(row.failed_at.is_some());
+        assert_eq!(
+            row.last_error.as_deref(),
+            Some("Budget email recipient or project is no longer eligible")
+        );
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn recipient_without_permission_state_never_receives_budget_figures(pool: sqlx::PgPool) {
+    let stub = Stub::new("touch \"$0.called\"\ncat > /dev/null");
+    let (ids, event) = queued(&pool).await;
+    sqlx::query!(
+        "DELETE FROM person_permission_states WHERE user_id = $1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    deliver(&pool, &stub.config, &event).await.unwrap();
+    assert!(!PathBuf::from(format!("{}.called", stub.program.display())).exists());
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT failed_at IS NOT NULL AND delivered_at IS NULL FROM horae_outbox WHERE id = $1",
+            event.id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(true)
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

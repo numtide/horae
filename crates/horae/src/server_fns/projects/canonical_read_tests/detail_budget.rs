@@ -1,4 +1,3 @@
-use super::detail::legacy_viewer;
 use super::*;
 use crate::models::project::ProjectDetailBudget;
 use chrono::NaiveDate;
@@ -139,11 +138,17 @@ async fn reader(pool: &PgPool, permissions: &[Permission]) -> (SeedIds, User) {
     fixture(pool, OrgRole::Member, PermissionSelection::new(permissions)).await
 }
 
+/// Budgets without settings value money, so these readers hold
+/// Administrator's grants, which include reading every billable rate.
+async fn administrator(pool: &PgPool) -> (SeedIds, User) {
+    use horae_core::permissions::catalog::BuiltInProfile;
+    reader(pool, BuiltInProfile::Administrator.direct_permissions()).await
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_budget_uses_lifetime_raw_minutes_and_list_fee_spend(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
-    let viewer = legacy_viewer(&ids, OrgRole::Admin);
+    let (ids, viewer) = administrator(&pool).await;
     assert_eq!(budget_on(&pool, &viewer, &ids, today()).await, None);
     entry(&pool, &ids, ids.task_id, "2026-01-01", 90, true).await;
     entry(&pool, &ids, ids.task_id, "2026-09-07", 60, false).await;
@@ -517,8 +522,7 @@ async fn configured_fee_valuation_overflow_is_unavailable_not_a_failed_detail(po
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_hours_budget_ignores_unrelated_money_overflow(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
-    let viewer = legacy_viewer(&ids, OrgRole::Admin);
+    let (ids, viewer) = administrator(&pool).await;
     hours_budget(&pool, &ids, Some(120)).await;
     maximum_project_rate(&pool, &ids).await;
     entry(&pool, &ids, ids.task_id, "2026-09-01", 120, true).await;
@@ -575,8 +579,7 @@ async fn configured_fee_sum_overflow_is_unavailable(pool: PgPool) {
 #[serial_test::serial]
 async fn legacy_fee_line_and_sum_overflow_are_unavailable(pool: PgPool) {
     for summed in [false, true] {
-        let ids = seed(&pool, OrgRole::Admin).await;
-        let viewer = legacy_viewer(&ids, OrgRole::Admin);
+        let (ids, viewer) = administrator(&pool).await;
         fee_budget(&pool, &ids, Some(10_000)).await;
         if summed {
             summed_overflow(&pool, &ids).await;
