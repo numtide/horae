@@ -52,7 +52,7 @@ fn rejected(result: Result<LinkOutcome, LinkError>) -> Rejection {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn links_an_unbound_account_exactly_and_repeats_as_a_no_op(pool: PgPool) {
     let id = account(&pool).await;
     let before = sqlx::query!(
@@ -105,7 +105,7 @@ async fn links_an_unbound_account_exactly_and_repeats_as_a_no_op(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn records_the_issuer_on_a_legacy_binding_with_the_same_subject(pool: PgPool) {
     let id = account(&pool).await;
     bind(&pool, id, None, "legacy-subject").await;
@@ -124,7 +124,7 @@ async fn records_the_issuer_on_a_legacy_binding_with_the_same_subject(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn refusals_write_nothing(pool: PgPool) {
     let unbound = account(&pool).await;
     let inactive = account(&pool).await;
@@ -171,7 +171,7 @@ async fn email(pool: &PgPool, id: Uuid) -> String {
         .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_subject_taken_by_an_uncommitted_link_is_refused_by_the_unique_index(pool: PgPool) {
     let first = account(&pool).await;
     let second = account(&pool).await;
@@ -204,7 +204,7 @@ async fn a_subject_taken_by_an_uncommitted_link_is_refused_by_the_unique_index(p
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_callback_ordered_after_a_link_of_its_subject_gets_no_session(pool: PgPool) {
     let linked = account(&pool).await;
     let unbound = account(&pool).await;
@@ -281,7 +281,7 @@ async fn finish<T>(task: Spawned<T>) -> T {
         .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_link_ordered_before_a_same_identity_callback_lets_it_resolve(pool: PgPool) {
     let id = account(&pool).await;
     let held = hold(&pool, &[id]).await;
@@ -301,7 +301,7 @@ async fn a_link_ordered_before_a_same_identity_callback_lets_it_resolve(pool: Pg
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_link_ordered_before_another_subjects_callback_keeps_its_binding(pool: PgPool) {
     let id = account(&pool).await;
     let held = hold(&pool, &[id]).await;
@@ -319,7 +319,7 @@ async fn a_link_ordered_before_another_subjects_callback_keeps_its_binding(pool:
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_callback_ordered_before_a_link_of_another_subject_is_never_replaced(pool: PgPool) {
     let id = account(&pool).await;
     let held = hold(&pool, &[id]).await;
@@ -337,7 +337,7 @@ async fn a_callback_ordered_before_a_link_of_another_subject_is_never_replaced(p
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_callback_ordered_before_a_link_of_the_same_identity_makes_it_a_no_op(pool: PgPool) {
     let id = account(&pool).await;
     let held = hold(&pool, &[id]).await;
@@ -355,7 +355,7 @@ async fn a_callback_ordered_before_a_link_of_the_same_identity_makes_it_a_no_op(
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn two_links_of_one_subject_to_different_accounts_bind_exactly_one(pool: PgPool) {
     let first = account(&pool).await;
     let second = account(&pool).await;
@@ -386,7 +386,7 @@ async fn two_links_of_one_subject_to_different_accounts_bind_exactly_one(pool: P
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_deactivation_ordered_first_makes_the_link_write_nothing(pool: PgPool) {
     let id = account(&pool).await;
     let mut deactivation = pool.begin().await.unwrap();
@@ -408,7 +408,7 @@ async fn a_deactivation_ordered_first_makes_the_link_write_nothing(pool: PgPool)
     assert_eq!(binding(&pool, id).await, (None, None));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_deactivation_ordered_after_a_link_still_revokes_sign_in(pool: PgPool) {
     let id = account(&pool).await;
     assert_eq!(

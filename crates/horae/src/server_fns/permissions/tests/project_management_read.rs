@@ -2,7 +2,7 @@ use super::*;
 use crate::server_fns::permissions::project_management::read;
 use serde_json::json;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn manager_reader_preserves_the_complete_retained_set_without_private_fields(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -56,7 +56,7 @@ async fn manager_reader_preserves_the_complete_retained_set_without_private_fiel
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn manager_reader_requires_current_project_edit_scope_not_identity_or_membership(
     pool: PgPool,
@@ -144,7 +144,7 @@ async fn manager_reader_requires_current_project_edit_scope_not_identity_or_memb
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn manager_reader_rechecks_revocation_after_the_organization_wait(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -183,7 +183,7 @@ async fn manager_reader_rechecks_revocation_after_the_organization_wait(pool: Pg
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn manager_reader_holds_authority_and_cancellation_releases_it(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -239,7 +239,7 @@ async fn manager_reader_holds_authority_and_cancellation_releases_it(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn manager_reader_observes_direct_deactivation_before_its_actor_lock(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -266,7 +266,7 @@ async fn manager_reader_observes_direct_deactivation_before_its_actor_lock(pool:
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn manager_reader_materializes_before_a_waiting_actor_deactivation(pool: PgPool) {
     let ids = fixture(&pool).await;

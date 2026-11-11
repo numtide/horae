@@ -13,7 +13,7 @@ async fn is_default(pool: &PgPool, task_id: Uuid) -> bool {
         .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn common_flag_round_trips_through_create_and_update(pool: PgPool) {
     let (ids, _) = fixture(
@@ -66,7 +66,7 @@ async fn common_flag_round_trips_through_create_and_update(pool: PgPool) {
     assert!(event.is_none(), "saving the same values is a no-op");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn common_flag_needs_task_editing_authority(pool: PgPool) {
     let (ids, _) = fixture(
@@ -123,7 +123,7 @@ async fn common_flag_needs_task_editing_authority(pool: PgPool) {
 /// Common tasks come first, then the rest; each group by name. The cursor
 /// carries the group, so a page boundary inside either group, or between
 /// them, neither skips nor repeats a task.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn catalog_lists_common_tasks_first_across_pages(pool: PgPool) {
     let (ids, _) = fixture(

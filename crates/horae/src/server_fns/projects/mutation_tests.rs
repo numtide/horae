@@ -76,7 +76,7 @@ mod project {
         save_editable_project(pool, ids.user_id, ids.org_id, request, false).await
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn configured_edits_reject_incompatible_financial_changes_atomically(pool: PgPool) {
         for (mode, scope, field, value, message) in [
             ("task", "project", "currency", "USD", "currency"),
@@ -104,7 +104,7 @@ mod project {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn configured_edits_preserve_compatible_changes_and_idempotence(pool: PgPool) {
         for (mode, scope, budget, value, rate, expected_spend) in [
             ("task", "task", BudgetMode::HoursPerTask, "2", "", 8000),
@@ -191,7 +191,7 @@ mod project {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn configured_edits_recheck_settings_after_waiting_for_the_project(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let mut edit = request(&pool, &ids).await;
@@ -237,7 +237,7 @@ mod project {
         assert_eq!(version(&pool, ids.project_id).await, before);
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn configured_edits_preserve_non_hourly_billing(pool: PgPool) {
         for project_type in [ProjectType::FixedFee, ProjectType::NonBillable] {
             let ids = configured_project(&pool, "person", "project").await;
@@ -293,7 +293,7 @@ mod project {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn inactive_project_edits_preserve_identity_and_reject_implicit_migrations(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let (mut expected, _) =
@@ -323,7 +323,7 @@ mod project {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn budgets_and_rates_distinguish_null_zero_and_normalized_values(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         for (budget, value, rate, amount, minutes, cents) in [
@@ -371,7 +371,7 @@ mod project {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn invalid_project_fields_leave_the_row_unchanged(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let before = version(&pool, ids.project_id).await;
@@ -417,7 +417,7 @@ mod project {
             .unwrap()
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn unchanged_edit_preserves_the_row(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let before = version(&pool, ids.project_id).await;
@@ -429,7 +429,7 @@ mod project {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn unchanged_activation_preserves_the_row(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let before = version(&pool, ids.project_id).await;
@@ -475,7 +475,7 @@ mod project {
         error
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn repeating_a_competing_edit_requires_a_fresh_revision(pool: PgPool) {
         let error = competing_edit(&pool, "Changed").await;
         assert!(matches!(
@@ -484,7 +484,7 @@ mod project {
         ));
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn restoring_a_competing_edit_does_not_overwrite_the_other_session(pool: PgPool) {
         let error = competing_edit(&pool, "Widget").await;
         assert!(matches!(
@@ -527,13 +527,13 @@ mod project {
             .unwrap()
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn repeating_a_competing_deactivation_reports_no_transition(pool: PgPool) {
         let (returned, transition) = competing_activation(&pool, false).await;
         assert_eq!((transition, returned.active), (None, false));
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn restoring_a_competing_deactivation_reports_reactivation(pool: PgPool) {
         let (returned, transition) = competing_activation(&pool, true).await;
         assert_eq!(
@@ -542,7 +542,7 @@ mod project {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn missing_and_foreign_rows_are_not_noops(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let other = seed(&pool, OrgRole::Admin).await;
@@ -582,7 +582,7 @@ mod project {
         assert_eq!(version(&pool, ids.project_id).await, before);
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn both_activation_transitions_preserve_details_and_change_once(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let (mut expected, _) = edit(&pool, &ids, "Renamed").await;
@@ -606,7 +606,7 @@ mod project {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn concurrent_deletion_is_rejected_by_both_mutations(pool: PgPool) {
         for activation in [false, true] {
             let ids = seed(&pool, OrgRole::Admin).await;
@@ -685,7 +685,7 @@ mod task {
         })
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn rate_edits_set_currency_without_relabelling_renames_or_noops(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         sqlx::query!(
@@ -725,7 +725,7 @@ mod task {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn each_detail_field_changes_once_and_preserves_inactive_status(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let (mut expected, _) = activity(&pool, ids.org_id, ids.user_id, ids.task_id, false)
@@ -798,7 +798,7 @@ mod task {
             .unwrap()
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn unchanged_edit_preserves_the_row(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let before = version(&pool, ids.task_id).await;
@@ -810,7 +810,7 @@ mod task {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn unchanged_activation_preserves_the_row(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let before = version(&pool, ids.task_id).await;
@@ -848,13 +848,13 @@ mod task {
             .unwrap()
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn repeating_a_competing_edit_does_not_report_a_change(pool: PgPool) {
         let (returned, changed) = competing_edit(&pool, "Changed").await;
         assert_eq!((changed, returned.name.as_str()), (false, "Changed"));
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn restoring_a_competing_edit_reports_a_change(pool: PgPool) {
         let (returned, changed) = competing_edit(&pool, "Dev").await;
         assert_eq!((changed, returned.name.as_str()), (true, "Dev"));
@@ -887,13 +887,13 @@ mod task {
             .unwrap()
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn repeating_a_competing_deactivation_reports_no_transition(pool: PgPool) {
         let (returned, transition) = competing_activation(&pool, false).await;
         assert_eq!((transition, returned.active), (None, false));
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn restoring_a_competing_deactivation_reports_reactivation(pool: PgPool) {
         let (returned, transition) = competing_activation(&pool, true).await;
         assert_eq!(
@@ -902,7 +902,7 @@ mod task {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn missing_and_foreign_rows_are_not_noops(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let other = seed(&pool, OrgRole::Admin).await;
@@ -949,7 +949,7 @@ mod task {
         assert_eq!(version(&pool, ids.task_id).await, before);
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn both_activation_transitions_preserve_details_and_change_once(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let (mut expected, _) = edit(&pool, &ids, "Renamed").await;
@@ -971,7 +971,7 @@ mod task {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn concurrent_deletion_returns_not_found_for_both_mutations(pool: PgPool) {
         for activation in [false, true] {
             let ids = seed(&pool, OrgRole::Admin).await;

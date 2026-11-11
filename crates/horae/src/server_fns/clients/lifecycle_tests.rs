@@ -122,7 +122,7 @@ fn code_and_message(error: ServerFnError) -> (u16, String) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn archive_is_refused_while_any_linked_project_is_active(pool: PgPool) {
     let ids = fixture(&pool).await;
     // A second, archived project must not hide the active one.
@@ -147,7 +147,7 @@ async fn archive_is_refused_while_any_linked_project_is_active(pool: PgPool) {
     assert_eq!(history(&pool).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn archive_succeeds_without_active_projects_and_repeats_as_a_noop(pool: PgPool) {
     for linked in ["none", "archived only"] {
         let ids = fixture(&pool).await;
@@ -186,7 +186,7 @@ async fn archive_succeeds_without_active_projects_and_repeats_as_a_noop(pool: Pg
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn restore_changes_only_the_client(pool: PgPool) {
     let ids = fixture(&pool).await;
     archive_projects(&pool, ids.client_id).await;
@@ -206,7 +206,7 @@ async fn restore_changes_only_the_client(pool: PgPool) {
     assert_eq!(history(&pool).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn status_changes_recheck_current_authority_before_project_state(pool: PgPool) {
     for change in [
         "member",
@@ -262,7 +262,7 @@ async fn status_changes_recheck_current_authority_before_project_state(pool: PgP
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn status_change_waits_for_a_role_change_and_then_fails_closed(pool: PgPool) {
     let ids = fixture(&pool).await;
     archive_projects(&pool, ids.client_id).await;
@@ -302,7 +302,7 @@ async fn status_change_waits_for_a_role_change_and_then_fails_closed(pool: PgPoo
     assert!(client_active(&pool, client_id).await);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn foreign_clients_are_indistinguishable_from_unknown_ones(pool: PgPool) {
     let ids = fixture(&pool).await;
     let other = seed(&pool, OrgRole::Admin).await;
@@ -434,7 +434,7 @@ impl Writer {
 /// lock. Archive must then see it, even when the session default is REPEATABLE
 /// READ (the writer leaves the client row unchanged, so no serialization error
 /// would warn an archive reading its older snapshot).
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn archive_waiting_for_a_project_writer_sees_its_committed_project(pool: PgPool) {
     let rr = repeatable_read_pool(&pool).await;
     for writer in [Writer::Create, Writer::Reassign, Writer::Restore] {

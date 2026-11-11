@@ -76,7 +76,7 @@ fn client_error(error: &anyhow::Error) -> Option<&ClientError> {
     error.downcast_ref()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn stored_client_applies_without_restart_and_seals_the_secret(pool: PgPool) {
     let org = organization(&pool).await;
     let deployment = key_only();
@@ -107,7 +107,7 @@ async fn stored_client_applies_without_restart_and_seals_the_secret(pool: PgPool
     assert!(credentials::decrypt(OTHER_KEY, &sealed).is_err());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn view_reports_the_stored_client_without_its_secret(pool: PgPool) {
     let org = organization(&pool).await;
     let deployment = key_only();
@@ -128,7 +128,7 @@ async fn view_reports_the_stored_client_without_its_secret(pool: PgPool) {
     assert!(!json.contains("stored-secret"), "{json}");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn environment_client_wins_and_locks_the_stored_one(pool: PgPool) {
     let org = organization(&pool).await;
     save_client(&pool, &key_only(), org, "stored-id", Some("stored-secret"))
@@ -179,7 +179,7 @@ async fn environment_client_wins_and_locks_the_stored_one(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn environment_redirect_url_wins_over_the_stored_client(pool: PgPool) {
     let org = organization(&pool).await;
     let deployment = HarvestDeployment {
@@ -209,7 +209,7 @@ async fn environment_redirect_url_wins_over_the_stored_client(pool: PgPool) {
     assert!(resolve(&pool, &key_only(), org).await.unwrap().is_none());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn missing_key_disables_the_client_and_refuses_saves(pool: PgPool) {
     let org = organization(&pool).await;
     save_client(&pool, &key_only(), org, "stored-id", Some("s"))
@@ -228,7 +228,7 @@ async fn missing_key_disables_the_client_and_refuses_saves(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn rotated_key_requires_the_secret_again(pool: PgPool) {
     let org = organization(&pool).await;
     save_client(&pool, &key_only(), org, "stored-id", Some("old"))
@@ -260,7 +260,7 @@ async fn rotated_key_requires_the_secret_again(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn replacing_the_secret_keeps_the_connection(pool: PgPool) {
     let org = organization(&pool).await;
     let deployment = key_only();
@@ -287,7 +287,7 @@ async fn replacing_the_secret_keeps_the_connection(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn new_client_id_disconnects_but_keeps_the_account_binding(pool: PgPool) {
     let org = organization(&pool).await;
     let deployment = key_only();
@@ -316,7 +316,7 @@ async fn new_client_id_disconnects_but_keeps_the_account_binding(pool: PgPool) {
     assert!(after.connection_revision > before.connection_revision);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn removal_disconnects_and_unconfigures(pool: PgPool) {
     let org = organization(&pool).await;
     let deployment = key_only();
@@ -358,7 +358,7 @@ async fn removal_disconnects_and_unconfigures(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn active_imports_and_the_import_lock_refuse_changes(pool: PgPool) {
     let org = organization(&pool).await;
     let deployment = key_only();
@@ -409,7 +409,7 @@ async fn active_imports_and_the_import_lock_refuse_changes(pool: PgPool) {
     assert!(credentials::load(&pool, org, KEY).await.unwrap().is_some());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn authorization_started_before_a_change_cannot_store_tokens(pool: PgPool) {
     let org = organization(&pool).await;
     let deployment = key_only();
@@ -445,7 +445,7 @@ async fn authorization_started_before_a_change_cannot_store_tokens(pool: PgPool)
     assert!(credentials::load(&pool, org, KEY).await.unwrap().is_none());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn only_an_active_administrator_of_the_organization_may_change_it(pool: PgPool) {
     let org = organization(&pool).await;
     let other = organization(&pool).await;
@@ -465,7 +465,7 @@ async fn only_an_active_administrator_of_the_organization_may_change_it(pool: Pg
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn disconnecting_needs_the_callers_confirmation(pool: PgPool) {
     let org = organization(&pool).await;
     let deployment = key_only();
@@ -532,7 +532,7 @@ async fn disconnecting_needs_the_callers_confirmation(pool: PgPool) {
     assert!(credentials::load(&pool, org, KEY).await.unwrap().is_some());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_client_can_be_removed_without_the_encryption_key(pool: PgPool) {
     let org = organization(&pool).await;
     save_client(&pool, &key_only(), org, "stored-id", Some("s"))
@@ -547,7 +547,7 @@ async fn a_client_can_be_removed_without_the_encryption_key(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_client_saved_under_the_environment_redirect_url_asks_for_its_own(pool: PgPool) {
     let org = organization(&pool).await;
     let with_redirect = HarvestDeployment {

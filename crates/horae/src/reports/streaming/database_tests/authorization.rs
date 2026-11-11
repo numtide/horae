@@ -41,7 +41,7 @@ async fn empty_invoice(pool: &PgPool, ids: &SeedIds) -> Uuid {
     id
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_exports_require_current_tenant_bound_actors_even_when_empty(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -115,7 +115,7 @@ async fn streamed_exports_require_current_tenant_bound_actors_even_when_empty(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_exports_refresh_after_organization_or_actor_wait(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -162,7 +162,7 @@ async fn streamed_exports_refresh_after_organization_or_actor_wait(pool: PgPool)
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_projects_capture_scope_gained_during_initial_wait(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -204,7 +204,7 @@ async fn streamed_projects_capture_scope_gained_during_initial_wait(pool: PgPool
     assert_eq!(&rows[0][2], "Widget");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_timesheet_rechecks_after_backpressure_without_retaining_locks(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -250,7 +250,7 @@ async fn streamed_timesheet_rechecks_after_backpressure_without_retaining_locks(
     assert!(csv::Reader::from_reader(bytes.as_slice()).records().count() <= 1 + CHUNK_ROWS);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_source_stays_frozen_across_batches_while_authority_is_fresh(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -277,7 +277,7 @@ async fn streamed_source_stays_frozen_across_batches_while_authority_is_fresh(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_pending_project_block_checks_all_captured_ids_after_capacity(pool: PgPool) {
     for revoke_previous_block in [false, true] {
@@ -359,7 +359,7 @@ async fn streamed_pending_project_block_checks_all_captured_ids_after_capacity(p
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_native_batches_keep_crossing_rows_and_reject_invalid_limits(pool: PgPool) {
     for limit in [None, Some(0), Some(129)] {
@@ -402,7 +402,7 @@ async fn streamed_native_batches_keep_crossing_rows_and_reject_invalid_limits(po
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_compressible_unicode_payload_bounds_native_prefetch(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -441,7 +441,7 @@ async fn streamed_compressible_unicode_payload_bounds_native_prefetch(pool: PgPo
     tx.rollback().await.unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_invoice_keeps_original_metadata_lines_and_totals_between_batches(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -494,7 +494,7 @@ async fn streamed_invoice_keeps_original_metadata_lines_and_totals_between_batch
     assert_eq!((&rows[401][0], &rows[401][3]), ("Total", "400.00"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_header_and_total_blocks_recheck_manager_after_capacity(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -547,7 +547,7 @@ async fn streamed_header_and_total_blocks_recheck_manager_after_capacity(pool: P
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_project_release_refreshes_scope_after_parent_wait(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -598,7 +598,7 @@ async fn streamed_project_release_refreshes_scope_after_parent_wait(pool: PgPool
     assert_eq!(pending.await.unwrap().unwrap_err(), StatusCode::FORBIDDEN);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_authority_releases_successful_locks_and_overrides_inherited_settings(
     pool: PgPool,
@@ -678,7 +678,7 @@ async fn closed_backend(pool: &PgPool, pid: i32) {
     .expect("cancelled export must close its connection");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_cancelled_authorization_reclaims_its_single_connection(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -719,7 +719,7 @@ async fn streamed_cancelled_authorization_reclaims_its_single_connection(pool: P
     export_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_cancelled_fetch_reclaims_connection_without_authority_locks(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -791,7 +791,7 @@ async fn streamed_cancelled_fetch_reclaims_connection_without_authority_locks(po
     export_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_native_projection_mismatch_fails_instead_of_coercing(pool: PgPool) {
     let mut tx = pool.begin().await.unwrap();

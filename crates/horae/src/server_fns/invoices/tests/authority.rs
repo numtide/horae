@@ -19,7 +19,7 @@ async fn administrator(pool: &PgPool, org_id: Uuid) -> Uuid {
     id
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_generation_and_user_revocation_commit_in_gate_order(pool: PgPool) {
     for invoice_first in [true, false] {
@@ -174,7 +174,7 @@ async fn invoice_generation_and_user_revocation_commit_in_gate_order(pool: PgPoo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_edit_and_transition_observe_user_revocation_order(pool: PgPool) {
     for edit_invoice in [true, false] {
@@ -342,7 +342,7 @@ async fn invoice_edit_and_transition_observe_user_revocation_order(pool: PgPool)
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_writers_override_readonly_defaults_without_changing_the_session(pool: PgPool) {
     let ids = super::super::fee_tests::single_fee(&pool).await;
@@ -425,7 +425,7 @@ async fn invoice_writers_override_readonly_defaults_without_changing_the_session
     restricted.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn cancelled_invoice_writers_roll_back_and_release_single_connection(pool: PgPool) {
     for command in ["generate", "edit", "transition"] {

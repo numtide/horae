@@ -32,7 +32,7 @@ async fn team_ids(pool: &PgPool, viewer: &User, project_id: Uuid) -> Option<Vec<
         .map(|team| team.into_iter().map(|member| member.id).collect())
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_reader_can_read_retained_team_without_people_directory_or_rates(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -65,7 +65,7 @@ async fn project_reader_can_read_retained_team_without_people_directory_or_rates
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_member_does_not_inherit_legacy_admin_team(pool: PgPool) {
     let (ids, viewer) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
@@ -85,7 +85,7 @@ async fn canonical_member_does_not_inherit_legacy_admin_team(pool: PgPool) {
     assert_eq!(team_ids(&pool, &viewer, ids.project_id).await, None);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_team_follows_current_project_scope(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -116,7 +116,7 @@ async fn project_team_follows_current_project_scope(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn team_reader_denies_foreign_projects_and_unavailable_actors(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -142,7 +142,7 @@ async fn team_reader_denies_foreign_projects_and_unavailable_actors(pool: PgPool
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn team_reader_rejects_malformed_canonical_state_including_empty_projects(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -171,7 +171,7 @@ async fn team_reader_rejects_malformed_canonical_state_including_empty_projects(
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn team_reader_does_not_disclose_cross_tenant_assignment_targets(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -194,7 +194,7 @@ async fn team_reader_does_not_disclose_cross_tenant_assignment_targets(pool: PgP
 /// access implies team access. It stays as defense in depth; this pins the
 /// implication so a change to `project_read_access` cannot make that filter
 /// the only, untested guard.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn legacy_progress_access_implies_team_access(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let mut viewers = vec![ids.user_id];

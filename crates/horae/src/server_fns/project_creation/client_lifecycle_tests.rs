@@ -89,7 +89,7 @@ async fn prepare(pool: &PgPool, ids: &SeedIds, writer: Writer) -> (Uuid, Project
 /// A writer that waits for an archive of its client must write nothing, at
 /// READ COMMITTED (it then reads the archived client) and at REPEATABLE READ
 /// (its share lock on a client changed after its snapshot fails to serialize).
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn creation_and_reassignment_waiting_for_a_client_archive_write_nothing(pool: PgPool) {
     let rr = repeatable_read_pool(&pool).await;

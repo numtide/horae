@@ -54,7 +54,7 @@ fn intents(f: &Fixture, id: Uuid) -> Vec<TimesheetCommand> {
     ]
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn all_intents_reject_read_only_inactive_and_stale_identities_atomically(pool: PgPool) {
     let f = fixture(&pool).await;
     let id = f.entry(&pool).await;
@@ -118,7 +118,7 @@ async fn all_intents_reject_read_only_inactive_and_stale_identities_atomically(p
     assert_eq!(snapshot(&pool, f.ids.org_id).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn project_management_covers_only_its_project_and_checks_both_move_ends(pool: PgPool) {
     let f = fixture(&pool).await;
     sqlx::query!(
@@ -223,7 +223,7 @@ async fn project_management_covers_only_its_project_and_checks_both_move_ends(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn bulk_sets_do_not_partially_modify_foreign_locked_or_duplicate_entries(pool: PgPool) {
     let f = fixture(&pool).await;
     let id = f.entry(&pool).await;
@@ -261,7 +261,7 @@ async fn bulk_sets_do_not_partially_modify_foreign_locked_or_duplicate_entries(p
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn delegated_stop_requires_restored_tracking_but_owner_keeps_terminal_recovery(pool: PgPool) {
     let f = fixture(&pool).await;
     let timer = f.entry(&pool).await;
@@ -344,7 +344,7 @@ async fn delegated_stop_requires_restored_tracking_but_owner_keeps_terminal_reco
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn coverage_conflicts_are_explicit_pending_submitted_editing_integration(pool: PgPool) {
     let f = fixture(&pool).await;
     let id = f.entry(&pool).await;
@@ -368,7 +368,7 @@ async fn coverage_conflicts_are_explicit_pending_submitted_editing_integration(p
     assert_eq!(snapshot(&pool, f.ids.org_id).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn legacy_own_history_is_editable_without_becoming_new_tracking_authority(pool: PgPool) {
     let mut f = fixture(&pool).await;
     let owner = f.context.subject_id;
@@ -451,7 +451,7 @@ async fn legacy_own_history_is_editable_without_becoming_new_tracking_authority(
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn task_grants_archives_and_canonical_admin_role_do_not_bypass_tracking(pool: PgPool) {
     let f = fixture(&pool).await;
     let id = f.entry(&pool).await;
@@ -528,7 +528,7 @@ async fn task_grants_archives_and_canonical_admin_role_do_not_bypass_tracking(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn no_op_emits_no_effects_and_changed_payload_uses_normalized_effective_values(pool: PgPool) {
     let f = fixture(&pool).await;
     let id = f.entry(&pool).await;
@@ -589,7 +589,7 @@ async fn no_op_emits_no_effects_and_changed_payload_uses_normalized_effective_va
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn reorders_reject_locked_timed_and_running_entries_atomically(pool: PgPool) {
     let f = fixture(&pool).await;
     let subject = SeedIds {
@@ -661,7 +661,7 @@ async fn reorders_reject_locked_timed_and_running_entries_atomically(pool: PgPoo
     assert_eq!(snapshot(&pool, f.ids.org_id).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn legacy_archived_edits_keep_time_but_cannot_override_non_billability(pool: PgPool) {
     for non_billable_project in [false, true] {
         let mut f = fixture(&pool).await;

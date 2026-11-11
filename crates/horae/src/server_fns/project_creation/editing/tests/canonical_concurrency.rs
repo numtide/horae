@@ -201,25 +201,25 @@ async fn revoked_while_waiting(pool: &PgPool, operation: Operation) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_read_discards_snapshot_after_concurrent_revocation(pool: PgPool) {
     revoked_while_waiting(&pool, Operation::Read).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_save_rechecks_authority_after_concurrent_revocation(pool: PgPool) {
     revoked_while_waiting(&pool, Operation::Save).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_replay_rechecks_recorded_effects_after_concurrent_revocation(pool: PgPool) {
     revoked_while_waiting(&pool, Operation::Replay).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_editor_operations_finish_before_waiting_designation_revocation(pool: PgPool) {
     for operation in [Operation::Read, Operation::Save, Operation::Replay] {

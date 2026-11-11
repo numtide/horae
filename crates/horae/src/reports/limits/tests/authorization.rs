@@ -84,7 +84,7 @@ fn spawn_read(
     })
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn materialized_exports_deny_revoked_managers(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -110,7 +110,7 @@ async fn materialized_exports_deny_revoked_managers(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn materialized_exports_require_same_tenant_active_actor(pool: PgPool) {
     let case = Case::new(&pool).await;
@@ -163,7 +163,7 @@ async fn materialized_exports_require_same_tenant_active_actor(pool: PgPool) {
     assert_eq!(case.stored(&pool).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn materialized_exports_deny_winning_legacy_revocations(pool: PgPool) {
     for reader in READERS {
@@ -218,7 +218,7 @@ async fn materialized_exports_deny_winning_legacy_revocations(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn materialized_exports_refresh_after_access_revision_change(pool: PgPool) {
     for reader in READERS {
@@ -272,7 +272,7 @@ async fn materialized_exports_refresh_after_access_revision_change(pool: PgPool)
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn materialized_exports_retain_authority_and_release_cancelled_reads(pool: PgPool) {
     let reader_pool = sqlx::postgres::PgPoolOptions::new()
@@ -365,7 +365,7 @@ async fn materialized_exports_retain_authority_and_release_cancelled_reads(pool:
     reader_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn materialized_exports_preserve_checked_snapshots(pool: PgPool) {
     for reader in READERS {
@@ -425,7 +425,7 @@ async fn materialized_exports_preserve_checked_snapshots(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn materialized_exports_keep_deadlines_and_restore_pool_defaults(pool: PgPool) {
     let case = Case::new(&pool).await;
@@ -496,7 +496,7 @@ async fn materialized_exports_keep_deadlines_and_restore_pool_defaults(pool: PgP
     reader_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn materialized_exports_recheck_after_render_without_retaining_authority(pool: PgPool) {
     use crate::reports::{bounded::ExportPermit, render_manager_export};
@@ -590,7 +590,7 @@ async fn materialized_exports_recheck_after_render_without_retaining_authority(p
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn materialized_exports_release_rendered_body_when_final_check_is_interrupted(pool: PgPool) {
     use crate::reports::{bounded::ExportPermit, render_manager_export};

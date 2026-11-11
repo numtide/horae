@@ -2,7 +2,7 @@ use super::*;
 use crate::server_fns::test_seed::wait_for_blocked;
 use std::{sync::Arc, time::Duration};
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn financial_snapshots_deny_winning_actor_revocation_without_organization_change(
     pool: PgPool,
@@ -76,7 +76,7 @@ async fn financial_snapshots_deny_winning_actor_revocation_without_organization_
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn financial_snapshots_retry_organization_row_change_and_refresh_amounts(pool: PgPool) {
     for reader in [Reader::Invoice, Reader::Fees] {
@@ -115,7 +115,7 @@ async fn financial_snapshots_retry_organization_row_change_and_refresh_amounts(p
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn financial_snapshots_hold_authority_until_materialization(pool: PgPool) {
     for reader in [Reader::Invoice, Reader::Fees] {
@@ -164,7 +164,7 @@ async fn financial_snapshots_hold_authority_until_materialization(pool: PgPool) 
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn financial_snapshots_keep_fee_values_from_their_initial_snapshot(pool: PgPool) {
     for reader in [Reader::Invoice, Reader::Fees] {
@@ -209,7 +209,7 @@ async fn financial_snapshots_keep_fee_values_from_their_initial_snapshot(pool: P
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn financial_snapshots_release_cancelled_reads_for_one_connection(pool: PgPool) {
     let reader_pool = sqlx::postgres::PgPoolOptions::new()

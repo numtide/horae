@@ -39,7 +39,7 @@ async fn scope(pool: &PgPool, actor: Uuid, selection: PermissionSelection) {
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn candidates_include_empty_project_members_and_retained_history_without_directory_access(
     pool: PgPool,
@@ -141,7 +141,7 @@ async fn candidates_include_empty_project_members_and_retained_history_without_d
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn profiles_and_custom_grants_use_time_scope_not_legacy_role_or_directory(pool: PgPool) {
     let seed = fixture(&pool).await;
@@ -216,7 +216,7 @@ async fn profiles_and_custom_grants_use_time_scope_not_legacy_role_or_directory(
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn history_keeps_archived_context_but_excludes_inactive_people_and_foreign_parents(
     pool: PgPool,
@@ -341,7 +341,7 @@ async fn history_keeps_archived_context_but_excludes_inactive_people_and_foreign
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn paging_search_and_identity_filters_only_narrow_current_scope(pool: PgPool) {
     let seed = fixture(&pool).await;
@@ -426,7 +426,7 @@ async fn paging_search_and_identity_filters_only_narrow_current_scope(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn discovery_rechecks_revocation_and_actor_activity_after_waiting(pool: PgPool) {
     let seed = fixture(&pool).await;
@@ -516,7 +516,7 @@ async fn discovery_rechecks_revocation_and_actor_activity_after_waiting(pool: Pg
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn admitted_discovery_finishes_before_competing_revocation(pool: PgPool) {
     let seed = fixture(&pool).await;
@@ -587,7 +587,7 @@ async fn admitted_discovery_finishes_before_competing_revocation(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn cancellation_releases_discovery_locks_and_keeps_pool_defaults(pool: PgPool) {
     let seed = fixture(&pool).await;
@@ -653,7 +653,7 @@ async fn cancellation_releases_discovery_locks_and_keeps_pool_defaults(pool: PgP
     reader.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn discovery_fails_closed_for_policy_identity_and_invalid_state(pool: PgPool) {
     let seed = fixture(&pool).await;

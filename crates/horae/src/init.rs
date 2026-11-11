@@ -75,7 +75,7 @@ mod tests {
     use super::run;
     use sqlx::PgPool;
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn init_creates_one_org_and_one_admin_and_nothing_else(pool: PgPool) {
         run(&pool, "Contoso", "ops@contoso.example", "Ops")
             .await
@@ -112,7 +112,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn init_refuses_when_an_organization_exists(pool: PgPool) {
         run(&pool, "Contoso", "ops@contoso.example", "Ops")
             .await

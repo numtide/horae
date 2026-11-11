@@ -20,7 +20,7 @@ async fn scoped(pool: &PgPool, role: OrgRole, selection: &[Permission]) -> SeedI
     ids
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_csv_member_downloads_own_rows_without_financial_grants(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
@@ -37,7 +37,7 @@ async fn scoped_csv_member_downloads_own_rows_without_financial_grants(pool: PgP
     assert_eq!(&records[0][1], "Widget");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_csv_legacy_manager_does_not_expand_own_scope(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Manager, &[Permission::TimeReadOwn]).await;
@@ -101,7 +101,7 @@ async fn grants(pool: &PgPool, actor: Uuid, permissions: &[Permission]) {
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_csv_source_uses_declare_authority_not_initial_or_fetch_authority(pool: PgPool) {
     for gain in [false, true] {
@@ -151,7 +151,7 @@ async fn scoped_csv_source_uses_declare_authority_not_initial_or_fetch_authority
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_csv_source_uses_management_edges_at_declare(pool: PgPool) {
     for gain in [false, true] {
@@ -222,7 +222,7 @@ async fn scoped_csv_source_uses_management_edges_at_declare(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_csv_invalid_captured_state_cannot_be_repaired_before_fetch(pool: PgPool) {
     for populated in [false, true] {
@@ -322,7 +322,7 @@ async fn scoped_csv_invalid_captured_state_cannot_be_repaired_before_fetch(pool:
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_csv_missing_identity_has_invalid_sentinel_and_metadata_is_bounded(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Manager, &[Permission::TimeReadOwn]).await;
@@ -377,7 +377,7 @@ async fn scoped_csv_missing_identity_has_invalid_sentinel_and_metadata_is_bounde
     tx.rollback().await.unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_csv_revocation_under_backpressure_interrupts_body_without_holding_locks(
     pool: PgPool,
@@ -432,7 +432,7 @@ async fn scoped_csv_revocation_under_backpressure_interrupts_body_without_holdin
     assert!(csv::Reader::from_reader(bytes.as_slice()).records().count() <= 1 + CHUNK_ROWS);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_csv_rechecks_every_pending_context_but_not_previous_blocks(pool: PgPool) {
     for revoke_previous in [false, true] {
@@ -499,7 +499,7 @@ async fn scoped_csv_rechecks_every_pending_context_but_not_previous_blocks(pool:
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_csv_empty_header_rechecks_policy_and_state_after_capacity(pool: PgPool) {
     for change_policy in [false, true] {
@@ -550,7 +550,7 @@ async fn scoped_csv_empty_header_rechecks_policy_and_state_after_capacity(pool: 
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_csv_reassigned_or_deleted_entries_keep_captured_context(pool: PgPool) {
     for retain_original in [false, true] {

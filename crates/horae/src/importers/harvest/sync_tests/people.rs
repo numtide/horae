@@ -93,7 +93,7 @@ fn kinds(report: &ImportReport) -> Vec<(String, PersonErrorKind)> {
         .collect()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn people_are_matched_or_created_and_their_entries_import(pool: PgPool) {
     let org = setup(&pool).await;
     let before = add_old_account(&pool, org).await;
@@ -185,7 +185,7 @@ async fn people_are_matched_or_created_and_their_entries_import(pool: PgPool) {
     assert_eq!(queued_user_events(&pool, org).await, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_second_commit_creates_nobody_and_follows_the_harvest_identity(pool: PgPool) {
     let org = setup(&pool).await;
     add_old_account(&pool, org).await;
@@ -230,7 +230,7 @@ async fn a_second_commit_creates_nobody_and_follows_the_harvest_identity(pool: P
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_preview_reports_people_and_writes_none(pool: PgPool) {
     let org = setup(&pool).await;
     let before = add_old_account(&pool, org).await;
@@ -261,7 +261,7 @@ async fn a_preview_reports_people_and_writes_none(pool: PgPool) {
     assert_eq!(preview.row_errors, commit.row_errors);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_email_shared_by_two_accounts_is_never_guessed(pool: PgPool) {
     let org = setup(&pool).await;
     add_user(&pool, org, "same@example.com").await;
@@ -353,7 +353,7 @@ async fn durable_people_job(
     .await
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_durable_preview_keeps_simulated_people_across_pages(pool: PgPool) {
     let org = setup(&pool).await;
     let before = accounts(&pool, org).await;
@@ -382,7 +382,7 @@ fn failing_entries(url: &openidconnect::url::Url) -> Response {
     paged_people(url)
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_created_person_is_announced_even_when_the_job_fails_later(pool: PgPool) {
     let org = setup(&pool).await;
     let error = durable_people_job(&pool, org, ImportMode::Commit, failing_entries)
@@ -393,7 +393,7 @@ async fn a_created_person_is_announced_even_when_the_job_fails_later(pool: PgPoo
     assert_eq!(queued_user_events(&pool, org).await, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_email_match_never_takes_over_another_harvest_persons_account(pool: PgPool) {
     let org = setup(&pool).await;
     let mut data = valid_data();
@@ -427,7 +427,7 @@ async fn an_email_match_never_takes_over_another_harvest_persons_account(pool: P
     assert_eq!(report.summary.time_entries.skipped, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_email_used_outside_the_workspace_is_reported_not_created(pool: PgPool) {
     let org = setup(&pool).await;
     let elsewhere = Uuid::now_v7();
@@ -458,7 +458,7 @@ async fn an_email_used_outside_the_workspace_is_reported_not_created(pool: PgPoo
 /// Sign-in creates `Late@Example.com` while the import waits on that email's
 /// lock. Even on a REPEATABLE READ connection the import's recheck must see
 /// it, or it would add `late@example.com` beside it.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_account_created_while_the_import_waits_is_never_duplicated(pool: PgPool) {
     let org = setup(&pool).await;
     let elsewhere = Uuid::now_v7();

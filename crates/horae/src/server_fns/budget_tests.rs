@@ -48,7 +48,7 @@ async fn progress(pool: &PgPool, ids: &SeedIds, date: &str) -> Vec<super::budget
     .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn overview_budget_progress_is_current_period_scoped_and_authorized(pool: PgPool) {
     let ids = configured(&pool).await;
     let foreign = configured(&pool).await;
@@ -146,7 +146,7 @@ async fn overview_budget_progress_is_current_period_scoped_and_authorized(pool: 
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn overview_budget_progress_batches_projects_without_mixing_scopes(pool: PgPool) {
     let ids = configured(&pool).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -288,7 +288,7 @@ async fn overview_budget_progress_batches_projects_without_mixing_scopes(pool: P
     assert_eq!(rows[0].project_id, ids.project_id);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn overview_budget_progress_includes_people_without_an_allowance(pool: PgPool) {
     let ids = configured(&pool).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -360,7 +360,7 @@ async fn overview_budget_progress_includes_people_without_an_allowance(pool: PgP
     assert_eq!(alerts[0].user_id, Some(other));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_monthly_budget_excludes_other_months_and_nonbillable_time(pool: PgPool) {
     let ids = configured(&pool).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -419,7 +419,7 @@ async fn configured_monthly_budget_excludes_other_months_and_nonbillable_time(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_nonbillable_projects_count_time_without_hidden_checkbox(pool: PgPool) {
     let ids = configured(&pool).await;
     sqlx::query!(
@@ -440,7 +440,7 @@ async fn configured_nonbillable_projects_count_time_without_hidden_checkbox(pool
     assert_eq!(progress(&pool, &ids, "2026-09-01").await[0].consumed, 60);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_task_and_person_budgets_do_not_share_consumption(pool: PgPool) {
     let ids = configured(&pool).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -517,7 +517,7 @@ async fn configured_task_and_person_budgets_do_not_share_consumption(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_amount_budget_uses_resolved_rates_and_explicit_zero(pool: PgPool) {
     let ids = configured(&pool).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -533,7 +533,7 @@ async fn configured_amount_budget_uses_resolved_rates_and_explicit_zero(pool: Pg
     assert_eq!(progress(&pool, &ids, "2026-09-01").await[0].consumed, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_budget_does_not_read_foreign_or_legacy_projects(pool: PgPool) {
     let ids = configured(&pool).await;
     let other = seed(&pool, OrgRole::Manager).await;
@@ -551,7 +551,7 @@ async fn configured_budget_does_not_read_foreign_or_legacy_projects(pool: PgPool
     assert!(progress(&pool, &other, "2026-09-01").await.is_empty());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_alerts_deduplicate_concurrent_checks_and_recrossing(pool: PgPool) {
     let ids = configured(&pool).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
@@ -624,7 +624,7 @@ async fn configured_alerts_deduplicate_concurrent_checks_and_recrossing(pool: Pg
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_alerts_require_enabled_active_project_and_authorized_recipient(pool: PgPool) {
     let ids = configured(&pool).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -700,7 +700,7 @@ async fn configured_alerts_require_enabled_active_project_and_authorized_recipie
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_monthly_budget_includes_leap_day_and_preserves_locked_rounding(pool: PgPool) {
     let ids = configured(&pool).await;
     sqlx::query!(
@@ -739,7 +739,7 @@ async fn configured_monthly_budget_includes_leap_day_and_preserves_locked_roundi
     assert_eq!(progress(&pool, &ids, "2024-03-01").await[0].consumed, 60);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_task_fee_budget_respects_billability_and_alert_scope(pool: PgPool) {
     let ids = configured(&pool).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -781,7 +781,7 @@ async fn configured_task_fee_budget_respects_billability_and_alert_scope(pool: P
     assert_eq!((scope.task_id, scope.user_id), (Some(ids.task_id), None));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_person_budget_excludes_other_people_and_has_its_own_alert(pool: PgPool) {
     let ids = configured(&pool).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -837,7 +837,7 @@ async fn configured_person_budget_excludes_other_people_and_has_its_own_alert(po
     assert_eq!((scope.task_id, scope.user_id), (None, Some(ids.user_id)));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_alert_and_outbox_roll_back_together(pool: PgPool) {
     let ids = configured(&pool).await;
     sqlx::query!("UPDATE project_settings SET alert_enabled = true, alert_threshold = 0 WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
@@ -861,7 +861,7 @@ async fn configured_alert_and_outbox_roll_back_together(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_budget_sweep_recovers_missed_checks_without_duplicates(pool: PgPool) {
     let ids = configured(&pool).await;
     sqlx::query!("UPDATE project_settings SET alert_enabled = true, alert_threshold = 0 WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
@@ -877,7 +877,7 @@ async fn configured_budget_sweep_recovers_missed_checks_without_duplicates(pool:
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_budget_sweep_dates_the_period_in_the_workspace_zone(pool: PgPool) {
     let ids = configured(&pool).await;
     sqlx::query!("UPDATE project_settings SET alert_enabled = true, alert_threshold = 0, monthly_reset = true WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
@@ -901,7 +901,7 @@ async fn configured_budget_sweep_dates_the_period_in_the_workspace_zone(pool: Pg
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_alert_recipients_are_active_same_org_managers_and_project_leads(pool: PgPool) {
     let ids = configured(&pool).await;
     let foreign = seed(&pool, OrgRole::Admin).await;
@@ -963,7 +963,7 @@ async fn configured_alert_recipients_are_active_same_org_managers_and_project_le
     assert_eq!(actual, expected);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_notification_schema_enforces_tenants_and_no_public_access(pool: PgPool) {
     let ids = configured(&pool).await;
     let foreign = seed(&pool, OrgRole::Manager).await;
@@ -984,7 +984,7 @@ async fn budget_notification_schema_enforces_tenants_and_no_public_access(pool: 
     assert!(!public_access);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn concurrent_budget_checks_have_one_band_claimant(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     sqlx::query!(

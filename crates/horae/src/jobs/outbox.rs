@@ -154,7 +154,7 @@ mod tests {
             .unwrap()
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn acknowledges_confirmed_delivery_without_reclaiming_it(pool: sqlx::PgPool) {
         let event = enqueue(&pool).await;
@@ -176,7 +176,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn worker_delivers_available_events_and_stops_cleanly(pool: sqlx::PgPool) {
         let event = enqueue(&pool).await;
@@ -210,7 +210,7 @@ mod tests {
         worker.shutdown(Duration::from_secs(5)).await.unwrap();
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn invalid_payload_is_not_delivered_and_does_not_leak_into_errors(pool: sqlx::PgPool) {
         let mut event = enqueue(&pool).await;
@@ -233,7 +233,7 @@ mod tests {
         assert!(row.claim_token.is_none());
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn plugin_failure_retries_with_the_same_event_identity(pool: sqlx::PgPool) {
         let dir = tempfile::tempdir().unwrap();

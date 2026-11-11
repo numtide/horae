@@ -22,7 +22,7 @@ async fn project_entries(pool: &PgPool, ids: &SeedIds, owner: Uuid, count: usize
     projects
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_preserves_distinct_ids_beyond_ten_thousand_groups(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
@@ -49,7 +49,7 @@ async fn grouped_csv_preserves_distinct_ids_beyond_ten_thousand_groups(pool: PgP
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_checks_last_context_before_emitting_any_group_bytes(pool: PgPool) {
     for revoke_last in [false, true] {
@@ -119,7 +119,7 @@ async fn grouped_csv_checks_last_context_before_emitting_any_group_bytes(pool: P
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_revocation_under_backpressure_does_not_hold_gates(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadAll]).await;
@@ -170,7 +170,7 @@ async fn grouped_csv_revocation_under_backpressure_does_not_hold_gates(pool: PgP
     assert!(csv::Reader::from_reader(bytes.as_slice()).records().count() <= 2);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_invalid_source_authority_cannot_be_repaired_after_declare(pool: PgPool) {
     for populated in [false, true] {
@@ -218,7 +218,7 @@ async fn grouped_csv_invalid_source_authority_cannot_be_repaired_after_declare(p
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_bounds_native_fragments_and_preserves_large_unicode_labels(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
@@ -278,7 +278,7 @@ async fn grouped_csv_bounds_native_fragments_and_preserves_large_unicode_labels(
     assert_eq!(&records[0][1], "3.00");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_keeps_authority_between_fragment_batches_and_releases_on_cancel(pool: PgPool) {
     // This database-local probe pauses the third native fetch, after the first
@@ -388,7 +388,7 @@ async fn grouped_csv_keeps_authority_between_fragment_batches_and_releases_on_ca
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_exports_all_four_dimensions_with_exact_rounded_hours(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
@@ -439,7 +439,7 @@ async fn grouped_csv_exports_all_four_dimensions_with_exact_rounded_hours(pool: 
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_has_no_workbook_source_entry_cap(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
@@ -462,7 +462,7 @@ async fn grouped_csv_has_no_workbook_source_entry_cap(pool: PgPool) {
     assert_eq!(&records[0][1], "10001.00");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_empty_source_still_requires_canonical_authority(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Manager, &[Permission::TimeReadOwn]).await;

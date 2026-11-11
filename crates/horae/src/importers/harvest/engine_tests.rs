@@ -18,7 +18,7 @@ mod csv_people;
 mod csv_streaming;
 mod lookup_cache;
 
-#[sqlx::test]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn imported_project_task_activity_preserves_archival_and_legacy_links(pool: PgPool) {
     for policy in [0, 1] {
         let ids =
@@ -127,7 +127,7 @@ impl RowSource for PausedSource {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn concurrent_imports_reject_overlap_without_collapsing_repeated_entries(pool: PgPool) {
     for mode in [ImportMode::Commit, ImportMode::DryRun] {
         let org = seed_org(&pool).await;
@@ -204,7 +204,7 @@ fn disconnected_config() -> crate::config::HarvestConfig {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn import_cleanup_recovers_unacknowledged_savepoint_release(pool: PgPool) {
     use sqlx::Acquire;
 
@@ -275,7 +275,7 @@ async fn import_cleanup_recovers_unacknowledged_savepoint_release(pool: PgPool) 
     single.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn import_cleanup_rolls_back_an_untracked_server_transaction(pool: PgPool) {
     let org = seed_org(&pool).await;
     let previous = sqlx::query_scalar!("SELECT name FROM organizations WHERE id = $1", org)
@@ -309,7 +309,7 @@ async fn import_cleanup_rolls_back_an_untracked_server_transaction(pool: PgPool)
     super::release_import(retry).await.unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn import_cleanup_does_not_hide_a_backend_failure(pool: PgPool) {
     let org = seed_org(&pool).await;
     let single = sqlx::postgres::PgPoolOptions::new()
@@ -349,7 +349,7 @@ async fn import_cleanup_does_not_hide_a_backend_failure(pool: PgPool) {
     single.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn completed_imports_allow_immediate_retries(pool: PgPool) {
     let org = seed_org(&pool).await;
     for _ in 0..64 {
@@ -368,7 +368,7 @@ async fn completed_imports_allow_immediate_retries(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn cancelled_http_waiter_keeps_the_lock_until_its_worker_exits(pool: PgPool) {
     let org = seed_org(&pool).await;
     let one_connection = sqlx::postgres::PgPoolOptions::new()
@@ -402,7 +402,7 @@ async fn cancelled_http_waiter_keeps_the_lock_until_its_worker_exits(pool: PgPoo
     one_connection.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn api_and_csv_share_the_lock_but_other_organizations_can_import(pool: PgPool) {
     let org = seed_org(&pool).await;
     let other_org = seed_org(&pool).await;
@@ -436,7 +436,7 @@ async fn api_and_csv_share_the_lock_but_other_organizations_can_import(pool: PgP
     guard.close().await.unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn cancellation_rolls_back_rows_and_releases_the_import_session(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -516,7 +516,7 @@ async fn cancellation_rolls_back_rows_and_releases_the_import_session(pool: PgPo
     one_connection.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn failed_source_releases_the_session_and_rolls_back_partial_rows(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -554,7 +554,7 @@ async fn failed_source_releases_the_session_and_rolls_back_partial_rows(pool: Pg
     guard.close().await.unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn api_connection_checks_work_with_a_single_connection_pool(pool: PgPool) {
     let org = seed_org(&pool).await;
     let one_connection = sqlx::postgres::PgPoolOptions::new()
@@ -610,7 +610,7 @@ async fn seed_user(pool: &PgPool, org_id: Uuid, email: &str) -> Uuid {
     id
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_barrier_blocks_imported_time_entries(pool: PgPool) {
     let org = seed_org(&pool).await;
     let user = seed_user(&pool, org, "dana@test.com").await;
@@ -783,7 +783,7 @@ async fn commit(pool: &PgPool, org: Uuid, rows: Vec<SourceRow>) -> super::report
 
 // ── US1: full API import, exact conversions, provenance ───────────────────────
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn full_import_creates_all_levels_with_exact_minutes(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -840,7 +840,7 @@ async fn full_import_creates_all_levels_with_exact_minutes(pool: PgPool) {
 
 // ── FIX #1: natural-key re-import with whitespace/case variance is duplicate-free
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn natural_key_reimport_normalizes_whitespace_and_ascii_case(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -901,7 +901,7 @@ async fn natural_key_reimport_normalizes_whitespace_and_ascii_case(pool: PgPool)
 
 // ── US2: idempotent + edit-robust re-sync ─────────────────────────────────────
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn second_identical_run_creates_nothing(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -931,7 +931,7 @@ async fn second_identical_run_creates_nothing(pool: PgPool) {
     assert_eq!(count(&pool, "clients").await, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn edited_entry_still_matched_by_provenance(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -978,7 +978,7 @@ async fn edited_entry_still_matched_by_provenance(pool: PgPool) {
     assert_eq!(count(&pool, "time_entries").await, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn watermark_advances_only_on_commit(pool: PgPool) {
     let org = seed_org(&pool).await;
     let admin = seed_user(&pool, org, "admin@example.com").await;
@@ -1014,7 +1014,7 @@ async fn watermark_advances_only_on_commit(pool: PgPool) {
 
 // ── US3: dry-run writes nothing and previews the commit ───────────────────────
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn dry_run_writes_nothing_and_matches_commit(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -1068,7 +1068,7 @@ async fn dry_run_writes_nothing_and_matches_commit(pool: PgPool) {
 
 // ── US4: resilience + reconciliation ──────────────────────────────────────────
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn overflowing_decimals_fail_only_their_rows(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -1122,7 +1122,7 @@ async fn overflowing_decimals_fail_only_their_rows(pool: PgPool) {
     assert_eq!(clients, vec!["Good"]);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn bad_records_are_reported_and_run_continues(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -1175,7 +1175,7 @@ async fn bad_records_are_reported_and_run_continues(pool: PgPool) {
     assert_eq!(entries, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn rows_past_the_daily_limit_are_reported_like_other_bad_rows(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -1228,7 +1228,7 @@ async fn rows_past_the_daily_limit_are_reported_like_other_bad_rows(pool: PgPool
 
 /// The import holds no day lock: one held elsewhere on an imported day does
 /// not stall it, however many days it spans.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_import_of_many_days_takes_no_day_locks(pool: PgPool) {
     use chrono::Datelike;
     let org = seed_org(&pool).await;
@@ -1264,7 +1264,7 @@ async fn an_import_of_many_days_takes_no_day_locks(pool: PgPool) {
 
 // ── US5: CSV natural-key path ─────────────────────────────────────────────────
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn csv_name_only_matches_one_org_user_and_reimports_without_duplicates(pool: PgPool) {
     let org = seed_org(&pool).await;
     let user = seed_user(&pool, org, "dev@acme.com").await;
@@ -1287,7 +1287,7 @@ async fn csv_name_only_matches_one_org_user_and_reimports_without_duplicates(poo
     assert_eq!(count(&pool, "users").await, 2);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn import_rejects_ambiguous_normalized_email_without_partial_writes(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -1307,7 +1307,7 @@ async fn import_rejects_ambiguous_normalized_email_without_partial_writes(pool: 
     assert_eq!(count(&pool, "clients").await, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn csv_name_fallback_requires_a_full_unique_name_and_never_overrides_email(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -1351,7 +1351,7 @@ async fn csv_name_fallback_requires_a_full_unique_name_and_never_overrides_email
     assert_eq!(count(&pool, "users").await, 2);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn csv_ambiguous_names_include_inactive_users_but_unique_email_disambiguates(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -1377,7 +1377,7 @@ async fn csv_ambiguous_names_include_inactive_users_but_unique_email_disambiguat
     assert_eq!(count(&pool, "clients").await, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn csv_name_only_dry_run_and_duplicate_occurrences_preserve_history(pool: PgPool) {
     let org = seed_org(&pool).await;
     let user = seed_user(&pool, org, "dev@acme.com").await;
@@ -1409,7 +1409,7 @@ const CSV: &str = "Date,Client,Project,Project Code,Task,Notes,Hours,Billable?,I
 2026-01-15,Acme,Website,WEB,Design,kickoff,1.5,Yes,No,dev@acme.com,USD\n\
 2026-01-16,Acme,Website,WEB,Design,,0.25,No,No,dev@acme.com,USD\n";
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn csv_import_populates_and_is_idempotent(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -1439,7 +1439,7 @@ async fn csv_import_populates_and_is_idempotent(pool: PgPool) {
 
 /// Two identical rows in one Detailed export are two real entries (e.g. two
 /// 30-minute calls on the same day) — both must be imported.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn two_identical_csv_rows_import_as_two_entries(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -1463,7 +1463,7 @@ async fn two_identical_csv_rows_import_as_two_entries(pool: PgPool) {
 
 /// Re-importing the same file with repeated identical rows stays idempotent:
 /// each occurrence matches its own stored entry, leaving exactly two.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn reimporting_identical_csv_rows_is_idempotent(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -1501,7 +1501,7 @@ async fn reimporting_identical_csv_rows_is_idempotent(pool: PgPool) {
 /// Two Harvest entries with different ids but identical fields are distinct
 /// records: each gets its own Horae entry and its own provenance mapping, and an
 /// incremental re-sync matches each by its id.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn distinct_harvest_ids_with_identical_fields_import_as_two(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -1554,7 +1554,7 @@ async fn distinct_harvest_ids_with_identical_fields_import_as_two(pool: PgPool) 
 
 /// A first API sync after a CSV import must adopt the id-less entries the CSV
 /// created — one Harvest id per stored entry — instead of duplicating them.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn api_sync_adopts_entries_from_a_prior_csv_import(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -1611,7 +1611,7 @@ async fn api_sync_adopts_entries_from_a_prior_csv_import(pool: PgPool) {
     assert_eq!(distinct, 2);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn csv_malformed_file_is_rejected_with_no_writes(pool: PgPool) {
     let org = seed_org(&pool).await;
     let result =
@@ -1624,7 +1624,7 @@ async fn csv_malformed_file_is_rejected_with_no_writes(pool: PgPool) {
 
 // ── Polish: scale (SC-006) and reconciliation (SC-003/SC-007) ─────────────────
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn large_run_reuses_parents_and_reconciles_totals(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -1699,7 +1699,7 @@ async fn archived_client(pool: &PgPool, org: Uuid) -> Uuid {
 /// that needs it, each with its own location and reason, under the existing
 /// per-row accounting. Nothing is suppressed or deduplicated, other rows import,
 /// dry run and commit agree, and a re-run after restoring the client creates it once.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn csv_lines_for_a_new_project_of_an_archived_client_fail_and_retry(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -1764,7 +1764,7 @@ async fn csv_lines_for_a_new_project_of_an_archived_client_fail_and_retry(pool: 
 /// client. The import must not create it, even when the connection default is
 /// REPEATABLE READ: the import runs at READ COMMITTED and reads the archived
 /// client. The run still finishes with the other rows.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_import_waiting_for_a_client_archive_creates_no_project_under_it(pool: PgPool) {
     let rr = crate::server_fns::test_seed::repeatable_read_pool(&pool).await;
     for (n, (isolation, import_pool)) in [("default", &pool), ("repeatable read", &rr)]

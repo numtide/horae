@@ -122,11 +122,15 @@ const name = 'Permission fixture project';
       // mutations below must preserve the whole row, including that new revision.
       const originalProject = sql(`SELECT row_to_json(p)::text FROM projects p WHERE id = '${projectId}'`);
       await visit('/projects');
+      // `endpoints` keeps earlier scenarios' reads, so it cannot show that this
+      // page has hydrated; a click before hydration never opens the picker.
+      await page.waitForLoadState('networkidle');
       await expect.poll(() => endpoints.has('list_project_budget_progress')).toBe(true);
       await readsFinished();
       // The rail reads the tracking catalog only when its timer picker opens.
+      const catalog = page.waitForResponse(r => r.url().includes('/api/list_tracking_projects'));
       await page.locator('.sidebar-timer-wrap').getByRole('button', { name: 'Start timer', exact: true }).click();
-      await expect.poll(() => endpoints.has('list_tracking_projects')).toBe(true);
+      await catalog;
       await page.locator('.sidebar-timer-pop').getByRole('button', { name: 'Cancel', exact: true }).click();
       await readsFinished();
       await expect(page.getByRole('link', { name: 'New project', exact: true })).toHaveCount(scenario.rates ? 1 : 0);

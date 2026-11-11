@@ -71,7 +71,7 @@ async fn refused(pool: &PgPool, identity: &Identity, policy: &AutoProvision) -> 
         .expect_err("sign-in must be refused")
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn first_sign_in_creates_an_active_member_bound_to_the_identity(pool: PgPool) {
     let org_id = organization(&pool).await;
     let mut token = token("new-subject", "Ada@Example.com", Some(true));
@@ -116,7 +116,7 @@ async fn first_sign_in_creates_an_active_member_bound_to_the_identity(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn later_sign_ins_reuse_the_created_account(pool: PgPool) {
     organization(&pool).await;
     let token = token("new-subject", EMAIL, Some(true));
@@ -128,7 +128,7 @@ async fn later_sign_ins_reuse_the_created_account(pool: PgPool) {
     assert_eq!(accounts(&pool).await, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn created_account_is_named_after_the_email_without_a_name_claim(pool: PgPool) {
     organization(&pool).await;
     let sign_in = resolve_user(
@@ -142,7 +142,7 @@ async fn created_account_is_named_after_the_email_without_a_name_claim(pool: PgP
     assert_eq!(sign_in.user.name, "ada");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn nothing_is_created_when_provisioning_is_off(pool: PgPool) {
     organization(&pool).await;
     let notice = refused(
@@ -160,7 +160,7 @@ async fn nothing_is_created_when_provisioning_is_off(pool: PgPool) {
     assert_eq!(accounts(&pool).await, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_unlisted_domain_is_refused(pool: PgPool) {
     organization(&pool).await;
     let notice = refused(
@@ -178,7 +178,7 @@ async fn an_unlisted_domain_is_refused(pool: PgPool) {
     assert_eq!(accounts(&pool).await, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_unverified_email_is_refused(pool: PgPool) {
     organization(&pool).await;
     // `false` is refused whatever the trust switch says; an absent claim is
@@ -201,7 +201,7 @@ async fn an_unverified_email_is_refused(pool: PgPool) {
     assert_eq!(accounts(&pool).await, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_absent_claim_provisions_when_the_operator_trusts_it(pool: PgPool) {
     organization(&pool).await;
     let sign_in = resolve_user(
@@ -215,7 +215,7 @@ async fn an_absent_claim_provisions_when_the_operator_trusts_it(pool: PgPool) {
     assert!(sign_in.created && sign_in.user.active);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn the_trust_switch_never_binds_an_existing_account_by_email(pool: PgPool) {
     let org_id = organization(&pool).await;
     let existing = account(&pool, org_id, EMAIL, true, None).await;
@@ -236,7 +236,7 @@ async fn the_trust_switch_never_binds_an_existing_account_by_email(pool: PgPool)
     assert_eq!(accounts(&pool).await, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_deactivated_unbound_account_is_neither_recreated_nor_reactivated(pool: PgPool) {
     let org_id = organization(&pool).await;
     let existing = account(&pool, org_id, EMAIL, false, None).await;
@@ -256,7 +256,7 @@ async fn a_deactivated_unbound_account_is_neither_recreated_nor_reactivated(pool
     assert_eq!(accounts(&pool).await, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_email_held_by_another_identity_is_not_reused(pool: PgPool) {
     // Active or deactivated, bound under the same issuer or another, or held in
     // another letter case: nothing is created and the notice reveals nothing
@@ -298,7 +298,7 @@ async fn an_email_held_by_another_identity_is_not_reused(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_subject_held_by_another_account_is_not_reused(pool: PgPool) {
     // The pair misses (another issuer, or a legacy binding with none), and a
     // second account with the same subject would break its uniqueness.
@@ -332,7 +332,7 @@ async fn a_subject_held_by_another_account_is_not_reused(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn nothing_is_created_without_exactly_one_organization(pool: PgPool) {
     let token = token("new-subject", EMAIL, Some(true));
     let policy = allow(&["example.com"], false);
@@ -348,7 +348,7 @@ async fn nothing_is_created_without_exactly_one_organization(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn concurrent_first_sign_ins_create_one_account(pool: PgPool) {
     let org_id = organization(&pool).await;
     let blocker = hold_organization(&pool, org_id).await;
@@ -378,7 +378,7 @@ async fn concurrent_first_sign_ins_create_one_account(pool: PgPool) {
     assert_eq!(accounts(&pool).await, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn concurrent_sign_ins_with_case_variant_emails_create_one_account(pool: PgPool) {
     let org_id = organization(&pool).await;
     let blocker = hold_organization(&pool, org_id).await;
@@ -413,7 +413,7 @@ async fn concurrent_sign_ins_with_case_variant_emails_create_one_account(pool: P
     assert_eq!(loser, Some(LoginNotice::NoAccount { email: None }));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn admin_creation_and_provisioning_of_case_variant_emails_create_one_account(pool: PgPool) {
     let ids = crate::server_fns::test_seed::seed(&pool, OrgRole::Admin).await;
     // Hold the email lock. The sign-in takes its share of the organization row

@@ -106,7 +106,7 @@ async fn block_payload(tx: &mut Transaction<'_, Postgres>, reader: Reader) {
     };
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_readers_reject_revoked_session_identity(pool: PgPool) {
     let fixture = Fixture::new(&pool).await;
@@ -144,7 +144,7 @@ async fn legacy_readers_reject_revoked_session_identity(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_readers_preserve_actor_tenant_filters_and_missing_resources(pool: PgPool) {
     let fixture = Fixture::new(&pool).await;
@@ -200,7 +200,7 @@ async fn legacy_readers_preserve_actor_tenant_filters_and_missing_resources(pool
     assert!(rows.is_empty());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_readers_deny_writer_first_revocation(pool: PgPool) {
     for reader in READERS {
@@ -249,7 +249,7 @@ async fn legacy_readers_deny_writer_first_revocation(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_readers_hold_reader_first_authority_until_materialized(pool: PgPool) {
     for reader in READERS {
@@ -296,7 +296,7 @@ async fn legacy_readers_hold_reader_first_authority_until_materialized(pool: PgP
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_invoice_detail_keeps_metadata_and_lines_in_one_snapshot(pool: PgPool) {
     let fixture = Arc::new(Fixture::new(&pool).await);
@@ -337,7 +337,7 @@ async fn legacy_invoice_detail_keeps_metadata_and_lines_in_one_snapshot(pool: Pg
     assert_eq!(fresh["lines"][0]["amount_cents"], 2400);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_readers_cancel_without_retaining_authority_or_pool_connection(pool: PgPool) {
     let reader_pool = sqlx::postgres::PgPoolOptions::new()
@@ -387,7 +387,7 @@ async fn legacy_readers_cancel_without_retaining_authority_or_pool_connection(po
     reader_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_readers_preserve_inherited_connection_settings(pool: PgPool) {
     let fixture = Fixture::new(&pool).await;
@@ -434,7 +434,7 @@ async fn legacy_readers_preserve_inherited_connection_settings(pool: PgPool) {
     reader_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn manager_commits_asynchronously_only_inside_its_snapshot(pool: PgPool) {
     let fixture = Fixture::new(&pool).await;
@@ -494,7 +494,7 @@ async fn manager_commits_asynchronously_only_inside_its_snapshot(pool: PgPool) {
 /// the 5 s bound (55P03) instead of waiting for the holder. `manager` reports
 /// that as an internal error, so the bound shows as the wait ending while the
 /// blocker still holds the row.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn manager_bounds_its_authority_lock_wait(pool: PgPool) {
     let fixture = Fixture::new(&pool).await;

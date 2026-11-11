@@ -28,7 +28,7 @@ async fn read(pool: &PgPool, ids: &SeedIds) -> Vec<crate::models::ProjectBudgetO
         .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_budget_reader_does_not_require_legacy_management(pool: PgPool) {
     let (ids, _) = fixture(
@@ -43,7 +43,7 @@ async fn canonical_budget_reader_does_not_require_legacy_management(pool: PgPool
     assert_eq!((rows[0].budget, rows[0].consumed), (Some(240), Some(0)));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_budget_managed_scope_requires_current_designation(pool: PgPool) {
     let (ids, _) = fixture(
@@ -67,7 +67,7 @@ async fn canonical_budget_managed_scope_requires_current_designation(pool: PgPoo
     assert!(read(&pool, &ids).await.is_empty());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_budget_financial_revocation_withholds_allowance_and_consumption(pool: PgPool) {
     let (ids, _) = fixture(
@@ -107,7 +107,7 @@ async fn canonical_budget_financial_revocation_withholds_allowance_and_consumpti
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_shared_budget_does_not_disclose_other_person_allocations(pool: PgPool) {
     let (ids, _) = fixture(&pool, OrgRole::Member, PermissionSelection::new(&[])).await;
@@ -179,7 +179,7 @@ async fn canonical_shared_budget_does_not_disclose_other_person_allocations(pool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_shared_budget_does_not_disclose_individual_task_allocations(pool: PgPool) {
     let (ids, _) = fixture(&pool, OrgRole::Member, PermissionSelection::new(&[])).await;
@@ -231,7 +231,7 @@ async fn canonical_shared_budget_does_not_disclose_individual_task_allocations(p
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_budget_skips_hidden_monetary_overflow(pool: PgPool) {
     let (ids, _) = fixture(
@@ -272,7 +272,7 @@ async fn canonical_budget_skips_hidden_monetary_overflow(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_budget_managed_financial_scope_is_independent_of_project_read_all(pool: PgPool) {
     let (ids, _) = fixture(
@@ -309,7 +309,7 @@ async fn canonical_budget_managed_financial_scope_is_independent_of_project_read
     assert_eq!((rows[0].budget, rows[0].consumed), (None, None));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_budget_summaries_exclude_unallocated_hours_and_money_but_not_zero(pool: PgPool) {
     for monetary in [false, true] {

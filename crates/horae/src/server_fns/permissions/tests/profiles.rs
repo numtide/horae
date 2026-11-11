@@ -111,7 +111,7 @@ async fn state(pool: &PgPool, org: Uuid, user: Uuid) -> PersonPermissions {
         .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn profile_command_waits_for_direct_actor_deactivation_even_on_replay(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -144,7 +144,7 @@ async fn profile_command_waits_for_direct_actor_deactivation_even_on_replay(pool
     assert_eq!(state(&pool, ids.org_id, user).await.revision, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn profile_command_rechecks_remaining_administrator_after_deactivation_wait(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -174,7 +174,7 @@ async fn profile_command_rechecks_remaining_administrator_after_deactivation_wai
     assert!(state(&pool, ids.org_id, ids.user_id).await.is_administrator);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn profile_command_overrides_readonly_defaults_locally(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -210,7 +210,7 @@ async fn profile_command_overrides_readonly_defaults_locally(pool: PgPool) {
     restricted.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn profile_command_retains_target_activity_through_receipt_insert(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -253,7 +253,7 @@ async fn profile_command_retains_target_activity_through_receipt_insert(pool: Pg
     assert_eq!(state(&pool, ids.org_id, user).await.revision, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn profile_command_rechecks_target_activation_before_demotion(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -288,7 +288,7 @@ async fn profile_command_rechecks_target_activation_before_demotion(pool: PgPool
     assert!(state(&pool, ids.org_id, ids.user_id).await.is_administrator);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn profile_demotion_retains_surviving_administrator_until_commit(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -329,7 +329,7 @@ async fn profile_demotion_retains_surviving_administrator_until_commit(pool: PgP
     deactivate.await.unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn cancelled_profile_save_rolls_back_effects_and_releases_single_connection(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -394,7 +394,7 @@ async fn cancelled_profile_save_rolls_back_effects_and_releases_single_connectio
     connection.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn explicit_application_and_adjustments_preserve_confirmed_grants(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -424,7 +424,7 @@ async fn explicit_application_and_adjustments_preserve_confirmed_grants(pool: Pg
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn last_active_administrator_cannot_be_demoted_or_replaced_by_equivalent_grants(
     pool: PgPool,
@@ -444,7 +444,7 @@ async fn last_active_administrator_cannot_be_demoted_or_replaced_by_equivalent_g
     assert_eq!(state(&pool, ids.org_id, ids.user_id).await.revision, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn unchanged_edit_preserves_identity_source_timestamp_and_revisions(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -478,7 +478,7 @@ async fn unchanged_edit_preserves_identity_source_timestamp_and_revisions(pool: 
     assert!(audit.get("change").unwrap().is_null());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn explicit_identity_changes_and_inactive_targets_do_not_change_activation(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -508,7 +508,7 @@ async fn explicit_identity_changes_and_inactive_targets_do_not_change_activation
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn reduced_administrator_and_stale_person_proposals_are_rejected(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -559,7 +559,7 @@ async fn relationship_ids(pool: &PgPool, org: Uuid) -> (Vec<Uuid>, Vec<Uuid>) {
     (projects, people)
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn simultaneous_losses_require_exact_confirmation_preserve_history_and_never_restore_links(
     pool: PgPool,
@@ -638,7 +638,7 @@ async fn simultaneous_losses_require_exact_confirmation_preserve_history_and_nev
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn read_only_retention_and_explicit_keep_project_access_preserve_independent_person_losses(
     pool: PgPool,
@@ -689,7 +689,7 @@ async fn read_only_retention_and_explicit_keep_project_access_preserve_independe
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn adjusted_template_reset_and_replay_after_deletion_use_explicit_intent(pool: PgPool) {
     use super::templates::{self, TemplateAction, TemplateCommand};
@@ -766,7 +766,7 @@ async fn adjusted_template_reset_and_replay_after_deletion_use_explicit_intent(p
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn all_grant_template_cannot_confer_identity_and_cross_command_keys_conflict(pool: PgPool) {
     use super::templates::{self, TemplateAction, TemplateCommand, TemplateCommandError};
@@ -818,7 +818,7 @@ async fn all_grant_template_cannot_confer_identity_and_cross_command_keys_confli
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn concurrent_self_demotions_leave_one_active_explicit_administrator(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -844,7 +844,7 @@ async fn concurrent_self_demotions_leave_one_active_explicit_administrator(pool:
     assert_eq!(count, Some(1));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn revocation_winning_gate_denies_new_and_replayed_changes(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -884,7 +884,7 @@ async fn revocation_winning_gate_denies_new_and_replayed_changes(pool: PgPool) {
     assert_eq!(state(&pool, org, user).await.revision, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn audit_failure_rolls_back_profile_and_both_relationship_sets(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -914,7 +914,7 @@ async fn audit_failure_rolls_back_profile_and_both_relationship_sets(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn existing_user_share_lock_does_not_block_profile_command(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -942,7 +942,7 @@ async fn existing_user_share_lock_does_not_block_profile_command(pool: PgPool) {
     tx.rollback().await.unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn management_schema_rejects_foreign_parents_self_links_and_duplicate_pairs(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -986,7 +986,7 @@ async fn management_schema_rejects_foreign_parents_self_links_and_duplicate_pair
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_actor_policy_tenant_and_target_checks_precede_mutation(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -1043,7 +1043,7 @@ async fn canonical_actor_policy_tenant_and_target_checks_precede_mutation(pool: 
     assert_eq!(state(&pool, ids.org_id, non_admin).await.revision, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn malformed_person_or_remaining_administrator_state_fails_closed(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -1072,7 +1072,7 @@ async fn malformed_person_or_remaining_administrator_state_fails_closed(pool: Pg
     assert_eq!(state(&pool, ids.org_id, ids.user_id).await.revision, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn stale_template_and_org_revision_and_exhausted_revisions_roll_back(pool: PgPool) {
     use super::templates::{self, TemplateAction, TemplateCommand};
@@ -1159,7 +1159,7 @@ async fn stale_template_and_org_revision_and_exhausted_revisions_roll_back(pool:
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invalid_confirmations_and_noncanonical_grants_are_not_silently_repaired(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -1191,7 +1191,7 @@ async fn invalid_confirmations_and_noncanonical_grants_are_not_silently_repaired
     assert_eq!(state(&pool, ids.org_id, user).await.revision, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn unchanged_and_unrelated_edits_do_not_clean_up_preexisting_incompatible_links(
     pool: PgPool,
@@ -1227,7 +1227,7 @@ async fn unchanged_and_unrelated_edits_do_not_clean_up_preexisting_incompatible_
     assert_eq!(relationship_ids(&pool, ids.org_id).await, links);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn recreated_relationship_invalidates_waiting_confirmation_without_partial_removal(
     pool: PgPool,

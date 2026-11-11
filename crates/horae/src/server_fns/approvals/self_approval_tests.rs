@@ -76,7 +76,7 @@ fn is_forbidden<T: std::fmt::Debug>(result: &Result<T, ServerFnError>) -> bool {
     )
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_manager_cannot_approve_their_own_submission(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -91,7 +91,7 @@ async fn a_manager_cannot_approve_their_own_submission(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_manager_cannot_reject_or_reopen_their_own_submission(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -106,7 +106,7 @@ async fn a_manager_cannot_reject_or_reopen_their_own_submission(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_bulk_approval_including_the_managers_own_week_changes_nothing(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -130,7 +130,7 @@ async fn a_bulk_approval_including_the_managers_own_week_changes_nothing(pool: P
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_manager_can_approve_someone_elses_submission(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -149,7 +149,7 @@ async fn a_manager_can_approve_someone_elses_submission(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn an_admin_can_approve_and_reopen_their_own_submission(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -167,7 +167,7 @@ async fn an_admin_can_approve_and_reopen_their_own_submission(pool: PgPool) {
     assert_eq!(states(&pool, own.id, entry).await, (None, EntryState::Open));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_demoted_admin_is_judged_by_their_current_role(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;

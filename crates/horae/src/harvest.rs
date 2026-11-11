@@ -907,7 +907,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn members_cannot_read_own_project_rates_or_cost_overrides(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Member).await;
         let id = insert_entry(&pool, &ids, ids.user_id, "Private costs").await;
@@ -945,7 +945,7 @@ mod tests {
         assert_eq!(entry.hours, Hours(60));
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn imported_legacy_rates_survive_retry_in_harvest_list_and_detail(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
@@ -1003,7 +1003,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn harvest_entry_rates_respect_selected_project_mode(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         let id = insert_entry(&pool, &ids, ids.user_id, "Selected rates").await;
@@ -1062,7 +1062,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn harvest_entry_rates_follow_the_cascade_and_frozen_invoice_line(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
         let id = insert_entry(&pool, &ids, ids.user_id, "Rates").await;
@@ -1149,7 +1149,7 @@ mod tests {
         assert_eq!(page.data["time_entries"][0].billable_rate, Some(eur(1234)));
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn harvest_marks_unbilled_non_billable_contexts_consistently(pool: PgPool) {
         for project_billable in [false, true] {
             let ids = seed(&pool, OrgRole::Manager).await;
@@ -1175,7 +1175,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn harvest_effective_minutes_match_sql_for_open_and_frozen_time(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
         let id = insert_entry(&pool, &ids, ids.user_id, "rounding").await;
@@ -1275,7 +1275,7 @@ mod tests {
         id
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_member_cannot_list_users(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Member).await;
         colleague(&pool, &ids).await;
@@ -1288,7 +1288,7 @@ mod tests {
         assert_eq!(status, StatusCode::FORBIDDEN);
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_manager_lists_billable_rates_and_only_an_admin_cost_rates(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
         let other = colleague(&pool, &ids).await;
@@ -1322,7 +1322,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_member_does_not_read_their_own_rates(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Member).await;
         sqlx::query!(
@@ -1339,7 +1339,7 @@ mod tests {
         assert_eq!((me.default_hourly_rate, me.cost_rate), (None, None));
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_member_sees_only_their_own_time_entries(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Member).await;
         let other = colleague(&pool, &ids).await;
@@ -1366,7 +1366,7 @@ mod tests {
         assert_eq!(page.total_entries, 1);
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_manager_sees_the_whole_org(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
         let other = colleague(&pool, &ids).await;
@@ -1385,7 +1385,7 @@ mod tests {
         assert_eq!(page.total_entries, 2);
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_member_cannot_filter_to_a_colleague(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Member).await;
         let other = colleague(&pool, &ids).await;
@@ -1403,7 +1403,7 @@ mod tests {
         assert_eq!(status, StatusCode::FORBIDDEN);
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_member_cannot_fetch_a_colleagues_entry(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Member).await;
         let other = colleague(&pool, &ids).await;

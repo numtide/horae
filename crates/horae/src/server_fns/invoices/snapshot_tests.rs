@@ -45,7 +45,7 @@ fn assert_denied(result: Result<i64, ServerFnError>) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn financial_snapshots_require_current_same_tenant_manager(pool: PgPool) {
     let ids = fee_tests::single_fee(&pool).await;

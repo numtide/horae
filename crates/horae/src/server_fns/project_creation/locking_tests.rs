@@ -64,7 +64,7 @@ impl Operation {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn every_project_entry_gates_before_actor_and_rechecks_revocation(pool: PgPool) {
     for operation in [

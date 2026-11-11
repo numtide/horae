@@ -69,7 +69,7 @@ async fn running_timer(pool: &PgPool, f: &Fixture, ran_for_minutes: i32) -> Uuid
     .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_day_holds_exactly_240_hours_and_no_single_entry_more(pool: PgPool) {
     let f = fixture(&pool).await;
     create(&pool, &f, DAY, 14_400).await.unwrap();
@@ -96,7 +96,7 @@ async fn a_day_holds_exactly_240_hours_and_no_single_entry_more(pool: PgPool) {
     assert_eq!(day_total(&pool, &f, NEXT_DAY.parse().unwrap()).await, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn entries_that_sum_past_240_hours_are_refused(pool: PgPool) {
     let f = fixture(&pool).await;
     create(&pool, &f, DAY, 10_000).await.unwrap();
@@ -140,7 +140,7 @@ async fn entries_that_sum_past_240_hours_are_refused(pool: PgPool) {
 
 /// A day stored over the limit before it existed can still be corrected
 /// downward, but never raised further.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_day_over_the_limit_can_be_lowered_but_not_raised(pool: PgPool) {
     let f = fixture(&pool).await;
     let (first, second) = (f.entry(&pool).await, f.entry(&pool).await);
@@ -179,7 +179,7 @@ async fn a_day_over_the_limit_can_be_lowered_but_not_raised(pool: PgPool) {
 
 /// Stopping is never refused, so a timer cannot be trapped running: it keeps
 /// what is left of the day and says what the limit cut.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn stopping_a_timer_keeps_only_the_rest_of_the_day(pool: PgPool) {
     let f = fixture(&pool).await;
     let today = Utc::now().date_naive();
@@ -225,7 +225,7 @@ async fn stopping_a_timer_keeps_only_the_rest_of_the_day(pool: PgPool) {
     assert_eq!(day_total(&pool, &f, today).await, 14_400);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn the_database_bounds_each_entry(pool: PgPool) {
     let f = fixture(&pool).await;
     let entry = f.entry(&pool).await;
@@ -250,7 +250,7 @@ async fn the_database_bounds_each_entry(pool: PgPool) {
 /// The trigger refuses only a new value over the limit: a legacy entry keeps
 /// its minutes through every other write, such as the long-timer sweep's
 /// claim, and may be lowered.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_legacy_entry_over_the_limit_can_change_anything_but_raise_its_minutes(pool: PgPool) {
     let f = fixture(&pool).await;
     let entry = f.entry(&pool).await;
@@ -302,7 +302,7 @@ async fn behind_day_lock<T>(
 
 /// Two writers on the same empty day queue on its lock, so exactly one of two
 /// 7,300-minute entries gets in.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn concurrent_writers_cannot_overshoot_a_day_together(pool: PgPool) {
     let f = fixture(&pool).await;
     let both = async { tokio::join!(create(&pool, &f, DAY, 7_300), create(&pool, &f, DAY, 7_300)) };
@@ -316,7 +316,7 @@ async fn concurrent_writers_cannot_overshoot_a_day_together(pool: PgPool) {
 /// Decreases wait for the day lock too, so they cannot land between another
 /// writer's before and after totals: a delete, and the day a reschedule or a
 /// reorder moves an entry off.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_delete_waits_for_the_day_lock(pool: PgPool) {
     let f = fixture(&pool).await;
     let entry_ids = vec![f.entry(&pool).await];
@@ -324,7 +324,7 @@ async fn a_delete_waits_for_the_day_lock(pool: PgPool) {
     behind_day_lock(&pool, &f, DAY, 1, delete).await.unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_reschedule_waits_for_its_source_day_lock(pool: PgPool) {
     let f = fixture(&pool).await;
     let move_off = f.execute(
@@ -339,7 +339,7 @@ async fn a_reschedule_waits_for_its_source_day_lock(pool: PgPool) {
     behind_day_lock(&pool, &f, DAY, 1, move_off).await.unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_reorder_waits_for_its_source_day_lock(pool: PgPool) {
     let f = fixture(&pool).await;
     let move_off = f.execute(
@@ -355,7 +355,7 @@ async fn a_reorder_waits_for_its_source_day_lock(pool: PgPool) {
 /// The widget stop locks the running entry before its day, like every other
 /// write: a writer holding the row and then taking the day lock does not
 /// deadlock with it.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_widget_stop_waits_for_the_entry_lock(pool: PgPool) {
     let f = fixture(&pool).await;
     let timer = running_timer(&pool, &f, 30).await;

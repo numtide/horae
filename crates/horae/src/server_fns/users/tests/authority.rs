@@ -3,7 +3,7 @@ use crate::server_fns::test_seed::{seed, wait_for_blocked};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
     use crate::models::project_creation::ProjectEditRequest;
@@ -185,7 +185,7 @@ async fn assert_unchanged(pool: &PgPool, org: Uuid, target: Uuid) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn revoked_administrator_cannot_create_change_roles_or_deactivate(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -221,7 +221,7 @@ async fn revoked_administrator_cannot_create_change_roles_or_deactivate(pool: Pg
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn foreign_and_unknown_actors_cannot_change_local_user_access(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -245,7 +245,7 @@ async fn foreign_and_unknown_actors_cannot_change_local_user_access(pool: PgPool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn user_mutations_wait_for_actor_revocation_and_recheck_after_commit(pool: PgPool) {
     for change in [Change::Create, Change::Role, Change::Active] {
@@ -292,7 +292,7 @@ async fn user_mutations_wait_for_actor_revocation_and_recheck_after_commit(pool:
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn user_mutations_recheck_revocation_after_waiting_for_organization_lock(pool: PgPool) {
     for change in [Change::Create, Change::Role, Change::Active] {
@@ -345,7 +345,7 @@ async fn user_mutations_recheck_revocation_after_waiting_for_organization_lock(p
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn active_administrator_can_create_change_roles_and_deactivate(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -374,7 +374,7 @@ async fn active_administrator_can_create_change_roles_and_deactivate(pool: PgPoo
     assert!(!updated.active);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn duplicate_creation_rolls_back_and_leaves_access_changes_usable(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -406,7 +406,7 @@ async fn duplicate_creation_rolls_back_and_leaves_access_changes_usable(pool: Pg
     assert_eq!(updated.org_role, OrgRole::Manager);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn access_transaction_holds_actor_authority_until_commit(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;

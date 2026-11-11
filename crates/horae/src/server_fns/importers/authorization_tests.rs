@@ -233,7 +233,7 @@ async fn user(pool: &PgPool, org_id: Uuid, role: OrgRole) -> Uuid {
 
 // Keep the HTTP matrix in one test: production AppState is initialized once per
 // process. Other importer tests use their own pools without that singleton.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     let owner = crate::server_fns::test_seed::seed(&pool, OrgRole::Admin).await;

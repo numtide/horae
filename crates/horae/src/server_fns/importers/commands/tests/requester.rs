@@ -38,7 +38,7 @@ async fn submit(
     .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn new_import_jobs_record_the_authorized_original_requester(pool: PgPool) {
     for operation in [Operation::Api, Operation::Csv] {
@@ -67,7 +67,7 @@ async fn another_admin(pool: &PgPool, org: Uuid) -> Uuid {
     id
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn waiting_duplicate_keeps_the_first_committed_requester(pool: PgPool) {
     for operation in [Operation::Api, Operation::Csv] {
@@ -123,7 +123,7 @@ async fn waiting_duplicate_keeps_the_first_committed_requester(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn duplicates_and_job_lifecycle_never_replace_or_invent_the_original_requester(pool: PgPool) {
     for operation in [Operation::Api, Operation::Csv] {
@@ -209,7 +209,7 @@ async fn duplicates_and_job_lifecycle_never_replace_or_invent_the_original_reque
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn original_requester_foreign_key_preserves_tenant_and_known_identity(pool: PgPool) {
     let (ids, job) = fixture(&pool).await;

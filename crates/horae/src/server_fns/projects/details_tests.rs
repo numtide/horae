@@ -5,7 +5,7 @@ use serial_test::serial;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn project_details_only_offer_task_rate_currency_to_current_managers(pool: PgPool) {
     for project_type in [
@@ -73,7 +73,7 @@ async fn project_details_only_offer_task_rate_currency_to_current_managers(pool:
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn project_details_and_tags_follow_current_progress_and_private_permissions(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -201,7 +201,7 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn unlinked_and_private_project_tags_do_not_leak_into_filters(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;

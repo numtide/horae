@@ -53,7 +53,7 @@ async fn save(
     update_org_branding_record(pool, org_id, actor_id, &expected, branding).await
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_save_edited_from_an_older_snapshot_is_refused_and_keeps_the_newer_values(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let opened = stored(&pool, ids.org_id).await;
@@ -85,7 +85,7 @@ async fn a_save_edited_from_an_older_snapshot_is_refused_and_keeps_the_newer_val
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_stored_value_too_long_to_print_does_not_block_saving_other_fields(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let overlong = "x".repeat(crate::models::organization::MAX_BRANDING_VALUE_BYTES + 1);
@@ -108,7 +108,7 @@ async fn a_stored_value_too_long_to_print_does_not_block_saving_other_fields(poo
     assert_eq!((changed, returned), (true, requested));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unchanged_branding_preserves_the_row(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let branding = default_branding();
@@ -122,7 +122,7 @@ async fn unchanged_branding_preserves_the_row(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn each_branding_field_changes_once_including_null_and_empty(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let mut fields = serde_json::to_value(default_branding()).unwrap();
@@ -202,7 +202,7 @@ async fn competing_edit(
     (result, stored(pool, ids.org_id).await.provider_name)
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_save_waiting_on_a_competing_edit_is_refused_whatever_it_requested(pool: PgPool) {
     for requested in [Some("Changed"), None] {
         let (result, name) = competing_edit(&pool, requested).await;
@@ -217,7 +217,7 @@ async fn a_save_waiting_on_a_competing_edit_is_refused_whatever_it_requested(poo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn missing_organization_is_not_an_unchanged_update(pool: PgPool) {
     let error = update_org_branding_record(
         &pool,
@@ -237,7 +237,7 @@ async fn missing_organization_is_not_an_unchanged_update(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn branding_requires_current_tenant_bound_authority_even_for_noops(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -280,7 +280,7 @@ async fn branding_requires_current_tenant_bound_authority_even_for_noops(pool: P
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn branding_rechecks_authority_after_the_organization_wait(pool: PgPool) {
     let run_pool = sqlx::postgres::PgPoolOptions::new()
@@ -358,7 +358,7 @@ async fn branding_rechecks_authority_after_the_organization_wait(pool: PgPool) {
     run_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn branding_rechecks_authority_after_an_actor_only_wait(pool: PgPool) {
     for deactivate in [false, true] {
@@ -407,7 +407,7 @@ async fn branding_rechecks_authority_after_an_actor_only_wait(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn branding_holds_actor_authority_until_its_write_commits(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -476,7 +476,7 @@ async fn branding_holds_actor_authority_until_its_write_commits(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn failed_branding_write_rolls_back_and_releases_authority(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -530,7 +530,7 @@ async fn failed_branding_write_rolls_back_and_releases_authority(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn branding_refuses_a_value_the_invoice_pdf_cannot_print(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let longest = "x".repeat(crate::models::organization::MAX_BRANDING_VALUE_BYTES);
@@ -562,7 +562,7 @@ async fn branding_refuses_a_value_the_invoice_pdf_cannot_print(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn detailed_permissions_leave_branding_to_managers_and_admins(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     sqlx::query!(
