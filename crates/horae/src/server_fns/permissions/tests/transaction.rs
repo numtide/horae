@@ -73,7 +73,7 @@ async fn assert_limits(connection: &mut PgConnection, default: &str, statement: 
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn lock_only_reads_bound_limits_and_commit_asynchronously(
     pool_opts: PgPoolOptions,
     connect_opts: PgConnectOptions,
@@ -111,7 +111,7 @@ async fn lock_only_reads_bound_limits_and_commit_asynchronously(
 
 /// Transactions that may write data never set the commit mode locally: they
 /// keep the connection's default, durable unless the server says otherwise.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn administration_transactions_bound_limits_and_commit_durably(
     pool_opts: PgPoolOptions,
     connect_opts: PgConnectOptions,

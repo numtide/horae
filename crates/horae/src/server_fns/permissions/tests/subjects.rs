@@ -1,7 +1,7 @@
 use super::*;
 use crate::server_fns::permissions::editor;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn subject_pages_preserve_all_local_identities_with_only_display_fields(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -72,7 +72,7 @@ async fn subject_pages_preserve_all_local_identities_with_only_display_fields(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn subject_cursor_is_only_a_bound_and_exact_page_has_no_continuation(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -120,7 +120,7 @@ async fn subject_cursor_is_only_a_bound_and_exact_page_has_no_continuation(pool:
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn subject_discovery_requires_current_explicit_identity_and_supported_policy(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -169,7 +169,7 @@ async fn subject_discovery_requires_current_explicit_identity_and_supported_poli
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn subject_discovery_rechecks_revocation_after_gate_wait_and_between_pages(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -218,7 +218,7 @@ async fn subject_discovery_rechecks_revocation_after_gate_wait_and_between_pages
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn subject_discovery_rechecks_direct_deactivation(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -245,7 +245,7 @@ async fn subject_discovery_rechecks_direct_deactivation(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn subject_discovery_cancellation_releases_connection_and_preserves_pool_defaults(
     pool: PgPool,

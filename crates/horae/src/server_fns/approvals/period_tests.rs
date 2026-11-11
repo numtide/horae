@@ -71,7 +71,7 @@ fn is_bad_request(result: &Result<Vec<ApprovalSummary>, ServerFnError>) -> bool 
     )
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_week_lists_only_its_own_organizations_approvals_starting_that_day(pool: PgPool) {
     let local = seed(&pool, OrgRole::Admin).await;
@@ -94,7 +94,7 @@ async fn a_week_lists_only_its_own_organizations_approvals_starting_that_day(poo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn the_status_filter_applies_within_the_week(pool: PgPool) {
     let local = seed(&pool, OrgRole::Admin).await;
@@ -112,7 +112,7 @@ async fn the_status_filter_applies_within_the_week(pool: PgPool) {
     assert!(pending.is_empty(), "{pending:?}");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn an_unusable_week_start_is_a_bad_request(pool: PgPool) {
     let local = seed(&pool, OrgRole::Admin).await;
@@ -138,7 +138,7 @@ async fn an_unusable_week_start_is_a_bad_request(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn approving_a_week_leaves_the_previous_week_pending(pool: PgPool) {
     let local = seed(&pool, OrgRole::Admin).await;
@@ -159,7 +159,7 @@ async fn approving_a_week_leaves_the_previous_week_pending(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn reopening_a_week_leaves_the_next_week_approved(pool: PgPool) {
     let local = seed(&pool, OrgRole::Admin).await;

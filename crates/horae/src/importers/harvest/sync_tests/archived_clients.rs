@@ -6,7 +6,7 @@
 
 use super::*;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn api_new_active_project_of_an_archived_client_fails_as_a_record(pool: PgPool) {
     let org = setup(&pool).await;
     let client = Uuid::now_v7();

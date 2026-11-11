@@ -16,7 +16,7 @@ const HEADER: &str = "Date,Client,Project,Task,Hours,Email,Notes\n";
 // person's day stay within its 240-hour limit.
 const ROW: &str = "2026-01-15,Acme,Website,Design,0.02,dev@acme.com,kickoff\n";
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_csv_waits_for_input_without_an_open_transaction(pool: PgPool) {
     use super::super::csv_source::import_body_with_lease;
     use crate::jobs;
@@ -102,7 +102,7 @@ async fn durable_csv_waits_for_input_without_an_open_transaction(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_csv_discards_incomplete_preparation_and_resumes_its_checkpoint(pool: PgPool) {
     use super::super::csv_source::import_body_with_lease;
     use crate::jobs;
@@ -173,7 +173,7 @@ async fn durable_csv_discards_incomplete_preparation_and_resumes_its_checkpoint(
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_csv_report_metadata_is_bounded_after_recovery(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -273,37 +273,37 @@ async fn entry_count(pool: &PgPool, org: Uuid) -> i64 {
         .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_csv_resumes_committed_batches_without_recounting_duplicate_rows(pool: PgPool) {
     interrupted_csv_batches(pool, BatchInterruption::Crash, ImportMode::Commit).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_csv_cancel_preserves_its_completed_batches_for_manual_retry(pool: PgPool) {
     interrupted_csv_batches(pool, BatchInterruption::Cancel, ImportMode::Commit).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_csv_reclaimed_lease_cannot_commit_the_next_batch(pool: PgPool) {
     interrupted_csv_batches(pool, BatchInterruption::Reclaim, ImportMode::Commit).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_csv_preview_resumes_after_a_crash_without_recounting_rows(pool: PgPool) {
     interrupted_csv_batches(pool, BatchInterruption::Crash, ImportMode::DryRun).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_csv_preview_cancel_preserves_simulation_for_manual_retry(pool: PgPool) {
     interrupted_csv_batches(pool, BatchInterruption::Cancel, ImportMode::DryRun).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_csv_preview_rejects_a_stale_next_batch(pool: PgPool) {
     interrupted_csv_batches(pool, BatchInterruption::Reclaim, ImportMode::DryRun).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_csv_preview_matches_existing_and_new_rows_with_one_connection(pool: PgPool) {
     use super::super::csv_source::import_body_with_lease;
     use crate::jobs;
@@ -396,7 +396,7 @@ enum BatchInterruption {
     Reclaim,
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_csv_preview_crosses_batch_boundaries_without_committing_domain_data(pool: PgPool) {
     use super::super::csv_source::import_body_with_lease;
     use crate::jobs;
@@ -618,7 +618,7 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption, 
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn csv_applies_before_eof_but_transport_failure_rolls_back_everything(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -668,7 +668,7 @@ async fn csv_applies_before_eof_but_transport_failure_rolls_back_everything(pool
     assert_eq!(retry.summary.time_entries.created, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn csv_preview_errors_and_repeated_rows_match_commit_and_reimport(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -705,7 +705,7 @@ async fn csv_preview_errors_and_repeated_rows_match_commit_and_reimport(pool: Pg
     assert_eq!(entry_count(&pool, org).await, 2);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn cancelling_a_csv_waiting_for_more_bytes_releases_its_session(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -757,7 +757,7 @@ async fn cancelling_a_csv_waiting_for_more_bytes_releases_its_session(pool: PgPo
     single.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_csv_cancel_joins_parser_and_preserves_committed_rows(pool: PgPool) {
     use super::super::csv_source::import_body_with_lease;
     use crate::jobs;
@@ -862,7 +862,7 @@ async fn durable_csv_cancel_joins_parser_and_preserves_committed_rows(pool: PgPo
     assert!(completed.report.is_some());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_csv_stale_commit_is_fenced_without_a_heartbeat(pool: PgPool) {
     use super::super::csv_source::import_body_with_lease;
     use crate::jobs;
@@ -986,25 +986,25 @@ fn scale_body(records: u64, parents: u64) -> Body {
     )))
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[ignore = "100,000-row CSV measurement; run explicitly with --release --nocapture"]
 async fn measure_csv_streaming_100k(pool: PgPool) {
     measured_csv_imports(pool, false, 1).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[ignore = "100,000-row durable CSV measurement; run explicitly with --release --nocapture"]
 async fn measure_csv_durable_100k(pool: PgPool) {
     measured_csv_imports(pool, true, 1).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[ignore = "100,000-row CSV with 5,000 parent sets; run explicitly with --release --nocapture"]
 async fn measure_csv_streaming_large_catalog_100k(pool: PgPool) {
     measured_csv_imports(pool, false, 5_000).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[ignore = "100,000-row durable CSV with 5,000 parent sets; run explicitly with --release --nocapture"]
 async fn measure_csv_durable_large_catalog_100k(pool: PgPool) {
     measured_csv_imports(pool, true, 5_000).await;
@@ -1202,7 +1202,7 @@ async fn measured_csv_job(pool: &PgPool, org: Uuid, body: Body, mode: ImportMode
     unreachable!("the second attempt returns its completed report")
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn csv_measurement_recovers_a_complete_batch_without_recounting(pool: PgPool) {
     let pool = csv_measurement_pool(&pool).await;
     assert_eq!(
@@ -1240,7 +1240,7 @@ async fn csv_measurement_recovers_a_complete_batch_without_recounting(pool: PgPo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn csv_sql_backpressure_stops_reading_later_input_rows(pool: PgPool) {
     use std::sync::atomic::{AtomicUsize, Ordering};
     let org = seed_org(&pool).await;

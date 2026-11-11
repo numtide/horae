@@ -4,7 +4,7 @@ use crate::server_fns::test_seed::seed;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn project_rate_sql_matches_rust_for_missing_zero_and_present_sources(pool: PgPool) {
     use horae_core::project::RateMode;
 
@@ -46,7 +46,7 @@ async fn project_rate_sql_matches_rust_for_missing_zero_and_present_sources(pool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn project_rate_helper_has_no_public_execute_grant(pool: PgPool) {
     let public_execute = sqlx::query_scalar!(
         r#"SELECT EXISTS (
@@ -97,7 +97,7 @@ async fn project_with_assignment(pool: &PgPool) -> (User, Uuid) {
     (viewer, ids.project_id)
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn members_see_the_project_team_without_rates(pool: PgPool) {
     let (viewer, project) = project_with_assignment(&pool).await;
     sqlx::query!(
@@ -120,7 +120,7 @@ async fn members_see_the_project_team_without_rates(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn managers_and_admins_see_the_project_team(pool: PgPool) {
     let (mut viewer, project) = project_with_assignment(&pool).await;
     for role in [OrgRole::Manager, OrgRole::Admin] {
@@ -141,7 +141,7 @@ async fn managers_and_admins_see_the_project_team(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn assignments_are_scoped_to_the_viewers_organization(pool: PgPool) {
     let (mut viewer, project) = project_with_assignment(&pool).await;
     let foreign = seed(&pool, OrgRole::Admin).await;

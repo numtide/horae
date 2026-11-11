@@ -95,19 +95,19 @@ async fn composed_edit(pool: &PgPool, commit: bool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_and_manager_changes_commit_with_the_same_receipt(pool: PgPool) {
     composed_edit(&pool, true).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_rollback_discards_managers_revision_and_receipt(pool: PgPool) {
     composed_edit(&pool, false).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn delegation_reuses_editor_gate_without_upgrading_past_foreign_keys(pool: PgPool) {
     let ids = fixture(&pool).await;

@@ -70,7 +70,7 @@ async fn project_task_activity_migration_preserves_legacy_and_archives_canonical
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn global_restore_does_not_restore_project_tracking_and_archive_invalidates_editor(
     pool: PgPool,
@@ -132,7 +132,7 @@ async fn global_restore_does_not_restore_project_tracking_and_archive_invalidate
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn activity_separates_session_rates_from_events_and_preserves_noops(pool: PgPool) {
     let (ids, _) = fixture(
@@ -200,7 +200,7 @@ async fn activity_separates_session_rates_from_events_and_preserves_noops(pool: 
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn activity_rejects_unavailable_authority_even_for_noops(pool: PgPool) {
     for case in [
@@ -284,7 +284,7 @@ async fn activity_rejects_unavailable_authority_even_for_noops(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn activity_observes_revocation_after_organization_wait(pool: PgPool) {
     let (ids, _) = fixture(
@@ -338,7 +338,7 @@ async fn activity_observes_revocation_after_organization_wait(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn archive_waits_for_existing_time_writer_and_observes_committed_timer(pool: PgPool) {
     let (ids, _) = fixture(
@@ -385,7 +385,7 @@ async fn archive_waits_for_existing_time_writer_and_observes_committed_timer(poo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn archive_excludes_new_tracking_writers_before_task_lock_and_commit(pool: PgPool) {
     let (ids, _) = fixture(

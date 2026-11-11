@@ -68,7 +68,7 @@ pub(crate) async fn complete_cli_api_fixture(
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn exact_api_decimals_survive_preview_commit_and_reimport(pool: PgPool) {
     let org = setup(&pool).await;
     let mut source = valid_data();
@@ -111,7 +111,7 @@ async fn exact_api_decimals_survive_preview_commit_and_reimport(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn out_of_range_api_decimals_error_per_row_and_leave_retry_watermark(pool: PgPool) {
     let org = setup(&pool).await;
     let mut source = valid_data();
@@ -195,7 +195,7 @@ fn day(day: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 1, day, 0, 0, 0).unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn api_requires_email_even_when_full_name_matches(pool: PgPool) {
     let org = setup(&pool).await;
     let mut source = valid_data();
@@ -221,7 +221,7 @@ async fn api_requires_email_even_when_full_name_matches(pool: PgPool) {
     assert_eq!(retry.summary.time_entries.created, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn api_rejects_ambiguous_email_without_advancing_watermark(pool: PgPool) {
     let org = setup(&pool).await;
     add_user(&pool, org, "KNOWN@EXAMPLE.COM").await;
@@ -239,7 +239,7 @@ async fn api_rejects_ambiguous_email_without_advancing_watermark(pool: PgPool) {
     assert_eq!(watermark(&pool, org).await, json!({}));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn parent_only_api_import_creates_catalog_and_reimport_skips_it(pool: PgPool) {
     let org = setup(&pool).await;
     let mut source = valid_data();
@@ -278,7 +278,7 @@ async fn parent_only_api_import_creates_catalog_and_reimport_skips_it(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn parent_only_dry_run_previews_without_persisting_catalog(pool: PgPool) {
     let org = setup(&pool).await;
     let mut source = valid_data();
@@ -300,7 +300,7 @@ async fn parent_only_dry_run_previews_without_persisting_catalog(pool: PgPool) {
     assert_eq!(preview.summary, committed.summary);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn parent_catalog_preserves_metadata_and_counts_each_entity_once(pool: PgPool) {
     let org = setup(&pool).await;
     let mut source = valid_data();
@@ -401,7 +401,7 @@ async fn parent_catalog_preserves_metadata_and_counts_each_entity_once(pool: PgP
     assert_eq!(stamp, Some(day(1)));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invalid_parent_blocks_dependent_time_but_other_catalog_records_survive(pool: PgPool) {
     let org = setup(&pool).await;
     let mut source = valid_data();
@@ -458,7 +458,7 @@ async fn invalid_parent_blocks_dependent_time_but_other_catalog_records_survive(
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn missing_client_fallback_and_failed_project_savepoints_do_not_poison_cache(pool: PgPool) {
     let org = setup(&pool).await;
     let source = HarvestData {
@@ -504,7 +504,7 @@ async fn missing_client_fallback_and_failed_project_savepoints_do_not_poison_cac
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn failed_client_propagates_to_project_and_entry_without_placeholder_records(pool: PgPool) {
     let org = setup(&pool).await;
     let mut source = valid_data();
@@ -537,7 +537,7 @@ async fn failed_client_propagates_to_project_and_entry_without_placeholder_recor
     assert_eq!(watermark(&pool, org).await, json!({}));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn disconnect_and_reconnect_preserves_imported_records_and_exact_identity(pool: PgPool) {
     let org = setup(&pool).await;
     let first = apply_api_data(&pool, org, "USD", ImportMode::Commit, &valid_data(), day(4))
@@ -587,7 +587,7 @@ async fn disconnect_and_reconnect_preserves_imported_records_and_exact_identity(
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn refreshed_tokens_survive_a_dry_run_rollback_in_the_same_import_session(pool: PgPool) {
     let org = setup(&pool).await;
     let mut connection = lock_import(&pool, org).await.unwrap();
@@ -706,7 +706,7 @@ fn valid_data() -> HarvestData {
     data
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn failed_rows_are_available_to_the_next_incremental_retry(pool: PgPool) {
     let org = setup(&pool).await;
     credentials::advance_watermark(&pool, org, &[(EntityType::TimeEntry, day(1))])
@@ -764,7 +764,7 @@ async fn failed_rows_are_available_to_the_next_incremental_retry(pool: PgPool) {
     assert_eq!(third.summary.time_entries.skipped, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn empty_sync_does_not_invent_a_watermark(pool: PgPool) {
     let org = setup(&pool).await;
     apply_api_data(
@@ -797,7 +797,7 @@ async fn empty_sync_does_not_invent_a_watermark(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn successful_sync_only_marks_the_incrementally_fetched_entity(pool: PgPool) {
     let org = setup(&pool).await;
     credentials::advance_watermark(&pool, org, &[(EntityType::Client, day(1))])
@@ -814,7 +814,7 @@ async fn successful_sync_only_marks_the_incrementally_fetched_entity(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn watermark_never_passes_the_start_of_capture(pool: PgPool) {
     let org = setup(&pool).await;
     apply_api_data(&pool, org, "USD", ImportMode::Commit, &valid_data(), day(2))
@@ -826,7 +826,7 @@ async fn watermark_never_passes_the_start_of_capture(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn missing_source_timestamp_keeps_the_previous_watermark(pool: PgPool) {
     let org = setup(&pool).await;
     credentials::advance_watermark(&pool, org, &[(EntityType::TimeEntry, day(1))])
@@ -846,7 +846,7 @@ async fn missing_source_timestamp_keeps_the_previous_watermark(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn dry_run_leaves_data_provenance_and_watermark_unchanged(pool: PgPool) {
     let org = setup(&pool).await;
     let report = apply_api_data(&pool, org, "USD", ImportMode::DryRun, &valid_data(), day(4))
@@ -865,7 +865,7 @@ async fn dry_run_leaves_data_provenance_and_watermark_unchanged(pool: PgPool) {
     assert_eq!((counts.entries, counts.mappings), (0, 0));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn watermark_write_failure_rolls_back_imported_data(pool: PgPool) {
     let org = setup(&pool).await;
     sqlx::query!("ALTER TABLE harvest_credentials ADD CONSTRAINT reject_sync_marker CHECK (synced_watermark = '{}'::jsonb)")

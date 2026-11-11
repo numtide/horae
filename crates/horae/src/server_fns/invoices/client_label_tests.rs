@@ -22,7 +22,7 @@ async fn invoice_fixture(pool: &PgPool) -> (SeedIds, InvoiceWithLines) {
     (ids, invoice)
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_labels_preserve_names_and_history_for_inactive_clients(pool: PgPool) {
     let (ids, original) = invoice_fixture(&pool).await;

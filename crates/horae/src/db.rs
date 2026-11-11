@@ -48,8 +48,13 @@ pub async fn create_pool(database_url: &str) -> anyhow::Result<PgPool> {
     Ok(pool)
 }
 
+/// The embedded migrations. `#[sqlx::test]` takes this as
+/// `migrator = "crate::db::MIGRATOR"`: given a path instead, it would paste
+/// every migration's SQL into each of the ~1,300 tests it expands.
+pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
+
 pub async fn run_migrations(pool: &PgPool) -> anyhow::Result<()> {
-    sqlx::migrate!("./migrations").run(pool).await?;
+    MIGRATOR.run(pool).await?;
     crate::jobs::report::upgrade_legacy_reports(pool).await?;
     sqlx::query!(
         "ALTER TABLE horae_jobs VALIDATE CONSTRAINT horae_jobs_report_budget, \
@@ -242,7 +247,7 @@ mod tests {
 
     /// `migrate reset --confirm` promises a reset, so assert data is actually
     /// gone afterwards and the schema is back.
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn reset_empties_the_database_and_reapplies_migrations(pool: sqlx::PgPool) {
         sqlx::query!(
             "INSERT INTO organizations (id, name) VALUES ($1, 'Doomed')",

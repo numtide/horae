@@ -13,7 +13,7 @@ async fn task_count(pool: &PgPool, org_id: Uuid) -> i64 {
         .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn initial_task_rate_requires_global_financial_and_task_authority(pool: PgPool) {
     for grants in [
@@ -62,7 +62,7 @@ async fn initial_task_rate_requires_global_financial_and_task_authority(pool: Pg
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn initial_task_rate_commits_with_service_payload(pool: PgPool) {
     let (ids, _) = fixture(
@@ -114,7 +114,7 @@ async fn initial_task_rate_commits_with_service_payload(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn initial_task_rate_rechecks_financial_authority_and_currency_after_wait(pool: PgPool) {
     for change_currency in [false, true] {
@@ -188,7 +188,7 @@ async fn initial_task_rate_rechecks_financial_authority_and_currency_after_wait(
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_edit_authority_does_not_create_global_tasks(pool: PgPool) {
     let (ids, _) = fixture(
@@ -217,7 +217,7 @@ async fn project_edit_authority_does_not_create_global_tasks(pool: PgPool) {
     assert_eq!(task_count(&pool, ids.org_id).await, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_creation_fails_closed_for_unavailable_actor_permissions(pool: PgPool) {
     for invalid in ["inactive", "missing", "unknown_grant", "unknown_catalog"] {
@@ -282,7 +282,7 @@ async fn task_creation_fails_closed_for_unavailable_actor_permissions(pool: PgPo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_creation_rechecks_revoked_grants_after_organization_wait(pool: PgPool) {
     let (ids, _) = fixture(
@@ -342,7 +342,7 @@ async fn task_creation_rechecks_revoked_grants_after_organization_wait(pool: PgP
     assert_eq!(task_count(&pool, ids.org_id).await, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn global_task_creation_accepts_current_grant_without_legacy_manager(pool: PgPool) {
     let (ids, _) = fixture(
@@ -367,7 +367,7 @@ async fn global_task_creation_accepts_current_grant_without_legacy_manager(pool:
     assert!(task.default_rate_cents.is_none());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn global_task_creation_does_not_inherit_legacy_administrator_authority(pool: PgPool) {
     let (ids, _) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
@@ -397,7 +397,7 @@ async fn global_task_creation_does_not_inherit_legacy_administrator_authority(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn global_task_creation_rejects_unknown_policy_without_inserting(pool: PgPool) {
     let (ids, _) = fixture(

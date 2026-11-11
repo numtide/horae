@@ -7,7 +7,7 @@ fn unconfigured_sql_never_falls_back_to_application_state() {
     assert!(result.unwrap_err().contains("plugin SQL is disabled"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn select_cannot_write_or_gain_application_privileges(pool: sqlx::PgPool) {
     let reader = Reader::new(&pool).await;
     let writer = sqlx::query_scalar!(r#"SELECT current_user AS "name!""#)
@@ -50,7 +50,7 @@ async fn select_cannot_write_or_gain_application_privileges(pool: sqlx::PgPool) 
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn query_results_are_bounded_without_silent_truncation(pool: sqlx::PgPool) {
     let reader = Reader::new(&pool).await;
     let boundary = execute_db_query(&reader.pool, "SELECT generate_series(1,1000) AS n", &[]).await;
@@ -79,7 +79,7 @@ async fn query_results_are_bounded_without_silent_truncation(pool: sqlx::PgPool)
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn wasm_host_uses_the_restricted_connection_on_a_current_thread_runtime(pool: sqlx::PgPool) {
     let reader = Reader::new(&pool).await;
     let database = reader.database().await;
@@ -122,7 +122,7 @@ async fn wasm_host_uses_the_restricted_connection_on_a_current_thread_runtime(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn query_discards_session_advisory_locks(pool: sqlx::PgPool) {
     let reader = Reader::new(&pool).await;
     let rows = execute_db_query(

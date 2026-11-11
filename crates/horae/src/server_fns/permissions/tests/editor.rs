@@ -12,7 +12,7 @@ fn draft(request: &ProfileCommand) -> ProfileDraft {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_loss_names_cover_only_current_outgoing_effects(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -91,7 +91,7 @@ async fn editor_loss_names_cover_only_current_outgoing_effects(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_preview_matches_saved_effects_without_writing(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -178,7 +178,7 @@ async fn editor_preview_matches_saved_effects_without_writing(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_noop_and_last_admin_proposals_are_truthful(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -197,7 +197,7 @@ async fn editor_noop_and_last_admin_proposals_are_truthful(pool: PgPool) {
     assert_eq!(state(&pool, ids.org_id, ids.user_id).await.revision, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn every_builtin_preview_matches_its_actual_save(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -226,7 +226,7 @@ async fn every_builtin_preview_matches_its_actual_save(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_denies_wrong_authority_policy_and_foreign_targets(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -268,7 +268,7 @@ async fn editor_denies_wrong_authority_policy_and_foreign_targets(pool: PgPool) 
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_direct_actor_deactivation_wins_preview_and_load(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -304,7 +304,7 @@ async fn editor_direct_actor_deactivation_wins_preview_and_load(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn template_deletion_preview_preserves_people_and_fences_its_affected_set(pool: PgPool) {
     use crate::models::permission_editor::ProfileSource;

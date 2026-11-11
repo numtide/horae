@@ -24,7 +24,7 @@ async fn legacy_csv_job(pool: &sqlx::PgPool, org: Uuid) -> Uuid {
     id
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn report_fragments_survive_until_the_owning_job_expires(pool: sqlx::PgPool) {
     let org_id = Uuid::now_v7();
@@ -848,7 +848,7 @@ async fn legacy_converter_gate_allows_a_job_locked_workers_chunk_foreign_keys(po
 
 /// A clean import of an account whose Harvest ids collide often has nothing to
 /// archive; its checkpoint must still save, with the notices bounded.
-#[sqlx::test]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_report_with_notices_and_people_but_no_errors_checkpoints(pool: sqlx::PgPool) {
     let org_id = Uuid::now_v7();

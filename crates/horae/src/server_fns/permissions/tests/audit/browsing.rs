@@ -30,7 +30,7 @@ async fn receipts(pool: &PgPool, ids: &SeedIds, count: i64) -> Vec<Uuid> {
     records
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn history_pages_scope_before_limit_and_use_stable_exclusive_timestamp_id_bounds(
     pool: PgPool,
@@ -124,7 +124,7 @@ async fn history_pages_scope_before_limit_and_use_stable_exclusive_timestamp_id_
     assert!(empty.entries.is_empty() && empty.next_after.is_none());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn history_page_rejects_malformed_history_without_partial_success(pool: PgPool) {
     let ids = fixture(&pool, true).await;
@@ -149,7 +149,7 @@ async fn history_page_rejects_malformed_history_without_partial_success(pool: Pg
     assert_unlocked(&pool, &ids).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn history_page_reauthorizes_empty_and_continuation_requests_and_binds_requester(
     pool: PgPool,
@@ -204,7 +204,7 @@ async fn history_page_reauthorizes_empty_and_continuation_requests_and_binds_req
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn history_page_waits_for_revocation_commit_or_rollback_at_each_gate(pool: PgPool) {
     for direct_activity in [false, true] {
@@ -256,7 +256,7 @@ async fn history_page_waits_for_revocation_commit_or_rollback_at_each_gate(pool:
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn admitted_history_page_finishes_before_revocation_at_each_gate(pool: PgPool) {
     for direct_activity in [false, true] {
@@ -317,7 +317,7 @@ async fn admitted_history_page_finishes_before_revocation_at_each_gate(pool: PgP
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn cancelling_history_page_releases_both_authority_gates(pool: PgPool) {
     let ids = fixture(&pool, true).await;

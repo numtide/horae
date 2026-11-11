@@ -75,7 +75,7 @@ fn assert_status(result: Result<Value, ServerFnError>, status: u16) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_snapshots_preserve_rows_and_override_inherited_read_only(pool: PgPool) {
     let case = Case::new(&pool).await;
@@ -137,7 +137,7 @@ async fn editor_snapshots_preserve_rows_and_override_inherited_read_only(pool: P
     reader_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_snapshots_deny_winning_legacy_revocation(pool: PgPool) {
     for reader in [EditorRead::Load, EditorRead::Review] {
@@ -216,7 +216,7 @@ async fn editor_snapshots_deny_winning_legacy_revocation(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_snapshots_refresh_after_organization_row_change_without_rebasing_edits(
     pool: PgPool,
@@ -267,7 +267,7 @@ async fn editor_snapshots_refresh_after_organization_row_change_without_rebasing
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_snapshots_retain_authority_and_release_cancelled_reads(pool: PgPool) {
     let reader_pool = sqlx::postgres::PgPoolOptions::new()
@@ -375,7 +375,7 @@ async fn editor_snapshots_retain_authority_and_release_cancelled_reads(pool: PgP
     reader_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_snapshots_keep_invoice_metadata_revision_and_lines_together(pool: PgPool) {
     for reader in [EditorRead::Load, EditorRead::Review] {

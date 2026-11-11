@@ -59,7 +59,7 @@ async fn fixture(pool: &PgPool) -> (SeedIds, User) {
     (ids, viewer)
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_project_filter_preserves_progress_access_and_rate_redaction(pool: PgPool) {
     let (ids, viewer) = fixture(&pool).await;
     let foreign = seed(&pool, OrgRole::Admin).await;
@@ -156,7 +156,7 @@ async fn client_project_filter_preserves_progress_access_and_rate_redaction(pool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn private_progress_does_not_prevent_tracking_or_reveal_financial_fields(pool: PgPool) {
     let (ids, viewer) = fixture(&pool).await;
     assert!(
@@ -215,7 +215,7 @@ async fn private_progress_does_not_prevent_tracking_or_reveal_financial_fields(p
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn legacy_members_retain_progress_without_new_settings(pool: PgPool) {
     let (ids, viewer) = fixture(&pool).await;
     sqlx::query!(
@@ -240,7 +240,7 @@ async fn legacy_members_retain_progress_without_new_settings(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn project_members_and_leads_receive_progress_without_rates(pool: PgPool) {
     let (ids, viewer) = fixture(&pool).await;
     for role in [
@@ -285,7 +285,7 @@ async fn project_members_and_leads_receive_progress_without_rates(pool: PgPool) 
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn revoked_membership_preserves_only_own_historical_tracking_identity(pool: PgPool) {
     let (ids, viewer) = fixture(&pool).await;
     sqlx::query!(
@@ -338,7 +338,7 @@ async fn revoked_membership_preserves_only_own_historical_tracking_identity(pool
     assert!(tasks[0].default_rate_cents.is_none());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn project_reads_use_current_authority_and_reject_foreign_scope(pool: PgPool) {
     let (ids, mut viewer) = fixture(&pool).await;
     viewer.org_role = OrgRole::Admin;
@@ -417,7 +417,7 @@ async fn project_reads_use_current_authority_and_reject_foreign_scope(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn outsiders_and_inactive_viewers_have_no_project_reads(pool: PgPool) {
     let (ids, viewer) = fixture(&pool).await;
     // Remove both independent identity grants, then restore the assignment for

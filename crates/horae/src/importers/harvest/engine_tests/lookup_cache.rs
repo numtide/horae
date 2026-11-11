@@ -100,7 +100,7 @@ fn cold_query_callsite_on_untraced_thread_is_still_captured() {
     assert_eq!(queries.0.lock().unwrap().users, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn repeated_rows_resolve_each_user_and_project_task_once(pool: PgPool) {
     let mut measurements = Vec::new();
     for (source, name_only) in [
@@ -157,7 +157,7 @@ async fn repeated_rows_resolve_each_user_and_project_task_once(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn rolled_back_row_does_not_cache_user_or_project_task(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@example.com").await;
@@ -187,7 +187,7 @@ async fn rolled_back_row_does_not_cache_user_or_project_task(pool: PgPool) {
     assert_eq!(count(&pool, "project_tasks").await, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn cached_project_task_still_validates_each_rows_rate(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@example.com").await;
@@ -209,7 +209,7 @@ async fn cached_project_task_still_validates_each_rows_rate(pool: PgPool) {
     assert_eq!((counts.releases, counts.rollbacks), (2, 1));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn cached_email_and_full_name_do_not_share_a_namespace(pool: PgPool) {
     let org = seed_org(&pool).await;
     let email_user = seed_user(&pool, org, "dev@example.com").await;
@@ -244,7 +244,7 @@ async fn cached_email_and_full_name_do_not_share_a_namespace(pool: PgPool) {
     assert!(assigned.contains(&name_user));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn new_run_rechecks_previously_cached_user_for_ambiguity(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@example.com").await;
@@ -270,7 +270,7 @@ async fn new_run_rechecks_previously_cached_user_for_ambiguity(pool: PgPool) {
     assert_eq!(count(&pool, "time_entries").await, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn project_task_cache_distinguishes_both_sides_of_the_link(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@example.com").await;

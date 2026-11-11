@@ -101,17 +101,17 @@ async fn concurrent_links(pool: &PgPool, subjects: [&str; 2]) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn different_subjects_cannot_both_claim_an_unlinked_account(pool: PgPool) {
     concurrent_links(&pool, ["subject-a", "subject-b"]).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn simultaneous_logins_with_the_same_subject_are_allowed(pool: PgPool) {
     concurrent_links(&pool, ["same-subject", "same-subject"]).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn deactivation_during_first_link_denies_login(pool: PgPool) {
     let (id, email) = account(&pool).await;
     let mut blocker = pool.begin().await.unwrap();
@@ -139,7 +139,7 @@ async fn deactivation_during_first_link_denies_login(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn existing_subject_wins_over_another_accounts_email(pool: PgPool) {
     let (id, email) = account(&pool).await;
     let (_, other_email) = account(&pool).await;
@@ -149,7 +149,7 @@ async fn existing_subject_wins_over_another_accounts_email(pool: PgPool) {
     assert_eq!(sign_in(&pool, &identity).await.unwrap().unwrap().id, id);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unverified_email_cannot_link_an_account(pool: PgPool) {
     let (_, email) = account(&pool).await;
     let identity = identity(ISSUER, "unverified-subject", Some(email), false);
@@ -179,7 +179,7 @@ async fn bind(pool: &PgPool, id: Uuid, issuer: Option<&str>, subject: &str) {
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn sign_in_resolves_only_the_issuer_and_subject_pair(pool: PgPool) {
     let (id, _) = account(&pool).await;
     bind(&pool, id, Some(ISSUER), "pair-subject").await;
@@ -198,7 +198,7 @@ async fn sign_in_resolves_only_the_issuer_and_subject_pair(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn verified_email_binding_records_the_tokens_issuer(pool: PgPool) {
     let (id, email) = account(&pool).await;
     let first = identity(
@@ -217,7 +217,7 @@ async fn verified_email_binding_records_the_tokens_issuer(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn legacy_binding_is_denied_without_adopting_an_issuer(pool: PgPool) {
     let (id, email) = account(&pool).await;
     bind(&pool, id, None, "legacy-subject").await;
@@ -240,7 +240,7 @@ async fn legacy_binding_is_denied_without_adopting_an_issuer(pool: PgPool) {
     assert_eq!(sign_in(&pool, &token).await.unwrap().unwrap().id, id);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn held_subject_with_another_accounts_verified_email_changes_nothing(pool: PgPool) {
     for holder_issuer in [None, Some("https://other.example")] {
         let (holder, _) = account(&pool).await;

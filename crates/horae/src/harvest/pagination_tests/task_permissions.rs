@@ -2,7 +2,7 @@ use super::project_permissions::{canonical, selection};
 use super::*;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_api_uses_canonical_catalog_scope_for_count_list_and_direct_id(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::TaskReadAll]).await;
@@ -12,7 +12,7 @@ async fn task_api_uses_canonical_catalog_scope_for_count_list_and_direct_id(pool
     assert!(detail.get("default_hourly_rate").is_none());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_api_does_not_inherit_legacy_admin_or_tracking_identity(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Admin, &[]).await;
@@ -30,7 +30,7 @@ async fn task_api_does_not_inherit_legacy_admin_or_tracking_identity(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_api_rechecks_global_rate_access_independently_of_catalog(pool: PgPool) {
     let (ids, app) = canonical(
@@ -60,7 +60,7 @@ async fn task_api_rechecks_global_rate_access_independently_of_catalog(pool: PgP
     assert!(body["tasks"][0].get("default_hourly_rate").is_none());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_api_filters_archived_tasks_and_preserves_total_past_last_page(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::TaskReadAll]).await;
@@ -83,7 +83,7 @@ async fn task_api_filters_archived_tasks_and_preserves_total_past_last_page(pool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_api_rejects_unknown_policy_before_empty_or_direct_results(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Admin, &[]).await;
@@ -102,7 +102,7 @@ async fn task_api_rejects_unknown_policy_before_empty_or_direct_results(pool: Pg
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_api_rechecks_catalog_and_financial_grants_after_authority_wait(pool: PgPool) {
     for detail in [false, true] {
@@ -180,7 +180,7 @@ async fn task_api_rechecks_catalog_and_financial_grants_after_authority_wait(poo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_api_rechecks_deactivation_after_session_lookup(pool: PgPool) {
     for detail in [false, true] {
@@ -206,7 +206,7 @@ async fn task_api_rechecks_deactivation_after_session_lookup(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_api_rejects_malformed_canonical_state_without_legacy_fallback(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Admin, &[Permission::TaskReadAll]).await;

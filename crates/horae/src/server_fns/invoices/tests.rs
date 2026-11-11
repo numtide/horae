@@ -5,7 +5,7 @@ use sqlx::PgPool;
 mod authority;
 mod imported_rates;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn assignment_gate_allows_inflight_invoice_organization_fks_to_finish(pool: PgPool) {
     use crate::server_fns::test_seed::wait_for_blocked;
@@ -83,7 +83,7 @@ async fn assignment_gate_allows_inflight_invoice_organization_fks_to_finish(pool
     assert_eq!(state, EntryState::Invoiced);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_preview_keeps_time_rates_and_defaults_in_one_snapshot(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -137,7 +137,7 @@ async fn invoice_preview_keeps_time_rates_and_defaults_in_one_snapshot(pool: PgP
     assert_eq!(preview.defaults, Some(InvoiceDefaults::default()));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_preview_rejects_large_results_instead_of_truncating_them(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -178,7 +178,7 @@ async fn invoice_preview_rejects_large_results_instead_of_truncating_them(pool: 
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_preview_requires_explicit_resolution_and_scopes_selected_projects(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -281,7 +281,7 @@ async fn invoice_preview_requires_explicit_resolution_and_scopes_selected_projec
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_preview_matches_generation_without_claiming_time(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -375,7 +375,7 @@ async fn invoice_preview_matches_generation_without_claiming_time(pool: PgPool) 
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_defaults_apply_exact_adjustments_and_payment_terms(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -420,7 +420,7 @@ async fn invoice_defaults_apply_exact_adjustments_and_payment_terms(pool: PgPool
     assert_eq!(result.invoice.tax2_name.as_deref(), Some("Local tax"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_defaults_conflict_rolls_back_all_claims(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -491,7 +491,7 @@ async fn invoice_defaults_conflict_rolls_back_all_claims(pool: PgPool) {
     assert_eq!(result.invoice.po_number, "Resolved");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_defaults_are_invoice_owned_and_only_drafts_are_editable(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -615,7 +615,7 @@ async fn invoice_defaults_are_invoice_owned_and_only_drafts_are_editable(pool: P
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_defaults_selection_rejects_unavailable_projects_before_claiming(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -671,7 +671,7 @@ async fn invoice_defaults_selection_rejects_unavailable_projects_before_claiming
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_defaults_edit_rechecks_status_after_waiting_for_a_concurrent_send(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -837,7 +837,7 @@ fn invoice_defaults_validate_all_override_fields() {
     assert_eq!(defaults::amounts(&free, 1).unwrap().total_cents, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_project_currency_and_cost_override_keep_their_denominations(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -899,7 +899,7 @@ async fn configured_project_currency_and_cost_override_keep_their_denominations(
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_fixed_fee_hours_are_not_invoiced_but_legacy_fees_are_unchanged(pool: PgPool) {
     for configured in [false, true] {
         let ids = seed(&pool, OrgRole::Manager).await;
@@ -953,7 +953,7 @@ async fn configured_fixed_fee_hours_are_not_invoiced_but_legacy_fees_are_unchang
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn mixed_project_currencies_cannot_partially_create_an_invoice(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -982,7 +982,7 @@ async fn mixed_project_currencies_cannot_partially_create_an_invoice(pool: PgPoo
     assert_eq!(sqlx::query_scalar!("SELECT count(*) FROM time_entries WHERE org_id = $1 AND invoice_id IS NULL AND state = 'open'", ids.org_id).fetch_one(&pool).await.unwrap(), Some(2));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn selected_project_rate_modes_agree_across_billing_consumers(pool: PgPool) {
     for (mode, task, assignment, project, user, client, expected) in [
         (
@@ -1129,7 +1129,7 @@ async fn selected_project_rate_modes_agree_across_billing_consumers(pool: PgPool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn billing_cascade_agrees_across_all_four_levels_including_zero(pool: PgPool) {
     for (task, assignment, project, user, expected) in [
         (Some(5000), Some(4000), Some(3500), Some(3000), 5000),
@@ -1193,7 +1193,7 @@ async fn billing_cascade_agrees_across_all_four_levels_including_zero(pool: PgPo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn project_rate_is_used_by_invoices_reports_and_spend(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -1233,7 +1233,7 @@ async fn project_rate_is_used_by_invoices_reports_and_spend(pool: PgPool) {
     assert_eq!(spend[0].spent_cents, Some(6000));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoiced_amounts_survive_rate_changes_and_void_uses_current_rates(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -1292,7 +1292,7 @@ async fn invoiced_amounts_survive_rate_changes_and_void_uses_current_rates(pool:
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn non_billable_context_produces_no_unbilled_amount_on_any_report(pool: PgPool) {
     for project_billable in [false, true] {
         let ids = seed(&pool, OrgRole::Manager).await;
@@ -1358,7 +1358,7 @@ async fn non_billable_context_produces_no_unbilled_amount_on_any_report(pool: Pg
     assert_no_partial_invoice(&pool).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoiced_billability_survives_later_project_changes(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -1393,7 +1393,7 @@ async fn invoiced_billability_survives_later_project_changes(pool: PgPool) {
     assert_eq!(report[0].billable_minutes, 60);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoice_total_overflow_leaves_all_time_unbilled(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     for _ in 0..3 {
@@ -1418,7 +1418,7 @@ async fn invoice_total_overflow_leaves_all_time_unbilled(pool: PgPool) {
     assert_no_partial_invoice(&pool).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoice_line_overflow_leaves_time_unbilled(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
@@ -1458,7 +1458,7 @@ async fn assert_no_partial_invoice(pool: &PgPool) {
     assert_eq!((row.invoices, row.lines, row.changed), (0, 0, false));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -1521,7 +1521,7 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoicing_uses_and_freezes_effective_minutes(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let open = time_entry(&pool, &ids, EntryState::Open).await;
@@ -1668,7 +1668,7 @@ async fn assert_reporting_minutes(
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn effective_minutes_sql_matches_domain_rounding(pool: PgPool) {
     let rows = sqlx::query!(
         r#"SELECT m as "minutes!", inc as "increment!", dir as "dir!: horae_core::types::RoundDir",
@@ -1783,7 +1783,7 @@ async fn effective_minutes_migration_preserves_historical_invoice_quantities(poo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoicing_leaves_running_time_open(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let running = time_entry(&pool, &ids, EntryState::Open).await;
@@ -1817,7 +1817,7 @@ async fn invoicing_leaves_running_time_open(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn only_running_time_does_not_create_an_invoice(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let running = time_entry(&pool, &ids, EntryState::Open).await;
@@ -1848,7 +1848,7 @@ async fn only_running_time_does_not_create_an_invoice(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn void_waits_for_a_concurrent_payment_and_then_refuses(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let entry = time_entry(&pool, &ids, EntryState::Approved).await;
@@ -1934,7 +1934,7 @@ async fn void_waits_for_a_concurrent_payment_and_then_refuses(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn void_reopens_time_without_stale_rounding(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let entry = time_entry(&pool, &ids, EntryState::Approved).await;
@@ -1976,7 +1976,7 @@ async fn void_reopens_time_without_stale_rounding(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoice_transitions_reject_invalid_states_and_foreign_organizations(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let foreign = seed(&pool, OrgRole::Manager).await;
@@ -2059,7 +2059,7 @@ async fn invoice_transitions_reject_invalid_states_and_foreign_organizations(poo
 
 /// An entry stored over the daily limit before it existed can still be
 /// invoiced and released by a void; only raising its minutes is refused.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_legacy_entry_over_the_limit_is_invoiced_and_voided(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
@@ -2088,7 +2088,7 @@ async fn a_legacy_entry_over_the_limit_is_invoiced_and_voided(pool: PgPool) {
     crate::server_fns::test_seed::assert_minutes_cannot_rise(&pool, entry).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn new_invoices_start_with_the_organization_default_notes(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;

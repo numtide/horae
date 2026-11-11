@@ -94,7 +94,7 @@ async fn fixture(pool: &PgPool) -> SeedIds {
     ids
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn billability_matches_effective_rows_totals_and_all_download_sources(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -215,7 +215,7 @@ async fn billability_matches_effective_rows_totals_and_all_download_sources(pool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn billability_csv_uses_the_captured_source_after_entry_changes(pool: PgPool) {
     for grouped in [false, true] {
@@ -285,7 +285,7 @@ async fn billability_csv_uses_the_captured_source_after_entry_changes(pool: PgPo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn billability_empty_exports_still_require_active_authority(pool: PgPool) {
     let ids = fixture(&pool).await;

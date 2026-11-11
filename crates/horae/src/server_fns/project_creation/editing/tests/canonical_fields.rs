@@ -37,7 +37,7 @@ pub(super) fn keep_protected(form: &ProjectForm) -> Vec<ProtectedProjectField> {
     fields
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_editor_keeps_inactive_member_budgets_on_name_save_and_replay(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -88,7 +88,7 @@ async fn project_editor_keeps_inactive_member_budgets_on_name_save_and_replay(po
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_editor_explicit_hour_budget_change_clears_inactive_member_budget(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -304,7 +304,7 @@ async fn assert_removed_budget_recomputes_total(
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_task_removal_recomputes_hour_budget_without_financial_writes(pool: PgPool) {
     for (budget, expected) in [("5", Some(300)), ("0", Some(0)), ("", None)] {
@@ -313,7 +313,7 @@ async fn canonical_task_removal_recomputes_hour_budget_without_financial_writes(
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_member_removal_recomputes_hour_budget_without_financial_writes(pool: PgPool) {
     for (budget, expected) in [("5", Some(300)), ("0", Some(0)), ("", None)] {
@@ -322,7 +322,7 @@ async fn canonical_member_removal_recomputes_hour_budget_without_financial_write
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_task_removal_recomputes_fee_budget_with_financial_authority(pool: PgPool) {
     for (budget, expected) in [("5", Some(500)), ("0", Some(0)), ("", None)] {
@@ -331,7 +331,7 @@ async fn canonical_task_removal_recomputes_fee_budget_with_financial_authority(p
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_blank_task_removal_preserves_stale_fee_total_without_financial_writes(
     pool: PgPool,
@@ -389,7 +389,7 @@ async fn canonical_blank_task_removal_preserves_stale_fee_total_without_financia
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_editor_uses_designations_instead_of_legacy_team_roles(pool: PgPool) {
     use crate::models::project_managers::{ProjectManagersCommand, ProjectManagersCommandKind};
@@ -464,7 +464,7 @@ async fn canonical_editor_uses_designations_instead_of_legacy_team_roles(pool: P
     assert_eq!(wire["access"]["managers"]["managers"][0]["active"], false);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_save_requires_the_requester_that_opened_the_editor(pool: PgPool) {
     use crate::models::permission_editor::PermissionRequester;
@@ -532,7 +532,7 @@ async fn canonical_save_requires_the_requester_that_opened_the_editor(pool: PgPo
     assert!(!changed);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_editor_cannot_save_after_switching_to_another_authorized_person(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -590,7 +590,7 @@ async fn canonical_editor_cannot_save_after_switching_to_another_authorized_pers
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_task_rate_zero_reset_and_revoked_retry_remain_distinct(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -679,7 +679,7 @@ async fn canonical_task_rate_zero_reset_and_revoked_retry_remain_distinct(pool: 
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_save_preserves_withheld_fields_and_original_retry_intent(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -771,7 +771,7 @@ async fn canonical_save_preserves_withheld_fields_and_original_retry_intent(pool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_new_task_alias_cannot_bypass_billable_write_authority(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -820,7 +820,7 @@ async fn canonical_new_task_alias_cannot_bypass_billable_write_authority(pool: P
     assert!(billable);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_save_rejects_equal_value_edit_without_write_authority(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -852,7 +852,7 @@ async fn canonical_save_rejects_equal_value_edit_without_write_authority(pool: P
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_editor_without_rate_read_withholds_stored_task_rate(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -897,7 +897,7 @@ async fn canonical_editor_without_rate_read_withholds_stored_task_rate(pool: PgP
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_cost_reader_does_not_require_legacy_administrator(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -923,7 +923,7 @@ async fn canonical_cost_reader_does_not_require_legacy_administrator(pool: PgPoo
     assert!(editor.form.admin_notes.is_empty());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_editor_withholds_monetary_settings_without_billable_read(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -1013,7 +1013,7 @@ async fn canonical_editor_withholds_monetary_settings_without_billable_read(pool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_hour_budget_edits_preserve_inactive_parent_money(pool: PgPool) {
     for previous_kind in [BudgetKind::Hours, BudgetKind::None] {
@@ -1081,7 +1081,7 @@ async fn canonical_hour_budget_edits_preserve_inactive_parent_money(pool: PgPool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_fee_to_hours_requires_financial_authority_on_save_and_replay(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -1162,7 +1162,7 @@ async fn canonical_fee_to_hours_requires_financial_authority_on_save_and_replay(
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_editor_keeps_hour_budgets_without_financial_grants(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -1220,7 +1220,7 @@ async fn canonical_editor_keeps_hour_budgets_without_financial_grants(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_editor_managed_rates_require_designation_and_withhold_catalog_defaults(
     pool: PgPool,
@@ -1273,7 +1273,7 @@ async fn canonical_editor_managed_rates_require_designation_and_withhold_catalog
     assert_eq!(task.default_rate_currency, None);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_editor_never_projects_stale_task_money_as_hours(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -1304,7 +1304,7 @@ async fn canonical_editor_never_projects_stale_task_money_as_hours(pool: PgPool)
     assert!(!payload.contains("86753"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_read_only_billable_grant_rejects_task_rate_update(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -1392,7 +1392,7 @@ async fn canonical_read_only_billable_grant_rejects_task_rate_update(pool: PgPoo
     assert_eq!(saved_rate, Some(3000));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_editor_is_not_rejected_by_legacy_member_role(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -1415,7 +1415,7 @@ async fn canonical_project_editor_is_not_rejected_by_legacy_member_role(pool: Pg
     assert_eq!(editor.id, original.id);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_financial_grants_do_not_replace_project_editing_authority(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -1441,7 +1441,7 @@ async fn canonical_financial_grants_do_not_replace_project_editing_authority(poo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_managed_editor_requires_the_project_designation(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
@@ -1474,7 +1474,7 @@ async fn canonical_managed_editor_requires_the_project_designation(pool: PgPool)
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_save_rejects_unavailable_authority_without_changing_storage(pool: PgPool) {
     for case in [

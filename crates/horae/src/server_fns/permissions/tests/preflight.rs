@@ -8,7 +8,7 @@ use sqlx::PgPool;
 use std::time::Duration;
 use uuid::Uuid;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn preflight_counts_cross_tenant_memberships_from_both_ends(pool: PgPool) {
     let a = seed(&pool, OrgRole::Admin).await;
@@ -49,7 +49,7 @@ async fn preflight_counts_cross_tenant_memberships_from_both_ends(pool: PgPool) 
     assert_eq!(history(&pool).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn preflight_approval_diagnostics_preserve_stored_history(pool: PgPool) {
     let a = seed(&pool, OrgRole::Admin).await;
@@ -113,7 +113,7 @@ async fn preflight_approval_diagnostics_preserve_stored_history(pool: PgPool) {
     assert_eq!(history(&pool).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn preflight_separates_unknown_import_requesters_without_changing_artifacts(pool: PgPool) {
     let a = seed(&pool, OrgRole::Admin).await;
@@ -195,7 +195,7 @@ async fn history(pool: &PgPool) -> serde_json::Value {
     .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn preflight_requires_current_legacy_administrator_not_staged_grants(pool: PgPool) {
     let admin = seed(&pool, OrgRole::Admin).await;
@@ -262,7 +262,7 @@ async fn preflight_requires_current_legacy_administrator_not_staged_grants(pool:
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn preflight_rechecks_revocation_after_organization_and_actor_waits(pool: PgPool) {
     let reader = sqlx::postgres::PgPoolOptions::new()
@@ -339,7 +339,7 @@ async fn preflight_rechecks_revocation_after_organization_and_actor_waits(pool: 
     reader.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn preflight_cancellation_releases_organization_and_single_connection(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -392,7 +392,7 @@ async fn preflight_cancellation_releases_organization_and_single_connection(pool
     reader.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn preflight_lock_failure_releases_organization_without_mutating_data(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;

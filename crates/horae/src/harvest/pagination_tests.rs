@@ -110,7 +110,7 @@ async fn walk(pool: &PgPool, app: &Router, resource: &str, query: &str, expected
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_pagination_catalog_links_preserve_filters_and_break_name_ties(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -189,7 +189,7 @@ async fn harvest_pagination_catalog_links_preserve_filters_and_break_name_ties(p
     assert_eq!(no_client_projects["total_entries"], 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_pagination_time_entries_keep_the_filtered_set_and_date_ties(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -235,7 +235,7 @@ async fn harvest_pagination_time_entries_keep_the_filtered_set_and_date_ties(poo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_pagination_rejects_invalid_windows_on_every_collection(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -270,7 +270,7 @@ fn harvest_pagination_total_pages_does_not_overflow() {
     assert_eq!(page.total_pages, i64::MAX / 100 + 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_pagination_malformed_filters_are_client_errors(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -314,7 +314,7 @@ async fn harvest_pagination_malformed_filters_are_client_errors(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_pagination_empty_and_out_of_range_pages_keep_the_contract(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -355,7 +355,7 @@ async fn harvest_pagination_empty_and_out_of_range_pages_keep_the_contract(pool:
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_pagination_router_preserves_session_and_tenant_guards(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -429,7 +429,7 @@ async fn harvest_pagination_router_preserves_session_and_tenant_guards(pool: PgP
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_project_progress_permissions_cover_counts_pages_and_details(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -551,7 +551,7 @@ async fn harvest_project_progress_permissions_cover_counts_pages_and_details(poo
     assert_eq!(request(&app, &detail).await.0, StatusCode::UNAUTHORIZED);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_task_access_filters_counts_and_preserves_rate_free_history(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -656,7 +656,7 @@ async fn harvest_task_access_filters_counts_and_preserves_rate_free_history(pool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_own_time_omits_private_project_budget_metadata(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -708,7 +708,7 @@ async fn harvest_own_time_omits_private_project_budget_metadata(pool: PgPool) {
     assert!(page(&app, &detail).await.get("budgeted").is_none());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_project_cost_overrides_require_admin_without_fabricated_fallback(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;

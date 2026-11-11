@@ -30,7 +30,7 @@ async fn fixture(pool: &PgPool, administrator: bool) -> SeedIds {
     ids
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn direct_deactivation_winning_user_lock_denies_audit_read(pool: PgPool) {
     let ids = fixture(&pool, true).await;
@@ -59,7 +59,7 @@ async fn direct_deactivation_winning_user_lock_denies_audit_read(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn audit_reader_overrides_transaction_defaults_without_changing_connection(pool: PgPool) {
     let ids = fixture(&pool, true).await;
@@ -95,7 +95,7 @@ async fn audit_reader_overrides_transaction_defaults_without_changing_connection
     reader.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn audit_reader_holds_requester_until_materialization_finishes(pool: PgPool) {
     let ids = fixture(&pool, true).await;
@@ -144,7 +144,7 @@ async fn audit_reader_holds_requester_until_materialization_finishes(pool: PgPoo
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn audit_timeout_preserves_stricter_limits_and_releases_locks(pool: PgPool) {
     let ids = fixture(&pool, true).await;
@@ -199,7 +199,7 @@ async fn audit_timeout_preserves_stricter_limits_and_releases_locks(pool: PgPool
     reader.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn cancelled_audit_read_releases_both_gates_and_single_connection(pool: PgPool) {
     let ids = fixture(&pool, true).await;
@@ -311,7 +311,7 @@ async fn create_template(pool: &PgPool, ids: &SeedIds) -> (Uuid, Uuid) {
     )
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn administrator_reads_historical_template_without_intent_or_replay_result(pool: PgPool) {
     let ids = fixture(&pool, true).await;
@@ -367,7 +367,7 @@ async fn administrator_reads_historical_template_without_intent_or_replay_result
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_admin_and_all_grants_without_explicit_identity_cannot_read_audit(pool: PgPool) {
     let ids = fixture(&pool, false).await;
@@ -394,7 +394,7 @@ fn historical_decoder_distinguishes_missing_change_from_explicit_noop() {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn profile_and_project_history_decode_exact_changes_and_noops(pool: PgPool) {
     use super::profiles::{ProfileAction, ProfileCommand};
@@ -515,7 +515,7 @@ async fn profile_and_project_history_decode_exact_changes_and_noops(pool: PgPool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn tenant_activity_and_policy_checks_precede_receipt_existence_and_decode(pool: PgPool) {
     let ids = fixture(&pool, true).await;
@@ -607,7 +607,7 @@ async fn tenant_activity_and_policy_checks_precede_receipt_existence_and_decode(
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn operator_attribution_is_not_a_user_and_excludes_private_replay_payload(pool: PgPool) {
     let ids = fixture(&pool, true).await;
@@ -636,7 +636,7 @@ async fn operator_attribution_is_not_a_user_and_excludes_private_replay_payload(
     assert!(!json.contains("private_result"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn failed_mutation_has_no_success_audit_and_reads_do_not_write(pool: PgPool) {
     let ids = fixture(&pool, true).await;
@@ -679,7 +679,7 @@ async fn failed_mutation_has_no_success_audit_and_reads_do_not_write(pool: PgPoo
     assert_eq!(revision, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn revocation_winning_gate_denies_waiting_historical_reader(pool: PgPool) {
     let ids = fixture(&pool, true).await;
@@ -719,7 +719,7 @@ async fn revocation_winning_gate_denies_waiting_historical_reader(pool: PgPool) 
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn reader_winning_gate_finishes_before_revocation_and_later_reads_fail(pool: PgPool) {
     let ids = fixture(&pool, true).await;
@@ -783,7 +783,7 @@ async fn reader_winning_gate_finishes_before_revocation_and_later_reads_fail(poo
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn current_administrator_reads_inactive_authors_history_without_live_state(pool: PgPool) {
     let ids = fixture(&pool, true).await;
@@ -825,7 +825,7 @@ async fn current_administrator_reads_inactive_authors_history_without_live_state
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn template_detachment_history_preserves_exact_grants_and_provenance(pool: PgPool) {
     use super::profiles::{ProfileAction, ProfileCommand};
@@ -898,7 +898,7 @@ async fn template_detachment_history_preserves_exact_grants_and_provenance(pool:
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn profile_history_keeps_removed_relationships_after_grants_change_again(pool: PgPool) {
     use super::profiles::{ProfileAction, ProfileCommand};

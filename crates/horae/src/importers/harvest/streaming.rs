@@ -291,7 +291,7 @@ async fn begin_transaction(
 mod tests {
     use super::*;
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn import_batches_join_the_access_gate_before_resource_locks(pool: sqlx::PgPool) {
         let ids =
             crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
@@ -340,7 +340,7 @@ mod tests {
         pending.await.unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn api_planning_policy_ends_with_the_transaction(pool: sqlx::PgPool) {
         let ids =
             crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;

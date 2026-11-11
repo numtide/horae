@@ -106,7 +106,7 @@ pub(super) async fn validate_connection(connection: &mut sqlx::PgConnection) -> 
 pub(super) mod tests {
     use super::*;
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn reader_accepts_optional_first_party_rounding_helper(pool: sqlx::PgPool) {
         // The validator must work both before and after the rounding migration.
         // Only its function identity matters here; arithmetic has its own tests.
@@ -127,7 +127,7 @@ pub(super) mod tests {
         result.unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn reader_rejects_unapproved_invoker_functions(pool: sqlx::PgPool) {
         sqlx::query!(
             "CREATE FUNCTION public.plugin_test_unknown() RETURNS integer LANGUAGE sql AS $$ SELECT 1 $$",
@@ -145,7 +145,7 @@ pub(super) mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn reader_cannot_read_either_oidc_identity_column(pool: sqlx::PgPool) {
         let reader = Reader::new(&pool).await;
         let name = reader.name.clone();
@@ -185,7 +185,7 @@ pub(super) mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn application_database_owner_is_not_a_plugin_identity(pool: sqlx::PgPool) {
         let mut connection = pool.acquire().await.unwrap();
         assert!(validate_connection(&mut connection).await.is_err());
@@ -238,7 +238,7 @@ pub(super) mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn project_configuration_is_private_even_when_plugin_grants_are_misconfigured(
         pool: sqlx::PgPool,
     ) {
@@ -319,7 +319,7 @@ pub(super) mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn reader_cannot_have_access_to_credentials(pool: sqlx::PgPool) {
         let reader = Reader::new(&pool).await;
         sqlx::raw_sql(&format!(
@@ -341,7 +341,7 @@ pub(super) mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn reader_cannot_switch_into_another_role(pool: sqlx::PgPool) {
         let reader = Reader::new(&pool).await;
         sqlx::raw_sql(&format!("GRANT pg_read_all_data TO {}", reader.name))
@@ -355,7 +355,7 @@ pub(super) mod tests {
         assert!(result.unwrap_err().to_string().contains("role memberships"));
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn reader_cannot_execute_security_definer_functions(pool: sqlx::PgPool) {
         let reader = Reader::new(&pool).await;
         sqlx::query!("CREATE FUNCTION public.plugin_test_secret() RETURNS text LANGUAGE sql SECURITY DEFINER AS $$ SELECT 'secret'::text $$")
@@ -372,7 +372,7 @@ pub(super) mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn dedicated_reader_is_accepted_but_new_write_grants_are_rejected(pool: sqlx::PgPool) {
         let reader = Reader::new(&pool).await;
         let mut connection = reader.pool.acquire().await.unwrap();

@@ -30,7 +30,7 @@ async fn read(
     .await
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_catalog_withholds_defaults_without_their_financial_authority(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -66,7 +66,7 @@ async fn editor_catalog_withholds_defaults_without_their_financial_authority(poo
     assert!(!payload.contains("people") && !payload.contains("previous_code"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_catalog_requires_operation_authority_not_legacy_role_or_rate_grant(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -110,7 +110,7 @@ async fn editor_catalog_requires_operation_authority_not_legacy_role_or_rate_gra
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_catalog_rejects_switched_requesters_and_out_of_scope_projects(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -175,7 +175,7 @@ async fn editor_catalog_rejects_switched_requesters_and_out_of_scope_projects(po
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_catalog_has_no_implicit_legacy_policy_fallback(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -199,7 +199,7 @@ async fn editor_catalog_has_no_implicit_legacy_policy_fallback(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_catalog_managed_scope_needs_designation_but_never_opens_global_rates(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -263,7 +263,7 @@ async fn editor_catalog_managed_scope_needs_designation_but_never_opens_global_r
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_catalog_filters_candidates_before_bounded_literal_search_pages(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -407,7 +407,7 @@ async fn editor_catalog_filters_candidates_before_bounded_literal_search_pages(p
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_catalog_rechecks_revocation_after_waiting_for_the_organization(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
