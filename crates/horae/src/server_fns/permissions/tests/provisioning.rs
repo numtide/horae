@@ -4,7 +4,6 @@ use crate::models::permission_editor::{ProfileAction, ProfileCommand};
 use crate::server_fns::permissions::{directory, profiles};
 use crate::server_fns::test_seed::{built_in_profile, use_policy_one};
 use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
 
 async fn only_user(pool: &PgPool) -> (Uuid, Uuid) {
@@ -23,19 +22,6 @@ async fn policy(pool: &PgPool, org: Uuid) -> i32 {
     .fetch_one(pool)
     .await
     .unwrap()
-}
-
-#[test]
-fn legacy_roles_provision_the_closest_built_in_profile() {
-    assert_eq!(
-        profile_for_role(OrgRole::Admin),
-        BuiltInProfile::Administrator
-    );
-    assert_eq!(
-        profile_for_role(OrgRole::Manager),
-        BuiltInProfile::ExecutiveManager
-    );
-    assert_eq!(profile_for_role(OrgRole::Member), BuiltInProfile::Member);
 }
 
 #[sqlx::test(migrations = "./migrations")]

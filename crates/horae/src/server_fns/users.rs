@@ -401,10 +401,14 @@ pub(super) async fn change_user_role(
     org_role: OrgRole,
 ) -> Result<(User, Option<OrgRole>), ServerFnError> {
     let mut tx = begin_user_access_change(db, org_id, actor_id).await?;
-    // Under policy 1 roles no longer grant anything; profiles replace them.
-    if access_policy(&mut tx, org_id).await? != 0 {
+    // Under policy 1 privileges are given in the permission editor, so a role
+    // may only be lowered: the editor never touches `org_role`, and until
+    // user administration authorizes from permission state, lowering it here
+    // is how an administrator demoted in the editor loses that access.
+    let policy = access_policy(&mut tx, org_id).await?;
+    if policy != 0 && org_role != OrgRole::Member {
         return Err(conflict(
-            "Roles no longer apply; change the person's profile in the permission editor",
+            "Roles no longer grant access; change the person's profile in the permission editor",
         ));
     }
     // Read the prior role/active so the event reports the transition (a no-op
@@ -436,9 +440,11 @@ pub(super) async fn change_user_role(
     .await
     .map_err(server_err)?
     .ok_or_else(|| not_found("User not found"))?;
-    provisioning::follow_role(&mut tx, org_id, user_id, org_role)
-        .await
-        .map_err(server_err)?;
+    if policy == 0 {
+        provisioning::follow_role(&mut tx, org_id, user_id, org_role)
+            .await
+            .map_err(server_err)?;
+    }
 
     tx.commit().await.map_err(server_err)?;
     Ok((user, previous))
@@ -482,15 +488,16 @@ async fn change_user_active(
     let was_active: Option<bool> = current.map(|(active, _)| active);
 
     // Deactivating the last active admin would lock the org out. Policy 1
-    // counts Administrator states, as the permission editor does.
+    // also counts Administrator states, as the permission editor does, and
+    // keeps the role rule while user administration still requires the role.
     if !active {
-        if access_policy(&mut tx, org_id).await? == 0 {
-            if current.is_some_and(|(a, role)| a && role == OrgRole::Admin) {
-                ensure_other_active_admin(&mut tx, org_id, user_id).await?;
-            }
-        } else if provisioning::is_active_administrator(&mut tx, org_id, user_id)
-            .await
-            .map_err(server_err)?
+        if current.is_some_and(|(a, role)| a && role == OrgRole::Admin) {
+            ensure_other_active_admin(&mut tx, org_id, user_id).await?;
+        }
+        if access_policy(&mut tx, org_id).await? != 0
+            && provisioning::is_active_administrator(&mut tx, org_id, user_id)
+                .await
+                .map_err(server_err)?
             && !provisioning::other_active_administrator(&mut tx, org_id, user_id)
                 .await
                 .map_err(server_err)?

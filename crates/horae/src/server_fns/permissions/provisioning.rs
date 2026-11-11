@@ -30,11 +30,10 @@ pub(crate) const fn profile_for_role(role: OrgRole) -> BuiltInProfile {
 }
 
 /// The identifier a catalog value is stored under.
-fn stored_id(value: impl Serialize) -> String {
+fn stored_id(value: impl Serialize) -> Result<String, sqlx::Error> {
     serde_json::to_value(value)
-        .ok()
-        .and_then(|value| value.as_str().map(str::to_owned))
-        .expect("catalog identifiers serialize as strings")
+        .and_then(serde_json::from_value::<String>)
+        .map_err(|error| sqlx::Error::Encode(error.into()))
 }
 
 struct StoredProfile {
@@ -44,12 +43,16 @@ struct StoredProfile {
 }
 
 impl StoredProfile {
-    fn new(profile: BuiltInProfile) -> Self {
-        Self {
-            grants: profile.selection().iter().map(stored_id).collect(),
+    fn new(profile: BuiltInProfile) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            grants: profile
+                .selection()
+                .iter()
+                .map(stored_id)
+                .collect::<Result<_, _>>()?,
             is_administrator: profile == BuiltInProfile::Administrator,
-            profile: stored_id(profile),
-        }
+            profile: stored_id(profile)?,
+        })
     }
 }
 
@@ -60,7 +63,7 @@ pub(crate) async fn provision(
     user_id: Uuid,
     profile: BuiltInProfile,
 ) -> Result<(), sqlx::Error> {
-    let stored = StoredProfile::new(profile);
+    let stored = StoredProfile::new(profile)?;
     sqlx::query!(
         "INSERT INTO person_permission_states
            (id, org_id, user_id, catalog_version, grants, is_administrator, source, built_in_profile)
@@ -81,15 +84,18 @@ pub(crate) async fn provision(
 /// Replace a person's state with the profile of their new legacy role.
 ///
 /// Only for policy 0, where roles still decide and nobody can edit permission
-/// state, so nothing chosen in the permission editor is overwritten. A person
-/// created before provisioning existed gets their first state here.
+/// state, so nothing chosen in the permission editor is overwritten. That
+/// holds only because an organization never returns from policy 1 to 0: after
+/// such a return, this would replace an editor-chosen template or selection
+/// without an audit receipt. A person created before provisioning existed gets
+/// their first state here.
 pub(crate) async fn follow_role(
     connection: &mut PgConnection,
     org_id: Uuid,
     user_id: Uuid,
     role: OrgRole,
 ) -> Result<(), sqlx::Error> {
-    let stored = StoredProfile::new(profile_for_role(role));
+    let stored = StoredProfile::new(profile_for_role(role))?;
     sqlx::query!(
         "INSERT INTO person_permission_states
            (id, org_id, user_id, catalog_version, grants, is_administrator, source, built_in_profile)
