@@ -54,7 +54,7 @@ fn legacy_roles_map_to_their_grants() {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn policy_zero_answers_from_the_role(pool: PgPool) {
     for (role, administrator, writes) in [
         (OrgRole::Admin, true, true),
@@ -76,7 +76,7 @@ async fn policy_zero_answers_from_the_role(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn policy_one_answers_from_the_grants_not_the_role(pool: PgPool) {
     // A legacy Admin with a member's grants and a legacy Member who is an
     // administrator: the stored state decides, never the role.
@@ -96,7 +96,7 @@ async fn policy_one_answers_from_the_grants_not_the_role(pool: PgPool) {
     assert!(!actor.has(Permission::ClientReadAll));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn foreign_missing_and_inactive_people_have_no_authority(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let foreign = seed(&pool, OrgRole::Admin).await;
@@ -120,7 +120,7 @@ async fn foreign_missing_and_inactive_people_have_no_authority(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unknown_policy_and_missing_or_invalid_state_fail_closed(pool: PgPool) {
     for state in ["unknown policy", "missing", "malformed"] {
         let ids = seed(&pool, OrgRole::Admin).await;
@@ -147,7 +147,7 @@ async fn unknown_policy_and_missing_or_invalid_state_fail_closed(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn storage_failures_loading_state_are_not_a_refusal(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     policy_one(&pool, &ids, &[Permission::ClientReadAll], true).await;

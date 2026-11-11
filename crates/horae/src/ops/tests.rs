@@ -83,7 +83,7 @@ impl EventSink for CommitProbe {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn events_are_dispatched_after_the_commit(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let probe = CommitProbe {
@@ -99,7 +99,7 @@ async fn events_are_dispatched_after_the_commit(pool: PgPool) {
     assert!(client_exists(&pool, id).await);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_failed_operation_rolls_back_and_dispatches_nothing(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let events = Recorder::default();
@@ -115,7 +115,7 @@ async fn a_failed_operation_rolls_back_and_dispatches_nothing(pool: PgPool) {
 }
 
 /// A deferred constraint fails at COMMIT, after the operation succeeded.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_failed_commit_dispatches_nothing(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let events = Recorder::default();
@@ -141,7 +141,7 @@ async fn a_failed_commit_dispatches_nothing(pool: PgPool) {
     assert!(!client_exists(&pool, id).await);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn writes_run_at_read_committed_whatever_the_session_default(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let rr = repeatable_read_pool(&pool).await;

@@ -125,7 +125,7 @@ async fn rate_of(pool: &PgPool, client_id: Uuid) -> Option<i64> {
     .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn create_needs_client_write_and_global_rate_write_for_a_rate(pool: PgPool) {
     for (who, rate, allowed) in [
         (Who::Legacy(OrgRole::Manager), "10", true),
@@ -153,7 +153,7 @@ async fn create_needs_client_write_and_global_rate_write_for_a_rate(pool: PgPool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn created_client_shows_its_rate_only_to_rate_readers(pool: PgPool) {
     let without = create_with(&pool, Who::Grants(WRITER), "").await.unwrap();
     assert_eq!(without.billing, None);
@@ -166,7 +166,7 @@ async fn created_client_shows_its_rate_only_to_rate_readers(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn create_announces_the_client_after_commit(pool: PgPool) {
     let ids = fixture(&pool, Who::Grants(WRITER)).await;
     let events = Recorder::default();
@@ -198,7 +198,7 @@ async fn update_with(
     (ids, result)
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn update_needs_client_write(pool: PgPool) {
     for (who, snapshot, allowed) in [
         (Who::Legacy(OrgRole::Manager), Some(12345), true),
@@ -221,7 +221,7 @@ async fn update_needs_client_write(pool: PgPool) {
 
 /// FR-035: someone who may edit clients but not see global rates keeps the
 /// saved rate untouched and cannot replace or clear it.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn update_keeps_a_withheld_rate_and_needs_rate_write_to_change_it(pool: PgPool) {
     let (ids, kept) = update_with(&pool, Who::Grants(WRITER), |_| keep("EUR", None)).await;
     assert_eq!(kept.unwrap().billing, None);
@@ -286,7 +286,7 @@ async fn update_keeps_a_withheld_rate_and_needs_rate_write_to_change_it(pool: Pg
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn update_with_rate_read_still_detects_a_stale_rate(pool: PgPool) {
     let (_, result) = update_with(
         &pool,
@@ -322,7 +322,7 @@ async fn set_active_with(
 
 /// The class b row of the study (015 T238): policy one used to refuse every
 /// status change.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn archive_and_restore_need_client_write(pool: PgPool) {
     for active in [false, true] {
         for (who, allowed) in [
@@ -362,7 +362,7 @@ async fn read<T>(
     .await
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn details_need_the_catalog_and_rates_need_global_rate_read(pool: PgPool) {
     for (who, outcome) in [
         (Who::Legacy(OrgRole::Admin), Some(true)),
@@ -395,7 +395,7 @@ async fn details_need_the_catalog_and_rates_need_global_rate_read(pool: PgPool) 
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_invoices_need_the_catalog_and_invoice_read(pool: PgPool) {
     for (who, outcome) in [
         (Who::Legacy(OrgRole::Manager), "ok"),
@@ -424,7 +424,7 @@ async fn client_invoices_need_the_catalog_and_invoice_read(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn the_page_offers_writes_and_invoices_by_grant(pool: PgPool) {
     for (who, manage, invoices) in [
         (Who::Legacy(OrgRole::Manager), true, true),
@@ -451,7 +451,7 @@ async fn the_page_offers_writes_and_invoices_by_grant(pool: PgPool) {
 
 /// Catalog readers list every client with its contact fields; anyone else
 /// sees only the names of clients behind projects they work on or may read.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn list_projects_names_beyond_the_catalog(pool: PgPool) {
     for (who, assigned, expected) in [
         (Who::Legacy(OrgRole::Member), false, Some(true)),
