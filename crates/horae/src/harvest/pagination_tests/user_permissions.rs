@@ -32,7 +32,7 @@ fn rates(user: &Value) -> (Option<f64>, Option<f64>) {
     )
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn user_api_follows_people_and_rate_grants_not_the_legacy_role(pool: PgPool) {
     // A legacy manager whose detailed permissions carry no rate grant.
@@ -83,7 +83,7 @@ async fn user_api_follows_people_and_rate_grants_not_the_legacy_role(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn user_api_gives_a_legacy_admin_nothing_their_grants_do_not(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Admin, &[]).await;

@@ -37,7 +37,7 @@ async fn import(
         .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn email_rows_create_one_deactivated_person_and_names_never_do(pool: PgPool) {
     let org = seed_org(&pool).await;
     let csv = format!(
@@ -79,7 +79,7 @@ async fn email_rows_create_one_deactivated_person_and_names_never_do(pool: PgPoo
     assert_eq!(again.summary.time_entries.skipped, 2);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_person_reached_by_name_and_by_email_counts_once(pool: PgPool) {
     let org = seed_org(&pool).await;
     let id = seed_user(&pool, org, "dev@acme.com").await;
@@ -98,7 +98,7 @@ async fn a_person_reached_by_name_and_by_email_counts_once(pool: PgPool) {
     assert_eq!(report.people[0].horae_id, id);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_rolled_back_row_leaves_no_person_behind(pool: PgPool) {
     let org = seed_org(&pool).await;
     let csv = format!(
@@ -112,7 +112,7 @@ async fn a_rolled_back_row_leaves_no_person_behind(pool: PgPool) {
     assert_eq!(account(&pool, org, "lost@acme.com").await, None);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_durable_preview_keeps_a_simulated_person_across_batches(pool: PgPool) {
     use crate::jobs;
 

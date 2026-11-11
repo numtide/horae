@@ -124,7 +124,7 @@ async fn observe(pool: &PgPool, org: Uuid, actor: Uuid, target: Uuid) -> Access 
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn policy_zero_follows_the_legacy_role_rule(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -149,7 +149,7 @@ async fn policy_zero_follows_the_legacy_role_rule(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn policy_zero_manager_cannot_write_or_see_a_cost_rate(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -196,7 +196,7 @@ async fn policy_zero_manager_cannot_write_or_see_a_cost_rate(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn policy_one_uses_each_rate_grant_and_its_managed_scope(pool: PgPool) {
     use Permission::*;
@@ -264,7 +264,7 @@ async fn policy_one_uses_each_rate_grant_and_its_managed_scope(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn policy_one_rate_grants_need_people_access_and_never_cover_oneself(pool: PgPool) {
     use Permission::*;
@@ -295,7 +295,7 @@ async fn policy_one_rate_grants_need_people_access_and_never_cover_oneself(pool:
     assert_eq!(observe(&pool, ids.org_id, actor, actor).await, None);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn policy_one_refuses_writes_beyond_the_grant(pool: PgPool) {
     use Permission::*;
@@ -356,7 +356,7 @@ async fn policy_one_refuses_writes_beyond_the_grant(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn rates_round_trip_exact_minor_units(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -385,7 +385,7 @@ async fn rates_round_trip_exact_minor_units(pool: PgPool) {
     assert_eq!(read.cost.unwrap().cents, None);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn writes_refuse_negative_amounts_and_a_stale_currency(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -424,7 +424,7 @@ async fn writes_refuse_negative_amounts_and_a_stale_currency(pool: PgPool) {
     assert_eq!(billable, Some(12000));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn another_organizations_person_is_not_found(pool: PgPool) {
     let ours = seed(&pool, OrgRole::Admin).await;

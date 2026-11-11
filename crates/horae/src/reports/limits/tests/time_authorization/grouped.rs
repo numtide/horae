@@ -2,7 +2,7 @@ use super::*;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::TimeReportGrouping;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_xlsx_rejects_partial_loss_of_a_multi_context_group(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadManaged]).await;
@@ -55,7 +55,7 @@ async fn grouped_xlsx_rejects_partial_loss_of_a_multi_context_group(pool: PgPool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_xlsx_budget_includes_contexts_in_addition_to_names(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
@@ -90,7 +90,7 @@ async fn groups(pool: &PgPool, ids: &SeedIds) -> Result<time::groups::GroupExpor
     .await
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_xlsx_limits_groups_not_source_entries_and_preserves_scope(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
@@ -113,7 +113,7 @@ async fn grouped_xlsx_limits_groups_not_source_entries_and_preserves_scope(pool:
     assert_eq!(export.rows[0].totals.billable_minutes, 600_060);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_xlsx_rejects_wrong_identity_legacy_policy_and_page_cursor(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Admin, &[Permission::TimeReadOwn]).await;
@@ -155,7 +155,7 @@ async fn grouped_xlsx_rejects_wrong_identity_legacy_policy_and_page_cursor(pool:
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_xlsx_reauthorizes_original_pairs_after_reassignment(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadManaged]).await;
@@ -197,7 +197,7 @@ async fn grouped_xlsx_reauthorizes_original_pairs_after_reassignment(pool: PgPoo
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_xlsx_caps_groups_and_names_after_filters(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
@@ -245,7 +245,7 @@ async fn grouped_xlsx_caps_groups_and_names_after_filters(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_xlsx_all_dimensions_render_exact_hours_without_private_scope(pool: PgPool) {
     let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;

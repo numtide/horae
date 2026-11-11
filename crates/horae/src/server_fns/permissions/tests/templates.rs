@@ -71,7 +71,7 @@ async fn revision_and_count(pool: &PgPool, org: Uuid) -> (i64, i64) {
     (row.access_revision, row.count.unwrap())
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn template_command_waits_for_direct_actor_deactivation_on_replay(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -103,7 +103,7 @@ async fn template_command_waits_for_direct_actor_deactivation_on_replay(pool: Pg
     assert_eq!(revision_and_count(&pool, ids.org_id).await, (1, 1));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn template_command_overrides_readonly_defaults_and_keeps_stricter_timeouts(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -152,7 +152,7 @@ async fn template_command_overrides_readonly_defaults_and_keeps_stricter_timeout
     restricted.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn create_canonical_retry_returns_one_historical_change(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -188,7 +188,7 @@ async fn create_canonical_retry_returns_one_historical_change(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn equivalent_names_and_invalid_confirmed_selections_roll_back(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -224,7 +224,7 @@ async fn equivalent_names_and_invalid_confirmed_selections_roll_back(pool: PgPoo
     assert_eq!(revision_and_count(&pool, ids.org_id).await, (1, 1));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn delete_replay_does_not_touch_a_same_name_replacement(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -258,7 +258,7 @@ async fn delete_replay_does_not_touch_a_same_name_replacement(pool: PgPool) {
     assert_eq!(revision_and_count(&pool, ids.org_id).await, (3, 1));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_future_missing_foreign_and_non_admin_authority_deny(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -319,7 +319,7 @@ async fn legacy_future_missing_foreign_and_non_admin_authority_deny(pool: PgPool
     assert_eq!(revision_and_count(&pool, ids.org_id).await, (0, 0));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn actor_share_lock_does_not_block_template_command(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -362,7 +362,7 @@ async fn business_snapshot(pool: &PgPool) -> serde_json::Value {
     .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn delete_preserves_adjusted_grants_identity_and_business_rows(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -449,7 +449,7 @@ async fn delete_preserves_adjusted_grants_identity_and_business_rows(pool: PgPoo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn concurrent_creators_never_exceed_fifty_profiles(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -481,7 +481,7 @@ async fn concurrent_creators_never_exceed_fifty_profiles(pool: PgPool) {
     assert_eq!(receipts(&pool, ids.org_id).await.len(), 50);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn stale_foreign_and_exhausted_revisions_never_partially_delete(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -569,7 +569,7 @@ async fn stale_foreign_and_exhausted_revisions_never_partially_delete(pool: PgPo
     assert_eq!(receipts(&pool, ids.org_id).await.len(), 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn revocation_winning_org_gate_denies_pending_replay_and_new_command(pool: PgPool) {
     for deactivate in [false, true] {
@@ -617,7 +617,7 @@ async fn revocation_winning_org_gate_denies_pending_replay_and_new_command(pool:
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invalid_stored_authority_and_template_grants_fail_closed(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -678,7 +678,7 @@ async fn invalid_stored_authority_and_template_grants_fail_closed(pool: PgPool) 
     assert_eq!(receipts(&pool, ids.org_id).await.len(), 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn failed_audit_insert_rolls_back_creation_and_detachment(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -723,7 +723,7 @@ fn unknown_grants_and_authority_fields_cannot_deserialize_as_commands() {
     assert!(serde_json::from_value::<TemplateCommand>(value).is_err());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn malformed_assignee_aborts_all_detachments(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -776,7 +776,7 @@ async fn malformed_assignee_aborts_all_detachments(pool: PgPool) {
     assert_eq!(receipts(&pool, ids.org_id).await.len(), 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn concurrent_exact_retry_creates_one_receipt_without_changing_people(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -838,7 +838,7 @@ fn sqlstate(error: sqlx::Error, code: &str) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn receipts_enforce_tenant_exclusive_principal_and_request_uniqueness(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -900,7 +900,7 @@ async fn receipts_enforce_tenant_exclusive_principal_and_request_uniqueness(pool
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn command_receipts_are_not_shared_between_administrators(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -929,7 +929,7 @@ async fn command_receipts_are_not_shared_between_administrators(pool: PgPool) {
     assert_eq!(receipts(&pool, ids.org_id).await.len(), 2);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn unsupported_receipt_version_fails_without_repeating_the_change(pool: PgPool) {
     let ids = administrator(&pool).await;

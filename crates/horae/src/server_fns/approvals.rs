@@ -638,7 +638,7 @@ mod tests {
         id
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn sees_a_running_timer_inside_the_week(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Member).await;
         let ws = chrono::Utc::now().date_naive();
@@ -653,7 +653,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn ignores_stopped_and_out_of_week_timers(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Member).await;
         let ws = chrono::Utc::now().date_naive();

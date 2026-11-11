@@ -59,7 +59,7 @@ fn constraint(error: sqlx::Error, expected: &str) {
     assert_eq!(error.code().as_deref(), Some(expected));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn storage_does_not_activate_or_infer_legacy_roles(pool: PgPool) {
     for role in [OrgRole::Admin, OrgRole::Manager, OrgRole::Member] {
@@ -157,7 +157,7 @@ async fn additive_migration_preserves_populated_legacy_records(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn concurrent_equivalent_names_create_only_one_template(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -189,7 +189,7 @@ async fn concurrent_equivalent_names_create_only_one_template(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn person_grants_and_identity_round_trip_independently_of_source(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -301,7 +301,7 @@ async fn unicode_name_collision_rolls_back_migration_without_changing_profiles(p
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn template_names_are_case_insensitive_and_tenant_local(pool: PgPool) {
     let local = seed(&pool, OrgRole::Member).await;
@@ -341,7 +341,7 @@ async fn template_names_are_case_insensitive_and_tenant_local(pool: PgPool) {
         .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn person_state_rejects_duplicates_and_foreign_users_and_templates(pool: PgPool) {
     let local = seed(&pool, OrgRole::Member).await;
@@ -382,7 +382,7 @@ async fn person_state_rejects_duplicates_and_foreign_users_and_templates(pool: P
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn malformed_stored_grants_fail_without_repair(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -433,7 +433,7 @@ async fn malformed_stored_grants_fail_without_repair(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn source_shape_and_revision_constraints_reject_invalid_rows(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -465,7 +465,7 @@ async fn source_shape_and_revision_constraints_reject_invalid_rows(pool: PgPool)
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn referenced_template_deletion_requires_detaching_without_grant_or_identity_loss(
     pool: PgPool,

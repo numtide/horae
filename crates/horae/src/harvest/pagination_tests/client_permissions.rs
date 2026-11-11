@@ -2,7 +2,7 @@ use super::project_permissions::{canonical, selection};
 use super::*;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn client_api_allows_read_only_grants_without_legacy_management(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::ClientReadAll]).await;
@@ -21,7 +21,7 @@ async fn client_api_allows_read_only_grants_without_legacy_management(pool: PgPo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn client_api_does_not_inherit_legacy_role_or_related_workflow_authority(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Admin, &[]).await;
@@ -47,7 +47,7 @@ async fn client_api_does_not_inherit_legacy_role_or_related_workflow_authority(p
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn client_api_preserves_filters_counts_and_foreign_id_denial(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::ClientReadAll]).await;
@@ -78,7 +78,7 @@ async fn client_api_preserves_filters_counts_and_foreign_id_denial(pool: PgPool)
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn client_api_rejects_unavailable_policy_and_inactive_sessions(pool: PgPool) {
     for state in ["unknown_policy", "missing", "malformed", "inactive"] {
@@ -133,7 +133,7 @@ async fn client_api_rejects_unavailable_policy_and_inactive_sessions(pool: PgPoo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn client_api_observes_revocation_after_waiting_for_current_authority(pool: PgPool) {
     for detail in [false, true] {
@@ -187,7 +187,7 @@ async fn client_api_observes_revocation_after_waiting_for_current_authority(pool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn client_api_rechecks_activity_after_session_authentication(pool: PgPool) {
     for detail in [false, true] {

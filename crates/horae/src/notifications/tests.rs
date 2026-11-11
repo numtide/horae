@@ -248,7 +248,7 @@ async fn queued(
     (ids, event)
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn acknowledged_email_is_never_claimed_again(pool: sqlx::PgPool) {
     let stub = Stub::new("cat > \"$0.message\"");
     let (_, event) = queued(&pool).await;
@@ -271,7 +271,7 @@ async fn acknowledged_email_is_never_claimed_again(pool: sqlx::PgPool) {
     assert!(stub.captured(".message").contains("Scope: project"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn failed_email_retries_same_identity_and_eventually_stops(pool: sqlx::PgPool) {
     let stub = Stub::new("cat > \"$0.message\"\nprintf 'secret detail' >&2\nexit 75");
     let (_, mut event) = queued(&pool).await;
@@ -328,7 +328,7 @@ async fn failed_email_retries_same_identity_and_eventually_stops(pool: sqlx::PgP
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn revoked_recipient_does_not_receive_a_pending_email(pool: sqlx::PgPool) {
     let stub = Stub::new("touch \"$0.called\"\ncat > /dev/null");
     let (ids, event) = queued(&pool).await;
@@ -349,7 +349,7 @@ async fn revoked_recipient_does_not_receive_a_pending_email(pool: sqlx::PgPool) 
     assert!(!PathBuf::from(format!("{}.called", stub.program.display())).exists());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn stale_email_lease_cannot_start_delivery(pool: sqlx::PgPool) {
     let stub = Stub::new("touch \"$0.called\"\ncat > /dev/null");
     let (_, event) = queued(&pool).await;
@@ -365,7 +365,7 @@ async fn stale_email_lease_cannot_start_delivery(pool: sqlx::PgPool) {
     assert!(!PathBuf::from(format!("{}.called", stub.program.display())).exists());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn mail_worker_delivers_only_its_kind_and_drains_cleanly(pool: sqlx::PgPool) {
     let stub = Stub::new("cat > \"$0.message\"");
     let (ids, event) = queued(&pool).await;
@@ -420,7 +420,7 @@ async fn mail_worker_delivers_only_its_kind_and_drains_cleanly(pool: sqlx::PgPoo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn disabled_mail_worker_does_not_claim_pending_notifications(pool: sqlx::PgPool) {
     let (_, event) = queued(&pool).await;
     sqlx::query!(
@@ -449,7 +449,7 @@ async fn disabled_mail_worker_does_not_claim_pending_notifications(pool: sqlx::P
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn foreign_notification_payload_is_terminal_and_never_sent(pool: sqlx::PgPool) {
     let stub = Stub::new("touch \"$0.called\"\ncat > /dev/null");
     let (_, event) = queued(&pool).await;
@@ -476,7 +476,7 @@ async fn foreign_notification_payload_is_terminal_and_never_sent(pool: sqlx::PgP
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn retry_can_recover_without_changing_message_identity(pool: sqlx::PgPool) {
     let stub = Stub::new(
         "cat > \"$0.message\"\nif test ! -f \"$0.retry\"; then touch \"$0.retry\"; exit 75; fi",

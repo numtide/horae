@@ -116,27 +116,27 @@ async fn concurrent_changes_keep_an_admin(pool: &PgPool, first: Change, second: 
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn demotion_and_deactivation_keep_an_active_admin(pool: PgPool) {
     concurrent_changes_keep_an_admin(&pool, Change::Demote, Change::Deactivate).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn deactivation_and_demotion_keep_an_active_admin(pool: PgPool) {
     concurrent_changes_keep_an_admin(&pool, Change::Deactivate, Change::Demote).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn concurrent_demotions_keep_an_active_admin(pool: PgPool) {
     concurrent_changes_keep_an_admin(&pool, Change::Demote, Change::Demote).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn concurrent_deactivations_keep_an_active_admin(pool: PgPool) {
     concurrent_changes_keep_an_admin(&pool, Change::Deactivate, Change::Deactivate).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn repeatable_read_default_cannot_remove_every_administrator(pool: PgPool) {
     let requests = sqlx::postgres::PgPoolOptions::new()
@@ -165,7 +165,7 @@ async fn repeatable_read_default_cannot_remove_every_administrator(pool: PgPool)
     requests.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn the_last_admin_cannot_be_demoted_or_deactivated(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     for change in [Change::Demote, Change::Deactivate] {
@@ -176,7 +176,7 @@ async fn the_last_admin_cannot_be_demoted_or_deactivated(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unchanged_admin_access_is_allowed(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let (user, role) =
@@ -190,7 +190,7 @@ async fn unchanged_admin_access_is_allowed(pool: PgPool) {
     assert_eq!(active, Some(user.active));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn access_changes_cannot_target_another_organization(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let foreign = seed(&pool, OrgRole::Admin).await;

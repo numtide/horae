@@ -1,7 +1,7 @@
 use super::*;
 use crate::server_fns::test_seed::time_entry;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn hidden_spend_overflow_does_not_prevent_authorized_hour_totals(pool: PgPool) {
     let ids = tracked(&pool, OrgRole::Admin, &[Permission::ProjectReadAll]).await;
@@ -34,7 +34,7 @@ async fn hidden_spend_overflow_does_not_prevent_authorized_hour_totals(pool: PgP
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_spend_excludes_entries_with_foreign_person_parents(pool: PgPool) {
     let ids = tracked(
@@ -59,7 +59,7 @@ async fn canonical_spend_excludes_entries_with_foreign_person_parents(pool: PgPo
     assert_eq!((rows[0].spent_minutes, rows[0].spent_cents), (0, Some(0)));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn spend_rechecks_financial_only_revocation_after_organization_wait(pool: PgPool) {
     let ids = tracked(
@@ -119,7 +119,7 @@ async fn tracked(pool: &PgPool, role: OrgRole, permissions: &[Permission]) -> Se
     ids
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_spend_reads_do_not_require_a_legacy_manager_role(pool: PgPool) {
     let ids = tracked(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;
@@ -139,7 +139,7 @@ async fn canonical_spend_reads_do_not_require_a_legacy_manager_role(pool: PgPool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_spend_withholds_money_after_financial_revocation(pool: PgPool) {
     let ids = tracked(
@@ -168,7 +168,7 @@ async fn canonical_spend_withholds_money_after_financial_revocation(pool: PgPool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_spend_managed_scope_requires_current_project_designation(pool: PgPool) {
     let ids = tracked(
@@ -211,7 +211,7 @@ async fn canonical_spend_managed_scope_requires_current_project_designation(pool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_spend_zero_and_withheld_money_remain_distinct_without_entries(pool: PgPool) {
     let (ids, _) = fixture(
@@ -243,7 +243,7 @@ async fn canonical_spend_zero_and_withheld_money_remain_distinct_without_entries
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_shared_progress_and_report_permissions_do_not_open_ordinary_money(pool: PgPool) {
     let ids = tracked(
@@ -279,7 +279,7 @@ async fn canonical_shared_progress_and_report_permissions_do_not_open_ordinary_m
 /// whose invoice is missing from the organization. The foreign key keeps
 /// `invoice_id` pointing at a real invoice, so "missing" is an invoice of
 /// another organization, which the org-scoped join cannot see.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn spend_totals_are_exact_for_invoiced_hidden_empty_and_missing_invoice_entries(
     pool: PgPool,

@@ -20,7 +20,7 @@ fn params() -> ExportParams {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_project_exports_deny_inactive_actors(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -56,7 +56,7 @@ async fn add_entries(pool: &PgPool, ids: &SeedIds, count: usize) {
     ).execute(pool).await.unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_tag_filter_excludes_other_projects_without_duplicating_rows(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -135,7 +135,7 @@ async fn streamed_tag_filter_excludes_other_projects_without_duplicating_rows(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_timesheet_preserves_csv_escaping_frozen_zero_and_all_filters(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -207,7 +207,7 @@ async fn streamed_timesheet_preserves_csv_escaping_frozen_zero_and_all_filters(p
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_timesheet_exceeds_xlsx_row_limit_without_one_large_body_chunk(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -233,7 +233,7 @@ async fn streamed_timesheet_exceeds_xlsx_row_limit_without_one_large_body_chunk(
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_projects_preserve_scope_budget_and_tenant_isolation(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -302,7 +302,7 @@ async fn streamed_projects_preserve_scope_budget_and_tenant_isolation(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_invoice_uses_stored_exact_cents_and_tenant_scoped_metadata(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -359,7 +359,7 @@ async fn export_connection(pool: &PgPool) -> (PgPool, i32) {
     (export_pool, pid)
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_fee_invoice_has_no_fabricated_hours_or_hourly_rate(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -406,7 +406,7 @@ async fn streamed_fee_invoice_has_no_fabricated_hours_or_hourly_rate(pool: PgPoo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn dropping_streamed_timesheet_closes_its_database_connection(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -436,7 +436,7 @@ async fn dropping_streamed_timesheet_closes_its_database_connection(pool: PgPool
     export_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_real_database_error_interrupts_the_csv_body(pool: PgPool) {
     let slots = Arc::new(Semaphore::new(1));
@@ -455,7 +455,7 @@ async fn a_real_database_error_interrupts_the_csv_body(pool: PgPool) {
     assert!(chunks.next().await.is_none());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_invoice_metadata_and_lines_share_one_snapshot(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -547,7 +547,7 @@ async fn streamed_invoice_metadata_and_lines_share_one_snapshot(pool: PgPool) {
     export_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 #[ignore = "Manual release measurement of a 100,000-row CSV download"]
 async fn measure_streaming_csv_export(pool: PgPool) {

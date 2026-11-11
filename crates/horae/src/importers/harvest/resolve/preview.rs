@@ -223,7 +223,7 @@ pub(in crate::importers::harvest) fn forget_lost_people(
 mod tests {
     use super::*;
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn checkpoint_retains_link_activity_and_derives_missing_legacy_field(pool: sqlx::PgPool) {
         let ids =
             crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
@@ -274,7 +274,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn checkpoint_restores_known_task_currency_and_keeps_old_currency_unknown(
         pool: sqlx::PgPool,
     ) {
@@ -316,7 +316,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn rejects_foreign_parent_snapshots_before_restoring_any_rows(pool: sqlx::PgPool) {
         let owner = Uuid::now_v7();
         for field in ["clients", "projects", "tasks"] {
@@ -335,7 +335,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_person_whose_email_was_taken_meanwhile_is_reported_not_restored(pool: sqlx::PgPool) {
         use horae_core::importers::harvest::types::{ImportMode, SourceKind};
 

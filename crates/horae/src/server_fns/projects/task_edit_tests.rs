@@ -11,7 +11,7 @@ fn set_rate(amount_cents: i64) -> TaskRateEdit {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_name_editor_preserves_unknown_currency_and_hides_rate_even_on_noop(pool: PgPool) {
     let (ids, _) = fixture(
@@ -60,7 +60,7 @@ async fn task_name_editor_preserves_unknown_currency_and_hides_rate_even_on_noop
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_rate_edit_does_not_rewrite_project_overrides_or_time_history(pool: PgPool) {
     let (ids, _) = fixture(
@@ -111,7 +111,7 @@ async fn task_rate_edit_does_not_rewrite_project_overrides_or_time_history(pool:
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn explicit_task_rate_noops_still_require_global_write_authority(pool: PgPool) {
     for extra in [
@@ -174,7 +174,7 @@ async fn explicit_task_rate_noops_still_require_global_write_authority(pool: PgP
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_edit_validates_currency_amount_name_and_foreign_targets_atomically(pool: PgPool) {
     let (ids, _) = fixture(
@@ -221,7 +221,7 @@ async fn task_edit_validates_currency_amount_name_and_foreign_targets_atomically
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_edit_observes_task_and_rate_revocation_after_organization_wait(pool: PgPool) {
     for revoke in [Permission::TaskWriteAll, Permission::BillableRateWriteAll] {
@@ -289,7 +289,7 @@ async fn task_edit_observes_task_and_rate_revocation_after_organization_wait(poo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_rate_edit_refuses_stale_currency_after_organization_wait(pool: PgPool) {
     let (ids, _) = fixture(
@@ -352,7 +352,7 @@ async fn task_rate_edit_refuses_stale_currency_after_organization_wait(pool: PgP
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_edit_holds_authority_while_waiting_for_task_and_commit(pool: PgPool) {
     let (ids, _) = fixture(
@@ -405,7 +405,7 @@ async fn task_edit_holds_authority_while_waiting_for_task_and_commit(pool: PgPoo
     assert!(event.is_some());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_edit_rejects_actor_deactivated_after_waiting_for_actor_lock(pool: PgPool) {
     let (ids, _) = fixture(

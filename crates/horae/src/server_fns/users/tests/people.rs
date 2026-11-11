@@ -64,7 +64,7 @@ fn a_new_person_needs_an_email_and_falls_back_to_it_for_a_name() {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn people_are_added_deactivated_or_active_as_chosen(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -104,7 +104,7 @@ async fn people_are_added_deactivated_or_active_as_chosen(pool: PgPool) {
     assert_eq!(emails(&pool, ids.org_id).await, expected);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn an_email_already_in_use_is_reported_present_and_the_rest_are_added(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -158,7 +158,7 @@ async fn an_email_already_in_use_is_reported_present_and_the_rest_are_added(pool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn an_email_listed_twice_in_any_case_refuses_the_batch(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -189,7 +189,7 @@ async fn an_email_listed_twice_in_any_case_refuses_the_batch(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn only_an_active_administrator_adds_people(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;

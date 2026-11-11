@@ -39,7 +39,7 @@ async fn policy_one(
     ids
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn own_permissions_legacy_mode_never_discloses_staging(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -85,7 +85,7 @@ fn is_forbidden(result: Result<String, ServerFnError>) -> bool {
     )
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn server_version_under_policy_zero_follows_the_legacy_role(pool: PgPool) {
     let admin = seed(&pool, OrgRole::Admin).await;
@@ -96,7 +96,7 @@ async fn server_version_under_policy_zero_follows_the_legacy_role(pool: PgPool) 
     assert!(is_forbidden(version));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn server_version_under_policy_one_follows_the_canonical_flag(pool: PgPool) {
     let admin = policy_one(&pool, OrgRole::Member, BuiltInProfile::Administrator, true).await;
@@ -108,7 +108,7 @@ async fn server_version_under_policy_one_follows_the_canonical_flag(pool: PgPool
     assert!(is_forbidden(version));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn server_version_refuses_a_person_deactivated_mid_session(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -120,7 +120,7 @@ async fn server_version_refuses_a_person_deactivated_mid_session(pool: PgPool) {
     assert!(is_forbidden(version));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn own_permissions_preserve_exact_grants_and_independent_identity(pool: PgPool) {
     for profile in BuiltInProfile::ALL {
@@ -163,7 +163,7 @@ async fn own_permissions_preserve_exact_grants_and_independent_identity(pool: Pg
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn own_permissions_deny_invalid_identity_policy_and_state(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -226,7 +226,7 @@ async fn own_permissions_deny_invalid_identity_policy_and_state(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn own_permissions_wait_for_current_actor_deactivation(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -269,7 +269,7 @@ async fn person(pool: &PgPool, org: Uuid) -> Uuid {
     id
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn own_permissions_scope_is_sorted_and_excludes_membership_and_other_managers(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -311,7 +311,7 @@ async fn own_permissions_scope_is_sorted_and_excludes_membership_and_other_manag
     assert_eq!(after, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn own_permissions_reload_after_winning_gate_under_repeatable_read_defaults(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -397,7 +397,7 @@ async fn own_permissions_reload_after_winning_gate_under_repeatable_read_default
     reader_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn own_permissions_reader_retains_actor_activity_until_snapshot_is_loaded(pool: PgPool) {
     let ids = fixture(&pool).await;

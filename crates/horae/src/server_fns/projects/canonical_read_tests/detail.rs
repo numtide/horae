@@ -1,6 +1,6 @@
 use super::*;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detail_view_contains_only_scoped_workflow_labels_and_current_edit_authority(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -79,7 +79,7 @@ async fn detail_view_contains_only_scoped_workflow_labels_and_current_edit_autho
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detail_view_shared_member_gets_own_identity_not_other_people_or_legacy_actions(
     pool: PgPool,
@@ -106,7 +106,7 @@ async fn detail_view_shared_member_gets_own_identity_not_other_people_or_legacy_
     assert!(view.project.task_rate_currency.is_none());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detail_view_rejects_changed_requester_and_current_resource_denial(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -201,7 +201,7 @@ pub(super) fn legacy_viewer(ids: &SeedIds, role: OrgRole) -> User {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detail_view_identity_and_lifecycle_affordances_match_policy_zero_authority(pool: PgPool) {
     // `set_project_active` requires a legacy Manager or Administrator; any
@@ -254,7 +254,7 @@ async fn detail_view_identity_and_lifecycle_affordances_match_policy_zero_author
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detail_view_policy_one_offers_no_role_derived_status_change_and_scopes_client_link(
     pool: PgPool,

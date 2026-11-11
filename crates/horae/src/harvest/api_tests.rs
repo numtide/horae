@@ -7,7 +7,7 @@ use crate::server_fns::test_seed::{seed, time_entry};
 use horae_core::types::{EntryState, OrgRole};
 use serde_json::{Value, json};
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn responses_carry_integer_ids_for_every_reference(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
@@ -29,7 +29,7 @@ async fn responses_carry_integer_ids_for_every_reference(pool: PgPool) {
     assert_eq!(row["task"]["id"], api_id(&pool, "task", ids.task_id).await);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn hours_are_exact_decimals(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
@@ -45,7 +45,7 @@ async fn hours_are_exact_decimals(pool: PgPool) {
     assert!(body.contains(r#""hours":1.67,"#), "{body}");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn records_are_found_by_number_or_by_uuid(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let app = signed_in(&pool, ids.user_id).await;
@@ -60,7 +60,7 @@ async fn records_are_found_by_number_or_by_uuid(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_unknown_number_is_a_harvest_404(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let app = signed_in(&pool, ids.user_id).await;
@@ -72,7 +72,7 @@ async fn an_unknown_number_is_a_harvest_404(pool: PgPool) {
     assert_eq!(body["error"], "not_found");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_filter_by_an_unknown_number_matches_nothing(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -83,7 +83,7 @@ async fn a_filter_by_an_unknown_number_matches_nothing(pool: PgPool) {
     assert_eq!(body["total_entries"], 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn filters_accept_numbers(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -99,7 +99,7 @@ async fn filters_accept_numbers(pool: PgPool) {
     assert_eq!(body["total_entries"], 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_malformed_id_is_a_422_with_a_message(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let app = signed_in(&pool, ids.user_id).await;
@@ -110,7 +110,7 @@ async fn a_malformed_id_is_a_422_with_a_message(pool: PgPool) {
     assert!(serde_json::from_str::<Value>(&body).unwrap()["message"].is_string());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn signed_out_requests_get_the_oauth_error_body(pool: PgPool) {
     let app = router(pool);
 
@@ -123,7 +123,7 @@ async fn signed_out_requests_get_the_oauth_error_body(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn every_alias_serves_the_canonical_response(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let app = signed_in(&pool, ids.user_id).await;
@@ -141,7 +141,7 @@ async fn every_alias_serves_the_canonical_response(pool: PgPool) {
     assert_eq!(projects["total_entries"], 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn amounts_use_the_currencys_own_decimals(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     sqlx::query!(
@@ -159,7 +159,7 @@ async fn amounts_use_the_currencys_own_decimals(pool: PgPool) {
     assert!(body.contains(r#""budget":1000,"#), "{body}");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_member_filtering_by_an_unknown_person_is_refused(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     let app = signed_in(&pool, ids.user_id).await;
@@ -173,7 +173,7 @@ async fn a_member_filtering_by_an_unknown_person_is_refused(pool: PgPool) {
 
 // ── Numbering (migrations 0058–0060) ────────────────────────────────────────
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn every_organization_has_an_account_id(pool: PgPool) {
     let first = seed(&pool, OrgRole::Admin).await;
     let second = seed(&pool, OrgRole::Admin).await;
@@ -190,7 +190,7 @@ async fn every_organization_has_an_account_id(pool: PgPool) {
     assert!(accounts[0] < accounts[1]);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn numbers_count_up_per_kind_in_creation_order(pool: PgPool) {
     let first = seed(&pool, OrgRole::Admin).await;
     let second = seed(&pool, OrgRole::Admin).await;
@@ -210,7 +210,7 @@ async fn numbers_count_up_per_kind_in_creation_order(pool: PgPool) {
     assert!(entries.0 < entries.1, "{entries:?}");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_deleted_records_number_is_not_reused(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
@@ -227,7 +227,7 @@ async fn a_deleted_records_number_is_not_reused(pool: PgPool) {
 
 /// Two creators whose snapshots predate each other's commit still get numbers:
 /// allocation must not depend on what the transaction's snapshot can see.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn concurrent_creators_get_numbers_at_every_isolation_level(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     for level in ["REPEATABLE READ", "SERIALIZABLE"] {
@@ -283,7 +283,7 @@ async fn insert_client(pool: &PgPool, org_id: Uuid, harvest_id: Option<i64>) -> 
     id
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_given_harvest_id_is_kept(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
 
@@ -295,7 +295,7 @@ async fn a_given_harvest_id_is_kept(pool: PgPool) {
     assert!(api_id(&pool, "client", native).await < 4_200_000);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_native_record_skips_an_id_another_record_has(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let next = api_id(&pool, "client", ids.client_id).await + 1;
@@ -308,7 +308,7 @@ async fn a_native_record_skips_an_id_another_record_has(pool: PgPool) {
 
 /// A number never names another record: an imported record's Harvest id stays
 /// reserved after the record is deleted, so it can come back with it.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_native_record_skips_a_harvest_id_the_import_map_holds(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let next = api_id(&pool, "client", ids.client_id).await + 1;
@@ -328,7 +328,7 @@ async fn a_native_record_skips_a_harvest_id_the_import_map_holds(pool: PgPool) {
     assert!(api_id(&pool, "client", native).await > next);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn ids_are_unique_per_organization_only(pool: PgPool) {
     let first = seed(&pool, OrgRole::Admin).await;
     let second = seed(&pool, OrgRole::Admin).await;
@@ -575,7 +575,7 @@ async fn a_duplicate_number_stops_the_unique_index_with_a_readable_error(pool: P
 
 /// The backfill's flag only mattered during 0061; afterwards nothing can skip
 /// the stamps.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn the_backfill_flag_no_longer_skips_edit_stamps(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;

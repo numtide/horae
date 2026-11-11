@@ -46,7 +46,7 @@ async fn restrict_task(pool: &PgPool, entry: &TimeEntry) {
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn restricted_empty_task_rejects_picker_manual_and_timer_starts(pool: PgPool) {
     let entry = editable_entry(&pool, true).await;
     restrict_task(&pool, &entry).await;
@@ -79,7 +79,7 @@ async fn restricted_empty_task_rejects_picker_manual_and_timer_starts(pool: PgPo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn restriction_changes_are_rechecked_before_manual_or_timer_insertion(pool: PgPool) {
     for is_running in [false, true] {
         for revoke_grant in [false, true] {
@@ -148,7 +148,7 @@ async fn restriction_changes_are_rechecked_before_manual_or_timer_insertion(pool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn revoked_timer_stop_preserves_the_open_state_guard(pool: PgPool) {
     let entry = editable_entry(&pool, true).await;
     sqlx::query!("UPDATE time_entries SET is_running = true, started_at = now(), state = 'submitted' WHERE id = $1", entry.id)
@@ -194,7 +194,7 @@ async fn grant_task(pool: &PgPool, entry: &TimeEntry) {
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn assignment_cascade_allows_an_inflight_entry_project_fk_to_finish(pool: PgPool) {
     let entry = editable_entry(&pool, true).await;
@@ -294,7 +294,7 @@ async fn assignment_cascade_allows_an_inflight_entry_project_fk_to_finish(pool: 
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn task_grants_allow_tracking_for_every_role(pool: PgPool) {
     for role in [OrgRole::Member, OrgRole::Manager, OrgRole::Admin] {
         let entry = editable_entry(&pool, true).await;
@@ -337,7 +337,7 @@ async fn task_grants_allow_tracking_for_every_role(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn revoked_grant_does_not_trap_an_own_running_timer(pool: PgPool) {
     let entry = editable_entry(&pool, true).await;
     let running = insert_time_entry(

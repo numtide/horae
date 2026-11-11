@@ -128,7 +128,7 @@ fn kinds(report: &ImportReport) -> Vec<Option<EntryErrorKind>> {
         .collect()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn negative_hours_are_reported_with_their_value(pool: PgPool) {
     let org = setup(&pool).await;
     for mode in [ImportMode::DryRun, ImportMode::Commit] {
@@ -139,7 +139,7 @@ async fn negative_hours_are_reported_with_their_value(pool: PgPool) {
     assert!(stored(&pool, org).await.is_empty());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn running_timer_is_reported_until_it_stops(pool: PgPool) {
     let org = setup(&pool).await;
     let running = sync(
@@ -166,7 +166,7 @@ async fn running_timer_is_reported_until_it_stops(pool: PgPool) {
     assert_eq!(stored(&pool, org).await, [(480, None)]);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn later_harvest_edits_update_the_open_entry_in_preview_and_commit(pool: PgPool) {
     let org = setup(&pool).await;
     let first = sync(
@@ -215,7 +215,7 @@ async fn later_harvest_edits_update_the_open_entry_in_preview_and_commit(pool: P
     assert_eq!(stored(&pool, org).await, [(540, Some("finished".into()))]);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn later_harvest_edits_never_overwrite_submitted_or_horae_edited_entries(pool: PgPool) {
     let org = setup(&pool).await;
     for (edited_in_horae, reason) in [
@@ -281,7 +281,7 @@ async fn entry(pool: &PgPool, org: Uuid) -> (i32, String, Option<String>) {
     (row.minutes, row.state, row.notes)
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_submit_racing_an_update_keeps_the_submitted_entry(pool: PgPool) {
     let org = setup(&pool).await;
     sync(
@@ -336,7 +336,7 @@ async fn a_submit_racing_an_update_keeps_the_submitted_entry(pool: PgPool) {
     assert_eq!(entry(&pool, org).await, (60, "submitted".into(), None));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_horae_edit_from_an_older_transaction_still_counts_as_edited(pool: PgPool) {
     let org = setup(&pool).await;
     sync(
@@ -387,7 +387,7 @@ async fn a_horae_edit_from_an_older_transaction_still_counts_as_edited(pool: PgP
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn later_harvest_edits_never_touch_a_submitted_period(pool: PgPool) {
     let org = setup(&pool).await;
     sync(
@@ -441,7 +441,7 @@ async fn later_harvest_edits_never_touch_a_submitted_period(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn preview_and_commit_agree_on_a_repeated_update(pool: PgPool) {
     let org = setup(&pool).await;
     sync(

@@ -1,6 +1,6 @@
 use super::*;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn financial_snapshots_override_isolation_but_restore_connection_settings(pool: PgPool) {
     let ids = fee_tests::single_fee(&pool).await;
@@ -52,7 +52,7 @@ async fn financial_snapshots_override_isolation_but_restore_connection_settings(
     reader_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn financial_snapshots_honor_stricter_lock_timeout_during_authorization(pool: PgPool) {
     let ids = fee_tests::single_fee(&pool).await;
@@ -108,7 +108,7 @@ async fn financial_snapshots_honor_stricter_lock_timeout_during_authorization(po
     }
     reader_pool.close().await;
 }
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn financial_snapshots_retry_only_serialization_failures_and_stop_after_three(pool: PgPool) {
     let ids = fee_tests::single_fee(&pool).await;

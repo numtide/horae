@@ -6,7 +6,7 @@ use super::*;
 use crate::server_fns::test_seed::{assert_minutes_cannot_rise, legacy_minutes, seed};
 use sqlx::PgPool;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_legacy_entry_over_the_limit_is_submitted_approved_rejected_and_reopened(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;

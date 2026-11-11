@@ -28,7 +28,7 @@ fn request(project: EditableProject, task: Uuid, active: bool) -> ProjectEditReq
     request
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_task_archive_restore_preserves_hidden_configuration_history_and_replays(
     pool: PgPool,
@@ -105,7 +105,7 @@ async fn project_task_archive_restore_preserves_hidden_configuration_history_and
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_settings_save_without_activity_intent_does_not_restore_archived_links(
     pool: PgPool,
@@ -139,7 +139,7 @@ async fn project_settings_save_without_activity_intent_does_not_restore_archived
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invalid_task_activity_targets_and_global_restore_order_rollback_the_whole_edit(
     pool: PgPool,

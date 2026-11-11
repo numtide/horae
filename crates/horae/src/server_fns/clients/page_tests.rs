@@ -69,7 +69,7 @@ fn assert_code(error: ServerFnError, expected: u16) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn read_only_client_grant_shows_catalog_without_writes_rates_or_projects(pool: PgPool) {
     let ids = policy_one(&pool, OrgRole::Member, &[Permission::ClientReadAll]).await;
     let page = overview(&pool, &ids).await.unwrap();
@@ -88,7 +88,7 @@ async fn read_only_client_grant_shows_catalog_without_writes_rates_or_projects(p
     assert!(!serde_json::to_string(&view).unwrap().contains("12345"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unrelated_grants_and_legacy_roles_do_not_open_the_catalog(pool: PgPool) {
     for (role, permissions) in [
         (OrgRole::Admin, vec![]),
@@ -111,7 +111,7 @@ async fn unrelated_grants_and_legacy_roles_do_not_open_the_catalog(pool: PgPool)
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn default_rate_requires_the_global_billable_rate_grant(pool: PgPool) {
     for (rate_grant, visible) in [
         (Permission::BillableRateReadAll, true),
@@ -132,7 +132,7 @@ async fn default_rate_requires_the_global_billable_rate_grant(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn project_counts_follow_the_policy_one_project_reader(pool: PgPool) {
     let ids = policy_one(
         &pool,
@@ -169,7 +169,7 @@ async fn project_counts_follow_the_policy_one_project_reader(pool: PgPool) {
     assert_eq!(counts(overview(&pool, &ids).await.unwrap()).0, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn managed_project_counts_require_an_actual_management_link(pool: PgPool) {
     let ids = policy_one(
         &pool,
@@ -186,7 +186,7 @@ async fn managed_project_counts_require_an_actual_management_link(pool: PgPool) 
     assert_eq!(total(overview(&pool, &ids).await.unwrap()), 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn visible_default_rate_distinguishes_unset_from_zero(pool: PgPool) {
     let ids = policy_one(
         &pool,
@@ -211,7 +211,7 @@ async fn visible_default_rate_distinguishes_unset_from_zero(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn foreign_missing_and_rebound_requests_fail_closed(pool: PgPool) {
     let ids = policy_one(&pool, OrgRole::Member, &[Permission::ClientReadAll]).await;
     let foreign = seed(&pool, OrgRole::Admin).await;
@@ -255,7 +255,7 @@ async fn foreign_missing_and_rebound_requests_fail_closed(pool: PgPool) {
     assert_code(error, FORBIDDEN);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unavailable_permission_state_and_inactive_actors_fail_closed(pool: PgPool) {
     for state in ["unknown_policy", "missing", "malformed", "inactive"] {
         let ids = policy_one(&pool, OrgRole::Admin, &[Permission::ClientReadAll]).await;
@@ -297,7 +297,7 @@ async fn unavailable_permission_state_and_inactive_actors_fail_closed(pool: PgPo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn readers_observe_revocation_after_waiting_for_current_authority(pool: PgPool) {
     for read_detail in [false, true] {
         let ids = policy_one(&pool, OrgRole::Admin, &[Permission::ClientReadAll]).await;
@@ -347,7 +347,7 @@ async fn readers_observe_revocation_after_waiting_for_current_authority(pool: Pg
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn policy_zero_keeps_legacy_catalog_billing_and_manager_affordance(pool: PgPool) {
     for (role, manager) in [
         (OrgRole::Admin, true),
@@ -385,7 +385,7 @@ async fn policy_zero_keeps_legacy_catalog_billing_and_manager_affordance(pool: P
 
 /// The shared detail reader follows the same grants as the page: a legacy
 /// Manager role without them sees nothing under policy one.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn workflow_reader_follows_grants_under_policy_one(pool: PgPool) {
     let ids = policy_one(&pool, OrgRole::Manager, &[]).await;
     let error = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)

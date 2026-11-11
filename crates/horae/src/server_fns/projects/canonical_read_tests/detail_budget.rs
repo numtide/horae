@@ -139,7 +139,7 @@ async fn reader(pool: &PgPool, permissions: &[Permission]) -> (SeedIds, User) {
     fixture(pool, OrgRole::Member, PermissionSelection::new(permissions)).await
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_budget_uses_lifetime_raw_minutes_and_list_fee_spend(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -177,7 +177,7 @@ async fn legacy_budget_uses_lifetime_raw_minutes_and_list_fee_spend(pool: PgPool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn configured_budget_applies_rounding_and_saved_nonbillable_inclusion(pool: PgPool) {
     let (ids, viewer) = reader(&pool, &[Permission::ProjectReadAll]).await;
@@ -208,7 +208,7 @@ async fn configured_budget_applies_rounding_and_saved_nonbillable_inclusion(pool
     assert_eq!(headline_of(&pool, &viewer, &ids).await, exact(120, 90, 30));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn monthly_budget_counts_only_the_current_calendar_month(pool: PgPool) {
     let (ids, viewer) = reader(&pool, &[Permission::ProjectReadAll]).await;
@@ -238,7 +238,7 @@ async fn monthly_budget_counts_only_the_current_calendar_month(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_budgets_exclude_blank_count_zero_and_report_unallocated(pool: PgPool) {
     let (ids, viewer) = reader(&pool, &[Permission::ProjectReadAll]).await;
@@ -270,7 +270,7 @@ async fn task_budgets_exclude_blank_count_zero_and_report_unallocated(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_allowance_overflow_is_unavailable_not_unallocated(pool: PgPool) {
     let (ids, viewer) = reader(&pool, &[Permission::ProjectReadAll]).await;
@@ -285,7 +285,7 @@ async fn task_allowance_overflow_is_unavailable_not_unallocated(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn person_budget_uses_saved_member_allowances(pool: PgPool) {
     let (ids, viewer) = reader(&pool, &[Permission::ProjectReadAll]).await;
@@ -319,7 +319,7 @@ async fn person_budget_uses_saved_member_allowances(pool: PgPool) {
     assert_eq!(headline_of(&pool, &viewer, &ids).await, exact(60, 30, 30));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn configured_budget_unit_none_ignores_leftover_legacy_columns(pool: PgPool) {
     let (ids, viewer) = reader(&pool, &[Permission::ProjectReadAll]).await;
@@ -334,7 +334,7 @@ async fn configured_budget_unit_none_ignores_leftover_legacy_columns(pool: PgPoo
     assert_eq!(budget_on(&pool, &viewer, &ids, today()).await, None);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn fee_figures_require_current_financial_authority(pool: PgPool) {
     let (ids, viewer) = reader(
@@ -379,7 +379,7 @@ async fn fee_figures_require_current_financial_authority(pool: PgPool) {
     assert_eq!(headline_of(&pool, &viewer, &ids).await, exact(120, 60, 60));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn unallocated_fee_budget_is_still_withheld_without_financial_authority(pool: PgPool) {
     let (ids, viewer) = reader(
@@ -402,7 +402,7 @@ async fn unallocated_fee_budget_is_still_withheld_without_financial_authority(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_fee_figures_follow_spend_redaction_for_canonical_readers(pool: PgPool) {
     let (ids, viewer) = reader(
@@ -429,7 +429,7 @@ async fn legacy_fee_figures_follow_spend_redaction_for_canonical_readers(pool: P
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn archived_project_keeps_its_configured_budget(pool: PgPool) {
     let (ids, viewer) = reader(&pool, &[Permission::ProjectReadAll]).await;
@@ -449,7 +449,7 @@ async fn archived_project_keeps_its_configured_budget(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn foreign_client_parent_hides_configured_and_legacy_budgets(pool: PgPool) {
     let (ids, viewer) = reader(
@@ -496,7 +496,7 @@ async fn maximum_project_rate(pool: &PgPool, ids: &SeedIds) {
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn configured_fee_valuation_overflow_is_unavailable_not_a_failed_detail(pool: PgPool) {
     let (ids, viewer) = reader(
@@ -514,7 +514,7 @@ async fn configured_fee_valuation_overflow_is_unavailable_not_a_failed_detail(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_hours_budget_ignores_unrelated_money_overflow(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -554,7 +554,7 @@ async fn summed_overflow(pool: &PgPool, ids: &SeedIds) {
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn configured_fee_sum_overflow_is_unavailable(pool: PgPool) {
     let (ids, viewer) = reader(
@@ -571,7 +571,7 @@ async fn configured_fee_sum_overflow_is_unavailable(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_fee_line_and_sum_overflow_are_unavailable(pool: PgPool) {
     for summed in [false, true] {
@@ -592,7 +592,7 @@ async fn legacy_fee_line_and_sum_overflow_are_unavailable(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn unallocated_configured_budgets_keep_metadata_and_value_nothing(pool: PgPool) {
     let (ids, viewer) = reader(
@@ -641,7 +641,7 @@ async fn task_rate_fee_budget(pool: &PgPool, ids: &SeedIds) {
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn blank_scope_overflow_cannot_hide_an_exact_allocated_total(pool: PgPool) {
     let (ids, viewer) = reader(
@@ -673,7 +673,7 @@ async fn blank_scope_overflow_cannot_hide_an_exact_allocated_total(pool: PgPool)
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn explicit_zero_allowance_overflow_is_unavailable(pool: PgPool) {
     let (ids, viewer) = reader(
@@ -702,7 +702,7 @@ async fn explicit_zero_allowance_overflow_is_unavailable(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn other_consumption_failures_still_fail_the_detail(pool: PgPool) {
     let (ids, viewer) = reader(&pool, &[Permission::ProjectReadAll]).await;
@@ -738,7 +738,7 @@ async fn other_consumption_failures_still_fail_the_detail(pool: PgPool) {
     reader_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn shared_member_person_budget_is_aggregate_only(pool: PgPool) {
     let (ids, viewer) = reader(&pool, &[]).await;
@@ -812,7 +812,7 @@ async fn shared_member_person_budget_is_aggregate_only(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detail_budget_sends_no_scope_details(pool: PgPool) {
     let (ids, viewer) = reader(&pool, &[Permission::ProjectReadAll]).await;
@@ -833,7 +833,7 @@ async fn detail_budget_sends_no_scope_details(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn reading_the_budget_writes_nothing(pool: PgPool) {
     let (ids, viewer) = reader(&pool, &[Permission::ProjectReadAll]).await;

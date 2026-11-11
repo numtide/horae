@@ -22,7 +22,7 @@ fn query(group_by: TimeReportGrouping) -> TimeReportGroupQuery {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn billability_narrows_every_grouping_before_totals_and_cursor(pool: PgPool) {
     use crate::models::time_report::TimeReportBillability;
@@ -66,7 +66,7 @@ async fn billability_narrows_every_grouping_before_totals_and_cursor(pool: PgPoo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn active_projects_only_narrows_every_grouping_before_totals(pool: PgPool) {
     let ids = super::time_reports_tests::active_projects_fixture(&pool).await;
@@ -103,7 +103,7 @@ async fn active_projects_only_narrows_every_grouping_before_totals(pool: PgPool)
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_reports_preserve_dimensions_own_scope_and_rounding(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -154,7 +154,7 @@ async fn grouped_reports_preserve_dimensions_own_scope_and_rounding(pool: PgPool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_reports_keep_duplicate_names_distinct_across_pages(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -231,7 +231,7 @@ async fn set_grants(pool: &PgPool, actor: Uuid, selection: PermissionSelection) 
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_reports_apply_scope_union_before_every_group(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -311,7 +311,7 @@ async fn grouped_reports_apply_scope_union_before_every_group(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_reports_reject_wrong_requesters_cursors_and_policy(pool: PgPool) {
     use crate::models::permission_editor::PermissionRequester;
@@ -363,7 +363,7 @@ async fn grouped_reports_reject_wrong_requesters_cursors_and_policy(pool: PgPool
     assert!(serde_json::from_value::<TimeReportGroupQuery>(wire).is_err());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_reports_keep_history_but_exclude_foreign_parent_records(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -450,7 +450,7 @@ async fn grouped_reports_keep_history_but_exclude_foreign_parent_records(pool: P
     assert_eq!(empty.totals.entry_count, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_reports_filter_before_aggregation_and_keep_empty_totals(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -480,7 +480,7 @@ async fn grouped_reports_filter_before_aggregation_and_keep_empty_totals(pool: P
     assert_eq!(empty.totals.total_minutes, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_reports_observe_revocation_after_wait_and_release_on_cancel(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -564,7 +564,7 @@ async fn grouped_reports_observe_revocation_after_wait_and_release_on_cancel(poo
     reader_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_reports_recheck_actor_deactivation_after_wait(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -597,7 +597,7 @@ async fn grouped_reports_recheck_actor_deactivation_after_wait(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_reports_sum_frozen_minutes_beyond_integer_column_range(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -647,7 +647,7 @@ async fn grouped_reports_sum_frozen_minutes_beyond_integer_column_range(pool: Pg
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_reports_round_each_entry_before_summing_a_group(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -683,7 +683,7 @@ async fn grouped_reports_round_each_entry_before_summing_a_group(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_reports_use_the_same_c_order_for_labels_and_cursor(pool: PgPool) {
     let ids = fixture(&pool).await;

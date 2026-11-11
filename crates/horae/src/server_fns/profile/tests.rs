@@ -42,14 +42,14 @@ fn assert_code(result: Result<(), ServerFnError>, expected: u16) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn new_organizations_and_people_start_on_utc_without_an_override(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     assert_eq!(workspace_zone(&pool, ids.org_id).await, "UTC");
     assert_eq!(profile(&pool, ids.user_id).await.1, None);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_person_saves_their_name_and_zone(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     update_profile_record(
@@ -67,7 +67,7 @@ async fn a_person_saves_their_name_and_zone(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn clearing_the_zone_follows_the_workspace_again(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     update_profile_record(&pool, ids.org_id, ids.user_id, "Ana", Some("Asia/Tokyo"))
@@ -79,7 +79,7 @@ async fn clearing_the_zone_follows_the_workspace_again(pool: PgPool) {
     assert_eq!(profile(&pool, ids.user_id).await.1, None);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_unknown_zone_is_rejected_and_nothing_changes(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     for bad in ["Mars/Olympus_Mons", "europe/madrid", "+02:00", ""] {
@@ -94,7 +94,7 @@ async fn an_unknown_zone_is_rejected_and_nothing_changes(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_blank_or_overlong_name_is_rejected(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     for bad in ["   ".to_owned(), "x".repeat(201), "a\0b".to_owned()] {
@@ -106,7 +106,7 @@ async fn a_blank_or_overlong_name_is_rejected(pool: PgPool) {
     assert_eq!(profile(&pool, ids.user_id).await.0, "Test User");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_profile_save_leaves_colleagues_alone(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     let other = colleague(&pool, &ids, OrgRole::Member).await;
@@ -116,7 +116,7 @@ async fn a_profile_save_leaves_colleagues_alone(pool: PgPool) {
     assert_eq!(profile(&pool, other).await, ("Colleague".into(), None));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_deactivated_person_cannot_save(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
@@ -129,7 +129,7 @@ async fn a_deactivated_person_cannot_save(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_administrator_changes_the_workspace_zone(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     set_workspace_timezone_record(&pool, ids.org_id, ids.user_id, "America/Los_Angeles")
@@ -141,7 +141,7 @@ async fn an_administrator_changes_the_workspace_zone(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn members_and_managers_cannot_change_the_workspace_zone(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     for role in [OrgRole::Member, OrgRole::Manager] {
@@ -154,7 +154,7 @@ async fn members_and_managers_cannot_change_the_workspace_zone(pool: PgPool) {
     assert_eq!(workspace_zone(&pool, ids.org_id).await, "UTC");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_administrator_of_another_organization_cannot_change_it(pool: PgPool) {
     let ours = seed(&pool, OrgRole::Admin).await;
     let theirs = seed(&pool, OrgRole::Admin).await;
@@ -165,7 +165,7 @@ async fn an_administrator_of_another_organization_cannot_change_it(pool: PgPool)
     assert_eq!(workspace_zone(&pool, ours.org_id).await, "UTC");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn the_workspace_zone_is_validated(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     assert_code(
@@ -175,7 +175,7 @@ async fn the_workspace_zone_is_validated(pool: PgPool) {
     assert_eq!(workspace_zone(&pool, ids.org_id).await, "UTC");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_personal_zone_overrides_the_workspace_zone(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     set_workspace_timezone_record(&pool, ids.org_id, ids.user_id, "Pacific/Kiritimati")
@@ -198,7 +198,7 @@ async fn a_personal_zone_overrides_the_workspace_zone(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn the_session_carries_both_zones_and_the_effective_offset(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let me = || async {

@@ -29,7 +29,7 @@ async fn names(pool: &PgPool, org: Uuid, actor: Uuid) -> Result<Vec<String>, Sta
         .collect())
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_require_current_tenant_bound_actor(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -60,7 +60,7 @@ async fn project_exports_require_current_tenant_bound_actor(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_preserve_membership_visibility_and_history_rules(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -124,7 +124,7 @@ async fn project_exports_preserve_membership_visibility_and_history_rules(pool: 
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_refresh_scope_after_winning_relationship_changes(pool: PgPool) {
     for change in [
@@ -195,7 +195,7 @@ async fn project_exports_refresh_scope_after_winning_relationship_changes(pool: 
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_deny_actor_revoked_during_either_authority_wait(pool: PgPool) {
     for gate in [false, true] {
@@ -229,7 +229,7 @@ async fn project_exports_deny_actor_revoked_during_either_authority_wait(pool: P
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_refresh_release_scope_after_parent_wait(pool: PgPool) {
     for change in ["remove", "insert_settings", "downgrade"] {
@@ -292,7 +292,7 @@ async fn project_exports_refresh_release_scope_after_parent_wait(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_release_every_captured_project_without_render_locks(pool: PgPool) {
     use crate::reports::{bounded::ExportPermit, render_project_export};
@@ -399,7 +399,7 @@ async fn project_exports_release_every_captured_project_without_render_locks(poo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_bound_rows_and_text_after_scope_filtering(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -527,7 +527,7 @@ async fn paused_project_pool(pool: &PgPool) -> PgPool {
         .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_share_one_size_and_payload_snapshot(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -561,7 +561,7 @@ async fn project_exports_share_one_size_and_payload_snapshot(pool: PgPool) {
     reader_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_release_cancelled_and_timed_out_checks(pool: PgPool) {
     use crate::reports::{bounded::ExportPermit, render_project_export};
@@ -658,7 +658,7 @@ async fn project_exports_release_cancelled_and_timed_out_checks(pool: PgPool) {
     reader_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_reject_missing_foreign_and_unreadable_captured_ids(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -700,7 +700,7 @@ async fn project_exports_reject_missing_foreign_and_unreadable_captured_ids(pool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_retain_parent_authority_until_release_check_finishes(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -768,7 +768,7 @@ async fn project_exports_retain_parent_authority_until_release_check_finishes(po
     reader_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_cancel_loading_without_retaining_authority(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;

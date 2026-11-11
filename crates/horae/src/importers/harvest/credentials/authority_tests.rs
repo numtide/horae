@@ -91,7 +91,7 @@ fn assert_denied(result: anyhow::Result<()>, change: Change) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn connection_changes_require_current_tenant_bound_administrator(pool: PgPool) {
     for change in CHANGES {
@@ -130,7 +130,7 @@ async fn connection_changes_require_current_tenant_bound_administrator(pool: PgP
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn disconnected_noop_still_requires_authority(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -142,7 +142,7 @@ async fn disconnected_noop_still_requires_authority(pool: PgPool) {
     assert_eq!(snapshot(&pool, ids.org_id).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn denied_first_connection_creates_no_binding_credentials_or_generation(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -173,7 +173,7 @@ async fn denied_first_connection_creates_no_binding_credentials_or_generation(po
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn connection_changes_recheck_authority_after_organization_wait(pool: PgPool) {
     let run_pool = sqlx::postgres::PgPoolOptions::new()
@@ -241,7 +241,7 @@ async fn connection_changes_recheck_authority_after_organization_wait(pool: PgPo
     run_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn connection_changes_recheck_authority_after_actor_only_wait(pool: PgPool) {
     for change in CHANGES {
@@ -286,7 +286,7 @@ async fn connection_changes_recheck_authority_after_actor_only_wait(pool: PgPool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn connection_changes_hold_authority_until_commit(pool: PgPool) {
     for change in CHANGES {
@@ -348,7 +348,7 @@ async fn connection_changes_hold_authority_until_commit(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn failed_connection_changes_roll_back_and_release_authority_and_reservation(pool: PgPool) {
     for change in CHANGES {

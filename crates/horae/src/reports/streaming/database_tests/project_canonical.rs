@@ -29,7 +29,7 @@ async fn canonical(pool: &PgPool, role: OrgRole, permissions: &[Permission]) -> 
     ids
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_csv_rejects_financial_revocation_after_capacity_wait(pool: PgPool) {
     let ids = canonical(
@@ -100,7 +100,7 @@ async fn project_csv_rejects_financial_revocation_after_capacity_wait(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_csv_canonical_reader_exports_project_without_monetary_budget(pool: PgPool) {
     let ids = canonical(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;
@@ -124,7 +124,7 @@ async fn project_csv_canonical_reader_exports_project_without_monetary_budget(po
     assert_eq!(&rows[0][5], "");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_csv_canonical_empty_scope_does_not_inherit_legacy_admin(pool: PgPool) {
     let ids = canonical(&pool, OrgRole::Admin, &[]).await;
@@ -145,7 +145,7 @@ async fn project_csv_canonical_empty_scope_does_not_inherit_legacy_admin(pool: P
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_csv_source_masks_money_using_declare_snapshot(pool: PgPool) {
     for visible in [false, true] {
@@ -188,7 +188,7 @@ async fn project_csv_source_masks_money_using_declare_snapshot(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_csv_invalid_source_state_cannot_be_repaired_before_fetch(pool: PgPool) {
     for populated in [false, true] {

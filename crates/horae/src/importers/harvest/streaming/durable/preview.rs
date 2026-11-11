@@ -102,7 +102,7 @@ impl ApiPreview {
 mod tests {
     use super::*;
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn restoration_omits_unneeded_virtual_entries(pool: sqlx::PgPool) {
         let org = Uuid::now_v7();
         sqlx::query!(

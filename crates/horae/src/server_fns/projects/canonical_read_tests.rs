@@ -112,7 +112,7 @@ pub(super) async fn project_team(
         .map(|view| view.team))
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_reader_lists_without_legacy_management_or_tracking(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -130,7 +130,7 @@ async fn canonical_project_reader_lists_without_legacy_management_or_tracking(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_reader_opens_without_legacy_management_or_tracking(pool: PgPool) {
     let (ids, _) = fixture(
@@ -145,7 +145,7 @@ async fn canonical_project_reader_opens_without_legacy_management_or_tracking(po
     assert_eq!(details.map(|p| p.id), Some(ids.project_id));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_own_only_member_does_not_inherit_legacy_manager_project_list(pool: PgPool) {
     let (_, viewer) = fixture(&pool, OrgRole::Manager, PermissionSelection::new(&[])).await;
@@ -158,7 +158,7 @@ async fn canonical_own_only_member_does_not_inherit_legacy_manager_project_list(
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_own_only_member_does_not_inherit_legacy_manager_project_details(pool: PgPool) {
     let (ids, _) = fixture(&pool, OrgRole::Manager, PermissionSelection::new(&[])).await;
@@ -168,7 +168,7 @@ async fn canonical_own_only_member_does_not_inherit_legacy_manager_project_detai
     assert!(details.is_none(), "legacy Manager disclosed: {details:?}");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_read_does_not_inherit_legacy_admin_financial_fields(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -228,7 +228,7 @@ async fn designate(pool: &PgPool, ids: &SeedIds) {
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_managed_project_reads_require_current_designation(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -261,7 +261,7 @@ async fn canonical_managed_project_reads_require_current_designation(pool: PgPoo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_tags_follow_project_reads_and_revocation(pool: PgPool) {
     let (ids, _) = fixture(
@@ -306,7 +306,7 @@ async fn canonical_tags_follow_project_reads_and_revocation(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_details_withhold_legacy_admin_notes_and_rate_controls(pool: PgPool) {
     let (ids, _) = fixture(
@@ -330,7 +330,7 @@ async fn canonical_project_details_withhold_legacy_admin_notes_and_rate_controls
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_financial_projection_matches_owning_project_evaluator(pool: PgPool) {
     use horae_core::permissions::rates::{
@@ -396,7 +396,7 @@ async fn canonical_project_financial_projection_matches_owning_project_evaluator
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_reads_reject_unknown_policy_and_invalid_grants(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -458,7 +458,7 @@ async fn canonical_project_reads_reject_unknown_policy_and_invalid_grants(pool: 
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_shared_report_and_historical_tracking_are_distinct(pool: PgPool) {
     let (ids, viewer) = fixture(&pool, OrgRole::Member, PermissionSelection::new(&[])).await;
@@ -509,7 +509,7 @@ async fn canonical_shared_report_and_historical_tracking_are_distinct(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_reads_exclude_foreign_client_parent_links(pool: PgPool) {
     let (ids, viewer) = fixture(

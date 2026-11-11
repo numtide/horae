@@ -65,7 +65,7 @@ async fn running(pool: &PgPool, f: &Fixture) -> Uuid {
     id
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn delegated_stop_waits_for_revocation_and_observes_commit_or_rollback(pool: PgPool) {
     for kind in [
         Revocation::Assignment,
@@ -118,7 +118,7 @@ async fn delegated_stop_waits_for_revocation_and_observes_commit_or_rollback(poo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn admitted_delegated_stop_finishes_before_assignment_revocation(pool: PgPool) {
     let f = fixture(&pool).await;
     let id = running(&pool, &f).await;
@@ -181,7 +181,7 @@ async fn admitted_delegated_stop_finishes_before_assignment_revocation(pool: PgP
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn cancelling_waiting_command_releases_authority_and_subject_barriers(pool: PgPool) {
     let f = fixture(&pool).await;
     let id = f.entry(&pool).await;
@@ -238,7 +238,7 @@ async fn cancelling_waiting_command_releases_authority_and_subject_barriers(pool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn waiting_writes_recheck_entry_state_after_the_submission_barrier(pool: PgPool) {
     for reorder in [false, true] {

@@ -37,7 +37,7 @@ async fn attempt(
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn every_time_mutation_denies_inactive_and_missing_owners_without_changes(pool: PgPool) {
     for role in [OrgRole::Member, OrgRole::Manager, OrgRole::Admin] {
         for operation in [Operation::Create, Operation::Start, Operation::Stop] {

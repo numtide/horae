@@ -47,7 +47,7 @@ async fn csv_rows(pool: &PgPool, ids: &SeedIds, scope: &str) -> Vec<csv::StringR
         .collect()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_downloads_follow_progress_visibility(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -107,7 +107,7 @@ async fn project_downloads_follow_progress_visibility(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn unauthorized_project_text_does_not_affect_export_size_limits(pool: PgPool) {
     let ids = fixture(&pool).await;

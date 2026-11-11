@@ -403,7 +403,7 @@ mod tests {
         .await
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn another_account_cannot_replace_credentials_or_watermarks(pool: sqlx::PgPool) {
         let org = organization(&pool).await;
         connect(&pool, org, "original").await.unwrap();
@@ -418,7 +418,7 @@ mod tests {
         assert_eq!(stored.watermark_for(EntityType::TimeEntry), Some(mark));
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn unidentified_legacy_provenance_requires_operator_review(pool: sqlx::PgPool) {
         let org = organization(&pool).await;
         super::super::provenance::upsert(&pool, org, EntityType::Client, 1, Uuid::now_v7(), None)
@@ -444,7 +444,7 @@ mod tests {
         assert!(connect(&pool, org, "different").await.is_err());
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn disconnect_preserves_identity_and_provenance_for_the_original_account(
         pool: sqlx::PgPool,
     ) {
@@ -471,7 +471,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn same_account_reconnect_rotates_encryption_without_resetting_watermarks(
         pool: sqlx::PgPool,
     ) {
@@ -504,7 +504,7 @@ mod tests {
         assert!(load(&pool, org, KEY).await.is_err());
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn connect_and_disconnect_share_import_exclusion_without_blocking_other_orgs(
         pool: sqlx::PgPool,
     ) {
@@ -530,7 +530,7 @@ mod tests {
         disconnect(&pool, org, org).await.unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn completed_credential_changes_allow_immediate_retries(pool: sqlx::PgPool) {
         let org = organization(&pool).await;
         for _ in 0..64 {
@@ -539,7 +539,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn failed_credential_write_does_not_leave_an_account_binding(pool: sqlx::PgPool) {
         let org = organization(&pool).await;
         sqlx::query!(
@@ -570,7 +570,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn concurrent_first_connections_cannot_bind_different_accounts(pool: sqlx::PgPool) {
         let org = organization(&pool).await;
         let (first, second) =
@@ -585,7 +585,7 @@ mod tests {
         assert!(connect(&pool, org, losing).await.is_err());
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn connection_changes_work_with_a_single_connection_pool(pool: sqlx::PgPool) {
         let org = organization(&pool).await;
         let single = sqlx::postgres::PgPoolOptions::new()

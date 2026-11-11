@@ -9,7 +9,7 @@ mod guards;
 mod revocation;
 mod timezone;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn archived_project_task_excludes_choices_and_new_time_without_changing_global_task(
     pool: PgPool,
@@ -156,7 +156,7 @@ async fn fixture(pool: &PgPool) -> Fixture {
     Fixture { ids, context }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn tracking_is_subject_eligible_and_actor_writable_without_financial_fields(pool: PgPool) {
     let f = fixture(&pool).await;
     let options = tracking(&pool, f.ids.org_id, f.ids.user_id, &f.context)
@@ -185,7 +185,7 @@ async fn tracking_is_subject_eligible_and_actor_writable_without_financial_field
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn delegated_commands_keep_owner_and_apply_each_ordinary_intent(pool: PgPool) {
     let f = fixture(&pool).await;
     f.execute(&pool, TimesheetCommand::Create { entry: f.input() })

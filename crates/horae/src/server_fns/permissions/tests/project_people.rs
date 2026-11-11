@@ -25,7 +25,7 @@ fn search(query: &str) -> Query {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_people_authorizes_the_operation_not_the_directory_or_legacy_role(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -137,7 +137,7 @@ async fn project_people_authorizes_the_operation_not_the_directory_or_legacy_rol
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_people_filters_before_paging_and_resolves_outside_the_search(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -244,7 +244,7 @@ async fn project_people_filters_before_paging_and_resolves_outside_the_search(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_people_validates_bounded_input_only_after_authorization(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -330,7 +330,7 @@ async fn project_people_validates_bounded_input_only_after_authorization(pool: P
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_people_rechecks_designation_after_waiting_for_revocation(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -391,7 +391,7 @@ async fn project_people_rechecks_designation_after_waiting_for_revocation(pool: 
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_people_denies_invalid_authority_even_for_empty_resolution(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -459,7 +459,7 @@ async fn project_people_denies_invalid_authority_even_for_empty_resolution(pool:
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_people_rechecks_grants_and_direct_deactivation_after_wait(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -510,7 +510,7 @@ async fn project_people_rechecks_grants_and_direct_deactivation_after_wait(pool:
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_people_holds_authority_until_read_finishes(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -577,7 +577,7 @@ async fn project_people_holds_authority_until_read_finishes(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_people_cancellation_releases_connection_and_preserves_pool_defaults(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -642,7 +642,7 @@ async fn project_people_cancellation_releases_connection_and_preserves_pool_defa
     reader.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_people_accepts_unconfigured_targets_and_exact_page_without_more(pool: PgPool) {
     let ids = fixture(&pool).await;

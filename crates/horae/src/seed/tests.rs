@@ -19,7 +19,7 @@ async fn snapshot(pool: &PgPool) -> serde_json::Value {
     .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn repeated_seed_preserves_every_row_and_user_edits(pool: PgPool) {
     run(&pool).await.unwrap();
@@ -39,7 +39,7 @@ async fn repeated_seed_preserves_every_row_and_user_edits(pool: PgPool) {
     assert_eq!(snapshot(&pool).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn seed_refuses_an_initialized_organization_without_writes(pool: PgPool) {
     crate::init::run(&pool, "Real Org", "admin@real.example", "Owner")
@@ -50,7 +50,7 @@ async fn seed_refuses_an_initialized_organization_without_writes(pool: PgPool) {
     assert_eq!(snapshot(&pool).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn late_seed_failure_rolls_back_all_demo_data(pool: PgPool) {
     sqlx::query!("ALTER TABLE time_entries ADD CONSTRAINT seed_test_failure CHECK (minutes < 300)")
@@ -79,7 +79,7 @@ async fn late_seed_failure_rolls_back_all_demo_data(pool: PgPool) {
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn concurrent_seed_runs_create_only_one_demo(pool: PgPool) {
     let (first, second) = tokio::join!(run(&pool), run(&pool));
@@ -92,7 +92,7 @@ async fn concurrent_seed_runs_create_only_one_demo(pool: PgPool) {
     assert_eq!(count, Some(10));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn seed_leaves_an_older_or_partial_demo_unchanged(pool: PgPool) {
     sqlx::query!(
@@ -107,7 +107,7 @@ async fn seed_leaves_an_older_or_partial_demo_unchanged(pool: PgPool) {
     assert_eq!(snapshot(&pool).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn seed_refuses_a_second_organization_even_when_the_demo_exists(pool: PgPool) {
     run(&pool).await.unwrap();
@@ -123,7 +123,7 @@ async fn seed_refuses_a_second_organization_even_when_the_demo_exists(pool: PgPo
     assert_eq!(snapshot(&pool).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn concurrent_init_and_seed_cannot_mix_organizations(pool: PgPool) {
     let (seed, init) = tokio::join!(
@@ -138,7 +138,7 @@ async fn concurrent_init_and_seed_cannot_mix_organizations(pool: PgPool) {
     assert_eq!(organizations, Some(1));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn concurrent_initializers_cannot_create_two_organizations(pool: PgPool) {
     let (first, second) = tokio::join!(

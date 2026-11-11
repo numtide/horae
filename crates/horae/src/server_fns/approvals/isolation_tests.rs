@@ -37,7 +37,7 @@ async fn entry_state(pool: &PgPool, entry_id: Uuid) -> EntryState {
     .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn foreign_approval_ids_do_not_change_another_organizations_week(pool: PgPool) {
     let foreign = seed(&pool, OrgRole::Member).await;
@@ -90,7 +90,7 @@ async fn foreign_week_total(
     .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn bulk_approval_only_returns_and_transitions_own_organization(pool: PgPool) {
     // An administrator, so approving their own week is allowed.
@@ -128,7 +128,7 @@ async fn bulk_approval_only_returns_and_transitions_own_organization(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn foreign_reopen_is_not_found_and_preserves_pending_and_approved_work(pool: PgPool) {
     let locals = [
@@ -169,7 +169,7 @@ async fn foreign_reopen_is_not_found_and_preserves_pending_and_approved_work(poo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn own_organization_can_reopen_without_unlocking_invoiced_entries(pool: PgPool) {
     let local = seed(&pool, OrgRole::Admin).await;

@@ -29,7 +29,7 @@ async fn canonical(pool: &PgPool, role: OrgRole, permissions: &[Permission]) -> 
     ids
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_export_accepts_project_reader_with_legacy_member_role(pool: PgPool) {
     let ids = canonical(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;
@@ -42,7 +42,7 @@ async fn canonical_project_export_accepts_project_reader_with_legacy_member_role
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_export_does_not_inherit_legacy_administrator_scope(pool: PgPool) {
     let ids = canonical(&pool, OrgRole::Admin, &[]).await;
@@ -56,7 +56,7 @@ async fn canonical_project_export_does_not_inherit_legacy_administrator_scope(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_export_withholds_ordinary_monetary_budget(pool: PgPool) {
     let ids = canonical(&pool, OrgRole::Admin, &[Permission::ProjectReadAll]).await;
@@ -67,7 +67,7 @@ async fn canonical_project_export_withholds_ordinary_monetary_budget(pool: PgPoo
     assert_eq!(rows[0].budget_amount_cents, None);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_workbook_rejects_financial_revocation_during_render(pool: PgPool) {
     let ids = canonical(
