@@ -76,6 +76,22 @@ pub(crate) fn unauthorized(msg: impl std::fmt::Display) -> ServerFnError {
     err(UNAUTHORIZED, msg)
 }
 
+/// Server functions report an operation's domain error with its status code.
+#[cfg(feature = "server")]
+impl From<crate::ops::OpError> for ServerFnError {
+    fn from(error: crate::ops::OpError) -> Self {
+        use crate::ops::OpError;
+        let code = match &error {
+            OpError::NotFound(_) => NOT_FOUND,
+            OpError::Forbidden(_) => FORBIDDEN,
+            OpError::Conflict(_) => CONFLICT,
+            OpError::Invalid { .. } => BAD_REQUEST,
+            OpError::Internal(_) => INTERNAL_ERROR,
+        };
+        err(code, error)
+    }
+}
+
 /// Parse a UUID argument, mapping a malformed value to a clear error naming the
 /// field (e.g. `parse_uuid(&entry_id, "entry_id")`).
 #[cfg(feature = "server")]
@@ -271,16 +287,6 @@ pub(crate) async fn week_total_minutes(
     .fetch_one(db)
     .await
     .map_err(server_err)
-}
-
-#[cfg(feature = "server")]
-pub(crate) fn client_payload(c: &crate::models::Client) -> crate::plugin::event::ClientPayload {
-    crate::plugin::event::ClientPayload {
-        id: c.id,
-        name: c.name.clone(),
-        currency: c.currency.clone(),
-        active: c.active,
-    }
 }
 
 #[cfg(feature = "server")]
@@ -501,7 +507,8 @@ mod permission_editor;
 mod permissions;
 #[cfg(feature = "server")]
 pub(crate) use permissions::{
-    PermissionStorageError, StoredPersonPermissions, load_person_permissions,
+    PermissionStorageError, ReadIsolation, StoredPersonPermissions,
+    begin_lock_only_read_async_commit, load_person_permissions,
 };
 mod plugins;
 mod profile;

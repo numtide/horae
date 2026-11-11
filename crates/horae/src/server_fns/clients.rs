@@ -1,40 +1,23 @@
-//! Client server functions.
+//! Client server functions: session adapters over `ops::clients`.
 
 use super::*;
-#[cfg(feature = "server")]
-use crate::models::client::ClientBilling;
-#[cfg(feature = "server")]
-use crate::models::client::ClientRateChange;
-#[cfg(feature = "server")]
-use crate::models::client::ClientSummary;
 use crate::models::client::{
     ClientDetailView, ClientDetails, ClientOverview, ClientProfile, ClientProfileEdit,
 };
 use crate::models::permission_editor::PermissionRequester;
+#[cfg(feature = "server")]
+use crate::ops::{self, Caller};
 
 #[server]
 pub async fn create_client_profile(
     profile: ClientProfile,
     default_rate: String,
 ) -> Result<ClientDetails, ServerFnError> {
-    let manager = require_manager().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
-    let detail = create_client_profile_record(
-        &state.db,
-        manager.org_id,
-        manager.id,
-        &profile,
-        &default_rate,
-    )
-    .await?;
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::ClientCreated {
-            occurred_at: chrono::Utc::now(),
-            org_id: manager.org_id,
-            client: client_payload(&detail.client),
-        });
-    Ok(detail)
+    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::clients::create(&mut write.tx, &write.actor, &profile, &default_rate).await;
+    Ok(write.commit(result, &*state.plugins).await?)
 }
 
 #[server]
@@ -42,177 +25,15 @@ pub async fn update_client_profile(
     client_id: String,
     edit: ClientProfileEdit,
 ) -> Result<ClientDetails, ServerFnError> {
-    let manager = require_manager().await?;
+    let user = require_user().await?;
     let client_id = client_id
         .parse()
         .map_err(|_| err(BAD_REQUEST, "Invalid client ID"))?;
     let state = crate::state::global_state().await;
-    let (detail, changed) =
-        update_client_profile_record(&state.db, manager.org_id, manager.id, client_id, &edit)
-            .await?;
-    if changed {
-        state
-            .plugins
-            .dispatch(crate::plugin::AppEvent::ClientUpdated {
-                occurred_at: chrono::Utc::now(),
-                org_id: manager.org_id,
-                client: client_payload(&detail.client),
-            });
-    }
-    Ok(detail)
+    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::clients::update(&mut write.tx, &write.actor, client_id, &edit).await;
+    Ok(write.commit(result, &*state.plugins).await?)
 }
-
-#[cfg(feature = "server")]
-async fn lock_client_manager(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    org_id: uuid::Uuid,
-    actor_id: uuid::Uuid,
-) -> Result<(), ServerFnError> {
-    let role = sqlx::query_scalar!(
-        r#"SELECT org_role as "org_role: OrgRole" FROM users
-           WHERE id = $1 AND org_id = $2 AND active FOR SHARE"#,
-        actor_id,
-        org_id,
-    )
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(server_err)?;
-    if !role.is_some_and(OrgRole::is_manager_or_above) {
-        return Err(forbidden("Active manager access required"));
-    }
-    Ok(())
-}
-
-#[cfg(feature = "server")]
-async fn create_client_profile_record(
-    db: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    actor_id: uuid::Uuid,
-    profile: &ClientProfile,
-    default_rate: &str,
-) -> Result<ClientDetails, ServerFnError> {
-    use horae_core::client::{optional_text, parse_default_rate, validate_profile};
-    validate_profile(
-        &profile.name,
-        &profile.currency,
-        profile.address.as_deref(),
-        profile.tax_id.as_deref(),
-    )
-    .map_err(|error| err(BAD_REQUEST, error))?;
-    let rate = parse_default_rate(default_rate).map_err(|error| err(BAD_REQUEST, error))?;
-    let mut tx = db.begin().await.map_err(server_err)?;
-    lock_client_manager(&mut tx, org_id, actor_id).await?;
-    let client = sqlx::query_as!(
-        Client,
-        r#"INSERT INTO clients (id, org_id, name, currency, address, tax_id, default_rate_cents)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)
-           RETURNING id, org_id, name, currency, address, tax_id, active,
-                     created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        uuid::Uuid::now_v7(),
-        org_id,
-        profile.name.trim(),
-        profile.currency,
-        profile.address.as_deref().and_then(optional_text),
-        profile.tax_id.as_deref().and_then(optional_text),
-        rate,
-    )
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(server_err)?;
-    tx.commit().await.map_err(server_err)?;
-    Ok(ClientDetails {
-        client,
-        billing: Some(ClientBilling {
-            default_rate_cents: rate,
-        }),
-    })
-}
-
-#[cfg(feature = "server")]
-async fn update_client_profile_record(
-    db: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    actor_id: uuid::Uuid,
-    client_id: uuid::Uuid,
-    edit: &ClientProfileEdit,
-) -> Result<(ClientDetails, bool), ServerFnError> {
-    use horae_core::client::{optional_text, parse_default_rate, validate_profile};
-    let profile = &edit.profile;
-    validate_profile(
-        &profile.name,
-        &profile.currency,
-        profile.address.as_deref(),
-        profile.tax_id.as_deref(),
-    )
-    .map_err(|error| err(BAD_REQUEST, error))?;
-    let replacement = match &edit.rate_change {
-        ClientRateChange::Replace(amount) => Some(
-            parse_default_rate(amount)
-                .map_err(|error| err(BAD_REQUEST, error))?
-                .ok_or_else(|| {
-                    err(
-                        BAD_REQUEST,
-                        "Enter a replacement rate or explicitly clear the default rate",
-                    )
-                })?,
-        ),
-        _ => None,
-    };
-    let mut tx = db.begin().await.map_err(server_err)?;
-    lock_client_manager(&mut tx, org_id, actor_id).await?;
-    let before = lock_client(&mut tx, org_id, client_id).await?;
-    let current_rate = sqlx::query_scalar!(
-        "SELECT default_rate_cents FROM clients WHERE id = $1 AND org_id = $2",
-        client_id,
-        org_id,
-    )
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(server_err)?;
-    if edit.original.currency != before.currency || edit.original.default_rate_cents != current_rate
-    {
-        return Err(conflict(
-            "Client currency or default rate changed. Reload the client before saving.",
-        ));
-    }
-    let rate = match edit.rate_change {
-        ClientRateChange::Keep => {
-            if profile.currency != before.currency && current_rate.is_some() {
-                return Err(conflict(
-                    "Changing currency requires explicitly replacing or clearing the default rate.",
-                ));
-            }
-            current_rate
-        }
-        ClientRateChange::Replace(_) => replacement,
-        ClientRateChange::Clear => None,
-    };
-    let updated = sqlx::query_as!(
-        Client,
-        r#"UPDATE clients SET name = $3, currency = $4, address = $5, tax_id = $6, default_rate_cents = $7
-           WHERE id = $1 AND org_id = $2
-             AND (name, currency, address, tax_id, default_rate_cents)
-                 IS DISTINCT FROM ($3, $4, $5, $6, $7)
-           RETURNING id, org_id, name, currency, address, tax_id, active,
-                     created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        client_id, org_id, profile.name.trim(), profile.currency,
-        profile.address.as_deref().and_then(optional_text),
-        profile.tax_id.as_deref().and_then(optional_text), rate,
-    ).fetch_optional(&mut *tx).await.map_err(server_err)?;
-    let changed = updated.is_some();
-    tx.commit().await.map_err(server_err)?;
-    Ok((
-        ClientDetails {
-            client: updated.unwrap_or(before),
-            billing: Some(ClientBilling {
-                default_rate_cents: rate,
-            }),
-        },
-        changed,
-    ))
-}
-
-// ── Clients ──────────────────────────────────────────────────────────────────
 
 #[server]
 pub async fn get_client_details(client_id: String) -> Result<ClientDetails, ServerFnError> {
@@ -225,102 +46,20 @@ pub async fn get_client_details(client_id: String) -> Result<ClientDetails, Serv
 }
 
 #[cfg(feature = "server")]
-async fn client_details_for_viewer<'e>(
-    db: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
+async fn client_details_for_viewer(
+    db: &sqlx::PgPool,
     org_id: uuid::Uuid,
     viewer_id: uuid::Uuid,
     client_id: uuid::Uuid,
 ) -> Result<ClientDetails, ServerFnError> {
-    client_details_in_scope(db, org_id, viewer_id, client_id, ClientReadScope::LEGACY).await
-}
-
-/// Current grants for the canonical Clients readers; `legacy` keeps policy zero.
-#[cfg(feature = "server")]
-#[derive(Clone, Copy)]
-struct ClientReadScope {
-    legacy: bool,
-    catalog: bool,
-    rates: bool,
-    projects_all: bool,
-    projects_managed: bool,
-}
-
-#[cfg(feature = "server")]
-impl ClientReadScope {
-    const LEGACY: Self = Self {
-        legacy: true,
-        catalog: false,
-        rates: false,
-        projects_all: false,
-        projects_managed: false,
-    };
-
-    fn current(access: &ProjectReadAccess<'_>) -> Self {
-        use horae_core::permissions::catalog::Permission;
-        Self {
-            legacy: access.legacy(),
-            catalog: access.has(Permission::ClientReadAll),
-            // FR-035: the client default is a global rate; managed grants never apply.
-            rates: access.has(Permission::BillableRateReadAll),
-            projects_all: access.has(Permission::ProjectReadAll),
-            projects_managed: access.has(Permission::ProjectReadManaged),
-        }
-    }
-
-    fn can_read(self) -> bool {
-        self.legacy || self.catalog
-    }
-}
-
-#[cfg(feature = "server")]
-async fn client_details_in_scope<'e>(
-    db: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
-    org_id: uuid::Uuid,
-    viewer_id: uuid::Uuid,
-    client_id: uuid::Uuid,
-    scope: ClientReadScope,
-) -> Result<ClientDetails, ServerFnError> {
-    let row = sqlx::query!(
-        r#"SELECT c.id, c.org_id, c.name, c.currency, c.address, c.tax_id, c.active,
-                  c.created_at as "created_at: chrono::DateTime<chrono::Utc>",
-                  (CASE WHEN $4 THEN u.org_role IN ('admin', 'manager') ELSE $5 AND $6 END)
-                    as "can_view_billing!",
-                  CASE WHEN (CASE WHEN $4 THEN u.org_role IN ('admin', 'manager') ELSE $5 AND $6 END)
-                       THEN c.default_rate_cents END as default_rate_cents
-           FROM clients c
-           JOIN users u ON u.org_id = c.org_id AND u.id = $2 AND u.active
-           WHERE c.org_id = $1 AND c.id = $3 AND ($4 OR $5)"#,
-        org_id,
-        viewer_id,
-        client_id,
-        scope.legacy,
-        scope.catalog,
-        scope.rates,
-    )
-    .fetch_optional(db)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Client not found"))?;
-    Ok(ClientDetails {
-        client: Client {
-            id: row.id,
-            org_id: row.org_id,
-            name: row.name,
-            currency: row.currency,
-            address: row.address,
-            tax_id: row.tax_id,
-            active: row.active,
-            created_at: row.created_at,
-        },
-        billing: row.can_view_billing.then_some(ClientBilling {
-            default_rate_cents: row.default_rate_cents,
-        }),
-    })
+    let mut read = ops::begin_read(db, Caller::session(org_id, viewer_id)).await?;
+    let result = ops::clients::details(&mut read.tx, &read.actor, client_id).await;
+    Ok(read.finish(result).await?)
 }
 
 #[server]
 pub async fn list_client_invoices(client_id: String) -> Result<Vec<Invoice>, ServerFnError> {
-    let viewer = require_manager().await?;
+    let viewer = require_user().await?;
     let client_id = client_id
         .parse()
         .map_err(|_| err(BAD_REQUEST, "Invalid client ID"))?;
@@ -335,94 +74,12 @@ async fn client_invoices_for_viewer(
     viewer_id: uuid::Uuid,
     client_id: uuid::Uuid,
 ) -> Result<Vec<Invoice>, ServerFnError> {
-    let mut tx = db.begin().await.map_err(server_err)?;
-    client_details_for_viewer(&mut *tx, org_id, viewer_id, client_id).await?;
-    // Keep current authority locked through materialization, not just its check.
-    lock_client_manager(&mut tx, org_id, viewer_id).await?;
-    let invoices = super::invoices::fetch_invoices(&mut *tx, org_id, None, Some(client_id)).await?;
-    tx.commit().await.map_err(server_err)?;
-    Ok(invoices)
+    let mut read = ops::begin_read(db, Caller::session(org_id, viewer_id)).await?;
+    let result = ops::clients::invoices(&mut read.tx, &read.actor, client_id).await;
+    Ok(read.finish(result).await?)
 }
 
-/// Policy-zero summaries, kept for parity tests of the canonical overview.
-#[cfg(all(test, feature = "server"))]
-async fn client_summaries_for_viewer(
-    db: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    user_id: uuid::Uuid,
-) -> Result<Vec<ClientSummary>, ServerFnError> {
-    client_summaries_in_scope(db, org_id, user_id, ClientReadScope::LEGACY).await
-}
-
-/// Policy one counts the projects `list_projects` would show the same viewer.
-#[cfg(feature = "server")]
-async fn client_summaries_in_scope<'e>(
-    db: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
-    org_id: uuid::Uuid,
-    user_id: uuid::Uuid,
-    scope: ClientReadScope,
-) -> Result<Vec<ClientSummary>, ServerFnError> {
-    if !scope.can_read() {
-        return Ok(Vec::new());
-    }
-    let rows = sqlx::query!(
-        r#"SELECT c.id, c.org_id, c.name, c.currency, c.address, c.tax_id, c.active,
-                  c.created_at as "created_at: chrono::DateTime<chrono::Utc>",
-                  COUNT(p.id) FILTER (WHERE p.active) as "active_projects!",
-                  COUNT(p.id) as "total_projects!",
-                  COALESCE(ARRAY_AGG(DISTINCT p.currency ORDER BY p.currency)
-                      FILTER (WHERE p.id IS NOT NULL), ARRAY[]::text[]) as "project_currencies!"
-           FROM clients c
-           JOIN users u ON u.org_id = c.org_id AND u.id = $2 AND u.active
-           LEFT JOIN projects p ON p.client_id = c.id AND p.org_id = c.org_id
-             AND CASE WHEN $3 THEN EXISTS (
-               SELECT 1 FROM project_read_access a
-               WHERE a.project_id = p.id AND a.org_id = c.org_id
-                 AND a.user_id = u.id AND a.can_view_progress
-             ) ELSE $4 OR ($5 AND EXISTS (
-               SELECT 1 FROM project_management_assignments m
-               WHERE m.org_id = p.org_id AND m.project_id = p.id AND m.manager_id = u.id
-             )) OR (EXISTS (
-               SELECT 1 FROM assignments member
-               WHERE member.project_id = p.id AND member.user_id = u.id
-             ) AND COALESCE((
-               SELECT s.report_visibility FROM project_settings s
-               WHERE s.project_id = p.id AND s.org_id = p.org_id
-             ), 'project_members') = 'project_members') END
-           WHERE c.org_id = $1
-           GROUP BY c.id
-           ORDER BY c.name, c.id"#,
-        org_id,
-        user_id,
-        scope.legacy,
-        scope.projects_all,
-        scope.projects_managed,
-    )
-    .fetch_all(db)
-    .await
-    .map_err(server_err)?;
-
-    Ok(rows
-        .into_iter()
-        .map(|row| ClientSummary {
-            client: Client {
-                id: row.id,
-                org_id: row.org_id,
-                name: row.name,
-                currency: row.currency,
-                address: row.address,
-                tax_id: row.tax_id,
-                active: row.active,
-                created_at: row.created_at,
-            },
-            active_projects: row.active_projects,
-            total_projects: row.total_projects,
-            project_currencies: row.project_currencies,
-        })
-        .collect())
-}
-
-/// The canonical Clients page. Workflow pickers keep their legacy readers.
+/// The canonical Clients page.
 #[server]
 pub async fn client_overview(
     expected_requester: Option<PermissionRequester>,
@@ -453,62 +110,15 @@ pub async fn client_detail_view(
 }
 
 #[cfg(feature = "server")]
-fn client_requester(
-    org_id: uuid::Uuid,
-    user_id: uuid::Uuid,
-    expected_requester: Option<PermissionRequester>,
-) -> Result<PermissionRequester, ServerFnError> {
-    let requester = PermissionRequester { org_id, user_id };
-    if expected_requester.is_some_and(|expected| expected != requester) {
-        return Err(forbidden("Client requester has changed"));
-    }
-    Ok(requester)
-}
-
-/// The client writes still check only the legacy role. Until they use current
-/// grants, policy one offers no client mutations rather than role-derived ones.
-#[cfg(feature = "server")]
-async fn offers_legacy_client_writes(
-    access: &mut ProjectReadAccess<'_>,
-    org_id: uuid::Uuid,
-    user_id: uuid::Uuid,
-) -> Result<bool, ServerFnError> {
-    if !access.legacy() {
-        return Ok(false);
-    }
-    let role = sqlx::query_scalar!(
-        r#"SELECT org_role as "org_role: OrgRole" FROM users WHERE org_id=$1 AND id=$2"#,
-        org_id,
-        user_id,
-    )
-    .fetch_one(&mut *access.tx)
-    .await
-    .map_err(server_err)?;
-    Ok(role.is_manager_or_above())
-}
-
-#[cfg(feature = "server")]
 async fn client_overview_for(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
     viewer_id: uuid::Uuid,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<ClientOverview, ServerFnError> {
-    let requester = client_requester(org_id, viewer_id, expected_requester)?;
-    let mut access = ProjectReadAccess::begin(db, org_id, viewer_id)
-        .await?
-        .ok_or_else(|| forbidden("Current client access is required"))?;
-    let scope = ClientReadScope::current(&access);
-    let can_manage = offers_legacy_client_writes(&mut access, org_id, viewer_id).await?;
-    let clients = client_summaries_in_scope(&mut *access.tx, org_id, viewer_id, scope).await?;
-    access.tx.commit().await.map_err(server_err)?;
-    Ok(ClientOverview {
-        requester,
-        canonical_permissions: !scope.legacy,
-        can_read: scope.can_read(),
-        can_manage,
-        clients,
-    })
+    let mut read = ops::begin_read(db, Caller::session(org_id, viewer_id)).await?;
+    let result = ops::clients::overview(&mut read.tx, &read.actor, expected_requester).await;
+    Ok(read.finish(result).await?)
 }
 
 #[cfg(feature = "server")]
@@ -519,21 +129,10 @@ async fn client_detail_view_for(
     client_id: uuid::Uuid,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<ClientDetailView, ServerFnError> {
-    let requester = client_requester(org_id, viewer_id, expected_requester)?;
-    let mut access = ProjectReadAccess::begin(db, org_id, viewer_id)
-        .await?
-        .ok_or_else(|| not_found("Client not found"))?;
-    let scope = ClientReadScope::current(&access);
-    let details =
-        client_details_in_scope(&mut *access.tx, org_id, viewer_id, client_id, scope).await?;
-    let can_manage = offers_legacy_client_writes(&mut access, org_id, viewer_id).await?;
-    access.tx.commit().await.map_err(server_err)?;
-    Ok(ClientDetailView {
-        requester,
-        canonical_permissions: !scope.legacy,
-        can_manage,
-        details,
-    })
+    let mut read = ops::begin_read(db, Caller::session(org_id, viewer_id)).await?;
+    let result =
+        ops::clients::detail_view(&mut read.tx, &read.actor, client_id, expected_requester).await;
+    Ok(read.finish(result).await?)
 }
 
 /// Explicit client creation from the project form, including its default rate.
@@ -543,30 +142,48 @@ pub async fn create_project_client(
     currency: String,
     default_rate: String,
 ) -> Result<crate::models::project_creation::CreationClient, ServerFnError> {
-    let actor = require_manager().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
-    let client = super::project_creation::create_client_record(
+    create_project_client_record(
         &state.db,
-        actor.id,
-        actor.org_id,
+        &*state.plugins,
+        Caller::session(user.org_id, user.id),
         &name,
         &currency,
         &default_rate,
     )
-    .await?;
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::ClientCreated {
-            occurred_at: chrono::Utc::now(),
-            org_id: actor.org_id,
-            client: crate::plugin::event::ClientPayload {
-                id: client.id,
-                name: client.name.clone(),
-                currency: client.currency.clone(),
-                active: client.active,
-            },
-        });
-    Ok(client)
+    .await
+}
+
+/// Inline creation follows the standalone rules (OP18); only the reply's
+/// shape differs.
+#[cfg(feature = "server")]
+pub(super) async fn create_project_client_record(
+    db: &sqlx::PgPool,
+    events: &dyn ops::EventSink,
+    caller: Caller,
+    name: &str,
+    currency: &str,
+    default_rate: &str,
+) -> Result<crate::models::project_creation::CreationClient, ServerFnError> {
+    let profile = ClientProfile {
+        name: name.to_owned(),
+        currency: currency.to_owned(),
+        address: None,
+        tax_id: None,
+    };
+    let mut write = ops::begin(db, caller).await?;
+    let result = ops::clients::create(&mut write.tx, &write.actor, &profile, default_rate).await;
+    let details = write.commit(result, events).await?;
+    Ok(crate::models::project_creation::CreationClient {
+        id: details.client.id,
+        name: details.client.name,
+        currency: details.client.currency,
+        active: details.client.active,
+        default_rate_cents: details
+            .billing
+            .and_then(|billing| billing.default_rate_cents),
+    })
 }
 
 /// Lists clients. With `include_inactive = false` only active clients are
@@ -576,140 +193,26 @@ pub async fn create_project_client(
 pub async fn list_clients(include_inactive: bool) -> Result<Vec<Client>, ServerFnError> {
     let user = require_user().await?;
     let state = crate::state::global_state().await;
-
-    let clients = sqlx::query_as!(
-        Client,
-        r#"SELECT id, org_id, name, currency, address, tax_id, active,
-                created_at as "created_at: chrono::DateTime<chrono::Utc>"
-         FROM clients
-         WHERE org_id = $2 AND ($1::bool OR active = true)
-         ORDER BY name ASC"#,
-        include_inactive,
-        user.org_id,
-    )
-    .fetch_all(&state.db)
-    .await
-    .map_err(server_err)?;
-
-    Ok(clients)
+    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::clients::list(&mut read.tx, &read.actor, include_inactive).await;
+    Ok(read.finish(result).await?)
 }
 
-/// Archive or restore a client. Archiving needs every linked project archived
-/// first; restoring changes only the client. Archived clients are hidden from
-/// new-entry pickers but remain linked to existing projects and entries (FR-011).
+/// Archive or restore a client (FR-036).
 #[server]
 pub async fn set_client_active(client_id: String, active: bool) -> Result<Client, ServerFnError> {
-    let manager = require_manager().await?;
-    let state = crate::state::global_state().await;
+    let user = require_user().await?;
     let client_id = parse_uuid(&client_id, "client_id")?;
-    let (client, transition) =
-        set_client_active_record(&state.db, manager.org_id, manager.id, client_id, active).await?;
-    if let Some(t) = transition {
-        let occurred_at = chrono::Utc::now();
-        let client = client_payload(&client);
-        state.plugins.dispatch(match t {
-            crate::plugin::event::ActiveTransition::Reactivated => {
-                crate::plugin::AppEvent::ClientReactivated {
-                    occurred_at,
-                    org_id: manager.org_id,
-                    client,
-                }
-            }
-            crate::plugin::event::ActiveTransition::Deactivated => {
-                crate::plugin::AppEvent::ClientDeactivated {
-                    occurred_at,
-                    org_id: manager.org_id,
-                    client,
-                }
-            }
-        });
-    }
-    Ok(client)
+    let state = crate::state::global_state().await;
+    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::clients::set_active(&mut write.tx, &write.actor, client_id, active).await;
+    Ok(write.commit(result, &*state.plugins).await?)
 }
 
-#[cfg(feature = "server")]
-async fn set_client_active_record(
-    db: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    actor_id: uuid::Uuid,
-    client_id: uuid::Uuid,
-    active: bool,
-) -> Result<(Client, Option<crate::plugin::event::ActiveTransition>), ServerFnError> {
-    let mut tx = db.begin().await.map_err(server_err)?;
-    // The linked-project check below must see projects committed while this
-    // waited for the client lock, which an older snapshot would miss.
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE")
-        .execute(&mut *tx)
-        .await
-        .map_err(server_err)?;
-    super::projects::authorize_legacy_status_write(
-        &mut tx,
-        org_id,
-        actor_id,
-        "Client status changes are unavailable",
-    )
-    .await?;
-    let before = lock_client(&mut tx, org_id, client_id).await?;
-    // Project writers share-lock this client before making a project active, so
-    // a separate statement after the lock sees any that committed meanwhile.
-    if !active
-        && before.active
-        && sqlx::query_scalar!(
-            r#"SELECT EXISTS(SELECT 1 FROM projects WHERE org_id = $1 AND client_id = $2 AND active) AS "exists!""#,
-            org_id,
-            client_id,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(server_err)?
-    {
-        return Err(conflict(
-            "Archive this client's projects before archiving the client.",
-        ));
-    }
-
-    let client = sqlx::query_as!(
-        Client,
-        r#"UPDATE clients SET active = $3
-         WHERE id = $1 AND org_id = $2 AND active IS DISTINCT FROM $3
-         RETURNING id, org_id, name, currency, address, tax_id, active,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        client_id,
-        org_id,
-        active,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?;
-
-    let transition = client.as_ref().and_then(|updated| {
-        crate::plugin::event::active_transition(Some(before.active), updated.active)
-    });
-    tx.commit().await.map_err(server_err)?;
-    Ok((client.unwrap_or(before), transition))
-}
-
-#[cfg(feature = "server")]
-async fn lock_client(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    org_id: uuid::Uuid,
-    client_id: uuid::Uuid,
-) -> Result<Client, ServerFnError> {
-    // Both mutations compare against the latest locked row, including when
-    // the requested values matched an older version before a competing edit.
-    sqlx::query_as!(
-        Client,
-        r#"SELECT id, org_id, name, currency, address, tax_id, active,
-                  created_at as "created_at: chrono::DateTime<chrono::Utc>"
-           FROM clients WHERE id = $1 AND org_id = $2 FOR UPDATE"#,
-        client_id,
-        org_id,
-    )
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Client not found"))
-}
+#[cfg(all(test, feature = "server"))]
+mod records;
+#[cfg(all(test, feature = "server"))]
+use records::*;
 
 #[cfg(all(test, feature = "server"))]
 mod lifecycle_tests;

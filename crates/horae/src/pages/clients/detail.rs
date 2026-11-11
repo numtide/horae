@@ -60,10 +60,10 @@ fn ClientDetailContent(id: Uuid) -> Element {
     let mut status_error = use_signal(|| None::<String>);
     let ready = details.state()() == UseResourceState::Ready;
     let data = details.read();
-    // Legacy-only until client writes and invoices use canonical permissions;
-    // billing visibility is a separate grant and never implies management.
+    // Billing visibility is a separate grant and never implies management.
     // A reloading resource keeps its previous value, so require a settled one.
     let can_manage = ready && matches!(&*data, Some(Ok(view)) if view.can_manage);
+    let can_read_invoices = ready && matches!(&*data, Some(Ok(view)) if view.can_read_invoices);
 
     rsx! {
         div { class: "client-detail min-w-0",
@@ -171,7 +171,7 @@ fn ClientDetailContent(id: Uuid) -> Element {
                                 }
                             }
                         }
-                        if can_manage { ClientInvoices { client_id: id } }
+                        if can_read_invoices { ClientInvoices { client_id: id } }
                     }
                 }
             } else {

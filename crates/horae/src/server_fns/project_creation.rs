@@ -245,8 +245,10 @@ fn storage_error(error: sqlx::Error) -> ServerFnError {
     server_err("Could not save or load the project. Please retry.")
 }
 
-#[cfg(feature = "server")]
-pub(super) async fn create_client_record(
+/// The project form's client dialog (`clients::create_project_client`) as the
+/// creation tests drive it.
+#[cfg(all(test, feature = "server"))]
+async fn create_client_record(
     pool: &sqlx::PgPool,
     actor_id: uuid::Uuid,
     org_id: uuid::Uuid,
@@ -254,27 +256,15 @@ pub(super) async fn create_client_record(
     currency: &str,
     default_rate: &str,
 ) -> Result<CreationClient, ServerFnError> {
-    horae_core::client::validate_profile(name, currency, None, None)
-        .map_err(|error| err(BAD_REQUEST, error))?;
-    let rate = horae_core::client::parse_default_rate(default_rate)
-        .map_err(|error| err(BAD_REQUEST, error))?;
-    let mut tx = pool.begin().await.map_err(storage_error)?;
-    lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
-    let client = sqlx::query_as!(
-        CreationClient,
-        "INSERT INTO clients (id, org_id, name, currency, default_rate_cents)
-         VALUES ($1,$2,$3,$4,$5) RETURNING id, name, currency, active, default_rate_cents",
-        uuid::Uuid::now_v7(),
-        org_id,
-        name.trim(),
+    super::clients::create_project_client_record(
+        pool,
+        &crate::ops::testing::Recorder::default(),
+        crate::ops::Caller::session(org_id, actor_id),
+        name,
         currency,
-        rate,
+        default_rate,
     )
-    .fetch_one(&mut *tx)
     .await
-    .map_err(storage_error)?;
-    tx.commit().await.map_err(storage_error)?;
-    Ok(client)
 }
 
 #[cfg(feature = "server")]

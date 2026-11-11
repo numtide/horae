@@ -1007,6 +1007,7 @@ mod server_fns {
             requester: super::client_tests::requester(),
             canonical_permissions: probe.canonical,
             can_manage: !probe.member && !probe.canonical,
+            can_read_invoices: !probe.member && !probe.canonical,
             details: get_client_details(id).await?,
         })
     }

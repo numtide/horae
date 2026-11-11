@@ -169,6 +169,27 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
     await capture('global-rate-detail');
     console.log('PASS: only global billable-rate read reveals the client default, keeping unset distinct from zero');
 
+    setGrants([...catalog, 'client_write_all']);
+    const writer = await success(await loadDetail(zero));
+    assert.deepEqual([writer.can_manage, writer.can_read_invoices, Object.hasOwn(writer.details, 'billing')], [true, false, false]);
+    await expect(page.getByRole('region', { name: 'Invoices', exact: true })).toHaveCount(0);
+    await page.locator('#client-edit').click();
+    await expect(dialog.getByLabel('Client name', { exact: true })).toBeFocused();
+    await expect(dialog.getByLabel('Default rate', { exact: true })).toHaveCount(0);
+    await capture('client-writer-editor');
+    await dialog.getByLabel('Tax ID (optional)', { exact: true }).fill('PERM-6');
+    await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    assert.equal(sql(`SELECT tax_id || ':' || default_rate_cents FROM clients WHERE id='${zero}'`), 'PERM-6:0');
+    console.log('PASS: ClientWriteAll edits a client without seeing or changing its default rate');
+
+    setGrants([...catalog, 'invoice_read_managed', 'invoice_read_all']);
+    const reader = await success(await loadDetail(zero));
+    assert.deepEqual([reader.can_manage, reader.can_read_invoices], [false, true]);
+    await expect(page.getByRole('region', { name: 'Invoices', exact: true })).toBeVisible();
+    await expect(page.getByText('No invoices for this client.', { exact: true })).toBeVisible();
+    console.log('PASS: organization-wide invoice read shows a client\'s invoices without client management');
+
     setGrants([...floor, 'project_read_managed', 'project_read_all', 'invoice_read_managed', 'invoice_read_all',
       'billable_rate_read_managed', 'billable_rate_read_all', 'report_profitability_read']);
     overview = await success(await loadList());

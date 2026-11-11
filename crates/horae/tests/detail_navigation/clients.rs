@@ -292,6 +292,7 @@ async fn policy_one_detail_distinguishes_restricted_from_unset_rate() {
                 requester: requester(),
                 canonical_permissions: true,
                 can_manage: false,
+                can_read_invoices: false,
                 details: client::ClientDetails {
                     client: client_record(id),
                     billing,

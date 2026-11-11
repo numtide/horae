@@ -40,7 +40,7 @@ pub struct ClientOverview {
     pub canonical_permissions: bool,
     /// False means the catalog is withheld, distinct from an empty catalog.
     pub can_read: bool,
-    /// Display affordance for the legacy client writes; every write rechecks.
+    /// Display affordance for client writes; every write rechecks.
     pub can_manage: bool,
     pub clients: Vec<ClientSummary>,
 }
@@ -49,8 +49,10 @@ pub struct ClientOverview {
 pub struct ClientDetailView {
     pub requester: PermissionRequester,
     pub canonical_permissions: bool,
-    /// Display affordance for the legacy client writes; every write rechecks.
+    /// Display affordance for client writes; every write rechecks.
     pub can_manage: bool,
+    /// Display affordance for the client's invoices; the read rechecks.
+    pub can_read_invoices: bool,
     pub details: ClientDetails,
 }
 

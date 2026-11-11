@@ -72,11 +72,13 @@ impl ClientFields {
             && self.confirmed_currency.as_deref() != Some(self.currency.as_str())
     }
 
+    /// Without billing access the rate field is hidden, so the saved rate is
+    /// kept and no snapshot of it is sent.
     fn edit(&self, initial: &ClientDetails) -> Result<ClientProfileEdit, String> {
-        let billing = initial
+        let default_rate_cents = initial
             .billing
             .as_ref()
-            .ok_or("Manager access is required to edit this client.")?;
+            .and_then(|billing| billing.default_rate_cents);
         let profile = self.profile()?;
         if self.needs_rate_confirmation(initial) {
             return Err("Confirm the default rate in the new currency, enter a replacement, or clear the rate.".into());
@@ -93,7 +95,7 @@ impl ClientFields {
             rate_change,
             original: ClientBillingSnapshot {
                 currency: initial.client.currency.clone(),
-                default_rate_cents: billing.default_rate_cents,
+                default_rate_cents,
             },
         })
     }
@@ -152,14 +154,7 @@ fn ClientEditorLoader(
         if !ready {
             p { class: "modal-body m-0", role: "status", aria_busy: "true", "Loading client editor…" }
         } else if let Some(Ok(detail)) = &*value {
-            if detail.as_ref().is_none_or(|detail| detail.billing.is_some()) {
-                ClientForm { initial: detail.clone(), busy, on_dismiss, on_saved }
-            } else {
-                div { class: "modal-body",
-                    p { role: "alert", "Manager access is required to edit this client." }
-                    button { r#type: "button", class: "btn btn-secondary", onclick: move |_| on_dismiss.call(()), "Close" }
-                }
-            }
+            ClientForm { initial: detail.clone(), busy, on_dismiss, on_saved }
         } else {
             div { class: "modal-body",
                 p { role: "alert", "Could not load this client for editing." }
@@ -185,6 +180,11 @@ fn ClientForm(
     let mut error = use_signal(|| None::<String>);
     let mut uncertain = use_signal(|| false);
     let editing = initial.read().is_some();
+    // Someone who may edit clients but not see billable rates keeps the rate.
+    let shows_rate = initial
+        .read()
+        .as_ref()
+        .is_none_or(|detail| detail.billing.is_some());
     let dirty = *fields.read() != *baseline.read();
     let needs_confirmation = initial
         .read()
@@ -256,14 +256,16 @@ fn ClientForm(
                         onchange: move |event: FormEvent| fields.write().currency = event.value(),
                     }
                 }
-                FormGroup { label: "Default rate", id: "client-form-rate",
-                    Input { id: "client-form-rate", class: "font-mono", value: fields.read().rate.clone(), disabled: busy(),
-                        oninput: move |event: FormEvent| {
-                            let mut value = fields.write();
-                            value.rate = event.value(); value.rate_touched = true; value.confirmed_currency = Some(value.currency.clone());
+                if shows_rate {
+                    FormGroup { label: "Default rate", id: "client-form-rate",
+                        Input { id: "client-form-rate", class: "font-mono", value: fields.read().rate.clone(), disabled: busy(),
+                            oninput: move |event: FormEvent| {
+                                let mut value = fields.write();
+                                value.rate = event.value(); value.rate_touched = true; value.confirmed_currency = Some(value.currency.clone());
+                            }
                         }
+                        p { class: "text-xs text-secondary mt-1", "Per hour. Blank means not set; zero is a valid rate." }
                     }
-                    p { class: "text-xs text-secondary mt-1", "Per hour. Blank means not set; zero is a valid rate." }
                 }
             }
             if needs_confirmation {
@@ -370,10 +372,12 @@ mod tests {
     }
 
     #[test]
-    fn absent_billing_authority_never_produces_an_edit_payload() {
+    fn absent_billing_authority_keeps_the_rate_without_a_snapshot() {
         let mut initial = initial(None);
         initial.billing = None;
-        assert!(ClientFields::new(Some(&initial)).edit(&initial).is_err());
+        let edit = ClientFields::new(Some(&initial)).edit(&initial).unwrap();
+        assert_eq!(edit.rate_change, ClientRateChange::Keep);
+        assert_eq!(edit.original.default_rate_cents, None);
     }
 
     #[test]

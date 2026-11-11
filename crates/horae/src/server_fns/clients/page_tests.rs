@@ -383,13 +383,13 @@ async fn policy_zero_keeps_legacy_catalog_billing_and_manager_affordance(pool: P
     }
 }
 
-/// Deferred: the shared legacy readers are not cut over by this page slice.
+/// The shared detail reader follows the same grants as the page: a legacy
+/// Manager role without them sees nothing under policy one.
 #[sqlx::test(migrations = "./migrations")]
-async fn legacy_workflow_readers_are_unchanged_under_policy_one(pool: PgPool) {
+async fn workflow_reader_follows_grants_under_policy_one(pool: PgPool) {
     let ids = policy_one(&pool, OrgRole::Manager, &[]).await;
-    let legacy = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+    let error = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
         .await
-        .unwrap();
-    assert_eq!(legacy.client.tax_id.as_deref(), Some(TAX_ID));
-    assert!(legacy.billing.is_some());
+        .unwrap_err();
+    assert_code(error, NOT_FOUND);
 }

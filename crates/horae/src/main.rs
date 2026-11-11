@@ -21,6 +21,8 @@ mod jobs;
 #[cfg(feature = "server")]
 mod notifications;
 #[cfg(feature = "server")]
+mod ops;
+#[cfg(feature = "server")]
 mod plugin;
 #[cfg(feature = "server")]
 mod render;
