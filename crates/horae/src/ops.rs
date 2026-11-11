@@ -94,11 +94,14 @@ pub(crate) struct WriteTx {
 
 /// Begins a write at READ COMMITTED and loads the [`Actor`]. The isolation is
 /// explicit so checks that must see rows committed while the operation waited
-/// for a lock do not depend on the server default.
+/// for a lock do not depend on the server default. The statement and idle
+/// limits bound how long the actor's `FOR SHARE` locks can hold off access
+/// changes.
 pub(crate) async fn begin(pool: &PgPool, caller: Caller) -> Result<WriteTx, OpError> {
     let mut tx = pool
         .begin_with("BEGIN ISOLATION LEVEL READ COMMITTED, READ WRITE")
         .await?;
+    crate::server_fns::configure_transaction_limits(&mut tx).await?;
     let actor = Actor::load(&mut tx, caller).await?;
     Ok(WriteTx { tx, actor })
 }

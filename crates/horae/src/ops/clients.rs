@@ -25,6 +25,9 @@ const WRITE_REQUIRED: &str = "Client management access required";
 const RATE_WRITE_REQUIRED: &str =
     "Changing a client's default rate requires permission to edit billable rates for everyone";
 const INVOICES_REQUIRED: &str = "Invoice access required";
+const LEGACY_INVOICES_REQUIRED: &str = "Manager access required";
+const CURRENCY_NEEDS_RATE_WRITE: &str =
+    "Changing a client's currency requires permission to edit billable rates";
 const ARCHIVE_PROJECTS_FIRST: &str = "Archive this client's projects before archiving the client.";
 
 /// FR-035: the client default is a global rate. Reading it needs the client
@@ -187,10 +190,14 @@ pub(crate) async fn update(
             "Client currency or default rate changed. Reload the client before saving.",
         ));
     }
+    // FR-035: whether a rate exists is as hidden as its amount, so someone who
+    // cannot read it is refused any currency change, rate or no rate.
+    if profile.currency != before.currency && !reads_default_rate(actor) {
+        return Err(OpError::forbidden(CURRENCY_NEEDS_RATE_WRITE));
+    }
     let rate = match edit.rate_change {
         ClientRateChange::Keep => {
-            // The kept rate would silently change currency. Someone who cannot
-            // see it learns only that it exists, and whom to ask.
+            // The kept rate would silently change currency.
             if profile.currency != before.currency && current_rate.is_some() {
                 return Err(OpError::conflict(if writes_default_rate(actor) {
                     "Changing currency requires explicitly replacing or clearing the default rate."
@@ -237,7 +244,7 @@ pub(crate) async fn update(
 /// clients are hidden from new-entry pickers but stay linked to existing
 /// projects and entries.
 ///
-/// Runs at READ COMMITTED ([`super::with_tx`]): the linked-project check must
+/// Runs at READ COMMITTED ([`super::begin`]): the linked-project check must
 /// see projects committed while this waited for the client lock.
 pub(crate) async fn set_active(
     tx: &mut Tx,
@@ -391,16 +398,22 @@ pub(crate) async fn overview(
 }
 
 /// A client's invoices. Whole-invoice authority is organization-wide invoice
-/// read; managed invoice scope belongs to the invoices domain.
+/// read; managed invoice scope belongs to the invoices domain. It is checked
+/// before the client, as policy zero's manager check was, so the refusal says
+/// nothing about the client.
 pub(crate) async fn invoices(
     tx: &mut Tx,
     actor: &Actor,
     client_id: Uuid,
 ) -> Result<Vec<Invoice>, OpError> {
-    details(tx, actor, client_id).await?;
     if !actor.has(Permission::InvoiceReadAll) {
-        return Err(OpError::forbidden(INVOICES_REQUIRED));
+        return Err(OpError::forbidden(if actor.is_legacy() {
+            LEGACY_INVOICES_REQUIRED
+        } else {
+            INVOICES_REQUIRED
+        }));
     }
+    details(tx, actor, client_id).await?;
     Ok(sqlx::query_as!(
         Invoice,
         r#"SELECT id, org_id, client_id, number,

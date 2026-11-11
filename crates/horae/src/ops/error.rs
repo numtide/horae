@@ -12,6 +12,8 @@ pub(crate) enum OpError {
     #[error("{0}")]
     Conflict(String),
     /// The input is invalid; `field` names it when one field is to blame.
+    /// `field` is for adapters that pass it on (Harvest, `/api/v1`);
+    /// `ServerFnError` carries only the message.
     #[error("{message}")]
     Invalid {
         field: Option<&'static str>,

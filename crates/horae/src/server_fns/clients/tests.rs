@@ -666,10 +666,11 @@ async fn client_invoices_require_manager_authority_even_without_invoices(pool: P
     let error = client_invoices_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
         .await
         .unwrap_err();
+    // Invoice authority is checked before the client, as on the session path.
     assert!(matches!(
         error,
         ServerFnError::ServerError {
-            code: NOT_FOUND,
+            code: FORBIDDEN,
             ..
         }
     ));
@@ -677,12 +678,7 @@ async fn client_invoices_require_manager_authority_even_without_invoices(pool: P
 
 #[sqlx::test(migrations = "./migrations")]
 async fn client_invoices_reject_a_winning_concurrent_revocation(pool: PgPool) {
-    // The reader locks its actor before reading anything, so a deactivation
-    // it waited for reads like any inactive actor: the client is not found.
-    for (revoked_role, active, expected) in [
-        (OrgRole::Member, true, FORBIDDEN),
-        (OrgRole::Manager, false, NOT_FOUND),
-    ] {
+    for (revoked_role, active) in [(OrgRole::Member, true), (OrgRole::Manager, false)] {
         let ids = seed(&pool, OrgRole::Manager).await;
         sqlx::query!(
             "INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents)
@@ -726,10 +722,13 @@ async fn client_invoices_reject_a_winning_concurrent_revocation(pool: PgPool) {
             .unwrap()
             .unwrap()
             .unwrap_err();
-        assert!(
-            matches!(error, ServerFnError::ServerError { code, .. } if code == expected),
-            "{error:?}"
-        );
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError {
+                code: FORBIDDEN,
+                ..
+            }
+        ));
     }
 }
 

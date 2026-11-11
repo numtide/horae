@@ -252,16 +252,38 @@ async fn update_keeps_a_withheld_rate_and_needs_rate_write_to_change_it(pool: Pg
         assert_eq!(rate_of(&pool, ids.client_id).await, expected);
     }
 
-    // A currency change would leave the hidden rate in the old currency.
-    let (_, refused) = update_with(&pool, Who::Grants(WRITER), |_| ClientProfileEdit {
-        profile: ClientProfile {
-            currency: "USD".into(),
-            ..profile()
-        },
-        ..keep("EUR", None)
-    })
-    .await;
-    assert!(matches!(refused, Err(OpError::Conflict(_))), "{refused:?}");
+    // FR-035: the refusal must not tell a set rate (even zero) from no rate.
+    for rate in [Some(12345), Some(0), None] {
+        let ids = fixture(&pool, Who::Grants(WRITER)).await;
+        sqlx::query!(
+            "UPDATE clients SET default_rate_cents = $2 WHERE id = $1",
+            ids.client_id,
+            rate,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let edit = ClientProfileEdit {
+            profile: ClientProfile {
+                currency: "USD".into(),
+                ..profile()
+            },
+            ..keep("EUR", None)
+        };
+        let refused = with_tx(
+            &pool,
+            &Recorder::default(),
+            caller(&ids),
+            async |tx, actor| update(tx, actor, ids.client_id, &edit).await,
+        )
+        .await;
+        assert_eq!(
+            refused.unwrap_err(),
+            OpError::forbidden(CURRENCY_NEEDS_RATE_WRITE),
+            "{rate:?}"
+        );
+        assert_eq!(rate_of(&pool, ids.client_id).await, rate);
+    }
 }
 
 #[sqlx::test(migrations = "./migrations")]
@@ -377,7 +399,8 @@ async fn details_need_the_catalog_and_rates_need_global_rate_read(pool: PgPool) 
 async fn client_invoices_need_the_catalog_and_invoice_read(pool: PgPool) {
     for (who, outcome) in [
         (Who::Legacy(OrgRole::Manager), "ok"),
-        (Who::Legacy(OrgRole::Member), "forbidden"),
+        // Policy zero keeps the session path's manager refusal.
+        (Who::Legacy(OrgRole::Member), "manager"),
         (Who::Grants(INVOICES), "ok"),
         (Who::Grants(CATALOG), "forbidden"),
         (
@@ -392,6 +415,8 @@ async fn client_invoices_need_the_catalog_and_invoice_read(pool: PgPool) {
         .await;
         match (outcome, result) {
             ("ok", Ok(rows)) => assert!(rows.is_empty()),
+            ("manager", Err(OpError::Forbidden(message)))
+                if message == LEGACY_INVOICES_REQUIRED => {}
             ("forbidden", Err(OpError::Forbidden(_)))
             | ("not found", Err(OpError::NotFound(_))) => {}
             (_, other) => panic!("{who:?}: {other:?}"),

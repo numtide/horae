@@ -146,3 +146,24 @@ async fn unknown_policy_and_missing_or_invalid_state_fail_closed(pool: PgPool) {
         assert!(matches!(error, OpError::Forbidden(_)), "{state}: {error:?}");
     }
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn storage_failures_loading_state_are_not_a_refusal(pool: PgPool) {
+    let ids = seed(&pool, OrgRole::Admin).await;
+    policy_one(&pool, &ids, &[Permission::ClientReadAll], true).await;
+    let mut holder = pool.begin().await.unwrap();
+    sqlx::query!("LOCK TABLE person_permission_states IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *holder)
+        .await
+        .unwrap();
+    let mut tx: Tx = pool.begin().await.unwrap();
+    sqlx::query!("SET LOCAL lock_timeout = '50ms'")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let error = Actor::load(&mut tx, Caller::session(ids.org_id, ids.user_id))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, OpError::Internal(_)), "{error:?}");
+    holder.rollback().await.unwrap();
+}

@@ -7,6 +7,7 @@ use horae_core::types::OrgRole;
 
 use super::{Caller, OpError, Tx};
 use crate::models::permissions::PersonPermissions;
+use crate::server_fns::PermissionStorageError;
 
 /// The entry point a request came through. Tokens and the CLI join later.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,9 +84,13 @@ impl Actor {
             let state =
                 crate::server_fns::load_person_permissions(tx, caller.org_id, caller.user_id)
                     .await
-                    .map_err(|error| {
-                        tracing::error!(%error, "Unable to load the actor's permission state");
-                        OpError::forbidden(STATE_UNAVAILABLE)
+                    .map_err(|error| match error {
+                        // A lost race or a storage fault, not missing authority.
+                        PermissionStorageError::Database(error) => OpError::from(error),
+                        error => {
+                            tracing::error!(%error, "Invalid stored permission state");
+                            OpError::forbidden(STATE_UNAVAILABLE)
+                        }
                     })?
                     .ok_or_else(|| OpError::forbidden(STATE_UNAVAILABLE))?;
             Authority::Scoped(state)
