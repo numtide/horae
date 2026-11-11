@@ -1,4 +1,4 @@
-// Fixtures are restricted to the browser runner's disposable database.
+// Invoice settings on stored grants. Fixtures are restricted to the browser runner's disposable database.
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
@@ -8,14 +8,22 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id FROM users WHERE email='admin@example.com' AND active AND org_role='admin') u"));
+const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id,org_role FROM users WHERE email='admin@example.com' AND active) u"));
 const org = actor.org_id;
+const state = '019f4300-0000-7000-8000-000000000001';
+const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
+const writer = [...floor, 'invoice_read_managed', 'invoice_draft_write_managed', 'invoice_write_managed',
+  'invoice_read_all', 'invoice_write_all'];
+const reader = [...floor, 'invoice_read_managed', 'invoice_read_all'];
+const grantsSql = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
+const setGrants = grants => sql(`UPDATE person_permission_states SET grants=${grantsSql(grants)} WHERE id='${state}'`);
 const branding = column => sql(`SELECT coalesce(${column}, '<null>') FROM organizations WHERE id='${org}'`);
 const columns = ['provider_name', 'provider_address', 'provider_tax_id', 'provider_email', 'provider_phone',
   'bank_name', 'bank_iban', 'bank_bic', 'bank_routing', 'bank_account', 'invoice_notes', 'invoice_payment_terms'];
 const before = JSON.parse(sql(`SELECT row_to_json(o) FROM (SELECT ${columns.join(',')}, permission_policy_version FROM organizations WHERE id='${org}') o`));
-assert.equal(before.permission_policy_version, 0);
 const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll("'", "''")}'`;
+// Only this suite's state row is created and removed; the policy and role are restored to their observed values.
+assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE user_id='${actor.id}'`), '0');
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -25,16 +33,24 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
   page.on('pageerror', error => errors.push(error.stack || error.message));
   const main = page.locator('main');
   const settingsLink = main.getByRole('link', { name: 'Settings', exact: true });
-  const asRole = async role => {
+  // The action follows the session's permissions, so wait for them to load.
+  const invoices = async () => {
+    const permissions = page.waitForResponse(r => r.url().includes('/api/get_my_permissions') && r.status() === 200);
     await page.goto(`${base}/invoices`);
-    await expect(page.locator('.sidebar-user-sub')).toHaveText(role[0].toUpperCase() + role.slice(1));
+    await permissions;
+    await expect(page.getByRole('heading', { name: 'Invoices', level: 1 })).toBeVisible();
   };
   try {
+    // The page shows grants only once the organization answers from stored state.
+    sql(`BEGIN;
+      INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
+        VALUES ('${state}','${org}','${actor.id}',1,${grantsSql(writer)},false,'individual');
+      UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
 
-    await asRole('admin');
+    await invoices();
     await settingsLink.click();
     await expect(page).toHaveURL(`${base}/invoices/settings`);
     await expect(page.getByRole('heading', { name: 'Invoice settings', level: 1 })).toBeVisible();
@@ -99,27 +115,23 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
     await expect(page.getByLabel('IBAN', { exact: true })).toHaveValue('DE89 3704 0044 0532 0130 00');
     console.log('PASS: a save from a stale page is refused and keeps the newer values');
 
-    // Members neither see the action nor get the form from a direct link.
-    sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`);
-    await asRole('member');
+    // Reading invoices is not enough: no action, and a direct link shows no values.
+    setGrants(reader);
+    await invoices();
     await expect(settingsLink).toHaveCount(0);
     await page.goto(`${base}/invoices/settings`);
-    await expect(main.getByRole('alert')).toContainText('managers and administrators');
+    await expect(main.getByRole('alert')).toContainText('people who manage all invoices');
     await expect(page.getByLabel('Company name', { exact: true })).toHaveCount(0);
     await expect(main).not.toContainText('Acme Studio');
-    console.log('PASS: members are not offered invoice settings and a direct link shows no values');
+    console.log('PASS: invoice readers are not offered invoice settings and a direct link shows no values');
 
-    // Detailed permissions leave the decision to the role, as the server does.
-    sql(`BEGIN; UPDATE users SET org_role='manager' WHERE id='${actor.id}';
-      INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-        VALUES ('019f4300-0000-7000-8000-000000000001','${org}','${actor.id}',1,
-          ARRAY['time_read_own','time_write_own','expense_read_own','expense_write_own'],false,'individual');
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
-    // Under policy one the sidebar names no legacy role, so the action itself is the signal.
-    await page.goto(`${base}/invoices`);
+    // The dead legacy role decides nothing: a member with the grant opens the settings.
+    sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`);
+    setGrants(writer);
+    await invoices();
     await settingsLink.click();
     await expect(page.getByLabel('Company name', { exact: true })).toHaveValue('Acme Studio S.L.');
-    console.log('PASS: managers open invoice settings under detailed permissions');
+    console.log('PASS: the invoice write grant opens invoice settings whatever the legacy role');
 
     // 390px: the cards and preview stack without horizontal scrolling.
     await page.setViewportSize({ width: 390, height: 844 });
@@ -133,9 +145,9 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
     console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot({ timeout: 3000 }).catch(failure => failure.message) });
     throw error;
   } finally {
-    sql(`BEGIN; UPDATE users SET org_role='admin' WHERE id='${actor.id}';
-      DELETE FROM person_permission_states WHERE user_id='${actor.id}';
-      UPDATE organizations SET permission_policy_version=0,
+    sql(`BEGIN; UPDATE users SET org_role=${literal(actor.org_role)} WHERE id='${actor.id}';
+      DELETE FROM person_permission_states WHERE id='${state}';
+      UPDATE organizations SET permission_policy_version=${before.permission_policy_version},
         ${columns.map(column => `${column}=${literal(before[column])}`).join(', ')}
         WHERE id='${org}'; COMMIT;`);
     await browser.close();

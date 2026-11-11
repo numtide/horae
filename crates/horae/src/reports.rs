@@ -632,16 +632,9 @@ fn stream_invoice_lines<'e>(
     .fetch(executor)
 }
 
-/// The org's invoice branding block — shared with the `get_org_branding`
-/// server fn so the PDF carries the same identity the settings page edits.
-pub(crate) async fn fetch_org_branding(
-    org_id: uuid::Uuid,
-) -> Result<crate::models::OrgBranding, sqlx::Error> {
-    let state = crate::state::global_state().await;
-    fetch_branding_from(&state.db, org_id).await
-}
-
-async fn fetch_branding_from(
+/// The org's invoice branding block, shared with the invoice settings page
+/// (`ops::organization::branding`) so the PDF carries the identity it edits.
+pub(crate) async fn fetch_branding_from(
     executor: impl sqlx::PgExecutor<'_>,
     org_id: uuid::Uuid,
 ) -> Result<crate::models::OrgBranding, sqlx::Error> {
