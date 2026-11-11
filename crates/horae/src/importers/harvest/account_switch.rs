@@ -222,7 +222,7 @@ mod tests {
         ) records"#).fetch_one(pool).await.unwrap()
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn successful_change_preserves_business_rows_and_failure_rolls_back_secrets(
         pool: PgPool,
     ) {
@@ -283,7 +283,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn running_jobs_block_change_and_old_execution_never_reaches_http(pool: PgPool) {
         use super::super::api_source::http::{
             ApiHttp,
@@ -358,7 +358,7 @@ mod tests {
         assert_eq!(server.count.load(std::sync::atomic::Ordering::Acquire), 0);
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn queue_acceptance_does_not_wait_for_the_import_session_lock(pool: PgPool) {
         let org = organization(&pool).await;
         connect(
@@ -385,7 +385,7 @@ mod tests {
         super::super::release_import(lock).await.unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn retry_and_change_are_serialized(pool: PgPool) {
         for _ in 0..8 {
             let org = organization(&pool).await;
@@ -399,7 +399,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn disconnect_and_reconnect_fence_callbacks_but_not_same_account_work(pool: PgPool) {
         let org = organization(&pool).await;
         let initial = Version {
@@ -439,7 +439,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_b_a_keeps_old_callbacks_requests_and_retries_fenced(pool: PgPool) {
         let org = organization(&pool).await;
         connect(
@@ -548,7 +548,7 @@ mod tests {
         fresh_pool.close().await;
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn competing_change_and_submission_cannot_both_succeed(pool: PgPool) {
         for _ in 0..8 {
             let org = organization(&pool).await;
@@ -576,7 +576,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn competing_callbacks_and_confirmations_have_one_winner(pool: PgPool) {
         let org = organization(&pool).await;
         let initial = Version {
@@ -613,7 +613,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn change_preserves_terminal_history_and_rejects_stale_confirmation(pool: sqlx::PgPool) {
         let org = organization(&pool).await;
         let job = jobs::enqueue(
@@ -659,7 +659,7 @@ mod tests {
         assert!(change(&pool, org, "A", 0, 0).await.is_err());
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn queued_work_and_provenance_block_without_changing_binding(pool: sqlx::PgPool) {
         let org = organization(&pool).await;
         let job = jobs::enqueue_csv(

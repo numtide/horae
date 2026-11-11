@@ -76,7 +76,7 @@ fn refused_with(result: Result<JobStatus, ServerFnError>, code: u16, message: &s
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn an_api_preview_commits_once_with_its_scope_and_account(pool: PgPool) {
     let (ids, _) = fixture(&pool).await;
@@ -109,7 +109,7 @@ async fn an_api_preview_commits_once_with_its_scope_and_account(pool: PgPool) {
     assert_eq!(shown.committed_as, Some(first.id));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_preview_of_a_previous_account_is_refused(pool: PgPool) {
     let (ids, _) = fixture(&pool).await;
@@ -132,7 +132,7 @@ async fn a_preview_of_a_previous_account_is_refused(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_csv_preview_commits_its_retained_upload_until_it_expires(pool: PgPool) {
     let (ids, _) = fixture(&pool).await;
@@ -165,7 +165,7 @@ async fn a_csv_preview_commits_its_retained_upload_until_it_expires(pool: PgPool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn only_the_latest_finished_preview_of_its_source_commits(pool: PgPool) {
     let (ids, _) = fixture(&pool).await;
@@ -221,7 +221,7 @@ async fn only_the_latest_finished_preview_of_its_source_commits(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn committing_a_preview_needs_an_administrator_of_its_organization(pool: PgPool) {
     let (ids, _) = fixture(&pool).await;
@@ -277,7 +277,7 @@ fn unmatched(location: &str, email: &str) -> RowError {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_summary_groups_archived_and_inline_errors_for_administrators(pool: PgPool) {
     let (ids, _) = fixture(&pool).await;

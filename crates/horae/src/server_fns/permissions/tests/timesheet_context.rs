@@ -16,7 +16,7 @@ fn query(subject_id: Option<Uuid>) -> TimesheetQuery {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn sheet_resolves_legacy_own_context_without_canonical_state(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
@@ -52,7 +52,7 @@ async fn sheet_resolves_legacy_own_context_without_canonical_state(pool: PgPool)
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn sheet_selects_empty_managed_participant_without_widening_record_scope(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -133,7 +133,7 @@ async fn sheet_selects_empty_managed_participant_without_widening_record_scope(p
     assert!(page.entries.iter().all(|entry| entry.user_id == target));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn sheet_rejects_changed_requester_or_policy_and_inaccessible_subject(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -193,7 +193,7 @@ async fn sheet_rejects_changed_requester_or_policy_and_inaccessible_subject(pool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn sheet_exhausts_pages_and_does_not_reuse_scope_or_silently_change_policy(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -266,7 +266,7 @@ async fn sheet_exhausts_pages_and_does_not_reuse_scope_or_silently_change_policy
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn sheet_rechecks_selected_activity_after_waiting_for_archive(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -294,7 +294,7 @@ async fn sheet_rechecks_selected_activity_after_waiting_for_archive(pool: PgPool
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn sheet_holds_selected_activity_through_entry_delivery_and_releases_on_cancel(pool: PgPool) {
     let ids = fixture(&pool).await;

@@ -1,7 +1,7 @@
 use super::*;
 use crate::server_fns::test_seed::wait_for_blocked;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_api_refreshes_scope_and_money_after_authority_wait(pool: PgPool) {
     for detail in [false, true] {
@@ -72,7 +72,7 @@ async fn project_api_refreshes_scope_and_money_after_authority_wait(pool: PgPool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_api_rejects_actor_deactivated_after_session_lookup(pool: PgPool) {
     for detail in [false, true] {

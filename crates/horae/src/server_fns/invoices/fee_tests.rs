@@ -46,7 +46,7 @@ pub(super) async fn fee_balances(
         .collect())
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_fee_context_matches_invoice_balances_and_current_authority(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -169,7 +169,7 @@ async fn project_fee_context_matches_invoice_balances_and_current_authority(pool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_fee_context_keeps_monthly_balances_separate(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -226,7 +226,7 @@ async fn project_fee_context_keeps_monthly_balances_separate(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_status_rechecks_authority_after_waiting_for_the_invoice_lock(pool: PgPool) {
     for deactivate in [false, true] {
@@ -329,7 +329,7 @@ async fn invoice_status_rechecks_authority_after_waiting_for_the_invoice_lock(po
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn settled_fee_sources_remain_reviewable_without_automatic_charges(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -405,7 +405,7 @@ async fn settled_fee_sources_remain_reviewable_without_automatic_charges(pool: P
     assert_eq!(overdrawn.lines[0].fee_balance.unwrap().agreed_cents, 12500);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn reviewed_generation_bills_partial_fees_and_rejects_stale_balances(pool: PgPool) {
     use crate::models::invoice::{InvoiceFeeSelection, InvoiceGenerationRequest};
@@ -511,7 +511,7 @@ async fn reviewed_generation_bills_partial_fees_and_rejects_stale_balances(pool:
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn reviewed_generation_requires_exact_excess_and_current_authority(pool: PgPool) {
     use crate::models::invoice::{InvoiceFeeSelection, InvoiceSourceExcess};
@@ -645,7 +645,7 @@ async fn reviewed_generation_requires_exact_excess_and_current_authority(pool: P
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn reviewed_generation_does_not_materialize_unselected_months(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -723,7 +723,7 @@ async fn reviewed_generation_does_not_materialize_unselected_months(pool: PgPool
     assert_eq!(selected[0].source, edits[1].source);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn reviewed_generation_rejects_changed_time_before_claiming_it(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -786,7 +786,7 @@ async fn reviewed_generation_rejects_changed_time_before_claiming_it(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn prepared_fee_selection_rejects_invalid_values_and_empty_generation(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -877,7 +877,7 @@ async fn prepared_fee_selection_rejects_invalid_values_and_empty_generation(pool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn fee_preview_keeps_source_identity_and_reports_discounted_draft_balances(pool: PgPool) {
     use crate::models::invoice::{InvoiceFeeBalance, InvoiceSource};
@@ -966,7 +966,7 @@ async fn fee_preview_keeps_source_identity_and_reports_discounted_draft_balances
     assert_eq!(restored.lines, initial.lines);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn fee_preview_discount_ties_follow_source_keys_not_display_dates(pool: PgPool) {
     use crate::models::invoice::InvoiceSource;
@@ -1050,7 +1050,7 @@ async fn fee_preview_discount_ties_follow_source_keys_not_display_dates(pool: Pg
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn draft_fee_edit_replaces_amount_and_preserves_source_and_retry_identity(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -1115,7 +1115,7 @@ async fn draft_fee_edit_replaces_amount_and_preserves_source_and_retry_identity(
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn discounted_fee_leaves_a_balance_and_void_releases_only_its_contribution(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -1234,7 +1234,7 @@ async fn edit_request(
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn draft_fee_edit_requires_current_balance_and_exact_excess_confirmation(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -1329,7 +1329,7 @@ async fn draft_fee_edit_requires_current_balance_and_exact_excess_confirmation(p
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn draft_fee_edit_serializes_retries_and_rejects_stale_revisions(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -1395,7 +1395,7 @@ async fn draft_fee_edit_serializes_retries_and_rejects_stale_revisions(pool: PgP
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn draft_fee_edit_rejects_invalid_lines_and_current_unauthorized_actors(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -1486,7 +1486,7 @@ async fn draft_fee_edit_rejects_invalid_lines_and_current_unauthorized_actors(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn concurrent_discounted_invoice_retries_return_one_invoice(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -1588,7 +1588,7 @@ async fn concurrent_discounted_invoice_retries_return_one_invoice(pool: PgPool) 
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn mixed_time_and_fee_discount_conserves_cents_without_reopening_time(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -1690,7 +1690,7 @@ async fn mixed_time_and_fee_discount_conserves_cents_without_reopening_time(pool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn removing_discount_and_billing_the_remainder_cannot_both_succeed(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -1724,7 +1724,7 @@ async fn removing_discount_and_billing_the_remainder_cannot_both_succeed(pool: P
     ).fetch_one(&pool).await.unwrap(), Some(12500));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn zero_fee_is_invoiced_once_until_voided(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -1825,7 +1825,7 @@ async fn fee_balance_migration_allocates_discount_without_rewriting_invoice_snap
     assert_eq!(sqlx::query_scalar!("SELECT count(*) FROM information_schema.role_table_grants WHERE table_name='invoice_generation_requests' AND grantee='PUBLIC'").fetch_one(&pool).await.unwrap(), Some(0));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_preview_does_not_materialize_fees_and_preserves_released_snapshots(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -1905,7 +1905,7 @@ async fn invoice_preview_does_not_materialize_fees_and_preserves_released_snapsh
     assert_eq!(released.amounts.unwrap().total_cents, 12500);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_defaults_apply_to_selected_fees_without_claiming_other_projects(pool: PgPool) {
     let ids = single_fee(&pool).await;
@@ -1994,7 +1994,7 @@ async fn invoice_defaults_apply_to_selected_fees_without_claiming_other_projects
     assert_eq!(stored.tax1_cents, 2363);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn single_fee_can_be_invoiced_without_time(pool: PgPool) {
     let ids = single_fee(&pool).await;
     let from = "2026-09-01".parse().unwrap();
@@ -2024,7 +2024,7 @@ async fn single_fee_can_be_invoiced_without_time(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn concurrent_invoices_claim_a_single_fee_once(pool: PgPool) {
     let ids = single_fee(&pool).await;
     let from = "2026-09-01".parse().unwrap();
@@ -2056,7 +2056,7 @@ async fn concurrent_invoices_claim_a_single_fee_once(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn void_releases_fee_identity_without_rewriting_the_original_line(pool: PgPool) {
     let ids = single_fee(&pool).await;
     let from = "2026-09-01".parse().unwrap();
@@ -2101,7 +2101,7 @@ async fn void_releases_fee_identity_without_rewriting_the_original_line(pool: Pg
     assert_ne!(first.invoice.id, second.invoice.id);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn milestones_include_unbilled_overdue_fees_but_not_future_fees(pool: PgPool) {
     let ids = single_fee(&pool).await;
     sqlx::query!("UPDATE project_settings SET fee_mode = 'milestones', fee_amount_cents = NULL WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
@@ -2146,7 +2146,7 @@ async fn milestones_include_unbilled_overdue_fees_but_not_future_fees(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn monthly_fees_use_calendar_dates_and_skip_already_claimed_months(pool: PgPool) {
     let ids = single_fee(&pool).await;
     sqlx::query!("UPDATE project_settings SET fee_mode = 'monthly', monthly_day = 'last' WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
@@ -2222,7 +2222,7 @@ async fn monthly_fees_use_calendar_dates_and_skip_already_claimed_months(pool: P
     assert!(next.lines[0].description.contains("2028-04"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn fee_total_overflow_rolls_back_occurrences_and_invoice(pool: PgPool) {
     let ids = single_fee(&pool).await;
     sqlx::query!("UPDATE project_settings SET fee_mode = 'monthly', monthly_day = 'first', fee_amount_cents = $2 WHERE project_id = $1", ids.project_id, i64::MAX).execute(&pool).await.unwrap();
@@ -2262,7 +2262,7 @@ async fn fee_total_overflow_rolls_back_occurrences_and_invoice(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn fee_invoice_does_not_claim_hours_or_another_clients_fee(pool: PgPool) {
     let ids = single_fee(&pool).await;
     let other = single_fee(&pool).await;
@@ -2296,7 +2296,7 @@ async fn fee_invoice_does_not_claim_hours_or_another_clients_fee(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoice_line_sources_reject_mixed_sources_and_invented_fee_quantities(pool: PgPool) {
     let ids = single_fee(&pool).await;
     let entry = crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
@@ -2326,7 +2326,7 @@ async fn invoice_line_sources_reject_mixed_sources_and_invented_fee_quantities(p
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn fee_occurrence_rejects_cross_organization_project(pool: PgPool) {
     let ids = single_fee(&pool).await;
     let other = seed(&pool, OrgRole::Manager).await;
@@ -2338,7 +2338,7 @@ async fn fee_occurrence_rejects_cross_organization_project(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn monthly_first_and_fifteenth_respect_partial_period_and_project_end(pool: PgPool) {
     for (day, expected) in [("first", "2028-02-01"), ("fifteenth", "2028-01-15")] {
         let ids = single_fee(&pool).await;

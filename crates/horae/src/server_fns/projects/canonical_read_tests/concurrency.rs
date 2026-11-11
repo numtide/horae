@@ -107,7 +107,7 @@ async fn tagged_reader(pool: &PgPool) -> (SeedIds, User) {
     (ids, viewer)
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_readers_observe_grant_revocation_after_waiting_for_organization(pool: PgPool) {
     for reader in [
@@ -159,7 +159,7 @@ async fn project_readers_observe_grant_revocation_after_waiting_for_organization
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_readers_observe_deactivation_after_waiting_for_actor(pool: PgPool) {
     for reader in [
@@ -193,7 +193,7 @@ async fn project_readers_observe_deactivation_after_waiting_for_actor(pool: PgPo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_readers_hold_authority_until_materialization_before_deactivation(pool: PgPool) {
     for reader in [
@@ -268,7 +268,7 @@ async fn project_readers_hold_authority_until_materialization_before_deactivatio
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn cancelling_project_readers_releases_organization_and_actor_fences(pool: PgPool) {
     for reader in [
@@ -347,7 +347,7 @@ async fn blocked_by(pool: &PgPool, blocker: i32) -> i32 {
     .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detail_view_reads_identity_and_workflow_labels_from_one_snapshot(pool: PgPool) {
     let (ids, viewer) = tagged_reader(&pool).await;
@@ -405,7 +405,7 @@ async fn detail_view_reads_identity_and_workflow_labels_from_one_snapshot(pool: 
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detail_view_reads_identity_and_budget_from_one_snapshot(pool: PgPool) {
     let (ids, viewer) = tagged_reader(&pool).await;
@@ -476,7 +476,7 @@ async fn detail_view_reads_identity_and_budget_from_one_snapshot(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detail_view_observes_membership_removed_behind_the_lock_only_access_gate(pool: PgPool) {
     let (ids, viewer) = fixture(&pool, OrgRole::Member, PermissionSelection::new(&[])).await;
@@ -538,7 +538,7 @@ async fn detail_view_observes_membership_removed_behind_the_lock_only_access_gat
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detail_view_observes_report_visibility_revoked_by_the_project_editor(pool: PgPool) {
     use crate::models::project_creation::{
@@ -681,7 +681,7 @@ async fn detail_view_observes_report_visibility_revoked_by_the_project_editor(po
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn membership_removal_waits_for_a_reader_that_already_holds_authority(pool: PgPool) {
     let (ids, viewer) = fixture(&pool, OrgRole::Member, PermissionSelection::new(&[])).await;
@@ -738,7 +738,7 @@ async fn membership_removal_waits_for_a_reader_that_already_holds_authority(pool
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn access_change_gate_keeps_the_stored_organization_unchanged(pool: PgPool) {
     use crate::db::{OrganizationLock, lock_organization};
@@ -776,7 +776,7 @@ async fn access_change_gate_keeps_the_stored_organization_unchanged(pool: PgPool
     assert_ne!(new_version, version);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detail_view_reports_a_conflict_after_three_serialization_failures(pool: PgPool) {
     let (ids, viewer) = tagged_reader(&pool).await;
@@ -840,7 +840,7 @@ async fn detail_view_reports_a_conflict_after_three_serialization_failures(pool:
     assert_eq!(fresh.project.id, ids.project_id);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detail_view_snapshot_preserves_inherited_connection_settings(pool: PgPool) {
     let (ids, viewer) = tagged_reader(&pool).await;

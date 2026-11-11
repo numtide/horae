@@ -32,7 +32,7 @@ async fn restricted_pool(pool: &sqlx::PgPool) -> sqlx::PgPool {
         .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_delivery_waits_for_organization_and_rechecks_recipient(pool: sqlx::PgPool) {
     let stub = Stub::new("touch \"$0.called\"\ncat > /dev/null");
     let (ids, event) = queued(&pool).await;
@@ -75,7 +75,7 @@ async fn budget_delivery_waits_for_organization_and_rechecks_recipient(pool: sql
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_delivery_refreshes_after_recipient_and_project_waits(pool: sqlx::PgPool) {
     let reader = restricted_pool(&pool).await;
     for change in ["recipient", "role", "project", "assignment", "alerts"] {
@@ -175,7 +175,7 @@ async fn budget_delivery_refreshes_after_recipient_and_project_waits(pool: sqlx:
     reader.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_delivery_rechecks_claim_and_clock_after_final_wait(pool: sqlx::PgPool) {
     for change in ["margin", "token", "payload", "attempts", "kind", "terminal"] {
         let stub = Stub::new("touch \"$0.called\"\ncat > /dev/null");
@@ -275,7 +275,7 @@ async fn budget_delivery_rechecks_claim_and_clock_after_final_wait(pool: sqlx::P
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_delivery_uses_current_payload_after_recipient_wait(pool: sqlx::PgPool) {
     let reader = restricted_pool(&pool).await;
     let stub = Stub::new("printf '%s\\n' \"$@\" > \"$0.args\"\ncat > \"$0.message\"");
@@ -312,7 +312,7 @@ async fn budget_delivery_uses_current_payload_after_recipient_wait(pool: sqlx::P
     reader.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_delivery_skips_retargeted_notification_without_terminalizing(pool: sqlx::PgPool) {
     let stub = Stub::new("touch \"$0.called\"\ncat > /dev/null");
     let (ids, event) = queued(&pool).await;
@@ -354,7 +354,7 @@ async fn budget_delivery_skips_retargeted_notification_without_terminalizing(poo
     ).fetch_one(&pool).await.unwrap(), Some(true));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_delivery_skips_project_drift_or_disappearance(pool: sqlx::PgPool) {
     for remove in [false, true] {
         let stub = Stub::new("touch \"$0.called\"\ncat > /dev/null");
@@ -408,7 +408,7 @@ async fn budget_delivery_skips_project_drift_or_disappearance(pool: sqlx::PgPool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_delivery_observes_winning_activation_and_alert_enable(pool: sqlx::PgPool) {
     let reader = restricted_pool(&pool).await;
     for recipient in [true, false] {
@@ -459,7 +459,7 @@ async fn budget_delivery_observes_winning_activation_and_alert_enable(pool: sqlx
     reader.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_delivery_terminal_rejections_preserve_existing_reasons(pool: sqlx::PgPool) {
     for (case, reason) in [
         ("payload", "Invalid budget email event"),
@@ -507,7 +507,7 @@ async fn budget_delivery_terminal_rejections_preserve_existing_reasons(pool: sql
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_delivery_skips_notification_appearing_after_discovery(pool: sqlx::PgPool) {
     let stub = Stub::new("touch \"$0.called\"\ncat > /dev/null");
     let (ids, event) = queued(&pool).await;
@@ -549,7 +549,7 @@ async fn budget_delivery_skips_notification_appearing_after_discovery(pool: sqlx
     ).fetch_one(&pool).await.unwrap(), Some(true));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_delivery_rejects_missing_settings_without_waiting_on_child_locks(
     pool: sqlx::PgPool,
 ) {
@@ -593,7 +593,7 @@ async fn budget_delivery_rejects_missing_settings_without_waiting_on_child_locks
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_preparation_overrides_read_only_without_leaking_transaction_settings(
     pool: sqlx::PgPool,
 ) {
@@ -616,7 +616,7 @@ async fn budget_preparation_overrides_read_only_without_leaking_transaction_sett
     reader.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_preparation_cancellation_and_deadline_release_single_connection(
     pool: sqlx::PgPool,
 ) {
@@ -694,7 +694,7 @@ async fn budget_preparation_cancellation_and_deadline_release_single_connection(
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_delivery_releases_all_gates_before_blocked_transport(pool: sqlx::PgPool) {
     let stub =
         Stub::new("cat > \"$0.message\"\ntouch \"$0.started\"\nread -r resume < \"$0.release\"");

@@ -2,7 +2,7 @@ use super::*;
 use crate::importers::harvest::csv_source::import_body;
 use horae_core::importers::harvest::types::ImportMode;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn imported_legacy_project_keeps_exact_rates_and_totals_on_retry(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -94,7 +94,7 @@ async fn imported_legacy_project_keeps_exact_rates_and_totals_on_retry(pool: PgP
     assert_eq!(rates, vec![Some(0), Some(3000), Some(8000)]);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn imported_task_rates_require_matching_currency_only_for_new_configured_links(pool: PgPool) {
     for (configured, existing_rate, source_rate, currency, expected_errors, expected_rate) in [
@@ -178,7 +178,7 @@ async fn imported_task_rates_require_matching_currency_only_for_new_configured_l
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn rejected_import_rate_does_not_poison_the_next_row_or_its_catalog_rate(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;

@@ -226,7 +226,7 @@ mod tests {
         .rows)
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn invoice_exports_show_saved_adjustments_and_exact_large_amounts(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
@@ -336,7 +336,7 @@ mod tests {
         (invoice_id, entries)
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn tag_filter_applies_before_xlsx_size_checks_and_rendering(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
@@ -404,7 +404,7 @@ mod tests {
         assert!(strings.contains("Widget") && !strings.contains("Untagged"));
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn bounded_entries_enforce_the_row_limit_after_all_filters(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
@@ -455,7 +455,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn bounded_entries_reject_large_fields_and_combined_text(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
@@ -502,7 +502,7 @@ mod tests {
         ));
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn bounded_projects_filter_archives_before_size_checks(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
@@ -553,7 +553,7 @@ mod tests {
         ));
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn bounded_invoice_limits_include_branding_and_preserve_tenant_scope(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
@@ -605,7 +605,7 @@ mod tests {
         assert!(invoice(&pool, ids.org_id, ids.user_id, id).await.is_ok());
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn export_size_checks_and_reads_share_a_repeatable_read_snapshot(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
@@ -628,7 +628,7 @@ mod tests {
         ));
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn export_queries_are_read_only_and_have_a_database_deadline(pool: PgPool) {
         let mut tx = begin(&pool).await.unwrap();
@@ -653,7 +653,7 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn fee_exports_preserve_absent_quantities_and_render_a_real_pdf(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
@@ -694,7 +694,7 @@ mod tests {
         .unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn bounded_exports_preserve_real_workbooks_and_deterministic_pdf(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Manager).await;
@@ -747,7 +747,7 @@ mod tests {
         .unwrap();
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     #[ignore = "manual release export measurement; set HORAE_EXPORT_PROBE_DIR for artifacts"]
     async fn measure_bounded_export_limits(pool: PgPool) {

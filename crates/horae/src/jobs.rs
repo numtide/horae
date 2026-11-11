@@ -1241,7 +1241,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn cancelling_a_job_waiting_to_retry_clears_its_error_kind(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
         let payload = JobPayload::HarvestApi {
@@ -1282,7 +1282,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn retry_snapshot_matches_status_and_list_without_exposing_payload(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
         let api = enqueue(
@@ -1341,7 +1341,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn concurrent_csv_resubmission_preserves_identity_after_upload_cleanup(
         pool: sqlx::PgPool,
@@ -1386,7 +1386,7 @@ mod tests {
         assert!(error.is::<RequestConflict>());
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn submission_key_cannot_change_csv_bytes_or_mode(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -1439,7 +1439,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn submission_key_cannot_change_api_mode_or_scope(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -1494,7 +1494,7 @@ mod tests {
 
     use super::*;
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn import_adapters_reject_a_lease_from_another_organization(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -1545,7 +1545,7 @@ mod tests {
         assert!(list(&pool, foreign, 10, None).await.unwrap().is_empty());
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn reclaimed_attempt_rejects_stale_results_even_with_the_same_worker_name(
         pool: sqlx::PgPool,
@@ -1585,7 +1585,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn expired_lease_cannot_renew_or_commit_using_an_old_transaction_timestamp(
         pool: sqlx::PgPool,
@@ -1623,7 +1623,7 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn cancellation_survives_a_crash_before_the_worker_acknowledges(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -1654,7 +1654,7 @@ mod tests {
         assert_eq!(claim(&pool, "recovery").await.unwrap().unwrap().id, id);
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn cancellation_waits_for_the_claimed_execution_before_allowing_retry(
         pool: sqlx::PgPool,
@@ -1700,7 +1700,7 @@ mod tests {
         assert!(decode_payload(serde_json::json!({"version": 2, "payload": payload})).is_err());
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn api_job_keeps_its_policy_across_duplicate_enqueue_and_manual_retry(
         pool: sqlx::PgPool,
@@ -1758,7 +1758,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn csv_job_persists_its_policy_with_the_upload(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -1807,7 +1807,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn invalid_policy_cannot_enqueue_a_job_or_upload(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -1850,7 +1850,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn expired_final_attempt_fails_without_claiming_again(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -1892,7 +1892,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn final_failure_is_retained_and_manual_retry_gets_a_new_budget(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -1936,7 +1936,7 @@ mod tests {
         assert_eq!(claim(&pool, "manual-retry").await.unwrap().unwrap().id, id);
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn invalid_stored_payloads_reach_a_terminal_error(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -1977,7 +1977,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn cleanup_retains_retryable_uploads_and_deletes_expired_jobs(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -2067,7 +2067,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn stopped_worker_leaves_queued_jobs_unclaimed(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -2089,7 +2089,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn synthetic_job_executes_through_claim_and_completion(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -2115,7 +2115,7 @@ mod tests {
         assert!(completed.finished_at.is_some());
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn missing_configuration_records_error_and_requeues(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -2148,7 +2148,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn missing_csv_upload_records_error_and_requeues(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -2345,7 +2345,7 @@ mod tests {
         assert!(list(&pool, org_id, 20, None).await.unwrap().is_empty());
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn failed_csv_commit_retains_confirmed_report_through_history_and_retry(
         pool: sqlx::PgPool,
@@ -2353,7 +2353,7 @@ mod tests {
         failed_csv_report(pool, ImportMode::Commit).await;
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn failed_csv_preview_retains_confirmed_report_through_history_and_retry(
         pool: sqlx::PgPool,
@@ -2361,7 +2361,7 @@ mod tests {
         failed_csv_report(pool, ImportMode::DryRun).await;
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn history_paginates_tied_timestamps_and_rejects_foreign_cursors(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
         let foreign_org = org(&pool).await;
@@ -2438,7 +2438,7 @@ mod tests {
         assert_eq!(list(&pool, org_id, 1, None).await.unwrap()[0].id, ids[23]);
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn claims_are_atomic_and_expired_leases_recover(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
         let payload = JobPayload::HarvestApi {
@@ -2472,7 +2472,7 @@ mod tests {
         assert_eq!(recovered.id, left.id);
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn cancellation_and_retry_are_scoped_and_idempotent(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
         let foreign_org = org(&pool).await;
@@ -2507,7 +2507,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn upload_organization_must_match_its_job(pool: sqlx::PgPool) {
         let owner = org(&pool).await;
         let foreign = org(&pool).await;
@@ -2556,7 +2556,7 @@ mod tests {
         assert!(retry(&pool, owner, id).await.unwrap());
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn outbox_claims_only_the_requested_event_kind(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -2599,7 +2599,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn outbox_same_kind_consumers_cannot_claim_the_same_lease(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -2621,7 +2621,7 @@ mod tests {
         assert_eq!(claimed[0].attempts, 1);
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn outbox_delivery_is_idempotent(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
         let mut tx = pool.begin().await.unwrap();
@@ -2640,7 +2640,7 @@ mod tests {
         assert!(!mark_outbox_delivered(&pool, &event).await.unwrap());
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn outbox_rollback_does_not_publish_an_event(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;
@@ -2653,7 +2653,7 @@ mod tests {
         assert!(claim_outbox(&pool, "rollback").await.unwrap().is_none());
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn outbox_stale_claims_cannot_acknowledge_or_reschedule_delivery(pool: sqlx::PgPool) {
         let org_id = org(&pool).await;

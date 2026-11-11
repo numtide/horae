@@ -46,7 +46,7 @@ pub(super) async fn active_projects_fixture(pool: &PgPool) -> SeedIds {
     ids
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn active_projects_only_narrows_detailed_rows_and_period_totals(pool: PgPool) {
     let ids = active_projects_fixture(&pool).await;
@@ -96,7 +96,7 @@ async fn grants(pool: &PgPool, actor: Uuid, selection: PermissionSelection) {
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detailed_report_uses_own_scope_without_directory_or_financial_grants(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -124,7 +124,7 @@ async fn detailed_report_uses_own_scope_without_directory_or_financial_grants(po
     assert_totals(&page, 1, 60, 60, 60);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detailed_report_keeps_archived_history_and_report_rounding(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -176,7 +176,7 @@ async fn detailed_report_keeps_archived_history_and_report_rounding(pool: PgPool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detailed_report_profiles_and_custom_scope_union_do_not_duplicate_rows(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -247,7 +247,7 @@ async fn detailed_report_profiles_and_custom_scope_union_do_not_duplicate_rows(p
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detailed_report_filters_are_any_within_and_between_dimensions(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -299,7 +299,7 @@ async fn detailed_report_filters_are_any_within_and_between_dimensions(pool: PgP
     assert_totals(&empty, 0, 0, 0, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detailed_report_keyset_exhausts_ties_without_repeating_rows(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -359,7 +359,7 @@ async fn detailed_report_keyset_exhausts_ties_without_repeating_rows(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detailed_report_rejects_invalid_queries_requesters_and_policy_without_fallback(
     pool: PgPool,
@@ -414,7 +414,7 @@ async fn detailed_report_rejects_invalid_queries_requesters_and_policy_without_f
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detailed_report_observes_revocation_after_wait_and_releases_on_cancel(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -490,7 +490,7 @@ async fn detailed_report_observes_revocation_after_wait_and_releases_on_cancel(p
     reader_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detailed_report_excludes_malformed_tenant_parents(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -535,7 +535,7 @@ async fn detailed_report_excludes_malformed_tenant_parents(pool: PgPool) {
     assert_totals(&empty, 0, 0, 0, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detailed_report_billability_preserves_billed_status_and_frozen_minutes_after_configuration_changes(
     pool: PgPool,
@@ -642,7 +642,7 @@ async fn detailed_report_billability_preserves_billed_status_and_frozen_minutes_
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detailed_report_totals_round_each_entry_before_summing_billable_time(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -672,7 +672,7 @@ async fn detailed_report_totals_round_each_entry_before_summing_billable_time(po
     assert_totals(&page, 3, 51, 60, 30);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detailed_report_totals_use_bigint_and_count_zero_duration_entries(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -734,7 +734,7 @@ async fn detailed_report_totals_use_bigint_and_count_zero_duration_entries(pool:
     assert_totals(&page, 2, 0, 0, 0);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detailed_report_rechecks_direct_actor_deactivation_after_wait(pool: PgPool) {
     let ids = fixture(&pool).await;

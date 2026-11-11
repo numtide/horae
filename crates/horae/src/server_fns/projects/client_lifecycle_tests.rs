@@ -61,7 +61,7 @@ fn code_and_message(error: ServerFnError) -> (u16, String) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn restoring_a_project_of_an_archived_client_is_refused_single_and_bulk(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -104,7 +104,7 @@ async fn restoring_a_project_of_an_archived_client_is_refused_single_and_bulk(po
     assert_eq!(history(&pool).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_already_active_project_of_an_archived_client_stays_a_noop(pool: PgPool) {
     // Data from before the archive prerequisite existed.
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -123,7 +123,7 @@ async fn an_already_active_project_of_an_archived_client_stays_a_noop(pool: PgPo
     assert_eq!(history(&pool).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_project_restores_once_its_client_is_restored(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let bulk_project = project(&pool, &ids, ids.client_id, false).await;
@@ -158,7 +158,7 @@ async fn a_project_restores_once_its_client_is_restored(pool: PgPool) {
 /// must fail at READ COMMITTED (it reads the archived client) and at REPEATABLE
 /// READ (its share lock on a row changed after its snapshot is a serialization
 /// failure), and write nothing either way.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_restore_waiting_for_a_client_archive_writes_nothing(pool: PgPool) {
     let rr = repeatable_read_pool(&pool).await;
     for bulk in [false, true] {

@@ -13,7 +13,7 @@ mod canonical_managers;
 mod catalog;
 mod task_activity;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn editor_load_uses_current_role_across_all_billing_configurations(pool: PgPool) {
     for project_type in [
@@ -173,7 +173,7 @@ async fn configured_fixture(
     (owner, project)
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn manager_edit_preserves_private_settings_and_cannot_remove_them_indirectly(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
     sqlx::query!(
@@ -247,7 +247,7 @@ async fn manager_edit_preserves_private_settings_and_cannot_remove_them_indirect
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn cost_edits_distinguish_zero_override_from_reset_without_changing_person_default(
     pool: PgPool,
@@ -285,7 +285,7 @@ async fn cost_edits_distinguish_zero_override_from_reset_without_changing_person
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn concurrent_edits_have_one_winner_and_association_writes_invalidate_open_forms(
     pool: PgPool,
 ) {
@@ -334,7 +334,7 @@ async fn concurrent_edits_have_one_winner_and_association_writes_invalidate_open
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn save_preserves_recorded_time_and_rejects_removing_its_task_or_person(pool: PgPool) {
     let (mut owner, original) = configured_fixture(&pool).await;
     owner.project_id = original.id;
@@ -387,7 +387,7 @@ async fn save_preserves_recorded_time_and_rejects_removing_its_task_or_person(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn saves_recheck_current_authority_and_do_not_repeat_noops(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
     let mut request = edit_request(original.clone());
@@ -430,7 +430,7 @@ async fn saves_recheck_current_authority_and_do_not_repeat_noops(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn editing_milestones_keeps_invoice_snapshots_and_fee_identities_immutable(pool: PgPool) {
     let owner = seed(&pool, OrgRole::Admin).await;
     let form = ProjectForm {
@@ -524,7 +524,7 @@ async fn editing_milestones_keeps_invoice_snapshots_and_fee_identities_immutable
     ).fetch_one(&pool).await.unwrap(), snapshot);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn task_catalog_and_graph_changes_roll_back_together_on_duplicate_resolution(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
     let mut request = edit_request(original.clone());
@@ -603,7 +603,7 @@ async fn task_catalog_and_graph_changes_roll_back_together_on_duplicate_resoluti
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn foreign_actor_cannot_save_or_retry_another_organizations_edit(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
     let foreign = seed(&pool, OrgRole::Admin).await;
@@ -638,7 +638,7 @@ async fn foreign_actor_cannot_save_or_retry_another_organizations_edit(pool: PgP
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn save_edits_the_same_legacy_project_and_never_creates_a_draft_or_configuration(
     pool: PgPool,
 ) {
@@ -725,7 +725,7 @@ async fn save_edits_the_same_legacy_project_and_never_creates_a_draft_or_configu
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn save_updates_configured_sections_atomically_and_rejects_stale_or_invalid_edits(
     pool: PgPool,
 ) {
@@ -815,7 +815,7 @@ async fn save_updates_configured_sections_atomically_and_rejects_stale_or_invali
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn editor_loads_legacy_values_without_fabricating_a_billing_mode_or_draft(pool: PgPool) {
     let owner = seed(&pool, OrgRole::Admin).await;
     sqlx::query!(
@@ -858,7 +858,7 @@ async fn editor_loads_legacy_values_without_fabricating_a_billing_mode_or_draft(
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn editor_recovers_full_configuration_and_redacts_private_values_after_role_change(
     pool: PgPool,
 ) {
@@ -973,7 +973,7 @@ async fn editor_recovers_full_configuration_and_redacts_private_values_after_rol
     assert_eq!(manager.form.tasks[0].rate, "0.00");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn editor_rechecks_tenant_role_and_active_status(pool: PgPool) {
     let owner = seed(&pool, OrgRole::Manager).await;
     let foreign = seed(&pool, OrgRole::Admin).await;
@@ -1012,7 +1012,7 @@ async fn editor_rechecks_tenant_role_and_active_status(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn editor_keeps_archived_selected_identities_and_nullable_overrides(pool: PgPool) {
     let owner = seed(&pool, OrgRole::Admin).await;
     let user_id = Uuid::now_v7();
@@ -1079,7 +1079,7 @@ async fn editor_keeps_archived_selected_identities_and_nullable_overrides(pool: 
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn editor_preserves_fee_schedule_and_operational_milestone_ids(pool: PgPool) {
     let owner = seed(&pool, OrgRole::Admin).await;
     for mode in [FeeMode::Single, FeeMode::Milestones, FeeMode::Monthly] {
@@ -1146,7 +1146,7 @@ async fn editor_preserves_fee_schedule_and_operational_milestone_ids(pool: PgPoo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn editor_recovers_each_budget_scope_without_turning_absence_into_zero(pool: PgPool) {
     let owner = seed(&pool, OrgRole::Admin).await;
     for mode in [
@@ -1231,7 +1231,7 @@ async fn editor_recovers_each_budget_scope_without_turning_absence_into_zero(poo
 
 /// A task linked without an explicit rate inherits its catalog default only
 /// when that default is in the project currency; otherwise nothing is linked.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn linked_task_inherits_its_default_rate_only_in_the_project_currency(pool: PgPool) {
     for (currency, rate, expected) in [
         (None, "", None),
@@ -1291,7 +1291,7 @@ async fn linked_task_inherits_its_default_rate_only_in_the_project_currency(pool
 
 /// A task added in the editor inherits its catalog default only where billing
 /// uses task rates, and a non-billable project never makes the link billable.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn added_task_links_inherit_default_rates_only_for_task_billing(pool: PgPool) {
     use horae_core::types::ProjectType;
     for (project_type, rate_mode) in [

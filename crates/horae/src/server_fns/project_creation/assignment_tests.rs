@@ -40,7 +40,7 @@ fn task_input(source: TaskSource) -> ProjectTaskInput {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn finalization_reuses_catalog_and_keeps_lead_overrides_local_on_retry(pool: PgPool) {
     let owner = seed(&pool, OrgRole::Admin).await;
     let teammate = member(&pool, owner.org_id, true).await;
@@ -190,7 +190,7 @@ async fn creation_counts(pool: &PgPool, org: Uuid) -> Vec<i64> {
     .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invalid_assignment_graphs_leave_no_partial_creation_or_draft_change(pool: PgPool) {
     use crate::server_fns::{BAD_REQUEST, CONFLICT, NOT_FOUND};
     let owner = seed(&pool, OrgRole::Admin).await;

@@ -227,17 +227,17 @@ async fn resumed_api(
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_resumes_committed_pages_and_preserves_the_high_watermark(pool: PgPool) {
     resumed_api(pool, "time_entries", FirstEntry::Valid, ImportMode::Commit).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_resumes_a_partially_downloaded_catalog(pool: PgPool) {
     resumed_api(pool, "clients", FirstEntry::Valid, ImportMode::Commit).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_resume_keeps_earlier_errors_and_does_not_advance_watermark(pool: PgPool) {
     resumed_api(
         pool,
@@ -248,7 +248,7 @@ async fn durable_api_resume_keeps_earlier_errors_and_does_not_advance_watermark(
     .await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_resume_remembers_an_earlier_missing_timestamp(pool: PgPool) {
     resumed_api(
         pool,
@@ -259,17 +259,17 @@ async fn durable_api_resume_remembers_an_earlier_missing_timestamp(pool: PgPool)
     .await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_preview_resumes_pages_without_publishing_domain_data(pool: PgPool) {
     resumed_api(pool, "time_entries", FirstEntry::Valid, ImportMode::DryRun).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_preview_resumes_catalog_download(pool: PgPool) {
     resumed_api(pool, "clients", FirstEntry::Valid, ImportMode::DryRun).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_preview_resume_preserves_row_errors(pool: PgPool) {
     resumed_api(
         pool,
@@ -410,7 +410,7 @@ async fn interrupted_preview(
     jobs::status(pool, org, id).await.unwrap().unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_running_job_saves_the_time_entry_total_from_the_first_page(pool: PgPool) {
     let job = interrupted_preview(&pool, Some("two")).await;
     assert_eq!(job.status, "queued");
@@ -418,7 +418,7 @@ async fn a_running_job_saves_the_time_entry_total_from_the_first_page(pool: PgPo
     assert_eq!(job.total_count, Some(2));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_resumed_job_keeps_the_time_entry_total_it_read_before(pool: PgPool) {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -516,7 +516,7 @@ async fn a_resumed_job_keeps_the_time_entry_total_it_read_before(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_running_job_saves_the_catalog_total_once_downloaded(pool: PgPool) {
     let job = interrupted_preview(&pool, None).await;
     assert_eq!(job.status, "queued");
@@ -526,7 +526,7 @@ async fn a_running_job_saves_the_catalog_total_once_downloaded(pool: PgPool) {
     assert_eq!(job.processed_count, 5);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn rejected_credentials_finish_the_job_while_server_errors_retry(pool: PgPool) {
     let org = setup(&pool).await;
     use crate::models::JobErrorKind;
@@ -593,12 +593,12 @@ async fn rejected_credentials_finish_the_job_while_server_errors_retry(pool: PgP
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn failed_api_commit_publishes_its_last_confirmed_page_report(pool: PgPool) {
     failed_api_report(pool, ImportMode::Commit).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn failed_api_preview_publishes_its_last_confirmed_page_report(pool: PgPool) {
     failed_api_report(pool, ImportMode::DryRun).await;
 }
@@ -778,27 +778,27 @@ async fn interrupted_api_batch(pool: PgPool, cancel: bool, mode: ImportMode) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_reclaimed_worker_cannot_commit_its_next_page(pool: PgPool) {
     interrupted_api_batch(pool, false, ImportMode::Commit).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_cancellation_preserves_confirmed_pages_for_manual_retry(pool: PgPool) {
     interrupted_api_batch(pool, true, ImportMode::Commit).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_preview_reclaimed_worker_cannot_checkpoint_its_next_page(pool: PgPool) {
     interrupted_api_batch(pool, false, ImportMode::DryRun).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_preview_cancellation_preserves_confirmed_pages_for_manual_retry(pool: PgPool) {
     interrupted_api_batch(pool, true, ImportMode::DryRun).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_finalization_retry_does_not_repeat_completed_downloads(pool: PgPool) {
     let org = setup(&pool).await;
     let id = jobs::enqueue(
@@ -1002,17 +1002,17 @@ async fn resumed_parent_batch(pool: PgPool, mode: ImportMode) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_resumes_after_a_confirmed_parent_batch(pool: PgPool) {
     resumed_parent_batch(pool, ImportMode::Commit).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_preview_resumes_after_a_confirmed_parent_batch(pool: PgPool) {
     resumed_parent_batch(pool, ImportMode::DryRun).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_preview_preserves_adoptions_and_repeated_ids_across_recovery(pool: PgPool) {
     let org = setup(&pool).await;
     csv_source::import_csv(
@@ -1202,7 +1202,7 @@ async fn durable_api_preview_preserves_adoptions_and_repeated_ids_across_recover
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_preview_finalization_retry_does_not_repeat_completed_downloads(pool: PgPool) {
     let org = setup(&pool).await;
     let id = jobs::enqueue(

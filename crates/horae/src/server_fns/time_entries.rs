@@ -588,7 +588,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_timer_is_dated_in_the_persons_zone(pool: PgPool) {
         use chrono::Timelike;
         let ids = linked_seed(&pool, OrgRole::Admin).await;
@@ -614,7 +614,7 @@ mod tests {
         assert!([before, day()].contains(&entry.spent_date), "{entry:?}");
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn new_time_and_picker_reject_inactive_or_foreign_contexts(pool: PgPool) {
         let ids = linked_seed(&pool, OrgRole::Admin).await;
         let other = linked_seed(&pool, OrgRole::Admin).await;
@@ -705,7 +705,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn new_time_and_picker_require_a_project_task_link(pool: PgPool) {
         let ids = seed(&pool, OrgRole::Admin).await;
         assert!(
@@ -730,7 +730,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn new_time_uses_effective_billability_for_manual_entries_and_timers(pool: PgPool) {
         for project_billable in [false, true] {
             for task_billable in [false, true] {
@@ -764,7 +764,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn concurrent_timer_starts_insert_exactly_one_entry(pool: PgPool) {
         let ids = linked_seed(&pool, OrgRole::Admin).await;
         let (first, second) = tokio::join!(
@@ -795,7 +795,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn inactive_project_cannot_accept_new_time_even_for_admin(pool: PgPool) {
         let ids = linked_seed(&pool, OrgRole::Admin).await;
         sqlx::query!(
@@ -845,7 +845,7 @@ mod tests {
 
     // New time is checked through the actual insert and the shared selector view.
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn unassigned_member_is_forbidden(pool: PgPool) {
         let ids = linked_seed(&pool, OrgRole::Member).await;
 
@@ -858,7 +858,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn assigned_member_may_log_time(pool: PgPool) {
         let ids = linked_seed(&pool, OrgRole::Member).await;
         sqlx::query!(
@@ -878,7 +878,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn admin_may_log_time_without_assignment(pool: PgPool) {
         let ids = linked_seed(&pool, OrgRole::Admin).await;
 
@@ -889,7 +889,7 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn submission_barrier_blocks_manual_entries_and_timer_starts(pool: PgPool) {
         for is_running in [false, true] {
             let ids = linked_seed(&pool, OrgRole::Admin).await;

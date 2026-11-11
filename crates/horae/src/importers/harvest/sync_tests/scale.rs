@@ -29,7 +29,7 @@ fn config() -> HarvestConfig {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn http_pages_preview_commit_and_reimport(pool: PgPool) {
     let org = setup(&pool).await;
     let server = scale_server(205);
@@ -287,7 +287,7 @@ async fn measured_job(pool: &PgPool, org: Uuid, server: &Server, mode: ImportMod
     serde_json::from_value(complete.report.unwrap()).unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[ignore = "100,000-entry scale measurement; run explicitly with --release --nocapture"]
 async fn api_100k_commit_and_reimport(pool: PgPool) {
     require_release();
@@ -303,7 +303,7 @@ async fn api_100k_commit_and_reimport(pool: PgPool) {
     assert_stored_rows(&pool, org, (RECORDS - INVALID) as i64).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[ignore = "100,000-entry scale measurement; run explicitly with --release --nocapture"]
 async fn api_100k_dry_run(pool: PgPool) {
     require_release();
@@ -320,7 +320,7 @@ async fn api_100k_dry_run(pool: PgPool) {
     assert_eq!(parents, Some(0));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[ignore = "100,000-entry durable API measurement; run explicitly with --release --nocapture"]
 async fn api_durable_100k_commit_and_reimport(pool: PgPool) {
     require_release();
@@ -336,7 +336,7 @@ async fn api_durable_100k_commit_and_reimport(pool: PgPool) {
     assert_stored_rows(&pool, org, (RECORDS - INVALID) as i64).await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[ignore = "100,000-entry durable API measurement; run explicitly with --release --nocapture"]
 async fn api_durable_100k_dry_run(pool: PgPool) {
     require_release();
@@ -353,7 +353,7 @@ async fn api_durable_100k_dry_run(pool: PgPool) {
     assert_eq!(parents, Some(0));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_measurement_finishes_from_its_eof_checkpoint(pool: PgPool) {
     let org = setup(&pool).await;
     let server = scale_server(205);
@@ -376,7 +376,7 @@ async fn durable_measurement_finishes_from_its_eof_checkpoint(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_report_preserves_overflow_errors_after_recovery(pool: PgPool) {
     let org = setup(&pool).await;
     let server = scale_server_with_error_interval(1000, 2);

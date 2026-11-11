@@ -25,7 +25,7 @@ async fn assignment_count(pool: &PgPool) -> i64 {
         .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_membership_and_task_callers_wait_before_authorizing(pool: PgPool) {
     for operation in ["assign", "remove", "create_task"] {
@@ -132,7 +132,7 @@ async fn project_membership_and_task_callers_wait_before_authorizing(pool: PgPoo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn creation_rejects_foreign_and_unknown_project_or_person(pool: PgPool) {
     let local = seed(&pool, OrgRole::Admin).await;
@@ -166,7 +166,7 @@ async fn creation_rejects_foreign_and_unknown_project_or_person(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn removal_preserves_foreign_and_malformed_assignments(pool: PgPool) {
     let local = seed(&pool, OrgRole::Admin).await;
@@ -198,7 +198,7 @@ async fn removal_preserves_foreign_and_malformed_assignments(pool: PgPool) {
     assert_eq!(assignment_count(&pool).await, 3);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn own_assignment_lifecycle_preserves_role_and_duplicate_behavior(pool: PgPool) {
     let local = seed(&pool, OrgRole::Admin).await;
@@ -242,7 +242,7 @@ async fn own_assignment_lifecycle_preserves_role_and_duplicate_behavior(pool: Pg
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn stale_administrator_cannot_create_or_remove_after_revocation(pool: PgPool) {
     let local = seed(&pool, OrgRole::Admin).await;
@@ -303,7 +303,7 @@ async fn stale_administrator_cannot_create_or_remove_after_revocation(pool: PgPo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn assignment_mutations_wait_for_revocation_and_recheck_authority(pool: PgPool) {
     for remove in [false, true] {

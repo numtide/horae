@@ -77,7 +77,7 @@ async fn report(pool: &PgPool, viewer_id: Uuid, dimension: &str) -> Vec<ReportRo
     .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn tag_filters_keep_report_dimensions_and_details_in_sync(pool: PgPool) {
     use crate::reports::ReportFilters;
@@ -197,7 +197,7 @@ async fn tag_filters_keep_report_dimensions_and_details_in_sync(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn manager_report_omits_groups_containing_private_project_costs(pool: PgPool) {
     let (first, second) = fixtures(&pool, "EUR").await;
@@ -312,7 +312,7 @@ async fn manager_report_omits_groups_containing_private_project_costs(pool: PgPo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn report_uses_current_active_actor_and_tenant_for_every_filter(pool: PgPool) {
     let first = seed(&pool, OrgRole::Manager).await;
@@ -367,7 +367,7 @@ async fn report_uses_current_active_actor_and_tenant_for_every_filter(pool: PgPo
     assert!(report(&pool, first.user_id, "project").await.is_empty());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn same_names_keep_separate_groups_for_every_dimension(pool: PgPool) {
     let (first, second) = fixtures(&pool, "EUR").await;
@@ -419,7 +419,7 @@ async fn same_names_keep_separate_groups_for_every_dimension(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn shared_person_and_task_are_partitioned_by_currency(pool: PgPool) {
     let (first, second) = fixtures(&pool, "USD").await;
@@ -444,7 +444,7 @@ async fn shared_person_and_task_are_partitioned_by_currency(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
     let (first, second) = fixtures(&pool, "EUR").await;
@@ -532,7 +532,7 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
 /// grouping of the report adds up to the same totals, and those equal the
 /// entries rounded and priced one by one with the core rules. Catches rounding
 /// after summing, a group dropping or double-counting entries, and rate drift.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn every_grouping_reconciles_with_the_entries(pool: PgPool) {
     use horae_core::invoice::line_amount_cents;

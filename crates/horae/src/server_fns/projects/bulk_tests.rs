@@ -45,7 +45,7 @@ async fn billing_snapshot(pool: &PgPool) -> serde_json::Value {
     .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn bulk_preserves_invoiced_history_assignments_and_spend(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
@@ -88,7 +88,7 @@ async fn bulk_preserves_invoiced_history_assignments_and_spend(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn bulk_accepts_one_hundred_projects_and_mixed_status_noops(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let mut targets = vec![ids.project_id];
@@ -132,7 +132,7 @@ fn bulk_ids_validate_before_writes_and_normalize_duplicates() {
     assert_eq!(parse_bulk_project_ids(&values).unwrap().len(), 100);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn bulk_status_preserves_details_history_and_noop_versions(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let other = extra_project(&pool, &ids).await;
@@ -189,7 +189,7 @@ async fn bulk_status_preserves_details_history_and_noop_versions(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn bulk_missing_or_foreign_project_rolls_back_earlier_changes(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
     let foreign = seed(&pool, OrgRole::Admin).await;
@@ -212,7 +212,7 @@ async fn bulk_missing_or_foreign_project_rolls_back_earlier_changes(pool: PgPool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn bulk_database_failure_rolls_back_earlier_changes(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let other = extra_project(&pool, &ids).await;
@@ -242,7 +242,7 @@ async fn bulk_database_failure_rolls_back_earlier_changes(pool: PgPool) {
     assert_eq!(snapshot(&pool, ids.org_id).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn bulk_reversed_overlapping_batches_finish_without_deadlock(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let other = extra_project(&pool, &ids).await;
@@ -310,7 +310,7 @@ async fn status_writes(
     ]
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn status_writes_recheck_current_actor_role_and_policy(pool: PgPool) {
     for change in [
         "member",
@@ -371,7 +371,7 @@ async fn status_writes_recheck_current_actor_role_and_policy(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn status_write_waits_for_a_policy_change_and_then_fails_closed(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let (org_id, user_id, project_id) = (ids.org_id, ids.user_id, ids.project_id);

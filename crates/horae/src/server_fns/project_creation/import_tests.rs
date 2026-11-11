@@ -12,7 +12,7 @@ use horae_core::types::{OrgRole, ProjectType};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn imported_catalog_rate_cannot_be_relabelled_as_workspace_currency(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -179,7 +179,7 @@ async fn configuration(pool: &PgPool, org: Uuid) -> serde_json::Value {
     ).fetch_one(pool).await.unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn imports_preserve_finalized_project_configuration_and_restricted_access(pool: PgPool) {
     for source in [SourceKind::Csv, SourceKind::HarvestApi] {

@@ -1,6 +1,6 @@
 use super::*;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_task_reader_requires_current_manager_designation(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -38,7 +38,7 @@ async fn project_task_reader_requires_current_manager_designation(pool: PgPool) 
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_workflow_identity_rejects_foreign_client_parents(pool: PgPool) {
     let (ids, viewer) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
@@ -87,7 +87,7 @@ async fn task_workflow_identity_rejects_foreign_client_parents(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_catalog_accepts_current_read_grant_without_legacy_role(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -105,7 +105,7 @@ async fn task_catalog_accepts_current_read_grant_without_legacy_role(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_reads_do_not_inherit_legacy_administrator_catalog(pool: PgPool) {
     let (_, viewer) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
@@ -120,7 +120,7 @@ async fn task_reads_do_not_inherit_legacy_administrator_catalog(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_catalog_withholds_global_rates_without_all_rate_read(pool: PgPool) {
     for rates in [None, Some(Permission::BillableRateReadManaged)] {
@@ -152,7 +152,7 @@ async fn task_catalog_withholds_global_rates_without_all_rate_read(pool: PgPool)
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_catalog_all_rate_grant_is_independent_of_legacy_role(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -179,7 +179,7 @@ async fn task_catalog_all_rate_grant_is_independent_of_legacy_role(pool: PgPool)
     assert!(tracking.iter().all(|row| row.default_rate_cents.is_none()));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_reader_rejects_unknown_policy_even_with_legacy_admin(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -202,7 +202,7 @@ async fn task_reader_rejects_unknown_policy_even_with_legacy_admin(pool: PgPool)
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn tracking_history_is_not_task_catalog_authority(pool: PgPool) {
     let (ids, viewer) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
@@ -228,7 +228,7 @@ async fn tracking_history_is_not_task_catalog_authority(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_task_labels_require_project_scope_not_global_task_scope(pool: PgPool) {
     for grants in [
@@ -263,7 +263,7 @@ async fn project_task_labels_require_project_scope_not_global_task_scope(pool: P
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn assigned_tracking_task_survives_private_progress_without_catalog_grant(pool: PgPool) {
     let (ids, viewer) = fixture(&pool, OrgRole::Member, PermissionSelection::new(&[])).await;
@@ -317,7 +317,7 @@ async fn assigned_tracking_task_survives_private_progress_without_catalog_grant(
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_catalog_uses_current_actor_and_never_foreign_tasks(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -352,7 +352,7 @@ async fn task_catalog_uses_current_actor_and_never_foreign_tasks(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_catalog_refreshes_permissions_after_organization_wait(pool: PgPool) {
     use crate::server_fns::test_seed::wait_for_blocked;

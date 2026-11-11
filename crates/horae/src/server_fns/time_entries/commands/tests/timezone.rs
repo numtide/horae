@@ -62,7 +62,7 @@ async fn timer_day(pool: &PgPool, f: &Fixture, offset_hours: i64) -> (NaiveDate,
     (day, [before, after])
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_timer_starts_on_the_workspace_day_by_default(pool: PgPool) {
     let f = fixture(&pool).await;
@@ -72,7 +72,7 @@ async fn a_timer_starts_on_the_workspace_day_by_default(pool: PgPool) {
     assert!(expected.contains(&day), "{day} not in {expected:?}");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn the_persons_own_zone_overrides_the_workspace_day(pool: PgPool) {
     let f = fixture(&pool).await;
@@ -83,7 +83,7 @@ async fn the_persons_own_zone_overrides_the_workspace_day(pool: PgPool) {
     assert!(expected.contains(&day), "{day} not in {expected:?}");
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_delegated_timer_follows_the_subject_not_the_actor(pool: PgPool) {
     let f = fixture(&pool).await;

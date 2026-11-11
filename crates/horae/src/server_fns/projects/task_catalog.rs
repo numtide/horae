@@ -115,7 +115,7 @@ mod tests {
     use sqlx::PgPool;
     use uuid::Uuid;
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn catalog_pages_keep_duplicate_names_and_filter_activity_without_foreign_rows(
         pool: PgPool,
@@ -199,7 +199,7 @@ mod tests {
 
     /// Policy zero opens the catalog to the legacy roles that may already edit
     /// it, with rates, and keeps it closed to members.
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn policy_zero_opens_the_catalog_to_admins_and_managers_only(pool: PgPool) {
         for (role, allowed) in [
@@ -240,7 +240,7 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn catalog_observes_revocation_after_waiting_for_current_authority(pool: PgPool) {
         let (ids, _) = fixture(

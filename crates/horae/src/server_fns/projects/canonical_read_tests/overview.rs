@@ -8,7 +8,7 @@ fn requester(viewer: &User) -> PermissionRequester {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn overview_resolves_only_visible_client_identity_without_directory_or_rates(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -62,7 +62,7 @@ async fn overview_resolves_only_visible_client_identity_without_directory_or_rat
     assert!(!payload.to_string().contains("98765"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn overview_rejects_changed_requester_including_empty_results(pool: PgPool) {
     let (_, viewer) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
@@ -95,7 +95,7 @@ async fn overview_rejects_changed_requester_including_empty_results(pool: PgPool
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn overview_edit_affordance_requires_current_project_write_scope(pool: PgPool) {
     let (ids, viewer) = fixture(
@@ -140,7 +140,7 @@ async fn overview_edit_affordance_requires_current_project_write_scope(pool: PgP
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn overview_denies_unavailable_actor_instead_of_binding_an_empty_success(pool: PgPool) {
     let (ids, viewer) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
@@ -160,7 +160,7 @@ async fn overview_denies_unavailable_actor_instead_of_binding_an_empty_success(p
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_overview_uses_current_role_not_the_captured_user_role(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Manager).await;
@@ -202,7 +202,7 @@ async fn legacy_overview_uses_current_role_not_the_captured_user_role(pool: PgPo
     assert!(!after.projects[0].can_edit);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn overview_observes_edit_revocation_after_waiting_for_organization(pool: PgPool) {
     let (ids, viewer) = fixture(

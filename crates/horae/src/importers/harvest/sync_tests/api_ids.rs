@@ -110,7 +110,7 @@ async fn take_every_harvest_id(pool: &PgPool, org: Uuid) {
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_api_import_gives_created_records_their_harvest_ids(pool: PgPool) {
     let org = setup(&pool).await;
 
@@ -141,7 +141,7 @@ async fn an_api_import_gives_created_records_their_harvest_ids(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_harvest_id_another_record_has_gets_a_fresh_id_and_a_report_line(pool: PgPool) {
     let org = setup(&pool).await;
     take_every_harvest_id(&pool, org).await;
@@ -171,7 +171,7 @@ async fn a_harvest_id_another_record_has_gets_a_fresh_id_and_a_report_line(pool:
     assert_eq!(report.id_notices, expected);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_preview_reports_the_ids_it_cannot_keep_and_writes_nothing(pool: PgPool) {
     let org = setup(&pool).await;
     take_every_harvest_id(&pool, org).await;
@@ -203,7 +203,7 @@ async fn a_preview_reports_the_ids_it_cannot_keep_and_writes_nothing(pool: PgPoo
 /// A native record that takes the number between the importer's check and its
 /// insert: the import waits for it, then numbers its own record afresh instead
 /// of failing it.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_harvest_id_taken_during_the_insert_gets_a_fresh_id(pool: PgPool) {
     let org = setup(&pool).await;
     let mut racer = pool.begin().await.unwrap();
@@ -252,7 +252,7 @@ async fn a_harvest_id_taken_during_the_insert_gets_a_fresh_id(pool: PgPool) {
 /// A number never names another record: a deleted native record's number is
 /// not free for an import whose Harvest id happens to equal it. Nor is one just
 /// above the sequence, which a native insert could reach during the import.
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_deleted_native_records_number_is_not_given_to_an_import(pool: PgPool) {
     let org = setup(&pool).await;
     let gone = Uuid::now_v7();

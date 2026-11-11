@@ -35,7 +35,7 @@ async fn fixture(pool: &PgPool) -> SeedIds {
     ids
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn active_projects_only_matches_detailed_and_grouped_downloads(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -109,7 +109,7 @@ async fn active_projects_only_matches_detailed_and_grouped_downloads(pool: PgPoo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn active_projects_only_empty_downloads_still_require_current_authority(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -205,7 +205,7 @@ async fn active_projects_only_empty_downloads_still_require_current_authority(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn active_projects_only_csv_captures_activity_at_source_snapshot(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -274,7 +274,7 @@ async fn active_projects_only_csv_captures_activity_at_source_snapshot(pool: PgP
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn active_projects_only_workbooks_retain_source_after_archiving(pool: PgPool) {
     let ids = fixture(&pool).await;

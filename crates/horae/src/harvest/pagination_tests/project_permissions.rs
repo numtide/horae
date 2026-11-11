@@ -49,7 +49,7 @@ pub(super) async fn canonical(
     (ids, app)
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_reader_uses_list_count_and_detail_without_legacy_role(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;
@@ -59,7 +59,7 @@ async fn canonical_project_reader_uses_list_count_and_detail_without_legacy_role
     assert!(detail["budget"].is_null());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_api_does_not_inherit_legacy_administrator_scope(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Admin, &[]).await;
@@ -76,7 +76,7 @@ async fn canonical_project_api_does_not_inherit_legacy_administrator_scope(pool:
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_api_rechecks_financial_only_revocation(pool: PgPool) {
     let (ids, app) = canonical(
@@ -94,7 +94,7 @@ async fn canonical_project_api_rechecks_financial_only_revocation(pool: PgPool) 
     assert!(page(&app, &detail_uri).await["budget"].is_null());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_api_managed_scope_requires_current_designation(pool: PgPool) {
     let (ids, app) = canonical(
@@ -126,7 +126,7 @@ async fn canonical_project_api_managed_scope_requires_current_designation(pool: 
     assert_eq!(request(&app, &detail_uri).await.0, StatusCode::NOT_FOUND);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_api_rejects_malformed_state_even_without_visible_rows(pool: PgPool) {
     for invalid in ["catalog", "grants", "missing", "policy"] {
@@ -183,7 +183,7 @@ async fn canonical_project_api_rejects_malformed_state_even_without_visible_rows
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_api_retains_filtered_total_past_last_page(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;
@@ -218,7 +218,7 @@ async fn canonical_project_api_retains_filtered_total_past_last_page(pool: PgPoo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_api_shared_member_keeps_hours_but_not_money(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Member, &[]).await;
@@ -247,7 +247,7 @@ async fn canonical_project_api_shared_member_keeps_hours_but_not_money(pool: PgP
     assert_eq!(request(&app, &detail_uri).await.0, StatusCode::NOT_FOUND);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_api_excludes_foreign_projects_and_foreign_client_parents(pool: PgPool) {
     let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;

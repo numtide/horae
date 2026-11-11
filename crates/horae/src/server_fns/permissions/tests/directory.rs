@@ -29,7 +29,7 @@ async fn manage(pool: &PgPool, org: Uuid, actor: Uuid, target: Uuid) {
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn directory_uses_each_profiles_people_grants_not_legacy_role_or_other_scope(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -85,7 +85,7 @@ async fn directory_uses_each_profiles_people_grants_not_legacy_role_or_other_sco
     assert_eq!(page.requester.user_id, ids.user_id);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn directory_rechecks_grant_revocation_and_direct_deactivation_after_wait(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -136,7 +136,7 @@ async fn directory_rechecks_grant_revocation_and_direct_deactivation_after_wait(
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn directory_cancellation_releases_connection_and_preserves_pool_defaults(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -192,7 +192,7 @@ async fn directory_cancellation_releases_connection_and_preserves_pool_defaults(
     reader.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn directory_orders_by_name_then_id_and_accepts_deleted_cursor_without_extra_page(
     pool: PgPool,
@@ -279,7 +279,7 @@ async fn directory_orders_by_name_then_id_and_accepts_deleted_cursor_without_ext
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn directory_scopes_before_activity_pagination_and_only_returns_basic_identity(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -387,7 +387,7 @@ async fn directory_scopes_before_activity_pagination_and_only_returns_basic_iden
     assert_eq!(bounded, first);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn directory_does_not_use_project_management_and_rechecks_relationship_removal(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -456,7 +456,7 @@ async fn directory_does_not_use_project_management_and_rechecks_relationship_rem
     assert!(pending.await.unwrap().unwrap().people.is_empty());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn directory_denies_legacy_foreign_inactive_and_invalid_authority_even_for_empty_pages(
     pool: PgPool,

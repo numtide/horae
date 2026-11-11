@@ -90,8 +90,10 @@ Integration tests (`crates/horae/tests/integration.rs`) use `#[sqlx::test]` — 
 
 - Keep Cargo's incremental compilation on (the default). With `CARGO_INCREMENTAL=0`, rebuilding the server after a one-file change takes about 60 s instead of 18 s, and `cargo test --no-run` about 210 s instead of 60 s. When disk runs low, delete the worktree's `target/` instead.
 - `[profile.dev]` in the root `Cargo.toml` builds proc macros optimised (most of a rebuild of the `horae` crate is macro expansion: sqlx, `rsx!`, serde) and keeps line tables only, so backtraces still show file:line. The `test` profile inherits it.
+- In-crate tests take `#[sqlx::test(migrator = "crate::db::MIGRATOR")]`. A bare `#[sqlx::test]` or `migrations = "./migrations"` pastes every migration's SQL into the test, which across the suite doubled macro expansion of the unit-test binary.
 - The bottleneck is the `horae` crate and its unit-test binary (`--bin horae`), not linking: rustc already links with its bundled `rust-lld`, and mold saves about 1 s. Filter tests with `--bin horae` or `--test <file>` to build only what you run.
 - `cargo build` and `cargo test` resolve different features (the dev-dependencies enable some), so running both compiles dioxus, sqlx and typst twice in one `target/`.
+- Don't use `dx serve --hot-patch`. The server runs its own `axum::serve` rather than `dioxus::serve`, so dx answers server changes with `Missing server jump table` and never rebuilds; after a failed first build it ignores every later change. Wired through `dioxus::serve`, a warm patch took as long as the normal rebuild and relaunch (about 25 s).
 - No shared compiler cache is configured: sccache can't cache the incremental `horae` crate, which dominates a cold build, so a fresh worktree saved nothing measurable.
 
 ### sqlx query cache

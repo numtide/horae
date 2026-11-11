@@ -1,7 +1,7 @@
 use super::super::streaming::{self as pipeline, Page};
 use super::*;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_stale_commit_cannot_advance_data_or_watermark(pool: PgPool) {
     use crate::jobs;
     use std::time::Duration;
@@ -97,7 +97,7 @@ async fn durable_api_stale_commit_cannot_advance_data_or_watermark(pool: PgPool)
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn durable_api_cancel_waits_for_the_producer_before_acknowledging(pool: PgPool) {
     use crate::jobs;
     use std::time::Duration;
@@ -195,7 +195,7 @@ async fn durable_api_cancel_waits_for_the_producer_before_acknowledging(pool: Pg
     assert!(jobs::retry(&pool, org, id).await.unwrap());
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn later_download_failure_rolls_back_parents_rows_and_watermark(pool: PgPool) {
     let org = setup(&pool).await;
     let connection = lock_import(&pool, org).await.unwrap();
@@ -248,7 +248,7 @@ async fn later_download_failure_rolls_back_parents_rows_and_watermark(pool: PgPo
     assert_eq!(retry.summary.time_entries.created, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn cancelled_page_consumer_retains_lock_until_worker_exits_and_rolls_back(pool: PgPool) {
     let org = setup(&pool).await;
     let one = sqlx::postgres::PgPoolOptions::new()
@@ -317,7 +317,7 @@ async fn cancelled_page_consumer_retains_lock_until_worker_exits_and_rolls_back(
     one.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invalid_and_missing_timestamp_rows_cross_page_boundaries_without_advancing(pool: PgPool) {
     let org = setup(&pool).await;
     let mut source = valid_data();

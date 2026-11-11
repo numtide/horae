@@ -109,7 +109,7 @@ async fn archived_job(pool: &PgPool) -> ArchivedJob {
     }
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn download_preparation_denies_revoked_authority(pool: PgPool) {
     let job = archived_job(&pool).await;
@@ -127,7 +127,7 @@ async fn download_preparation_denies_revoked_authority(pool: PgPool) {
     );
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn download_denies_revocation_before_first_page_and_inline_tail(pool: PgPool) {
     let job = archived_job(&pool).await;
@@ -163,7 +163,7 @@ async fn download_denies_revocation_before_first_page_and_inline_tail(pool: PgPo
     }
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn download_rechecks_after_buffered_pages_and_before_the_captured_tail(pool: PgPool) {
     let job = archived_job(&pool).await;
@@ -195,7 +195,7 @@ async fn download_rechecks_after_buffered_pages_and_before_the_captured_tail(poo
     }
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn download_preparation_is_tenant_bound_and_releases_failed_transactions(pool: PgPool) {
     use axum::http::StatusCode;
@@ -328,7 +328,7 @@ async fn read_boundary(
         .map_err(|error| error.to_string())
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn download_boundaries_recheck_after_organization_and_actor_waits(pool: PgPool) {
     use crate::server_fns::test_seed::wait_for_blocked;
@@ -416,7 +416,7 @@ async fn download_boundaries_recheck_after_organization_and_actor_waits(pool: Pg
     reading.close().await;
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn download_readers_retain_authority_through_their_bounded_reads(pool: PgPool) {
     use crate::server_fns::test_seed::wait_for_blocked;
@@ -486,7 +486,7 @@ async fn download_readers_retain_authority_through_their_bounded_reads(pool: PgP
     }
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn download_keeps_its_snapshot_when_later_progress_archives_the_inline_tail(pool: PgPool) {
     let mut job = archived_job(&pool).await;
@@ -529,7 +529,7 @@ async fn download_keeps_its_snapshot_when_later_progress_archives_the_inline_tai
     assert_eq!(errors, job.expected);
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn download_reports_missing_fragments_after_its_buffered_page(pool: PgPool) {
     let job = archived_job(&pool).await;
@@ -570,7 +570,7 @@ async fn download_reports_missing_fragments_after_its_buffered_page(pool: PgPool
     assert!(error.to_string().contains("report archive is incomplete"));
 }
 
-#[sqlx::test]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn download_reads_only_when_consumed_and_releases_its_connection(pool: PgPool) {
     use std::sync::{

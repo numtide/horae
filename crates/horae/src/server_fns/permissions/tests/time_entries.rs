@@ -27,7 +27,7 @@ async fn set_grants(pool: &PgPool, actor: Uuid, selection: PermissionSelection) 
     .unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn time_reads_distinguish_project_management_from_membership_and_people_scope(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -95,7 +95,7 @@ async fn time_reads_distinguish_project_management_from_membership_and_people_sc
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn time_reads_finish_before_competing_revocation_when_read_admitted_first(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -144,7 +144,7 @@ async fn time_reads_finish_before_competing_revocation_when_read_admitted_first(
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn time_reads_cancel_without_leaking_locks_or_changing_pool_defaults(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -196,7 +196,7 @@ async fn time_reads_cancel_without_leaking_locks_or_changing_pool_defaults(pool:
     reader.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn time_reads_exclude_foreign_parents_but_preserve_archived_history(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -267,7 +267,7 @@ async fn time_reads_exclude_foreign_parents_but_preserve_archived_history(pool: 
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn time_reads_page_ties_without_loss_and_filters_never_expand_scope(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -361,7 +361,7 @@ async fn time_reads_page_ties_without_loss_and_filters_never_expand_scope(pool: 
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn time_reads_recheck_grants_relationships_and_activity_after_wait(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -436,7 +436,7 @@ async fn time_reads_recheck_grants_relationships_and_activity_after_wait(pool: P
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn time_reads_fail_closed_for_policy_identity_and_invalid_state(pool: PgPool) {
     let ids = fixture(&pool).await;
@@ -492,7 +492,7 @@ async fn time_reads_fail_closed_for_policy_identity_and_invalid_state(pool: PgPo
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn time_reads_use_effective_profile_scope_and_union_without_duplicates(pool: PgPool) {
     let ids = fixture(&pool).await;

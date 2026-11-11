@@ -65,7 +65,7 @@ async fn target(pool: &PgPool, owner: &SeedIds) -> Uuid {
     user
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_form_manager_only_change_and_historical_replay_do_not_need_team_changes(
     pool: PgPool,
@@ -123,7 +123,7 @@ async fn canonical_form_manager_only_change_and_historical_replay_do_not_need_te
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_form_retains_archived_manager_with_different_legacy_role(pool: PgPool) {
     let (owner, editor) = fixture(&pool).await;
@@ -211,7 +211,7 @@ async fn canonical_form_retains_archived_manager_with_different_legacy_role(pool
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_form_self_removal_commits_but_cannot_replay_without_authority(pool: PgPool) {
     let (owner, editor) = fixture(&pool).await;
@@ -282,7 +282,7 @@ async fn canonical_form_self_removal_commits_but_cannot_replay_without_authority
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_form_saves_managers_without_changing_legacy_membership_roles(pool: PgPool) {
     let (owner, editor) = fixture(&pool).await;
@@ -323,7 +323,7 @@ async fn canonical_form_saves_managers_without_changing_legacy_membership_roles(
     assert_eq!(editor.access.unwrap().managers.access_revision, 1);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_form_rejects_invalid_or_stale_manager_selection_atomically(pool: PgPool) {
     let (owner, editor) = fixture(&pool).await;
@@ -366,7 +366,7 @@ async fn canonical_form_rejects_invalid_or_stale_manager_selection_atomically(po
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_form_cannot_reuse_an_independent_delegation_receipt(pool: PgPool) {
     let (owner, editor) = fixture(&pool).await;
@@ -400,7 +400,7 @@ async fn canonical_form_cannot_reuse_an_independent_delegation_receipt(pool: PgP
     assert_ne!(editor.form.name, request.form.name);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_form_receipt_failure_rolls_back_delegation_and_project(pool: PgPool) {
     let (owner, editor) = fixture(&pool).await;

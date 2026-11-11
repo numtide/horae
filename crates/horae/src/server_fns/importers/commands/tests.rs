@@ -116,7 +116,7 @@ fn assert_denied(result: Result<(), ServerFnError>, operation: Operation) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn commands_and_status_require_current_active_tenant_administrator(pool: PgPool) {
     for operation in OPERATIONS {
@@ -153,7 +153,7 @@ async fn commands_and_status_require_current_active_tenant_administrator(pool: P
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn duplicate_submission_and_noop_cancellation_do_not_bypass_revocation(pool: PgPool) {
     let (ids, job) = fixture(&pool).await;
@@ -204,7 +204,7 @@ async fn duplicate_submission_and_noop_cancellation_do_not_bypass_revocation(poo
     assert_eq!(snapshot(&pool).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn import_access_rechecks_revocation_after_organization_and_actor_waits(pool: PgPool) {
     let run_pool = sqlx::postgres::PgPoolOptions::new()
@@ -279,7 +279,7 @@ async fn import_access_rechecks_revocation_after_organization_and_actor_waits(po
     run_pool.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn import_commands_and_results_hold_actor_authority_until_commit(pool: PgPool) {
     for operation in OPERATIONS {
@@ -339,7 +339,7 @@ async fn import_commands_and_results_hold_actor_authority_until_commit(pool: PgP
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn foreign_and_missing_jobs_never_reveal_or_change_another_tenant(pool: PgPool) {
     let (owner, job) = fixture(&pool).await;
@@ -383,7 +383,7 @@ async fn foreign_and_missing_jobs_never_reveal_or_change_another_tenant(pool: Pg
     assert_eq!(snapshot(&pool).await, before);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn authorized_job_lifecycle_and_duplicate_retention_work_with_one_connection(pool: PgPool) {
     let (ids, existing) = fixture(&pool).await;
@@ -505,7 +505,7 @@ async fn authorized_job_lifecycle_and_duplicate_retention_work_with_one_connecti
     single.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn failed_upload_insert_rolls_back_the_job_and_releases_authority(pool: PgPool) {
     let (ids, _) = fixture(&pool).await;
@@ -575,7 +575,7 @@ async fn failed_upload_insert_rolls_back_the_job_and_releases_authority(pool: Pg
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn conflicting_and_stale_commands_preserve_payload_policy_and_retained_state(pool: PgPool) {
     let (ids, csv) = fixture(&pool).await;
@@ -663,7 +663,7 @@ async fn conflicting_and_stale_commands_preserve_payload_policy_and_retained_sta
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn authorized_submissions_do_not_wait_for_the_running_import_reservation(pool: PgPool) {
     let (ids, _) = fixture(&pool).await;

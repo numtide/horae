@@ -22,7 +22,7 @@ fn high_water_kib() -> u64 {
         .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[ignore = "isolated Linux HTTP/memory stress; run with --release --exact --ignored --nocapture"]
 async fn large_report_streams_over_http_without_buffering_the_archive(pool: PgPool) {
     require_release();

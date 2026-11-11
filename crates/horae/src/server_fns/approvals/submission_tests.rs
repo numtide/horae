@@ -3,7 +3,7 @@ use crate::server_fns::test_seed::{seed, time_entry, wait_for_blocked};
 use sqlx::PgPool;
 use std::time::Duration;
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_rechecks_policy_and_activity_after_access_change(pool: PgPool) {
     for policy_change in [true, false] {
         for commit in [true, false] {
@@ -77,7 +77,7 @@ async fn submission_rechecks_policy_and_activity_after_access_change(pool: PgPoo
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn admitted_submission_finishes_before_access_change(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
@@ -127,7 +127,7 @@ async fn admitted_submission_finishes_before_access_change(pool: PgPool) {
     assert_eq!(state.as_deref(), Some("submitted"));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_freezes_the_minutes_after_a_competing_edit(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
@@ -180,7 +180,7 @@ async fn submission_freezes_the_minutes_after_a_competing_edit(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_uses_one_pool_connection(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -201,7 +201,7 @@ async fn submission_uses_one_pool_connection(pool: PgPool) {
     single.close().await;
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_rejects_a_start_that_is_not_the_organizations_week_start(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
@@ -231,7 +231,7 @@ async fn submission_rejects_a_start_that_is_not_the_organizations_week_start(poo
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_waits_for_a_new_timer_before_checking_the_week(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
@@ -289,7 +289,7 @@ async fn submission_waits_for_a_new_timer_before_checking_the_week(pool: PgPool)
     assert_eq!(state, EntryState::Open);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn cancelling_a_submission_releases_its_write_barrier(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
@@ -337,7 +337,7 @@ async fn cancelling_a_submission_releases_its_write_barrier(pool: PgPool) {
     assert_eq!(total, 60);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_accepts_the_organizations_sunday_start(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -366,7 +366,7 @@ async fn submission_accepts_the_organizations_sunday_start(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_does_not_wait_for_another_users_writer(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     time_entry(&pool, &ids, EntryState::Open).await;
@@ -388,7 +388,7 @@ async fn submission_does_not_wait_for_another_users_writer(pool: PgPool) {
     writer.rollback().await.unwrap();
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_barrier_allows_shared_writers_for_the_same_user(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Member).await;
     let first = crate::db::begin_time_entry_write(&pool, ids.user_id)

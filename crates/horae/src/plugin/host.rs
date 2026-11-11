@@ -364,7 +364,7 @@ mod tests {
 
     mod database_tests;
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn database_queries_preserve_parameters_and_rollback_session_settings(
         pool: sqlx::PgPool,
     ) {
@@ -388,7 +388,7 @@ mod tests {
         reader.finish().await;
     }
 
-    #[sqlx::test(migrations = "./migrations")]
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_query_cannot_disable_its_own_deadline(pool: sqlx::PgPool) {
         let reader = super::super::database::tests::Reader::new(&pool).await;
         let sql = "SELECT set_config('statement_timeout', '0', true), pg_sleep(10)";
