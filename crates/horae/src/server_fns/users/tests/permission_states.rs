@@ -83,7 +83,7 @@ fn status(error: &ServerFnError) -> u16 {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn created_people_get_the_profile_of_their_role(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -102,7 +102,7 @@ async fn created_people_get_the_profile_of_their_role(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn added_harvest_people_are_members(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -126,7 +126,7 @@ async fn added_harvest_people_are_members(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn policy_one_creates_members_only(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -154,7 +154,7 @@ async fn policy_one_creates_members_only(pool: PgPool) {
     assert_eq!(people, 2);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn role_changes_carry_the_state_under_policy_zero(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
@@ -199,7 +199,7 @@ async fn role_changes_carry_the_state_under_policy_zero(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn policy_one_lowers_roles_but_never_raises_them(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -264,7 +264,7 @@ async fn policy_one_lowers_roles_but_never_raises_them(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn policy_one_keeps_an_administrator_by_role_while_the_role_still_decides(pool: PgPool) {
     let ids = administrator(&pool).await;
@@ -294,7 +294,7 @@ async fn policy_one_keeps_an_administrator_by_role_while_the_role_still_decides(
     assert!(active);
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn policy_one_keeps_an_active_administrator(pool: PgPool) {
     let ids = administrator(&pool).await;

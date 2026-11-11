@@ -24,7 +24,7 @@ async fn policy(pool: &PgPool, org: Uuid) -> i32 {
     .unwrap()
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn init_creates_an_administrator_who_administers_under_policy_one(pool: PgPool) {
     crate::init::run(&pool, "Contoso", "ops@contoso.example", "Ops")
         .await
@@ -61,7 +61,7 @@ async fn init_creates_an_administrator_who_administers_under_policy_one(pool: Pg
     ));
 }
 
-#[sqlx::test(migrations = "./migrations")]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn seed_gives_the_demo_admin_the_administrator_state(pool: PgPool) {
     crate::seed::run(&pool).await.unwrap();
     let admin = sqlx::query!("SELECT org_id, id FROM users WHERE org_role = 'admin'")
