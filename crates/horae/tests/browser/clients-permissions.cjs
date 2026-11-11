@@ -41,7 +41,9 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
     return response;
   };
   const success = async response => {
-    assert.equal(response.status(), 200, `${response.url()}: ${await response.text()}`);
+    // Read the body only on failure: a message argument is evaluated even when
+    // the assertion passes.
+    if (response.status() !== 200) assert.fail(`${response.url()}: ${response.status()} ${await response.text()}`);
     return response.json();
   };
   const loadDetail = async client => {
@@ -178,8 +180,12 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
     await expect(dialog.getByLabel('Default rate', { exact: true })).toHaveCount(0);
     await capture('client-writer-editor');
     await dialog.getByLabel('Tax ID (optional)', { exact: true }).fill('PERM-6');
+    // The detail reloads after a save. Let it finish here, or the next
+    // loadDetail can catch this response and lose its body to the navigation.
+    const reloaded = page.waitForResponse(r => r.url().includes('/api/client_detail_view'));
     await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect(dialog).toBeHidden();
+    await success(await reloaded);
     assert.equal(sql(`SELECT tax_id || ':' || default_rate_cents FROM clients WHERE id='${zero}'`), 'PERM-6:0');
     console.log('PASS: ClientWriteAll edits a client without seeing or changing its default rate');
 
