@@ -226,7 +226,7 @@ async fn only_the_latest_finished_preview_of_its_source_commits(pool: PgPool) {
 async fn committing_a_preview_needs_an_administrator_of_its_organization(pool: PgPool) {
     let (ids, _) = fixture(&pool).await;
     let preview = api_preview(&pool, &ids, "preview").await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = administrator(&pool).await;
     refused_with(
         commit_preview(
             &pool,
@@ -239,13 +239,7 @@ async fn committing_a_preview_needs_an_administrator_of_its_organization(pool: P
         NOT_FOUND,
         "not found",
     );
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    assign_profile(&pool, ids.org_id, ids.user_id, BuiltInProfile::Member).await;
     assert!(matches!(
         commit(&pool, &ids, preview).await,
         Err(ServerFnError::ServerError {
@@ -369,7 +363,7 @@ async fn a_summary_groups_archived_and_inline_errors_for_administrators(pool: Pg
     assert_eq!(summary.people[0].name.as_deref(), Some("Dana Dev"));
     assert_eq!(summary.people[0].entries, 2);
 
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = administrator(&pool).await;
     assert!(matches!(
         error_summary(&pool, foreign.org_id, foreign.user_id, job).await,
         Err(ServerFnError::ServerError {
@@ -377,13 +371,7 @@ async fn a_summary_groups_archived_and_inline_errors_for_administrators(pool: Pg
             ..
         })
     ));
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    assign_profile(&pool, ids.org_id, ids.user_id, BuiltInProfile::Member).await;
     assert!(matches!(
         error_summary(&pool, ids.org_id, ids.user_id, job).await,
         Err(ServerFnError::ServerError {

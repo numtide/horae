@@ -1,6 +1,12 @@
 use super::*;
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::ops::testing::{assign_profile, revoke, seed_profile};
+use crate::server_fns::test_seed::{SeedIds, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use std::time::Duration;
+
+async fn administrator(pool: &PgPool) -> SeedIds {
+    seed_profile(pool, BuiltInProfile::Administrator).await
+}
 
 mod preview_commit;
 mod requester;
@@ -33,7 +39,7 @@ fn payload() -> jobs::JobPayload {
 }
 
 async fn fixture(pool: &PgPool) -> (SeedIds, Uuid) {
-    let ids = seed(pool, OrgRole::Admin).await;
+    let ids = administrator(pool).await;
     crate::importers::harvest::credentials::store(
         pool,
         ids.org_id,
@@ -121,17 +127,17 @@ fn assert_denied(result: Result<(), ServerFnError>, operation: Operation) {
 async fn commands_and_status_require_current_active_tenant_administrator(pool: PgPool) {
     for operation in OPERATIONS {
         let (ids, job) = fixture(&pool).await;
-        let foreign = seed(&pool, OrgRole::Admin).await;
+        let foreign = administrator(&pool).await;
         let before = snapshot(&pool).await;
-        for (role, active) in [
-            (OrgRole::Member, true),
-            (OrgRole::Manager, true),
-            (OrgRole::Admin, false),
+        for (profile, active) in [
+            (BuiltInProfile::Member, true),
+            (BuiltInProfile::ExecutiveManager, true),
+            (BuiltInProfile::Administrator, false),
         ] {
+            assign_profile(&pool, ids.org_id, ids.user_id, profile).await;
             sqlx::query!(
-                "UPDATE users SET org_role = $2, active = $3 WHERE id = $1",
+                "UPDATE users SET active = $2 WHERE id = $1",
                 ids.user_id,
-                role as OrgRole,
                 active
             )
             .execute(&pool)
@@ -157,13 +163,7 @@ async fn commands_and_status_require_current_active_tenant_administrator(pool: P
 #[serial_test::serial]
 async fn duplicate_submission_and_noop_cancellation_do_not_bypass_revocation(pool: PgPool) {
     let (ids, job) = fixture(&pool).await;
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    assign_profile(&pool, ids.org_id, ids.user_id, BuiltInProfile::Member).await;
     let before = snapshot(&pool).await;
     assert_denied(
         start_csv(
@@ -223,57 +223,44 @@ async fn import_access_rechecks_revocation_after_organization_and_actor_waits(po
         .await
         .unwrap();
     for operation in OPERATIONS {
-        for actor_only in [false, true] {
-            for deactivate in [false, true] {
-                let (ids, job) = fixture(&pool).await;
-                let before = snapshot(&pool).await;
-                let mut revoke = pool.begin().await.unwrap();
-                let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
-                    .fetch_one(&mut *revoke)
-                    .await
-                    .unwrap()
-                    .unwrap();
-                if !actor_only {
-                    sqlx::query!(
-                        "SELECT id FROM organizations WHERE id = $1 FOR UPDATE",
-                        ids.org_id
-                    )
-                    .fetch_one(&mut *revoke)
-                    .await
-                    .unwrap();
-                }
+        // A profile change moves the organization's access revision, so only a
+        // deactivation can make the command wait on the actor lock alone.
+        for (actor_only, deactivate) in [(false, false), (false, true), (true, true)] {
+            let (ids, job) = fixture(&pool).await;
+            let before = snapshot(&pool).await;
+            let mut revoker = pool.begin().await.unwrap();
+            let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+                .fetch_one(&mut *revoker)
+                .await
+                .unwrap()
+                .unwrap();
+            if !actor_only {
                 sqlx::query!(
-                    "UPDATE users SET org_role = $2, active = $3 WHERE id = $1",
-                    ids.user_id,
-                    if deactivate {
-                        OrgRole::Admin
-                    } else {
-                        OrgRole::Member
-                    } as OrgRole,
-                    !deactivate
+                    "SELECT id FROM organizations WHERE id = $1 FOR UPDATE",
+                    ids.org_id
                 )
-                .execute(&mut *revoke)
+                .fetch_one(&mut *revoker)
                 .await
                 .unwrap();
-                let db = run_pool.clone();
-                let mut pending = tokio::task::JoinSet::new();
-                pending
-                    .spawn(async move { run(&db, ids.org_id, ids.user_id, job, operation).await });
-                tokio::select! {
-                    result = pending.join_next() => panic!("{operation:?} bypassed revocation wait: {result:?}"),
-                    () = wait_for_blocked(&pool, blocker) => {},
-                }
-                revoke.commit().await.unwrap();
-                assert_denied(
-                    tokio::time::timeout(Duration::from_secs(5), pending.join_next())
-                        .await
-                        .unwrap()
-                        .unwrap()
-                        .unwrap(),
-                    operation,
-                );
-                assert_eq!(snapshot(&pool).await, before);
             }
+            revoke(&mut revoker, ids.org_id, ids.user_id, deactivate).await;
+            let db = run_pool.clone();
+            let mut pending = tokio::task::JoinSet::new();
+            pending.spawn(async move { run(&db, ids.org_id, ids.user_id, job, operation).await });
+            tokio::select! {
+                result = pending.join_next() => panic!("{operation:?} bypassed revocation wait: {result:?}"),
+                () = wait_for_blocked(&pool, blocker) => {},
+            }
+            revoker.commit().await.unwrap();
+            assert_denied(
+                tokio::time::timeout(Duration::from_secs(5), pending.join_next())
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap(),
+                operation,
+            );
+            assert_eq!(snapshot(&pool).await, before);
         }
     }
     run_pool.close().await;
@@ -304,17 +291,14 @@ async fn import_commands_and_results_hold_actor_authority_until_commit(pool: PgP
             blocker,
         ).fetch_one(&pool).await.unwrap();
         let db = pool.clone();
-        let mut revoke = tokio::task::JoinSet::new();
-        revoke.spawn(async move {
-            sqlx::query!(
-                "UPDATE users SET org_role = 'member' WHERE id = $1",
-                ids.user_id
-            )
-            .execute(&db)
-            .await
+        let mut revoker = tokio::task::JoinSet::new();
+        revoker.spawn(async move {
+            let mut tx = db.begin().await.unwrap();
+            revoke(&mut tx, ids.org_id, ids.user_id, false).await;
+            tx.commit().await
         });
         tokio::select! {
-            result = revoke.join_next() => panic!("{operation:?} released authority early: {result:?}"),
+            result = revoker.join_next() => panic!("{operation:?} released authority early: {result:?}"),
             () = wait_for_blocked(&pool, writer) => {},
         }
         barrier.commit().await.unwrap();
@@ -324,7 +308,7 @@ async fn import_commands_and_results_hold_actor_authority_until_commit(pool: PgP
             .unwrap()
             .unwrap()
             .unwrap();
-        tokio::time::timeout(Duration::from_secs(5), revoke.join_next())
+        tokio::time::timeout(Duration::from_secs(5), revoker.join_next())
             .await
             .unwrap()
             .unwrap()
@@ -343,7 +327,7 @@ async fn import_commands_and_results_hold_actor_authority_until_commit(pool: PgP
 #[serial_test::serial]
 async fn foreign_and_missing_jobs_never_reveal_or_change_another_tenant(pool: PgPool) {
     let (owner, job) = fixture(&pool).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = administrator(&pool).await;
     let before = snapshot(&pool).await;
     for id in [job, Uuid::now_v7()] {
         assert!(

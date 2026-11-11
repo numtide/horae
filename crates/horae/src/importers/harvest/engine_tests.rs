@@ -19,73 +19,64 @@ mod csv_streaming;
 mod lookup_cache;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn imported_project_task_activity_preserves_archival_and_legacy_links(pool: PgPool) {
-    for policy in [0, 1] {
-        let ids =
-            crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
-            ids.org_id,
-            policy
-        )
+async fn imported_project_task_activity_preserves_archival(pool: PgPool) {
+    let ids = crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
+    sqlx::query!("UPDATE tasks SET active=false WHERE id=$1", ids.task_id)
         .execute(&pool)
         .await
         .unwrap();
-        sqlx::query!("UPDATE tasks SET active=false WHERE id=$1", ids.task_id)
-            .execute(&pool)
-            .await
-            .unwrap();
-        let mut tx = pool.begin().await.unwrap();
-        let row = nk_row(
-            "Acme",
-            "Widget",
-            "Dev",
-            "dev@example.com",
-            (2026, 1, 15),
-            "1",
-            None,
-        );
-        let cache = super::resolve::RunCache::default();
-        super::resolve::ensure_project_task(&mut tx, &cache, ids.project_id, ids.task_id, &row)
-            .await
-            .unwrap();
-        let active = sqlx::query_scalar!(
-            "SELECT active FROM project_tasks WHERE project_id=$1 AND task_id=$2",
-            ids.project_id,
-            ids.task_id
-        )
-        .fetch_one(&mut *tx)
+    let mut tx = pool.begin().await.unwrap();
+    let row = nk_row(
+        "Acme",
+        "Widget",
+        "Dev",
+        "dev@example.com",
+        (2026, 1, 15),
+        "1",
+        None,
+    );
+    let cache = super::resolve::RunCache::default();
+    super::resolve::ensure_project_task(&mut tx, &cache, ids.project_id, ids.task_id, &row)
         .await
         .unwrap();
-        assert_eq!(
-            active,
-            policy == 0,
-            "canonical imports must retain global archival"
-        );
-        sqlx::query!("UPDATE tasks SET active=true WHERE id=$1", ids.task_id)
-            .execute(&mut *tx)
-            .await
-            .unwrap();
-        sqlx::query!("UPDATE project_tasks SET active=false, rate_cents=2500 WHERE project_id=$1 AND task_id=$2", ids.project_id, ids.task_id)
-            .execute(&mut *tx).await.unwrap();
-        super::resolve::ensure_project_task(&mut tx, &cache, ids.project_id, ids.task_id, &row)
-            .await
-            .unwrap();
-        let link = sqlx::query!(
-            "SELECT active, rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2",
-            ids.project_id,
-            ids.task_id
-        )
-        .fetch_one(&mut *tx)
+    let active = sqlx::query_scalar!(
+        "SELECT active FROM project_tasks WHERE project_id=$1 AND task_id=$2",
+        ids.project_id,
+        ids.task_id
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    assert!(!active, "imports must retain global archival");
+    sqlx::query!("UPDATE tasks SET active=true WHERE id=$1", ids.task_id)
+        .execute(&mut *tx)
         .await
         .unwrap();
-        assert!(
-            !link.active,
-            "reimport is not an explicit project restoration"
-        );
-        assert_eq!(link.rate_cents, Some(2500));
-        tx.rollback().await.unwrap();
-    }
+    sqlx::query!(
+        "UPDATE project_tasks SET active=false, rate_cents=2500 WHERE project_id=$1 AND task_id=$2",
+        ids.project_id,
+        ids.task_id
+    )
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    super::resolve::ensure_project_task(&mut tx, &cache, ids.project_id, ids.task_id, &row)
+        .await
+        .unwrap();
+    let link = sqlx::query!(
+        "SELECT active, rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2",
+        ids.project_id,
+        ids.task_id
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    assert!(
+        !link.active,
+        "reimport is not an explicit project restoration"
+    );
+    assert_eq!(link.rate_cents, Some(2500));
+    tx.rollback().await.unwrap();
 }
 
 pub(super) async fn wait_for_session_release(pool: &PgPool, org: Uuid) {
@@ -982,10 +973,13 @@ async fn edited_entry_still_matched_by_provenance(pool: PgPool) {
 async fn watermark_advances_only_on_commit(pool: PgPool) {
     let org = seed_org(&pool).await;
     let admin = seed_user(&pool, org, "admin@example.com").await;
-    sqlx::query!("UPDATE users SET org_role = 'admin' WHERE id = $1", admin)
-        .execute(&pool)
-        .await
-        .unwrap();
+    crate::ops::testing::assign_profile(
+        &pool,
+        org,
+        admin,
+        horae_core::permissions::catalog::BuiltInProfile::Administrator,
+    )
+    .await;
     // Seed a credentials row so watermark advance has somewhere to write.
     super::credentials::store(
         &pool,

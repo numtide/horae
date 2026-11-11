@@ -138,6 +138,19 @@ pub(crate) async fn begin_read(pool: &PgPool, caller: Caller) -> Result<ReadTx, 
     Ok(ReadTx { tx, actor })
 }
 
+/// Loads the [`Actor`] inside an open transaction, with [`Actor::load`]'s
+/// locks, and refuses anyone but an active administrator. For actions that run
+/// in a transaction of their own rather than through [`begin`], such as the
+/// Harvest connection changes and the import jobs.
+pub(crate) async fn require_administrator(
+    connection: &mut sqlx::PgConnection,
+    caller: Caller,
+) -> Result<Actor, OpError> {
+    let actor = Actor::load(connection, caller).await?;
+    actor.require_administrator()?;
+    Ok(actor)
+}
+
 impl ReadTx {
     /// Releases the authority locks, held until the result was materialized.
     pub async fn finish<T>(self, result: Result<T, OpError>) -> Result<T, OpError> {

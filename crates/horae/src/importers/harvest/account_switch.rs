@@ -128,6 +128,7 @@ mod tests {
         jobs::{self, JobPayload},
     };
     use horae_core::importers::harvest::types::{EntityType, ImportMode, SyncScope};
+    use horae_core::permissions::catalog::BuiltInProfile;
 
     async fn organization(pool: &sqlx::PgPool) -> Uuid {
         let id = Uuid::now_v7();
@@ -139,9 +140,14 @@ mod tests {
         .await
         .unwrap();
         sqlx::query!(
-            "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $1, $2, 'Connection admin', 'admin')",
-            id, format!("{id}@test.com"),
-        ).execute(pool).await.unwrap();
+            "INSERT INTO users (id, org_id, email, name) VALUES ($1, $1, $2, 'Connection admin')",
+            id,
+            format!("{id}@test.com"),
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        crate::ops::testing::assign_profile(pool, id, id, BuiltInProfile::Administrator).await;
         sqlx::query!(
             "INSERT INTO harvest_account_bindings (org_id, harvest_account_id) VALUES ($1, 'A')",
             id
@@ -155,8 +161,16 @@ mod tests {
     const KEY: &str = "1111111111111111111111111111111111111111111111111111111111111111";
 
     async fn administrator(pool: &PgPool, org: Uuid) -> Uuid {
-        sqlx::query_scalar!("SELECT id FROM users WHERE org_id = $1 AND active AND org_role = 'admin' ORDER BY id LIMIT 1", org)
-            .fetch_one(pool).await.unwrap()
+        sqlx::query_scalar!(
+            "SELECT u.id FROM users u
+             JOIN person_permission_states s ON s.org_id = u.org_id AND s.user_id = u.id
+             WHERE u.org_id = $1 AND u.active AND s.is_administrator
+             ORDER BY u.id LIMIT 1",
+            org
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap()
     }
 
     async fn change(
@@ -226,8 +240,7 @@ mod tests {
     async fn successful_change_preserves_business_rows_and_failure_rolls_back_secrets(
         pool: PgPool,
     ) {
-        let seed =
-            crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
+        let seed = crate::ops::testing::seed_profile(&pool, BuiltInProfile::Administrator).await;
         let org = seed.org_id;
         let entry = Uuid::now_v7();
         sqlx::query!("INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, billable) VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, 60, true)", entry, org, seed.user_id, seed.project_id, seed.task_id).execute(&pool).await.unwrap();

@@ -5,7 +5,9 @@ use horae_core::importers::harvest::types::{
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::ops::testing::{assign_profile, revoke};
 use crate::{config::JobPolicy, jobs};
+use horae_core::permissions::catalog::BuiltInProfile;
 
 struct ArchivedJob {
     org: Uuid,
@@ -46,9 +48,15 @@ async fn archived_job(pool: &PgPool) -> ArchivedJob {
     .unwrap();
     let actor = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $2, $3, 'Report reader', 'admin')",
-        actor, org, format!("{actor}@example.test"),
-    ).execute(pool).await.unwrap();
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, 'Report reader')",
+        actor,
+        org,
+        format!("{actor}@example.test"),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    assign_profile(pool, org, actor, BuiltInProfile::Administrator).await;
     let id = jobs::enqueue(
         pool,
         org,
@@ -113,13 +121,7 @@ async fn archived_job(pool: &PgPool) -> ArchivedJob {
 #[serial_test::serial]
 async fn download_preparation_denies_revoked_authority(pool: PgPool) {
     let job = archived_job(&pool).await;
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        job.actor
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    assign_profile(&pool, job.org, job.actor, BuiltInProfile::Member).await;
     let result = super::download_response(&pool, job.org, job.actor, job.id).await;
     assert!(
         matches!(result, Err(axum::http::StatusCode::FORBIDDEN)),
@@ -139,21 +141,9 @@ async fn download_denies_revocation_before_first_page_and_inline_tail(pool: PgPo
             Vec::new(),
         ),
     ] {
-        sqlx::query!(
-            "UPDATE users SET org_role = 'admin' WHERE id = $1",
-            job.actor
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
+        assign_profile(&pool, job.org, job.actor, BuiltInProfile::Administrator).await;
         let body = super::download_body(pool.clone(), job.org, job.actor, job.id, end, tail);
-        sqlx::query!(
-            "UPDATE users SET org_role = 'member' WHERE id = $1",
-            job.actor
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
+        assign_profile(&pool, job.org, job.actor, BuiltInProfile::Member).await;
         let result = body
             .into_data_stream()
             .next()
@@ -199,9 +189,8 @@ async fn download_rechecks_after_buffered_pages_and_before_the_captured_tail(poo
 #[serial_test::serial]
 async fn download_preparation_is_tenant_bound_and_releases_failed_transactions(pool: PgPool) {
     use axum::http::StatusCode;
-    use horae_core::types::OrgRole;
     let job = archived_job(&pool).await;
-    let foreign = crate::server_fns::test_seed::seed(&pool, OrgRole::Admin).await;
+    let foreign = crate::ops::testing::seed_profile(&pool, BuiltInProfile::Administrator).await;
     for (org, actor, id, expected) in [
         (job.org, foreign.user_id, job.id, StatusCode::FORBIDDEN),
         (job.org, Uuid::now_v7(), job.id, StatusCode::FORBIDDEN),
@@ -221,15 +210,15 @@ async fn download_preparation_is_tenant_bound_and_releases_failed_transactions(p
             expected
         );
     }
-    for (role, active) in [
-        (OrgRole::Member, true),
-        (OrgRole::Manager, true),
-        (OrgRole::Admin, false),
+    for (profile, active) in [
+        (BuiltInProfile::Member, true),
+        (BuiltInProfile::ExecutiveManager, true),
+        (BuiltInProfile::Administrator, false),
     ] {
+        assign_profile(&pool, job.org, job.actor, profile).await;
         sqlx::query!(
-            "UPDATE users SET org_role = $2, active = $3 WHERE id = $1",
+            "UPDATE users SET active = $2 WHERE id = $1",
             job.actor,
-            role as OrgRole,
             active
         )
         .execute(&pool)
@@ -332,7 +321,6 @@ async fn read_boundary(
 #[serial_test::serial]
 async fn download_boundaries_recheck_after_organization_and_actor_waits(pool: PgPool) {
     use crate::server_fns::test_seed::wait_for_blocked;
-    use horae_core::types::OrgRole;
     let reading = sqlx::postgres::PgPoolOptions::new()
         .max_connections(1)
         .after_connect(|connection, _| {
@@ -355,62 +343,48 @@ async fn download_boundaries_recheck_after_organization_and_actor_waits(pool: Pg
         Boundary::Tail,
         Boundary::Empty,
     ] {
-        for actor_only in [false, true] {
-            for deactivate in [false, true] {
-                sqlx::query!(
-                    "UPDATE users SET org_role = 'admin', active = true WHERE id = $1",
-                    job.actor
-                )
+        // A profile change moves the organization's access revision, so only a
+        // deactivation can make the reader wait on the actor lock alone.
+        for (actor_only, deactivate) in [(false, false), (false, true), (true, true)] {
+            assign_profile(&pool, job.org, job.actor, BuiltInProfile::Administrator).await;
+            sqlx::query!("UPDATE users SET active = true WHERE id = $1", job.actor)
                 .execute(&pool)
                 .await
                 .unwrap();
-                let mut revoke = pool.begin().await.unwrap();
-                let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
-                    .fetch_one(&mut *revoke)
-                    .await
-                    .unwrap()
-                    .unwrap();
-                if !actor_only {
-                    sqlx::query!(
-                        "SELECT id FROM organizations WHERE id = $1 FOR UPDATE",
-                        job.org
-                    )
-                    .fetch_one(&mut *revoke)
-                    .await
-                    .unwrap();
-                }
+            let mut revoker = pool.begin().await.unwrap();
+            let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+                .fetch_one(&mut *revoker)
+                .await
+                .unwrap()
+                .unwrap();
+            if !actor_only {
                 sqlx::query!(
-                    "UPDATE users SET org_role = $2, active = $3 WHERE id = $1",
-                    job.actor,
-                    if deactivate {
-                        OrgRole::Admin
-                    } else {
-                        OrgRole::Member
-                    } as OrgRole,
-                    !deactivate
+                    "SELECT id FROM organizations WHERE id = $1 FOR UPDATE",
+                    job.org
                 )
-                .execute(&mut *revoke)
+                .fetch_one(&mut *revoker)
                 .await
                 .unwrap();
-                let db = reading.clone();
-                let mut pending = tokio::task::JoinSet::new();
-                pending.spawn(async move {
-                    read_boundary(&db, job.org, job.actor, job.id, boundary).await
-                });
-                tokio::select! {
-                    result = pending.join_next() => panic!("{boundary:?} bypassed authorization wait: {result:?}"),
-                    () = wait_for_blocked(&pool, blocker) => {},
-                }
-                revoke.commit().await.unwrap();
-                let error =
-                    tokio::time::timeout(std::time::Duration::from_secs(5), pending.join_next())
-                        .await
-                        .unwrap()
-                        .unwrap()
-                        .unwrap()
-                        .unwrap_err();
-                assert!(error.contains("403"), "{boundary:?}: {error}");
             }
+            revoke(&mut revoker, job.org, job.actor, deactivate).await;
+            let db = reading.clone();
+            let mut pending = tokio::task::JoinSet::new();
+            pending.spawn(
+                async move { read_boundary(&db, job.org, job.actor, job.id, boundary).await },
+            );
+            tokio::select! {
+                result = pending.join_next() => panic!("{boundary:?} bypassed authorization wait: {result:?}"),
+                () = wait_for_blocked(&pool, blocker) => {},
+            }
+            revoker.commit().await.unwrap();
+            let error =
+                tokio::time::timeout(std::time::Duration::from_secs(5), pending.join_next())
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap()
+                    .unwrap_err();
+            assert!(error.contains("403"), "{boundary:?}: {error}");
         }
     }
     reading.close().await;
@@ -422,13 +396,7 @@ async fn download_readers_retain_authority_through_their_bounded_reads(pool: PgP
     use crate::server_fns::test_seed::wait_for_blocked;
     let job = archived_job(&pool).await;
     for boundary in [Boundary::Preparation, Boundary::Page] {
-        sqlx::query!(
-            "UPDATE users SET org_role = 'admin' WHERE id = $1",
-            job.actor
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
+        assign_profile(&pool, job.org, job.actor, BuiltInProfile::Administrator).await;
         let mut barrier = pool.begin().await.unwrap();
         let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
             .fetch_one(&mut *barrier)
@@ -453,17 +421,14 @@ async fn download_readers_retain_authority_through_their_bounded_reads(pool: PgP
             "SELECT pid AS \"pid!\" FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid))", blocker,
         ).fetch_one(&pool).await.unwrap();
         let db = pool.clone();
-        let mut revoke = tokio::task::JoinSet::new();
-        revoke.spawn(async move {
-            sqlx::query!(
-                "UPDATE users SET org_role = 'member' WHERE id = $1",
-                job.actor
-            )
-            .execute(&db)
-            .await
+        let mut revoker = tokio::task::JoinSet::new();
+        revoker.spawn(async move {
+            let mut tx = db.begin().await.unwrap();
+            revoke(&mut tx, job.org, job.actor, false).await;
+            tx.commit().await
         });
         tokio::select! {
-            result = revoke.join_next() => panic!("{boundary:?} released authority early: {result:?}"),
+            result = revoker.join_next() => panic!("{boundary:?} released authority early: {result:?}"),
             () = wait_for_blocked(&pool, reader) => {},
         }
         barrier.commit().await.unwrap();
@@ -473,7 +438,7 @@ async fn download_readers_retain_authority_through_their_bounded_reads(pool: PgP
             .unwrap()
             .unwrap()
             .unwrap();
-        tokio::time::timeout(std::time::Duration::from_secs(5), revoke.join_next())
+        tokio::time::timeout(std::time::Duration::from_secs(5), revoker.join_next())
             .await
             .unwrap()
             .unwrap()

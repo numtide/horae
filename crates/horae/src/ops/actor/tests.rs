@@ -6,6 +6,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::*;
+use crate::ops::Tx;
 use crate::ops::testing::policy_one;
 use crate::server_fns::test_seed::seed;
 
@@ -114,4 +115,69 @@ async fn storage_failures_loading_state_are_not_a_refusal(pool: PgPool) {
         .unwrap_err();
     assert!(matches!(error, OpError::Internal(_)), "{error:?}");
     holder.rollback().await.unwrap();
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn only_the_stored_administrator_identity_passes_the_administrator_guard(pool: PgPool) {
+    use crate::ops::testing::{assign_profile, seed_profile};
+    use horae_core::permissions::catalog::BuiltInProfile;
+
+    let ids = seed_profile(&pool, BuiltInProfile::Administrator).await;
+    let caller = Caller::session(ids.org_id, ids.user_id);
+    let mut connection = pool.acquire().await.unwrap();
+    for profile in BuiltInProfile::ALL.iter().copied() {
+        assign_profile(&pool, ids.org_id, ids.user_id, profile).await;
+        for actor in [
+            load(&pool, ids.org_id, ids.user_id).await.unwrap(),
+            Actor::load_unlocked(&mut connection, caller).await.unwrap(),
+        ] {
+            let result = actor.require_administrator();
+            if profile == BuiltInProfile::Administrator {
+                result.unwrap();
+            } else {
+                assert_eq!(
+                    result,
+                    Err(OpError::forbidden(ADMINISTRATOR_REQUIRED)),
+                    "{profile:?}"
+                );
+            }
+        }
+    }
+    // Every grant without the identity is still refused.
+    let everything = seed(&pool, OrgRole::Member).await;
+    policy_one(&pool, &everything, Permission::ALL, false).await;
+    let actor = load(&pool, everything.org_id, everything.user_id)
+        .await
+        .unwrap();
+    assert!(actor.require_administrator().is_err());
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_unlocked_load_does_not_wait_for_an_access_change(pool: PgPool) {
+    use crate::ops::testing::seed_profile;
+    use horae_core::permissions::catalog::BuiltInProfile;
+
+    let ids = seed_profile(&pool, BuiltInProfile::Administrator).await;
+    let mut change = pool.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM organizations WHERE id = $1 FOR UPDATE",
+        ids.org_id
+    )
+    .fetch_one(&mut *change)
+    .await
+    .unwrap();
+    sqlx::query!("SELECT id FROM users WHERE id = $1 FOR UPDATE", ids.user_id)
+        .fetch_one(&mut *change)
+        .await
+        .unwrap();
+    let mut connection = pool.acquire().await.unwrap();
+    let actor = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        Actor::load_unlocked(&mut connection, Caller::session(ids.org_id, ids.user_id)),
+    )
+    .await
+    .expect("an unlocked load must not queue behind an access change")
+    .unwrap();
+    assert!(actor.administrator());
+    change.rollback().await.unwrap();
 }

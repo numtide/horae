@@ -113,18 +113,12 @@ pub(super) async fn error_summary(
     // skips the organization lock, so it never queues behind an import or an
     // access change, and every read below is scoped by `org_id`.
     let mut connection = pool.acquire().await.map_err(server_err)?;
-    let admin = sqlx::query_scalar!(
-        r#"SELECT EXISTS(SELECT 1 FROM users
-             WHERE id = $1 AND org_id = $2 AND active AND org_role = 'admin') AS "admin!""#,
-        actor_id,
-        org_id,
+    crate::ops::Actor::load_unlocked(
+        &mut connection,
+        crate::ops::Caller::session(org_id, actor_id),
     )
-    .fetch_one(&mut *connection)
-    .await
-    .map_err(server_err)?;
-    if !admin {
-        return Err(forbidden("Active administrator access required"));
-    }
+    .await?
+    .require_administrator()?;
     jobs::report::summarize(&mut connection, org_id, id)
         .await
         .map_err(server_err)?
@@ -175,15 +169,8 @@ async fn begin_access(
     pool: &PgPool,
     org_id: Uuid,
     actor_id: Uuid,
-) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
-    jobs::access::begin_admin_access(pool, org_id, actor_id)
-        .await
-        .map_err(|error| match error {
-            jobs::access::AccessError::Forbidden => {
-                forbidden("Active administrator access required")
-            }
-            jobs::access::AccessError::Database(error) => server_err(error),
-        })
+) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, ServerFnError> {
+    Ok(jobs::access::begin_admin_access(pool, org_id, actor_id).await?)
 }
 
 #[cfg(test)]

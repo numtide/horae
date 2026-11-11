@@ -83,6 +83,23 @@ async fn detached_csv_recovers_after_the_server_process_is_killed(pool: PgPool) 
         "{}",
         String::from_utf8_lossy(&initialized.stderr)
     );
+    // The importer answers only to the stored administrator identity, which
+    // `init` does not store yet.
+    use horae_core::permissions::catalog::{BuiltInProfile, PermissionSelection};
+    let grants: Vec<String> = serde_json::from_value(json!(PermissionSelection::new(
+        BuiltInProfile::Administrator.direct_permissions()
+    )))
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO person_permission_states
+           (id, org_id, user_id, catalog_version, grants, is_administrator, source)
+         SELECT gen_random_uuid(), org_id, id, 1, $1, true, 'individual'
+         FROM users WHERE email = 'restart@test.com'",
+        &grants,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     drop(listener);
