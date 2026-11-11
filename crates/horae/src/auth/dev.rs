@@ -21,18 +21,10 @@ pub async fn dev_login_post(
 ) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
     let state = crate::state::global_state().await;
 
-    // An administrator under the organization's own policy. Policy 1 also
-    // needs the Administrator permission state, and keeps the legacy role
-    // while the admin pages still require it.
     let row = sqlx::query!(
-        r#"SELECT u.id, u.org_id, u.email, u.name,
-                  u.org_role::text as "org_role!: String"
-           FROM users u
-           JOIN organizations o ON o.id = u.org_id
-           LEFT JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
-           WHERE u.active AND u.org_role = $1
-             AND (o.permission_policy_version = 0 OR coalesce(p.is_administrator, false))
-           ORDER BY u.id LIMIT 1"#,
+        r#"SELECT id, org_id, email, name,
+                  org_role::text as "org_role!: String"
+           FROM users WHERE org_role = $1 AND active = true LIMIT 1"#,
         horae_core::types::OrgRole::Admin as horae_core::types::OrgRole,
     )
     .fetch_optional(&state.db)

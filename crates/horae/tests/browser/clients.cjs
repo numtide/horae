@@ -4,6 +4,7 @@ const { chromium, expect: baseExpect } = require(process.env.PLAYWRIGHT_MODULE |
 const expect = baseExpect.configure({ timeout: 15000 });
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
+const { setAsideSeededStates } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
 const target = new URL(base);
@@ -389,6 +390,8 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await busyReload;
     await expect(archiveDialog('Acme Corp')).toBeVisible();
     const busyOrg = sql(`SELECT org_id FROM clients WHERE id = '${acmeId}'`);
+    // Policy 1 without a permission state makes the reload fail.
+    const restoreBusyStates = setAsideSeededStates(busyOrg);
     sql(`UPDATE organizations SET permission_policy_version = 1 WHERE id = '${busyOrg}'`);
     try {
       releaseBusyReload();
@@ -396,6 +399,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       await expect(archiveDialog('Acme Corp')).toBeHidden();
     } finally {
       sql(`UPDATE organizations SET permission_policy_version = 0 WHERE id = '${busyOrg}'`);
+      restoreBusyStates();
     }
     // Authority returns and the list is retried while the old archive is still
     // outstanding: no Archive opener works, for that client or any other, and
@@ -444,6 +448,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     // Until the reload settles the page cannot confirm authority, so an idle
     // confirmation closes (only an archive already in flight stays open).
     await expect(archiveDialog('Acme Corp')).toBeHidden();
+    const restoreStates = setAsideSeededStates(org);
     sql(`UPDATE organizations SET permission_policy_version = 1 WHERE id = '${org}'`);
     try {
       releaseOverview();
@@ -454,6 +459,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
       }
     } finally {
       sql(`UPDATE organizations SET permission_policy_version = 0 WHERE id = '${org}'`);
+      restoreStates();
     }
     await page.reload();
     assert.equal(clientActive(committedId), 't');

@@ -4,6 +4,7 @@ const { execFileSync } = require('node:child_process');
 const { readFileSync, mkdirSync } = require('node:fs');
 const { join } = require('node:path');
 const assert = require('node:assert/strict');
+const { setAsideSeededStates } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 const target = new URL(base);
 const database = new URL(process.env.DATABASE_URL);
@@ -27,7 +28,7 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
   page.setDefaultNavigationTimeout(30_000);
   const errors = [];
   let releaseRead;
-  let actor, project, initialRevision, fixtureStarted = false;
+  let actor, project, initialRevision, fixtureStarted = false, restoreSeededStates;
   page.on('pageerror', error => errors.push(error.stack || error.message));
   const history = page.getByRole('table', { name: 'Permission change history', exact: true });
   const receiptIds = () => history.locator('details p').filter({ hasText: /^Receipt: / }).allTextContents();
@@ -45,6 +46,7 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
     project = sql(`SELECT id FROM projects WHERE org_id='${actor.org_id}' AND active ORDER BY id LIMIT 1`);
     assert.match(project, /^[0-9a-f-]{36}$/);
     assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
+    restoreSeededStates = setAsideSeededStates(actor.org_id);
     for (const table of ['person_permission_states', 'permission_change_receipts', 'project_management_assignments']) {
       assert.equal(sql(`SELECT count(*) FROM ${table} WHERE org_id='${actor.org_id}'`), '0');
     }
@@ -163,5 +165,6 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
       DELETE FROM permission_change_receipts WHERE org_id='${actor.org_id}' AND actor_user_id='${actor.id}' AND request_id::text LIKE '01960000-0000-7000-8000-%';
       DELETE FROM person_permission_states WHERE id='${stateId}' AND org_id='${actor.org_id}';
       UPDATE organizations SET permission_policy_version=0, access_revision=${initialRevision} WHERE id='${actor.org_id}'; COMMIT;`);
+    restoreSeededStates?.();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

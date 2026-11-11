@@ -2,6 +2,7 @@
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
+const { setAsideSeededStates } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 const target = new URL(base), database = new URL(process.env.DATABASE_URL);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
@@ -21,6 +22,7 @@ const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_w
 const grants = writable => [...floor, 'time_read_managed', ...(writable ? ['time_write_managed'] : [])];
 const array = values => `ARRAY[${values.map(value => `'${value}'`).join(',')}]`;
 assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
+const restoreSeededStates = setAsideSeededStates(org);
 assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
 assert.equal(sql("SELECT count(*) FROM users WHERE active AND org_role='admin'"), '1');
 const originalRevision = sql(`SELECT access_revision FROM organizations WHERE id='${org}'`);
@@ -390,5 +392,6 @@ function assignPerson() {
       DELETE FROM projects WHERE id IN ('${project}','${hiddenProject}');
       DELETE FROM tasks WHERE id='${task}'; DELETE FROM clients WHERE id='${client}';
       DELETE FROM users WHERE id IN ('${person}','${emptyPerson}'); COMMIT;`);
+    restoreSeededStates();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

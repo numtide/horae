@@ -2,6 +2,7 @@
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
+const { setAsideSeededStates } = require('./seeded-permissions.cjs');
 const { mkdirSync } = require('node:fs');
 const { join } = require('node:path');
 const evidence = process.env.HORAE_TASK_CATALOG_EVIDENCE;
@@ -23,6 +24,7 @@ const authorize = extra => sql(`BEGIN;
   UPDATE organizations SET access_revision=access_revision+1 WHERE id='${actor.org_id}';
   UPDATE person_permission_states SET grants=${array([...floor, ...extra])}, revision=revision+1 WHERE id='${state}'; COMMIT;`);
 assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
+const restoreSeededStates = setAsideSeededStates(actor.org_id);
 assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
 
 (async () => {
@@ -183,5 +185,6 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     }
     sql(`BEGIN; UPDATE organizations SET permission_policy_version=0 WHERE id='${actor.org_id}';
       DELETE FROM person_permission_states WHERE id='${state}'; DELETE FROM tasks WHERE id='${task}'; COMMIT;`);
+    restoreSeededStates();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });
