@@ -3,7 +3,6 @@ use super::templates::{TemplateAction, TemplateCommand};
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::types::OrgRole;
 use serde_json::json;
 use sqlx::PgPool;
 use std::time::Duration;
@@ -12,7 +11,7 @@ use std::time::Duration;
 mod browsing;
 
 async fn fixture(pool: &PgPool, administrator: bool) -> SeedIds {
-    let ids = seed(pool, OrgRole::Admin).await;
+    let ids = seed(pool, BuiltInProfile::Administrator).await;
     let grants: Vec<String> = serde_json::from_value(
         serde_json::to_value(BuiltInProfile::Administrator.selection()).unwrap(),
     )
@@ -24,6 +23,7 @@ async fn fixture(pool: &PgPool, administrator: bool) -> SeedIds {
     .execute(pool)
     .await
     .unwrap();
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
         VALUES ($1, $2, $3, 1, $4, $5, 'individual')",
         Uuid::now_v7(), ids.org_id, ids.user_id, &grants, administrator).execute(pool).await.unwrap();
@@ -517,7 +517,7 @@ async fn profile_and_project_history_decode_exact_changes_and_noops(pool: PgPool
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn tenant_activity_and_policy_checks_precede_receipt_existence_and_decode(pool: PgPool) {
+async fn tenant_and_activity_checks_precede_receipt_existence_and_decode(pool: PgPool) {
     let ids = fixture(&pool, true).await;
     let foreign = fixture(&pool, true).await;
     let (receipt, _) = create_template(&pool, &ids).await;
@@ -558,20 +558,6 @@ async fn tenant_activity_and_policy_checks_precede_receipt_existence_and_decode(
         .execute(&pool)
         .await
         .unwrap();
-    for mode in [0, 2] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version = $2 WHERE id = $1",
-            ids.org_id,
-            mode
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        assert!(matches!(
-            read(&pool, ids.org_id, ids.user_id, receipt).await,
-            Err(AuditReadError::Forbidden)
-        ));
-    }
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
         ids.org_id

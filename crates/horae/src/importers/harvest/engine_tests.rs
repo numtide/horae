@@ -21,8 +21,11 @@ mod lookup_cache;
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn imported_project_task_activity_preserves_archival_and_legacy_links(pool: PgPool) {
     for policy in [0, 1] {
-        let ids =
-            crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
+        let ids = crate::server_fns::test_seed::seed(
+            &pool,
+            horae_core::permissions::catalog::BuiltInProfile::Administrator,
+        )
+        .await;
         sqlx::query!(
             "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
             ids.org_id,

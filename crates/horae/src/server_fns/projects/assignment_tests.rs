@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -29,7 +30,7 @@ async fn assignment_count(pool: &PgPool) -> i64 {
 #[serial_test::serial]
 async fn project_membership_and_task_callers_wait_before_authorizing(pool: PgPool) {
     for operation in ["assign", "remove", "create_task"] {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let actor = admin(&ids);
         let assignment = insert_assignment(
             &pool,
@@ -135,8 +136,8 @@ async fn project_membership_and_task_callers_wait_before_authorizing(pool: PgPoo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn creation_rejects_foreign_and_unknown_project_or_person(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Admin).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let local = seed(&pool, BuiltInProfile::Administrator).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for (project_id, user_id) in [
         (local.project_id, foreign.user_id),
         (foreign.project_id, local.user_id),
@@ -169,8 +170,8 @@ async fn creation_rejects_foreign_and_unknown_project_or_person(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn removal_preserves_foreign_and_malformed_assignments(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Admin).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let local = seed(&pool, BuiltInProfile::Administrator).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for (project_id, user_id) in [
         (foreign.project_id, foreign.user_id),
         (local.project_id, foreign.user_id),
@@ -201,7 +202,7 @@ async fn removal_preserves_foreign_and_malformed_assignments(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn own_assignment_lifecycle_preserves_role_and_duplicate_behavior(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Admin).await;
+    let local = seed(&pool, BuiltInProfile::Administrator).await;
     let actor = admin(&local);
     for role in [
         ProjectRole::Freelancer,
@@ -245,7 +246,7 @@ async fn own_assignment_lifecycle_preserves_role_and_duplicate_behavior(pool: Pg
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn stale_administrator_cannot_create_or_remove_after_revocation(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Admin).await;
+    let local = seed(&pool, BuiltInProfile::Administrator).await;
     let actor = admin(&local);
     let assignment = insert_assignment(
         &pool,
@@ -307,7 +308,7 @@ async fn stale_administrator_cannot_create_or_remove_after_revocation(pool: PgPo
 #[serial_test::serial]
 async fn assignment_mutations_wait_for_revocation_and_recheck_authority(pool: PgPool) {
     for remove in [false, true] {
-        let local = seed(&pool, OrgRole::Admin).await;
+        let local = seed(&pool, BuiltInProfile::Administrator).await;
         let actor = admin(&local);
         let assignment = insert_assignment(
             &pool,

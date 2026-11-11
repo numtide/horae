@@ -14,23 +14,12 @@ async fn only_user(pool: &PgPool) -> (Uuid, Uuid) {
     (row.org_id, row.id)
 }
 
-async fn policy(pool: &PgPool, org: Uuid) -> i32 {
-    sqlx::query_scalar!(
-        "SELECT permission_policy_version FROM organizations WHERE id = $1",
-        org
-    )
-    .fetch_one(pool)
-    .await
-    .unwrap()
-}
-
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn init_creates_an_administrator_who_administers_under_policy_one(pool: PgPool) {
     crate::init::run(&pool, "Contoso", "ops@contoso.example", "Ops")
         .await
         .unwrap();
     let (org, admin) = only_user(&pool).await;
-    assert_eq!(policy(&pool, org).await, NEW_ORGANIZATION_POLICY_VERSION);
     assert_eq!(
         built_in_profile(&pool, org, admin).await,
         Some((BuiltInProfile::Administrator, true))
@@ -68,10 +57,6 @@ async fn seed_gives_the_demo_admin_the_administrator_state(pool: PgPool) {
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(
-        policy(&pool, admin.org_id).await,
-        NEW_ORGANIZATION_POLICY_VERSION
-    );
     let people = sqlx::query_scalar!(
         r#"SELECT count(*) AS "count!" FROM users u
            WHERE NOT EXISTS (SELECT 1 FROM person_permission_states p WHERE p.user_id = u.id)"#
@@ -84,4 +69,14 @@ async fn seed_gives_the_demo_admin_the_administrator_state(pool: PgPool) {
         built_in_profile(&pool, admin.org_id, admin.id).await,
         Some((BuiltInProfile::Administrator, true))
     );
+}
+
+#[test]
+fn profiles_parse_from_their_stored_names_only() {
+    for &profile in BuiltInProfile::ALL {
+        assert_eq!(parse_profile(&stored_id(profile).unwrap()), Some(profile));
+    }
+    for legacy in ["admin", "manager", "Administrator", ""] {
+        assert_eq!(parse_profile(legacy), None, "{legacy}");
+    }
 }

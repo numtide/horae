@@ -42,10 +42,9 @@ pub async fn run(
 
     let org_id = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO organizations (id, name, permission_policy_version) VALUES ($1, $2, $3)",
+        "INSERT INTO organizations (id, name) VALUES ($1, $2)",
         org_id,
         org_name,
-        provisioning::NEW_ORGANIZATION_POLICY_VERSION,
     )
     .execute(&mut *tx)
     .await?;
@@ -57,7 +56,7 @@ pub async fn run(
         org_id,
         admin_email,
         admin_name,
-        OrgRole::Admin as OrgRole,
+        provisioning::placeholder_role(BuiltInProfile::Administrator) as OrgRole,
     )
     .execute(&mut *tx)
     .await?;

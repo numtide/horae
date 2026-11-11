@@ -65,18 +65,21 @@ Creates the admin used by `DEV_LOGIN` and sample time for the current ISO week
 in one transaction. Repeating it leaves an existing demo unchanged, including
 older, edited, or partially populated demos. Refuses any non-demo organization.
 
-### `user create --email <EMAIL> --name <NAME> [--role <ROLE>]`
+### `user create --email <EMAIL> --name <NAME> [--profile <PROFILE>]`
 
-Creates a user in the existing organization. Fails if the organization is absent,
-the role is invalid, or the email violates the database uniqueness constraint.
+Creates a user in the existing organization with the permission state of a
+built-in profile. Fails if the organization is absent, the profile is unknown,
+or the email violates the database uniqueness constraint.
 
 1. `--email` — required.
 1. `--name` — required.
-1. `--role` — optional; defaults to `member`; accepts `admin`, `manager`, or `member`.
+1. `--profile` — optional; defaults to `member`; accepts `administrator`,
+   `executive_manager`, `project_manager`, `accounting`, `people_admin` or `member`.
 
 ### `user list`
 
-Lists stored users by name with their email, organization role, and active status.
+Lists stored users by name with their email, permission profile (`template` or
+`individual` when the state did not come from a built-in profile), and active status.
 Prints `No users found.` only when the query returns no users.
 
 ## Environment Variables

@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT revision FROM person_permission_states WHERE user_id = $1",
+  "query": "SELECT access_revision FROM organizations WHERE id = $1 FOR UPDATE",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "revision",
+        "name": "access_revision",
         "type_info": "Int8"
       }
     ],
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "897dd360f5dea7c7c76bd90995d6b502e02396602244c5c95fdef4b4767bbd5f"
+  "hash": "1439eb9425a3b025a59f1bd3bdee294ccd6f72be719b51c07a9534884dd683c9"
 }

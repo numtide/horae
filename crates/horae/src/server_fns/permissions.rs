@@ -11,7 +11,6 @@ pub(crate) mod audit;
 pub(crate) mod directory;
 pub(crate) mod editor;
 pub(crate) mod own;
-pub(crate) mod preflight;
 pub(crate) mod profiles;
 pub(crate) mod project_management;
 pub(crate) mod project_people;
@@ -231,10 +230,6 @@ mod template_tests;
 #[cfg(test)]
 #[path = "permissions/tests/profiles.rs"]
 mod profile_tests;
-
-#[cfg(test)]
-#[path = "permissions/tests/preflight.rs"]
-mod preflight_tests;
 
 #[cfg(test)]
 #[path = "permissions/tests/audit.rs"]

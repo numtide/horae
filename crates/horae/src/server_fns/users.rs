@@ -4,7 +4,9 @@ use super::*;
 use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage};
 use crate::models::user::{Activation, AddedPeople, NewPerson, UserListItem};
 #[cfg(feature = "server")]
-use permissions::provisioning::{self, profile_for_role};
+use horae_core::permissions::catalog::BuiltInProfile;
+#[cfg(feature = "server")]
+use permissions::provisioning;
 
 mod rates;
 pub use rates::{load_person_rates, update_person_rates};
@@ -70,13 +72,19 @@ pub async fn list_users(include_inactive: bool) -> Result<Vec<UserListItem>, Ser
     .map_err(server_err)
 }
 
-/// Create a new user account. Requires admin role.
+/// Create a new user account with a built-in profile, named as stored
+/// (`member`, `administrator`, …). Requires admin role.
 #[server]
-pub async fn create_user(email: String, name: String, role: String) -> Result<User, ServerFnError> {
+pub async fn create_user(
+    email: String,
+    name: String,
+    profile: String,
+) -> Result<User, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
-    let org_role: OrgRole = parse_enum(&role, "role (use admin, manager, or member)")?;
-    let user = insert_user(&state.db, admin.org_id, admin.id, &email, &name, org_role).await?;
+    let profile = provisioning::parse_profile(&profile)
+        .ok_or_else(|| err(BAD_REQUEST, "Choose one of the built-in profiles"))?;
+    let user = insert_user(&state.db, admin.org_id, admin.id, &email, &name, profile).await?;
 
     state
         .plugins
@@ -123,7 +131,7 @@ pub async fn add_harvest_people(
         admin.org_id,
         admin.id,
         &people,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         activation,
         Existing::Skip,
     )
@@ -147,7 +155,7 @@ pub(crate) async fn insert_user(
     actor_id: uuid::Uuid,
     email: &str,
     name: &str,
-    org_role: OrgRole,
+    profile: BuiltInProfile,
 ) -> Result<User, ServerFnError> {
     let person = NewPerson {
         email: email.to_owned(),
@@ -158,7 +166,7 @@ pub(crate) async fn insert_user(
         org_id,
         actor_id,
         &[person],
-        org_role,
+        profile,
         Activation::Active,
         Existing::Refuse,
     )
@@ -172,18 +180,11 @@ async fn insert_users(
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
     people: &[NewPerson],
-    org_role: OrgRole,
+    profile: BuiltInProfile,
     activation: Activation,
     existing: Existing,
 ) -> Result<AddedPeople, ServerFnError> {
     let mut tx = begin_user_access_change(db, org_id, actor_id).await?;
-    // Under policy 1 privileges are given through the permission editor, which
-    // audits them; a role chosen here would bypass it.
-    if access_policy(&mut tx, org_id).await? != 0 && org_role != OrgRole::Member {
-        return Err(conflict(
-            "Add the person as a member, then choose their profile in the permission editor",
-        ));
-    }
     // The organization row is locked first, then each email, in one order so
     // two batches cannot deadlock. Emails compare trimmed and ignoring case.
     let key = |person: &NewPerson| person.email.trim().to_lowercase();
@@ -228,7 +229,7 @@ async fn insert_users(
             org_id,
             person.email,
             person.name,
-            org_role as OrgRole,
+            provisioning::placeholder_role(profile) as OrgRole,
             activation == Activation::Active,
         )
         .fetch_one(&mut *tx)
@@ -243,7 +244,7 @@ async fn insert_users(
                 server_err(e)
             }
         })?;
-        provisioning::provision(&mut tx, org_id, user.id, profile_for_role(org_role))
+        provisioning::provision(&mut tx, org_id, user.id, profile)
             .await
             .map_err(server_err)?;
         users.push(user);
@@ -302,21 +303,6 @@ async fn begin_user_access_change(
     .map_err(server_err)?
     .ok_or_else(|| forbidden("Active administrator access required"))?;
     Ok(tx)
-}
-
-/// The organization's permission policy, read under the access-change lock.
-#[cfg(feature = "server")]
-async fn access_policy(
-    db: &mut sqlx::PgConnection,
-    org_id: uuid::Uuid,
-) -> Result<i32, ServerFnError> {
-    sqlx::query_scalar!(
-        "SELECT permission_policy_version FROM organizations WHERE id = $1",
-        org_id
-    )
-    .fetch_one(db)
-    .await
-    .map_err(server_err)
 }
 
 /// Read the prior state under the organization's access-change lock, for both
@@ -401,16 +387,6 @@ pub(super) async fn change_user_role(
     org_role: OrgRole,
 ) -> Result<(User, Option<OrgRole>), ServerFnError> {
     let mut tx = begin_user_access_change(db, org_id, actor_id).await?;
-    // Under policy 1 privileges are given in the permission editor, so a role
-    // may only be lowered: the editor never touches `org_role`, and until
-    // user administration authorizes from permission state, lowering it here
-    // is how an administrator demoted in the editor loses that access.
-    let policy = access_policy(&mut tx, org_id).await?;
-    if policy != 0 && org_role != OrgRole::Member {
-        return Err(conflict(
-            "Roles no longer grant access; change the person's profile in the permission editor",
-        ));
-    }
     // Read the prior role/active so the event reports the transition (a no-op
     // role change emits nothing, FR-012) and so we can refuse demoting the last
     // active admin — including an admin dropping their own role.
@@ -440,11 +416,6 @@ pub(super) async fn change_user_role(
     .await
     .map_err(server_err)?
     .ok_or_else(|| not_found("User not found"))?;
-    if policy == 0 {
-        provisioning::follow_role(&mut tx, org_id, user_id, org_role)
-            .await
-            .map_err(server_err)?;
-    }
 
     tx.commit().await.map_err(server_err)?;
     Ok((user, previous))
@@ -487,25 +458,19 @@ async fn change_user_active(
     let current = user_active_role(&mut tx, user_id, org_id).await?;
     let was_active: Option<bool> = current.map(|(active, _)| active);
 
-    // Deactivating the last active admin would lock the org out. Policy 1
-    // also counts Administrator states, as the permission editor does, and
-    // keeps the role rule while user administration still requires the role.
-    if !active {
-        if current.is_some_and(|(a, role)| a && role == OrgRole::Admin) {
-            ensure_other_active_admin(&mut tx, org_id, user_id).await?;
-        }
-        if access_policy(&mut tx, org_id).await? != 0
-            && provisioning::is_active_administrator(&mut tx, org_id, user_id)
-                .await
-                .map_err(server_err)?
-            && !provisioning::other_active_administrator(&mut tx, org_id, user_id)
-                .await
-                .map_err(server_err)?
-        {
-            return Err(conflict(
-                "The organization must keep at least one active administrator.",
-            ));
-        }
+    // Deactivating the last active Administrator would lock the org out. The
+    // permission editor counts administrators the same way.
+    if !active
+        && provisioning::is_active_administrator(&mut tx, org_id, user_id)
+            .await
+            .map_err(server_err)?
+        && !provisioning::other_active_administrator(&mut tx, org_id, user_id)
+            .await
+            .map_err(server_err)?
+    {
+        return Err(conflict(
+            "The organization must keep at least one active administrator.",
+        ));
     }
 
     let user = sqlx::query_as!(

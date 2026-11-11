@@ -245,13 +245,6 @@ before asking for approval. In particular:
   while adding genuinely delegated time editing where configured.
 - `Manager → Executive Manager` adds people administration and time editing; it
   does not preserve every current rate or branding write.
-- People are already provisioned with a permission state while their
-  organization is at policy 0 (`server_fns::permissions::provisioning`), and a
-  new legacy Manager gets Executive Manager there. Compared with the Manager,
-  that state adds `PeopleWriteAll`, `TimeWriteAll` and `ReportContractorRead`;
-  `TimeWriteAll` already lets them edit other people's time once policy 1 is on.
-  Activation must list every provisioned Executive Manager state for review
-  instead of accepting it as reviewed.
 - Accounting and People Admin have distinct responsibilities; neither is a
   rank-equivalent fallback for an old Manager.
 - `Admin → Administrator` and `Member → Member` also need comparison. Expanded

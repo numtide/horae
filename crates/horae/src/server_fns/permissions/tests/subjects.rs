@@ -122,7 +122,7 @@ async fn subject_cursor_is_only_a_bound_and_exact_page_has_no_continuation(pool:
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn subject_discovery_requires_current_explicit_identity_and_supported_policy(pool: PgPool) {
+async fn subject_discovery_requires_current_explicit_identity(pool: PgPool) {
     let ids = fixture(&pool).await;
     let foreign = fixture(&pool).await;
     let all_grants = person(&pool, ids.org_id, false, BuiltInProfile::Administrator).await;
@@ -137,20 +137,6 @@ async fn subject_discovery_requires_current_explicit_identity_and_supported_poli
         ));
         assert!(matches!(
             editor::subjects(&pool, ids.org_id, actor, Some(Uuid::max())).await,
-            Err(ProfileCommandError::Forbidden)
-        ));
-    }
-    for policy in [0, 2] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
-            ids.org_id,
-            policy
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        assert!(matches!(
-            editor::subjects(&pool, ids.org_id, ids.user_id, None).await,
             Err(ProfileCommandError::Forbidden)
         ));
     }

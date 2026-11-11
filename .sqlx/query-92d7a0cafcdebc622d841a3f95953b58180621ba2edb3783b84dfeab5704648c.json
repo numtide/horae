@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT count(*) AS \"count!\" FROM users WHERE org_id = $1",
+  "query": "SELECT access_revision FROM organizations WHERE id=$1 FOR SHARE",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "count!",
+        "name": "access_revision",
         "type_info": "Int8"
       }
     ],
@@ -15,8 +15,8 @@
       ]
     },
     "nullable": [
-      null
+      false
     ]
   },
-  "hash": "9f4b937fa2f1ae0b421a4ff2fe9732b4bd7e1562b1fa8d31c3058d66784e5787"
+  "hash": "92d7a0cafcdebc622d841a3f95953b58180621ba2edb3783b84dfeab5704648c"
 }

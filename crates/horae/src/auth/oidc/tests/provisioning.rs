@@ -1,5 +1,6 @@
 use super::linking::{identity, wait_for_links};
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use tokio::{task::JoinSet, time::timeout};
 
@@ -415,7 +416,7 @@ async fn concurrent_sign_ins_with_case_variant_emails_create_one_account(pool: P
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn admin_creation_and_provisioning_of_case_variant_emails_create_one_account(pool: PgPool) {
-    let ids = crate::server_fns::test_seed::seed(&pool, OrgRole::Admin).await;
+    let ids = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
     // Hold the email lock. The sign-in takes its share of the organization row
     // and queues on the email; the administrator's exclusive organization lock
     // then queues behind the sign-in, so the sign-in commits first and the
@@ -444,7 +445,7 @@ async fn admin_creation_and_provisioning_of_case_variant_emails_create_one_accou
             ids.user_id,
             "Ada@example.com",
             "Ada",
-            OrgRole::Member,
+            BuiltInProfile::Member,
         )
         .await
     });

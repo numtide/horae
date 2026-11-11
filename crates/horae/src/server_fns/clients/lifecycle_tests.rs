@@ -7,6 +7,7 @@ use crate::plugin::event::ActiveTransition;
 use crate::server_fns::test_seed::{
     SeedIds, repeatable_read_pool, seed, time_entry, wait_for_blocked,
 };
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 use sqlx::PgPool;
 use std::time::Duration;
@@ -17,7 +18,7 @@ const ARCHIVE_PROJECTS_FIRST: &str = "Archive this client's projects before arch
 /// A manager's organization whose client has one project plus history a status
 /// change must keep: an invoiced time entry and import provenance.
 async fn fixture(pool: &PgPool) -> SeedIds {
-    let ids = seed(pool, OrgRole::Manager).await;
+    let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(pool, &ids, EntryState::Open).await;
     let invoice = Uuid::now_v7();
     sqlx::query!(
@@ -218,7 +219,7 @@ async fn status_changes_recheck_current_authority_before_project_state(pool: PgP
         // The project stays active: a caller without authority must get the
         // authority error, never the archive prerequisite.
         let ids = fixture(&pool).await;
-        let foreign = seed(&pool, OrgRole::Admin).await;
+        let foreign = seed(&pool, BuiltInProfile::Administrator).await;
         let mut actor = ids.user_id;
         match change {
             "member" => {
@@ -305,7 +306,7 @@ async fn status_change_waits_for_a_role_change_and_then_fails_closed(pool: PgPoo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn foreign_clients_are_indistinguishable_from_unknown_ones(pool: PgPool) {
     let ids = fixture(&pool).await;
-    let other = seed(&pool, OrgRole::Admin).await;
+    let other = seed(&pool, BuiltInProfile::Administrator).await;
     let mut errors = Vec::new();
     for client_id in [Uuid::now_v7(), ids.client_id] {
         for active in [false, true] {

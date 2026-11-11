@@ -3,6 +3,7 @@
 //! untouched: restarting the demo must not add time or restore deleted data.
 use anyhow::Context;
 use chrono::{NaiveDate, Utc};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::{BudgetKind, OrgRole, ProjectRole, ProjectType, RoundDir};
 use horae_core::week::iso_week_monday;
 use sqlx::PgPool;
@@ -60,13 +61,11 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
 
     // Organisation
     sqlx::query!(
-        "INSERT INTO organizations (id, name, default_currency, week_start, round_minutes, round_dir,
-                                    permission_policy_version)
-         VALUES ($1, $2, 'EUR', 1, 15, $3, $4)",
+        "INSERT INTO organizations (id, name, default_currency, week_start, round_minutes, round_dir)
+         VALUES ($1, $2, 'EUR', 1, 15, $3)",
         ORG_ID,
         "Demo Org",
         RoundDir::Nearest as RoundDir,
-        provisioning::NEW_ORGANIZATION_POLICY_VERSION,
     )
     .execute(&mut *tx)
     .await?;
@@ -77,17 +76,11 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
          VALUES ($1, $2, 'admin@example.com', 'Admin User', $3, 10000)",
         ADMIN_ID,
         ORG_ID,
-        OrgRole::Admin as OrgRole,
+        provisioning::placeholder_role(BuiltInProfile::Administrator) as OrgRole,
     )
     .execute(&mut *tx)
     .await?;
-    provisioning::provision(
-        &mut tx,
-        ORG_ID,
-        ADMIN_ID,
-        provisioning::profile_for_role(OrgRole::Admin),
-    )
-    .await?;
+    provisioning::provision(&mut tx, ORG_ID, ADMIN_ID, BuiltInProfile::Administrator).await?;
 
     // Clients
     sqlx::query!(

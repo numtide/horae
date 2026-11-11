@@ -31,8 +31,8 @@ async fn download(
 mod groups;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
-    let other = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
+    let other = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     let entry = crate::server_fns::test_seed::time_entry(pool, &ids, EntryState::Open).await;
     sqlx::query!("UPDATE users SET oidc_subject=id::text,billable_rate_cents=123456,cost_rate_cents=987654 WHERE id=$1", ids.user_id).execute(pool).await.unwrap();
     let cookie = api.cookie(ids.user_id).await;
@@ -103,6 +103,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .execute(pool)
     .await
     .unwrap();
+    // A person without permission state cannot read anything.
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     assert_eq!(
         api.call(ACCESS, access_request.clone(), Some(&cookie), false)
             .await
@@ -327,6 +329,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     );
     // A previously accepted scoped screen must not become an unrestricted
     // legacy download after a mode change, even with the same Admin session.
+    crate::server_fns::test_seed::clear_state(pool, other.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), other.org_id, other.user_id, &grants).execute(pool).await.unwrap();
     let scoped_link = format!(

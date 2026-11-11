@@ -1,16 +1,17 @@
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-fn manager(ids: &SeedIds, role: OrgRole) -> User {
+fn manager(ids: &SeedIds, role: BuiltInProfile) -> User {
     User {
         id: ids.user_id,
         org_id: ids.org_id,
         email: format!("{}@test.com", ids.user_id),
         name: "Test manager".into(),
         oidc_subject: None,
-        org_role: role,
+        org_role: crate::server_fns::provisioning::placeholder_role(role),
         cost_rate_cents: None,
         billable_rate_cents: None,
         active: true,
@@ -40,10 +41,13 @@ async fn entry_state(pool: &PgPool, entry_id: Uuid) -> EntryState {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn foreign_approval_ids_do_not_change_another_organizations_week(pool: PgPool) {
-    let foreign = seed(&pool, OrgRole::Member).await;
+    let foreign = seed(&pool, BuiltInProfile::Member).await;
     let (approval, entry) = submitted_week(&pool, &foreign).await;
 
-    for role in [OrgRole::Manager, OrgRole::Admin] {
+    for role in [
+        BuiltInProfile::ExecutiveManager,
+        BuiltInProfile::Administrator,
+    ] {
         let local = seed(&pool, role).await;
         let approved = approve_periods(&pool, &manager(&local, role), &[approval.id])
             .await
@@ -94,11 +98,11 @@ async fn foreign_week_total(
 #[serial_test::serial]
 async fn bulk_approval_only_returns_and_transitions_own_organization(pool: PgPool) {
     // An administrator, so approving their own week is allowed.
-    let local = seed(&pool, OrgRole::Admin).await;
-    let foreign = seed(&pool, OrgRole::Member).await;
+    let local = seed(&pool, BuiltInProfile::Administrator).await;
+    let foreign = seed(&pool, BuiltInProfile::Member).await;
     let (own_approval, own_entry) = submitted_week(&pool, &local).await;
     let (foreign_approval, foreign_entry) = submitted_week(&pool, &foreign).await;
-    let actor = manager(&local, OrgRole::Admin);
+    let actor = manager(&local, BuiltInProfile::Administrator);
 
     let approved = approve_periods(
         &pool,
@@ -132,17 +136,27 @@ async fn bulk_approval_only_returns_and_transitions_own_organization(pool: PgPoo
 #[serial_test::serial]
 async fn foreign_reopen_is_not_found_and_preserves_pending_and_approved_work(pool: PgPool) {
     let locals = [
-        (seed(&pool, OrgRole::Manager).await, OrgRole::Manager),
-        (seed(&pool, OrgRole::Admin).await, OrgRole::Admin),
+        (
+            seed(&pool, BuiltInProfile::ExecutiveManager).await,
+            BuiltInProfile::ExecutiveManager,
+        ),
+        (
+            seed(&pool, BuiltInProfile::Administrator).await,
+            BuiltInProfile::Administrator,
+        ),
     ];
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let (approval, entry) = submitted_week(&pool, &foreign).await;
 
     for expected in [EntryState::Submitted, EntryState::Approved] {
         if expected == EntryState::Approved {
-            approve_periods(&pool, &manager(&foreign, OrgRole::Admin), &[approval.id])
-                .await
-                .unwrap();
+            approve_periods(
+                &pool,
+                &manager(&foreign, BuiltInProfile::Administrator),
+                &[approval.id],
+            )
+            .await
+            .unwrap();
         }
         for (local, role) in &locals {
             let result = reopen_period(&pool, &manager(local, *role), approval.id).await;
@@ -172,9 +186,9 @@ async fn foreign_reopen_is_not_found_and_preserves_pending_and_approved_work(poo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn own_organization_can_reopen_without_unlocking_invoiced_entries(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Admin).await;
+    let local = seed(&pool, BuiltInProfile::Administrator).await;
     let (approval, entry) = submitted_week(&pool, &local).await;
-    let actor = manager(&local, OrgRole::Admin);
+    let actor = manager(&local, BuiltInProfile::Administrator);
     approve_periods(&pool, &actor, &[approval.id])
         .await
         .unwrap();

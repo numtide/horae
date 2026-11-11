@@ -1,5 +1,5 @@
 use super::*;
-use horae_core::types::OrgRole;
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use tokio::{task::JoinSet, time::timeout};
 
@@ -30,7 +30,7 @@ pub(super) async fn sign_in(pool: &PgPool, identity: &Identity) -> anyhow::Resul
 }
 
 async fn account(pool: &PgPool) -> (Uuid, String) {
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
     (ids.user_id, format!("{}@test.com", ids.user_id))
 }
 
