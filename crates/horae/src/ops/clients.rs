@@ -1,9 +1,6 @@
 //! Client operations (OP17/OP18, FR-035/036 of `specs/015-scoped-permissions`).
 //!
-//! Every decision goes through [`Actor::has`], so one predicate serves both
-//! permission policies: under policy zero the legacy role maps to the same
-//! grants (`ops::actor::legacy_has`). Only the project counts on the Clients
-//! page keep a legacy branch, because they follow the project domain's reader.
+//! Every decision goes through [`Actor::has`], on the actor's stored grants.
 
 use horae_core::client::{optional_text, parse_default_rate, validate_profile};
 use horae_core::permissions::catalog::Permission;
@@ -25,7 +22,6 @@ const WRITE_REQUIRED: &str = "Client management access required";
 const RATE_WRITE_REQUIRED: &str =
     "Changing a client's default rate requires permission to edit billable rates for everyone";
 const INVOICES_REQUIRED: &str = "Invoice access required";
-const LEGACY_INVOICES_REQUIRED: &str = "Manager access required";
 const CURRENCY_NEEDS_RATE_WRITE: &str =
     "Changing a client's currency requires permission to edit billable rates";
 const ARCHIVE_PROJECTS_FIRST: &str = "Archive this client's projects before archiving the client.";
@@ -368,7 +364,7 @@ pub(crate) async fn detail_view(
     let details = details(tx, actor, client_id).await?;
     Ok(ClientDetailView {
         requester,
-        canonical_permissions: !actor.is_legacy(),
+        canonical_permissions: true,
         can_manage: actor.has(Permission::ClientWriteAll),
         can_read_invoices: actor.has(Permission::InvoiceReadAll),
         details,
@@ -390,7 +386,7 @@ pub(crate) async fn overview(
     let clients = summaries(&mut **tx, actor.org_id(), actor.id(), scope).await?;
     Ok(ClientOverview {
         requester,
-        canonical_permissions: !actor.is_legacy(),
+        canonical_permissions: true,
         can_read: scope.catalog,
         can_manage: actor.has(Permission::ClientWriteAll),
         clients,
@@ -399,19 +395,14 @@ pub(crate) async fn overview(
 
 /// A client's invoices. Whole-invoice authority is organization-wide invoice
 /// read; managed invoice scope belongs to the invoices domain. It is checked
-/// before the client, as policy zero's manager check was, so the refusal says
-/// nothing about the client.
+/// before the client, so the refusal says nothing about the client.
 pub(crate) async fn invoices(
     tx: &mut Tx,
     actor: &Actor,
     client_id: Uuid,
 ) -> Result<Vec<Invoice>, OpError> {
     if !actor.has(Permission::InvoiceReadAll) {
-        return Err(OpError::forbidden(if actor.is_legacy() {
-            LEGACY_INVOICES_REQUIRED
-        } else {
-            INVOICES_REQUIRED
-        }));
+        return Err(OpError::forbidden(INVOICES_REQUIRED));
     }
     details(tx, actor, client_id).await?;
     Ok(sqlx::query_as!(
@@ -480,7 +471,6 @@ pub(crate) async fn list(
 /// count toward each client's totals.
 #[derive(Clone, Copy)]
 pub(crate) struct ClientReadScope {
-    pub legacy: bool,
     pub catalog: bool,
     pub projects_all: bool,
     pub projects_managed: bool,
@@ -489,7 +479,6 @@ pub(crate) struct ClientReadScope {
 impl ClientReadScope {
     fn of(actor: &Actor) -> Self {
         Self {
-            legacy: actor.is_legacy(),
             catalog: actor.has(Permission::ClientReadAll),
             projects_all: actor.has(Permission::ProjectReadAll),
             projects_managed: actor.has(Permission::ProjectReadManaged),
@@ -497,9 +486,8 @@ impl ClientReadScope {
     }
 }
 
-/// Client summaries with project counts. Policy zero counts what the legacy
-/// `project_read_access` view shows; policy one counts the projects
-/// `list_projects` would show the same viewer.
+/// Client summaries with project counts: the projects `list_projects` would
+/// show the same viewer.
 pub(crate) async fn summaries<'e>(
     db: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
     org_id: Uuid,
@@ -519,11 +507,7 @@ pub(crate) async fn summaries<'e>(
            FROM clients c
            JOIN users u ON u.org_id = c.org_id AND u.id = $2 AND u.active
            LEFT JOIN projects p ON p.client_id = c.id AND p.org_id = c.org_id
-             AND CASE WHEN $3 THEN EXISTS (
-               SELECT 1 FROM project_read_access a
-               WHERE a.project_id = p.id AND a.org_id = c.org_id
-                 AND a.user_id = u.id AND a.can_view_progress
-             ) ELSE $4 OR ($5 AND EXISTS (
+             AND ($3 OR ($4 AND EXISTS (
                SELECT 1 FROM project_management_assignments m
                WHERE m.org_id = p.org_id AND m.project_id = p.id AND m.manager_id = u.id
              )) OR (EXISTS (
@@ -532,13 +516,12 @@ pub(crate) async fn summaries<'e>(
              ) AND COALESCE((
                SELECT s.report_visibility FROM project_settings s
                WHERE s.project_id = p.id AND s.org_id = p.org_id
-             ), 'project_members') = 'project_members') END
+             ), 'project_members') = 'project_members'))
            WHERE c.org_id = $1
            GROUP BY c.id
            ORDER BY c.name, c.id"#,
         org_id,
         user_id,
-        scope.legacy,
         scope.projects_all,
         scope.projects_managed,
     )

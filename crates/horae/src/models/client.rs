@@ -37,6 +37,8 @@ pub struct ClientDetails {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClientOverview {
     pub requester: PermissionRequester,
+    /// Always true now that clients read only stored permissions; the page
+    /// still binds to it until the UI drops it.
     pub canonical_permissions: bool,
     /// False means the catalog is withheld, distinct from an empty catalog.
     pub can_read: bool,

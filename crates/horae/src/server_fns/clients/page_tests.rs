@@ -1,4 +1,4 @@
-//! Canonical Clients page readers under both permission policies.
+//! Clients page readers on stored grants.
 
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
@@ -257,16 +257,9 @@ async fn foreign_missing_and_rebound_requests_fail_closed(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unavailable_permission_state_and_inactive_actors_fail_closed(pool: PgPool) {
-    for state in ["unknown_policy", "missing", "malformed", "inactive"] {
+    for state in ["missing", "malformed", "inactive"] {
         let ids = policy_one(&pool, OrgRole::Admin, &[Permission::ClientReadAll]).await;
         match state {
-            "unknown_policy" => sqlx::query!(
-                "UPDATE organizations SET permission_policy_version=99 WHERE id=$1",
-                ids.org_id
-            )
-            .execute(&pool)
-            .await
-            .unwrap(),
             "missing" => sqlx::query!(
                 "DELETE FROM person_permission_states WHERE user_id=$1",
                 ids.user_id
@@ -347,44 +340,8 @@ async fn readers_observe_revocation_after_waiting_for_current_authority(pool: Pg
     }
 }
 
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn policy_zero_keeps_legacy_catalog_billing_and_manager_affordance(pool: PgPool) {
-    for (role, manager) in [
-        (OrgRole::Admin, true),
-        (OrgRole::Manager, true),
-        (OrgRole::Member, false),
-    ] {
-        let ids = seed(&pool, role).await;
-        sqlx::query!(
-            "UPDATE clients SET default_rate_cents=12345 WHERE id=$1",
-            ids.client_id
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        let page = overview(&pool, &ids).await.unwrap();
-        assert!(!page.canonical_permissions && page.can_read);
-        assert_eq!(page.can_manage, manager, "{role:?}");
-        assert_eq!(
-            page.clients,
-            client_summaries_for_viewer(&pool, ids.org_id, ids.user_id)
-                .await
-                .unwrap()
-        );
-        let view = detail(&pool, &ids).await.unwrap();
-        assert_eq!(view.can_manage, manager);
-        assert_eq!(
-            view.details,
-            client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
-                .await
-                .unwrap()
-        );
-        assert_eq!(view.details.billing.is_some(), manager);
-    }
-}
-
-/// The shared detail reader follows the same grants as the page: a legacy
-/// Manager role without them sees nothing under policy one.
+/// The shared detail reader follows the same grants as the page: a dead
+/// legacy Manager role without them sees nothing.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn workflow_reader_follows_grants_under_policy_one(pool: PgPool) {
     let ids = policy_one(&pool, OrgRole::Manager, &[]).await;

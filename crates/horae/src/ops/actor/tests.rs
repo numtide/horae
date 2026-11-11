@@ -1,4 +1,4 @@
-//! Loading the actor and answering under both permission policies.
+//! Loading the actor and answering from the stored permission state.
 
 use horae_core::permissions::catalog::Permission;
 use horae_core::types::OrgRole;
@@ -14,77 +14,19 @@ async fn load(pool: &PgPool, org_id: Uuid, user_id: Uuid) -> Result<Actor, OpErr
     Actor::load(&mut tx, Caller::session(org_id, user_id)).await
 }
 
-#[test]
-fn legacy_roles_map_to_their_grants() {
-    for permission in Permission::ALL {
-        assert!(legacy_has(OrgRole::Admin, *permission), "{permission:?}");
-    }
-    let member: Vec<_> = Permission::ALL
-        .iter()
-        .copied()
-        .filter(|permission| legacy_has(OrgRole::Member, *permission))
-        .collect();
-    assert_eq!(
-        member,
-        [
-            Permission::TimeReadOwn,
-            Permission::TimeWriteOwn,
-            Permission::ExpenseReadOwn,
-            Permission::ExpenseWriteOwn,
-            Permission::ClientReadAll,
-        ]
-    );
-    // The clients domain relies on these Manager rows.
-    for permission in [
-        Permission::ClientReadAll,
-        Permission::ClientWriteAll,
-        Permission::BillableRateReadAll,
-        Permission::BillableRateWriteAll,
-        Permission::InvoiceReadAll,
-    ] {
-        assert!(legacy_has(OrgRole::Manager, permission), "{permission:?}");
-    }
-    for permission in [
-        Permission::CostRateReadAll,
-        Permission::PeopleWriteAll,
-        Permission::TimeWriteAll,
-        Permission::CompanyWrite,
-    ] {
-        assert!(!legacy_has(OrgRole::Manager, permission), "{permission:?}");
-    }
-}
-
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn policy_zero_answers_from_the_role(pool: PgPool) {
-    for (role, administrator, writes) in [
-        (OrgRole::Admin, true, true),
-        (OrgRole::Manager, false, true),
-        (OrgRole::Member, false, false),
-    ] {
-        let ids = seed(&pool, role).await;
-        let actor = load(&pool, ids.org_id, ids.user_id).await.unwrap();
-        assert!(actor.is_active() && actor.is_legacy());
-        assert_eq!(actor.legacy_role(), Some(role));
-        assert_eq!(actor.channel(), Channel::Session);
-        assert_eq!(
-            (actor.identity().id, actor.identity().org_id),
-            (ids.user_id, ids.org_id)
-        );
-        assert_eq!(actor.administrator(), administrator, "{role:?}");
-        assert_eq!(actor.has(Permission::ClientWriteAll), writes, "{role:?}");
-        assert!(actor.has(Permission::ClientReadAll), "{role:?}");
-    }
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn policy_one_answers_from_the_grants_not_the_role(pool: PgPool) {
-    // A legacy Admin with a member's grants and a legacy Member who is an
+async fn answers_from_the_stored_state_not_the_role(pool: PgPool) {
+    // A legacy Admin role with a member's grants and a legacy Member who is an
     // administrator: the stored state decides, never the role.
     let admin = seed(&pool, OrgRole::Admin).await;
     policy_one(&pool, &admin, &[Permission::ClientReadAll], false).await;
     let actor = load(&pool, admin.org_id, admin.user_id).await.unwrap();
-    assert!(actor.is_active() && !actor.is_legacy());
-    assert_eq!(actor.legacy_role(), None);
+    assert!(actor.is_active());
+    assert_eq!(actor.channel(), Channel::Session);
+    assert_eq!(
+        (actor.identity().id, actor.identity().org_id),
+        (admin.user_id, admin.org_id)
+    );
     assert!(actor.has(Permission::ClientReadAll));
     assert!(!actor.has(Permission::ClientWriteAll));
     assert!(!actor.administrator());
@@ -100,6 +42,9 @@ async fn policy_one_answers_from_the_grants_not_the_role(pool: PgPool) {
 async fn foreign_missing_and_inactive_people_have_no_authority(pool: PgPool) {
     let ids = seed(&pool, OrgRole::Admin).await;
     let foreign = seed(&pool, OrgRole::Admin).await;
+    for seeded in [&ids, &foreign] {
+        policy_one(&pool, seeded, Permission::ALL, true).await;
+    }
     sqlx::query!(
         "UPDATE users SET active = false WHERE id = $1",
         foreign.user_id
@@ -121,15 +66,18 @@ async fn foreign_missing_and_inactive_people_have_no_authority(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn unknown_policy_and_missing_or_invalid_state_fail_closed(pool: PgPool) {
-    for state in ["unknown policy", "missing", "malformed"] {
+async fn missing_or_invalid_state_fails_closed(pool: PgPool) {
+    // An organization still on policy zero has no state for its people.
+    let unprovisioned = seed(&pool, OrgRole::Admin).await;
+    let error = load(&pool, unprovisioned.org_id, unprovisioned.user_id)
+        .await
+        .unwrap_err();
+    assert!(matches!(error, OpError::Forbidden(_)), "{error:?}");
+
+    for state in ["missing", "malformed"] {
         let ids = seed(&pool, OrgRole::Admin).await;
         policy_one(&pool, &ids, &[Permission::ClientReadAll], true).await;
         match state {
-            "unknown policy" => sqlx::query!(
-                "UPDATE organizations SET permission_policy_version = 2 WHERE id = $1",
-                ids.org_id
-            ),
             "missing" => sqlx::query!(
                 "DELETE FROM person_permission_states WHERE user_id = $1",
                 ids.user_id

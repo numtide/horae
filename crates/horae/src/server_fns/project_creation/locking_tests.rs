@@ -80,6 +80,13 @@ async fn every_project_entry_gates_before_actor_and_rechecks_revocation(pool: Pg
         Operation::Finalize,
     ] {
         let ids = seed(&pool, OrgRole::Admin).await;
+        // Client operations authorize from stored grants; the project
+        // operations here still read the legacy role.
+        let grants = matches!(operation, Operation::CreateClient);
+        if grants {
+            let write = [horae_core::permissions::catalog::Permission::ClientWriteAll];
+            crate::ops::testing::provision(&pool, &ids, &write, false).await;
+        }
         let editor = editing::load_editable_project(&pool, ids.user_id, ids.org_id, ids.project_id)
             .await
             .unwrap();
@@ -121,6 +128,12 @@ async fn every_project_entry_gates_before_actor_and_rechecks_revocation(pool: Pg
             .fetch_one(&mut *revocation)
             .await
             .unwrap();
+        }
+        if grants {
+            // Committed together with the role change below.
+            crate::ops::testing::set_grants(&mut revocation, &ids, &[])
+                .await
+                .unwrap();
         }
         let mut requests = JoinSet::new();
         let request_pool = pool.clone();

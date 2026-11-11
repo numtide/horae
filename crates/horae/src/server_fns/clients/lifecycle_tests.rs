@@ -3,10 +3,10 @@
 //! client, and both recheck current authority before revealing project state.
 
 use super::*;
+use crate::ops::testing::{seed_profile, set_grants};
 use crate::plugin::event::ActiveTransition;
-use crate::server_fns::test_seed::{
-    SeedIds, repeatable_read_pool, seed, time_entry, wait_for_blocked,
-};
+use crate::server_fns::test_seed::{SeedIds, repeatable_read_pool, time_entry, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 use sqlx::PgPool;
 use std::time::Duration;
@@ -14,10 +14,11 @@ use uuid::Uuid;
 
 const ARCHIVE_PROJECTS_FIRST: &str = "Archive this client's projects before archiving the client.";
 
-/// A manager's organization whose client has one project plus history a status
-/// change must keep: an invoiced time entry and import provenance.
+/// An Executive Manager's organization whose client has one project plus
+/// history a status change must keep: an invoiced time entry and import
+/// provenance.
 async fn fixture(pool: &PgPool) -> SeedIds {
-    let ids = seed(pool, OrgRole::Manager).await;
+    let ids = seed_profile(pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(pool, &ids, EntryState::Open).await;
     let invoice = Uuid::now_v7();
     sqlx::query!(
@@ -209,24 +210,23 @@ async fn restore_changes_only_the_client(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn status_changes_recheck_current_authority_before_project_state(pool: PgPool) {
     for change in [
-        "member",
+        "no client write",
         "inactive",
-        "policy one",
-        "unknown policy",
+        "missing state",
         "foreign actor",
     ] {
         // The project stays active: a caller without authority must get the
         // authority error, never the archive prerequisite.
         let ids = fixture(&pool).await;
-        let foreign = seed(&pool, OrgRole::Admin).await;
+        let foreign = seed_profile(&pool, BuiltInProfile::Administrator).await;
         let mut actor = ids.user_id;
         match change {
-            "member" => {
-                sqlx::query!(
-                    "UPDATE users SET org_role = 'member' WHERE id = $1",
-                    ids.user_id
+            "no client write" => {
+                set_grants(
+                    &mut pool.acquire().await.unwrap(),
+                    &ids,
+                    &[horae_core::permissions::catalog::Permission::ClientReadAll],
                 )
-                .execute(&pool)
                 .await
                 .unwrap();
             }
@@ -236,11 +236,10 @@ async fn status_changes_recheck_current_authority_before_project_state(pool: PgP
                     .await
                     .unwrap();
             }
-            "policy one" | "unknown policy" => {
+            "missing state" => {
                 sqlx::query!(
-                    "UPDATE organizations SET permission_policy_version = $2 WHERE id = $1",
-                    ids.org_id,
-                    if change == "policy one" { 1 } else { 2 },
+                    "DELETE FROM person_permission_states WHERE user_id = $1",
+                    ids.user_id
                 )
                 .execute(&pool)
                 .await
@@ -263,7 +262,7 @@ async fn status_changes_recheck_current_authority_before_project_state(pool: PgP
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn status_change_waits_for_a_role_change_and_then_fails_closed(pool: PgPool) {
+async fn status_change_waits_for_a_permission_change_and_then_fails_closed(pool: PgPool) {
     let ids = fixture(&pool).await;
     archive_projects(&pool, ids.client_id).await;
     let (org_id, user_id, client_id) = (ids.org_id, ids.user_id, ids.client_id);
@@ -280,13 +279,7 @@ async fn status_change_waits_for_a_role_change_and_then_fails_closed(pool: PgPoo
     )
     .await
     .unwrap();
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        user_id
-    )
-    .execute(&mut *change)
-    .await
-    .unwrap();
+    set_grants(&mut change, &ids, &[]).await.unwrap();
     let run_pool = pool.clone();
     let write = tokio::spawn(async move {
         set_client_active_record(&run_pool, org_id, user_id, client_id, false).await
@@ -305,7 +298,7 @@ async fn status_change_waits_for_a_role_change_and_then_fails_closed(pool: PgPoo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn foreign_clients_are_indistinguishable_from_unknown_ones(pool: PgPool) {
     let ids = fixture(&pool).await;
-    let other = seed(&pool, OrgRole::Admin).await;
+    let other = seed_profile(&pool, BuiltInProfile::Administrator).await;
     let mut errors = Vec::new();
     for client_id in [Uuid::now_v7(), ids.client_id] {
         for active in [false, true] {

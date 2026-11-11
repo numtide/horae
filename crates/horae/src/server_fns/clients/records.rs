@@ -3,7 +3,6 @@
 //! the plugin host would have received.
 
 pub(super) use crate::models::client::{ClientRateChange, ClientSummary};
-use crate::ops::clients::{ClientReadScope, summaries};
 use crate::ops::testing::Recorder;
 use crate::plugin::AppEvent;
 pub(super) use crate::plugin::event::ActiveTransition;
@@ -69,17 +68,15 @@ pub(super) async fn set_client_active_record(
     Ok((client, transitions.into_iter().next()))
 }
 
-/// Policy-zero summaries, kept for parity tests of the canonical overview.
+/// The Clients page rows the viewer would get.
 pub(super) async fn client_summaries_for_viewer(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
     user_id: uuid::Uuid,
 ) -> Result<Vec<ClientSummary>, ServerFnError> {
-    let legacy = ClientReadScope {
-        legacy: true,
-        catalog: true,
-        projects_all: false,
-        projects_managed: false,
-    };
-    Ok(summaries(db, org_id, user_id, legacy).await?)
+    let mut read = ops::begin_read(db, Caller::session(org_id, user_id)).await?;
+    let result = ops::clients::overview(&mut read.tx, &read.actor, None)
+        .await
+        .map(|page| page.clients);
+    Ok(read.finish(result).await?)
 }

@@ -1,20 +1,21 @@
-//! Each client operation allowed and refused under policy zero (legacy roles)
-//! and policy one (grants), per OP17/OP18 and FR-035/036.
+//! Each client operation allowed and refused by grants, per OP17/OP18 and
+//! FR-035/036.
 
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::Permission::{self, *};
 use horae_core::types::OrgRole;
 use sqlx::PgPool;
 
 use super::*;
 use crate::ops::Caller;
-use crate::ops::testing::{Recorder, policy_one};
+use crate::ops::testing::{Recorder, policy_one, seed_profile};
 use crate::server_fns::test_seed::{SeedIds, seed};
 
 /// Which authority a fixture gives the seeded person.
 #[derive(Debug, Clone, Copy)]
 enum Who {
-    Legacy(OrgRole),
-    /// Policy one with these grants. The legacy role is Admin on purpose: it
+    Profile(BuiltInProfile),
+    /// Exactly these grants. The dead legacy role is Admin on purpose: it
     /// must not matter.
     Grants(&'static [Permission]),
 }
@@ -29,11 +30,14 @@ const NOTHING: &[Permission] = &[];
 /// A seeded organization whose client has a default rate, an address and a
 /// tax ID, and whose project is archived (so the client may be archived).
 async fn fixture(pool: &PgPool, who: Who) -> SeedIds {
-    let role = match who {
-        Who::Legacy(role) => role,
-        Who::Grants(_) => OrgRole::Admin,
+    let ids = match who {
+        Who::Profile(profile) => seed_profile(pool, profile).await,
+        Who::Grants(grants) => {
+            let ids = seed(pool, OrgRole::Admin).await;
+            policy_one(pool, &ids, grants, false).await;
+            ids
+        }
     };
-    let ids = seed(pool, role).await;
     sqlx::query!(
         "UPDATE clients SET default_rate_cents = 12345, address = 'Street', tax_id = 'VAT'
          WHERE id = $1",
@@ -49,9 +53,6 @@ async fn fixture(pool: &PgPool, who: Who) -> SeedIds {
     .execute(pool)
     .await
     .unwrap();
-    if let Who::Grants(grants) = who {
-        policy_one(pool, &ids, grants, false).await;
-    }
     ids
 }
 
@@ -128,8 +129,11 @@ async fn rate_of(pool: &PgPool, client_id: Uuid) -> Option<i64> {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn create_needs_client_write_and_global_rate_write_for_a_rate(pool: PgPool) {
     for (who, rate, allowed) in [
-        (Who::Legacy(OrgRole::Manager), "10", true),
-        (Who::Legacy(OrgRole::Member), "", false),
+        (Who::Profile(BuiltInProfile::Administrator), "10", true),
+        // Executive Manager reads rates everywhere but cannot set them.
+        (Who::Profile(BuiltInProfile::ExecutiveManager), "", true),
+        (Who::Profile(BuiltInProfile::ExecutiveManager), "10", false),
+        (Who::Profile(BuiltInProfile::Member), "", false),
         (Who::Grants(WRITER), "", true),
         (Who::Grants(WRITER), "10", false),
         (Who::Grants(RATES), "10", true),
@@ -201,8 +205,12 @@ async fn update_with(
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn update_needs_client_write(pool: PgPool) {
     for (who, snapshot, allowed) in [
-        (Who::Legacy(OrgRole::Manager), Some(12345), true),
-        (Who::Legacy(OrgRole::Member), None, false),
+        (
+            Who::Profile(BuiltInProfile::Administrator),
+            Some(12345),
+            true,
+        ),
+        (Who::Profile(BuiltInProfile::Member), None, false),
         (Who::Grants(WRITER), None, true),
         (Who::Grants(CATALOG), None, false),
         (Who::Grants(NOTHING), None, false),
@@ -326,8 +334,8 @@ async fn set_active_with(
 async fn archive_and_restore_need_client_write(pool: PgPool) {
     for active in [false, true] {
         for (who, allowed) in [
-            (Who::Legacy(OrgRole::Manager), true),
-            (Who::Legacy(OrgRole::Member), false),
+            (Who::Profile(BuiltInProfile::ProjectManager), true),
+            (Who::Profile(BuiltInProfile::Member), false),
             (Who::Grants(WRITER), true),
             (Who::Grants(CATALOG), false),
             (Who::Grants(&[ProjectWriteAll]), false),
@@ -365,9 +373,10 @@ async fn read<T>(
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn details_need_the_catalog_and_rates_need_global_rate_read(pool: PgPool) {
     for (who, outcome) in [
-        (Who::Legacy(OrgRole::Admin), Some(true)),
-        (Who::Legacy(OrgRole::Manager), Some(true)),
-        (Who::Legacy(OrgRole::Member), Some(false)),
+        (Who::Profile(BuiltInProfile::Administrator), Some(true)),
+        (Who::Profile(BuiltInProfile::ExecutiveManager), Some(true)),
+        (Who::Profile(BuiltInProfile::ProjectManager), Some(false)),
+        (Who::Profile(BuiltInProfile::Member), None),
         (Who::Grants(CATALOG), Some(false)),
         (Who::Grants(RATE_READER), Some(true)),
         (
@@ -398,9 +407,9 @@ async fn details_need_the_catalog_and_rates_need_global_rate_read(pool: PgPool) 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_invoices_need_the_catalog_and_invoice_read(pool: PgPool) {
     for (who, outcome) in [
-        (Who::Legacy(OrgRole::Manager), "ok"),
-        // Policy zero keeps the session path's manager refusal.
-        (Who::Legacy(OrgRole::Member), "manager"),
+        (Who::Profile(BuiltInProfile::Accounting), "ok"),
+        (Who::Profile(BuiltInProfile::ProjectManager), "forbidden"),
+        (Who::Profile(BuiltInProfile::Member), "forbidden"),
         (Who::Grants(INVOICES), "ok"),
         (Who::Grants(CATALOG), "forbidden"),
         (
@@ -415,8 +424,6 @@ async fn client_invoices_need_the_catalog_and_invoice_read(pool: PgPool) {
         .await;
         match (outcome, result) {
             ("ok", Ok(rows)) => assert!(rows.is_empty()),
-            ("manager", Err(OpError::Forbidden(message)))
-                if message == LEGACY_INVOICES_REQUIRED => {}
             ("forbidden", Err(OpError::Forbidden(_)))
             | ("not found", Err(OpError::NotFound(_))) => {}
             (_, other) => panic!("{who:?}: {other:?}"),
@@ -427,8 +434,8 @@ async fn client_invoices_need_the_catalog_and_invoice_read(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn the_page_offers_writes_and_invoices_by_grant(pool: PgPool) {
     for (who, manage, invoices) in [
-        (Who::Legacy(OrgRole::Manager), true, true),
-        (Who::Legacy(OrgRole::Member), false, false),
+        (Who::Profile(BuiltInProfile::ExecutiveManager), true, true),
+        (Who::Profile(BuiltInProfile::ProjectManager), true, false),
         (Who::Grants(&[ClientWriteAll]), true, false),
         (Who::Grants(INVOICES), false, true),
         (Who::Grants(CATALOG), false, false),
@@ -454,7 +461,8 @@ async fn the_page_offers_writes_and_invoices_by_grant(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn list_projects_names_beyond_the_catalog(pool: PgPool) {
     for (who, assigned, expected) in [
-        (Who::Legacy(OrgRole::Member), false, Some(true)),
+        (Who::Profile(BuiltInProfile::Member), false, None),
+        (Who::Profile(BuiltInProfile::Member), true, Some(false)),
         (Who::Grants(CATALOG), false, Some(true)),
         (Who::Grants(NOTHING), false, None),
         (Who::Grants(NOTHING), true, Some(false)),

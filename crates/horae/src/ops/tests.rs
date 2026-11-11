@@ -2,14 +2,14 @@
 
 use std::sync::Mutex;
 
-use horae_core::types::OrgRole;
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::{Connection, PgPool};
 use uuid::Uuid;
 
-use super::testing::Recorder;
+use super::testing::{Recorder, seed_profile};
 use super::*;
 use crate::plugin::event::ClientPayload;
-use crate::server_fns::test_seed::{repeatable_read_pool, seed};
+use crate::server_fns::test_seed::repeatable_read_pool;
 
 fn created(client_id: Uuid, org_id: Uuid) -> AppEvent {
     AppEvent::ClientCreated {
@@ -85,7 +85,7 @@ impl EventSink for CommitProbe {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn events_are_dispatched_after_the_commit(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed_profile(&pool, BuiltInProfile::Administrator).await;
     let probe = CommitProbe {
         options: (*pool.connect_options()).clone(),
         seen: Mutex::default(),
@@ -101,7 +101,7 @@ async fn events_are_dispatched_after_the_commit(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_failed_operation_rolls_back_and_dispatches_nothing(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed_profile(&pool, BuiltInProfile::Administrator).await;
     let events = Recorder::default();
     let mut write = begin(&pool, Caller::session(ids.org_id, ids.user_id))
         .await
@@ -117,7 +117,7 @@ async fn a_failed_operation_rolls_back_and_dispatches_nothing(pool: PgPool) {
 /// A deferred constraint fails at COMMIT, after the operation succeeded.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_failed_commit_dispatches_nothing(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed_profile(&pool, BuiltInProfile::Administrator).await;
     let events = Recorder::default();
     let mut write = begin(&pool, Caller::session(ids.org_id, ids.user_id))
         .await
@@ -143,7 +143,7 @@ async fn a_failed_commit_dispatches_nothing(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn writes_run_at_read_committed_whatever_the_session_default(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed_profile(&pool, BuiltInProfile::Administrator).await;
     let rr = repeatable_read_pool(&pool).await;
     let mut write = begin(&rr, Caller::session(ids.org_id, ids.user_id))
         .await
