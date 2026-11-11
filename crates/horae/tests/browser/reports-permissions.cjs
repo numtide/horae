@@ -20,8 +20,7 @@ const person = id(1), client = id(2), project = id(3), task = id(4), state = id(
 const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expense_write_own']";
 const date = '2040-01-02';
 assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
-const restoreSeededStates = setAsideSeededStates(org);
-assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
+let restoreSeededStates = () => {};
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -36,6 +35,8 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: /Sign in as Admin/ }).click();
     await page.waitForURL(url => !url.pathname.startsWith('/auth/'));
+    restoreSeededStates = setAsideSeededStates(org);
+    assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
     await page.goto(`${base}/reports`);
     await expect(page.getByRole('button', { name: 'Time', exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Export CSV', exact: true })).toBeVisible();

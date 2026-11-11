@@ -2,7 +2,7 @@
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
-const { setAsideSeededStates } = require('./seeded-permissions.cjs');
+const { setAsideSeededStates, signInAsAdmin } = require('./seeded-permissions.cjs');
 const { mkdirSync } = require('node:fs');
 const { join } = require('node:path');
 const evidence = process.env.HORAE_TASK_CATALOG_EVIDENCE;
@@ -24,8 +24,7 @@ const authorize = extra => sql(`BEGIN;
   UPDATE organizations SET access_revision=access_revision+1 WHERE id='${actor.org_id}';
   UPDATE person_permission_states SET grants=${array([...floor, ...extra])}, revision=revision+1 WHERE id='${state}'; COMMIT;`);
 assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
-const restoreSeededStates = setAsideSeededStates(actor.org_id);
-assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
+let restoreSeededStates = () => {};
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -35,15 +34,16 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   try {
+    await signInAsAdmin(context, base);
+    restoreSeededStates = setAsideSeededStates(actor.org_id);
+    assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
     sql(`BEGIN;
       INSERT INTO tasks (id,org_id,name,billable_default,default_rate_cents,default_rate_currency)
         VALUES ('${task}','${actor.org_id}','Catalog browser task',true,8000,'USD');
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ('${state}','${actor.org_id}','${actor.id}',1,${array([...floor, ...grants])},false,'individual');
       UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'; COMMIT;`);
-    await page.goto(`${base}/auth/login`);
-    await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
-    await page.waitForURL(`${base}/`);
+    await page.goto(`${base}/`);
     await page.goto(`${base}/tasks`);
     const row = page.getByRole('row').filter({ hasText: 'Catalog browser task' });
     await expect(row).toContainText('USD 80.00');

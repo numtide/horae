@@ -19,8 +19,7 @@ const edit = [...read, 'project_write_managed'];
 const grantsSql = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
 const setGrants = grants => sql(`UPDATE person_permission_states SET grants=${grantsSql(grants)} WHERE user_id='${actor.id}'`);
 assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
-const restoreSeededStates = setAsideSeededStates(org);
-assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
+let restoreSeededStates = () => {};
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -45,6 +44,8 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     const login = await context.request.post(`${base}/auth/dev-login`, { maxRedirects: 0 });
     assert.equal(login.status(), 303);
     assert.equal(login.headers().location, '/');
+    restoreSeededStates = setAsideSeededStates(org);
+    assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
     sql(`BEGIN;
       INSERT INTO clients (id,org_id,name,currency) VALUES ('${client}','${org}','Scoped read client','EUR');
       INSERT INTO users (id,org_id,email,name,active) VALUES ('${teammate}','${org}','private-teammate@example.test','Retained teammate',false);

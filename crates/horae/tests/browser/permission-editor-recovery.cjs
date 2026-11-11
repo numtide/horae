@@ -262,7 +262,8 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
       await loginTab.waitForURL(`${base}/`);
     };
     try {
-      sql(`UPDATE users SET org_role='manager' WHERE id='${actor.id}'; UPDATE users SET org_role='admin' WHERE id='${otherActor}'`);
+      sql(`UPDATE users SET org_role='manager' WHERE id='${actor.id}'; UPDATE users SET org_role='admin' WHERE id='${otherActor}';
+      UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
       await login();
       for (const action of [
         () => page.getByRole('button', { name: 'Edit permissions for Other permission administrator', exact: true }).click(),
@@ -289,7 +290,8 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
       assert.equal(receipts(), 0);
       assert.equal(await record(), null);
     } finally {
-      sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'; UPDATE users SET org_role='member' WHERE id='${otherActor}'`);
+      sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'; UPDATE users SET org_role='member' WHERE id='${otherActor}';
+      UPDATE person_permission_states SET is_administrator=true WHERE id='${actorState}'`);
       await login();
       await loginTab.close();
     }
@@ -389,7 +391,8 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     const callsBeforeSwitch = saves.length;
     await readsFinished();
     // Change only disposable login candidates; never offer another user's retained request.
-    sql(`UPDATE users SET org_role='manager' WHERE id='${actor.id}'; UPDATE users SET org_role='admin' WHERE id='${otherActor}'`);
+    sql(`UPDATE users SET org_role='manager' WHERE id='${actor.id}'; UPDATE users SET org_role='admin' WHERE id='${otherActor}';
+      UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
@@ -400,7 +403,8 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await expect(recovery).not.toBeVisible();
     assert.equal(await record(), templateRecord);
     assert.equal(saves.length, callsBeforeSwitch);
-    sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'; UPDATE users SET org_role='member' WHERE id='${otherActor}'`);
+    sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'; UPDATE users SET org_role='member' WHERE id='${otherActor}';
+      UPDATE person_permission_states SET is_administrator=true WHERE id='${actorState}'`);
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);

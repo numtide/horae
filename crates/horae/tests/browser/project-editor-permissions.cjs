@@ -40,8 +40,7 @@ const leaves = value => value && typeof value === 'object' ? Object.values(value
 const receipts = () => sql(`SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY id), '[]'::jsonb) FROM permission_change_receipts r WHERE org_id='${org}'`);
 const initialReceipts = receipts();
 assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
-const restoreSeededStates = setAsideSeededStates(org);
-assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
+let restoreSeededStates = () => {};
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -62,6 +61,8 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
+    restoreSeededStates = setAsideSeededStates(org);
+    assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
     const originalHistory = history();
     sql(`BEGIN;
       INSERT INTO clients (id,org_id,name,currency) VALUES ('${client}','${org}','Permission editor client','EUR');

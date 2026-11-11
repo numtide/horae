@@ -2,7 +2,7 @@
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
-const { setAsideSeededStates } = require('./seeded-permissions.cjs');
+const { setAsideSeededStates, signInAsAdmin } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 const target = new URL(base), database = new URL(process.env.DATABASE_URL);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
@@ -22,8 +22,7 @@ const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_w
 const grants = writable => [...floor, 'time_read_managed', ...(writable ? ['time_write_managed'] : [])];
 const array = values => `ARRAY[${values.map(value => `'${value}'`).join(',')}]`;
 assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
-const restoreSeededStates = setAsideSeededStates(org);
-assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
+let restoreSeededStates = () => {};
 assert.equal(sql("SELECT count(*) FROM users WHERE active AND org_role='admin'"), '1');
 const originalRevision = sql(`SELECT access_revision FROM organizations WHERE id='${org}'`);
 assert.match(originalRevision, /^\d+$/);
@@ -89,6 +88,9 @@ function assignPerson() {
     await expect(page.locator('.ts-content[aria-busy="true"]')).toHaveCount(0);
   };
   try {
+    await signInAsAdmin(context, base);
+    restoreSeededStates = setAsideSeededStates(org);
+    assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
     sql(`BEGIN;
       INSERT INTO users (id,org_id,email,name) VALUES
         ('${person}','${org}','scoped-timesheet@example.test','${personName}'),
@@ -115,9 +117,7 @@ function assignPerson() {
       UPDATE time_entries SET is_running=true,started_at=now() WHERE id='${ownTimer}';
       UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
     created = true;
-    await page.goto(`${base}/auth/login`);
-    await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
-    await page.waitForURL(`${base}/`);
+    await page.goto(`${base}/`);
     await visit('day', null);
     await page.getByRole('button', { name: 'Timesheet for', exact: true }).click();
     const picker = page.getByRole('dialog', { name: 'Choose person', exact: true });
@@ -337,8 +337,7 @@ function assignPerson() {
     // Owner recovery uses a second real session, not a spoofed requester payload.
     sql(`UPDATE time_entries SET is_running=true,started_at=now() WHERE id='${timerId}';
       DELETE FROM assignments WHERE id='${id(13)}';
-      UPDATE users SET org_role='member' WHERE id='${actor}';
-      UPDATE users SET org_role='admin' WHERE id='${person}';`);
+      UPDATE person_permission_states SET is_administrator=true WHERE id='${id(17)}';`);
     const owner = await browser.newPage();
     const ownerPending = new Set();
     owner.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) ownerPending.add(request); });
@@ -350,7 +349,7 @@ function assignPerson() {
     await owner.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await owner.waitForURL(`${base}/`);
     await ownerSettled();
-    sql(`UPDATE users SET org_role='admin' WHERE id='${actor}'; UPDATE users SET org_role='member' WHERE id='${person}';`);
+    sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${id(17)}'`);
     await owner.goto(`${base}/timesheet/day/${timerDay}?span=week`);
     const ownRow = owner.locator('.ts-day-entry').filter({ has: owner.getByRole('button', { name: 'Stop', exact: true }) });
     await expect(ownRow.getByRole('button', { name: 'Edit', exact: true })).toBeDisabled();

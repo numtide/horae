@@ -2,7 +2,7 @@
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
-const { setAsideSeededStates } = require('./seeded-permissions.cjs');
+const { setAsideSeededStates, signInAsAdmin } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 const target = new URL(base), database = new URL(process.env.DATABASE_URL);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
@@ -16,15 +16,17 @@ const project = id(1), client = id(2), historical = id(3), enabled = id(4), unli
 const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
 const array = values => `ARRAY[${values.map(value => `'${value}'`).join(',')}]`;
 assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
-const restoreSeededStates = setAsideSeededStates(org);
-assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
 assert.equal(sql(`SELECT count(*) FROM time_entries WHERE user_id='${actor.id}' AND is_running`), '0');
+let restoreSeededStates = () => {};
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
+  await signInAsAdmin(context, base);
+  restoreSeededStates = setAsideSeededStates(org);
+  assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
   const errors = [];
   page.on('pageerror', error => errors.push(error.stack || error.message));
   const identities = () => page.waitForResponse(r => r.url().includes('/api/list_tracking_tasks') && r.status() === 200);
@@ -61,10 +63,8 @@ assert.equal(sql(`SELECT count(*) FROM time_entries WHERE user_id='${actor.id}' 
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ('${id(9)}','${org}','${actor.id}',1,${array(floor)},false,'individual');
       UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
-    await page.goto(`${base}/auth/login`);
     const response = identities();
-    await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
-    await page.waitForURL(`${base}/`);
+    await page.goto(`${base}/`);
     const rows = await (await response).json();
     assert.ok(rows.some(row => row.id === historical));
     assert.ok(rows.some(row => row.id === enabled));

@@ -16,7 +16,7 @@ const columns = ['provider_name', 'provider_address', 'provider_tax_id', 'provid
   'bank_name', 'bank_iban', 'bank_bic', 'bank_routing', 'bank_account', 'invoice_notes', 'invoice_payment_terms'];
 const before = JSON.parse(sql(`SELECT row_to_json(o) FROM (SELECT ${columns.join(',')}, permission_policy_version FROM organizations WHERE id='${org}') o`));
 assert.equal(before.permission_policy_version, 0);
-const restoreSeededStates = setAsideSeededStates(org);
+let restoreSeededStates = () => {};
 const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll("'", "''")}'`;
 
 (async () => {
@@ -35,6 +35,7 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
+    restoreSeededStates = setAsideSeededStates(org);
 
     await asRole('admin');
     await settingsLink.click();

@@ -21,7 +21,7 @@ const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_w
 const array = values => `ARRAY[${values.map(value => `'${value}'`).join(',')}]`;
 const stored = () => sql(`SELECT concat_ws('/', coalesce(billable_rate_cents::text,'-'), coalesce(cost_rate_cents::text,'-')) FROM users WHERE id='${person}'`);
 assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
-const restoreSeededStates = setAsideSeededStates(actor.org_id);
+let restoreSeededStates = () => {};
 
 (async () => {
   // Chromium in CI; HORAE_BROWSER=firefox for local evidence runs.
@@ -40,6 +40,7 @@ const restoreSeededStates = setAsideSeededStates(actor.org_id);
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
+    restoreSeededStates = setAsideSeededStates(actor.org_id);
 
     // Without detailed permissions an administrator edits both rates.
     await page.goto(`${base}/admin/users`);
