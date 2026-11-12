@@ -116,6 +116,9 @@ struct TimeView {
     own: bool,
     managed: bool,
     all: bool,
+    /// An entry's billable rate is an effective project value, so the managed
+    /// scope is the managed projects only, never the managed people
+    /// (`horae_core::permissions::rates::billable_rate_access`).
     billable_rates_managed: bool,
     billable_rates_all: bool,
     /// Cost rates have no managed scope.
@@ -420,7 +423,7 @@ async fn time_entries_page(
                p.name AS project_name, p.code AS project_code,
                t.harvest_id AS task_id, t.name AS task_name,
                c.harvest_id AS client_id, c.name AS client_name,
-               CASE WHEN $15 OR ($14 AND (managed.person OR managed.project)) THEN COALESCE(line.rate_cents,
+               CASE WHEN $15 OR ($14 AND managed.project) THEN COALESCE(line.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
                  THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
@@ -534,7 +537,7 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
                p.name AS project_name, p.code AS project_code,
                t.harvest_id AS task_id, t.name AS task_name,
                c.harvest_id AS client_id, c.name AS client_name,
-               CASE WHEN $8 OR ($7 AND (managed.person OR managed.project)) THEN COALESCE(line.rate_cents,
+               CASE WHEN $8 OR ($7 AND managed.project) THEN COALESCE(line.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
                  THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
@@ -1675,24 +1678,14 @@ mod tests {
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-    async fn managed_grants_cover_managed_people_and_projects_only(pool: PgPool) {
-        let ids = seed(&pool, BuiltInProfile::Member).await;
+    async fn managed_grants_cover_managed_people_but_rates_only_managed_projects(pool: PgPool) {
+        let ids = seed(&pool, BuiltInProfile::ProjectManager).await;
         let managed = colleague(&pool, &ids).await;
         let stranger = colleague(&pool, &ids).await;
         priced(&pool, &ids, managed).await;
         insert_entry(&pool, &ids, ids.user_id, "mine").await;
         insert_entry(&pool, &ids, managed, "managed").await;
         insert_entry(&pool, &ids, stranger, "stranger").await;
-        provision(
-            &pool,
-            &ids,
-            &[
-                Permission::TimeReadManaged,
-                Permission::BillableRateReadManaged,
-            ],
-            false,
-        )
-        .await;
         sqlx::query!(
             "INSERT INTO person_management_assignments (id, org_id, manager_id, managed_user_id) VALUES ($1, $2, $3, $4)",
             Uuid::now_v7(),
@@ -1704,20 +1697,65 @@ mod tests {
         .await
         .unwrap();
 
-        // Own time stays visible without a rate; the stranger is out of scope.
-        assert_eq!(
-            rates(&pool, &ids).await,
-            vec![
-                ("managed".into(), Some(eur(3500)), None),
-                ("mine".into(), None, None)
-            ]
-        );
+        // The Project Manager profile reads managed time but no rates. Own
+        // time stays visible; the stranger is out of scope.
+        let only_managed_people = vec![
+            ("managed".into(), None, None),
+            ("mine".into(), None, None),
+        ];
+        assert_eq!(rates(&pool, &ids).await, only_managed_people);
         let Json(page) = time_entries_page(&pool, &caller(&ids), no_time_entry_filters())
             .await
             .unwrap();
         assert_eq!(page.total_entries, 2);
 
+        // The managed rate grant still shows nothing on a project the reader
+        // does not manage: the rate is the project's, not the person's.
+        provision(
+            &pool,
+            &ids,
+            &[
+                Permission::TimeReadManaged,
+                Permission::BillableRateReadManaged,
+            ],
+            false,
+        )
+        .await;
+        assert_eq!(rates(&pool, &ids).await, only_managed_people);
+
+        // The Accounting profile reads every rate without managing anything.
+        provision(
+            &pool,
+            &ids,
+            BuiltInProfile::Accounting.direct_permissions(),
+            false,
+        )
+        .await;
+        let billable = |rows: Vec<(String, Option<Amount>, Option<Amount>)>| {
+            rows.into_iter()
+                .map(|(notes, billable, _)| (notes, billable))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            billable(rates(&pool, &ids).await),
+            vec![
+                ("managed".into(), Some(eur(3500))),
+                ("mine".into(), Some(eur(3500))),
+                ("stranger".into(), Some(eur(3500)))
+            ]
+        );
+
         // Managing the project brings in everyone's time on it, with rates.
+        provision(
+            &pool,
+            &ids,
+            &[
+                Permission::TimeReadManaged,
+                Permission::BillableRateReadManaged,
+            ],
+            false,
+        )
+        .await;
         sqlx::query!(
             "INSERT INTO project_management_assignments (id, org_id, manager_id, project_id) VALUES ($1, $2, $3, $4)",
             Uuid::now_v7(),
