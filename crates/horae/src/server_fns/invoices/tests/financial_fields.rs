@@ -78,7 +78,7 @@ fn forbidden<T: std::fmt::Debug>(result: Result<T, ServerFnError>) {
 }
 
 /// Issued invoices disclose the rates they recorded to their invoice grants
-/// alone; preparing a new one prices work from current billable rates and
+/// alone; preparing a new one or editing a draft shows billable pricing and
 /// needs `BillableRateReadAll` too. No payload carries a cost rate.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
@@ -95,7 +95,7 @@ async fn invoice_managers_without_rate_or_cost_grants_receive_no_cost_rates(pool
     let (org, actor) = (ids.org_id, ids.user_id);
     assert_no_cost(json(fetch_list(&pool, org, actor, None).await.unwrap()));
     assert_no_cost(json(fetch_detail(&pool, org, actor, id).await.unwrap()));
-    assert_no_cost(json(editing::load(&pool, org, actor, id).await.unwrap()));
+    forbidden(editing::load(&pool, org, actor, id).await);
     forbidden(preview::prepare(&pool, (org, actor), ids.client_id, (day, day), None, None).await);
     set_grants(
         &mut pool.acquire().await.unwrap(),
@@ -104,11 +104,80 @@ async fn invoice_managers_without_rate_or_cost_grants_receive_no_cost_rates(pool
     )
     .await
     .unwrap();
+    assert_no_cost(json(editing::load(&pool, org, actor, id).await.unwrap()));
     assert_no_cost(json(
         preview::prepare(&pool, (org, actor), ids.client_id, (day, day), None, None)
             .await
             .unwrap(),
     ));
+}
+
+/// The draft editor (load, review and save) shows and reprices fee balances,
+/// so it needs `BillableRateReadAll` with the invoice write grant; save checks
+/// it again in its own transaction. Changing the status needs only the
+/// invoice write grant.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn editing_a_draft_needs_everyones_billable_rates(pool: PgPool) {
+    let (ids, id) = costed_draft(&pool).await;
+    let (org, actor) = (ids.org_id, ids.user_id);
+    let editor_grants = [Permission::InvoiceWriteAll, Permission::BillableRateReadAll];
+    set_grants(&mut pool.acquire().await.unwrap(), &ids, &editor_grants)
+        .await
+        .unwrap();
+    let mut editor = editing::load(&pool, org, actor, id).await.unwrap();
+    editor.edit.defaults.po_number = "RATE-CHECKED".into();
+    let review = editing::review(&pool, org, actor, id, &editor.edit)
+        .await
+        .unwrap();
+    let request = InvoiceDraftSave {
+        request_id: uuid::Uuid::now_v7(),
+        edit: editor.edit.clone(),
+        review,
+        confirmed_excess: vec![],
+    };
+    for grants in [
+        &[Permission::InvoiceWriteAll][..],
+        &[Permission::InvoiceReadAll, Permission::BillableRateReadAll],
+    ] {
+        set_grants(&mut pool.acquire().await.unwrap(), &ids, grants)
+            .await
+            .unwrap();
+        forbidden(editing::load(&pool, org, actor, id).await);
+        forbidden(editing::review(&pool, org, actor, id, &editor.edit).await);
+        forbidden(editing::save(&pool, org, actor, id, &request).await);
+    }
+    let unchanged = sqlx::query!(
+        "SELECT po_number, (SELECT count(*) FROM invoice_edit_requests WHERE invoice_id = $1) AS requests
+         FROM invoices WHERE id = $1",
+        id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (unchanged.po_number.as_str(), unchanged.requests),
+        ("", Some(0))
+    );
+    set_grants(&mut pool.acquire().await.unwrap(), &ids, &editor_grants)
+        .await
+        .unwrap();
+    let saved = editing::save(&pool, org, actor, id, &request)
+        .await
+        .unwrap();
+    assert_eq!(saved.invoice.po_number, "RATE-CHECKED");
+    assert_no_cost(json(saved));
+    set_grants(
+        &mut pool.acquire().await.unwrap(),
+        &ids,
+        &[Permission::InvoiceWriteAll],
+    )
+    .await
+    .unwrap();
+    let sent = transition_invoice(&pool, org, id, InvoiceStatus::Sent, actor)
+        .await
+        .unwrap();
+    assert_eq!(sent.status, InvoiceStatus::Sent);
 }
 
 /// Generation rechecks the billable-rate grant inside its own transaction:
@@ -255,6 +324,14 @@ async fn built_in_profiles_follow_their_invoice_grants(pool: PgPool) {
             manages,
             "{profile:?}"
         );
+        // The profiles that manage invoices also view everyone's billable
+        // rates, so they open the draft editor too.
+        let editor = editing::load(&pool, org, actor, id).await;
+        if manages {
+            assert_no_cost(json(editor.unwrap()));
+        } else {
+            forbidden(editor);
+        }
         let sent = transition_invoice(&pool, org, id, InvoiceStatus::Sent, actor).await;
         if manages {
             assert_eq!(sent.unwrap().status, InvoiceStatus::Sent, "{profile:?}");

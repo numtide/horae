@@ -56,7 +56,7 @@ pub(super) async fn load(
     actor_id: Uuid,
     id: Uuid,
 ) -> Result<InvoiceEditor, ServerFnError> {
-    let mut tx = begin_invoice_draft_read(pool, org_id, actor_id).await?;
+    let mut tx = begin_invoice_preparation_read(pool, org_id, actor_id).await?;
     let (invoice, revision, mut rows) = snapshot(&mut tx, org_id, id).await?;
     let edit = InvoiceDraftEdit {
         revision,
@@ -94,7 +94,7 @@ pub(super) async fn review(
     id: Uuid,
     edit: &InvoiceDraftEdit,
 ) -> Result<InvoiceEditReview, ServerFnError> {
-    let mut tx = begin_invoice_draft_read(pool, org_id, actor_id).await?;
+    let mut tx = begin_invoice_preparation_read(pool, org_id, actor_id).await?;
     let (_, revision, mut rows) = snapshot(&mut tx, org_id, id).await?;
     if revision != edit.revision {
         return Err(conflict(
@@ -206,7 +206,10 @@ pub(super) async fn save(
     canonical.confirmed_excess.sort_by_key(|fee| fee.line_id);
     let payload = serde_json::to_value(&canonical).map_err(server_err)?;
     let mut tx = begin_invoice_write(pool, org_id).await?;
-    lock_actor(&mut tx, org_id, actor_id).await?;
+    // The saved edit reprices fee lines against the same balances the editor
+    // showed, as its review did.
+    let actor = lock_actor(&mut tx, org_id, actor_id).await?;
+    crate::ops::invoices::authorize_prepare(&actor)?;
     let size = sqlx::query_scalar!(
         r#"SELECT octet_length($1::jsonb::text) AS "size!""#,
         payload
