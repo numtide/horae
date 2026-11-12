@@ -122,8 +122,7 @@ pub fn ClientList() -> Element {
     let overview = ready
         .then(|| data.as_ref().and_then(|result| result.as_ref().ok()))
         .flatten();
-    // Client writes are not yet integrated with canonical permissions, so the
-    // server grants `can_manage` only to legacy-policy managers.
+    // `can_manage` reflects `ClientWriteAll`; every write rechecks it.
     let is_manager = overview.is_some_and(|overview| overview.can_manage);
     let can_import = is_manager && is_admin(&me);
     let denied = overview.is_some_and(|overview| !overview.can_read);

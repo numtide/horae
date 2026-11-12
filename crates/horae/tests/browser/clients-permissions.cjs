@@ -1,4 +1,4 @@
-// Canonical Clients reads and refresh fences use only the design runner's disposable database.
+// Clients reads, writes and refresh fences on stored grants. Uses only the design runner's disposable database.
 const { chromium, expect: baseExpect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const expect = baseExpect.configure({ timeout: 15000 });
 const { execFileSync } = require('node:child_process');
@@ -19,7 +19,6 @@ const catalog = [...floor, 'client_read_all'];
 const grantsSql = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
 const setGrants = grants => sql(`UPDATE person_permission_states SET grants=${grantsSql(grants)} WHERE id='${state}'`);
 let actor, org, owned = false, restoreSeededStates;
-const setPolicy = version => sql(`UPDATE organizations SET permission_policy_version=${version} WHERE id='${org}'`);
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -42,7 +41,9 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
     return response;
   };
   const success = async response => {
-    assert.equal(response.status(), 200, `${response.url()}: ${await response.text()}`);
+    // Read the body only on failure: a message argument is evaluated even when
+    // the assertion passes.
+    if (response.status() !== 200) assert.fail(`${response.url()}: ${response.status()} ${await response.text()}`);
     return response.json();
   };
   const loadDetail = async client => {
@@ -65,7 +66,6 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
     await page.goto(`${base}/clients`);
     actor = await (await me).json();
     org = actor.org_id;
-    assert.equal(actor.org_role, 'admin');
     // Only this suite's rows are created and removed; the policy is restored to its observed value.
     assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
     restoreSeededStates = setAsideSeededStates(org);
@@ -77,10 +77,13 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
       INSERT INTO clients (id,org_id,name,currency,default_rate_cents) VALUES ('${zero}','${org}','Permission zero client','EUR',0);
       INSERT INTO projects (id,org_id,client_id,name,currency) VALUES ('${project}','${org}','${unset}','Permission managed project','EUR');
       INSERT INTO project_management_assignments (id,org_id,project_id,manager_id) VALUES ('${assignment}','${org}','${project}','${actor.id}');
+      INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
+        VALUES ('${state}','${org}','${actor.id}',1,${grantsSql([...catalog, 'client_write_all'])},false,'individual');
+      UPDATE organizations SET permission_policy_version=1 WHERE id='${org}';
       COMMIT;`);
 
-    // Policy zero: a save's reload that fails, is rebound or changes policy
-    // consumes the opener refocus instead of moving focus later.
+    // A save's reload that fails or is rebound consumes the opener refocus
+    // instead of moving focus later.
     await loadList();
     await page.getByRole('searchbox', { name: 'Search clients by name' }).fill('Permission unset client');
     const rowEdit = page.locator(`#client-edit-${unset}`);
@@ -112,29 +115,19 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
 
     await loadDetail(unset);
     const edit = page.locator('#client-edit');
-    await page.route('**/api/client_detail_view*', async route => {
-      sql(`BEGIN;
-        INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-          VALUES ('${state}','${org}','${actor.id}',1,${grantsSql(catalog)},false,'individual');
-        UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
-      await route.continue();
-    }, { times: 1 });
+    await page.route('**/api/client_detail_view*', route => route.abort('failed'), { times: 1 });
     await editTaxId(edit, 'PERM-4');
     await expect(page.getByRole('alert')).toContainText('Could not load this client');
-    await expect(page.getByRole('heading', { name: 'Permission unset client', exact: true })).toHaveCount(0);
     await expect(edit).toHaveCount(0);
-    await page.getByRole('button', { name: 'Retry client', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('Could not load this client');
-    setPolicy(0);
     await page.getByRole('button', { name: 'Retry client', exact: true }).click();
     await expect(edit).toBeVisible();
     assert.notEqual(await activeId(), 'client-edit');
     await editTaxId(edit, 'PERM-5');
     await expect(edit).toBeFocused();
-    console.log('PASS: a policy change during a detail reload is rejected until the original policy returns');
+    console.log('PASS: detail refocus is one-shot across a failed reload; a successful edit returns to Edit client');
 
-    // Policy one: catalog reads without management, even for a legacy Administrator.
-    setPolicy(1);
+    // Catalog reads without management, even for a legacy Administrator role.
+    setGrants(catalog);
     let overview = await success(await loadList());
     assert.deepEqual([overview.canonical_permissions, overview.can_read, overview.can_manage], [true, true, false]);
     assert.ok([unset, zero].every(client => overview.clients.some(row => row.client.id === client)));
@@ -171,6 +164,31 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
     await capture('global-rate-detail');
     console.log('PASS: only global billable-rate read reveals the client default, keeping unset distinct from zero');
 
+    setGrants([...catalog, 'client_write_all']);
+    const writer = await success(await loadDetail(zero));
+    assert.deepEqual([writer.can_manage, writer.can_read_invoices, Object.hasOwn(writer.details, 'billing')], [true, false, false]);
+    await expect(page.getByRole('region', { name: 'Invoices', exact: true })).toHaveCount(0);
+    await page.locator('#client-edit').click();
+    await expect(dialog.getByLabel('Client name', { exact: true })).toBeFocused();
+    await expect(dialog.getByLabel('Default rate', { exact: true })).toHaveCount(0);
+    await capture('client-writer-editor');
+    await dialog.getByLabel('Tax ID (optional)', { exact: true }).fill('PERM-6');
+    // The detail reloads after a save. Let it finish here, or the next
+    // loadDetail can catch this response and lose its body to the navigation.
+    const reloaded = page.waitForResponse(r => r.url().includes('/api/client_detail_view'));
+    await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await success(await reloaded);
+    assert.equal(sql(`SELECT tax_id || ':' || default_rate_cents FROM clients WHERE id='${zero}'`), 'PERM-6:0');
+    console.log('PASS: ClientWriteAll edits a client without seeing or changing its default rate');
+
+    setGrants([...catalog, 'invoice_read_managed', 'invoice_read_all']);
+    const reader = await success(await loadDetail(zero));
+    assert.deepEqual([reader.can_manage, reader.can_read_invoices], [false, true]);
+    await expect(page.getByRole('region', { name: 'Invoices', exact: true })).toBeVisible();
+    await expect(page.getByText('No invoices for this client.', { exact: true })).toBeVisible();
+    console.log('PASS: organization-wide invoice read shows a client\'s invoices without client management');
+
     setGrants([...floor, 'project_read_managed', 'project_read_all', 'invoice_read_managed', 'invoice_read_all',
       'billable_rate_read_managed', 'billable_rate_read_all', 'report_profitability_read']);
     overview = await success(await loadList());
@@ -185,14 +203,7 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
     await expect(page.getByRole('alert')).toContainText('Could not load this client');
     await expect(page.getByRole('heading', { name: 'Permission zero client', exact: true })).toHaveCount(0);
     console.log('PASS: unrelated grants withhold the catalog as denied, not empty, and direct IDs are not found');
-
-    setGrants(catalog);
-    setPolicy(2);
-    assert.equal((await loadList()).status(), 403);
-    await expect(page.getByRole('alert')).toContainText('Could not load clients');
-    await expect(page.getByRole('link', { name: 'Permission zero client', exact: true })).toHaveCount(0);
     assert.deepEqual(errors, []);
-    console.log('PASS: an unknown policy fails closed on the Clients page');
   } catch (error) {
     console.error(error);
     console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot({ timeout: 3000 }).catch(failure => failure.message) });

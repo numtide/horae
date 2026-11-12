@@ -10,8 +10,19 @@ assert.equal(database.pathname, '/horae');
 assert.ok(database.searchParams.get('host')?.startsWith('/tmp/horae-browser.'));
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
 const id = suffix => `01970000-0000-7000-8000-${suffix.toString().padStart(12, '0')}`;
-const foreignOrg = id(401), foreignClient = id(402), visibleProject = id(403), hiddenProject = id(404);
+const foreignOrg = id(401), foreignClient = id(402), visibleProject = id(403), hiddenProject = id(404), state = id(411);
 const name = 'Access scope client';
+const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
+const catalog = [...floor, 'client_read_all'];
+const billing = [...catalog, 'client_write_all', 'billable_rate_read_managed', 'billable_rate_read_all',
+  'billable_rate_write_managed', 'billable_rate_write_all', 'invoice_read_managed', 'invoice_read_all',
+  'project_read_managed', 'project_read_all'];
+const grantsSql = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
+// Clients authorize from stored grants. During the cut other domains (project
+// lists, the project and invoice forms) still read the role, so each scenario
+// fills it from its profile, as the test seed does.
+const setAccess = (actorId, role, grants) => sql(`UPDATE users SET org_role = '${role}' WHERE id = '${actorId}';
+  UPDATE person_permission_states SET grants = ${grantsSql(grants)} WHERE id = '${state}'`);
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
@@ -53,6 +64,10 @@ const name = 'Access scope client';
     assert.equal(actor.org_role, 'admin');
     assert.deepEqual(Object.keys(actor).sort(), ['email', 'id', 'name', 'org_id', 'org_role', 'timezone', 'utc_offset_seconds', 'workspace_timezone']);
     assert.equal(sql(`SELECT active FROM users WHERE id='${actor.id}' AND org_id='${actor.org_id}'`), 't');
+    assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE user_id='${actor.id}'`), '0');
+    sql(`INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
+      VALUES ('${state}','${actor.org_id}','${actor.id}',1,${grantsSql(billing)},false,'individual')`);
+    await visit('/clients');
     await page.getByRole('button', { name: 'New client', exact: true }).first().click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('Client name', { exact: true }).fill(name);
@@ -89,21 +104,18 @@ const name = 'Access scope client';
     }
     const reads = [['get_client_details', { client_id: client }], ['client_overview', null], ['client_detail_view', null], ['list_client_invoices', { client_id: client }]];
     for (const scenario of [
-      { role: 'admin', assignment: 'freelancer', count: 2, billing: true },
-      { role: 'manager', assignment: 'freelancer', count: 2, billing: true },
-      { role: 'member', assignment: 'lead', count: 2, billing: false },
-      { role: 'member', assignment: 'freelancer', count: 1, billing: false },
+      { profile: 'billing manager', role: 'manager', grants: billing, count: 2, billing: true },
+      { profile: 'catalog member', role: 'member', grants: catalog, count: 1, billing: false },
     ]) {
       await settled();
-      sql(`UPDATE users SET org_role = '${scenario.role}' WHERE id = '${actor.id}';
-        UPDATE assignments SET role = '${scenario.assignment}' WHERE id IN ('${id(405)}', '${id(406)}')`);
+      setAccess(actor.id, scenario.role, scenario.grants);
       await visit('/clients');
       await page.getByRole('searchbox', { name: 'Search clients by name' }).fill(name);
       const row = page.getByRole('row').filter({ has: page.getByRole('link', { name, exact: true }) });
       await expect(row.getByLabel(`${scenario.count} active of ${scenario.count} visible projects`)).toBeVisible();
       await expect(page.getByRole('button', { name: 'New client', exact: true })).toHaveCount(scenario.billing ? 1 : 0);
       const overview = await json('client_overview', null);
-      assert.deepEqual([overview.canonical_permissions, overview.can_read, overview.can_manage], [false, true, scenario.billing]);
+      assert.deepEqual([overview.canonical_permissions, overview.can_read, overview.can_manage], [true, true, scenario.billing]);
       assert.deepEqual(overview.requester, { org_id: actor.org_id, user_id: actor.id });
       const summaries = overview.clients;
       assert.equal(summaries.some(item => item.client.id === foreignClient), false);
@@ -119,7 +131,7 @@ const name = 'Access scope client';
       await expect(page.getByRole('button', { name: 'Edit client', exact: true })).toHaveCount(scenario.billing ? 1 : 0);
       await expect(page.getByRole('link', { name: 'New invoice', exact: true })).toHaveCount(scenario.billing ? 1 : 0);
       const view = await json('client_detail_view', null);
-      assert.deepEqual([view.canonical_permissions, view.can_manage, view.details.client.id], [false, scenario.billing, client]);
+      assert.deepEqual([view.canonical_permissions, view.can_manage, view.details.client.id], [true, scenario.billing, client]);
       assert.equal(Object.hasOwn(view.details, 'billing'), scenario.billing);
       const detail = await json('get_client_details', { client_id: client });
       assert.equal(Object.hasOwn(detail, 'billing'), scenario.billing);
@@ -153,14 +165,15 @@ const name = 'Access scope client';
       await expect(page.getByRole('alert')).toContainText('Could not load this client');
       await expect(page.locator('body')).not.toContainText('Access foreign secret');
       assert.equal(sql(`SELECT row_to_json(c) FROM clients c WHERE id = '${client}'`), baseline);
-      console.log(`PASS: clients ${scenario.role}/${scenario.assignment} real-session scope, counts, currencies, billing and negative direct access`);
+      console.log(`PASS: clients ${scenario.profile} real-session scope, counts, currencies, billing and negative direct access`);
     }
     await settled();
     sql(`UPDATE users SET active = false WHERE id = '${actor.id}'`);
     for (const [method, data] of [...reads, ['create_client_profile', createPayload], ['update_client_profile', editPayload]]) {
       assert.ok([401, 403].includes((await post(method, data)).status()), `inactive ${method}`);
     }
-    sql(`UPDATE users SET active = true, org_role = 'admin' WHERE id = '${actor.id}'`);
+    sql(`UPDATE users SET active = true WHERE id = '${actor.id}'`);
+    setAccess(actor.id, 'admin', billing);
     const foreignEdit = { ...editPayload, client_id: foreignClient };
     assert.equal((await post('update_client_profile', foreignEdit)).status(), 404);
     const anonymous = await browser.newContext();
@@ -174,6 +187,7 @@ const name = 'Access scope client';
     console.log('PASS: clients inactive/anonymous access, foreign mutation and direct validation boundaries');
   } finally {
     await browser.close();
-    if (actor) sql(`UPDATE users SET org_role = '${actor.org_role}', active = true WHERE id = '${actor.id}'`);
+    if (actor) sql(`UPDATE users SET org_role = '${actor.org_role}', active = true WHERE id = '${actor.id}';
+      DELETE FROM person_permission_states WHERE id = '${state}'`);
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

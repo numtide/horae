@@ -56,7 +56,7 @@ pub(crate) async fn begin_lock_only_read_async_commit(
 }
 
 /// Set local limits only after the caller selects its transaction isolation.
-pub(super) async fn configure_transaction_limits(
+pub(crate) async fn configure_transaction_limits(
     connection: &mut PgConnection,
 ) -> Result<(), sqlx::Error> {
     configure_limits(connection, Commit::Durable).await

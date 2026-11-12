@@ -37,10 +37,12 @@ pub struct ClientDetails {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClientOverview {
     pub requester: PermissionRequester,
+    /// Always true now that clients read only stored permissions; the page
+    /// still binds to it until the UI drops it.
     pub canonical_permissions: bool,
     /// False means the catalog is withheld, distinct from an empty catalog.
     pub can_read: bool,
-    /// Display affordance for the legacy client writes; every write rechecks.
+    /// Display affordance for client writes; every write rechecks.
     pub can_manage: bool,
     pub clients: Vec<ClientSummary>,
 }
@@ -49,8 +51,10 @@ pub struct ClientOverview {
 pub struct ClientDetailView {
     pub requester: PermissionRequester,
     pub canonical_permissions: bool,
-    /// Display affordance for the legacy client writes; every write rechecks.
+    /// Display affordance for client writes; every write rechecks.
     pub can_manage: bool,
+    /// Display affordance for the client's invoices; the read rechecks.
+    pub can_read_invoices: bool,
     pub details: ClientDetails,
 }
 

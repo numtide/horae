@@ -4,7 +4,6 @@ const { chromium, expect: baseExpect } = require(process.env.PLAYWRIGHT_MODULE |
 const expect = baseExpect.configure({ timeout: 15000 });
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
-const { setAsideSeededStates } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
 const target = new URL(base);
@@ -13,6 +12,10 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.ok(database.searchParams.get('host')?.startsWith('/tmp/horae-browser.'));
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
+// Authority lost during a reload: an unknown grant makes every stored state in
+// the organization unreadable, so client reads fail closed until it is removed.
+const withholdAuthority = org => sql(`UPDATE person_permission_states SET grants = array_append(grants, 'withheld') WHERE org_id = '${org}'`);
+const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants = array_remove(grants, 'withheld') WHERE org_id = '${org}'`);
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
@@ -390,16 +393,13 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await busyReload;
     await expect(archiveDialog('Acme Corp')).toBeVisible();
     const busyOrg = sql(`SELECT org_id FROM clients WHERE id = '${acmeId}'`);
-    // Policy 1 without a permission state makes the reload fail.
-    const restoreBusyStates = setAsideSeededStates(busyOrg);
-    sql(`UPDATE organizations SET permission_policy_version = 1 WHERE id = '${busyOrg}'`);
+    withholdAuthority(busyOrg);
     try {
       releaseBusyReload();
       await expect(page.getByRole('alert').filter({ hasText: 'Could not load clients' })).toBeVisible();
       await expect(archiveDialog('Acme Corp')).toBeHidden();
     } finally {
-      sql(`UPDATE organizations SET permission_policy_version = 0 WHERE id = '${busyOrg}'`);
-      restoreBusyStates();
+      restoreAuthority(busyOrg);
     }
     // Authority returns and the list is retried while the old archive is still
     // outstanding: no Archive opener works, for that client or any other, and
@@ -448,8 +448,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     // Until the reload settles the page cannot confirm authority, so an idle
     // confirmation closes (only an archive already in flight stays open).
     await expect(archiveDialog('Acme Corp')).toBeHidden();
-    const restoreStates = setAsideSeededStates(org);
-    sql(`UPDATE organizations SET permission_policy_version = 1 WHERE id = '${org}'`);
+    withholdAuthority(org);
     try {
       releaseOverview();
       await expect(page.getByRole('alert').filter({ hasText: 'Could not load clients' })).toBeVisible();
@@ -458,8 +457,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
         await expect(page.getByRole('button', { name: control, exact: true })).toHaveCount(0);
       }
     } finally {
-      sql(`UPDATE organizations SET permission_policy_version = 0 WHERE id = '${org}'`);
-      restoreStates();
+      restoreAuthority(org);
     }
     await page.reload();
     assert.equal(clientActive(committedId), 't');

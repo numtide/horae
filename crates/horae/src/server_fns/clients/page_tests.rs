@@ -1,9 +1,8 @@
-//! Canonical Clients page readers under both permission policies.
+//! Clients page readers on stored grants.
 
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
-use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::permissions::catalog::{Permission, PermissionSelection};
+use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -27,6 +26,7 @@ async fn set_grants(pool: &PgPool, user_id: Uuid, permissions: &[Permission]) {
 /// protected field so payload checks can look for leaks.
 async fn policy_one(pool: &PgPool, role: BuiltInProfile, permissions: &[Permission]) -> SeedIds {
     let ids = seed(pool, role).await;
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "UPDATE clients SET address=$2, tax_id=$3, default_rate_cents=12345 WHERE id=$1",
         ids.client_id,
@@ -36,7 +36,6 @@ async fn policy_one(pool: &PgPool, role: BuiltInProfile, permissions: &[Permissi
     .execute(pool)
     .await
     .unwrap();
-    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
          VALUES ($1,$2,$3,1,'{}',false,'individual')",
@@ -94,19 +93,10 @@ async fn read_only_client_grant_shows_catalog_without_writes_rates_or_projects(p
 async fn unrelated_grants_and_legacy_roles_do_not_open_the_catalog(pool: PgPool) {
     for (role, permissions) in [
         (BuiltInProfile::Administrator, vec![]),
-        (
-            BuiltInProfile::ExecutiveManager,
-            vec![Permission::ProjectReadAll],
-        ),
+        (BuiltInProfile::ExecutiveManager, vec![Permission::ProjectReadAll]),
         (BuiltInProfile::Member, vec![Permission::InvoiceReadAll]),
-        (
-            BuiltInProfile::Member,
-            vec![Permission::BillableRateReadAll],
-        ),
-        (
-            BuiltInProfile::Member,
-            vec![Permission::ReportProfitabilityRead],
-        ),
+        (BuiltInProfile::Member, vec![Permission::BillableRateReadAll]),
+        (BuiltInProfile::Member, vec![Permission::ReportProfitabilityRead]),
     ] {
         let ids = policy_one(&pool, role, &permissions).await;
         let page = overview(&pool, &ids).await.unwrap();
@@ -268,21 +258,9 @@ async fn foreign_missing_and_rebound_requests_fail_closed(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unavailable_permission_state_and_inactive_actors_fail_closed(pool: PgPool) {
-    for state in ["unknown_policy", "missing", "malformed", "inactive"] {
-        let ids = policy_one(
-            &pool,
-            BuiltInProfile::Administrator,
-            &[Permission::ClientReadAll],
-        )
-        .await;
+    for state in ["missing", "malformed", "inactive"] {
+        let ids = policy_one(&pool, BuiltInProfile::Administrator, &[Permission::ClientReadAll]).await;
         match state {
-            "unknown_policy" => sqlx::query!(
-                "UPDATE organizations SET permission_policy_version=99 WHERE id=$1",
-                ids.org_id
-            )
-            .execute(&pool)
-            .await
-            .unwrap(),
             "missing" => sqlx::query!(
                 "DELETE FROM person_permission_states WHERE user_id=$1",
                 ids.user_id
@@ -316,12 +294,7 @@ async fn unavailable_permission_state_and_inactive_actors_fail_closed(pool: PgPo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn readers_observe_revocation_after_waiting_for_current_authority(pool: PgPool) {
     for read_detail in [false, true] {
-        let ids = policy_one(
-            &pool,
-            BuiltInProfile::Administrator,
-            &[Permission::ClientReadAll],
-        )
-        .await;
+        let ids = policy_one(&pool, BuiltInProfile::Administrator, &[Permission::ClientReadAll]).await;
         let mut hold = pool.begin().await.unwrap();
         sqlx::query!(
             "UPDATE organizations SET access_revision=access_revision+1 WHERE id=$1",
@@ -368,49 +341,13 @@ async fn readers_observe_revocation_after_waiting_for_current_authority(pool: Pg
     }
 }
 
+/// The shared detail reader follows the same grants as the page: a dead
+/// legacy Manager role without them sees nothing.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn policy_zero_keeps_legacy_catalog_billing_and_manager_affordance(pool: PgPool) {
-    for (role, manager) in [
-        (BuiltInProfile::Administrator, true),
-        (BuiltInProfile::ExecutiveManager, true),
-        (BuiltInProfile::Member, false),
-    ] {
-        let ids = seed(&pool, role).await;
-        sqlx::query!(
-            "UPDATE clients SET default_rate_cents=12345 WHERE id=$1",
-            ids.client_id
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        let page = overview(&pool, &ids).await.unwrap();
-        assert!(!page.canonical_permissions && page.can_read);
-        assert_eq!(page.can_manage, manager, "{role:?}");
-        assert_eq!(
-            page.clients,
-            client_summaries_for_viewer(&pool, ids.org_id, ids.user_id)
-                .await
-                .unwrap()
-        );
-        let view = detail(&pool, &ids).await.unwrap();
-        assert_eq!(view.can_manage, manager);
-        assert_eq!(
-            view.details,
-            client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
-                .await
-                .unwrap()
-        );
-        assert_eq!(view.details.billing.is_some(), manager);
-    }
-}
-
-/// Deferred: the shared legacy readers are not cut over by this page slice.
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn legacy_workflow_readers_are_unchanged_under_policy_one(pool: PgPool) {
+async fn workflow_reader_follows_grants_under_policy_one(pool: PgPool) {
     let ids = policy_one(&pool, BuiltInProfile::ExecutiveManager, &[]).await;
-    let legacy = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
+    let error = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
         .await
-        .unwrap();
-    assert_eq!(legacy.client.tax_id.as_deref(), Some(TAX_ID));
-    assert!(legacy.billing.is_some());
+        .unwrap_err();
+    assert_code(error, NOT_FOUND);
 }

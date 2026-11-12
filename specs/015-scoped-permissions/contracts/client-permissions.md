@@ -68,7 +68,10 @@ permission, for this default; managed-project authority does not suffice.
 This settles the ownership explicitly excluded from FR-034, but is not proven
 Harvest behavior. Omitted/zero/preserved values still need distinct command
 intent. Apply the rule to both standalone and inline creation/editing; ordinary
-field changes must preserve a withheld unchanged rate. Existing project
+field changes must preserve a withheld unchanged rate. Whether a rate exists is
+as protected as its amount: the user decided on 2026-11-11 that someone who
+cannot read the default rate is refused any client currency change (403),
+whether the client has a rate, a zero rate or none. Existing project
 overrides and historical financial values are not rewritten by this policy.
 
 The [client guide](https://support.getharvest.com/hc/en-us/articles/360048181312-Create-and-edit-clients-and-client-contacts)

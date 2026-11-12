@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, c.org_id, c.name, c.currency,\n                  CASE WHEN $3 THEN c.address END AS address,\n                  CASE WHEN $3 THEN c.tax_id END AS tax_id,\n                  c.active, c.created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n           FROM clients c\n           WHERE c.org_id = $2 AND ($1::bool OR c.active)\n             AND ($3 OR EXISTS (\n               SELECT 1 FROM projects p\n               WHERE p.org_id = c.org_id AND p.client_id = c.id\n                 AND ($4 OR ($5 AND EXISTS (\n                   SELECT 1 FROM project_management_assignments m\n                   WHERE m.org_id = p.org_id AND m.project_id = p.id AND m.manager_id = $6\n                 )) OR EXISTS (\n                   SELECT 1 FROM assignments a WHERE a.project_id = p.id AND a.user_id = $6\n                 ))\n             ))\n           ORDER BY c.name ASC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "org_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "currency",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "tax_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "414ee2a23d2dd5f1764a133c1a8199bfc98ee711c63f0f5f2e52dcfd51543865"
+}
