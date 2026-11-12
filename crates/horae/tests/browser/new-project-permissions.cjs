@@ -108,7 +108,8 @@ const name = 'Permission fixture project';
     const originalOtherDraft = sql(`SELECT payload::text FROM project_drafts WHERE id = '${otherDraft}'`);
     const saved = await json('save_project_draft', { ...creation, draft_id: ownDraft, expected_revision: 0 });
     const ownPayload = { ...creation, draft_id: ownDraft, expected_revision: saved.revision };
-    const publicForm = { ...creation.form, admin_notes: '', team: creation.form.team.map(person => ({ ...person, cost_rate: '' })) };
+    // Without notes, costs or billable rates; a blank rate needs a mode that inherits.
+    const publicForm = { ...creation.form, admin_notes: '', project_rate: '', rate_mode: 'person', team: creation.form.team.map(person => ({ ...person, cost_rate: '' })) };
 
     // The reports filters read list_projects; observe its route to replay it.
     await visit('/reports');
@@ -117,13 +118,13 @@ const name = 'Permission fixture project';
     const optionsArgs = { search: { clients: { query: '', offset: 0 }, tasks: { query: '', offset: 0 }, people: { query: '', offset: 0 } } };
     // progress: reads the project; rates: billable rates; edit: edits it;
     // create: creates projects; notes/costs: writes private notes/cost rates;
-    // costRead: reads cost rates.
+    // costRead: reads cost rates; setRates: sets billable rates while creating.
     const cases = [
-      { label: 'administrator', grants: null, visibility: 'managers', progress: true, rates: true, edit: true, create: true, notes: true, costs: true, costRead: true },
-      { label: 'executive manager grants', grants: executive, visibility: 'managers', progress: true, rates: true, edit: true, create: true, notes: true, costs: false, costRead: true },
-      { label: 'project manager grants', grants: projectManager, visibility: 'managers', progress: true, rates: false, edit: false, create: true, notes: false, costs: false, costRead: false },
-      { label: 'visible assigned member', grants: floor, visibility: 'project_members', progress: true, rates: false, edit: false, create: false, notes: false, costs: false, costRead: false },
-      { label: 'private assigned member', grants: floor, visibility: 'managers', progress: false, rates: false, edit: false, create: false, notes: false, costs: false, costRead: false },
+      { label: 'administrator', grants: null, visibility: 'managers', progress: true, rates: true, edit: true, create: true, notes: true, costs: true, costRead: true, setRates: true },
+      { label: 'executive manager grants', grants: executive, visibility: 'managers', progress: true, rates: true, edit: true, create: true, notes: true, costs: false, costRead: true, setRates: false },
+      { label: 'project manager grants', grants: projectManager, visibility: 'managers', progress: true, rates: false, edit: false, create: true, notes: false, costs: false, costRead: false, setRates: false },
+      { label: 'visible assigned member', grants: floor, visibility: 'project_members', progress: true, rates: false, edit: false, create: false, notes: false, costs: false, costRead: false, setRates: false },
+      { label: 'private assigned member', grants: floor, visibility: 'managers', progress: false, rates: false, edit: false, create: false, notes: false, costs: false, costRead: false, setRates: false },
     ];
     for (const scenario of cases) {
       await readsFinished();
@@ -199,9 +200,14 @@ const name = 'Permission fixture project';
         await expect(screen).toBeVisible();
         await expect(screen.getByLabel('Notes', { exact: true })).toHaveCount(scenario.notes ? 1 : 0);
         await expect(screen.getByLabel('Cost rate for Admin User (EUR/h)', { exact: true })).toHaveCount(scenario.costs ? 1 : 0);
+        // The project rate is required in its mode, so the mode goes with the grant.
+        const projectRateMode = screen.getByRole('radio', { name: /^Project hourly rate/ });
+        if (scenario.setRates) await expect(projectRateMode).toBeEnabled();
+        else await expect(projectRateMode).toBeDisabled();
         const options = await json('project_creation_options', optionsArgs);
         assert.equal(options.can_edit_private_notes, scenario.notes, scenario.label);
         assert.equal(options.can_edit_cost_rates, scenario.costs, scenario.label);
+        assert.equal(options.can_edit_billable_rates, scenario.setRates, scenario.label);
         assert.equal(options.clients.some(client => client.id === foreignClient), false);
         if (!scenario.costRead) for (const person of options.people) absent(person, 'cost_rate_cents');
         // A saved draft is pruned to what the creator may still write.
@@ -209,7 +215,12 @@ const name = 'Permission fixture project';
         assert.equal(draft.id, ownDraft);
         assert.equal(draft.form.admin_notes, scenario.notes ? privateNote : '');
         assert.equal(draft.form.team[0].cost_rate, scenario.costs ? '47.25' : '');
-        if (!(scenario.notes && scenario.costs)) assert.equal((await post('save_project_draft', ownPayload)).status(), 403);
+        assert.equal(draft.form.project_rate, scenario.setRates ? '123.45' : '');
+        if (!(scenario.notes && scenario.costs && scenario.setRates)) assert.equal((await post('save_project_draft', ownPayload)).status(), 403);
+        if (!scenario.setRates) {
+          const ratesOnly = { ...ownPayload, form: { ...publicForm, rate_mode: 'project', project_rate: '1' } };
+          assert.equal((await post('save_project_draft', ratesOnly)).status(), 403, scenario.label);
+        }
         const foreignWrite = { ...ownPayload, draft_id: otherDraft, expected_revision: 1, form: publicForm };
         assert.equal((await post('save_project_draft', foreignWrite)).status(), 404);
         assert.equal((await post('finalize_project_draft', foreignWrite)).status(), 404);
@@ -252,11 +263,14 @@ const name = 'Permission fixture project';
     }
     sql(`UPDATE users SET active = true WHERE id = '${actor.id}'`);
     setGrants(executive);
-    const managerForm = { ...publicForm, name: 'Permission executive-created project' };
+    // The creator marks themself as manager, which designates them like the editor would.
+    const managerForm = { ...publicForm, name: 'Permission executive-created project', team: publicForm.team.map(person => ({ ...person, manager: true })) };
     const managerDraft = await json('save_project_draft', { ...ownPayload, form: managerForm });
     const managerProject = await json('finalize_project_draft', { ...ownPayload, expected_revision: managerDraft.revision, form: managerForm });
     assert.notEqual(managerProject, projectId);
     assert.equal(sql(`SELECT count(*) FROM project_member_costs WHERE project_id = '${managerProject}'`), '0');
+    assert.equal(sql(`SELECT rate_cents IS NULL FROM projects WHERE id = '${managerProject}'`), 't');
+    assert.equal(sql(`SELECT string_agg(manager_id::text, ',') FROM project_management_assignments WHERE project_id = '${managerProject}'`), actor.id);
     assert.equal(await json('load_project_draft'), null);
     const anonymous = await browser.newContext();
     try {

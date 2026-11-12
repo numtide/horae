@@ -9,6 +9,7 @@ fn catalog() -> CreationOptions {
         organization_currency: "EUR".into(),
         can_edit_cost_rates: true,
         can_edit_private_notes: true,
+        can_edit_billable_rates: true,
         email_available: false,
         clients: vec![CreationClient {
             id: Uuid::now_v7(),

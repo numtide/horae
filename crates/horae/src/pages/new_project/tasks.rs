@@ -284,7 +284,7 @@ fn TaskRow(
                 if billable_access != ProjectFieldAccess::Withheld && ((form.read().project_type == ProjectType::TimeAndMaterials && form.read().rate_mode == RateMode::Task) || form.read().rate_mode == RateMode::Legacy) {
                     label { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full text-xs text-subtle", r#for: "np-task-rate-{id}", oninput: move |_| on_edit.call(ProtectedProjectField::TaskRate(id)),
                         "rate"
-                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-task-rate-{id}", disabled: read_only || billable_access != ProjectFieldAccess::Editable, label: "Hourly rate for {name} ({currency})", value: task.rate,
+                        Input { class: "w-30 max-w-full font-mono text-right", id: "np-task-rate-{id}", disabled: read_only || billable_access != ProjectFieldAccess::Editable || !options.read().can_edit_billable_rates, label: "Hourly rate for {name} ({currency})", value: task.rate,
                             error_id: (invalid_field == Some(ProjectFormField::TaskRate(id))).then(|| format!("np-task-error-{id}")),
                             placeholder: rate_placeholder,
                             oninput: move |event: FormEvent| { if let Some(task) = form.write().tasks.iter_mut().find(|task| task.id == id) { task.rate = event.value(); } }

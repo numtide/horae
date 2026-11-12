@@ -286,8 +286,13 @@ async fn creation_options_are_scoped_bounded_and_redact_manager_costs(pool: PgPo
     assert_eq!(options.people.len(), 1);
     assert_eq!(options.people[0].cost_rate_cents, Some(6200));
     assert_eq!(options.suggested_code.as_deref(), Some("0010"));
-    assert!(options.can_edit_cost_rates && options.can_edit_private_notes);
-    // Private notes follow `ProjectWriteAll`, cost rates `CostRateWriteAll`.
+    assert!(
+        options.can_edit_cost_rates
+            && options.can_edit_private_notes
+            && options.can_edit_billable_rates
+    );
+    // Private notes follow `ProjectWriteAll`, cost rates `CostRateWriteAll`
+    // and billable rates `BillableRateWriteAll`, which only Administrator has.
     for (profile, notes, costs) in [
         (BuiltInProfile::ExecutiveManager, true, Some(6200)),
         (BuiltInProfile::ProjectManager, false, None),
@@ -303,6 +308,7 @@ async fn creation_options_are_scoped_bounded_and_redact_manager_costs(pool: PgPo
         .await
         .unwrap();
         assert!(!options.can_edit_cost_rates, "{profile:?}");
+        assert!(!options.can_edit_billable_rates, "{profile:?}");
         assert_eq!(options.can_edit_private_notes, notes, "{profile:?}");
         assert_eq!(options.people[0].cost_rate_cents, costs, "{profile:?}");
     }
@@ -421,6 +427,16 @@ async fn finalization_persists_task_access_and_project_only_financial_overrides(
     let project = super::finalize_draft_record(&pool, ids.user_id, ids.org_id, id, 1, &form, false)
         .await
         .unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT manager_id FROM project_management_assignments WHERE project_id = $1",
+            project
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap(),
+        [ids.user_id]
+    );
     let task = sqlx::query!("SELECT p.rate_cents, s.restricted, s.budget_minutes FROM project_tasks p JOIN project_task_settings s USING(project_id,task_id) WHERE p.project_id = $1", project).fetch_one(&pool).await.unwrap();
     assert_eq!(
         (task.rate_cents, task.restricted, task.budget_minutes),
@@ -1057,6 +1073,7 @@ fn draft_validation_preserves_incomplete_input_but_bounds_its_size() {
         read_costs: true,
         write_costs: true,
         write_notes: true,
+        write_billable: true,
     };
     let form = ProjectForm {
         starts_on: "2026-".into(),
@@ -1093,6 +1110,7 @@ fn managers_cannot_store_administrator_notes_or_costs_in_a_draft() {
         read_costs: true,
         write_costs: false,
         write_notes: false,
+        write_billable: false,
     };
     let notes_only = PrivateFields {
         write_notes: true,
@@ -1118,6 +1136,134 @@ fn managers_cannot_store_administrator_notes_or_costs_in_a_draft() {
     assert!(validate_draft_form(&costs, none).is_err());
     assert!(validate_draft_form(&costs, notes_only).is_err());
     assert!(validate_draft_form(&costs, costs_only).is_ok());
+}
+
+#[test]
+fn billable_rates_in_a_draft_need_the_billable_rate_grant() {
+    use crate::models::project_creation::{ProjectTaskInput, TaskAccess, TaskSource};
+    let without = PrivateFields {
+        read_costs: false,
+        write_costs: false,
+        write_notes: false,
+        write_billable: false,
+    };
+    let with = PrivateFields {
+        write_billable: true,
+        ..without
+    };
+    let blank_member = ProjectMemberInput {
+        user_id: Uuid::now_v7(),
+        manager: false,
+        billable_rate: String::new(),
+        cost_rate: String::new(),
+        budget: String::new(),
+    };
+    let blank_task = ProjectTaskInput {
+        id: Uuid::now_v7(),
+        source: TaskSource::New {
+            name: "Design".into(),
+        },
+        billable: true,
+        rate: String::new(),
+        budget: String::new(),
+        access: TaskAccess::Everyone,
+    };
+    let blank = ProjectForm {
+        team: vec![blank_member.clone()],
+        tasks: vec![blank_task.clone()],
+        ..Default::default()
+    };
+    // Blank rates inherit, so creating without the grant stays possible.
+    assert!(validate_draft_form(&blank, without).is_ok());
+    let project_rate = ProjectForm {
+        project_rate: "0".into(),
+        ..blank.clone()
+    };
+    let person_rate = ProjectForm {
+        team: vec![ProjectMemberInput {
+            billable_rate: "80".into(),
+            ..blank_member
+        }],
+        ..blank.clone()
+    };
+    let task_rate = ProjectForm {
+        tasks: vec![ProjectTaskInput {
+            rate: "95".into(),
+            ..blank_task
+        }],
+        ..blank
+    };
+    for form in [project_rate, person_rate, task_rate] {
+        assert!(matches!(
+            validate_draft_form(&form, without),
+            Err(super::ServerFnError::ServerError {
+                code: super::FORBIDDEN,
+                ..
+            })
+        ));
+        assert!(validate_draft_form(&form, with).is_ok());
+        let mut pruned = form.clone();
+        without.prune(&mut pruned);
+        assert!(validate_draft_form(&pruned, without).is_ok());
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn creation_refuses_billable_rates_without_the_grant_and_prunes_old_drafts(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let id = Uuid::now_v7();
+    let form = ProjectForm {
+        client_id: Some(ids.client_id),
+        name: "Rates".into(),
+        team: vec![ProjectMemberInput {
+            user_id: ids.user_id,
+            manager: false,
+            billable_rate: "80".into(),
+            cost_rate: String::new(),
+            budget: String::new(),
+        }],
+        ..Default::default()
+    };
+    super::save_draft_record(&pool, ids.user_id, ids.org_id, id, 0, &form)
+        .await
+        .unwrap();
+    // Executive Manager creates projects but has no `BillableRateWriteAll`.
+    become_profile(&pool, &ids, BuiltInProfile::ExecutiveManager).await;
+    let draft = super::load_draft_record(&pool, ids.user_id, ids.org_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(draft.form.team[0].billable_rate.is_empty());
+    for result in [
+        super::save_draft_record(&pool, ids.user_id, ids.org_id, id, 1, &form)
+            .await
+            .map(|_| ()),
+        super::finalize_draft_record(&pool, ids.user_id, ids.org_id, id, 1, &form, false)
+            .await
+            .map(|_| ()),
+    ] {
+        assert!(matches!(
+            result,
+            Err(super::ServerFnError::ServerError {
+                code: super::FORBIDDEN,
+                ..
+            })
+        ));
+    }
+    let project =
+        super::finalize_draft_record(&pool, ids.user_id, ids.org_id, id, 1, &draft.form, false)
+            .await
+            .unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT rate_cents FROM assignments WHERE project_id = $1",
+            project
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        None
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

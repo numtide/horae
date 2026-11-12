@@ -17,6 +17,16 @@ async fn member(pool: &PgPool, org: Uuid, active: bool) -> Uuid {
          VALUES ($1, $2, $3, 'Teammate', 'member', $4, 7000, 5000)",
         id, org, format!("{id}@test.com"), active,
     ).execute(pool).await.unwrap();
+    // Eligible for the manager designation that `member_input` asks for.
+    let mut connection = pool.acquire().await.unwrap();
+    crate::server_fns::provisioning::provision(
+        &mut connection,
+        org,
+        id,
+        BuiltInProfile::ProjectManager,
+    )
+    .await
+    .unwrap();
     id
 }
 
@@ -129,6 +139,8 @@ async fn finalization_reuses_catalog_and_keeps_lead_overrides_local_on_retry(poo
         ),
         (teammate, ProjectRole::Lead, Some(0), 6225, 450),
     );
+    // The retry returned the first result instead of designating again.
+    assert_eq!(designated(&pool, project).await, [teammate]);
     let tasks = sqlx::query!(
         "SELECT t.id, t.name, p.billable, s.restricted,
                 (SELECT count(*) FROM project_task_members m WHERE m.project_id = p.project_id AND m.task_id = t.id) AS grants
@@ -174,6 +186,116 @@ async fn finalization_reuses_catalog_and_keeps_lead_overrides_local_on_retry(poo
         (before.profile, before.assignment, before.task)
     );
     assert_eq!(creation_counts(&pool, owner.org_id).await, [2, 2, 0, 1]);
+}
+
+async fn designated(pool: &PgPool, project: Uuid) -> Vec<Uuid> {
+    sqlx::query_scalar!(
+        "SELECT manager_id FROM project_management_assignments WHERE project_id = $1 ORDER BY manager_id",
+        project,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn finalization_designates_eligible_managers_like_the_editor(pool: PgPool) {
+    use crate::server_fns::permissions::project_management;
+    // Project Manager creates projects but edits only the ones it manages.
+    let creator = seed(&pool, BuiltInProfile::ProjectManager).await;
+    let teammate = member(&pool, creator.org_id, true).await;
+    let plain = member(&pool, creator.org_id, true).await;
+    crate::server_fns::test_seed::clear_state(&pool, plain).await;
+    let mut connection = pool.acquire().await.unwrap();
+    crate::server_fns::provisioning::provision(
+        &mut connection,
+        creator.org_id,
+        plain,
+        BuiltInProfile::Member,
+    )
+    .await
+    .unwrap();
+    drop(connection);
+    let person = |user_id, manager| ProjectMemberInput {
+        user_id,
+        manager,
+        billable_rate: String::new(),
+        cost_rate: String::new(),
+        budget: String::new(),
+    };
+    let mut form = ProjectForm {
+        client_id: Some(creator.client_id),
+        name: "Managed from the start".into(),
+        team: vec![person(creator.user_id, true), person(plain, true)],
+        ..Default::default()
+    };
+    let draft_id = Uuid::now_v7();
+    save_draft_record(&pool, creator.user_id, creator.org_id, draft_id, 0, &form)
+        .await
+        .unwrap();
+    let counts = creation_counts(&pool, creator.org_id).await;
+    let revision = || async {
+        sqlx::query_scalar!(
+            "SELECT access_revision FROM organizations WHERE id = $1",
+            creator.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+    let before = revision().await;
+    // A Member cannot manage projects, so the whole creation is refused.
+    assert!(matches!(
+        finalize_draft_record(
+            &pool,
+            creator.user_id,
+            creator.org_id,
+            draft_id,
+            1,
+            &form,
+            false
+        )
+        .await,
+        Err(ServerFnError::ServerError {
+            code: crate::server_fns::BAD_REQUEST,
+            ..
+        })
+    ));
+    assert_eq!(creation_counts(&pool, creator.org_id).await, counts);
+    assert_eq!(revision().await, before);
+
+    form.team = vec![
+        person(creator.user_id, true),
+        person(teammate, true),
+        person(plain, false),
+    ];
+    let project = finalize_draft_record(
+        &pool,
+        creator.user_id,
+        creator.org_id,
+        draft_id,
+        1,
+        &form,
+        false,
+    )
+    .await
+    .unwrap();
+    let mut expected = vec![creator.user_id, teammate];
+    expected.sort_unstable();
+    assert_eq!(designated(&pool, project).await, expected);
+    assert_eq!(revision().await, before + 1);
+    // The designation is what lets the creator open the project editor.
+    let managers = project_management::read(&pool, creator.org_id, creator.user_id, project)
+        .await
+        .unwrap();
+    assert_eq!(
+        managers
+            .managers
+            .iter()
+            .map(|manager| manager.id)
+            .collect::<Vec<_>>(),
+        expected
+    );
 }
 
 async fn creation_counts(pool: &PgPool, org: Uuid) -> Vec<i64> {

@@ -142,7 +142,7 @@ async fn configured_fixture(
         }],
         team: vec![ProjectMemberInput {
             user_id: owner.user_id,
-            manager: true,
+            manager: false,
             billable_rate: String::new(),
             cost_rate: "10.00".into(),
             budget: String::new(),
@@ -164,14 +164,24 @@ async fn configured_fixture(
     )
     .await
     .unwrap();
+    // The editor tests start from a lead role without a designation, as
+    // projects created before creation designated managers have, and
+    // designate explicitly where they need one.
+    sqlx::query!(
+        "UPDATE assignments SET role = 'lead' WHERE project_id = $1",
+        id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
     let project = load_editable_project(pool, owner.user_id, owner.org_id, id)
         .await
         .unwrap();
     (owner, project)
 }
 
-/// Designates `manager` on `project`. Creation stores the form's manager
-/// toggle only as an assignment role, which the editor no longer reads.
+/// Designates `manager` on `project`, as the editor or creation would. The
+/// assignment's `lead` role alone is not a designation.
 pub(super) async fn designate(
     pool: &PgPool,
     ids: &crate::server_fns::test_seed::SeedIds,
@@ -889,10 +899,22 @@ async fn editor_recovers_full_configuration_and_redacts_private_values_after_gra
     )
     .await
     .unwrap();
-    designate(&pool, &owner, id, owner.user_id).await;
+    // The creation's manager toggle designated the owner.
     let project = load_editable_project(&pool, owner.user_id, owner.org_id, id)
         .await
         .unwrap();
+    assert_eq!(
+        project
+            .access
+            .as_ref()
+            .unwrap()
+            .managers
+            .managers
+            .iter()
+            .map(|manager| manager.id)
+            .collect::<Vec<_>>(),
+        [owner.user_id]
+    );
     assert!(project.configured && project.active);
     assert_eq!(project.form.name, form.name);
     assert_eq!(project.form.code, form.code);

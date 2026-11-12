@@ -119,7 +119,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         team: vec![ProjectMemberInput {
             user_id: member,
             manager: false,
-            billable_rate: "100.00".to_owned(),
+            // An Executive Manager has no `BillableRateWriteAll`.
+            billable_rate: String::new(),
             cost_rate: String::new(),
             budget: String::new(),
         }],

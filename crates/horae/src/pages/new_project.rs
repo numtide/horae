@@ -196,6 +196,7 @@ fn ProjectEditLoader(id: Uuid, exit: Route) -> Element {
         if let Some(access) = &project.access {
             options.can_edit_cost_rates = access.costs == ProjectFieldAccess::Editable;
             options.can_edit_private_notes = access.private_notes == ProjectFieldAccess::Editable;
+            options.can_edit_billable_rates = access.billable == ProjectFieldAccess::Editable;
         }
         options
             .clients

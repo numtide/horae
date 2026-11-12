@@ -423,6 +423,11 @@ fn validate_draft_form(
             "Saving cost rates requires permission to edit cost rates",
         ));
     }
+    if !private.write_billable && PrivateFields::has_billable_rates(form) {
+        return Err(forbidden(
+            "Setting billable rates requires permission to edit billable rates",
+        ));
+    }
     form_payload(form)
 }
 
@@ -465,14 +470,17 @@ fn form_payload(form: &ProjectForm) -> Result<serde_json::Value, ServerFnError> 
     Ok(payload)
 }
 
-/// What a creator may put in a draft's private fields: cost rates with
-/// `CostRateWriteAll`, private notes with `ProjectWriteAll`.
+/// What a creator may put in a draft's protected fields: cost rates with
+/// `CostRateWriteAll`, private notes with `ProjectWriteAll`, and the project,
+/// person and task billable rates with `BillableRateWriteAll`. A blank rate
+/// inherits, so creating without a rate grant is still possible.
 #[cfg(feature = "server")]
 #[derive(Clone, Copy)]
 struct PrivateFields {
     read_costs: bool,
     write_costs: bool,
     write_notes: bool,
+    write_billable: bool,
 }
 
 #[cfg(feature = "server")]
@@ -483,7 +491,17 @@ impl PrivateFields {
             read_costs: actor.has(Permission::CostRateReadAll),
             write_costs: actor.has(Permission::CostRateWriteAll),
             write_notes: actor.has(Permission::ProjectWriteAll),
+            write_billable: actor.has(Permission::BillableRateWriteAll),
         }
+    }
+
+    fn has_billable_rates(form: &ProjectForm) -> bool {
+        !form.project_rate.is_empty()
+            || form
+                .team
+                .iter()
+                .any(|member| !member.billable_rate.is_empty())
+            || form.tasks.iter().any(|task| !task.rate.is_empty())
     }
 
     /// Clears what the creator may no longer write, as when a saved draft is
@@ -495,6 +513,15 @@ impl PrivateFields {
         if !self.write_costs {
             for member in &mut form.team {
                 member.cost_rate.clear();
+            }
+        }
+        if !self.write_billable {
+            form.project_rate.clear();
+            for member in &mut form.team {
+                member.billable_rate.clear();
+            }
+            for task in &mut form.tasks {
+                task.rate.clear();
             }
         }
     }

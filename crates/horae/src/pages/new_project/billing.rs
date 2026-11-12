@@ -148,6 +148,8 @@ pub(super) fn Billing(
                                 div { class: "np-option flex flex-wrap items-center gap-3 p-3 bg-base border border-input rounded-btn",
                                     label { class: "flex flex-1 basis-form-select min-w-0 items-center gap-3 cursor-pointer",
                                         input { class: "choice-box radio size-4 m-0", r#type: "radio", name: "np-rate-mode", checked: form.read().rate_mode == mode,
+                                            // The project rate is required in this mode.
+                                            disabled: mode == RateMode::Project && !options.read().can_edit_billable_rates,
                                             id: if mode == RateMode::Person { "np-rate-mode" },
                                             aria_invalid: if mode == RateMode::Person { error_id(ProjectFormField::RateMode).map(|_| "true") },
                                             aria_describedby: if mode == RateMode::Person { error_id(ProjectFormField::RateMode) },
@@ -157,7 +159,7 @@ pub(super) fn Billing(
                                     if mode == RateMode::Project && form.read().rate_mode == mode {
                                         div { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full",
                                             span { class: "font-mono text-sm text-subtle", "{currency_label}" }
-                                            Input { id: "np-project-rate", error_id: error_id(ProjectFormField::ProjectRate), label: "Hourly rate ({currency_label})", class: "w-30 max-w-full font-mono text-right", value: form.read().project_rate.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::ProjectRate); form.write().project_rate = event.value(); } }
+                                            Input { id: "np-project-rate", error_id: error_id(ProjectFormField::ProjectRate), label: "Hourly rate ({currency_label})", disabled: !options.read().can_edit_billable_rates, class: "w-30 max-w-full font-mono text-right", value: form.read().project_rate.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::ProjectRate); form.write().project_rate = event.value(); } }
                                             span { class: "text-xs text-subtle whitespace-nowrap", "/ h" }
                                         }
                                     }

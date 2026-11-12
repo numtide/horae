@@ -363,6 +363,8 @@ pub struct CreationOptions {
     pub can_edit_cost_rates: bool,
     /// The project's private notes.
     pub can_edit_private_notes: bool,
+    /// The project, person and task billable rates.
+    pub can_edit_billable_rates: bool,
     pub email_available: bool,
     pub clients: Vec<CreationClient>,
     pub tasks: Vec<CreationTask>,

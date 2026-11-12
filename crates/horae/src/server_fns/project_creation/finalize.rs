@@ -139,6 +139,23 @@ pub(super) async fn finalize_draft_record(
         .map_err(storage_error)?;
     }
     save_members(&mut tx, org_id, project_id, form, currency == org_currency).await?;
+    let manager_ids: Vec<Uuid> = form
+        .team
+        .iter()
+        .filter(|member| member.manager)
+        .map(|member| member.user_id)
+        .collect();
+    if !manager_ids.is_empty() {
+        crate::server_fns::permissions::project_management::designate_created(
+            &mut tx,
+            org_id,
+            actor_id,
+            project_id,
+            manager_ids,
+        )
+        .await
+        .map_err(crate::server_fns::project_managers::map_error)?;
+    }
     save_tasks(&mut tx, org_id, project_id, form, currency).await?;
 
     let event = crate::plugin::AppEvent::ProjectCreated {
