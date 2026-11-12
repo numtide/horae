@@ -7,7 +7,6 @@ reason = "Predates the check; mostly house Input, Checkbox and MenuItem props. H
 "crates/horae/src/components/no_tracking.rs" = 1
 "crates/horae/src/components/sidebar.rs" = 3
 "crates/horae/src/components/timer_widget.rs" = 1
-"crates/horae/src/pages/admin.rs" = 4
 "crates/horae/src/pages/admin/permission_editor.rs" = 10
 "crates/horae/src/pages/admin/permission_editor/recovery.rs" = 1
 "crates/horae/src/pages/admin/permission_editor/templates.rs" = 2

@@ -20,6 +20,45 @@ async fn administrator(pool: &PgPool, org_id: Uuid) -> Uuid {
     id
 }
 
+/// Revokes `user`'s legacy Manager role the way the removed role editor did:
+/// the organization row first, then the acting administrator, in one
+/// transaction. Invoices still authorize from the role.
+async fn revoke_legacy_manager(
+    pool: &PgPool,
+    org_id: Uuid,
+    administrator: Uuid,
+    user: Uuid,
+) -> Result<(), ServerFnError> {
+    let mut tx = pool.begin().await.map_err(server_err)?;
+    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+        .execute(&mut *tx)
+        .await
+        .map_err(server_err)?;
+    sqlx::query!(
+        "SELECT id FROM organizations WHERE id = $1 FOR UPDATE",
+        org_id
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(server_err)?;
+    sqlx::query!(
+        "SELECT id FROM users WHERE id = $1 FOR SHARE",
+        administrator
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(server_err)?;
+    sqlx::query!(
+        "UPDATE users SET org_role = 'member' WHERE id = $1 AND org_id = $2",
+        user,
+        org_id
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(server_err)?;
+    tx.commit().await.map_err(server_err)
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_generation_and_user_revocation_commit_in_gate_order(pool: PgPool) {
@@ -84,15 +123,9 @@ async fn invoice_generation_and_user_revocation_commit_in_gate_order(pool: PgPoo
                     .await
                     .map(|(invoice, _)| Some(invoice.invoice.id))
                 } else {
-                    crate::server_fns::users::change_user_role(
-                        &db,
-                        ids.org_id,
-                        administrator,
-                        ids.user_id,
-                        OrgRole::Member,
-                    )
-                    .await
-                    .map(|_| None)
+                    revoke_legacy_manager(&db, ids.org_id, administrator, ids.user_id)
+                        .await
+                        .map(|_| None)
                 };
                 (invoice, result)
             });
@@ -223,15 +256,7 @@ async fn invoice_edit_and_transition_observe_user_revocation_order(pool: PgPool)
                 let request = request.clone();
                 operations.spawn(async move {
                     let result = if !write_invoice {
-                        crate::server_fns::users::change_user_role(
-                            &db,
-                            ids.org_id,
-                            administrator,
-                            ids.user_id,
-                            OrgRole::Member,
-                        )
-                        .await
-                        .map(|_| ())
+                        revoke_legacy_manager(&db, ids.org_id, administrator, ids.user_id).await
                     } else if edit_invoice {
                         editing::save(&db, ids.org_id, ids.user_id, invoice_id, &request)
                             .await
@@ -516,14 +541,7 @@ async fn cancelled_invoice_writers_roll_back_and_release_single_connection(pool:
         let db = pool.clone();
         let mut revocation = tokio::task::JoinSet::new();
         revocation.spawn(async move {
-            crate::server_fns::users::change_user_role(
-                &db,
-                ids.org_id,
-                administrator,
-                ids.user_id,
-                OrgRole::Member,
-            )
-            .await
+            revoke_legacy_manager(&db, ids.org_id, administrator, ids.user_id).await
         });
         wait_for_blocked(&pool, writer_pid).await;
         writers.abort_all();

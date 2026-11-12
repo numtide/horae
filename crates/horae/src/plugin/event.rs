@@ -177,6 +177,8 @@ app_events! {
         org_id: Uuid,
         user: UserPayload,
     },
+    // Nothing emits this since roles gave way to permission profiles; it stays
+    // so manifests that subscribe to the hook still load.
     #[serde(rename = "user_role_changed")]
     UserRoleChanged {
         occurred_at: DateTime<Utc>,

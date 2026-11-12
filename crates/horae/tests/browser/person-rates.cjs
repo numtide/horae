@@ -35,16 +35,18 @@ let restoreSeededStates = () => {};
   const aborted = message => name === 'firefox' && message === 'NetworkError when attempting to fetch resource.';
   page.on('pageerror', error => { if (!aborted(error.message)) errors.push(error.message); });
   try {
-    sql(`INSERT INTO users (id,org_id,email,name,org_role,billable_rate_cents)
-      VALUES ('${person}','${actor.org_id}','rates-person@example.com','Rates Person','member',9000)`);
+    // The People page reads its own access only once the organization is on
+    // the stored permissions; the seeded Administrator state stays.
+    sql(`BEGIN; INSERT INTO users (id,org_id,email,name,billable_rate_cents)
+      VALUES ('${person}','${actor.org_id}','rates-person@example.com','Rates Person',9000);
+      UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'; COMMIT;`);
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
-    restoreSeededStates = setAsideSeededStates(actor.org_id);
 
-    // Without detailed permissions an administrator edits both rates.
+    // The Administrator profile edits both rates.
     await page.goto(`${base}/admin/users`);
-    const open = page.getByRole('button', { name: 'Edit rates for Rates Person', exact: true });
+    const open = page.getByRole('button', { name: 'Rates for Rates Person', exact: true });
     const dialog = page.getByRole('dialog', { name: 'Rates for Rates Person', exact: true });
     const billable = dialog.getByLabel('Default billable rate (EUR)', { exact: true });
     const cost = dialog.getByLabel('Cost rate (EUR)', { exact: true });
@@ -79,13 +81,14 @@ let restoreSeededStates = () => {};
     await page.keyboard.press('Escape');
     await expect(dialog).not.toBeVisible();
 
-    // With detailed permissions, a read-only billable grant shows the billable
-    // rate as text and withholds the cost rate entirely.
+    // A read-only billable grant shows the billable rate as text and
+    // withholds the cost rate entirely.
+    restoreSeededStates = setAsideSeededStates(actor.org_id);
     sql(`BEGIN;
       UPDATE users SET billable_rate_cents=12000 WHERE id='${person}';
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ('${state}','${actor.org_id}','${actor.id}',1,${array([...floor, 'people_read_managed', 'people_read_all','billable_rate_read_managed', 'billable_rate_read_all'])},false,'individual');
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'; COMMIT;`);
+      COMMIT;`);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${base}/admin/users`);
     await page.getByRole('button', { name: 'Rates for Rates Person', exact: true }).click();

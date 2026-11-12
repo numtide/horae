@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT email, active FROM users WHERE org_id = $1 AND org_role = 'member'",
+  "query": "SELECT u.email, u.active FROM users u\n           JOIN person_permission_states p ON p.user_id = u.id\n          WHERE u.org_id = $1 AND p.built_in_profile = 'member'",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       false
     ]
   },
-  "hash": "adfea4c66cdea4ab2a4bd7ce78698d3e0c7b1efc2ca436f62d07a685ed4d72e0"
+  "hash": "67dbfa0fdd33b991be51d4f6f835a90b5eb29efd71d29666bb206846e7298689"
 }

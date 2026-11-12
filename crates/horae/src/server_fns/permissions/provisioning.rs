@@ -69,46 +69,6 @@ pub(crate) async fn provision(
     Ok(())
 }
 
-/// Whether the person holds the Administrator state and is active.
-pub(crate) async fn is_active_administrator(
-    connection: &mut PgConnection,
-    org_id: Uuid,
-    user_id: Uuid,
-) -> Result<bool, sqlx::Error> {
-    let found = sqlx::query_scalar!(
-        r#"SELECT EXISTS (
-             SELECT 1 FROM person_permission_states p
-             JOIN users u ON u.id = p.user_id AND u.org_id = p.org_id
-             WHERE p.org_id = $1 AND p.user_id = $2 AND p.is_administrator AND u.active
-           ) AS "found!""#,
-        org_id,
-        user_id,
-    )
-    .fetch_one(connection)
-    .await?;
-    Ok(found)
-}
-
-/// Whether an active Administrator other than `exclude` remains.
-pub(crate) async fn other_active_administrator(
-    connection: &mut PgConnection,
-    org_id: Uuid,
-    exclude: Uuid,
-) -> Result<bool, sqlx::Error> {
-    let found = sqlx::query_scalar!(
-        r#"SELECT EXISTS (
-             SELECT 1 FROM person_permission_states p
-             JOIN users u ON u.id = p.user_id AND u.org_id = p.org_id
-             WHERE p.org_id = $1 AND p.user_id <> $2 AND p.is_administrator AND u.active
-           ) AS "found!""#,
-        org_id,
-        exclude,
-    )
-    .fetch_one(connection)
-    .await?;
-    Ok(found)
-}
-
 #[cfg(test)]
 #[path = "tests/provisioning.rs"]
 mod tests;

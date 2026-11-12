@@ -32,7 +32,7 @@ async fn fixture(pool: &PgPool, who: Who) -> SeedIds {
     let ids = match who {
         Who::Profile(profile) => seed_profile(pool, profile).await,
         Who::Grants(grants) => {
-            let ids = seed(pool, BuiltInProfile::Administrator).await;
+            let ids = seed(pool, BuiltInProfile::Member).await;
             policy_one(pool, &ids, grants, false).await;
             ids
         }
