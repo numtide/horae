@@ -3,10 +3,9 @@
 //! open and save it; this page only hides the way in.
 
 use dioxus::prelude::*;
-use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
+use horae_core::types::OrgRole;
 
 use crate::components::form::{FormGroup, Input, Textarea};
-use crate::models::own_permissions::OwnPermissions;
 use crate::models::{OrgBranding, branding_value_error};
 use crate::route::Route;
 use crate::server_fns;
@@ -15,11 +14,10 @@ const FORBIDDEN: u16 = 403;
 /// Addresses and notes keep the line breaks they were typed with, as on the PDF.
 const PRE_LINE: &str = "white-space: pre-line;";
 
-/// Whether to offer the settings action: the grant `update_org_branding`
-/// requires, from a catalog this build understands.
-pub(crate) fn edits_invoice_settings(own: &OwnPermissions) -> bool {
-    own.catalog_version == PERMISSION_CATALOG_VERSION
-        && own.grants.contains(&Permission::InvoiceWriteAll)
+/// Whether to offer the settings action: the same managers and administrators
+/// `update_org_branding` admits, under either permission policy.
+pub(crate) fn edits_invoice_settings(role: Option<OrgRole>) -> bool {
+    role.is_some_and(OrgRole::is_manager_or_above)
 }
 
 /// The server's own message, without Dioxus's "error running server function" wrapper.
@@ -184,7 +182,7 @@ pub fn InvoiceSettings() -> Element {
                 Some(Ok(initial)) => rsx! { SettingsForm { initial: initial.clone() } },
                 Some(Err(ServerFnError::ServerError { code: FORBIDDEN, .. })) => rsx! {
                     div { class: "alert alert-danger", role: "alert",
-                        "Invoice settings are available to people who manage all invoices. Ask an Administrator if you need access."
+                        "Invoice settings are available to managers and administrators. Ask an Administrator if you need access."
                     }
                 },
                 Some(Err(error)) => rsx! { div { class: "alert alert-danger", role: "alert", {message_of(error.clone())} } },
@@ -386,30 +384,16 @@ mod tests {
     }
 
     #[test]
-    fn only_invoice_writers_for_everyone_are_offered_the_settings() {
-        let own = |grants: &[Permission], is_administrator, catalog_version| OwnPermissions {
-            catalog_version,
-            grants: grants.to_vec(),
-            is_administrator,
-            access_revision: 1,
-            person_revision: 1,
-            managed_person_ids: Vec::new(),
-            managed_project_ids: Vec::new(),
-        };
-        let current = PERMISSION_CATALOG_VERSION;
+    fn only_managers_and_administrators_are_offered_the_settings() {
         assert_eq!(
             [
-                own(&[Permission::InvoiceWriteAll], false, current),
-                own(&[Permission::InvoiceReadAll], false, current),
-                own(&[Permission::InvoiceWriteManaged], false, current),
-                // Being an administrator is not the grant.
-                own(&[Permission::CompanyWrite], true, current),
-                own(&[Permission::InvoiceWriteAll], false, current + 1),
+                None,
+                Some(OrgRole::Member),
+                Some(OrgRole::Manager),
+                Some(OrgRole::Admin)
             ]
-            .iter()
-            .map(edits_invoice_settings)
-            .collect::<Vec<_>>(),
-            [true, false, false, false, false]
+            .map(edits_invoice_settings),
+            [false, false, true, true]
         );
     }
 

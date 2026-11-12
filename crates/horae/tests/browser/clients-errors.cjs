@@ -131,12 +131,22 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await page.locator('.np-page').getByRole('button', { name: 'Discard draft', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Discard draft', exact: true }).click();
     await expect(page).toHaveURL(`${base}/projects`);
-    await page.route('**/api/list_clients*', route => route.abort('failed'));
-    await page.goto(`${base}/invoices/new/client/${client}`);
-    await expect(page.getByRole('alert')).toBeVisible();
-    await page.unroute('**/api/list_clients*');
-    await page.getByRole('button', { name: 'Retry clients', exact: true }).click();
-    await expect(page.locator('#inv-client')).toHaveValue(client);
+    // The invoice pages read the session's own permissions, which an
+    // organization still on the legacy policy does not report. The page loads
+    // afresh below; the observed policy comes back afterwards.
+    const org = sql(`SELECT org_id FROM clients WHERE id = '${client}'`);
+    const policy = sql(`SELECT permission_policy_version FROM organizations WHERE id = '${org}'`);
+    sql(`UPDATE organizations SET permission_policy_version = 1 WHERE id = '${org}'`);
+    try {
+      await page.route('**/api/list_clients*', route => route.abort('failed'));
+      await page.goto(`${base}/invoices/new/client/${client}`);
+      await expect(page.getByRole('alert')).toBeVisible();
+      await page.unroute('**/api/list_clients*');
+      await page.getByRole('button', { name: 'Retry clients', exact: true }).click();
+      await expect(page.locator('#inv-client')).toHaveValue(client);
+    } finally {
+      sql(`UPDATE organizations SET permission_policy_version = ${policy} WHERE id = '${org}'`);
+    }
     console.log('PASS: contextual project/invoice client loading retries preserve the requested client');
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }

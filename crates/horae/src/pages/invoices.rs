@@ -78,10 +78,10 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
     let busy = use_signal(|| false);
     let navigator = use_navigator();
     let session = crate::components::session::use_session();
-    let configures = matches!(
-        &*session.permissions.read(),
-        Some(Ok(Some(own))) if settings::edits_invoice_settings(own)
-    );
+    let configures = settings::edits_invoice_settings(match &*session.me.read() {
+        Some(Ok(me)) => Some(me.org_role),
+        _ => None,
+    });
     let manages = manages_invoices(session);
 
     rsx! {
