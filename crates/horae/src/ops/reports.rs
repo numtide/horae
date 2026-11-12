@@ -3,7 +3,10 @@
 //!
 //! Report access and rate access are separate grants (contract C02): `TimeRead*`
 //! decides which entries a report covers, `BillableRateRead*` whether their
-//! billable amounts are shown, and only `CostRateReadAll` shows costs.
+//! billable amounts are shown, and only `CostRateReadAll` shows costs. That
+//! includes the per-project cost overrides (`project_member_costs`): the
+//! catalog has no separate grant for them. No report shows a margin yet; one
+//! that sets costs against amounts also needs `ReportProfitabilityRead`.
 
 use chrono::NaiveDate;
 use horae_core::permissions::catalog::Permission;
