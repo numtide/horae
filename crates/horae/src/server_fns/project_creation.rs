@@ -112,7 +112,7 @@ pub async fn load_project_editor(project_id: uuid::Uuid) -> Result<EditableProje
 pub async fn save_project_editor(request: ProjectEditRequest) -> Result<uuid::Uuid, ServerFnError> {
     let actor = require_user().await?;
     let state = crate::state::global_state().await;
-    let (project, changed) = editing::save_editable_project(
+    let saved = editing::save_project_edit(
         &state.db,
         actor.id,
         actor.org_id,
@@ -120,16 +120,19 @@ pub async fn save_project_editor(request: ProjectEditRequest) -> Result<uuid::Uu
         state.mail.is_some(),
     )
     .await?;
-    if changed {
+    if saved.changed {
         state
             .plugins
             .dispatch(crate::plugin::AppEvent::ProjectUpdated {
                 occurred_at: chrono::Utc::now(),
                 org_id: actor.org_id,
-                project: project_payload(&project),
+                project: project_payload(&saved.project),
             });
     }
-    Ok(project.id)
+    for event in saved.team_events {
+        state.plugins.dispatch(event);
+    }
+    Ok(saved.project.id)
 }
 
 /// Resolve only the selected active task/person identities, independently of pagination.
@@ -243,6 +246,19 @@ fn storage_error(error: sqlx::Error) -> ServerFnError {
     }
     tracing::error!(code = ?error.as_database_error().and_then(|error| error.code()), "Project creation database operation failed");
     server_err("Could not save or load the project. Please retry.")
+}
+
+/// A manager designation failure inside a project write: a lost race is
+/// retryable like any other write of the project, not an outage.
+#[cfg(feature = "server")]
+fn managers_error(
+    error: crate::server_fns::permissions::project_management::ProjectManagersError,
+) -> ServerFnError {
+    use crate::server_fns::permissions::project_management::ProjectManagersError;
+    match error {
+        ProjectManagersError::Database(error) => storage_error(error),
+        error => crate::server_fns::project_managers::map_error(error),
+    }
 }
 
 /// The project form's client dialog (`clients::create_project_client`) as the

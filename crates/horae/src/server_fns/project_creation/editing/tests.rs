@@ -1336,3 +1336,81 @@ async fn added_task_links_inherit_default_rates_only_for_task_billing(pool: PgPo
         );
     }
 }
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn team_changes_report_assignment_events_for_plugins(pool: PgPool) {
+    use crate::plugin::AppEvent;
+    let (owner, original) = configured_fixture(&pool).await;
+    let added = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO users (id,org_id,email,name) VALUES ($1,$2,$3,'Added teammate')",
+        added,
+        owner.org_id,
+        format!("{added}@test.com"),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut request = edit_request(original.clone());
+    request.form.team.push(ProjectMemberInput {
+        user_id: added,
+        manager: false,
+        billable_rate: String::new(),
+        cost_rate: String::new(),
+        budget: String::new(),
+    });
+    let saved = save_project_edit(&pool, owner.user_id, owner.org_id, &request, false)
+        .await
+        .unwrap();
+    let assignment = sqlx::query_scalar!(
+        "SELECT id FROM assignments WHERE project_id = $1 AND user_id = $2",
+        original.id,
+        added
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    match saved.team_events.as_slice() {
+        [
+            AppEvent::UserAssignedToProject {
+                org_id,
+                assignment: payload,
+                ..
+            },
+        ] => assert_eq!(
+            (*org_id, payload.id, payload.project_id, payload.user_id),
+            (owner.org_id, assignment, original.id, added)
+        ),
+        events => panic!("{events:?}"),
+    }
+    // Saving a team that kept its people reports nobody.
+    let project = load_editable_project(&pool, owner.user_id, owner.org_id, original.id)
+        .await
+        .unwrap();
+    let mut request = edit_request(project);
+    request.form.name = "Renamed with the same team".into();
+    let saved = save_project_edit(&pool, owner.user_id, owner.org_id, &request, false)
+        .await
+        .unwrap();
+    assert!(saved.changed && saved.team_events.is_empty());
+    let project = load_editable_project(&pool, owner.user_id, owner.org_id, original.id)
+        .await
+        .unwrap();
+    let mut request = edit_request(project);
+    request.form.team.retain(|member| member.user_id != added);
+    let saved = save_project_edit(&pool, owner.user_id, owner.org_id, &request, false)
+        .await
+        .unwrap();
+    match saved.team_events.as_slice() {
+        [
+            AppEvent::AssignmentRemoved {
+                assignment: payload,
+                ..
+            },
+        ] => assert_eq!(
+            (payload.id, payload.project_id, payload.user_id),
+            (assignment, original.id, added)
+        ),
+        events => panic!("{events:?}"),
+    }
+}

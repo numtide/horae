@@ -174,7 +174,7 @@ pub(super) async fn finalize_draft_record(
             manager_ids,
         )
         .await
-        .map_err(crate::server_fns::project_managers::map_error)?;
+        .map_err(managers_error)?;
     }
     save_tasks(&mut tx, org_id, project_id, form, currency).await?;
 
