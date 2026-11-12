@@ -14,7 +14,8 @@ pub(super) async fn load_selected_catalog(
         return Err(err(BAD_REQUEST, "Select at most 500 tasks and 500 people"));
     }
     let mut tx = pool.begin().await.map_err(storage_error)?;
-    let role = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
+    let actor = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
+    let private = PrivateFields::of(&actor);
     let tasks = sqlx::query_as!(
         CreationTask,
         "SELECT id, name, billable_default as billable, default_rate_cents, default_rate_currency FROM tasks
@@ -28,7 +29,7 @@ pub(super) async fn load_selected_catalog(
     let people = sqlx::query_as!(CreationPerson,
         "SELECT id, name, billable_rate_cents, CASE WHEN $3 THEN cost_rate_cents END as cost_rate_cents FROM users
          WHERE org_id = $1 AND active AND id = ANY($2) ORDER BY lower(name), id",
-        org_id, user_ids, role == OrgRole::Admin,
+        org_id, user_ids, private.read_costs,
     ).fetch_all(&mut *tx).await.map_err(storage_error)?;
     tx.commit().await.map_err(storage_error)?;
     Ok(CreationSelection { tasks, people })
@@ -69,7 +70,8 @@ pub(super) async fn load_creation_options(
         }
     }
     let mut tx = pool.begin().await.map_err(storage_error)?;
-    let role = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
+    let actor = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
+    let private = PrivateFields::of(&actor);
     let organization_currency = sqlx::query_scalar!(
         "SELECT default_currency FROM organizations WHERE id = $1",
         org_id,
@@ -118,7 +120,7 @@ pub(super) async fn load_creation_options(
         "SELECT id, name, billable_rate_cents, CASE WHEN $4 THEN cost_rate_cents END as cost_rate_cents FROM users
          WHERE org_id = $1 AND active AND strpos(lower(name), lower($2)) > 0
          ORDER BY lower(name), id LIMIT 51 OFFSET $3",
-        org_id, search.people.query.trim(), i64::from(search.people.offset), role == OrgRole::Admin,
+        org_id, search.people.query.trim(), i64::from(search.people.offset), private.read_costs,
     ).fetch_all(&mut *tx).await.map_err(storage_error)?;
     let previous_code = sqlx::query_scalar!(
         "SELECT code FROM projects WHERE org_id = $1 AND code IS NOT NULL AND btrim(code) <> ''
@@ -144,7 +146,8 @@ pub(super) async fn load_creation_options(
     tx.commit().await.map_err(storage_error)?;
     Ok(CreationOptions {
         organization_currency,
-        can_edit_private_settings: role == OrgRole::Admin,
+        can_edit_cost_rates: private.write_costs,
+        can_edit_private_notes: private.write_notes,
         email_available,
         clients,
         tasks,

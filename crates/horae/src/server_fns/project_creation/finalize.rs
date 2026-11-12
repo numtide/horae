@@ -15,7 +15,7 @@ pub(super) async fn finalize_draft_record(
     email_available: bool,
 ) -> Result<Uuid, ServerFnError> {
     let mut tx = pool.begin().await.map_err(storage_error)?;
-    let role =
+    let actor =
         lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::AccessChange).await?;
     let draft = sqlx::query!(
         "SELECT revision, completed_project_id, discarded_at FROM project_drafts
@@ -37,7 +37,7 @@ pub(super) async fn finalize_draft_record(
             "Draft changed or was discarded. Reload before creating the project.",
         ));
     }
-    let payload = validate_draft_form(form, role == OrgRole::Admin)?;
+    let payload = validate_draft_form(form, super::PrivateFields::of(&actor))?;
     let client_id = form.client_id.ok_or_else(|| {
         with_field(
             err(BAD_REQUEST, "Client is required"),

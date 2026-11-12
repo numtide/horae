@@ -194,8 +194,8 @@ fn ProjectEditLoader(id: Uuid, exit: Route) -> Element {
             catalog::options(editor_context(&project), CreationSearch::default()).await?;
         let mut options = defaults.clone();
         if let Some(access) = &project.access {
-            options.can_edit_private_settings =
-                access.private_notes == ProjectFieldAccess::Editable;
+            options.can_edit_cost_rates = access.costs == ProjectFieldAccess::Editable;
+            options.can_edit_private_notes = access.private_notes == ProjectFieldAccess::Editable;
         }
         options
             .clients
@@ -610,12 +610,19 @@ fn ProjectEditor(
         .and_then(|project| project.access.as_ref())
         .map(|access| (access.billable, access.costs, access.private_notes))
         .unwrap_or_else(|| {
-            let private = if options.read().can_edit_private_settings {
-                ProjectFieldAccess::Editable
-            } else {
-                ProjectFieldAccess::Withheld
+            let access = |editable| {
+                if editable {
+                    ProjectFieldAccess::Editable
+                } else {
+                    ProjectFieldAccess::Withheld
+                }
             };
-            (ProjectFieldAccess::Editable, private, private)
+            let options = options.read();
+            (
+                ProjectFieldAccess::Editable,
+                access(options.can_edit_cost_rates),
+                access(options.can_edit_private_notes),
+            )
         });
 
     let discard_to = exit.clone();

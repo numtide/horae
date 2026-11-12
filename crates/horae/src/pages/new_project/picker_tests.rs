@@ -7,7 +7,8 @@ use crate::models::project_creation::{CreationClient, CreationPerson, CreationTa
 fn catalog() -> CreationOptions {
     CreationOptions {
         organization_currency: "EUR".into(),
-        can_edit_private_settings: true,
+        can_edit_cost_rates: true,
+        can_edit_private_notes: true,
         email_available: false,
         clients: vec![CreationClient {
             id: Uuid::now_v7(),

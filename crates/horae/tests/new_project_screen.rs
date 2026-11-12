@@ -107,7 +107,8 @@ impl Default for Probe {
             other_project: None,
             options: CreationOptions {
                 organization_currency: "EUR".into(),
-                can_edit_private_settings: false,
+                can_edit_cost_rates: false,
+                can_edit_private_notes: false,
                 email_available: false,
                 clients: vec![],
                 tasks: vec![],
@@ -1202,7 +1203,8 @@ async fn manager_checkbox_save_and_uncertain_retry_preserve_complete_original_in
 async fn edit_prefills_legacy_currency_and_type_without_reading_or_saving_a_draft() {
     let client_id = Uuid::now_v7();
     let mut probe = Probe::default();
-    probe.options.can_edit_private_settings = true;
+    probe.options.can_edit_cost_rates = true;
+    probe.options.can_edit_private_notes = true;
     probe.existing = Some(project_creation::EditableProject {
         access: None,
         id: Uuid::now_v7(),
@@ -1592,7 +1594,7 @@ async fn recovered_client_outside_the_catalog_page_keeps_its_currency_and_name()
 #[tokio::test]
 async fn administrative_notes_only_render_for_an_authorized_editor() {
     let mut probe = Probe::default();
-    probe.options.can_edit_private_settings = true;
+    probe.options.can_edit_private_notes = true;
     assert!(render(probe).contains("id=\"np-notes\""));
 }
 
@@ -1822,7 +1824,7 @@ async fn tasks_and_team_restore_scoped_settings_without_exposing_costs_to_manage
     assert!(html.contains("value=\"12:30\""));
     assert!(!html.contains("np-cost-rate"));
     assert_eq!(probe.writes.get(), 0);
-    probe.options.can_edit_private_settings = true;
+    probe.options.can_edit_cost_rates = true;
     probe.options.people[0].cost_rate_cents = Some(6234);
     let html = render(probe);
     assert!(html.contains("np-cost-rate"));

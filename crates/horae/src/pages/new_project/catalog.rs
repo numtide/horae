@@ -38,7 +38,8 @@ pub(super) async fn options(
         more_tasks: result.more_tasks,
         people: Vec::new(),
         more_people: false,
-        can_edit_private_settings: false,
+        can_edit_cost_rates: false,
+        can_edit_private_notes: false,
         previous_code: None,
         suggested_code: None,
     })
