@@ -401,6 +401,9 @@ pub(super) async fn project_budget(
             headline
         }
         Ok(None) => {
+            // On policy one the detail and budget readers should agree, so
+            // log a divergence instead of hiding it.
+            tracing::warn!(%project_id, "Budget readers withheld a readable project");
             savepoint.commit().await.map_err(server_err)?;
             BudgetHeadline::Unavailable
         }
