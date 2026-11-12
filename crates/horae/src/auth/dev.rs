@@ -22,8 +22,7 @@ pub async fn dev_login_post(
     let state = crate::state::global_state().await;
 
     let row = sqlx::query!(
-        r#"SELECT u.id, u.org_id, u.email, u.name,
-                  u.org_role::text as "org_role!: String"
+        r#"SELECT u.id, u.org_id, u.email, u.name
            FROM users u
            JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
            WHERE p.is_administrator AND u.active
@@ -51,17 +50,23 @@ pub async fn dev_login_post(
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to write session"))?;
 
     // Dispatch user_logged_in event (FR-019).
+    let mut connection = state
+        .db
+        .acquire()
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "DB query failed"))?;
+    let user =
+        crate::server_fns::user_payload(&mut connection, row.org_id, row.id, &row.email, &row.name)
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "DB query failed"))?;
     state
         .plugins
         .dispatch(crate::plugin::AppEvent::UserLoggedIn {
             occurred_at: chrono::Utc::now(),
             org_id: row.org_id,
             user: crate::plugin::event::UserPayload {
-                id: row.id,
-                email: row.email,
-                name: row.name,
-                org_role: row.org_role,
                 method: Some("dev".into()),
+                ..user
             },
         });
 
@@ -73,26 +78,31 @@ pub async fn logout_post(session: Session) -> impl IntoResponse {
     // Capture the user before clearing the session so the logout can be announced.
     if let Some(uid) = crate::auth::session::get_session_user_id(&session).await {
         let state = crate::state::global_state().await;
-        if let Ok(user) = sqlx::query!(
-            r#"SELECT id, org_id, email, name, org_role::text as "org_role!: String"
-               FROM users WHERE id = $1"#,
-            uid,
-        )
-        .fetch_one(&state.db)
-        .await
-        {
+        let payload = async {
+            let mut connection = state.db.acquire().await?;
+            let user = sqlx::query!(
+                "SELECT id, org_id, email, name FROM users WHERE id = $1",
+                uid,
+            )
+            .fetch_one(&mut *connection)
+            .await?;
+            let payload = crate::server_fns::user_payload(
+                &mut connection,
+                user.org_id,
+                user.id,
+                &user.email,
+                &user.name,
+            )
+            .await?;
+            Ok::<_, sqlx::Error>((user.org_id, payload))
+        };
+        if let Ok((org_id, user)) = payload.await {
             state
                 .plugins
                 .dispatch(crate::plugin::AppEvent::UserLoggedOut {
                     occurred_at: chrono::Utc::now(),
-                    org_id: user.org_id,
-                    user: crate::plugin::event::UserPayload {
-                        id: user.id,
-                        email: user.email,
-                        name: user.name,
-                        org_role: user.org_role,
-                        method: None,
-                    },
+                    org_id,
+                    user,
                 });
         }
     }

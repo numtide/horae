@@ -918,13 +918,7 @@ async fn create_person(
     let event = crate::plugin::AppEvent::UserCreated {
         occurred_at: Utc::now(),
         org_id,
-        user: crate::plugin::event::UserPayload {
-            id,
-            email: email.to_owned(),
-            name: name.to_owned(),
-            org_role: "member".into(),
-            method: None,
-        },
+        user: crate::server_fns::user_payload(&mut *conn, org_id, id, email, name).await?,
     };
     let event = serde_json::to_value(event).map_err(|e| RowFailure::new(e.to_string()))?;
     crate::jobs::enqueue_outbox(&mut *conn, org_id, "user_created", event)

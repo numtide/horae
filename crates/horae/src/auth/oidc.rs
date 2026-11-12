@@ -520,13 +520,19 @@ async fn resolve_and_login(
     session.cycle_id().await?;
     set_session_user_id(session, user.id).await?;
 
+    let mut connection = state.db.acquire().await?;
     let payload = crate::plugin::event::UserPayload {
-        id: user.id,
-        email: user.email.clone(),
-        name: user.name.clone(),
-        org_role: user.org_role.to_string(),
         method: Some("oidc".into()),
+        ..crate::server_fns::user_payload(
+            &mut connection,
+            user.org_id,
+            user.id,
+            &user.email,
+            &user.name,
+        )
+        .await?
     };
+    drop(connection);
     let occurred_at = chrono::Utc::now();
     if created {
         state

@@ -52,7 +52,8 @@ fn login_event() -> AppEvent {
             id: uuid::Uuid::now_v7(),
             email: "test@example.com".into(),
             name: "Test".into(),
-            org_role: "member".into(),
+            is_administrator: false,
+            profile: Some("Member".into()),
             method: Some("dev".into()),
         },
     }

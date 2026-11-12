@@ -1273,3 +1273,48 @@ async fn recreated_relationship_invalidates_waiting_confirmation_without_partial
     );
     assert_eq!(state(&pool, org, user).await.revision, 0);
 }
+
+/// A save that changes the person's permissions announces their new profile
+/// and identity; a replay or an unchanged save announces nothing.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn a_changing_save_announces_the_new_permissions_to_plugins(pool: PgPool) {
+    use crate::plugin::AppEvent;
+
+    let ids = fixture(&pool).await;
+    let user = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
+    let request = apply(user, BuiltInProfile::ProjectManager);
+    let (outcome, event) = super::profiles::save(&pool, ids.org_id, ids.user_id, &request)
+        .await
+        .unwrap();
+    assert!(outcome.changed);
+    let Some(AppEvent::UserPermissionsChanged {
+        org_id,
+        user: payload,
+        ..
+    }) = event
+    else {
+        panic!("expected user_permissions_changed, got {event:?}");
+    };
+    assert_eq!((org_id, payload.id), (ids.org_id, user));
+    assert_eq!(payload.profile.as_deref(), Some("Project Manager"));
+    assert!(!payload.is_administrator);
+    assert_eq!(payload.method, None);
+
+    let (_, replay) = super::profiles::save(&pool, ids.org_id, ids.user_id, &request)
+        .await
+        .unwrap();
+    assert!(replay.is_none(), "a replay announces nothing again");
+
+    let unchanged = ProfileCommand {
+        request_id: Uuid::now_v7(),
+        expected_access_revision: outcome.access_revision,
+        expected_person_revision: outcome.person_revision,
+        ..request
+    };
+    let (outcome, event) = super::profiles::save(&pool, ids.org_id, ids.user_id, &unchanged)
+        .await
+        .unwrap();
+    assert!(!outcome.changed);
+    assert!(event.is_none(), "an unchanged save announces nothing");
+}

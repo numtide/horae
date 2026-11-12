@@ -179,11 +179,19 @@ Fired after a user successfully authenticates (for audit-log plugins).
     "id": "018f9c2e-2222-7000-8000-000000000003",
     "email": "casey@example.com",
     "name": "Casey Rivera",
-    "org_role": "member",
+    "is_administrator": false,
+    "profile": "Member",
     "method": "oidc"
   }
 }
 ```
+
+Every `user` payload carries `is_administrator`, the person's stored
+Administrator identity, and `profile`: the built-in profile's label
+(`"Member"`, `"Project Manager"`, `"Executive Manager"`, …) or the permission
+template's name their permissions come from, or `null` for individually chosen
+grants or a person without stored permissions. Earlier releases sent an
+`org_role` field instead; it is gone, and there is no ABI version to negotiate.
 
 ______________________________________________________________________
 
@@ -243,7 +251,7 @@ CREATE ROLE horae_plugin LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
 GRANT USAGE ON SCHEMA public TO horae_plugin;
 GRANT SELECT ON public.time_entries, public.projects, public.clients,
   public.tasks, public.project_tasks TO horae_plugin;
-GRANT SELECT (id, org_id, email, name, org_role, active)
+GRANT SELECT (id, org_id, email, name, active)
   ON public.users TO horae_plugin;
 ALTER ROLE horae_plugin SET default_transaction_read_only = on;
 ```

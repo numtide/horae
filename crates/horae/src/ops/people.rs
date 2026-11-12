@@ -170,14 +170,21 @@ pub(crate) async fn add(
         added.push(user);
     }
     let now = chrono::Utc::now();
-    let events = added
-        .iter()
-        .map(|user| AppEvent::UserCreated {
+    let mut events = Vec::with_capacity(added.len());
+    for user in &added {
+        events.push(AppEvent::UserCreated {
             occurred_at: now,
             org_id,
-            user: crate::server_fns::user_payload(user),
-        })
-        .collect();
+            user: crate::server_fns::user_payload(
+                &mut **tx,
+                org_id,
+                user.id,
+                &user.email,
+                &user.name,
+            )
+            .await?,
+        });
+    }
     Ok(Done {
         value: AddedPeople { added, present },
         events,
@@ -236,10 +243,18 @@ pub(crate) async fn set_active(
     let done = Done::new(user);
     // Plugins hear only about archiving; there is no restore event.
     if active_transition(Some(target.active), active) == Some(ActiveTransition::Deactivated) {
+        let user = &done.value;
         let event = AppEvent::UserDeactivated {
             occurred_at: chrono::Utc::now(),
             org_id,
-            user: crate::server_fns::user_payload(&done.value),
+            user: crate::server_fns::user_payload(
+                &mut **tx,
+                org_id,
+                user.id,
+                &user.email,
+                &user.name,
+            )
+            .await?,
         };
         return Ok(done.with(event));
     }

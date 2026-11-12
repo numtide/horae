@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use super::{PermissionStorageError, load_permission_template, load_person_permissions};
 use crate::models::permissions::{PermissionSource, PersonPermissions};
+use crate::plugin::AppEvent;
 
 use crate::models::permission_audit::RemovedRelationship as RelationshipRemoval;
 use crate::models::permission_editor::ProfileDraft;
@@ -83,14 +84,28 @@ fn reads_projects(grants: &PermissionSelection) -> bool {
     grants.contains(Permission::ProjectReadManaged) || grants.contains(Permission::ProjectReadAll)
 }
 
-/// Caller supplies authenticated organization/actor IDs. No user/project DML or
-/// external work occurs while holding the organization serialization gate.
+/// [`save`] without its plugin event, for tests that only need the outcome.
+#[cfg(test)]
 pub(crate) async fn execute(
     pool: &PgPool,
     org_id: Uuid,
     actor_id: Uuid,
     request: &ProfileCommand,
 ) -> Result<ProfileOutcome, ProfileCommandError> {
+    Ok(save(pool, org_id, actor_id, request).await?.0)
+}
+
+/// Saves a person's permissions and returns the `user_permissions_changed`
+/// event when the save changed them; the caller dispatches it after the commit
+/// this function makes, and a replayed request announces nothing again.
+/// Caller supplies authenticated organization/actor IDs. No user/project DML or
+/// external work occurs while holding the organization serialization gate.
+pub(crate) async fn save(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+    request: &ProfileCommand,
+) -> Result<(ProfileOutcome, Option<AppEvent>), ProfileCommandError> {
     let mut tx = pool.begin().await?;
     super::configure_administration(&mut tx).await?;
     let org = sqlx::query!(
@@ -140,7 +155,7 @@ pub(crate) async fn execute(
         }
         let outcome = serde_json::from_value(receipt.result)?;
         tx.commit().await?;
-        return Ok(outcome);
+        return Ok((outcome, None));
     }
     if org.access_revision != intent.expected_access_revision {
         return Err(ProfileCommandError::Stale);
@@ -222,8 +237,32 @@ pub(crate) async fn execute(
     )
     .execute(&mut *tx)
     .await?;
+    let event = if changed {
+        let person = sqlx::query!(
+            "SELECT email, name FROM users WHERE org_id = $1 AND id = $2",
+            org_id,
+            intent.user_id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        let user = crate::server_fns::user_payload(
+            &mut tx,
+            org_id,
+            intent.user_id,
+            &person.email,
+            &person.name,
+        )
+        .await?;
+        Some(AppEvent::UserPermissionsChanged {
+            occurred_at: chrono::Utc::now(),
+            org_id,
+            user,
+        })
+    } else {
+        None
+    };
     tx.commit().await?;
-    Ok(result)
+    Ok((result, event))
 }
 
 /// Evaluates confirmed input under an already-held organization gate.

@@ -26,7 +26,7 @@ one payload. Hook name = the serde tag.
 | `task_created` / `task_updated` | `TaskPayload` | |
 | `task_deactivated` / `task_reactivated` | `TaskPayload` | only on active flip |
 | `user_created` | `UserPayload` (existing) | reused |
-| `user_role_changed` | `UserPayload` + `previous_role: String` | carries prior role |
+| `user_permissions_changed` | `UserPayload` | after a permission editor save that changed the person's permissions |
 | `user_deactivated` | `UserPayload` | only on active flip to inactive |
 | `user_logged_out` | `UserPayload` | dispatched from `auth` |
 | `user_assigned_to_project` / `assignment_removed` | `AssignmentPayload` | |
