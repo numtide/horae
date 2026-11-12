@@ -47,9 +47,9 @@ pub(crate) async fn set_active(
     let mut events = Vec::new();
     for &project_id in sorted_ids {
         let designated = is_designated(tx, actor, project_id).await?;
-        if !actor.has(Permission::ProjectWriteAll)
-            && !(designated && actor.has(Permission::ProjectWriteManaged))
-        {
+        let writes = actor.has(Permission::ProjectWriteAll)
+            || (designated && actor.has(Permission::ProjectWriteManaged));
+        if !writes {
             return Err(refusal(tx, actor, project_id).await?);
         }
         let before = lock(tx, org_id, project_id).await?;

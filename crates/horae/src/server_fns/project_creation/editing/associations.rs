@@ -224,7 +224,7 @@ async fn save_member(
             .map_err(storage_error)?;
         }
     }
-    Ok(saved.inserted.then(|| AssignmentPayload {
+    Ok(saved.inserted.then_some(AssignmentPayload {
         id: saved.id,
         project_id: before.id,
         user_id: member.user_id,
