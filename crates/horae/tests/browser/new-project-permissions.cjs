@@ -34,6 +34,7 @@ const foreignProject = '01960000-0000-7000-8000-000000000104';
 const otherDraft = '01960000-0000-7000-8000-000000000105';
 const ownDraft = '01960000-0000-7000-8000-000000000106';
 const entry = '01960000-0000-7000-8000-000000000107';
+const managedDraft = '01960000-0000-7000-8000-000000000108';
 const privateNote = 'Permission fixture private note';
 const name = 'Permission fixture project';
 
@@ -118,7 +119,8 @@ const name = 'Permission fixture project';
     const optionsArgs = { search: { clients: { query: '', offset: 0 }, tasks: { query: '', offset: 0 }, people: { query: '', offset: 0 } } };
     // progress: reads the project; rates: billable rates; edit: edits it;
     // create: creates projects; notes/costs: writes private notes/cost rates;
-    // costRead: reads cost rates; setRates: sets billable rates while creating.
+    // costRead: reads cost rates; setRates: sets billable rates, fees, money
+    // budgets and invoice defaults while creating.
     const cases = [
       { label: 'administrator', grants: null, visibility: 'managers', progress: true, rates: true, edit: true, create: true, notes: true, costs: true, costRead: true, setRates: true },
       { label: 'executive manager grants', grants: executive, visibility: 'managers', progress: true, rates: true, edit: true, create: true, notes: true, costs: false, costRead: true, setRates: false },
@@ -201,13 +203,15 @@ const name = 'Permission fixture project';
         await expect(screen.getByLabel('Notes', { exact: true })).toHaveCount(scenario.notes ? 1 : 0);
         await expect(screen.getByLabel('Cost rate for Admin User (EUR/h)', { exact: true })).toHaveCount(scenario.costs ? 1 : 0);
         // The project rate is required in its mode, so the mode goes with the grant.
-        const projectRateMode = screen.getByRole('radio', { name: /^Project hourly rate/ });
-        if (scenario.setRates) await expect(projectRateMode).toBeEnabled();
-        else await expect(projectRateMode).toBeDisabled();
+        // So does a fixed fee project's fee.
+        for (const choice of [screen.getByRole('radio', { name: /^Project hourly rate/ }), screen.locator('input[name="np-project-type"][value="fixed_fee"]')]) {
+          if (scenario.setRates) await expect(choice).toBeEnabled();
+          else await expect(choice).toBeDisabled();
+        }
         const options = await json('project_creation_options', optionsArgs);
         assert.equal(options.can_edit_private_notes, scenario.notes, scenario.label);
         assert.equal(options.can_edit_cost_rates, scenario.costs, scenario.label);
-        assert.equal(options.can_edit_billable_rates, scenario.setRates, scenario.label);
+        assert.equal(options.can_edit_billable_settings, scenario.setRates, scenario.label);
         assert.equal(options.clients.some(client => client.id === foreignClient), false);
         if (!scenario.costRead) for (const person of options.people) absent(person, 'cost_rate_cents');
         // A saved draft is pruned to what the creator may still write.
@@ -218,8 +222,10 @@ const name = 'Permission fixture project';
         assert.equal(draft.form.project_rate, scenario.setRates ? '123.45' : '');
         if (!(scenario.notes && scenario.costs && scenario.setRates)) assert.equal((await post('save_project_draft', ownPayload)).status(), 403);
         if (!scenario.setRates) {
-          const ratesOnly = { ...ownPayload, form: { ...publicForm, rate_mode: 'project', project_rate: '1' } };
-          assert.equal((await post('save_project_draft', ratesOnly)).status(), 403, scenario.label);
+          for (const billable of [{ rate_mode: 'project', project_rate: '1' }, { invoice_defaults: { ...publicForm.invoice_defaults, po_number: 'PO-1' } }]) {
+            const billableOnly = { ...ownPayload, form: { ...publicForm, ...billable } };
+            assert.equal((await post('save_project_draft', billableOnly)).status(), 403, scenario.label);
+          }
         }
         const foreignWrite = { ...ownPayload, draft_id: otherDraft, expected_revision: 1, form: publicForm };
         assert.equal((await post('save_project_draft', foreignWrite)).status(), 404);
@@ -272,6 +278,15 @@ const name = 'Permission fixture project';
     assert.equal(sql(`SELECT rate_cents IS NULL FROM projects WHERE id = '${managerProject}'`), 't');
     assert.equal(sql(`SELECT string_agg(manager_id::text, ',') FROM project_management_assignments WHERE project_id = '${managerProject}'`), actor.id);
     assert.equal(await json('load_project_draft'), null);
+    // Without project_write_all the creator is designated even unmarked, so a
+    // Project Manager can edit what they create.
+    setGrants(projectManager);
+    const managedForm = { ...publicForm, name: 'Permission project-manager-created project', team: publicForm.team.map(person => ({ ...person, manager: false })) };
+    const managedPayload = { ...ownPayload, draft_id: managedDraft, expected_revision: 0, form: managedForm };
+    const managedSaved = await json('save_project_draft', managedPayload);
+    const managedProject = await json('finalize_project_draft', { ...managedPayload, expected_revision: managedSaved.revision });
+    assert.equal(sql(`SELECT string_agg(manager_id::text, ',') FROM project_management_assignments WHERE project_id = '${managedProject}'`), actor.id);
+    assert.equal((await (await post('get_project_detail_view', { project_id: managedProject })).json()).can_edit, true);
     const anonymous = await browser.newContext();
     try {
       for (const method of ['project_creation_options', 'load_project_draft', 'save_project_draft', 'finalize_project_draft']) {

@@ -298,6 +298,64 @@ async fn finalization_designates_eligible_managers_like_the_editor(pool: PgPool)
     );
 }
 
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn creators_without_project_write_all_manage_what_they_create(pool: PgPool) {
+    use crate::server_fns::permissions::project_management;
+    for (profile, designates) in [
+        (BuiltInProfile::ProjectManager, true),
+        (BuiltInProfile::ExecutiveManager, false),
+        (BuiltInProfile::Administrator, false),
+    ] {
+        let creator = seed(&pool, profile).await;
+        // Nobody is on the team, let alone marked as manager.
+        let form = ProjectForm {
+            client_id: Some(creator.client_id),
+            name: "Created without a team".into(),
+            ..Default::default()
+        };
+        let draft_id = Uuid::now_v7();
+        save_draft_record(&pool, creator.user_id, creator.org_id, draft_id, 0, &form)
+            .await
+            .unwrap();
+        let before = sqlx::query_scalar!(
+            "SELECT access_revision FROM organizations WHERE id = $1",
+            creator.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let project = finalize_draft_record(
+            &pool,
+            creator.user_id,
+            creator.org_id,
+            draft_id,
+            1,
+            &form,
+            false,
+        )
+        .await
+        .unwrap();
+        let after = sqlx::query_scalar!(
+            "SELECT access_revision FROM organizations WHERE id = $1",
+            creator.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        if designates {
+            assert_eq!(designated(&pool, project).await, [creator.user_id]);
+            assert_eq!(after, before + 1);
+        } else {
+            assert!(designated(&pool, project).await.is_empty(), "{profile:?}");
+            assert_eq!(after, before, "{profile:?}");
+        }
+        // Every creator can open the editor of what they created.
+        project_management::read(&pool, creator.org_id, creator.user_id, project)
+            .await
+            .unwrap();
+    }
+}
+
 async fn creation_counts(pool: &PgPool, org: Uuid) -> Vec<i64> {
     sqlx::query_scalar!(
         r#"SELECT ARRAY[

@@ -148,7 +148,7 @@ pub(super) async fn load_creation_options(
         organization_currency,
         can_edit_cost_rates: private.write_costs,
         can_edit_private_notes: private.write_notes,
-        can_edit_billable_rates: private.write_billable,
+        can_edit_billable_settings: private.write_billable,
         email_available,
         clients,
         tasks,

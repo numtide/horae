@@ -41,7 +41,7 @@ pub(super) async fn options(
         can_edit_cost_rates: false,
         can_edit_private_notes: false,
         // The editor decides from the project's own access instead.
-        can_edit_billable_rates: false,
+        can_edit_billable_settings: false,
         previous_code: None,
         suggested_code: None,
     })

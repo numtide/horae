@@ -109,7 +109,7 @@ impl Default for Probe {
                 organization_currency: "EUR".into(),
                 can_edit_cost_rates: false,
                 can_edit_private_notes: false,
-                can_edit_billable_rates: true,
+                can_edit_billable_settings: true,
                 email_available: false,
                 clients: vec![],
                 tasks: vec![],

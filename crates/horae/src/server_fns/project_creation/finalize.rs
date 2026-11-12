@@ -139,12 +139,19 @@ pub(super) async fn finalize_draft_record(
         .map_err(storage_error)?;
     }
     save_members(&mut tx, org_id, project_id, form, currency == org_currency).await?;
-    let manager_ids: Vec<Uuid> = form
+    let mut manager_ids: Vec<Uuid> = form
         .team
         .iter()
         .filter(|member| member.manager)
         .map(|member| member.user_id)
         .collect();
+    // Without `ProjectWriteAll` the creator edits only managed projects, so
+    // creating one designates them too, whether or not they are on the team.
+    if !actor.has(horae_core::permissions::catalog::Permission::ProjectWriteAll)
+        && !manager_ids.contains(&actor_id)
+    {
+        manager_ids.push(actor_id);
+    }
     if !manager_ids.is_empty() {
         crate::server_fns::permissions::project_management::designate_created(
             &mut tx,

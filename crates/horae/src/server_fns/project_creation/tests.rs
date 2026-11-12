@@ -289,7 +289,7 @@ async fn creation_options_are_scoped_bounded_and_redact_manager_costs(pool: PgPo
     assert!(
         options.can_edit_cost_rates
             && options.can_edit_private_notes
-            && options.can_edit_billable_rates
+            && options.can_edit_billable_settings
     );
     // Private notes follow `ProjectWriteAll`, cost rates `CostRateWriteAll`
     // and billable rates `BillableRateWriteAll`, which only Administrator has.
@@ -308,7 +308,7 @@ async fn creation_options_are_scoped_bounded_and_redact_manager_costs(pool: PgPo
         .await
         .unwrap();
         assert!(!options.can_edit_cost_rates, "{profile:?}");
-        assert!(!options.can_edit_billable_rates, "{profile:?}");
+        assert!(!options.can_edit_billable_settings, "{profile:?}");
         assert_eq!(options.can_edit_private_notes, notes, "{profile:?}");
         assert_eq!(options.people[0].cost_rate_cents, costs, "{profile:?}");
     }
@@ -1139,8 +1139,12 @@ fn managers_cannot_store_administrator_notes_or_costs_in_a_draft() {
 }
 
 #[test]
-fn billable_rates_in_a_draft_need_the_billable_rate_grant() {
-    use crate::models::project_creation::{ProjectTaskInput, TaskAccess, TaskSource};
+fn billable_settings_in_a_draft_need_the_billable_rate_grant() {
+    use crate::models::project_creation::{
+        InvoiceDefaultsInput, ProjectTaskInput, TaskAccess, TaskSource,
+    };
+    use horae_core::project::BudgetMode;
+    use horae_core::types::ProjectType;
     let without = PrivateFields {
         read_costs: false,
         write_costs: false,
@@ -1189,11 +1193,52 @@ fn billable_rates_in_a_draft_need_the_billable_rate_grant() {
     let task_rate = ProjectForm {
         tasks: vec![ProjectTaskInput {
             rate: "95".into(),
+            ..blank_task.clone()
+        }],
+        ..blank.clone()
+    };
+    let fixed_fee = ProjectForm {
+        project_type: ProjectType::FixedFee,
+        fee_amount: "1000".into(),
+        ..blank.clone()
+    };
+    let money_budget = ProjectForm {
+        budget_mode: BudgetMode::TotalFees,
+        budget_value: "5000".into(),
+        ..blank.clone()
+    };
+    let task_fee_budget = ProjectForm {
+        budget_mode: BudgetMode::FeesPerTask,
+        tasks: vec![ProjectTaskInput {
+            budget: "300".into(),
             ..blank_task
         }],
+        ..blank.clone()
+    };
+    let invoice_defaults = ProjectForm {
+        invoice_defaults: InvoiceDefaultsInput {
+            po_number: "PO-1".into(),
+            ..Default::default()
+        },
+        ..blank.clone()
+    };
+    // An hour budget and a fee left behind by a type switch are not billable.
+    let hours_budget = ProjectForm {
+        budget_mode: BudgetMode::TotalHours,
+        budget_value: "40".into(),
+        fee_amount: "1000".into(),
         ..blank
     };
-    for form in [project_rate, person_rate, task_rate] {
+    assert!(validate_draft_form(&hours_budget, without).is_ok());
+    for form in [
+        project_rate,
+        person_rate,
+        task_rate,
+        fixed_fee,
+        money_budget,
+        task_fee_budget,
+        invoice_defaults,
+    ] {
         assert!(matches!(
             validate_draft_form(&form, without),
             Err(super::ServerFnError::ServerError {

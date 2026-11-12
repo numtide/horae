@@ -423,9 +423,9 @@ fn validate_draft_form(
             "Saving cost rates requires permission to edit cost rates",
         ));
     }
-    if !private.write_billable && PrivateFields::has_billable_rates(form) {
+    if !private.write_billable && PrivateFields::has_billable_settings(form) {
         return Err(forbidden(
-            "Setting billable rates requires permission to edit billable rates",
+            "Setting rates, fees, money budgets or invoice defaults requires permission to edit billable rates",
         ));
     }
     form_payload(form)
@@ -471,9 +471,10 @@ fn form_payload(form: &ProjectForm) -> Result<serde_json::Value, ServerFnError> 
 }
 
 /// What a creator may put in a draft's protected fields: cost rates with
-/// `CostRateWriteAll`, private notes with `ProjectWriteAll`, and the project,
-/// person and task billable rates with `BillableRateWriteAll`. A blank rate
-/// inherits, so creating without a rate grant is still possible.
+/// `CostRateWriteAll`, private notes with `ProjectWriteAll`, and billable
+/// settings (see [`Self::has_billable_settings`]) with `BillableRateWriteAll`.
+/// Blank rates inherit and untouched invoice defaults are the form's own, so
+/// creating a time-and-materials or non-billable project needs no such grant.
 #[cfg(feature = "server")]
 #[derive(Clone, Copy)]
 struct PrivateFields {
@@ -495,13 +496,25 @@ impl PrivateFields {
         }
     }
 
-    fn has_billable_rates(form: &ProjectForm) -> bool {
+    /// What the editor protects as `billable`, except the project type and
+    /// rate mode a new project must choose: rates, a fixed fee, a budget in
+    /// money and invoice defaults that differ from the organization's.
+    fn has_billable_settings(form: &ProjectForm) -> bool {
+        use horae_core::project::BudgetMode;
         !form.project_rate.is_empty()
             || form
                 .team
                 .iter()
                 .any(|member| !member.billable_rate.is_empty())
             || form.tasks.iter().any(|task| !task.rate.is_empty())
+            || (form.project_type == ProjectType::FixedFee
+                && (!form.fee_amount.is_empty() || !form.milestones.is_empty()))
+            || matches!(
+                form.budget_mode,
+                BudgetMode::TotalFees | BudgetMode::FeesPerTask
+            )
+            || form.invoice_defaults
+                != crate::models::project_creation::InvoiceDefaultsInput::default()
     }
 
     /// Clears what the creator may no longer write, as when a saved draft is
@@ -516,6 +529,7 @@ impl PrivateFields {
             }
         }
         if !self.write_billable {
+            use horae_core::project::BudgetMode;
             form.project_rate.clear();
             for member in &mut form.team {
                 member.billable_rate.clear();
@@ -523,6 +537,19 @@ impl PrivateFields {
             for task in &mut form.tasks {
                 task.rate.clear();
             }
+            form.fee_amount.clear();
+            form.milestones.clear();
+            if matches!(
+                form.budget_mode,
+                BudgetMode::TotalFees | BudgetMode::FeesPerTask
+            ) {
+                form.budget_mode = BudgetMode::None;
+                form.budget_value.clear();
+                for task in &mut form.tasks {
+                    task.budget.clear();
+                }
+            }
+            form.invoice_defaults = Default::default();
         }
     }
 }
