@@ -44,11 +44,13 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .status(),
         StatusCode::UNAUTHORIZED
     );
+    // The time-read fence answers from stored grants alone: the seeded
+    // person's own-time grant admits the read whatever the policy says.
     assert_eq!(
         api.call(ENDPOINT, request.clone(), Some(&cookie), false)
             .await
             .status(),
-        StatusCode::FORBIDDEN
+        StatusCode::OK
     );
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",

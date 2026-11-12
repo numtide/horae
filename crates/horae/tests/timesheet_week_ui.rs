@@ -161,8 +161,7 @@ mod route {
 
 use models::permission_editor::PermissionRequester;
 use models::scoped_time::{
-    TimesheetCommand, TimesheetPage, TimesheetPerson, TimesheetPolicy, TimesheetTrackingOption,
-    VisibleTimeEntry,
+    TimesheetCommand, TimesheetPage, TimesheetPerson, TimesheetTrackingOption, VisibleTimeEntry,
 };
 use timesheet::{Anchor, CalSpan, Timesheet, ViewMode};
 
@@ -209,7 +208,6 @@ fn release(start: NaiveDate, entries: Vec<VisibleTimeEntry>) {
             name: "Me".into(),
         },
         subject_utc_offset_seconds: SUBJECT_OFFSET.get(),
-        policy: TimesheetPolicy::LegacyOwn,
         entries,
         next_after: None,
     };
@@ -280,10 +278,21 @@ mod server_fns {
         Err(ServerFnError::new("submission refused"))
     }
 
+    /// Someone who reads only their own time discovers only themselves.
     pub async fn list_timesheet_people(
         _: TimesheetPeopleQuery,
     ) -> Result<TimesheetPeoplePage, ServerFnError> {
-        panic!("a legacy own sheet has no person picker")
+        Ok(TimesheetPeoplePage {
+            requester: PermissionRequester {
+                org_id: Uuid::nil(),
+                user_id: ME,
+            },
+            people: vec![TimesheetPerson {
+                id: ME,
+                name: "Me".into(),
+            }],
+            next_after: None,
+        })
     }
 }
 

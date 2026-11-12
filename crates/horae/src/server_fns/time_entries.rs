@@ -592,6 +592,48 @@ mod tests {
         }
     }
 
+    /// Every profile tracks on projects it is assigned to; only the stored
+    /// Administrator state also offers unassigned projects. The legacy picker
+    /// and the Timesheet's own choices agree.
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn picker_offers_assigned_projects_and_every_project_to_administrators(pool: PgPool) {
+        use crate::models::permission_editor::PermissionRequester;
+        use crate::models::scoped_time::TimesheetWriteContext;
+
+        for profile in BuiltInProfile::ALL.iter().copied() {
+            for assigned in [false, true] {
+                let ids = linked_seed(&pool, profile).await;
+                if assigned {
+                    sqlx::query!(
+                        "INSERT INTO assignments (id, project_id, user_id) VALUES ($1, $2, $3)",
+                        Uuid::now_v7(),
+                        ids.project_id,
+                        ids.user_id
+                    )
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+                }
+                let expected = usize::from(assigned || profile == BuiltInProfile::Administrator);
+                let picker = fetch_time_entry_contexts(&pool, ids.user_id).await.unwrap();
+                assert_eq!(picker.len(), expected, "{profile:?} assigned={assigned}");
+                let own = TimesheetWriteContext {
+                    expected_requester: PermissionRequester {
+                        org_id: ids.org_id,
+                        user_id: ids.user_id,
+                    },
+                    subject_id: ids.user_id,
+                };
+                let choices = super::commands::tracking(&pool, ids.org_id, ids.user_id, &own)
+                    .await
+                    .unwrap();
+                assert_eq!(choices.len(), expected, "{profile:?} assigned={assigned}");
+                let started = insert_time_entry(&pool, ids.user_id, manual_entry(&ids)).await;
+                assert_eq!(started.is_ok(), expected == 1, "{profile:?} {started:?}");
+            }
+        }
+    }
+
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_timer_is_dated_in_the_persons_zone(pool: PgPool) {
         use chrono::Timelike;

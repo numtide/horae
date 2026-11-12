@@ -1,9 +1,8 @@
 //! Clients page readers on stored grants.
 
 use super::*;
-use crate::server_fns::test_seed::{SeedIds, seed, seed_before_permission_state, wait_for_blocked};
-use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::permissions::catalog::{Permission, PermissionSelection};
+use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -25,8 +24,9 @@ async fn set_grants(pool: &PgPool, user_id: Uuid, permissions: &[Permission]) {
 
 /// A disposable organization on policy one, with a client carrying every
 /// protected field so payload checks can look for leaks.
-async fn policy_one(pool: &PgPool, role: OrgRole, permissions: &[Permission]) -> SeedIds {
-    let ids = seed_before_permission_state(pool, role).await;
+async fn policy_one(pool: &PgPool, role: BuiltInProfile, permissions: &[Permission]) -> SeedIds {
+    let ids = seed(pool, role).await;
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "UPDATE clients SET address=$2, tax_id=$3, default_rate_cents=12345 WHERE id=$1",
         ids.client_id,
@@ -72,7 +72,7 @@ fn assert_code(error: ServerFnError, expected: u16) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn read_only_client_grant_shows_catalog_without_writes_rates_or_projects(pool: PgPool) {
-    let ids = policy_one(&pool, OrgRole::Member, &[Permission::ClientReadAll]).await;
+    let ids = policy_one(&pool, BuiltInProfile::Member, &[Permission::ClientReadAll]).await;
     let page = overview(&pool, &ids).await.unwrap();
     assert!(page.canonical_permissions && page.can_read && !page.can_manage);
     assert_eq!(page.clients.len(), 1);
@@ -92,11 +92,20 @@ async fn read_only_client_grant_shows_catalog_without_writes_rates_or_projects(p
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unrelated_grants_and_legacy_roles_do_not_open_the_catalog(pool: PgPool) {
     for (role, permissions) in [
-        (OrgRole::Admin, vec![]),
-        (OrgRole::Manager, vec![Permission::ProjectReadAll]),
-        (OrgRole::Member, vec![Permission::InvoiceReadAll]),
-        (OrgRole::Member, vec![Permission::BillableRateReadAll]),
-        (OrgRole::Member, vec![Permission::ReportProfitabilityRead]),
+        (BuiltInProfile::Administrator, vec![]),
+        (
+            BuiltInProfile::ExecutiveManager,
+            vec![Permission::ProjectReadAll],
+        ),
+        (BuiltInProfile::Member, vec![Permission::InvoiceReadAll]),
+        (
+            BuiltInProfile::Member,
+            vec![Permission::BillableRateReadAll],
+        ),
+        (
+            BuiltInProfile::Member,
+            vec![Permission::ReportProfitabilityRead],
+        ),
     ] {
         let ids = policy_one(&pool, role, &permissions).await;
         let page = overview(&pool, &ids).await.unwrap();
@@ -120,7 +129,7 @@ async fn default_rate_requires_the_global_billable_rate_grant(pool: PgPool) {
     ] {
         let ids = policy_one(
             &pool,
-            OrgRole::Manager,
+            BuiltInProfile::ExecutiveManager,
             &[Permission::ClientReadAll, rate_grant],
         )
         .await;
@@ -137,7 +146,7 @@ async fn default_rate_requires_the_global_billable_rate_grant(pool: PgPool) {
 async fn project_counts_follow_the_policy_one_project_reader(pool: PgPool) {
     let ids = policy_one(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         &[Permission::ClientReadAll, Permission::ProjectReadAll],
     )
     .await;
@@ -174,7 +183,7 @@ async fn project_counts_follow_the_policy_one_project_reader(pool: PgPool) {
 async fn managed_project_counts_require_an_actual_management_link(pool: PgPool) {
     let ids = policy_one(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         &[Permission::ClientReadAll, Permission::ProjectReadManaged],
     )
     .await;
@@ -191,7 +200,7 @@ async fn managed_project_counts_require_an_actual_management_link(pool: PgPool) 
 async fn visible_default_rate_distinguishes_unset_from_zero(pool: PgPool) {
     let ids = policy_one(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         &[Permission::ClientReadAll, Permission::BillableRateReadAll],
     )
     .await;
@@ -214,7 +223,7 @@ async fn visible_default_rate_distinguishes_unset_from_zero(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn foreign_missing_and_rebound_requests_fail_closed(pool: PgPool) {
-    let ids = policy_one(&pool, OrgRole::Member, &[Permission::ClientReadAll]).await;
+    let ids = policy_one(&pool, BuiltInProfile::Member, &[Permission::ClientReadAll]).await;
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for client_id in [foreign.client_id, Uuid::now_v7()] {
         let error = client_detail_view_for(&pool, ids.org_id, ids.user_id, client_id, None)
@@ -259,7 +268,12 @@ async fn foreign_missing_and_rebound_requests_fail_closed(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unavailable_permission_state_and_inactive_actors_fail_closed(pool: PgPool) {
     for state in ["missing", "malformed", "inactive"] {
-        let ids = policy_one(&pool, OrgRole::Admin, &[Permission::ClientReadAll]).await;
+        let ids = policy_one(
+            &pool,
+            BuiltInProfile::Administrator,
+            &[Permission::ClientReadAll],
+        )
+        .await;
         match state {
             "missing" => sqlx::query!(
                 "DELETE FROM person_permission_states WHERE user_id=$1",
@@ -294,7 +308,12 @@ async fn unavailable_permission_state_and_inactive_actors_fail_closed(pool: PgPo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn readers_observe_revocation_after_waiting_for_current_authority(pool: PgPool) {
     for read_detail in [false, true] {
-        let ids = policy_one(&pool, OrgRole::Admin, &[Permission::ClientReadAll]).await;
+        let ids = policy_one(
+            &pool,
+            BuiltInProfile::Administrator,
+            &[Permission::ClientReadAll],
+        )
+        .await;
         let mut hold = pool.begin().await.unwrap();
         sqlx::query!(
             "UPDATE organizations SET access_revision=access_revision+1 WHERE id=$1",
@@ -345,7 +364,7 @@ async fn readers_observe_revocation_after_waiting_for_current_authority(pool: Pg
 /// legacy Manager role without them sees nothing.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn workflow_reader_follows_grants_under_policy_one(pool: PgPool) {
-    let ids = policy_one(&pool, OrgRole::Manager, &[]).await;
+    let ids = policy_one(&pool, BuiltInProfile::ExecutiveManager, &[]).await;
     let error = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
         .await
         .unwrap_err();
