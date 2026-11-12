@@ -492,9 +492,7 @@ const fn reads(
 /// the alerts the first chose. An amount budget's progress is valued at
 /// billable rates, so its alerts also need a billable-rate read.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn alert_recipients_and_delivery_follow_project_and_billable_rate_reads(
-    pool: sqlx::PgPool,
-) {
+async fn alert_recipients_and_delivery_follow_project_and_billable_rate_reads(pool: sqlx::PgPool) {
     use horae_core::permissions::catalog::BuiltInProfile::{
         Accounting, Administrator, ExecutiveManager, Member, PeopleAdmin, ProjectManager,
     };
@@ -699,7 +697,11 @@ async fn amount_alert_needs_billable_rate_read_at_delivery(pool: sqlx::PgPool) {
     // (grants left before delivery, designated manager, sent)
     for (grants, designated, sent) in [
         (&[ProjectReadAll, BillableRateReadAll][..], false, true),
-        (&[ProjectReadManaged, BillableRateReadManaged][..], true, true),
+        (
+            &[ProjectReadManaged, BillableRateReadManaged][..],
+            true,
+            true,
+        ),
         (&[ProjectReadAll][..], true, false),
         (&[ProjectReadAll, BillableRateReadManaged][..], false, false),
     ] {
