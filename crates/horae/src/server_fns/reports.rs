@@ -303,7 +303,13 @@ pub(super) async fn fetch_detailed(
     period: (chrono::NaiveDate, chrono::NaiveDate),
     filters: crate::reports::ReportFilters,
 ) -> Result<Vec<DetailedReportRow>, ServerFnError> {
-    let mut tx = super::snapshot::manager(pool, org_id, actor_id).await?;
+    let mut tx = super::snapshot::authorized(
+        pool,
+        org_id,
+        actor_id,
+        horae_core::permissions::catalog::Permission::TimeReadAll,
+    )
+    .await?;
     let rows = crate::reports::fetch_entries(&mut *tx, org_id, period, filters)
         .await
         .map_err(server_err)?;

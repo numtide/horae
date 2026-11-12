@@ -4,6 +4,7 @@ use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 
 mod authority;
+mod financial_fields;
 mod imported_rates;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -754,6 +755,16 @@ async fn invoice_defaults_legacy_insert_preserves_dates_and_exact_total(pool: Pg
     .await
     .unwrap();
     sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+    // The person predates permission state; give them one so the edit below
+    // is refused for its values, not for missing authority.
+    crate::server_fns::provisioning::provision(
+        &mut pool.acquire().await.unwrap(),
+        ids.org_id,
+        ids.user_id,
+        BuiltInProfile::ExecutiveManager,
+    )
+    .await
+    .unwrap();
     let legacy = crate::reports::fetch_invoice_metadata(&pool, id, ids.org_id)
         .await
         .unwrap()

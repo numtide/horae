@@ -15,7 +15,7 @@ const name = 'Historical <client> & agency';
 sql(`BEGIN;
   INSERT INTO clients (id, org_id, name, currency)
     SELECT '${clientId}', org_id, '${name}', 'EUR' FROM users
-    WHERE org_role='admin' ORDER BY id LIMIT 1;
+    WHERE email='admin@example.com';
   INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency)
     SELECT '${invoiceId}', org_id, id, 'LABEL-REGRESSION', 'paid', '2026-10-01', '2026-10-31', 'EUR'
     FROM clients WHERE id='${clientId}';

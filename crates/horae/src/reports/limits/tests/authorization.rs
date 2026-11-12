@@ -1,6 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::wait_for_blocked;
-use horae_core::permissions::catalog::BuiltInProfile;
+use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
 
@@ -72,6 +72,27 @@ async fn block_payload(pool: &PgPool, reader: Reader) -> (Transaction<'_, Postgr
     (tx, pid)
 }
 
+/// Takes the reader's authority away the way its domain decides it. Invoice
+/// exports read the stored grants, which the permission editor changes
+/// together with the organization row. The time export still follows the
+/// legacy role until the reports domain moves to stored permissions.
+async fn revoke(connection: &mut sqlx::PgConnection, ids: &SeedIds, reader: Reader) {
+    match reader {
+        Reader::Entries => {
+            sqlx::query!(
+                "UPDATE users SET org_role='member' WHERE id=$1",
+                ids.user_id
+            )
+            .execute(connection)
+            .await
+            .unwrap();
+        }
+        Reader::Invoice | Reader::Pdf => crate::ops::testing::set_grants(connection, ids, &[])
+            .await
+            .unwrap(),
+    }
+}
+
 fn spawn_read(
     pool: &PgPool,
     case: &Arc<Case>,
@@ -87,16 +108,13 @@ fn spawn_read(
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn materialized_exports_deny_revoked_managers(pool: PgPool) {
+async fn materialized_exports_deny_revoked_readers(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let (id, _) = add_invoice(&pool, &ids, 1).await;
-    sqlx::query!(
-        "UPDATE users SET org_role='member' WHERE id=$1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    let mut connection = pool.acquire().await.unwrap();
+    for reader in READERS {
+        revoke(&mut connection, &ids, reader).await;
+    }
     assert!(matches!(
         entries(&pool, ids.org_id, ids.user_id, &params()).await,
         Err(StatusCode::FORBIDDEN)
@@ -109,6 +127,48 @@ async fn materialized_exports_deny_revoked_managers(pool: PgPool) {
         pdf(&pool, ids.org_id, ids.user_id, id).await,
         Err(StatusCode::FORBIDDEN)
     ));
+}
+
+/// The invoice exports follow `InvoiceReadAll` alone: rate and cost grants
+/// neither open them nor are needed, and no cost rate reaches the export.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn invoice_exports_follow_the_invoice_grant_and_carry_no_cost_rates(pool: PgPool) {
+    let case = Case::new(&pool).await;
+    sqlx::query!(
+        "UPDATE users SET cost_rate_cents = 777123 WHERE id = $1",
+        case.ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut connection = pool.acquire().await.unwrap();
+    let identity = (case.ids.org_id, case.ids.user_id);
+    for reader in [Reader::Invoice, Reader::Pdf] {
+        crate::ops::testing::set_grants(&mut connection, &case.ids, &[Permission::InvoiceReadAll])
+            .await
+            .unwrap();
+        let export = case.read(&pool, identity, reader).await.unwrap();
+        assert!(!export.to_string().contains("777123"), "{export}");
+        for grants in [
+            &[
+                Permission::BillableRateWriteAll,
+                Permission::CostRateWriteAll,
+            ][..],
+            &[
+                Permission::InvoiceReadManaged,
+                Permission::InvoiceWriteManaged,
+            ],
+        ] {
+            crate::ops::testing::set_grants(&mut connection, &case.ids, grants)
+                .await
+                .unwrap();
+            assert_eq!(
+                case.read(&pool, identity, reader).await,
+                Err(StatusCode::FORBIDDEN)
+            );
+        }
+    }
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -128,15 +188,21 @@ async fn materialized_exports_require_same_tenant_active_actor(pool: PgPool) {
                 Err(StatusCode::FORBIDDEN)
             );
         }
-        for role in [OrgRole::Manager, OrgRole::Admin] {
-            sqlx::query!(
-                "UPDATE users SET org_role=$2, active=true WHERE id=$1",
-                case.ids.user_id,
-                role as OrgRole
+        for profile in [
+            BuiltInProfile::ExecutiveManager,
+            BuiltInProfile::Administrator,
+        ] {
+            crate::ops::testing::set_grants(
+                &mut pool.acquire().await.unwrap(),
+                &case.ids,
+                profile.direct_permissions(),
             )
-            .execute(&pool)
             .await
             .unwrap();
+            sqlx::query!("UPDATE users SET active=true WHERE id=$1", case.ids.user_id)
+                .execute(&pool)
+                .await
+                .unwrap();
             case.read(&pool, (case.ids.org_id, case.ids.user_id), reader)
                 .await
                 .unwrap();
@@ -166,7 +232,7 @@ async fn materialized_exports_require_same_tenant_active_actor(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn materialized_exports_deny_winning_legacy_revocations(pool: PgPool) {
+async fn materialized_exports_deny_winning_revocations(pool: PgPool) {
     for reader in READERS {
         for gated in [false, true] {
             for deactivate in [false, true] {
@@ -195,13 +261,7 @@ async fn materialized_exports_deny_winning_legacy_revocations(pool: PgPool) {
                     .await
                     .unwrap();
                 } else {
-                    sqlx::query!(
-                        "UPDATE users SET org_role='member' WHERE id=$1",
-                        case.ids.user_id
-                    )
-                    .execute(&mut *writer)
-                    .await
-                    .unwrap();
+                    revoke(&mut writer, &case.ids, reader).await;
                 }
                 let pending = spawn_read(&pool, &case, reader);
                 wait_for_blocked(&pool, pid).await;
@@ -462,7 +522,7 @@ async fn materialized_exports_keep_deadlines_and_restore_pool_defaults(pool: PgP
             expected
         );
     }
-    let mut tx = begin_manager(&reader_pool, case.ids.org_id, case.ids.user_id)
+    let mut tx = begin_invoice_read(&reader_pool, case.ids.org_id, case.ids.user_id)
         .await
         .unwrap();
     let settings = sqlx::query!(r#"SELECT current_setting('transaction_isolation') AS "isolation!", current_setting('transaction_read_only') AS "read_only!", current_setting('statement_timeout') AS "statement!", current_setting('idle_in_transaction_session_timeout') AS "idle!", current_setting('lock_timeout') AS "lock!""#).fetch_one(&mut *tx).await.unwrap();
@@ -500,7 +560,7 @@ async fn materialized_exports_keep_deadlines_and_restore_pool_defaults(pool: PgP
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn materialized_exports_recheck_after_render_without_retaining_authority(pool: PgPool) {
-    use crate::reports::{bounded::ExportPermit, render_manager_export};
+    use crate::reports::{bounded::ExportPermit, render_invoice_export};
     for gated in [false, true] {
         for deactivate in [false, true] {
             let case = Case::new(&pool).await;
@@ -512,7 +572,7 @@ async fn materialized_exports_recheck_after_render_without_retaining_authority(p
                 let actor = case.ids.user_id;
                 tokio::spawn(async move {
                     let _rows = entries(&pool, org, actor, &params()).await.unwrap();
-                    render_manager_export(
+                    render_invoice_export(
                         ExportPermit::acquire().unwrap(),
                         &pool,
                         org,
@@ -553,13 +613,7 @@ async fn materialized_exports_recheck_after_render_without_retaining_authority(p
                 .await
                 .unwrap();
             } else {
-                sqlx::query!(
-                    "UPDATE users SET org_role='member' WHERE id=$1",
-                    case.ids.user_id
-                )
-                .execute(&mut *writer)
-                .await
-                .unwrap();
+                revoke(&mut writer, &case.ids, Reader::Invoice).await;
             }
             writer.commit().await.unwrap();
             release.send(()).unwrap();
@@ -576,7 +630,7 @@ async fn materialized_exports_recheck_after_render_without_retaining_authority(p
         }
     }
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    let body = render_manager_export(
+    let body = render_invoice_export(
         ExportPermit::acquire().unwrap(),
         &pool,
         ids.org_id,
@@ -594,7 +648,7 @@ async fn materialized_exports_recheck_after_render_without_retaining_authority(p
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn materialized_exports_release_rendered_body_when_final_check_is_interrupted(pool: PgPool) {
-    use crate::reports::{bounded::ExportPermit, render_manager_export};
+    use crate::reports::{bounded::ExportPermit, render_invoice_export};
     let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     for cancel in [false, true] {
         let lock_timeout = if cancel { "0" } else { "250ms" };
@@ -618,7 +672,7 @@ async fn materialized_exports_release_rendered_body_when_final_check_is_interrup
             let org = ids.org_id;
             let actor = ids.user_id;
             tokio::spawn(async move {
-                render_manager_export(
+                render_invoice_export(
                     ExportPermit::acquire().unwrap(),
                     &pool,
                     org,
@@ -664,7 +718,7 @@ async fn materialized_exports_release_rendered_body_when_final_check_is_interrup
         let second = ExportPermit::acquire().unwrap();
         drop((first, second));
         tokio::time::timeout(Duration::from_secs(5), async {
-            begin_manager(&reader_pool, ids.org_id, ids.user_id)
+            begin_invoice_read(&reader_pool, ids.org_id, ids.user_id)
                 .await
                 .unwrap()
                 .commit()

@@ -1,31 +1,41 @@
 use super::*;
-use crate::server_fns::test_seed::wait_for_blocked;
+use crate::server_fns::test_seed::{SeedIds, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use std::time::Duration;
 use uuid::Uuid;
 
-async fn administrator(pool: &PgPool, org_id: Uuid) -> Uuid {
-    let id = Uuid::now_v7();
+/// Takes the seeded person's invoice grants away in a transaction of its own,
+/// the way the permission editor does: the organization row first, then the
+/// person's stored state.
+fn revoke(
+    pool: PgPool,
+    ids: &SeedIds,
+) -> impl std::future::Future<Output = Result<(), ServerFnError>> + use<> {
+    let ids = SeedIds { ..*ids };
+    async move {
+        let mut tx = pool.begin().await.map_err(server_err)?;
+        super::super::fee_tests::revoke(&mut tx, &ids).await;
+        tx.commit().await.map_err(server_err)
+    }
+}
+
+/// Holds the seeded person's stored state, which a revocation changes after
+/// taking the organization row.
+async fn hold_state(barrier: &mut sqlx::PgConnection, ids: &SeedIds) {
     sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role) \
-         VALUES ($1, $2, $3, 'Test User', $4)",
-        id,
-        org_id,
-        format!("{id}@test.com"),
-        OrgRole::Admin as OrgRole,
+        "SELECT id FROM person_permission_states WHERE user_id=$1 FOR UPDATE",
+        ids.user_id
     )
-    .execute(pool)
+    .fetch_one(barrier)
     .await
     .unwrap();
-    id
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn invoice_generation_and_user_revocation_commit_in_gate_order(pool: PgPool) {
+async fn invoice_generation_and_grant_revocation_commit_in_gate_order(pool: PgPool) {
     for invoice_first in [true, false] {
         let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
-        let administrator = administrator(&pool, ids.org_id).await;
         let entry = time_entry(&pool, &ids, EntryState::Open).await;
         sqlx::query!(
             "UPDATE projects SET rate_cents=10000 WHERE id=$1",
@@ -61,15 +71,13 @@ async fn invoice_generation_and_user_revocation_commit_in_gate_order(pool: PgPoo
                 .await
                 .unwrap();
         } else {
-            sqlx::query!("SELECT id FROM users WHERE id=$1 FOR UPDATE", ids.user_id)
-                .fetch_one(&mut *barrier)
-                .await
-                .unwrap();
+            hold_state(&mut barrier, &ids).await;
         }
         let mut operations = tokio::task::JoinSet::new();
         for invoice in [invoice_first, !invoice_first] {
             let db = pool.clone();
             let request = request.clone();
+            let revocation = revoke(pool.clone(), &ids);
             operations.spawn(async move {
                 let result = if invoice {
                     generate_invoice_with_request(
@@ -84,15 +92,7 @@ async fn invoice_generation_and_user_revocation_commit_in_gate_order(pool: PgPoo
                     .await
                     .map(|(invoice, _)| Some(invoice.invoice.id))
                 } else {
-                    crate::server_fns::users::change_user_role(
-                        &db,
-                        ids.org_id,
-                        administrator,
-                        ids.user_id,
-                        OrgRole::Member,
-                    )
-                    .await
-                    .map(|_| None)
+                    revocation.await.map(|_| None)
                 };
                 (invoice, result)
             });
@@ -177,11 +177,10 @@ async fn invoice_generation_and_user_revocation_commit_in_gate_order(pool: PgPoo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn invoice_edit_and_transition_observe_user_revocation_order(pool: PgPool) {
+async fn invoice_edit_and_transition_observe_grant_revocation_order(pool: PgPool) {
     for edit_invoice in [true, false] {
         for invoice_first in [true, false] {
             let ids = super::super::fee_tests::single_fee(&pool).await;
-            let administrator = administrator(&pool, ids.org_id).await;
             let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
             let invoice =
                 generate_invoice_with_options(&pool, ids.org_id, ids.client_id, period, None, None)
@@ -212,26 +211,16 @@ async fn invoice_edit_and_transition_observe_user_revocation_order(pool: PgPool)
                     .await
                     .unwrap();
             } else {
-                sqlx::query!("SELECT id FROM users WHERE id=$1 FOR UPDATE", ids.user_id)
-                    .fetch_one(&mut *barrier)
-                    .await
-                    .unwrap();
+                hold_state(&mut barrier, &ids).await;
             }
             let mut operations = tokio::task::JoinSet::new();
             for write_invoice in [invoice_first, !invoice_first] {
                 let db = pool.clone();
                 let request = request.clone();
+                let revocation = revoke(pool.clone(), &ids);
                 operations.spawn(async move {
                     let result = if !write_invoice {
-                        crate::server_fns::users::change_user_role(
-                            &db,
-                            ids.org_id,
-                            administrator,
-                            ids.user_id,
-                            OrgRole::Member,
-                        )
-                        .await
-                        .map(|_| ())
+                        revocation.await
                     } else if edit_invoice {
                         editing::save(&db, ids.org_id, ids.user_id, invoice_id, &request)
                             .await
@@ -431,7 +420,6 @@ async fn invoice_writers_override_readonly_defaults_without_changing_the_session
 async fn cancelled_invoice_writers_roll_back_and_release_single_connection(pool: PgPool) {
     for command in ["generate", "edit", "transition"] {
         let ids = super::super::fee_tests::single_fee(&pool).await;
-        let administrator = administrator(&pool, ids.org_id).await;
         let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
         let review = preview::prepare(
             &pool,
@@ -513,18 +501,8 @@ async fn cancelled_invoice_writers_roll_back_and_release_single_connection(pool:
             "SELECT pid AS \"pid!\" FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid))",
             blocker,
         ).fetch_one(&pool).await.unwrap();
-        let db = pool.clone();
         let mut revocation = tokio::task::JoinSet::new();
-        revocation.spawn(async move {
-            crate::server_fns::users::change_user_role(
-                &db,
-                ids.org_id,
-                administrator,
-                ids.user_id,
-                OrgRole::Member,
-            )
-            .await
-        });
+        revocation.spawn(revoke(pool.clone(), &ids));
         wait_for_blocked(&pool, writer_pid).await;
         writers.abort_all();
         let cancelled = writers.join_next().await.unwrap().unwrap_err();

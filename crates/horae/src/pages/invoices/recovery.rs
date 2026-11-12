@@ -1,8 +1,10 @@
 use dioxus::prelude::*;
+use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::models::invoice::{InvoiceDefaults, InvoiceDraftSave, InvoiceGenerationRequest};
+use crate::models::own_permissions::OwnPermissions;
 use crate::route::Route;
 use crate::server_fns;
 
@@ -113,6 +115,13 @@ pub(super) async fn release_navigation() {
     let _ = document::eval("document.querySelector('[data-editor-kind=\"invoice\"]')?.setAttribute('data-editor-leaving', '');").await;
 }
 
+/// Whether the person may open invoices at all: the grant `list_invoices` and
+/// `get_invoice` require, from a catalog this build understands.
+fn reads_invoices(own: &OwnPermissions) -> bool {
+    own.catalog_version == PERMISSION_CATALOG_VERSION
+        && own.grants.contains(&Permission::InvoiceReadAll)
+}
+
 /// Check this tab's current user's unresolved mutation before exposing invoice actions.
 #[component]
 pub(super) fn RecoveryGate(children: Element) -> Element {
@@ -138,8 +147,11 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
                 let user = server_fns::get_me()
                     .await
                     .map_err(|error| error.to_string())?;
-                if !user.is_manager_or_above() {
-                    return Err("Invoices require manager access.".to_owned());
+                let own = server_fns::get_my_permissions()
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if !own.is_some_and(|own| reads_invoices(&own)) {
+                    return Err("Invoices require access to all invoices.".to_owned());
                 }
                 storage_key.set(format!(
                     "horae-invoice-request:v1:{}:{}",

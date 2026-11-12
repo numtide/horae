@@ -13,12 +13,12 @@ pub fn can_transition(from: EntryState, to: EntryState, role: OrgRole) -> bool {
         (Submitted, Approved) => matches!(role, Manager | Admin),
         // Managers and admins can reject (reopen from submitted)
         (Approved, Open) => matches!(role, Manager | Admin),
-        // Managers and admins generate invoices, which flips the covered
-        // entries to invoiced. Open time is directly invoiceable (spec 001:
-        // no separate approval workflow in v1); approved time is the
-        // canonical pre-invoice state. Submitted time stays locked pending
-        // an approval decision.
-        (Open, Invoiced) | (Approved, Invoiced) => matches!(role, Manager | Admin),
+        // Generating an invoice flips the covered entries to invoiced; the
+        // caller requires the whole-invoice write grant, not a role. Open time
+        // is directly invoiceable (spec 001: no separate approval workflow in
+        // v1); approved time is the canonical pre-invoice state. Submitted
+        // time stays locked pending an approval decision.
+        (Open, Invoiced) | (Approved, Invoiced) => true,
         // No other transitions allowed
         _ => false,
     }
@@ -44,11 +44,11 @@ mod tests {
     }
 
     #[test]
-    fn managers_invoice_open_and_approved_time() {
+    fn open_and_approved_time_is_invoiceable_whatever_the_role() {
         for from in [Open, Approved] {
-            assert!(!can_transition(from, Invoiced, Member));
-            assert!(can_transition(from, Invoiced, Manager));
-            assert!(can_transition(from, Invoiced, Admin));
+            for role in [Member, Manager, Admin] {
+                assert!(can_transition(from, Invoiced, role));
+            }
         }
         assert!(!can_transition(Submitted, Invoiced, Admin));
     }

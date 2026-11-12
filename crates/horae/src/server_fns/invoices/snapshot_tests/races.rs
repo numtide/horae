@@ -4,9 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn financial_snapshots_deny_winning_actor_revocation_without_organization_change(
-    pool: PgPool,
-) {
+async fn financial_snapshots_deny_winning_actor_revocation(pool: PgPool) {
     for reader in [Reader::Invoice, Reader::Fees] {
         for gated in [false, true] {
             for deactivate in [false, true] {
@@ -38,13 +36,7 @@ async fn financial_snapshots_deny_winning_actor_revocation_without_organization_
                         .await
                         .unwrap();
                 } else {
-                    sqlx::query!(
-                        "UPDATE users SET org_role='member' WHERE id=$1",
-                        ids.user_id
-                    )
-                    .execute(&mut *writer)
-                    .await
-                    .unwrap();
+                    fee_tests::revoke(&mut writer, &ids).await;
                 }
                 let pending = {
                     let pool = pool.clone();
@@ -55,6 +47,19 @@ async fn financial_snapshots_deny_winning_actor_revocation_without_organization_
                 };
                 wait_for_blocked(&pool, pid).await;
                 writer.commit().await.unwrap();
+                // A grant change moves the organization row itself; the reader
+                // must still leave it as the writer did.
+                let organization_version = if deactivate {
+                    organization_version
+                } else {
+                    sqlx::query_scalar!(
+                        "SELECT xmin::text AS \"version!\" FROM organizations WHERE id=$1",
+                        ids.org_id
+                    )
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap()
+                };
                 assert_denied(
                     tokio::time::timeout(Duration::from_secs(5), pending)
                         .await

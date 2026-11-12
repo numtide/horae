@@ -65,6 +65,12 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                     .await
                     .unwrap();
             } else {
+                // The readers hold stored grants in their transaction; the
+                // detailed report's session gate still reads the role until
+                // the reports domain moves.
+                crate::ops::testing::set_grants(&mut writer, &ids, &[])
+                    .await
+                    .unwrap();
                 sqlx::query!(
                     "UPDATE users SET org_role='member' WHERE id=$1",
                     ids.user_id
@@ -104,6 +110,13 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 ids.user_id
             )
             .execute(pool)
+            .await
+            .unwrap();
+            crate::ops::testing::set_grants(
+                &mut pool.acquire().await.unwrap(),
+                &ids,
+                BuiltInProfile::ExecutiveManager.direct_permissions(),
+            )
             .await
             .unwrap();
             assert_eq!(api.json(name, body.clone(), &cookie).await, expected);

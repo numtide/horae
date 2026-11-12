@@ -222,6 +222,11 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             })
         };
         wait_for_blocked(pool, pid).await;
+        // Invoice exports follow the stored grants; the time exports still
+        // follow the role until the reports domain moves.
+        crate::ops::testing::set_grants(&mut writer, &ids, &[])
+            .await
+            .unwrap();
         sqlx::query!(
             "UPDATE users SET org_role='member' WHERE id=$1",
             ids.user_id
@@ -236,6 +241,13 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             ids.user_id
         )
         .execute(pool)
+        .await
+        .unwrap();
+        crate::ops::testing::set_grants(
+            &mut pool.acquire().await.unwrap(),
+            &ids,
+            BuiltInProfile::ExecutiveManager.direct_permissions(),
+        )
         .await
         .unwrap();
     }
