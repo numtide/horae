@@ -175,14 +175,8 @@ pub(crate) async fn add(
         events.push(AppEvent::UserCreated {
             occurred_at: now,
             org_id,
-            user: crate::server_fns::user_payload(
-                &mut **tx,
-                org_id,
-                user.id,
-                &user.email,
-                &user.name,
-            )
-            .await?,
+            user: crate::server_fns::user_payload(tx, org_id, user.id, &user.email, &user.name)
+                .await?,
         });
     }
     Ok(Done {
@@ -247,14 +241,8 @@ pub(crate) async fn set_active(
         let event = AppEvent::UserDeactivated {
             occurred_at: chrono::Utc::now(),
             org_id,
-            user: crate::server_fns::user_payload(
-                &mut **tx,
-                org_id,
-                user.id,
-                &user.email,
-                &user.name,
-            )
-            .await?,
+            user: crate::server_fns::user_payload(tx, org_id, user.id, &user.email, &user.name)
+                .await?,
         };
         return Ok(done.with(event));
     }
