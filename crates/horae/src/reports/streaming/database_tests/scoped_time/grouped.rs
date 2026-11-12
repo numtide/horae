@@ -25,7 +25,7 @@ async fn project_entries(pool: &PgPool, ids: &SeedIds, owner: Uuid, count: usize
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_preserves_distinct_ids_beyond_ten_thousand_groups(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
     project_entries(&pool, &ids, ids.user_id, 10_001).await;
     let response = groups::download(
         pool,
@@ -53,7 +53,12 @@ async fn grouped_csv_preserves_distinct_ids_beyond_ten_thousand_groups(pool: PgP
 #[serial_test::serial]
 async fn grouped_csv_checks_last_context_before_emitting_any_group_bytes(pool: PgPool) {
     for revoke_last in [false, true] {
-        let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadManaged]).await;
+        let ids = scoped(
+            &pool,
+            BuiltInProfile::Member,
+            &[Permission::TimeReadManaged],
+        )
+        .await;
         let other = person(&pool, ids.org_id).await;
         let projects = project_entries(&pool, &ids, other, 129).await;
         let edges: Vec<_> = projects.iter().map(|_| Uuid::now_v7()).collect();
@@ -122,7 +127,7 @@ async fn grouped_csv_checks_last_context_before_emitting_any_group_bytes(pool: P
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_revocation_under_backpressure_does_not_hold_gates(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadAll]).await;
+    let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadAll]).await;
     let other = person(&pool, ids.org_id).await;
     project_entries(&pool, &ids, other, 10).await;
     let response = groups::download(
@@ -174,7 +179,7 @@ async fn grouped_csv_revocation_under_backpressure_does_not_hold_gates(pool: PgP
 #[serial_test::serial]
 async fn grouped_csv_invalid_source_authority_cannot_be_repaired_after_declare(pool: PgPool) {
     for populated in [false, true] {
-        let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+        let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
         if populated {
             add_entries(&pool, &ids, 1).await;
         }
@@ -221,7 +226,7 @@ async fn grouped_csv_invalid_source_authority_cannot_be_repaired_after_declare(p
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_bounds_native_fragments_and_preserves_large_unicode_labels(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
     project_entries(&pool, &ids, ids.user_id, 3).await;
     let name = "界,\"quoted\"\n".repeat(10_000);
     sqlx::query!(
@@ -308,7 +313,7 @@ async fn grouped_csv_keeps_authority_between_fragment_batches_and_releases_on_ca
             END LOOP;
         END; $$"#).execute(&pool).await.unwrap();
     for cancel in [false, true] {
-        let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadAll]).await;
+        let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadAll]).await;
         let other = person(&pool, ids.org_id).await;
         project_entries(&pool, &ids, other, 257).await;
         let mut blocker = pool.begin().await.unwrap();
@@ -391,7 +396,7 @@ async fn grouped_csv_keeps_authority_between_fragment_batches_and_releases_on_ca
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_exports_all_four_dimensions_with_exact_rounded_hours(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE time_entries SET minutes=61,rounded_minutes=75 WHERE id=$1",
@@ -442,7 +447,7 @@ async fn grouped_csv_exports_all_four_dimensions_with_exact_rounded_hours(pool: 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_has_no_workbook_source_entry_cap(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
     add_entries(&pool, &ids, 10_001).await;
     let response = groups::download(
         pool,
@@ -465,7 +470,12 @@ async fn grouped_csv_has_no_workbook_source_entry_cap(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_csv_empty_source_still_requires_canonical_authority(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Manager, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(
+        &pool,
+        BuiltInProfile::ExecutiveManager,
+        &[Permission::TimeReadOwn],
+    )
+    .await;
     let response = groups::download(
         pool.clone(),
         ids.org_id,

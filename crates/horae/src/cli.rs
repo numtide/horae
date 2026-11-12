@@ -179,8 +179,10 @@ pub enum UserAction {
         email: String,
         #[arg(long)]
         name: String,
+        /// Built-in permission profile: administrator, executive_manager,
+        /// project_manager, accounting, people_admin or member
         #[arg(long, default_value = "member")]
-        role: String,
+        profile: String,
     },
     /// List all users
     List,

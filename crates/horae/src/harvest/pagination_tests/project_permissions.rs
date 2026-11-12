@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::SeedIds;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 mod concurrency;
@@ -21,10 +22,11 @@ pub(super) async fn selection(pool: &PgPool, user_id: Uuid, permissions: &[Permi
 
 pub(super) async fn canonical(
     pool: &PgPool,
-    role: OrgRole,
+    role: BuiltInProfile,
     permissions: &[Permission],
 ) -> (SeedIds, Router) {
     let ids = seed(pool, role).await;
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
          VALUES ($1,$2,$3,1,'{}',false,'individual')",
@@ -52,7 +54,7 @@ pub(super) async fn canonical(
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_reader_uses_list_count_and_detail_without_legacy_role(pool: PgPool) {
-    let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;
+    let (ids, app) = canonical(&pool, BuiltInProfile::Member, &[Permission::ProjectReadAll]).await;
     walk(&pool, &app, "projects", "is_active=true", &[ids.project_id]).await;
     let detail = page(&app, &format!("/harvest/v2/projects/{}", ids.project_id)).await;
     assert_eq!(detail["id"], api_id(&pool, "project", ids.project_id).await);
@@ -62,7 +64,7 @@ async fn canonical_project_reader_uses_list_count_and_detail_without_legacy_role
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_api_does_not_inherit_legacy_administrator_scope(pool: PgPool) {
-    let (ids, app) = canonical(&pool, OrgRole::Admin, &[]).await;
+    let (ids, app) = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
     for query in ["", "?per_page=1", "?per_page=1&page=2", "?is_active=true"] {
         let result = page(&app, &format!("/harvest/v2/projects{query}")).await;
         assert_eq!(result["total_entries"], 0);
@@ -81,7 +83,7 @@ async fn canonical_project_api_does_not_inherit_legacy_administrator_scope(pool:
 async fn canonical_project_api_rechecks_financial_only_revocation(pool: PgPool) {
     let (ids, app) = canonical(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         &[Permission::ProjectReadAll, Permission::BillableRateReadAll],
     )
     .await;
@@ -99,7 +101,7 @@ async fn canonical_project_api_rechecks_financial_only_revocation(pool: PgPool) 
 async fn canonical_project_api_managed_scope_requires_current_designation(pool: PgPool) {
     let (ids, app) = canonical(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         &[
             Permission::ProjectReadManaged,
             Permission::BillableRateReadManaged,
@@ -130,7 +132,7 @@ async fn canonical_project_api_managed_scope_requires_current_designation(pool: 
 #[serial_test::serial]
 async fn canonical_project_api_rejects_malformed_state_even_without_visible_rows(pool: PgPool) {
     for invalid in ["catalog", "grants", "missing", "policy"] {
-        let (ids, app) = canonical(&pool, OrgRole::Admin, &[]).await;
+        let (ids, app) = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
         match invalid {
             "catalog" => {
                 sqlx::query!(
@@ -186,7 +188,7 @@ async fn canonical_project_api_rejects_malformed_state_even_without_visible_rows
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_api_retains_filtered_total_past_last_page(pool: PgPool) {
-    let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;
+    let (ids, app) = canonical(&pool, BuiltInProfile::Member, &[Permission::ProjectReadAll]).await;
     let second = Uuid::now_v7();
     let archived = Uuid::now_v7();
     for (id, active) in [(second, true), (archived, false)] {
@@ -221,7 +223,7 @@ async fn canonical_project_api_retains_filtered_total_past_last_page(pool: PgPoo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_api_shared_member_keeps_hours_but_not_money(pool: PgPool) {
-    let (ids, app) = canonical(&pool, OrgRole::Member, &[]).await;
+    let (ids, app) = canonical(&pool, BuiltInProfile::Member, &[]).await;
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
         Uuid::now_v7(),
@@ -250,8 +252,8 @@ async fn canonical_project_api_shared_member_keeps_hours_but_not_money(pool: PgP
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_api_excludes_foreign_projects_and_foreign_client_parents(pool: PgPool) {
-    let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let (ids, app) = canonical(&pool, BuiltInProfile::Member, &[Permission::ProjectReadAll]).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     assert_eq!(
         request(
             &app,

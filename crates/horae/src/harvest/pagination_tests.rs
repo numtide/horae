@@ -1,6 +1,7 @@
 use super::*;
 use crate::server_fns::test_seed::{seed, time_entry};
 use axum::{Extension, body::Body, http::Request};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::{EntryState, OrgRole};
 use serde_json::Value;
 use std::sync::Arc;
@@ -113,8 +114,8 @@ async fn walk(pool: &PgPool, app: &Router, resource: &str, query: &str, expected
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_pagination_catalog_links_preserve_filters_and_break_name_ties(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
-    let _other_org = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+    let _other_org = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let second = Uuid::now_v7();
     let inactive = Uuid::now_v7();
     for (id, active) in [(inactive, false), (second, true)] {
@@ -192,8 +193,8 @@ async fn harvest_pagination_catalog_links_preserve_filters_and_break_name_ties(p
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_pagination_time_entries_keep_the_filtered_set_and_date_ties(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
-    let other = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+    let other = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let mut expected = Vec::new();
     for _ in 0..3 {
         expected.push(time_entry(&pool, &ids, EntryState::Open).await);
@@ -238,7 +239,7 @@ async fn harvest_pagination_time_entries_keep_the_filtered_set_and_date_ties(poo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_pagination_rejects_invalid_windows_on_every_collection(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let app = signed_in(&pool, ids.user_id).await;
     for resource in ["time_entries", "projects", "clients", "tasks", "users"] {
         // A window outside the bounds is Harvest's 422; a value that is not
@@ -273,7 +274,7 @@ fn harvest_pagination_total_pages_does_not_overflow() {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_pagination_malformed_filters_are_client_errors(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let app = signed_in(&pool, ids.user_id).await;
     for (uri, expected) in [
         (
@@ -317,7 +318,7 @@ async fn harvest_pagination_malformed_filters_are_client_errors(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_pagination_empty_and_out_of_range_pages_keep_the_contract(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let app = signed_in(&pool, ids.user_id).await;
     for resource in ["time_entries", "projects", "clients", "tasks", "users"] {
         let filter = if resource == "time_entries" {
@@ -358,7 +359,7 @@ async fn harvest_pagination_empty_and_out_of_range_pages_keep_the_contract(pool:
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_pagination_router_preserves_session_and_tenant_guards(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
         Uuid::now_v7(),
@@ -368,7 +369,7 @@ async fn harvest_pagination_router_preserves_session_and_tenant_guards(pool: PgP
     .execute(&pool)
     .await
     .unwrap();
-    let other = seed(&pool, OrgRole::Manager).await;
+    let other = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let own_entry = time_entry(&pool, &ids, EntryState::Open).await;
     let other_entry = time_entry(&pool, &other, EntryState::Open).await;
     let unsigned = router(pool.clone());
@@ -432,8 +433,8 @@ async fn harvest_pagination_router_preserves_session_and_tenant_guards(pool: PgP
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_project_progress_permissions_cover_counts_pages_and_details(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let own_entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
@@ -554,8 +555,8 @@ async fn harvest_project_progress_permissions_cover_counts_pages_and_details(poo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_task_access_filters_counts_and_preserves_rate_free_history(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
-    let other = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let other = seed(&pool, BuiltInProfile::Administrator).await;
     let hidden = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO tasks (id,org_id,name,default_rate_cents) VALUES ($1,$2,'Hidden',8765)",
@@ -659,7 +660,7 @@ async fn harvest_task_access_filters_counts_and_preserves_rate_free_history(pool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_own_time_omits_private_project_budget_metadata(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
@@ -711,7 +712,7 @@ async fn harvest_own_time_omits_private_project_budget_metadata(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_project_cost_overrides_require_admin_without_fabricated_fallback(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",

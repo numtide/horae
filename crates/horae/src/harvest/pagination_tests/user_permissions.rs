@@ -36,7 +36,12 @@ fn rates(user: &Value) -> (Option<f64>, Option<f64>) {
 #[serial_test::serial]
 async fn user_api_follows_people_and_rate_grants_not_the_legacy_role(pool: PgPool) {
     // A legacy manager whose detailed permissions carry no rate grant.
-    let (ids, app) = canonical(&pool, OrgRole::Manager, &[Permission::PeopleReadAll]).await;
+    let (ids, app) = canonical(
+        &pool,
+        BuiltInProfile::ExecutiveManager,
+        &[Permission::PeopleReadAll],
+    )
+    .await;
     with_rates(&pool, ids.user_id).await;
     assert_eq!(rates(&listed(&pool, &app, ids.user_id).await), (None, None));
     assert_eq!(
@@ -86,7 +91,7 @@ async fn user_api_follows_people_and_rate_grants_not_the_legacy_role(pool: PgPoo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn user_api_gives_a_legacy_admin_nothing_their_grants_do_not(pool: PgPool) {
-    let (ids, app) = canonical(&pool, OrgRole::Admin, &[]).await;
+    let (ids, app) = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
     with_rates(&pool, ids.user_id).await;
     assert_eq!(
         request(&app, "/harvest/v2/users").await.0,

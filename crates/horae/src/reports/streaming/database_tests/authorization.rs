@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::wait_for_blocked;
+use horae_core::permissions::catalog::BuiltInProfile;
 
 #[derive(Clone, Copy)]
 enum Surface {
@@ -44,8 +45,8 @@ async fn empty_invoice(pool: &PgPool, ids: &SeedIds) -> Uuid {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_exports_require_current_tenant_bound_actors_even_when_empty(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let invoice_id = empty_invoice(&pool, &ids).await;
     for surface in [Surface::Entries, Surface::Projects, Surface::Invoice] {
         for (org, actor) in [
@@ -118,7 +119,7 @@ async fn streamed_exports_require_current_tenant_bound_actors_even_when_empty(po
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_exports_refresh_after_organization_or_actor_wait(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let invoice_id = empty_invoice(&pool, &ids).await;
     for surface in [Surface::Entries, Surface::Projects, Surface::Invoice] {
         for organization_wait in [true, false] {
@@ -165,7 +166,7 @@ async fn streamed_exports_refresh_after_organization_or_actor_wait(pool: PgPool)
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_projects_capture_scope_gained_during_initial_wait(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let mut writer = pool.begin().await.unwrap();
     crate::db::lock_organization(
         &mut writer,
@@ -207,7 +208,7 @@ async fn streamed_projects_capture_scope_gained_during_initial_wait(pool: PgPool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_timesheet_rechecks_after_backpressure_without_retaining_locks(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     add_entries(&pool, &ids, 1000).await;
     let result = entries(pool.clone(), ids.org_id, ids.user_id, params())
         .await
@@ -253,7 +254,7 @@ async fn streamed_timesheet_rechecks_after_backpressure_without_retaining_locks(
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_source_stays_frozen_across_batches_while_authority_is_fresh(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     add_entries(&pool, &ids, 400).await;
     let result = entries(pool.clone(), ids.org_id, ids.user_id, params())
         .await
@@ -281,7 +282,7 @@ async fn streamed_source_stays_frozen_across_batches_while_authority_is_fresh(po
 #[serial_test::serial]
 async fn streamed_pending_project_block_checks_all_captured_ids_after_capacity(pool: PgPool) {
     for revoke_previous_block in [false, true] {
-        let ids = seed(&pool, OrgRole::Member).await;
+        let ids = seed(&pool, BuiltInProfile::Member).await;
         let project_ids = [ids.project_id, Uuid::now_v7(), Uuid::now_v7()];
         for id in &project_ids[1..] {
             sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency) VALUES ($1,$2,$3,'Later','EUR')",id,ids.org_id,ids.client_id).execute(&pool).await.unwrap();
@@ -405,7 +406,7 @@ async fn streamed_native_batches_keep_crossing_rows_and_reject_invalid_limits(po
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_compressible_unicode_payload_bounds_native_prefetch(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     add_entries(&pool, &ids, 4).await;
     let note = "界,\"quoted\"\n".repeat(CHUNK_BYTES);
     sqlx::query!(
@@ -444,7 +445,7 @@ async fn streamed_compressible_unicode_payload_bounds_native_prefetch(pool: PgPo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_invoice_keeps_original_metadata_lines_and_totals_between_batches(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     add_entries(&pool, &ids, 400).await;
     let invoice_id = empty_invoice(&pool, &ids).await;
     sqlx::query!(
@@ -497,7 +498,7 @@ async fn streamed_invoice_keeps_original_metadata_lines_and_totals_between_batch
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_header_and_total_blocks_recheck_manager_after_capacity(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     for tail in [false, true] {
         let (sender, mut receiver) = mpsc::channel(1);
         sender.send(b"queued".to_vec()).await.unwrap();
@@ -550,7 +551,7 @@ async fn streamed_header_and_total_blocks_recheck_manager_after_capacity(pool: P
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_project_release_refreshes_scope_after_parent_wait(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
         Uuid::now_v7(),
@@ -603,7 +604,7 @@ async fn streamed_project_release_refreshes_scope_after_parent_wait(pool: PgPool
 async fn streamed_authority_releases_successful_locks_and_overrides_inherited_settings(
     pool: PgPool,
 ) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let mut connection = pool.acquire().await.unwrap();
     sqlx::query!("SET default_transaction_isolation='serializable'")
         .execute(&mut *connection)
@@ -681,7 +682,7 @@ async fn closed_backend(pool: &PgPool, pid: i32) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_cancelled_authorization_reclaims_its_single_connection(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let (export_pool, pid) = export_connection(&pool).await;
     let mut writer = pool.begin().await.unwrap();
     crate::db::lock_organization(
@@ -722,7 +723,7 @@ async fn streamed_cancelled_authorization_reclaims_its_single_connection(pool: P
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_cancelled_fetch_reclaims_connection_without_authority_locks(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     add_entries(&pool, &ids, 1).await;
     sqlx::query!("CREATE SCHEMA csv_fetch_test")
         .execute(&pool)

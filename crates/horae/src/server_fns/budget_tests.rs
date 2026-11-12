@@ -1,5 +1,6 @@
 use super::claim_budget_band;
 use crate::server_fns::test_seed::seed;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::OrgRole;
 use sqlx::PgPool;
 
@@ -25,7 +26,7 @@ async fn visible_scopes(
 }
 
 async fn configured(pool: &PgPool) -> SeedIds {
-    let ids = seed(pool, OrgRole::Manager).await;
+    let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
     sqlx::query!(
         "UPDATE projects SET budget_kind = 'hours', budget_minutes = 100, rate_cents = 6000 WHERE id = $1",
         ids.project_id
@@ -536,7 +537,7 @@ async fn configured_amount_budget_uses_resolved_rates_and_explicit_zero(pool: Pg
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_budget_does_not_read_foreign_or_legacy_projects(pool: PgPool) {
     let ids = configured(&pool).await;
-    let other = seed(&pool, OrgRole::Manager).await;
+    let other = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     assert!(
         configured_progress(
             &mut pool.acquire().await.unwrap(),
@@ -904,7 +905,7 @@ async fn configured_budget_sweep_dates_the_period_in_the_workspace_zone(pool: Pg
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_alert_recipients_are_active_same_org_managers_and_project_leads(pool: PgPool) {
     let ids = configured(&pool).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     sqlx::query!("UPDATE project_settings SET alert_enabled = true, alert_threshold = 0 WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
     let mut expected = vec![ids.user_id];
     for (role, active, lead) in [
@@ -966,7 +967,7 @@ async fn configured_alert_recipients_are_active_same_org_managers_and_project_le
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_notification_schema_enforces_tenants_and_no_public_access(pool: PgPool) {
     let ids = configured(&pool).await;
-    let foreign = seed(&pool, OrgRole::Manager).await;
+    let foreign = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let error = sqlx::query!(
         "INSERT INTO project_budget_notifications (id,org_id,project_id,recipient_id,period_key,threshold)
          VALUES ($1,$2,$3,$4,'lifetime',80)",
@@ -986,7 +987,7 @@ async fn budget_notification_schema_enforces_tenants_and_no_public_access(pool: 
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn concurrent_budget_checks_have_one_band_claimant(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     sqlx::query!(
         "UPDATE projects SET last_budget_alert_pct = NULL WHERE id = $1",
         ids.project_id

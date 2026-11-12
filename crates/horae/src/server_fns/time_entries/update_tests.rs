@@ -1,10 +1,11 @@
 use super::*;
 use crate::server_fns::test_seed::{seed, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use std::time::Duration;
 
 pub(super) async fn editable_entry(pool: &PgPool, billable: bool) -> TimeEntry {
-    let ids = seed(pool, OrgRole::Admin).await;
+    let ids = seed(pool, BuiltInProfile::Administrator).await;
     sqlx::query!(
         "INSERT INTO project_tasks (project_id, task_id, billable) VALUES ($1, $2, $3)",
         ids.project_id,
@@ -357,7 +358,7 @@ async fn revoked_grant_does_not_trap_an_own_running_timer(pool: PgPool) {
     .await
     .unwrap();
     restrict_task(&pool, &entry).await;
-    let foreign_user = seed(&pool, OrgRole::Member).await;
+    let foreign_user = seed(&pool, BuiltInProfile::Member).await;
     let foreign = stop_entry_timer(&pool, foreign_user.user_id, running.id).await;
     assert!(matches!(
         foreign,

@@ -3,9 +3,12 @@
 //! tests live inside the crate because `tests/` cannot import a bin crate's
 //! modules.
 
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+use crate::server_fns::provisioning;
 
 pub struct SeedIds {
     pub org_id: Uuid,
@@ -65,8 +68,21 @@ pub async fn repeatable_read_pool(pool: &PgPool) -> PgPool {
     rr
 }
 
-/// Seed the minimal tenant, giving the user `role`, and return its ids.
-pub async fn seed(pool: &PgPool, role: OrgRole) -> SeedIds {
+/// Seed the minimal tenant, giving the user `profile`'s permission state, and
+/// return its ids. The user's `org_role` is the placeholder new people get,
+/// for the domains that still read it.
+pub async fn seed(pool: &PgPool, profile: BuiltInProfile) -> SeedIds {
+    let ids = seed_before_permission_state(pool, provisioning::placeholder_role(profile)).await;
+    let mut connection = pool.acquire().await.unwrap();
+    provisioning::provision(&mut connection, ids.org_id, ids.user_id, profile)
+        .await
+        .unwrap();
+    ids
+}
+
+/// Seed the minimal tenant with no permission state, for tests that migrate
+/// from a schema older than `person_permission_states`.
+pub async fn seed_before_permission_state(pool: &PgPool, role: OrgRole) -> SeedIds {
     let org_id = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO organizations (id, name) VALUES ($1, 'Test Org')",
@@ -191,4 +207,48 @@ pub async fn assert_minutes_cannot_rise(pool: &PgPool, entry_id: Uuid) {
             .contains("Daily hours cannot exceed 240."),
         "{raised}"
     );
+}
+
+/// The built-in profile a person's permission state holds, and whether it is
+/// the Administrator state. `None` when the person has no state, or one that
+/// came from a template or an individual selection.
+pub async fn built_in_profile(
+    pool: &PgPool,
+    org_id: Uuid,
+    user_id: Uuid,
+) -> Option<(BuiltInProfile, bool)> {
+    let mut connection = pool.acquire().await.unwrap();
+    let state = crate::server_fns::load_person_permissions(&mut connection, org_id, user_id)
+        .await
+        .unwrap()?;
+    match state.source {
+        crate::models::permissions::PermissionSource::BuiltIn(profile) => {
+            assert_eq!(state.grants, profile.selection());
+            Some((profile, state.is_administrator))
+        }
+        _ => None,
+    }
+}
+
+/// Remove the permission state `seed` provisioned, for a test that writes the
+/// person's state itself.
+pub async fn clear_state(pool: &PgPool, user_id: Uuid) {
+    sqlx::query!(
+        "DELETE FROM person_permission_states WHERE user_id = $1",
+        user_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Switch an organization to the scoped permission policy.
+pub async fn use_policy_one(pool: &PgPool, org_id: Uuid) {
+    sqlx::query!(
+        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
+        org_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
 }

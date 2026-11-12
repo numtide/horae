@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::wait_for_blocked;
+use horae_core::permissions::catalog::BuiltInProfile;
 
 #[derive(Clone, Copy, Debug)]
 enum Reader {
@@ -69,7 +70,7 @@ impl Reader {
 async fn tagged_reader(pool: &PgPool) -> (SeedIds, User) {
     let (ids, viewer) = fixture(
         pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -479,7 +480,7 @@ async fn detail_view_reads_identity_and_budget_from_one_snapshot(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detail_view_observes_membership_removed_behind_the_lock_only_access_gate(pool: PgPool) {
-    let (ids, viewer) = fixture(&pool, OrgRole::Member, PermissionSelection::new(&[])).await;
+    let (ids, viewer) = fixture(&pool, BuiltInProfile::Member, PermissionSelection::new(&[])).await;
     let assignment = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
@@ -502,7 +503,7 @@ async fn detail_view_observes_membership_removed_behind_the_lock_only_access_gat
     .unwrap();
     let admin = User {
         id: admin_id,
-        ..super::detail::legacy_viewer(&ids, OrgRole::Admin)
+        ..super::detail::legacy_viewer(&ids, BuiltInProfile::Administrator)
     };
     detail_view::fetch(&pool, &viewer, ids.project_id, None, today())
         .await
@@ -552,7 +553,7 @@ async fn detail_view_observes_report_visibility_revoked_by_the_project_editor(po
     // authorization path with the manager set unchanged.
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll, Permission::ProjectWriteAll]),
     )
     .await;
@@ -587,6 +588,7 @@ async fn detail_view_observes_report_visibility_revoked_by_the_project_editor(po
     let no_grants: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(&[])).unwrap())
             .unwrap();
+    crate::server_fns::test_seed::clear_state(&pool, member_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states
          (id, org_id, user_id, catalog_version, grants, is_administrator, source)
@@ -610,7 +612,7 @@ async fn detail_view_observes_report_visibility_revoked_by_the_project_editor(po
     .unwrap();
     let member = User {
         id: member_id,
-        ..super::detail::legacy_viewer(&ids, OrgRole::Member)
+        ..super::detail::legacy_viewer(&ids, BuiltInProfile::Member)
     };
     detail_view::fetch(&pool, &member, ids.project_id, None, today())
         .await
@@ -684,7 +686,7 @@ async fn detail_view_observes_report_visibility_revoked_by_the_project_editor(po
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn membership_removal_waits_for_a_reader_that_already_holds_authority(pool: PgPool) {
-    let (ids, viewer) = fixture(&pool, OrgRole::Member, PermissionSelection::new(&[])).await;
+    let (ids, viewer) = fixture(&pool, BuiltInProfile::Member, PermissionSelection::new(&[])).await;
     let assignment = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
@@ -707,7 +709,7 @@ async fn membership_removal_waits_for_a_reader_that_already_holds_authority(pool
     .unwrap();
     let admin = User {
         id: admin_id,
-        ..super::detail::legacy_viewer(&ids, OrgRole::Admin)
+        ..super::detail::legacy_viewer(&ids, BuiltInProfile::Administrator)
     };
     // The reader takes its authority locks, then waits on a later table.
     let mut hold = pool.begin().await.unwrap();
@@ -743,7 +745,7 @@ async fn membership_removal_waits_for_a_reader_that_already_holds_authority(pool
 async fn access_change_gate_keeps_the_stored_organization_unchanged(pool: PgPool) {
     use crate::db::{OrganizationLock, lock_organization};
 
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let stored = |pool: PgPool| async move {
         sqlx::query!(
             r#"SELECT to_jsonb(o) AS "row!", xmin::text AS "version!" FROM organizations o WHERE id=$1"#,

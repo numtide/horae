@@ -221,8 +221,8 @@ async fn begin_read(
     requester: Uuid,
 ) -> Result<Transaction<'_, Postgres>, AuditReadError> {
     let mut tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
-    let policy = sqlx::query_scalar!(
-        "SELECT permission_policy_version FROM organizations WHERE id = $1 FOR SHARE",
+    let organization = sqlx::query_scalar!(
+        "SELECT id FROM organizations WHERE id = $1 FOR SHARE",
         org_id
     )
     .fetch_optional(&mut *tx)
@@ -234,7 +234,7 @@ async fn begin_read(
     )
     .fetch_optional(&mut *tx)
     .await?;
-    if policy != Some(1) || active.is_none() {
+    if organization.is_none() || active.is_none() {
         return Err(AuditReadError::Forbidden);
     }
     if !load_person_permissions(&mut tx, org_id, requester)

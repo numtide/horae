@@ -166,7 +166,7 @@ fn yes_no(billable: bool) -> &'static str {
 }
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Manager).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::ExecutiveManager).await;
     sqlx::query!(
         "UPDATE organizations SET round_minutes = 15, round_dir = 'nearest' WHERE id = $1",
         ids.org_id
@@ -237,7 +237,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     }
     // Another organization's client with an entry in the period: a legacy
     // filter naming it must not reach across tenants.
-    let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     sqlx::query!(
         "INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, billable, notes)
              VALUES ($1, $2, $3, $4, $5, $6::text::date, $7, $8, $9)",

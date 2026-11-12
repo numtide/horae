@@ -1,6 +1,6 @@
 use super::linking::{identity, sign_in, wait_for_links};
 use crate::auth::oidc::link::{LinkError, LinkOutcome, Rejection, link};
-use horae_core::types::OrgRole;
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -9,7 +9,7 @@ use uuid::Uuid;
 const ISSUER: &str = "https://id.example.com";
 
 async fn account(pool: &PgPool) -> Uuid {
-    crate::server_fns::test_seed::seed(pool, OrgRole::Member)
+    crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member)
         .await
         .user_id
 }

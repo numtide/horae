@@ -8,7 +8,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     for (case, role, grants, rate, expected_status, expected_rate) in [
         (
             "member_preserves",
-            OrgRole::Member,
+            BuiltInProfile::Member,
             vec![Permission::TaskWriteAll],
             json!({"action":"preserve"}),
             StatusCode::OK,
@@ -16,7 +16,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         ),
         (
             "legacy_admin_has_no_authority",
-            OrgRole::Admin,
+            BuiltInProfile::Administrator,
             vec![],
             json!({"action":"preserve"}),
             StatusCode::FORBIDDEN,
@@ -24,7 +24,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         ),
         (
             "name_editor_preserves_hidden_rate",
-            OrgRole::Admin,
+            BuiltInProfile::Administrator,
             vec![Permission::TaskWriteAll],
             json!({"action":"preserve"}),
             StatusCode::OK,
@@ -32,7 +32,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         ),
         (
             "name_editor_cannot_clear",
-            OrgRole::Admin,
+            BuiltInProfile::Administrator,
             vec![Permission::TaskWriteAll],
             json!({"action":"clear"}),
             StatusCode::FORBIDDEN,
@@ -40,7 +40,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         ),
         (
             "equal_rate_still_requires_authority",
-            OrgRole::Admin,
+            BuiltInProfile::Administrator,
             vec![Permission::TaskWriteAll],
             json!({"action":"set","amount_cents":8000,"currency":"EUR"}),
             StatusCode::FORBIDDEN,
@@ -48,7 +48,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         ),
         (
             "managed_rate_does_not_write_global_default",
-            OrgRole::Admin,
+            BuiltInProfile::Administrator,
             vec![
                 Permission::TaskWriteAll,
                 Permission::BillableRateWriteManaged,
@@ -59,7 +59,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         ),
         (
             "rate_writer_clears",
-            OrgRole::Member,
+            BuiltInProfile::Member,
             vec![Permission::TaskWriteAll, Permission::BillableRateWriteAll],
             json!({"action":"clear"}),
             StatusCode::OK,
@@ -67,7 +67,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         ),
         (
             "rate_writer_sets_zero",
-            OrgRole::Member,
+            BuiltInProfile::Member,
             vec![Permission::TaskWriteAll, Permission::BillableRateWriteAll],
             json!({"action":"set","amount_cents":0,"currency":"EUR"}),
             StatusCode::OK,
@@ -75,7 +75,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         ),
         (
             "rate_grant_without_task_write",
-            OrgRole::Admin,
+            BuiltInProfile::Administrator,
             vec![Permission::BillableRateWriteAll],
             json!({"action":"set","amount_cents":0,"currency":"EUR"}),
             StatusCode::FORBIDDEN,
@@ -86,6 +86,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         let grants = PermissionSelection::new(&grants);
         let may_read_rate = grants.contains(Permission::BillableRateReadAll);
         let stored: Vec<String> = serde_json::from_value(json!(grants)).unwrap();
+        crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
             VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &stored)
             .execute(pool).await.unwrap();
