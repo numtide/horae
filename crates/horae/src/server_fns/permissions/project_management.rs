@@ -33,12 +33,12 @@ pub(crate) async fn read_in_transaction(
     project_id: Uuid,
 ) -> Result<ProjectManagers, ProjectManagersError> {
     let org = sqlx::query!(
-        "SELECT permission_policy_version, access_revision FROM organizations WHERE id=$1 FOR SHARE",
+        "SELECT access_revision FROM organizations WHERE id=$1 FOR SHARE",
         org_id
-    ).fetch_optional(&mut **tx).await?.ok_or(ProjectManagersError::Forbidden)?;
-    if org.permission_policy_version != 1 {
-        return Err(ProjectManagersError::Forbidden);
-    }
+    )
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or(ProjectManagersError::Forbidden)?;
     authorize_actor(tx, org_id, actor_id, project_id).await?;
     sqlx::query_scalar!(
         "SELECT id FROM projects WHERE org_id=$1 AND id=$2",
@@ -197,15 +197,12 @@ pub(crate) async fn execute_in_transaction(
             error => ProjectManagersError::Database(error),
         })?;
     let org = sqlx::query!(
-        "SELECT permission_policy_version, access_revision FROM organizations WHERE id = $1",
+        "SELECT access_revision FROM organizations WHERE id = $1",
         org_id
     )
     .fetch_optional(&mut **tx)
     .await?
     .ok_or(ProjectManagersError::Forbidden)?;
-    if org.permission_policy_version != 1 {
-        return Err(ProjectManagersError::Forbidden);
-    }
     authorize_actor(tx, org_id, actor_id, request.project_id).await?;
     let mut intent = request.clone();
     intent.manager_ids.sort_unstable();

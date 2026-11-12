@@ -42,12 +42,12 @@ async fn begin(
     let mut tx = pool.begin().await?;
     super::configure_administration(&mut tx).await?;
     let organization = sqlx::query!(
-        "SELECT permission_policy_version, access_revision FROM organizations WHERE id=$1 FOR SHARE",
+        "SELECT access_revision FROM organizations WHERE id=$1 FOR SHARE",
         org
-    ).fetch_optional(&mut *tx).await?.ok_or(ProfileCommandError::Forbidden)?;
-    if organization.permission_policy_version != 1 {
-        return Err(ProfileCommandError::Forbidden);
-    }
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(ProfileCommandError::Forbidden)?;
     let active = sqlx::query_scalar!(
         "SELECT active FROM users WHERE org_id = $1 AND id = $2 FOR SHARE",
         org,

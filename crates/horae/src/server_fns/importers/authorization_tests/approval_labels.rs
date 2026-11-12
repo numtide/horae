@@ -2,6 +2,7 @@
 
 use super::*;
 use chrono::NaiveDate;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 
 async fn approval(
@@ -29,8 +30,8 @@ async fn approval(
 }
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Manager).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::ExecutiveManager).await;
+    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     let admin = user(pool, ids.org_id, OrgRole::Admin).await;
     let member = user(pool, ids.org_id, OrgRole::Member).await;
     let archived = user(pool, ids.org_id, OrgRole::Member).await;

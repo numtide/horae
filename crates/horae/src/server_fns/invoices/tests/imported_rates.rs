@@ -1,11 +1,12 @@
 use super::*;
 use crate::importers::harvest::csv_source::import_body;
 use horae_core::importers::harvest::types::ImportMode;
+use horae_core::permissions::catalog::BuiltInProfile;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn imported_legacy_project_keeps_exact_rates_and_totals_on_retry(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     sqlx::query!(
         "UPDATE users SET billable_rate_cents = 3000, cost_rate_cents = 1200 WHERE id = $1",
         ids.user_id,
@@ -106,7 +107,7 @@ async fn imported_task_rates_require_matching_currency_only_for_new_configured_l
         (true, Some(0_i64), "80", "EUR", 0, Some(0)),
         (false, None, "80", "EUR", 0, Some(8000)),
     ] {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         sqlx::query!(
             "UPDATE projects SET currency = 'USD' WHERE id = $1",
             ids.project_id
@@ -181,7 +182,7 @@ async fn imported_task_rates_require_matching_currency_only_for_new_configured_l
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn rejected_import_rate_does_not_poison_the_next_row_or_its_catalog_rate(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     sqlx::query!(
         "UPDATE projects SET currency = 'USD' WHERE id = $1",
         ids.project_id

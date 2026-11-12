@@ -469,7 +469,7 @@ horae migrate run                   # apply pending migrations
 horae migrate reset --confirm       # drop every table and re-migrate (dev only)
 horae seed                          # insert demo data (idempotent)
 horae user list
-horae user create --email admin@example.com --name "Admin" --role admin
+horae user create --email admin@example.com --name "Admin" --profile administrator
 ```
 
 ## API

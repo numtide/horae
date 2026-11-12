@@ -1,11 +1,11 @@
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed};
-use horae_core::types::OrgRole;
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 async fn fixture(pool: &PgPool) -> SeedIds {
-    let ids = seed(pool, OrgRole::Member).await;
+    let ids = seed(pool, BuiltInProfile::Member).await;
     sqlx::query!(
         "INSERT INTO assignments (id, project_id, user_id) VALUES ($1,$2,$3)",
         Uuid::now_v7(),

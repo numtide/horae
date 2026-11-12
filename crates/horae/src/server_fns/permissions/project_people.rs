@@ -37,17 +37,10 @@ pub(crate) async fn read(
     query: &ProjectPeopleQuery,
 ) -> Result<ProjectPeopleResult, ProjectPeopleError> {
     let mut tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
-    let policy = sqlx::query_scalar!(
-        "SELECT permission_policy_version FROM organizations WHERE id=$1 FOR SHARE",
-        org_id
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
-    match policy {
-        Some(1) => {}
-        Some(0) | None => return Err(ProjectPeopleError::Forbidden),
-        Some(_) => return Err(ProjectPeopleError::Unavailable),
-    }
+    sqlx::query_scalar!("SELECT id FROM organizations WHERE id=$1 FOR SHARE", org_id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or(ProjectPeopleError::Forbidden)?;
     let actor = sqlx::query_scalar!(
         "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
         org_id,

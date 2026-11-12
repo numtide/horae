@@ -1,7 +1,8 @@
 //! Clients page readers on stored grants.
 
 use super::*;
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::server_fns::test_seed::{SeedIds, seed, seed_before_permission_state, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -25,7 +26,7 @@ async fn set_grants(pool: &PgPool, user_id: Uuid, permissions: &[Permission]) {
 /// A disposable organization on policy one, with a client carrying every
 /// protected field so payload checks can look for leaks.
 async fn policy_one(pool: &PgPool, role: OrgRole, permissions: &[Permission]) -> SeedIds {
-    let ids = seed(pool, role).await;
+    let ids = seed_before_permission_state(pool, role).await;
     sqlx::query!(
         "UPDATE clients SET address=$2, tax_id=$3, default_rate_cents=12345 WHERE id=$1",
         ids.client_id,
@@ -214,7 +215,7 @@ async fn visible_default_rate_distinguishes_unset_from_zero(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn foreign_missing_and_rebound_requests_fail_closed(pool: PgPool) {
     let ids = policy_one(&pool, OrgRole::Member, &[Permission::ClientReadAll]).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for client_id in [foreign.client_id, Uuid::now_v7()] {
         let error = client_detail_view_for(&pool, ids.org_id, ids.user_id, client_id, None)
             .await

@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::wait_for_blocked;
+use horae_core::permissions::catalog::BuiltInProfile;
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
 
@@ -19,7 +20,7 @@ struct Case {
 
 impl Case {
     async fn new(pool: &PgPool) -> Self {
-        let ids = seed(pool, OrgRole::Manager).await;
+        let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
         let (invoice_id, _) = add_invoice(pool, &ids, 1).await;
         Self { ids, invoice_id }
     }
@@ -87,7 +88,7 @@ fn spawn_read(
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn materialized_exports_deny_revoked_managers(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let (id, _) = add_invoice(&pool, &ids, 1).await;
     sqlx::query!(
         "UPDATE users SET org_role='member' WHERE id=$1",
@@ -115,7 +116,7 @@ async fn materialized_exports_deny_revoked_managers(pool: PgPool) {
 async fn materialized_exports_require_same_tenant_active_actor(pool: PgPool) {
     let case = Case::new(&pool).await;
     let before = case.stored(&pool).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for reader in READERS {
         for identity in [
             (case.ids.org_id, Uuid::now_v7()),
@@ -574,7 +575,7 @@ async fn materialized_exports_recheck_after_render_without_retaining_authority(p
             drop((first, second));
         }
     }
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let body = render_manager_export(
         ExportPermit::acquire().unwrap(),
         &pool,
@@ -594,7 +595,7 @@ async fn materialized_exports_recheck_after_render_without_retaining_authority(p
 #[serial_test::serial]
 async fn materialized_exports_release_rendered_body_when_final_check_is_interrupted(pool: PgPool) {
     use crate::reports::{bounded::ExportPermit, render_manager_export};
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     for cancel in [false, true] {
         let lock_timeout = if cancel { "0" } else { "250ms" };
         let reader_pool = sqlx::postgres::PgPoolOptions::new()

@@ -5,8 +5,8 @@ use super::*;
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
 
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
+    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     let target = user(pool, ids.org_id, OrgRole::Member).await;
     let cookie = api.cookie(ids.user_id).await;
     let request = json!({"activity":"all","after":null});
@@ -26,6 +26,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         Permission::PeopleReadManaged
     ])))
     .unwrap();
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants).execute(pool).await.unwrap();
     sqlx::query!(

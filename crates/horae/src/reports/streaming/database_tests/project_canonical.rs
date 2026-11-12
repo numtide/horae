@@ -1,12 +1,13 @@
 use super::*;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
-async fn canonical(pool: &PgPool, role: OrgRole, permissions: &[Permission]) -> SeedIds {
+async fn canonical(pool: &PgPool, role: BuiltInProfile, permissions: &[Permission]) -> SeedIds {
     let ids = seed(pool, role).await;
     let grants: Vec<String> = serde_json::from_value(
         serde_json::to_value(PermissionSelection::new(permissions)).unwrap(),
     )
     .unwrap();
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
          VALUES ($1,$2,$3,1,$4,false,'individual')",
@@ -34,7 +35,7 @@ async fn canonical(pool: &PgPool, role: OrgRole, permissions: &[Permission]) -> 
 async fn project_csv_rejects_financial_revocation_after_capacity_wait(pool: PgPool) {
     let ids = canonical(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         &[Permission::ProjectReadAll, Permission::BillableRateReadAll],
     )
     .await;
@@ -103,7 +104,7 @@ async fn project_csv_rejects_financial_revocation_after_capacity_wait(pool: PgPo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_csv_canonical_reader_exports_project_without_monetary_budget(pool: PgPool) {
-    let ids = canonical(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;
+    let ids = canonical(&pool, BuiltInProfile::Member, &[Permission::ProjectReadAll]).await;
     let data = body(
         projects(
             pool,
@@ -127,7 +128,7 @@ async fn project_csv_canonical_reader_exports_project_without_monetary_budget(po
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_csv_canonical_empty_scope_does_not_inherit_legacy_admin(pool: PgPool) {
-    let ids = canonical(&pool, OrgRole::Admin, &[]).await;
+    let ids = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
     let data = body(
         projects(
             pool,
@@ -149,7 +150,7 @@ async fn project_csv_canonical_empty_scope_does_not_inherit_legacy_admin(pool: P
 #[serial_test::serial]
 async fn project_csv_source_masks_money_using_declare_snapshot(pool: PgPool) {
     for visible in [false, true] {
-        let ids = canonical(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;
+        let ids = canonical(&pool, BuiltInProfile::Member, &[Permission::ProjectReadAll]).await;
         let mut tx = pool.begin().await.unwrap();
         let authority = Authority {
             org_id: ids.org_id,
@@ -197,7 +198,7 @@ async fn project_csv_invalid_source_state_cannot_be_repaired_before_fetch(pool: 
         } else {
             vec![]
         };
-        let ids = canonical(&pool, OrgRole::Admin, &permissions).await;
+        let ids = canonical(&pool, BuiltInProfile::Administrator, &permissions).await;
         let mut tx = pool.begin().await.unwrap();
         let authority = Authority {
             org_id: ids.org_id,

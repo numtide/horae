@@ -4,7 +4,7 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 mod billability;
 mod grouped;
 
-async fn scoped(pool: &PgPool, role: OrgRole, selection: &[Permission]) -> SeedIds {
+async fn scoped(pool: &PgPool, role: BuiltInProfile, selection: &[Permission]) -> SeedIds {
     let ids = seed(pool, role).await;
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
@@ -16,6 +16,7 @@ async fn scoped(pool: &PgPool, role: OrgRole, selection: &[Permission]) -> SeedI
     let grants: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(selection)).unwrap())
             .unwrap();
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source) VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants).execute(pool).await.unwrap();
     ids
 }
@@ -23,7 +24,7 @@ async fn scoped(pool: &PgPool, role: OrgRole, selection: &[Permission]) -> SeedI
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_csv_member_downloads_own_rows_without_financial_grants(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
     add_entries(&pool, &ids, 1).await;
     let response = entries(pool.clone(), ids.org_id, ids.user_id, params())
         .await
@@ -40,7 +41,12 @@ async fn scoped_csv_member_downloads_own_rows_without_financial_grants(pool: PgP
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_csv_legacy_manager_does_not_expand_own_scope(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Manager, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(
+        &pool,
+        BuiltInProfile::ExecutiveManager,
+        &[Permission::TimeReadOwn],
+    )
+    .await;
     let other = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO users (id,org_id,email,name) VALUES ($1,$2,$3,'Other')",
@@ -115,7 +121,7 @@ async fn scoped_csv_source_uses_declare_authority_not_initial_or_fetch_authority
         } else {
             Permission::TimeReadOwn
         };
-        let ids = scoped(&pool, OrgRole::Member, &[initial]).await;
+        let ids = scoped(&pool, BuiltInProfile::Member, &[initial]).await;
         let other = person(&pool, ids.org_id).await;
         add_entries(&pool, &ids, 1).await;
         add_entries(
@@ -155,7 +161,12 @@ async fn scoped_csv_source_uses_declare_authority_not_initial_or_fetch_authority
 #[serial_test::serial]
 async fn scoped_csv_source_uses_management_edges_at_declare(pool: PgPool) {
     for gain in [false, true] {
-        let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadManaged]).await;
+        let ids = scoped(
+            &pool,
+            BuiltInProfile::Member,
+            &[Permission::TimeReadManaged],
+        )
+        .await;
         let other = person(&pool, ids.org_id).await;
         add_entries(
             &pool,
@@ -226,7 +237,12 @@ async fn scoped_csv_source_uses_management_edges_at_declare(pool: PgPool) {
 #[serial_test::serial]
 async fn scoped_csv_invalid_captured_state_cannot_be_repaired_before_fetch(pool: PgPool) {
     for populated in [false, true] {
-        let ids = scoped(&pool, OrgRole::Manager, &[Permission::TimeReadOwn]).await;
+        let ids = scoped(
+            &pool,
+            BuiltInProfile::ExecutiveManager,
+            &[Permission::TimeReadOwn],
+        )
+        .await;
         if populated {
             add_entries(&pool, &ids, 1).await;
         }
@@ -325,7 +341,12 @@ async fn scoped_csv_invalid_captured_state_cannot_be_repaired_before_fetch(pool:
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_csv_missing_identity_has_invalid_sentinel_and_metadata_is_bounded(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Manager, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(
+        &pool,
+        BuiltInProfile::ExecutiveManager,
+        &[Permission::TimeReadOwn],
+    )
+    .await;
     for (org, actor) in [(Uuid::now_v7(), ids.user_id), (ids.org_id, Uuid::now_v7())] {
         let mut tx = pool.begin().await.unwrap();
         cursor::declare_entries(&mut tx, org, actor, &params().time_query().unwrap())
@@ -382,7 +403,7 @@ async fn scoped_csv_missing_identity_has_invalid_sentinel_and_metadata_is_bounde
 async fn scoped_csv_revocation_under_backpressure_interrupts_body_without_holding_locks(
     pool: PgPool,
 ) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadAll]).await;
+    let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadAll]).await;
     let other = person(&pool, ids.org_id).await;
     add_entries(
         &pool,
@@ -436,7 +457,12 @@ async fn scoped_csv_revocation_under_backpressure_interrupts_body_without_holdin
 #[serial_test::serial]
 async fn scoped_csv_rechecks_every_pending_context_but_not_previous_blocks(pool: PgPool) {
     for revoke_previous in [false, true] {
-        let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadManaged]).await;
+        let ids = scoped(
+            &pool,
+            BuiltInProfile::Member,
+            &[Permission::TimeReadManaged],
+        )
+        .await;
         let owners = [
             person(&pool, ids.org_id).await,
             person(&pool, ids.org_id).await,
@@ -503,7 +529,12 @@ async fn scoped_csv_rechecks_every_pending_context_but_not_previous_blocks(pool:
 #[serial_test::serial]
 async fn scoped_csv_empty_header_rechecks_policy_and_state_after_capacity(pool: PgPool) {
     for change_policy in [false, true] {
-        let ids = scoped(&pool, OrgRole::Manager, &[Permission::TimeReadOwn]).await;
+        let ids = scoped(
+            &pool,
+            BuiltInProfile::ExecutiveManager,
+            &[Permission::TimeReadOwn],
+        )
+        .await;
         let (sender, mut receiver) = mpsc::channel(1);
         sender.send(b"queued".to_vec()).await.unwrap();
         let (ready, waiting) = oneshot::channel();
@@ -554,7 +585,12 @@ async fn scoped_csv_empty_header_rechecks_policy_and_state_after_capacity(pool: 
 #[serial_test::serial]
 async fn scoped_csv_reassigned_or_deleted_entries_keep_captured_context(pool: PgPool) {
     for retain_original in [false, true] {
-        let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadManaged]).await;
+        let ids = scoped(
+            &pool,
+            BuiltInProfile::Member,
+            &[Permission::TimeReadManaged],
+        )
+        .await;
         let owner = person(&pool, ids.org_id).await;
         let other_project = Uuid::now_v7();
         sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency) VALUES ($1,$2,$3,'Reassigned','EUR')", other_project, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
