@@ -2,7 +2,7 @@
 //! transaction and answering authorization questions from the person's stored
 //! permission state.
 
-use horae_core::permissions::catalog::Permission;
+use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 use super::{Caller, OpError, Tx};
 use crate::models::permissions::PersonPermissions;
@@ -89,10 +89,6 @@ impl Actor {
     }
 
     /// The identity `horae-core` scope checks (`AccessScope::covers`) take.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "foundation for the next ops/ domains")
-    )]
     pub fn identity(&self) -> &horae_core::permissions::Actor {
         &self.identity
     }
@@ -117,12 +113,14 @@ impl Actor {
             .is_some_and(|state| state.grants.contains(permission))
     }
 
+    /// The stored grants, for the `horae-core` record checks that take the
+    /// whole selection; `None` for an actor with no authority.
+    pub fn grants(&self) -> Option<&PermissionSelection> {
+        self.permissions.as_ref().map(|state| &state.grants)
+    }
+
     /// The stored administrator identity. Holding every grant does not make
     /// someone an administrator.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "foundation for the next ops/ domains")
-    )]
     pub fn administrator(&self) -> bool {
         self.permissions
             .as_ref()

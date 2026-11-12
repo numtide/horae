@@ -1,6 +1,7 @@
 //! Weekly submission must remain bound to the page that initiated it.
 
 use super::*;
+use crate::ops::approvals::tests::add_person;
 use crate::server_fns::test_seed::{seed, time_entry};
 use horae_core::permissions::catalog::BuiltInProfile;
 
@@ -14,7 +15,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .execute(pool)
     .await
     .unwrap();
-    let other = user(pool, ids.org_id, OrgRole::Member).await;
+    let other = add_person(pool, &ids, BuiltInProfile::Member).await.user_id;
     let cookie = api.cookie(ids.user_id).await;
     let other_cookie = api.cookie(other).await;
     let body = json!({
@@ -38,7 +39,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     );
     for (field, value) in [
         ("subject_id", json!(other)),
-        ("expected_policy", json!("scoped")),
         (
             "expected_requester",
             json!({"org_id":Uuid::now_v7(),"user_id":ids.user_id}),
@@ -54,19 +54,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             "{field}"
         );
     }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-    assert_eq!(
-        api.call("submit_week", body.clone(), Some(&cookie), false)
-            .await
-            .status(),
-        StatusCode::FORBIDDEN
-    );
     let stored = sqlx::query!(
         "SELECT state::text,rounded_minutes FROM time_entries WHERE id=$1",
         entry
@@ -85,13 +72,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .unwrap(),
         Some(0)
     );
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=0 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     let result = api.json("submit_week", body, &cookie).await;
     assert_eq!(result["user_id"], json!(ids.user_id));
     assert_eq!(result["state"], json!("submitted"));

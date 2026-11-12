@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO approvals (id, org_id, user_id, period_start, period_end, state)\n         VALUES ($1, $2, $3, $4, $5, $6)\n         ON CONFLICT (user_id, period_start) DO UPDATE\n           SET state = $6, submitted_at = now()\n           WHERE approvals.state <> $7\n         RETURNING id, org_id, user_id,\n                   period_start as \"period_start: chrono::NaiveDate\",\n                   period_end as \"period_end: chrono::NaiveDate\",\n                   state as \"state: EntryState\",\n                   submitted_at as \"submitted_at: chrono::DateTime<chrono::Utc>\",\n                   approved_by,\n                   approved_at as \"approved_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "UPDATE approvals\n             SET state = $2, approved_by = $3, approved_at = now()\n           WHERE id = ANY($1) AND state = $4 AND org_id = $5\n        RETURNING id, org_id, user_id,\n                  period_start as \"period_start: NaiveDate\",\n                  period_end as \"period_end: NaiveDate\",\n                  state as \"state: EntryState\",\n                  submitted_at as \"submitted_at: chrono::DateTime<chrono::Utc>\",\n                  approved_by,\n                  approved_at as \"approved_at: chrono::DateTime<chrono::Utc>\"",
   "describe": {
     "columns": [
       {
@@ -20,12 +20,12 @@
       },
       {
         "ordinal": 3,
-        "name": "period_start: chrono::NaiveDate",
+        "name": "period_start: NaiveDate",
         "type_info": "Date"
       },
       {
         "ordinal": 4,
-        "name": "period_end: chrono::NaiveDate",
+        "name": "period_end: NaiveDate",
         "type_info": "Date"
       },
       {
@@ -63,11 +63,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Date",
-        "Date",
+        "UuidArray",
         {
           "Custom": {
             "name": "entry_state",
@@ -81,6 +77,7 @@
             }
           }
         },
+        "Uuid",
         {
           "Custom": {
             "name": "entry_state",
@@ -93,7 +90,8 @@
               ]
             }
           }
-        }
+        },
+        "Uuid"
       ]
     },
     "nullable": [
@@ -108,5 +106,5 @@
       true
     ]
   },
-  "hash": "b9632ebb55dfe28fae1080eb5228cbc5f9c193cf46b42872a564af1592c2ebbe"
+  "hash": "f76c632f724167b680d6d39ac2f2af8d14bc3b2502ae137875e75bf4d6b9c687"
 }

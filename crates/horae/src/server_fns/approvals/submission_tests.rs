@@ -1,3 +1,4 @@
+use super::tests::submit_user_week;
 use super::*;
 use crate::server_fns::test_seed::{seed, time_entry, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
@@ -5,8 +6,8 @@ use sqlx::PgPool;
 use std::time::Duration;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn submission_rechecks_policy_and_activity_after_access_change(pool: PgPool) {
-    for policy_change in [true, false] {
+async fn submission_rechecks_permission_state_and_activity_after_access_change(pool: PgPool) {
+    for state_change in [true, false] {
         for commit in [true, false] {
             let ids = seed(&pool, BuiltInProfile::Member).await;
             let entry = time_entry(&pool, &ids, EntryState::Open).await;
@@ -18,10 +19,11 @@ async fn submission_rechecks_policy_and_activity_after_access_change(pool: PgPoo
             )
             .await
             .unwrap();
-            if policy_change {
+            if state_change {
+                // Without stored state the person has no authority at all.
                 sqlx::query!(
-                    "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-                    ids.org_id
+                    "DELETE FROM person_permission_states WHERE user_id=$1",
+                    ids.user_id
                 )
                 .execute(&mut *change)
                 .await

@@ -32,8 +32,10 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .await
     .unwrap();
     sqlx::query!("INSERT INTO person_management_assignments (id,org_id,manager_id,managed_user_id) VALUES ($1,$2,$3,$4)",Uuid::now_v7(),ids.org_id,ids.user_id,target).execute(pool).await.unwrap();
+    // Approval access too: the check below reopens the person's week.
     let grants: Vec<String> = serde_json::from_value(json!(PermissionSelection::new(&[
-        Permission::TimeWriteManaged
+        Permission::TimeWriteManaged,
+        Permission::TimeApproveManaged
     ])))
     .unwrap();
     crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
