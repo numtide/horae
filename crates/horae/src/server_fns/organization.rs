@@ -1,6 +1,8 @@
-//! Organization-branding server functions.
+//! Organization server functions: week start, name and invoice branding.
 
 use super::*;
+#[cfg(feature = "server")]
+use crate::ops::{self, Caller};
 
 /// First weekday of the signed-in user's organization, shared by the timesheet
 /// and its date picker. Invalid stored configuration must not silently default.
@@ -54,11 +56,11 @@ pub async fn get_org_name() -> Result<String, ServerFnError> {
 
 #[server]
 pub async fn get_org_branding() -> Result<OrgBranding, ServerFnError> {
-    let manager = require_manager().await?;
-
-    crate::reports::fetch_org_branding(manager.org_id)
-        .await
-        .map_err(server_err)
+    let user = require_user().await?;
+    let state = crate::state::global_state().await;
+    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::organization::branding(&mut read.tx, &read.actor).await;
+    Ok(read.finish(result).await?)
 }
 
 #[server]
@@ -66,158 +68,10 @@ pub async fn update_org_branding(
     branding: OrgBranding,
     expected: OrgBranding,
 ) -> Result<OrgBranding, ServerFnError> {
-    let manager = require_manager().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
-    let (branding, changed) =
-        update_org_branding_record(&state.db, manager.org_id, manager.id, &expected, &branding)
-            .await?;
-    if changed {
-        state
-            .plugins
-            .dispatch(crate::plugin::AppEvent::OrgBrandingUpdated {
-                occurred_at: chrono::Utc::now(),
-                org_id: manager.org_id,
-                org: crate::plugin::event::OrgBrandingPayload {
-                    org_id: manager.org_id,
-                    provider_name: branding.provider_name.clone(),
-                },
-            });
-    }
-    Ok(branding)
+    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result =
+        ops::organization::update_branding(&mut write.tx, &write.actor, &expected, &branding).await;
+    Ok(write.commit(result, &*state.plugins).await?)
 }
-
-#[cfg(feature = "server")]
-async fn update_org_branding_record(
-    db: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    actor_id: uuid::Uuid,
-    expected: &OrgBranding,
-    branding: &OrgBranding,
-) -> Result<(OrgBranding, bool), ServerFnError> {
-    // Only edited values need checking: the rest must equal the stored row
-    // (enforced below), even one stored before values were checked.
-    for (value, previous) in branding_values(branding)
-        .into_iter()
-        .zip(branding_values(expected))
-    {
-        if let Some(message) = value
-            .as_deref()
-            .filter(|_| value != previous)
-            .and_then(crate::models::branding_value_error)
-        {
-            return Err(err(BAD_REQUEST, message));
-        }
-    }
-
-    let mut tx = db.begin().await.map_err(server_err)?;
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-        .execute(&mut *tx)
-        .await
-        .map_err(server_err)?;
-    // Compare with the latest locked row, including edits committed while
-    // this request waited. A missing organization is not an unchanged save.
-    let before = sqlx::query_as!(
-        OrgBranding,
-        r#"SELECT provider_name, provider_address, provider_tax_id,
-                  provider_email, provider_phone,
-                  bank_name, bank_iban, bank_bic, bank_routing, bank_account,
-                  invoice_notes, invoice_payment_terms
-           FROM organizations WHERE id = $1 FOR UPDATE"#,
-        org_id,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Organization not found"))?;
-
-    // Admission may predate an organization/actor lock wait. Even an unchanged
-    // save returns private branding, so retain current authority through commit.
-    let role = sqlx::query_scalar!(
-        r#"SELECT org_role as "org_role: OrgRole" FROM users
-           WHERE id = $1 AND org_id = $2 AND active FOR SHARE"#,
-        actor_id,
-        org_id,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| forbidden("Active manager access required"))?;
-    if !role.is_manager_or_above() {
-        return Err(forbidden("Manager access required"));
-    }
-    // The request carries every column, so one edited from an older snapshot
-    // would silently restore values someone else saved since.
-    if before != *expected {
-        return Err(conflict(
-            "Someone changed these settings after you opened this page. Reload the page to see the current values; your unsaved edits will be lost.",
-        ));
-    }
-
-    let branding = sqlx::query_as!(
-        OrgBranding,
-        r#"UPDATE organizations SET
-             provider_name = $2,
-             provider_address = $3,
-             provider_tax_id = $4,
-             provider_email = $5,
-             provider_phone = $6,
-             bank_name = $7,
-             bank_iban = $8,
-             bank_bic = $9,
-             bank_routing = $10,
-             bank_account = $11,
-             invoice_notes = $12,
-             invoice_payment_terms = $13
-           WHERE id = $1
-             AND (provider_name, provider_address, provider_tax_id,
-                  provider_email, provider_phone,
-                  bank_name, bank_iban, bank_bic, bank_routing, bank_account,
-                  invoice_notes, invoice_payment_terms)
-                 IS DISTINCT FROM ($2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-           RETURNING provider_name, provider_address, provider_tax_id,
-                     provider_email, provider_phone,
-                     bank_name, bank_iban, bank_bic, bank_routing, bank_account,
-                     invoice_notes, invoice_payment_terms"#,
-        org_id,
-        branding.provider_name,
-        branding.provider_address,
-        branding.provider_tax_id,
-        branding.provider_email,
-        branding.provider_phone,
-        branding.bank_name,
-        branding.bank_iban,
-        branding.bank_bic,
-        branding.bank_routing,
-        branding.bank_account,
-        branding.invoice_notes,
-        branding.invoice_payment_terms,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?;
-
-    let changed = branding.is_some();
-    tx.commit().await.map_err(server_err)?;
-    Ok((branding.unwrap_or(before), changed))
-}
-
-#[cfg(feature = "server")]
-fn branding_values(branding: &OrgBranding) -> [&Option<String>; 12] {
-    [
-        &branding.provider_name,
-        &branding.provider_address,
-        &branding.provider_tax_id,
-        &branding.provider_email,
-        &branding.provider_phone,
-        &branding.bank_name,
-        &branding.bank_iban,
-        &branding.bank_bic,
-        &branding.bank_routing,
-        &branding.bank_account,
-        &branding.invoice_notes,
-        &branding.invoice_payment_terms,
-    ]
-}
-
-#[cfg(all(test, feature = "server"))]
-mod tests;
