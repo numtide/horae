@@ -293,8 +293,11 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn import_batches_join_the_access_gate_before_resource_locks(pool: sqlx::PgPool) {
-        let ids =
-            crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
+        let ids = crate::server_fns::test_seed::seed(
+            &pool,
+            horae_core::permissions::catalog::BuiltInProfile::Administrator,
+        )
+        .await;
         let mut connection = pool.acquire().await.unwrap();
         let tx = begin_transaction(&mut connection, ids.org_id)
             .await
@@ -342,8 +345,11 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn api_planning_policy_ends_with_the_transaction(pool: sqlx::PgPool) {
-        let ids =
-            crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
+        let ids = crate::server_fns::test_seed::seed(
+            &pool,
+            horae_core::permissions::catalog::BuiltInProfile::Administrator,
+        )
+        .await;
         let mut connection = pool.acquire().await.unwrap();
         connection.close_on_drop();
         sqlx::query!("SET plan_cache_mode = force_generic_plan")

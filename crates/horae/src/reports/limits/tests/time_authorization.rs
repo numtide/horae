@@ -1,6 +1,7 @@
 use super::*;
 use crate::reports::bounded::ExportPermit;
 use crate::server_fns::test_seed::wait_for_blocked;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use std::time::Duration;
 
@@ -9,7 +10,7 @@ mod grouped;
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn denied_time_export_releases_authority_before_pool_cleanup(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
         .execute(&pool)
         .await
@@ -102,7 +103,7 @@ async fn project(pool: &PgPool, ids: &SeedIds) -> Uuid {
     id
 }
 
-async fn scoped(pool: &PgPool, role: OrgRole, grants: &[Permission]) -> SeedIds {
+async fn scoped(pool: &PgPool, role: BuiltInProfile, grants: &[Permission]) -> SeedIds {
     let ids = seed(pool, role).await;
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
@@ -114,6 +115,7 @@ async fn scoped(pool: &PgPool, role: OrgRole, grants: &[Permission]) -> SeedIds 
     let grants: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(grants)).unwrap())
             .unwrap();
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
          VALUES ($1,$2,$3,1,$4,false,'individual')",
@@ -125,7 +127,7 @@ async fn scoped(pool: &PgPool, role: OrgRole, grants: &[Permission]) -> SeedIds 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_xlsx_member_reads_own_rows_without_financial_or_directory_access(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
     add_entries(&pool, &ids, 1).await;
     let rows = entries(&pool, ids.org_id, ids.user_id, &params())
         .await
@@ -138,7 +140,12 @@ async fn scoped_xlsx_member_reads_own_rows_without_financial_or_directory_access
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_xlsx_legacy_manager_role_does_not_expand_canonical_scope(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Manager, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(
+        &pool,
+        BuiltInProfile::ExecutiveManager,
+        &[Permission::TimeReadOwn],
+    )
+    .await;
     let other = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO users (id,org_id,email,name) VALUES ($1,$2,$3,'Other person')",
@@ -169,7 +176,12 @@ async fn scoped_xlsx_legacy_manager_role_does_not_expand_canonical_scope(pool: P
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_xlsx_scope_union_and_multi_filters_precede_size_checks(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadManaged]).await;
+    let ids = scoped(
+        &pool,
+        BuiltInProfile::Member,
+        &[Permission::TimeReadManaged],
+    )
+    .await;
     let target = person(&pool, ids.org_id).await;
     let outsider = person(&pool, ids.org_id).await;
     let other = project(&pool, &ids).await;
@@ -216,7 +228,12 @@ async fn scoped_xlsx_scope_union_and_multi_filters_precede_size_checks(pool: PgP
 #[serial_test::serial]
 async fn scoped_xlsx_reauthorizes_captured_project_not_reassigned_source(pool: PgPool) {
     for retain_original_access in [false, true] {
-        let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadManaged]).await;
+        let ids = scoped(
+            &pool,
+            BuiltInProfile::Member,
+            &[Permission::TimeReadManaged],
+        )
+        .await;
         let owner = person(&pool, ids.org_id).await;
         let other = project(&pool, &ids).await;
         let entry = add_entries(
@@ -293,7 +310,12 @@ async fn scoped_xlsx_reauthorizes_captured_project_not_reassigned_source(pool: P
 #[serial_test::serial]
 async fn scoped_xlsx_deletion_keeps_recorded_scope_but_loss_of_person_access_denies(pool: PgPool) {
     for revoke in [false, true] {
-        let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadManaged]).await;
+        let ids = scoped(
+            &pool,
+            BuiltInProfile::Member,
+            &[Permission::TimeReadManaged],
+        )
+        .await;
         let target = person(&pool, ids.org_id).await;
         let entry = add_entries(
             &pool,
@@ -339,7 +361,12 @@ async fn scoped_xlsx_deletion_keeps_recorded_scope_but_loss_of_person_access_den
 #[serial_test::serial]
 async fn scoped_xlsx_empty_files_still_validate_state_actor_and_policy_at_release(pool: PgPool) {
     for change in ["unsupported", "missing", "inactive", "policy", "grants"] {
-        let ids = scoped(&pool, OrgRole::Manager, &[Permission::TimeReadAll]).await;
+        let ids = scoped(
+            &pool,
+            BuiltInProfile::ExecutiveManager,
+            &[Permission::TimeReadAll],
+        )
+        .await;
         let export = capture(&pool, &ids).await.unwrap();
         assert!(export.rows.is_empty());
         match change {
@@ -397,7 +424,12 @@ async fn scoped_xlsx_empty_files_still_validate_state_actor_and_policy_at_releas
         let second = ExportPermit::acquire().unwrap();
         drop((first, second));
     }
-    let ids = scoped(&pool, OrgRole::Manager, &[Permission::TimeReadAll]).await;
+    let ids = scoped(
+        &pool,
+        BuiltInProfile::ExecutiveManager,
+        &[Permission::TimeReadAll],
+    )
+    .await;
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version=0 WHERE id=$1",
         ids.org_id
@@ -425,7 +457,12 @@ async fn scoped_xlsx_waits_for_scope_revocation_and_cancellation_releases_connec
         .await
         .unwrap();
     for cancel in [false, true] {
-        let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadManaged]).await;
+        let ids = scoped(
+            &pool,
+            BuiltInProfile::Member,
+            &[Permission::TimeReadManaged],
+        )
+        .await;
         let owner = person(&pool, ids.org_id).await;
         add_entries(
             &pool,
@@ -481,7 +518,7 @@ async fn scoped_xlsx_waits_for_scope_revocation_and_cancellation_releases_connec
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_xlsx_rejects_paged_reversed_or_wrong_requester_queries(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
     let mut query = params().time_query().unwrap();
     query.date_to = "2026-09-06".parse().unwrap();
     assert!(matches!(
@@ -516,7 +553,7 @@ async fn scoped_xlsx_source_refreshes_grant_gains_and_losses_after_org_wait(pool
     for gain in [false, true] {
         let ids = scoped(
             &pool,
-            OrgRole::Member,
+            BuiltInProfile::Member,
             &[if gain {
                 Permission::TimeReadOwn
             } else {
@@ -581,7 +618,7 @@ async fn scoped_xlsx_source_refreshes_grant_gains_and_losses_after_org_wait(pool
 #[serial_test::serial]
 async fn scoped_xlsx_release_observes_direct_actor_update_commit_or_rollback(pool: PgPool) {
     for commit in [false, true] {
-        let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+        let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
         add_entries(&pool, &ids, 1).await;
         let export = capture(&pool, &ids).await.unwrap();
         let mut writer = pool.begin().await.unwrap();
@@ -611,7 +648,12 @@ async fn scoped_xlsx_release_observes_direct_actor_update_commit_or_rollback(poo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn scoped_xlsx_revoked_grants_after_render_deny_other_peoples_captured_rows(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Admin, &[Permission::TimeReadAll]).await;
+    let ids = scoped(
+        &pool,
+        BuiltInProfile::Administrator,
+        &[Permission::TimeReadAll],
+    )
+    .await;
     let owner = person(&pool, ids.org_id).await;
     add_entries(
         &pool,

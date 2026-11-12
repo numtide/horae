@@ -1,10 +1,16 @@
 use super::*;
 use crate::server_fns::test_seed::time_entry;
+use horae_core::permissions::catalog::BuiltInProfile;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn hidden_spend_overflow_does_not_prevent_authorized_hour_totals(pool: PgPool) {
-    let ids = tracked(&pool, OrgRole::Admin, &[Permission::ProjectReadAll]).await;
+    let ids = tracked(
+        &pool,
+        BuiltInProfile::Administrator,
+        &[Permission::ProjectReadAll],
+    )
+    .await;
     sqlx::query!(
         "UPDATE projects SET rate_cents=$2 WHERE id=$1",
         ids.project_id,
@@ -39,11 +45,11 @@ async fn hidden_spend_overflow_does_not_prevent_authorized_hour_totals(pool: PgP
 async fn canonical_spend_excludes_entries_with_foreign_person_parents(pool: PgPool) {
     let ids = tracked(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         &[Permission::ProjectReadAll, Permission::BillableRateReadAll],
     )
     .await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     sqlx::query!(
         "UPDATE time_entries SET user_id=$2 WHERE project_id=$1",
         ids.project_id,
@@ -64,7 +70,7 @@ async fn canonical_spend_excludes_entries_with_foreign_person_parents(pool: PgPo
 async fn spend_rechecks_financial_only_revocation_after_organization_wait(pool: PgPool) {
     let ids = tracked(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         &[Permission::ProjectReadAll, Permission::BillableRateReadAll],
     )
     .await;
@@ -106,7 +112,7 @@ async fn spend_rechecks_financial_only_revocation_after_organization_wait(pool: 
     assert_eq!((rows[0].spent_minutes, rows[0].spent_cents), (60, None));
 }
 
-async fn tracked(pool: &PgPool, role: OrgRole, permissions: &[Permission]) -> SeedIds {
+async fn tracked(pool: &PgPool, role: BuiltInProfile, permissions: &[Permission]) -> SeedIds {
     let (ids, _) = fixture(pool, role, PermissionSelection::new(permissions)).await;
     sqlx::query!(
         "UPDATE projects SET rate_cents=12345 WHERE id=$1",
@@ -122,7 +128,7 @@ async fn tracked(pool: &PgPool, role: OrgRole, permissions: &[Permission]) -> Se
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_spend_reads_do_not_require_a_legacy_manager_role(pool: PgPool) {
-    let ids = tracked(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;
+    let ids = tracked(&pool, BuiltInProfile::Member, &[Permission::ProjectReadAll]).await;
     let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id)
         .await
         .unwrap();
@@ -144,7 +150,7 @@ async fn canonical_spend_reads_do_not_require_a_legacy_manager_role(pool: PgPool
 async fn canonical_spend_withholds_money_after_financial_revocation(pool: PgPool) {
     let ids = tracked(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         &[Permission::ProjectReadAll, Permission::BillableRateReadAll],
     )
     .await;
@@ -173,7 +179,7 @@ async fn canonical_spend_withholds_money_after_financial_revocation(pool: PgPool
 async fn canonical_spend_managed_scope_requires_current_project_designation(pool: PgPool) {
     let ids = tracked(
         &pool,
-        OrgRole::Manager,
+        BuiltInProfile::ExecutiveManager,
         &[
             Permission::ProjectReadManaged,
             Permission::BillableRateReadManaged,
@@ -216,7 +222,7 @@ async fn canonical_spend_managed_scope_requires_current_project_designation(pool
 async fn canonical_spend_zero_and_withheld_money_remain_distinct_without_entries(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll, Permission::BillableRateReadAll]),
     )
     .await;
@@ -248,7 +254,7 @@ async fn canonical_spend_zero_and_withheld_money_remain_distinct_without_entries
 async fn canonical_shared_progress_and_report_permissions_do_not_open_ordinary_money(pool: PgPool) {
     let ids = tracked(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         &[Permission::ReportProfitabilityRead],
     )
     .await;
@@ -287,7 +293,7 @@ async fn spend_totals_are_exact_for_invoiced_hidden_empty_and_missing_invoice_en
     // One 60-minute entry at 12345 cents an hour on the managed project.
     let ids = tracked(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         &[
             Permission::ProjectReadAll,
             Permission::BillableRateReadManaged,
@@ -320,7 +326,7 @@ async fn spend_totals_are_exact_for_invoiced_hidden_empty_and_missing_invoice_en
     .await
     .unwrap();
 
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let missing = add_invoice(&pool, foreign.org_id, foreign.client_id).await;
     add_entry(&pool, &ids, ids.project_id, 45, Some(missing)).await;
 

@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::{seed, time_entry, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use std::time::Duration;
 
@@ -7,7 +8,7 @@ use std::time::Duration;
 async fn submission_rechecks_policy_and_activity_after_access_change(pool: PgPool) {
     for policy_change in [true, false] {
         for commit in [true, false] {
-            let ids = seed(&pool, OrgRole::Member).await;
+            let ids = seed(&pool, BuiltInProfile::Member).await;
             let entry = time_entry(&pool, &ids, EntryState::Open).await;
             let mut change = pool.begin().await.unwrap();
             crate::db::lock_organization(
@@ -79,7 +80,7 @@ async fn submission_rechecks_policy_and_activity_after_access_change(pool: PgPoo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn admitted_submission_finishes_before_access_change(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     let mut held = pool.begin().await.unwrap();
     sqlx::query!("SELECT id FROM time_entries WHERE id=$1 FOR UPDATE", entry)
@@ -129,7 +130,7 @@ async fn admitted_submission_finishes_before_access_change(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_freezes_the_minutes_after_a_competing_edit(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE organizations SET round_minutes = 15, round_dir = 'up' WHERE id = $1",
@@ -182,7 +183,7 @@ async fn submission_freezes_the_minutes_after_a_competing_edit(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_uses_one_pool_connection(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     let single = sqlx::postgres::PgPoolOptions::new()
         .max_connections(1)
@@ -203,7 +204,7 @@ async fn submission_uses_one_pool_connection(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_rejects_a_start_that_is_not_the_organizations_week_start(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE time_entries SET spent_date = '2026-09-08' WHERE id = $1",
@@ -233,7 +234,7 @@ async fn submission_rejects_a_start_that_is_not_the_organizations_week_start(poo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_waits_for_a_new_timer_before_checking_the_week(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     let mut writer = crate::db::begin_time_entry_write(&pool, ids.user_id)
         .await
@@ -291,7 +292,7 @@ async fn submission_waits_for_a_new_timer_before_checking_the_week(pool: PgPool)
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn cancelling_a_submission_releases_its_write_barrier(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     let mut editor = pool.begin().await.unwrap();
     let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
@@ -339,7 +340,7 @@ async fn cancelling_a_submission_releases_its_write_barrier(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_accepts_the_organizations_sunday_start(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE organizations SET week_start = 7 WHERE id = $1",
@@ -368,7 +369,7 @@ async fn submission_accepts_the_organizations_sunday_start(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_does_not_wait_for_another_users_writer(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     let writer = crate::db::begin_time_entry_write(&pool, uuid::Uuid::now_v7())
         .await
@@ -390,7 +391,7 @@ async fn submission_does_not_wait_for_another_users_writer(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submission_barrier_allows_shared_writers_for_the_same_user(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let first = crate::db::begin_time_entry_write(&pool, ids.user_id)
         .await
         .unwrap();

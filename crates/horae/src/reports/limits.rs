@@ -202,6 +202,7 @@ mod tests {
     use crate::reports::ExportParams;
     use crate::reports::xlsx_cells::{assert_cell, assert_text_cell, xlsx_part};
     use crate::server_fns::test_seed::{SeedIds, seed};
+    use horae_core::permissions::catalog::BuiltInProfile;
     use horae_core::types::OrgRole;
 
     mod authorization;
@@ -229,7 +230,7 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn invoice_exports_show_saved_adjustments_and_exact_large_amounts(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let (id, _) = add_invoice(&pool, &ids, 1).await;
         let mut document = pdf(&pool, ids.org_id, ids.user_id, id).await.unwrap();
         let inv = &mut document.invoice;
@@ -339,7 +340,7 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn tag_filter_applies_before_xlsx_size_checks_and_rendering(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let other = SeedIds {
             project_id: Uuid::now_v7(),
             org_id: ids.org_id,
@@ -407,8 +408,8 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn bounded_entries_enforce_the_row_limit_after_all_filters(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
-        let other = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+        let other = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         add_entries(&pool, &other, 1).await;
         add_entries(&pool, &ids, XLSX.rows as usize).await;
         assert_eq!(
@@ -458,7 +459,7 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn bounded_entries_reject_large_fields_and_combined_text(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         add_entries(&pool, &ids, 1).await;
         sqlx::query!(
             "UPDATE time_entries SET notes = repeat('界', 10923) WHERE org_id = $1",
@@ -505,8 +506,8 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn bounded_projects_filter_archives_before_size_checks(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
-        let _other = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+        let _other = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let keys: Vec<_> = (0..=XLSX.rows).map(|_| Uuid::now_v7()).collect();
         sqlx::query!("INSERT INTO projects (id, org_id, client_id, name, currency, active) SELECT id, $2, $3, 'Archived', 'EUR', false FROM unnest($1::uuid[]) id", &keys, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
         for scope in ["active", "unknown"] {
@@ -556,8 +557,8 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn bounded_invoice_limits_include_branding_and_preserve_tenant_scope(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
-        let other = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+        let other = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let (id, lines) = add_invoice(&pool, &ids, PDF.rows as usize + 1).await;
         assert_eq!(
             invoice(&pool, ids.org_id, ids.user_id, id)
@@ -608,7 +609,7 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn export_size_checks_and_reads_share_a_repeatable_read_snapshot(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let (id, _) = add_invoice(&pool, &ids, 1).await;
         let mut tx = begin(&pool).await.unwrap();
         let before = read_invoice(&mut tx, ids.org_id, id, XLSX).await.unwrap();
@@ -656,7 +657,7 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn fee_exports_preserve_absent_quantities_and_render_a_real_pdf(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let (id, _) = add_invoice(&pool, &ids, 0).await;
         let fee_id = uuid::Uuid::now_v7();
         sqlx::query!("UPDATE invoices SET total_cents = 12500 WHERE id = $1", id)
@@ -697,7 +698,7 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn bounded_exports_preserve_real_workbooks_and_deterministic_pdf(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let (id, _) = add_invoice(&pool, &ids, 1).await;
         sqlx::query!(
             "UPDATE time_entries SET rounded_minutes = 0, notes = 'Café <&>' WHERE org_id = $1",
@@ -751,7 +752,7 @@ mod tests {
     #[serial_test::serial]
     #[ignore = "manual release export measurement; set HORAE_EXPORT_PROBE_DIR for artifacts"]
     async fn measure_bounded_export_limits(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let (id, _) = add_invoice(&pool, &ids, PDF.rows as usize).await;
         add_entries(&pool, &ids, (XLSX.rows - PDF.rows) as usize).await;
         let start = std::time::Instant::now();

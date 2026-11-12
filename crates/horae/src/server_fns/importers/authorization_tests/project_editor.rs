@@ -2,10 +2,11 @@
 
 use super::*;
 use crate::models::project_creation::{EditableProject, ProjectEditRequest, ProtectedProjectField};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
     let second = user(pool, ids.org_id, OrgRole::Manager).await;
     let first_cookie = api.cookie(ids.user_id).await;
     let second_cookie = api.cookie(second).await;
@@ -40,6 +41,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     ])))
     .unwrap();
     for actor in [ids.user_id, second] {
+        crate::server_fns::test_seed::clear_state(pool, actor).await;
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, actor, &grants)
             .execute(pool).await.unwrap();

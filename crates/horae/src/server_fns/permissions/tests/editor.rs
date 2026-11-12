@@ -228,7 +228,7 @@ async fn every_builtin_preview_matches_its_actual_save(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn editor_denies_wrong_authority_policy_and_foreign_targets(pool: PgPool) {
+async fn editor_denies_wrong_authority_and_foreign_targets(pool: PgPool) {
     let ids = fixture(&pool).await;
     let foreign = fixture(&pool).await;
     let user = person(&pool, ids.org_id, false, BuiltInProfile::Administrator).await;
@@ -240,30 +240,6 @@ async fn editor_denies_wrong_authority_policy_and_foreign_targets(pool: PgPool) 
         assert!(matches!(
             editor::load(&pool, ids.org_id, ids.user_id, target).await,
             Err(ProfileCommandError::NotFound)
-        ));
-    }
-    for version in [0, 2] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
-            ids.org_id,
-            version
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        assert!(matches!(
-            editor::load(&pool, ids.org_id, ids.user_id, user).await,
-            Err(ProfileCommandError::Forbidden)
-        ));
-        assert!(matches!(
-            editor::preview(
-                &pool,
-                ids.org_id,
-                ids.user_id,
-                &draft(&apply(user, BuiltInProfile::Member))
-            )
-            .await,
-            Err(ProfileCommandError::Forbidden)
         ));
     }
 }

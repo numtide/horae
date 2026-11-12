@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use std::time::Duration;
 
 mod preview_commit;
@@ -33,7 +34,7 @@ fn payload() -> jobs::JobPayload {
 }
 
 async fn fixture(pool: &PgPool) -> (SeedIds, Uuid) {
-    let ids = seed(pool, OrgRole::Admin).await;
+    let ids = seed(pool, BuiltInProfile::Administrator).await;
     crate::importers::harvest::credentials::store(
         pool,
         ids.org_id,
@@ -121,7 +122,7 @@ fn assert_denied(result: Result<(), ServerFnError>, operation: Operation) {
 async fn commands_and_status_require_current_active_tenant_administrator(pool: PgPool) {
     for operation in OPERATIONS {
         let (ids, job) = fixture(&pool).await;
-        let foreign = seed(&pool, OrgRole::Admin).await;
+        let foreign = seed(&pool, BuiltInProfile::Administrator).await;
         let before = snapshot(&pool).await;
         for (role, active) in [
             (OrgRole::Member, true),
@@ -343,7 +344,7 @@ async fn import_commands_and_results_hold_actor_authority_until_commit(pool: PgP
 #[serial_test::serial]
 async fn foreign_and_missing_jobs_never_reveal_or_change_another_tenant(pool: PgPool) {
     let (owner, job) = fixture(&pool).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let before = snapshot(&pool).await;
     for id in [job, Uuid::now_v7()] {
         assert!(

@@ -2,6 +2,7 @@ use super::canonical_fields::{canonical_actor, keep_protected};
 use super::*;
 use crate::models::project_creation::ProjectTaskActivity;
 use crate::server_fns::test_seed::{SeedIds, time_entry};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 async fn fixture(pool: &PgPool) -> (SeedIds, EditableProject) {
@@ -145,7 +146,7 @@ async fn invalid_task_activity_targets_and_global_restore_order_rollback_the_who
     pool: PgPool,
 ) {
     let (owner, project) = fixture(&pool).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for case in [
         "foreign",
         "removed",

@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::wait_for_blocked;
+use horae_core::permissions::catalog::BuiltInProfile;
 use std::time::Duration;
 
 async fn assign(connection: &mut PgConnection, ids: &SeedIds) {
@@ -32,8 +33,8 @@ async fn names(pool: &PgPool, org: Uuid, actor: Uuid) -> Result<Vec<String>, Sta
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_require_current_tenant_bound_actor(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     assert!(
         projects(&pool, ids.org_id, ids.user_id, "active")
             .await
@@ -63,7 +64,7 @@ async fn project_exports_require_current_tenant_bound_actor(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_preserve_membership_visibility_and_history_rules(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     add_entries(&pool, &ids, 1).await;
     assert!(
         names(&pool, ids.org_id, ids.user_id)
@@ -135,7 +136,7 @@ async fn project_exports_refresh_scope_after_winning_relationship_changes(pool: 
         "insert_settings",
         "new_project",
     ] {
-        let ids = seed(&pool, OrgRole::Member).await;
+        let ids = seed(&pool, BuiltInProfile::Member).await;
         if !matches!(change, "add" | "new_project") {
             assign(&mut pool.acquire().await.unwrap(), &ids).await;
         }
@@ -199,7 +200,7 @@ async fn project_exports_refresh_scope_after_winning_relationship_changes(pool: 
 #[serial_test::serial]
 async fn project_exports_deny_actor_revoked_during_either_authority_wait(pool: PgPool) {
     for gate in [false, true] {
-        let ids = seed(&pool, OrgRole::Member).await;
+        let ids = seed(&pool, BuiltInProfile::Member).await;
         assign(&mut pool.acquire().await.unwrap(), &ids).await;
         let mut writer = pool.begin().await.unwrap();
         if gate {
@@ -233,7 +234,7 @@ async fn project_exports_deny_actor_revoked_during_either_authority_wait(pool: P
 #[serial_test::serial]
 async fn project_exports_refresh_release_scope_after_parent_wait(pool: PgPool) {
     for change in ["remove", "insert_settings", "downgrade"] {
-        let ids = seed(&pool, OrgRole::Member).await;
+        let ids = seed(&pool, BuiltInProfile::Member).await;
         assign(&mut pool.acquire().await.unwrap(), &ids).await;
         if change == "downgrade" {
             visibility(&mut pool.acquire().await.unwrap(), &ids, "managers").await;
@@ -297,7 +298,7 @@ async fn project_exports_refresh_release_scope_after_parent_wait(pool: PgPool) {
 async fn project_exports_release_every_captured_project_without_render_locks(pool: PgPool) {
     use crate::reports::{bounded::ExportPermit, render_project_export};
     for change in ["remove", "deactivate", "demote_retained"] {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         assign(&mut pool.acquire().await.unwrap(), &ids).await;
         let second = Uuid::now_v7();
         sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency) VALUES ($1,$2,$3,'Second','EUR')",
@@ -402,7 +403,7 @@ async fn project_exports_release_every_captured_project_without_render_locks(poo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_bound_rows_and_text_after_scope_filtering(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let keys: Vec<_> = (1..XLSX.rows).map(|_| Uuid::now_v7()).collect();
     sqlx::query!(
         "INSERT INTO projects (id,org_id,client_id,name,currency)
@@ -475,7 +476,7 @@ async fn project_exports_bound_rows_and_text_after_scope_filtering(pool: PgPool)
         32766
     );
 
-    let aggregate = seed(&pool, OrgRole::Manager).await;
+    let aggregate = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let keys: Vec<_> = (0..300).map(|_| Uuid::now_v7()).collect();
     sqlx::query!(
         "INSERT INTO projects (id,org_id,client_id,name,currency)
@@ -530,7 +531,7 @@ async fn paused_project_pool(pool: &PgPool) -> PgPool {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_share_one_size_and_payload_snapshot(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     assign(&mut pool.acquire().await.unwrap(), &ids).await;
     let reader_pool = paused_project_pool(&pool).await;
     let mut blocker = pool.begin().await.unwrap();
@@ -565,7 +566,7 @@ async fn project_exports_share_one_size_and_payload_snapshot(pool: PgPool) {
 #[serial_test::serial]
 async fn project_exports_release_cancelled_and_timed_out_checks(pool: PgPool) {
     use crate::reports::{bounded::ExportPermit, render_project_export};
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     assign(&mut pool.acquire().await.unwrap(), &ids).await;
     let reader_pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(1)
@@ -661,8 +662,8 @@ async fn project_exports_release_cancelled_and_timed_out_checks(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_reject_missing_foreign_and_unreadable_captured_ids(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for project in [Uuid::now_v7(), foreign.project_id] {
         assert_eq!(
             authorize_projects(
@@ -703,7 +704,7 @@ async fn project_exports_reject_missing_foreign_and_unreadable_captured_ids(pool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_retain_parent_authority_until_release_check_finishes(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     assign(&mut pool.acquire().await.unwrap(), &ids).await;
     let reader_pool = paused_project_pool(&pool).await;
     let mut blocker = pool.begin().await.unwrap();
@@ -771,7 +772,7 @@ async fn project_exports_retain_parent_authority_until_release_check_finishes(po
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_exports_cancel_loading_without_retaining_authority(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     assign(&mut pool.acquire().await.unwrap(), &ids).await;
     let reader_pool = paused_project_pool(&pool).await;
     let mut blocker = pool.begin().await.unwrap();

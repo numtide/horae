@@ -7,15 +7,16 @@ use crate::models::project_creation::{
 use crate::server_fns::test_seed::seed;
 use dioxus::prelude::ServerFnError;
 use horae_core::importers::harvest::types::{ImportMode, SourceKind, SourceRow};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::project::{BudgetMode, RateMode};
-use horae_core::types::{OrgRole, ProjectType};
+use horae_core::types::ProjectType;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn imported_catalog_rate_cannot_be_relabelled_as_workspace_currency(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let csv = format!(
         "Date,Client,Project,Task,Email,Hours,Billable?,Billable Rate,Currency\n\
          2026-09-07,Foreign client,Foreign project,Imported task,{}@test.com,1,Yes,80,USD\n",
@@ -189,7 +190,7 @@ async fn imports_preserve_finalized_project_configuration_and_restricted_access(
             (ProjectType::TimeAndMaterials, RateMode::Project, 8250),
             (ProjectType::FixedFee, RateMode::Task, 0),
         ] {
-            let ids = seed(&pool, OrgRole::Admin).await;
+            let ids = seed(&pool, BuiltInProfile::Administrator).await;
             let member = Uuid::now_v7();
             let email = format!("{member}@test.com");
             sqlx::query!(

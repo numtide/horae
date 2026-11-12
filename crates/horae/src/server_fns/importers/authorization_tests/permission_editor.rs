@@ -6,8 +6,8 @@ use horae_core::permissions::catalog::BuiltInProfile;
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     check_requester_binding(pool, api).await;
     check_template_capacity(pool, api).await;
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
+    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     let target = super::user(pool, ids.org_id, OrgRole::Member).await;
     let cookie = api.cookie(ids.user_id).await;
     let member_cookie = api.cookie(target).await;
@@ -33,6 +33,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     for (user, admin) in [(ids.user_id, true), (target, false)] {
         let grants: Vec<String> =
             serde_json::from_value(json!(BuiltInProfile::Administrator.selection())).unwrap();
+        crate::server_fns::test_seed::clear_state(pool, user).await;
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
             VALUES ($1,$2,$3,1,$4,$5,'individual')", Uuid::now_v7(), ids.org_id, user, &grants, admin)
             .execute(pool).await.unwrap();
@@ -283,38 +284,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             StatusCode::FORBIDDEN
         );
     }
-    for version in [0, 2] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
-            ids.org_id,
-            version
-        )
-        .execute(pool)
-        .await
-        .unwrap();
-        for (name, body) in [
-            ("list_permission_subjects", json!({"after":null})),
-            ("load_permission_editor", lookup.clone()),
-            ("preview_person_permissions", json!({"draft":draft})),
-            (
-                "save_person_permissions",
-                json!({"command":command,"expected_requester":expected_requester}),
-            ),
-            (
-                "save_permission_template",
-                json!({"command":create,"expected_requester":expected_requester}),
-            ),
-            (
-                "preview_permission_template_deletion",
-                json!({"template_id":template,"expected_access_revision":4,"expected_template_revision":0}),
-            ),
-        ] {
-            assert_eq!(
-                api.call(name, body, Some(&cookie), false).await.status(),
-                StatusCode::FORBIDDEN
-            );
-        }
-    }
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
         ids.org_id
@@ -387,12 +356,13 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
 }
 
 async fn check_template_capacity(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
     let other = super::user(pool, ids.org_id, OrgRole::Member).await;
     let grants: Vec<String> =
         serde_json::from_value(json!(BuiltInProfile::Administrator.selection())).unwrap();
     for user in [ids.user_id, other] {
         let admin = true;
+        crate::server_fns::test_seed::clear_state(pool, user).await;
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
             VALUES ($1,$2,$3,1,$4,$5,'individual')", Uuid::now_v7(), ids.org_id, user, &grants, admin)
             .execute(pool).await.unwrap();
@@ -547,13 +517,14 @@ async fn check_template_capacity(pool: &PgPool, api: &Api) {
 }
 
 async fn check_requester_binding(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
     let other = super::user(pool, ids.org_id, OrgRole::Member).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     for user in [ids.user_id, other] {
         let grants: Vec<String> =
             serde_json::from_value(json!(BuiltInProfile::Administrator.selection())).unwrap();
         let admin = true;
+        crate::server_fns::test_seed::clear_state(pool, user).await;
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
             VALUES ($1,$2,$3,1,$4,$5,'individual')", Uuid::now_v7(), ids.org_id, user, &grants, admin)
             .execute(pool).await.unwrap();

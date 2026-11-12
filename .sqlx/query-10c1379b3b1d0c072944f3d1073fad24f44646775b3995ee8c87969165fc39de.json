@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, email, org_role::text as role, active FROM users ORDER BY name ASC",
+  "query": "SELECT u.id, u.name, u.email, u.active, coalesce(p.built_in_profile, p.source) AS profile FROM users u LEFT JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id ORDER BY u.name ASC",
   "describe": {
     "columns": [
       {
@@ -20,13 +20,13 @@
       },
       {
         "ordinal": 3,
-        "name": "role",
-        "type_info": "Text"
+        "name": "active",
+        "type_info": "Bool"
       },
       {
         "ordinal": 4,
-        "name": "active",
-        "type_info": "Bool"
+        "name": "profile",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -36,9 +36,9 @@
       false,
       false,
       false,
-      null,
-      false
+      false,
+      null
     ]
   },
-  "hash": "7b0deda46433258294b0e509d92fd282df8ff6b4427831201d5452d5bfe5a2d3"
+  "hash": "10c1379b3b1d0c072944f3d1073fad24f44646775b3995ee8c87969165fc39de"
 }

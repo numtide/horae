@@ -1,11 +1,12 @@
 use super::project_permissions::{canonical, selection};
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn client_api_allows_read_only_grants_without_legacy_management(pool: PgPool) {
-    let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::ClientReadAll]).await;
+    let (ids, app) = canonical(&pool, BuiltInProfile::Member, &[Permission::ClientReadAll]).await;
     walk(&pool, &app, "clients", "is_active=true", &[ids.client_id]).await;
     let detail = page(&app, &format!("/harvest/v2/clients/{}", ids.client_id)).await;
     assert_eq!(detail["id"], api_id(&pool, "client", ids.client_id).await);
@@ -24,7 +25,7 @@ async fn client_api_allows_read_only_grants_without_legacy_management(pool: PgPo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn client_api_does_not_inherit_legacy_role_or_related_workflow_authority(pool: PgPool) {
-    let (ids, app) = canonical(&pool, OrgRole::Admin, &[]).await;
+    let (ids, app) = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     for permissions in [
         vec![],
@@ -50,8 +51,8 @@ async fn client_api_does_not_inherit_legacy_role_or_related_workflow_authority(p
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn client_api_preserves_filters_counts_and_foreign_id_denial(pool: PgPool) {
-    let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::ClientReadAll]).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let (ids, app) = canonical(&pool, BuiltInProfile::Member, &[Permission::ClientReadAll]).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     sqlx::query!("UPDATE clients SET active=false WHERE id=$1", ids.client_id)
         .execute(&pool)
         .await
@@ -82,7 +83,12 @@ async fn client_api_preserves_filters_counts_and_foreign_id_denial(pool: PgPool)
 #[serial_test::serial]
 async fn client_api_rejects_unavailable_policy_and_inactive_sessions(pool: PgPool) {
     for state in ["unknown_policy", "missing", "malformed", "inactive"] {
-        let (ids, app) = canonical(&pool, OrgRole::Admin, &[Permission::ClientReadAll]).await;
+        let (ids, app) = canonical(
+            &pool,
+            BuiltInProfile::Administrator,
+            &[Permission::ClientReadAll],
+        )
+        .await;
         match state {
             "unknown_policy" => {
                 sqlx::query!(
@@ -137,7 +143,12 @@ async fn client_api_rejects_unavailable_policy_and_inactive_sessions(pool: PgPoo
 #[serial_test::serial]
 async fn client_api_observes_revocation_after_waiting_for_current_authority(pool: PgPool) {
     for detail in [false, true] {
-        let (ids, app) = canonical(&pool, OrgRole::Admin, &[Permission::ClientReadAll]).await;
+        let (ids, app) = canonical(
+            &pool,
+            BuiltInProfile::Administrator,
+            &[Permission::ClientReadAll],
+        )
+        .await;
         let mut hold = pool.begin().await.unwrap();
         sqlx::query!(
             "UPDATE organizations SET access_revision=access_revision+1 WHERE id=$1",
@@ -191,7 +202,8 @@ async fn client_api_observes_revocation_after_waiting_for_current_authority(pool
 #[serial_test::serial]
 async fn client_api_rechecks_activity_after_session_authentication(pool: PgPool) {
     for detail in [false, true] {
-        let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::ClientReadAll]).await;
+        let (ids, app) =
+            canonical(&pool, BuiltInProfile::Member, &[Permission::ClientReadAll]).await;
         let mut hold = pool.begin().await.unwrap();
         sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
             .execute(&mut *hold)

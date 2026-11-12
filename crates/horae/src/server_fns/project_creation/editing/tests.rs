@@ -4,6 +4,7 @@ use crate::models::project_creation::{
     TaskSource,
 };
 use crate::server_fns::test_seed::seed;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::project::{BudgetMode, RateMode};
 use sqlx::PgPool;
 
@@ -33,7 +34,7 @@ async fn editor_load_uses_current_role_across_all_billing_configurations(pool: P
             if project_type == ProjectType::Retainer && mode.is_some() {
                 continue;
             }
-            let ids = seed(&pool, OrgRole::Admin).await;
+            let ids = seed(&pool, BuiltInProfile::Administrator).await;
             sqlx::query!(
                 "UPDATE projects SET project_type = $2 WHERE id = $1",
                 ids.project_id,
@@ -93,8 +94,8 @@ async fn editor_load_uses_current_role_across_all_billing_configurations(pool: P
             );
         }
     }
-    let a = seed(&pool, OrgRole::Admin).await;
-    let b = seed(&pool, OrgRole::Admin).await;
+    let a = seed(&pool, BuiltInProfile::Administrator).await;
+    let b = seed(&pool, BuiltInProfile::Administrator).await;
     for (org, user, project) in [
         (a.org_id, a.user_id, b.project_id),
         (a.org_id, b.user_id, a.project_id),
@@ -127,7 +128,7 @@ fn edit_request(project: EditableProject) -> ProjectEditRequest {
 async fn configured_fixture(
     pool: &PgPool,
 ) -> (crate::server_fns::test_seed::SeedIds, EditableProject) {
-    let owner = seed(pool, OrgRole::Admin).await;
+    let owner = seed(pool, BuiltInProfile::Administrator).await;
     let form = ProjectForm {
         client_id: Some(owner.client_id),
         name: "Configured fixture".into(),
@@ -432,7 +433,7 @@ async fn saves_recheck_current_authority_and_do_not_repeat_noops(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn editing_milestones_keeps_invoice_snapshots_and_fee_identities_immutable(pool: PgPool) {
-    let owner = seed(&pool, OrgRole::Admin).await;
+    let owner = seed(&pool, BuiltInProfile::Administrator).await;
     let form = ProjectForm {
         client_id: Some(owner.client_id),
         name: "Milestones".into(),
@@ -606,7 +607,7 @@ async fn task_catalog_and_graph_changes_roll_back_together_on_duplicate_resoluti
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn foreign_actor_cannot_save_or_retry_another_organizations_edit(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let mut request = edit_request(original.clone());
     request.form.name = "Not authorized".into();
     assert!(matches!(
@@ -642,7 +643,7 @@ async fn foreign_actor_cannot_save_or_retry_another_organizations_edit(pool: PgP
 async fn save_edits_the_same_legacy_project_and_never_creates_a_draft_or_configuration(
     pool: PgPool,
 ) {
-    let owner = seed(&pool, OrgRole::Admin).await;
+    let owner = seed(&pool, BuiltInProfile::Administrator).await;
     sqlx::query!(
         "UPDATE projects SET project_type = 'retainer', currency = 'JPY' WHERE id = $1",
         owner.project_id
@@ -729,7 +730,7 @@ async fn save_edits_the_same_legacy_project_and_never_creates_a_draft_or_configu
 async fn save_updates_configured_sections_atomically_and_rejects_stale_or_invalid_edits(
     pool: PgPool,
 ) {
-    let owner = seed(&pool, OrgRole::Admin).await;
+    let owner = seed(&pool, BuiltInProfile::Administrator).await;
     let form = ProjectForm {
         client_id: Some(owner.client_id),
         name: "Configured".into(),
@@ -817,7 +818,7 @@ async fn save_updates_configured_sections_atomically_and_rejects_stale_or_invali
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn editor_loads_legacy_values_without_fabricating_a_billing_mode_or_draft(pool: PgPool) {
-    let owner = seed(&pool, OrgRole::Admin).await;
+    let owner = seed(&pool, BuiltInProfile::Administrator).await;
     sqlx::query!(
         "UPDATE projects SET project_type = 'retainer', currency = 'JPY', rate_cents = 0,
          code = 'OLD-01', budget_kind = 'hours', budget_minutes = 1830, active = false WHERE id = $1",
@@ -862,7 +863,7 @@ async fn editor_loads_legacy_values_without_fabricating_a_billing_mode_or_draft(
 async fn editor_recovers_full_configuration_and_redacts_private_values_after_role_change(
     pool: PgPool,
 ) {
-    let owner = seed(&pool, OrgRole::Admin).await;
+    let owner = seed(&pool, BuiltInProfile::Administrator).await;
     let form = ProjectForm {
         client_id: Some(owner.client_id),
         name: "Configured editor".into(),
@@ -975,8 +976,8 @@ async fn editor_recovers_full_configuration_and_redacts_private_values_after_rol
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn editor_rechecks_tenant_role_and_active_status(pool: PgPool) {
-    let owner = seed(&pool, OrgRole::Manager).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let owner = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for id in [foreign.project_id, Uuid::now_v7()] {
         let error = load_editable_project(&pool, owner.user_id, owner.org_id, id)
             .await
@@ -1014,7 +1015,7 @@ async fn editor_rechecks_tenant_role_and_active_status(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn editor_keeps_archived_selected_identities_and_nullable_overrides(pool: PgPool) {
-    let owner = seed(&pool, OrgRole::Admin).await;
+    let owner = seed(&pool, BuiltInProfile::Administrator).await;
     let user_id = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO users (id, org_id, email, name, active) VALUES ($1, $2, 'archived@test.com', 'Archived person', false)",
@@ -1081,7 +1082,7 @@ async fn editor_keeps_archived_selected_identities_and_nullable_overrides(pool: 
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn editor_preserves_fee_schedule_and_operational_milestone_ids(pool: PgPool) {
-    let owner = seed(&pool, OrgRole::Admin).await;
+    let owner = seed(&pool, BuiltInProfile::Administrator).await;
     for mode in [FeeMode::Single, FeeMode::Milestones, FeeMode::Monthly] {
         let form = ProjectForm {
             client_id: Some(owner.client_id),
@@ -1148,7 +1149,7 @@ async fn editor_preserves_fee_schedule_and_operational_milestone_ids(pool: PgPoo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn editor_recovers_each_budget_scope_without_turning_absence_into_zero(pool: PgPool) {
-    let owner = seed(&pool, OrgRole::Admin).await;
+    let owner = seed(&pool, BuiltInProfile::Administrator).await;
     for mode in [
         BudgetMode::None,
         BudgetMode::TotalHours,
