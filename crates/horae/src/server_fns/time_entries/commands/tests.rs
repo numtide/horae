@@ -2,6 +2,7 @@ use super::*;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::scoped_time::{TimesheetEntryInput, TimesheetPolicy};
 use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 mod daily_limit;
@@ -102,7 +103,7 @@ impl Fixture {
 }
 
 async fn fixture(pool: &PgPool) -> Fixture {
-    let ids = seed(pool, OrgRole::Manager).await;
+    let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
     let target = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO users (id,org_id,email,name) VALUES ($1,$2,$3,'Target')",
@@ -136,6 +137,7 @@ async fn fixture(pool: &PgPool) -> Fixture {
         serde_json::to_value(PermissionSelection::new(&[Permission::TimeWriteManaged])).unwrap(),
     )
     .unwrap();
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source) VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants)
         .execute(pool).await.unwrap();
     sqlx::query!(

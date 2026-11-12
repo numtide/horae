@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::{seed, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use std::time::Duration;
 
@@ -55,7 +56,7 @@ async fn save(
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_save_edited_from_an_older_snapshot_is_refused_and_keeps_the_newer_values(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let opened = stored(&pool, ids.org_id).await;
     let newer = OrgBranding {
         bank_iban: Some("ES91 2100 0418 4502 0005 1332".into()),
@@ -87,7 +88,7 @@ async fn a_save_edited_from_an_older_snapshot_is_refused_and_keeps_the_newer_val
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_stored_value_too_long_to_print_does_not_block_saving_other_fields(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let overlong = "x".repeat(crate::models::organization::MAX_BRANDING_VALUE_BYTES + 1);
     // Saved through the API before values were checked.
     sqlx::query!(
@@ -110,7 +111,7 @@ async fn a_stored_value_too_long_to_print_does_not_block_saving_other_fields(poo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unchanged_branding_preserves_the_row(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let branding = default_branding();
     let before = row_version(&pool, ids.org_id).await;
     let (returned, changed) = save(&pool, ids.org_id, ids.user_id, &branding)
@@ -124,7 +125,7 @@ async fn unchanged_branding_preserves_the_row(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn each_branding_field_changes_once_including_null_and_empty(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let mut fields = serde_json::to_value(default_branding()).unwrap();
     for field in [
         "provider_name",
@@ -170,7 +171,7 @@ async fn competing_edit(
     pool: &PgPool,
     requested_name: Option<&str>,
 ) -> (Result<(OrgBranding, bool), ServerFnError>, Option<String>) {
-    let ids = seed(pool, OrgRole::Admin).await;
+    let ids = seed(pool, BuiltInProfile::Administrator).await;
     let opened = stored(pool, ids.org_id).await;
     let mut first = pool.begin().await.unwrap();
     let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
@@ -240,8 +241,8 @@ async fn missing_organization_is_not_an_unchanged_update(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn branding_requires_current_tenant_bound_authority_even_for_noops(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let before = row_version(&pool, ids.org_id).await;
     for (actor, role, active) in [
         (ids.user_id, OrgRole::Member, true),
@@ -300,7 +301,7 @@ async fn branding_rechecks_authority_after_the_organization_wait(pool: PgPool) {
         .unwrap();
     for deactivate in [false, true] {
         for change in [false, true] {
-            let ids = seed(&pool, OrgRole::Manager).await;
+            let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
             let before = row_version(&pool, ids.org_id).await;
             let mut revoke = pool.begin().await.unwrap();
             let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
@@ -362,7 +363,7 @@ async fn branding_rechecks_authority_after_the_organization_wait(pool: PgPool) {
 #[serial_test::serial]
 async fn branding_rechecks_authority_after_an_actor_only_wait(pool: PgPool) {
     for deactivate in [false, true] {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let before = row_version(&pool, ids.org_id).await;
         let mut revoke = pool.begin().await.unwrap();
         let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
@@ -410,7 +411,7 @@ async fn branding_rechecks_authority_after_an_actor_only_wait(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn branding_holds_actor_authority_until_its_write_commits(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let requested = OrgBranding {
         provider_name: Some("Authorized before revocation".into()),
         ..default_branding()
@@ -479,7 +480,7 @@ async fn branding_holds_actor_authority_until_its_write_commits(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn failed_branding_write_rolls_back_and_releases_authority(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let before = row_version(&pool, ids.org_id).await;
     sqlx::query!(
         "ALTER TABLE organizations ADD CONSTRAINT reject_branding_write CHECK (false) NOT VALID"
@@ -532,7 +533,7 @@ async fn failed_branding_write_rolls_back_and_releases_authority(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn branding_refuses_a_value_the_invoice_pdf_cannot_print(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let longest = "x".repeat(crate::models::organization::MAX_BRANDING_VALUE_BYTES);
     let accepted = OrgBranding {
         invoice_notes: Some(longest.clone()),
@@ -564,7 +565,7 @@ async fn branding_refuses_a_value_the_invoice_pdf_cannot_print(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn detailed_permissions_leave_branding_to_managers_and_admins(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
         ids.org_id

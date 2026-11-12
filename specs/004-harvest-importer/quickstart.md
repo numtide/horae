@@ -30,7 +30,7 @@ Wait for the app and the demo seed to finish starting. The stack applies migrati
 
 ```sh
 nix develop
-cargo run -p horae --features server -- user create --email dev@example.com --name "Dev User" --role member
+cargo run -p horae --features server -- user create --email dev@example.com --name "Dev User" --profile member
 ```
 
 The importer never creates users. Use emails matching the source account; name-only CSV matching is covered in Scenario 6. Open `http://localhost:8080/auth/login`, choose **Sign in as Admin**, then open **Importers** at `http://localhost:8080/admin/importers`. The local stack enables this development-only login; do not enable it in production. CSV validation does not require Harvest OAuth configuration.

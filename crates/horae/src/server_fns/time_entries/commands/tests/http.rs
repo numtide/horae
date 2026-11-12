@@ -1,10 +1,11 @@
 //! Person-bound commands through real registered routes and session cookies.
 
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Manager).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::ExecutiveManager).await;
     let target = user(pool, ids.org_id, OrgRole::Member).await;
     sqlx::query!(
         "UPDATE users SET oidc_subject=id::text WHERE id=$1",
@@ -35,6 +36,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         Permission::TimeWriteManaged
     ])))
     .unwrap();
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source) VALUES ($1,$2,$3,1,$4,false,'individual')",Uuid::now_v7(),ids.org_id,ids.user_id,&grants).execute(pool).await.unwrap();
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",

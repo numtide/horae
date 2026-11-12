@@ -94,8 +94,12 @@ pub(crate) async fn execute(
     let mut tx = pool.begin().await?;
     super::configure_administration(&mut tx).await?;
     let org = sqlx::query!(
-        "SELECT permission_policy_version, access_revision FROM organizations WHERE id = $1 FOR UPDATE", org_id
-    ).fetch_optional(&mut *tx).await?.ok_or(ProfileCommandError::Forbidden)?;
+        "SELECT access_revision FROM organizations WHERE id = $1 FOR UPDATE",
+        org_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(ProfileCommandError::Forbidden)?;
     let active = sqlx::query_scalar!(
         "SELECT active FROM users WHERE org_id = $1 AND id = $2 FOR SHARE",
         org_id,
@@ -103,7 +107,7 @@ pub(crate) async fn execute(
     )
     .fetch_optional(&mut *tx)
     .await?;
-    if org.permission_policy_version != 1 || active != Some(true) {
+    if active != Some(true) {
         return Err(ProfileCommandError::Forbidden);
     }
     if !load_person_permissions(&mut tx, org_id, actor_id)

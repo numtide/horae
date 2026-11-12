@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -47,7 +48,7 @@ async fn billing_snapshot(pool: &PgPool) -> serde_json::Value {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn bulk_preserves_invoiced_history_assignments_and_spend(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!("INSERT INTO project_tasks (project_id, task_id, billable, rate_cents) VALUES ($1, $2, true, $3)", ids.project_id, ids.task_id, Some(6000_i64))
         .execute(&pool).await.unwrap();
@@ -90,7 +91,7 @@ async fn bulk_preserves_invoiced_history_assignments_and_spend(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn bulk_accepts_one_hundred_projects_and_mixed_status_noops(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let mut targets = vec![ids.project_id];
     for _ in 1..100 {
         targets.push(extra_project(&pool, &ids).await);
@@ -134,7 +135,7 @@ fn bulk_ids_validate_before_writes_and_normalize_duplicates() {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn bulk_status_preserves_details_history_and_noop_versions(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let other = extra_project(&pool, &ids).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     let history = sqlx::query_scalar!("SELECT jsonb_agg(to_jsonb(t)) FROM time_entries t")
@@ -191,8 +192,8 @@ async fn bulk_status_preserves_details_history_and_noop_versions(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn bulk_missing_or_foreign_project_rolls_back_earlier_changes(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let before = snapshot(&pool, ids.org_id).await;
     for last in [foreign.project_id, Uuid::max()] {
         let targets =
@@ -214,7 +215,7 @@ async fn bulk_missing_or_foreign_project_rolls_back_earlier_changes(pool: PgPool
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn bulk_database_failure_rolls_back_earlier_changes(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let other = extra_project(&pool, &ids).await;
     // A rejecting constraint belongs only to this disposable test database.
     sqlx::query!(
@@ -244,7 +245,7 @@ async fn bulk_database_failure_rolls_back_earlier_changes(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn bulk_reversed_overlapping_batches_finish_without_deadlock(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let other = extra_project(&pool, &ids).await;
     let forward = parse_bulk_project_ids(&[ids.project_id.to_string(), other.to_string()]).unwrap();
     let reverse = parse_bulk_project_ids(&[other.to_string(), ids.project_id.to_string()]).unwrap();
@@ -319,8 +320,8 @@ async fn status_writes_recheck_current_actor_role_and_policy(pool: PgPool) {
         "unknown policy",
         "foreign actor",
     ] {
-        let ids = seed(&pool, OrgRole::Manager).await;
-        let foreign = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+        let foreign = seed(&pool, BuiltInProfile::Administrator).await;
         let mut actor = ids.user_id;
         match change {
             "member" => {
@@ -373,7 +374,7 @@ async fn status_writes_recheck_current_actor_role_and_policy(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn status_write_waits_for_a_policy_change_and_then_fails_closed(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let (org_id, user_id, project_id) = (ids.org_id, ids.user_id, ids.project_id);
     let mut change = pool.begin().await.unwrap();
     let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")

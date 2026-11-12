@@ -1,10 +1,15 @@
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 pub(super) async fn single_fee(pool: &PgPool) -> SeedIds {
-    let ids = seed(pool, OrgRole::Manager).await;
+    fee_project(pool, seed(pool, BuiltInProfile::ExecutiveManager).await).await
+}
+
+/// Make the seeded project a single fixed fee.
+async fn fee_project(pool: &PgPool, ids: SeedIds) -> SeedIds {
     sqlx::query!(
         "UPDATE projects SET project_type = 'fixed_fee', starts_on = '2026-09-01' WHERE id = $1",
         ids.project_id
@@ -594,7 +599,7 @@ async fn reviewed_generation_requires_exact_excess_and_current_authority(pool: P
         Some(0)
     );
     request.confirmed_excess[0].excess_cents = 100;
-    let foreign = seed(&pool, OrgRole::Manager).await;
+    let foreign = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     assert!(
         generate_invoice_with_request(
             &pool,
@@ -726,7 +731,7 @@ async fn reviewed_generation_does_not_materialize_unselected_months(pool: PgPool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn reviewed_generation_rejects_changed_time_before_claiming_it(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
     let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
     let defaults = InvoiceDefaults::default();
@@ -1434,7 +1439,7 @@ async fn draft_fee_edit_rejects_invalid_lines_and_current_unauthorized_actors(po
                 .is_err()
         );
     }
-    let outsider = seed(&pool, OrgRole::Manager).await;
+    let outsider = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     assert!(
         editing::load(&pool, outsider.org_id, outsider.user_id, id)
             .await
@@ -1791,7 +1796,11 @@ async fn fee_balance_migration_allocates_discount_without_rewriting_invoice_snap
             .collect(),
     );
     previous.run(&pool).await.unwrap();
-    let ids = single_fee(&pool).await;
+    let ids = fee_project(
+        &pool,
+        crate::server_fns::test_seed::seed_before_permission_state(&pool, OrgRole::Manager).await,
+    )
+    .await;
     let invoice = Uuid::now_v7();
     sqlx::query!("INSERT INTO invoices (id,org_id,client_id,number,status,issued_on,due_on,currency,total_cents,discount_bps,discount_cents) VALUES ($1,$2,$3,'BEFORE-BALANCES','draft','2026-09-01','2026-10-01','EUR',1,5000,2)", invoice, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
     let line_ids = [Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
@@ -2329,7 +2338,7 @@ async fn invoice_line_sources_reject_mixed_sources_and_invented_fee_quantities(p
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn fee_occurrence_rejects_cross_organization_project(pool: PgPool) {
     let ids = single_fee(&pool).await;
-    let other = seed(&pool, OrgRole::Manager).await;
+    let other = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let error = sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency) VALUES ($1,$2,$3,'single','2026-09-01','Foreign',100,'EUR')", Uuid::now_v7(), other.org_id, ids.project_id)
         .execute(&pool).await.unwrap_err();
     assert_eq!(

@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::wait_for_blocked;
+use horae_core::permissions::catalog::BuiltInProfile;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -23,7 +24,7 @@ async fn administrator(pool: &PgPool, org_id: Uuid) -> Uuid {
 #[serial_test::serial]
 async fn invoice_generation_and_user_revocation_commit_in_gate_order(pool: PgPool) {
     for invoice_first in [true, false] {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let administrator = administrator(&pool, ids.org_id).await;
         let entry = time_entry(&pool, &ids, EntryState::Open).await;
         sqlx::query!(

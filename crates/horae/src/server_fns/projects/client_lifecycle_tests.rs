@@ -5,6 +5,7 @@ use super::*;
 use crate::server_fns::test_seed::{
     SeedIds, repeatable_read_pool, seed, time_entry, wait_for_blocked,
 };
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 use sqlx::PgPool;
 use std::time::Duration;
@@ -63,7 +64,7 @@ fn code_and_message(error: ServerFnError) -> (u16, String) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn restoring_a_project_of_an_archived_client_is_refused_single_and_bulk(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     let other_client = Uuid::now_v7();
     sqlx::query!(
@@ -107,7 +108,7 @@ async fn restoring_a_project_of_an_archived_client_is_refused_single_and_bulk(po
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_already_active_project_of_an_archived_client_stays_a_noop(pool: PgPool) {
     // Data from before the archive prerequisite existed.
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     set_client(&pool, ids.client_id, false).await;
     let before = history(&pool).await;
     let (project, transition) =
@@ -125,7 +126,7 @@ async fn an_already_active_project_of_an_archived_client_stays_a_noop(pool: PgPo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_project_restores_once_its_client_is_restored(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let bulk_project = project(&pool, &ids, ids.client_id, false).await;
     sqlx::query!(
         "UPDATE projects SET active = false WHERE id = $1",
@@ -163,7 +164,7 @@ async fn a_restore_waiting_for_a_client_archive_writes_nothing(pool: PgPool) {
     let rr = repeatable_read_pool(&pool).await;
     for bulk in [false, true] {
         for (isolation, restore_pool) in [("default", &pool), ("repeatable read", &rr)] {
-            let ids = seed(&pool, OrgRole::Manager).await;
+            let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
             sqlx::query!(
                 "UPDATE projects SET active = false WHERE id = $1",
                 ids.project_id

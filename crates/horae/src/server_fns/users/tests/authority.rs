@@ -12,14 +12,14 @@ async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
     };
 
     for editor_first in [true, false] {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let manager = insert_user(
             &pool,
             ids.org_id,
             ids.user_id,
             &format!("{}@test.com", Uuid::now_v7()),
             "Manager",
-            OrgRole::Manager,
+            BuiltInProfile::ExecutiveManager,
         )
         .await
         .unwrap();
@@ -146,7 +146,7 @@ async fn attempt(
             actor,
             &format!("{}@test.com", Uuid::now_v7()),
             "New member",
-            OrgRole::Member,
+            BuiltInProfile::Member,
         )
         .await
         .map(|_| ()),
@@ -188,7 +188,7 @@ async fn assert_unchanged(pool: &PgPool, org: Uuid, target: Uuid) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn revoked_administrator_cannot_create_change_roles_or_deactivate(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let target = target(&pool, ids.org_id).await;
     for (role, active) in [
         (OrgRole::Member, true),
@@ -224,8 +224,8 @@ async fn revoked_administrator_cannot_create_change_roles_or_deactivate(pool: Pg
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn foreign_and_unknown_actors_cannot_change_local_user_access(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let target = target(&pool, ids.org_id).await;
     for actor in [foreign.user_id, Uuid::now_v7()] {
         for change in [Change::Create, Change::Role, Change::Active] {
@@ -249,7 +249,7 @@ async fn foreign_and_unknown_actors_cannot_change_local_user_access(pool: PgPool
 #[serial_test::serial]
 async fn user_mutations_wait_for_actor_revocation_and_recheck_after_commit(pool: PgPool) {
     for change in [Change::Create, Change::Role, Change::Active] {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let target = target(&pool, ids.org_id).await;
         let mut revocation = pool.begin().await.unwrap();
         let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
@@ -296,7 +296,7 @@ async fn user_mutations_wait_for_actor_revocation_and_recheck_after_commit(pool:
 #[serial_test::serial]
 async fn user_mutations_recheck_revocation_after_waiting_for_organization_lock(pool: PgPool) {
     for change in [Change::Create, Change::Role, Change::Active] {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let target = target(&pool, ids.org_id).await;
         let mut revocation = pool.begin().await.unwrap();
         let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
@@ -348,14 +348,14 @@ async fn user_mutations_recheck_revocation_after_waiting_for_organization_lock(p
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn active_administrator_can_create_change_roles_and_deactivate(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let created = insert_user(
         &pool,
         ids.org_id,
         ids.user_id,
         "new@test.com",
         "New",
-        OrgRole::Member,
+        BuiltInProfile::Member,
     )
     .await
     .unwrap();
@@ -377,7 +377,7 @@ async fn active_administrator_can_create_change_roles_and_deactivate(pool: PgPoo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn duplicate_creation_rolls_back_and_leaves_access_changes_usable(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let target = target(&pool, ids.org_id).await;
     let result = insert_user(
         &pool,
@@ -385,7 +385,7 @@ async fn duplicate_creation_rolls_back_and_leaves_access_changes_usable(pool: Pg
         ids.user_id,
         &format!("{target}@test.com"),
         "Duplicate",
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
     )
     .await;
     assert!(
@@ -409,7 +409,7 @@ async fn duplicate_creation_rolls_back_and_leaves_access_changes_usable(pool: Pg
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn access_transaction_holds_actor_authority_until_commit(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let mut access = begin_user_access_change(&pool, ids.org_id, ids.user_id)
         .await
         .unwrap();

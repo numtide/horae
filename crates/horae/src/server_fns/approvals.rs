@@ -606,7 +606,8 @@ async fn reopen_period(
 mod tests {
     use super::week_has_running_timer;
     use crate::server_fns::test_seed::{SeedIds, seed};
-    use horae_core::types::{EntryState, OrgRole};
+    use horae_core::permissions::catalog::BuiltInProfile;
+    use horae_core::types::EntryState;
     use sqlx::PgPool;
     use uuid::Uuid;
 
@@ -640,7 +641,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn sees_a_running_timer_inside_the_week(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Member).await;
+        let ids = seed(&pool, BuiltInProfile::Member).await;
         let ws = chrono::Utc::now().date_naive();
         let we = ws + chrono::Duration::days(6);
 
@@ -655,7 +656,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn ignores_stopped_and_out_of_week_timers(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Member).await;
+        let ids = seed(&pool, BuiltInProfile::Member).await;
         let ws = chrono::Utc::now().date_naive();
         let we = ws + chrono::Duration::days(6);
 
