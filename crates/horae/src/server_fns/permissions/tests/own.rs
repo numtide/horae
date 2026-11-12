@@ -12,18 +12,19 @@ use uuid::Uuid;
 async fn state(pool: &PgPool, ids: &SeedIds, profile: BuiltInProfile, administrator: bool) {
     let grants: Vec<String> =
         serde_json::from_value(serde_json::to_value(profile.selection()).unwrap()).unwrap();
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source, revision)
         VALUES ($1, $2, $3, 1, $4, $5, 'individual', 3)", Uuid::now_v7(), ids.org_id, ids.user_id, &grants, administrator).execute(pool).await.unwrap();
 }
 
 async fn fixture(pool: &PgPool) -> SeedIds {
-    policy_one(pool, OrgRole::Member, BuiltInProfile::Member, false).await
+    policy_one(pool, BuiltInProfile::Member, BuiltInProfile::Member, false).await
 }
 
 /// A person with a legacy role, moved to policy one with the given canonical state.
 async fn policy_one(
     pool: &PgPool,
-    role: OrgRole,
+    role: BuiltInProfile,
     profile: BuiltInProfile,
     administrator: bool,
 ) -> SeedIds {
@@ -42,7 +43,7 @@ async fn policy_one(
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn own_permissions_legacy_mode_never_discloses_staging(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     assert_eq!(read(&pool, ids.org_id, ids.user_id).await.unwrap(), None);
     state(&pool, &ids, BuiltInProfile::Administrator, true).await;
     assert_eq!(read(&pool, ids.org_id, ids.user_id).await.unwrap(), None);
@@ -88,8 +89,8 @@ fn is_forbidden(result: Result<String, ServerFnError>) -> bool {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn server_version_under_policy_zero_follows_the_legacy_role(pool: PgPool) {
-    let admin = seed(&pool, OrgRole::Admin).await;
-    let member = seed(&pool, OrgRole::Member).await;
+    let admin = seed(&pool, BuiltInProfile::Administrator).await;
+    let member = seed(&pool, BuiltInProfile::Member).await;
     let version = server_version(&pool, &session_user(&admin, OrgRole::Admin)).await;
     assert_eq!(version.unwrap(), crate::version::current());
     let version = server_version(&pool, &session_user(&member, OrgRole::Member)).await;
@@ -99,8 +100,20 @@ async fn server_version_under_policy_zero_follows_the_legacy_role(pool: PgPool) 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn server_version_under_policy_one_follows_the_canonical_flag(pool: PgPool) {
-    let admin = policy_one(&pool, OrgRole::Member, BuiltInProfile::Administrator, true).await;
-    let member = policy_one(&pool, OrgRole::Admin, BuiltInProfile::Member, false).await;
+    let admin = policy_one(
+        &pool,
+        BuiltInProfile::Member,
+        BuiltInProfile::Administrator,
+        true,
+    )
+    .await;
+    let member = policy_one(
+        &pool,
+        BuiltInProfile::Administrator,
+        BuiltInProfile::Member,
+        false,
+    )
+    .await;
     let version = server_version(&pool, &session_user(&admin, OrgRole::Member)).await;
     assert_eq!(version.unwrap(), crate::version::current());
     // The legacy role no longer grants anything once canonical state exists.
@@ -111,7 +124,7 @@ async fn server_version_under_policy_one_follows_the_canonical_flag(pool: PgPool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn server_version_refuses_a_person_deactivated_mid_session(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
         .execute(&pool)
         .await

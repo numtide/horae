@@ -1,11 +1,12 @@
 use super::canonical_read_tests::project_team;
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 async fn fixture(pool: &PgPool) -> (SeedIds, User) {
-    let ids = seed(pool, OrgRole::Member).await;
+    let ids = seed(pool, BuiltInProfile::Member).await;
     sqlx::query!(
         "INSERT INTO assignments (id, project_id, user_id) VALUES ($1,$2,$3)",
         Uuid::now_v7(),
@@ -62,7 +63,7 @@ async fn fixture(pool: &PgPool) -> (SeedIds, User) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_project_filter_preserves_progress_access_and_rate_redaction(pool: PgPool) {
     let (ids, viewer) = fixture(&pool).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let other_client = Uuid::now_v7();
     let other_project = Uuid::now_v7();
     sqlx::query!(
@@ -395,7 +396,7 @@ async fn project_reads_use_current_authority_and_reject_foreign_scope(pool: PgPo
             .is_empty()
         );
     }
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     viewer.org_id = foreign.org_id;
     assert!(
         projects_for_viewer(&pool, &viewer, None, true, ProjectRead::Overview)

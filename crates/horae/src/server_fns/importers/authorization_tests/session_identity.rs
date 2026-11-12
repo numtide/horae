@@ -1,10 +1,11 @@
 //! The account menu's identity response is not a financial or provider profile.
 
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     let manager = user(pool, ids.org_id, OrgRole::Manager).await;
     let member = user(pool, ids.org_id, OrgRole::Member).await;
     sqlx::query!(

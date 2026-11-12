@@ -1,6 +1,7 @@
 use super::canonical_read_tests::project_details;
 use super::*;
 use crate::server_fns::test_seed::seed;
+use horae_core::permissions::catalog::BuiltInProfile;
 use serial_test::serial;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -14,7 +15,7 @@ async fn project_details_only_offer_task_rate_currency_to_current_managers(pool:
         ProjectType::NonBillable,
     ] {
         for mode in [None, Some("task"), Some("person"), Some("project")] {
-            let ids = seed(&pool, OrgRole::Admin).await;
+            let ids = seed(&pool, BuiltInProfile::Administrator).await;
             sqlx::query!(
                 "UPDATE projects SET project_type = $2 WHERE id = $1",
                 ids.project_id,
@@ -76,8 +77,8 @@ async fn project_details_only_offer_task_rate_currency_to_current_managers(pool:
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn project_details_and_tags_follow_current_progress_and_private_permissions(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
-    let other = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let other = seed(&pool, BuiltInProfile::Administrator).await;
     let tag = Uuid::now_v7();
     sqlx::query!("UPDATE projects SET code = 'READ-1', starts_on = '2026-09-01', ends_on = '2026-10-31' WHERE id = $1", ids.project_id).execute(&pool).await.unwrap();
     sqlx::query!("INSERT INTO project_private_settings (id,org_id,project_id,admin_notes) VALUES ($1,$2,$3,'Private launch plan')", Uuid::now_v7(), ids.org_id, ids.project_id).execute(&pool).await.unwrap();
@@ -204,7 +205,7 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn unlinked_and_private_project_tags_do_not_leak_into_filters(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let tag = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO project_tags (id,org_id,name) VALUES ($1,$2,'Private tag')",

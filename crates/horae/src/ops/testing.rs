@@ -3,9 +3,7 @@
 use std::sync::Mutex;
 
 use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use super::{AppEvent, EventSink};
 use crate::server_fns::test_seed::{SeedIds, seed};
@@ -27,17 +25,16 @@ impl EventSink for Recorder {
 }
 
 /// Seeds an organization on policy one whose person holds a built-in profile.
-/// Stands in for `test_seed::seed(pool, BuiltInProfile)` until it lands; the
-/// seeded `org_role` is dead data that no operation reads.
+/// The seeded `org_role` is dead data that no operation reads.
 pub(crate) async fn seed_profile(pool: &PgPool, profile: BuiltInProfile) -> SeedIds {
-    let ids = seed(pool, OrgRole::Member).await;
-    policy_one(
-        pool,
-        &ids,
-        profile.direct_permissions(),
-        profile == BuiltInProfile::Administrator,
+    let ids = seed(pool, profile).await;
+    sqlx::query!(
+        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
+        ids.org_id
     )
-    .await;
+    .execute(pool)
+    .await
+    .unwrap();
     ids
 }
 
@@ -86,8 +83,8 @@ pub(crate) async fn policy_one(
     .unwrap();
 }
 
-/// Stores a permission state for the seeded person without touching the
-/// organization's policy, for tests of domains still on legacy roles.
+/// Replaces the seeded person's permission state with an individual one
+/// without touching the organization's policy.
 pub(crate) async fn provision(
     pool: &PgPool,
     ids: &SeedIds,
@@ -97,10 +94,9 @@ pub(crate) async fn provision(
     let grants: Vec<String> =
         serde_json::from_value(serde_json::json!(PermissionSelection::new(grants))).unwrap();
     sqlx::query!(
-        "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-         VALUES ($1,$2,$3,1,$4,$5,'individual')",
-        Uuid::now_v7(),
-        ids.org_id,
+        "UPDATE person_permission_states
+         SET grants = $2, is_administrator = $3, source = 'individual', built_in_profile = NULL
+         WHERE user_id = $1",
         ids.user_id,
         &grants,
         administrator,

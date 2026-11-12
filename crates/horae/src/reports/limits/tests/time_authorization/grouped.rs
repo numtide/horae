@@ -5,7 +5,12 @@ use crate::models::time_report::TimeReportGrouping;
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_xlsx_rejects_partial_loss_of_a_multi_context_group(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadManaged]).await;
+    let ids = scoped(
+        &pool,
+        BuiltInProfile::Member,
+        &[Permission::TimeReadManaged],
+    )
+    .await;
     let owner = person(&pool, ids.org_id).await;
     let other = project(&pool, &ids).await;
     for project_id in [ids.project_id, other] {
@@ -58,7 +63,7 @@ async fn grouped_xlsx_rejects_partial_loss_of_a_multi_context_group(pool: PgPool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_xlsx_budget_includes_contexts_in_addition_to_names(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
     let projects: Vec<Uuid> = (0..256).map(|_| Uuid::now_v7()).collect();
     sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency) SELECT id,$2,$3,repeat('n',32736),'EUR' FROM unnest($1::uuid[]) id", &projects, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
     sqlx::query!("INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable) SELECT id,$2,$3,id,$4,'2026-09-07',1,true FROM unnest($1::uuid[]) id", &projects, ids.org_id, ids.user_id, ids.task_id).execute(&pool).await.unwrap();
@@ -93,7 +98,7 @@ async fn groups(pool: &PgPool, ids: &SeedIds) -> Result<time::groups::GroupExpor
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_xlsx_limits_groups_not_source_entries_and_preserves_scope(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
     add_entries(&pool, &ids, 10_001).await;
     let outsider = person(&pool, ids.org_id).await;
     add_entries(
@@ -116,7 +121,12 @@ async fn grouped_xlsx_limits_groups_not_source_entries_and_preserves_scope(pool:
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_xlsx_rejects_wrong_identity_legacy_policy_and_page_cursor(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Admin, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(
+        &pool,
+        BuiltInProfile::Administrator,
+        &[Permission::TimeReadOwn],
+    )
+    .await;
     let requester = PermissionRequester {
         org_id: ids.org_id,
         user_id: ids.user_id,
@@ -158,7 +168,12 @@ async fn grouped_xlsx_rejects_wrong_identity_legacy_policy_and_page_cursor(pool:
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_xlsx_reauthorizes_original_pairs_after_reassignment(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadManaged]).await;
+    let ids = scoped(
+        &pool,
+        BuiltInProfile::Member,
+        &[Permission::TimeReadManaged],
+    )
+    .await;
     let owner = person(&pool, ids.org_id).await;
     let other = project(&pool, &ids).await;
     let entry = add_entries(
@@ -200,7 +215,7 @@ async fn grouped_xlsx_reauthorizes_original_pairs_after_reassignment(pool: PgPoo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_xlsx_caps_groups_and_names_after_filters(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
     let projects: Vec<Uuid> = (0..10_001).map(|_| Uuid::now_v7()).collect();
     sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency) SELECT id,$2,$3,'Same name','EUR' FROM unnest($1::uuid[]) id", &projects, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
     sqlx::query!("INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable) SELECT id,$2,$3,id,$4,'2026-09-07',1,true FROM unnest($1::uuid[]) id", &projects, ids.org_id, ids.user_id, ids.task_id).execute(&pool).await.unwrap();
@@ -248,7 +263,7 @@ async fn grouped_xlsx_caps_groups_and_names_after_filters(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn grouped_xlsx_all_dimensions_render_exact_hours_without_private_scope(pool: PgPool) {
-    let ids = scoped(&pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(&pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
     let entry = add_entries(&pool, &ids, 1).await[0];
     sqlx::query!(
         "UPDATE time_entries SET minutes=61,rounded_minutes=75 WHERE id=$1",

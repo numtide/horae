@@ -2,7 +2,7 @@ use super::canonical_read_tests::fixture;
 use super::task_catalog::fetch_task_catalog;
 use super::*;
 use crate::models::task::TaskActivity;
-use horae_core::permissions::catalog::PermissionSelection;
+use horae_core::permissions::catalog::{BuiltInProfile, PermissionSelection};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -18,7 +18,7 @@ async fn is_default(pool: &PgPool, task_id: Uuid) -> bool {
 async fn common_flag_round_trips_through_create_and_update(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskWriteAll]),
     )
     .await;
@@ -71,7 +71,7 @@ async fn common_flag_round_trips_through_create_and_update(pool: PgPool) {
 async fn common_flag_needs_task_editing_authority(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::TaskReadAll]),
     )
     .await;
@@ -128,7 +128,7 @@ async fn common_flag_needs_task_editing_authority(pool: PgPool) {
 async fn catalog_lists_common_tasks_first_across_pages(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskReadAll]),
     )
     .await;

@@ -2,6 +2,7 @@
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
+const { setAsideSeededStates } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 const target = new URL(base), database = new URL(process.env.DATABASE_URL);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
@@ -18,7 +19,7 @@ const edit = [...read, 'project_write_managed'];
 const grantsSql = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
 const setGrants = grants => sql(`UPDATE person_permission_states SET grants=${grantsSql(grants)} WHERE user_id='${actor.id}'`);
 assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
-assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
+let restoreSeededStates = () => {};
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -43,6 +44,8 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     const login = await context.request.post(`${base}/auth/dev-login`, { maxRedirects: 0 });
     assert.equal(login.status(), 303);
     assert.equal(login.headers().location, '/');
+    restoreSeededStates = setAsideSeededStates(org);
+    assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
     sql(`BEGIN;
       INSERT INTO clients (id,org_id,name,currency) VALUES ('${client}','${org}','Scoped read client','EUR');
       INSERT INTO users (id,org_id,email,name,active) VALUES ('${teammate}','${org}','private-teammate@example.test','Retained teammate',false);
@@ -150,5 +153,6 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       DELETE FROM clients WHERE id='${client}';
       DELETE FROM users WHERE id='${teammate}';
       DELETE FROM tasks WHERE id='${task}'; COMMIT;`);
+    restoreSeededStates();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

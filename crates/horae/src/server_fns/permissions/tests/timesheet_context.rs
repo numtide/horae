@@ -19,7 +19,7 @@ fn query(subject_id: Option<Uuid>) -> TimesheetQuery {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn sheet_resolves_legacy_own_context_without_canonical_state(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     let result = sheet(&pool, ids.org_id, ids.user_id, &query(None))
         .await
@@ -138,7 +138,7 @@ async fn sheet_selects_empty_managed_participant_without_widening_record_scope(p
 async fn sheet_rejects_changed_requester_or_policy_and_inaccessible_subject(pool: PgPool) {
     let ids = fixture(&pool).await;
     let target = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let initial = sheet(&pool, ids.org_id, ids.user_id, &query(Some(target)))
         .await
         .unwrap();
