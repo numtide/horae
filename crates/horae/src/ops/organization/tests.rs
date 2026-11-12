@@ -1,6 +1,6 @@
 //! Branding and the workspace time zone, allowed and refused by stored grants.
 //! Fixtures keep the organization on its default policy and give the person a
-//! dead legacy role of Admin: neither may matter.
+//! dead legacy role of Admin, whatever their profile: neither may matter.
 
 use std::time::Duration;
 
@@ -22,19 +22,22 @@ enum Who {
 }
 
 async fn fixture(pool: &PgPool, who: Who) -> SeedIds {
-    let ids = seed(pool, OrgRole::Admin).await;
-    match who {
-        Who::Profile(profile) => {
-            provision(
-                pool,
-                &ids,
-                profile.direct_permissions(),
-                profile == Administrator,
-            )
-            .await;
+    let ids = match who {
+        Who::Profile(profile) => seed(pool, profile).await,
+        Who::Grants(grants) => {
+            let ids = seed(pool, Member).await;
+            provision(pool, &ids, grants, false).await;
+            ids
         }
-        Who::Grants(grants) => provision(pool, &ids, grants, false).await,
-    }
+    };
+    sqlx::query!(
+        "UPDATE users SET org_role = $2 WHERE id = $1",
+        ids.user_id,
+        OrgRole::Admin as OrgRole,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
     ids
 }
 

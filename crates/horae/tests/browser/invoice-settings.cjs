@@ -2,6 +2,7 @@
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
+const { setAsideSeededStates } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 const target = new URL(base), database = new URL(process.env.DATABASE_URL);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
@@ -21,9 +22,9 @@ const branding = column => sql(`SELECT coalesce(${column}, '<null>') FROM organi
 const columns = ['provider_name', 'provider_address', 'provider_tax_id', 'provider_email', 'provider_phone',
   'bank_name', 'bank_iban', 'bank_bic', 'bank_routing', 'bank_account', 'invoice_notes', 'invoice_payment_terms'];
 const before = JSON.parse(sql(`SELECT row_to_json(o) FROM (SELECT ${columns.join(',')}, permission_policy_version FROM organizations WHERE id='${org}') o`));
+let restoreSeededStates = () => {};
 const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll("'", "''")}'`;
-// Only this suite's state row is created and removed; the policy and role are restored to their observed values.
-assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE user_id='${actor.id}'`), '0');
+// The seeded states are set aside and put back; the policy and role are restored to their observed values.
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -41,14 +42,16 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE user_id='$
     await expect(page.getByRole('heading', { name: 'Invoices', level: 1 })).toBeVisible();
   };
   try {
+    // The development login needs the seeded Administrator state, so sign in before replacing it.
+    await page.goto(`${base}/auth/login`);
+    await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
+    await page.waitForURL(`${base}/`);
+    restoreSeededStates = setAsideSeededStates(org);
     // The page shows grants only once the organization answers from stored state.
     sql(`BEGIN;
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ('${state}','${org}','${actor.id}',1,${grantsSql(writer)},false,'individual');
       UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
-    await page.goto(`${base}/auth/login`);
-    await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
-    await page.waitForURL(`${base}/`);
 
     await invoices();
     await settingsLink.click();
@@ -150,6 +153,7 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE user_id='$
       UPDATE organizations SET permission_policy_version=${before.permission_policy_version},
         ${columns.map(column => `${column}=${literal(before[column])}`).join(', ')}
         WHERE id='${org}'; COMMIT;`);
+    restoreSeededStates();
     await browser.close();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

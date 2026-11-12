@@ -15,17 +15,19 @@ pub async fn login_page() -> impl IntoResponse {
     Html(render(LoginVariant::Dev, None))
 }
 
-/// `POST /auth/dev-login` — look up the first admin user and log them in.
+/// `POST /auth/dev-login` — log in the first active Administrator.
 pub async fn dev_login_post(
     session: Session,
 ) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
     let state = crate::state::global_state().await;
 
     let row = sqlx::query!(
-        r#"SELECT id, org_id, email, name,
-                  org_role::text as "org_role!: String"
-           FROM users WHERE org_role = $1 AND active = true LIMIT 1"#,
-        horae_core::types::OrgRole::Admin as horae_core::types::OrgRole,
+        r#"SELECT u.id, u.org_id, u.email, u.name,
+                  u.org_role::text as "org_role!: String"
+           FROM users u
+           JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
+           WHERE p.is_administrator AND u.active
+           ORDER BY u.id LIMIT 1"#,
     )
     .fetch_optional(&state.db)
     .await

@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -56,14 +57,14 @@ fn assert_code(result: Result<(), ServerFnError>, expected: u16) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn new_organizations_and_people_start_on_utc_without_an_override(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     assert_eq!(workspace_zone(&pool, ids.org_id).await, "UTC");
     assert_eq!(profile(&pool, ids.user_id).await.1, None);
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_person_saves_their_name_and_zone(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     update_profile_record(
         &pool,
         ids.org_id,
@@ -81,7 +82,7 @@ async fn a_person_saves_their_name_and_zone(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn clearing_the_zone_follows_the_workspace_again(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     update_profile_record(&pool, ids.org_id, ids.user_id, "Ana", Some("Asia/Tokyo"))
         .await
         .unwrap();
@@ -93,7 +94,7 @@ async fn clearing_the_zone_follows_the_workspace_again(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_unknown_zone_is_rejected_and_nothing_changes(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     for bad in ["Mars/Olympus_Mons", "europe/madrid", "+02:00", ""] {
         assert_code(
             update_profile_record(&pool, ids.org_id, ids.user_id, "Ana", Some(bad)).await,
@@ -108,7 +109,7 @@ async fn an_unknown_zone_is_rejected_and_nothing_changes(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_blank_or_overlong_name_is_rejected(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     for bad in ["   ".to_owned(), "x".repeat(201), "a\0b".to_owned()] {
         assert_code(
             update_profile_record(&pool, ids.org_id, ids.user_id, &bad, None).await,
@@ -120,7 +121,7 @@ async fn a_blank_or_overlong_name_is_rejected(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_profile_save_leaves_colleagues_alone(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let other = colleague(&pool, &ids, OrgRole::Member).await;
     update_profile_record(&pool, ids.org_id, ids.user_id, "Ana", Some("Asia/Tokyo"))
         .await
@@ -130,7 +131,7 @@ async fn a_profile_save_leaves_colleagues_alone(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_deactivated_person_cannot_save(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
         .execute(&pool)
         .await
@@ -143,7 +144,7 @@ async fn a_deactivated_person_cannot_save(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_personal_zone_overrides_the_workspace_zone(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     set_workspace_zone(&pool, ids.org_id, "Pacific/Kiritimati").await;
     assert_eq!(
         crate::timezone::person_zone(&pool, ids.user_id)
@@ -164,7 +165,7 @@ async fn a_personal_zone_overrides_the_workspace_zone(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn the_session_carries_both_zones_and_the_effective_offset(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let me = || async {
         let user = User {
             id: ids.user_id,

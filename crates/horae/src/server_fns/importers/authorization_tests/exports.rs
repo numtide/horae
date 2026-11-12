@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::server_fns::test_seed::{seed, time_entry, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 use std::io::{Cursor, Read};
 
@@ -34,8 +35,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     project_requester::check(pool, api).await;
     projects::check(pool, api).await;
     csv::check(pool, api).await;
-    let ids = seed(pool, OrgRole::Manager).await;
-    let foreign = seed(pool, OrgRole::Admin).await;
+    let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
+    let foreign = seed(pool, BuiltInProfile::Administrator).await;
     let own_entry = time_entry(pool, &ids, EntryState::Open).await;
     for (entry, note) in [
         (own_entry, "Private export note"),

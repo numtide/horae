@@ -33,7 +33,7 @@ async fn read(pool: &PgPool, ids: &SeedIds) -> Vec<crate::models::ProjectBudgetO
 async fn canonical_budget_reader_does_not_require_legacy_management(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -48,7 +48,7 @@ async fn canonical_budget_reader_does_not_require_legacy_management(pool: PgPool
 async fn canonical_budget_managed_scope_requires_current_designation(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadManaged]),
     )
     .await;
@@ -72,7 +72,7 @@ async fn canonical_budget_managed_scope_requires_current_designation(pool: PgPoo
 async fn canonical_budget_financial_revocation_withholds_allowance_and_consumption(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll, Permission::BillableRateReadAll]),
     )
     .await;
@@ -110,7 +110,7 @@ async fn canonical_budget_financial_revocation_withholds_allowance_and_consumpti
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_shared_budget_does_not_disclose_other_person_allocations(pool: PgPool) {
-    let (ids, _) = fixture(&pool, OrgRole::Member, PermissionSelection::new(&[])).await;
+    let (ids, _) = fixture(&pool, BuiltInProfile::Member, PermissionSelection::new(&[])).await;
     configured(&pool, &ids).await;
     sqlx::query!(
         "UPDATE project_settings SET budget_scope='person' WHERE project_id=$1",
@@ -182,7 +182,7 @@ async fn canonical_shared_budget_does_not_disclose_other_person_allocations(pool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_shared_budget_does_not_disclose_individual_task_allocations(pool: PgPool) {
-    let (ids, _) = fixture(&pool, OrgRole::Member, PermissionSelection::new(&[])).await;
+    let (ids, _) = fixture(&pool, BuiltInProfile::Member, PermissionSelection::new(&[])).await;
     configured(&pool, &ids).await;
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
@@ -236,7 +236,7 @@ async fn canonical_shared_budget_does_not_disclose_individual_task_allocations(p
 async fn canonical_budget_skips_hidden_monetary_overflow(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -277,7 +277,7 @@ async fn canonical_budget_skips_hidden_monetary_overflow(pool: PgPool) {
 async fn canonical_budget_managed_financial_scope_is_independent_of_project_read_all(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[
             Permission::ProjectReadAll,
             Permission::BillableRateReadManaged,
@@ -315,7 +315,7 @@ async fn canonical_budget_summaries_exclude_unallocated_hours_and_money_but_not_
     for monetary in [false, true] {
         let (ids, _) = fixture(
             &pool,
-            OrgRole::Member,
+            BuiltInProfile::Member,
             PermissionSelection::new(&[
                 Permission::ProjectReadAll,
                 Permission::BillableRateReadAll,

@@ -1,5 +1,6 @@
 //! Real registered server functions with PostgreSQL-backed session cookies.
 
+use horae_core::permissions::catalog::BuiltInProfile;
 use std::{sync::Arc, time::Duration};
 
 use axum::{
@@ -236,8 +237,8 @@ async fn user(pool: &PgPool, org_id: Uuid, role: OrgRole) -> Uuid {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
-    let owner = crate::server_fns::test_seed::seed(&pool, OrgRole::Admin).await;
-    let foreign = crate::server_fns::test_seed::seed(&pool, OrgRole::Admin).await;
+    let owner = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
+    let foreign = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
     crate::state::init_state(
         pool.clone(),
         Arc::new(crate::plugin::PluginRegistry::empty()),

@@ -471,6 +471,15 @@ async fn provision(
     )
     .fetch_optional(&mut *tx)
     .await?;
+    if let Some(user) = &user {
+        crate::server_fns::provisioning::provision(
+            &mut tx,
+            org_id,
+            user.id,
+            horae_core::permissions::catalog::BuiltInProfile::Member,
+        )
+        .await?;
+    }
     tx.commit().await?;
     Ok(user)
 }

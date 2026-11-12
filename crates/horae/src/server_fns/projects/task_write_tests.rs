@@ -1,7 +1,7 @@
 use super::canonical_read_tests::fixture;
 use super::*;
 use crate::server_fns::test_seed::wait_for_blocked;
-use horae_core::permissions::catalog::PermissionSelection;
+use horae_core::permissions::catalog::{BuiltInProfile, PermissionSelection};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -29,7 +29,12 @@ async fn initial_task_rate_requires_global_financial_and_task_authority(pool: Pg
             Permission::ReportProfitabilityRead,
         ],
     ] {
-        let (ids, _) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&grants)).await;
+        let (ids, _) = fixture(
+            &pool,
+            BuiltInProfile::Administrator,
+            PermissionSelection::new(&grants),
+        )
+        .await;
         for rate in [
             TaskRateEdit::Clear {},
             TaskRateEdit::Set {
@@ -67,7 +72,7 @@ async fn initial_task_rate_requires_global_financial_and_task_authority(pool: Pg
 async fn initial_task_rate_commits_with_service_payload(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskWriteAll, Permission::BillableRateWriteAll]),
     )
     .await;
@@ -120,7 +125,7 @@ async fn initial_task_rate_rechecks_financial_authority_and_currency_after_wait(
     for change_currency in [false, true] {
         let (ids, _) = fixture(
             &pool,
-            OrgRole::Member,
+            BuiltInProfile::Member,
             PermissionSelection::new(&[Permission::TaskWriteAll, Permission::BillableRateWriteAll]),
         )
         .await;
@@ -193,7 +198,7 @@ async fn initial_task_rate_rechecks_financial_authority_and_currency_after_wait(
 async fn project_edit_authority_does_not_create_global_tasks(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectWriteAll]),
     )
     .await;
@@ -223,7 +228,7 @@ async fn task_creation_fails_closed_for_unavailable_actor_permissions(pool: PgPo
     for invalid in ["inactive", "missing", "unknown_grant", "unknown_catalog"] {
         let (ids, _) = fixture(
             &pool,
-            OrgRole::Admin,
+            BuiltInProfile::Administrator,
             PermissionSelection::new(&[Permission::TaskWriteAll, Permission::ProjectWriteAll]),
         )
         .await;
@@ -287,7 +292,7 @@ async fn task_creation_fails_closed_for_unavailable_actor_permissions(pool: PgPo
 async fn task_creation_rechecks_revoked_grants_after_organization_wait(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::TaskWriteAll, Permission::ProjectWriteAll]),
     )
     .await;
@@ -347,7 +352,7 @@ async fn task_creation_rechecks_revoked_grants_after_organization_wait(pool: PgP
 async fn global_task_creation_accepts_current_grant_without_legacy_manager(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskWriteAll]),
     )
     .await;
@@ -370,7 +375,12 @@ async fn global_task_creation_accepts_current_grant_without_legacy_manager(pool:
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn global_task_creation_does_not_inherit_legacy_administrator_authority(pool: PgPool) {
-    let (ids, _) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
+    let (ids, _) = fixture(
+        &pool,
+        BuiltInProfile::Administrator,
+        PermissionSelection::new(&[]),
+    )
+    .await;
     let result = create_catalog_task(
         &pool,
         ids.org_id,
@@ -402,7 +412,7 @@ async fn global_task_creation_does_not_inherit_legacy_administrator_authority(po
 async fn global_task_creation_rejects_unknown_policy_without_inserting(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::TaskWriteAll]),
     )
     .await;

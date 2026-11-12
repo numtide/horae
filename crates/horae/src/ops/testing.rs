@@ -3,12 +3,11 @@
 use std::sync::Mutex;
 
 use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{AppEvent, EventSink};
-use crate::server_fns::test_seed::{SeedIds, seed};
+use crate::server_fns::test_seed::{SeedIds, clear_state, seed, use_policy_one};
 
 /// Keeps dispatched events so a test can inspect them.
 #[derive(Default)]
@@ -27,17 +26,10 @@ impl EventSink for Recorder {
 }
 
 /// Seeds an organization on policy one whose person holds a built-in profile.
-/// Stands in for `test_seed::seed(pool, BuiltInProfile)` until it lands; the
-/// seeded `org_role` is dead data that no operation reads.
+/// The seeded `org_role` is dead data that no operation reads.
 pub(crate) async fn seed_profile(pool: &PgPool, profile: BuiltInProfile) -> SeedIds {
-    let ids = seed(pool, OrgRole::Member).await;
-    policy_one(
-        pool,
-        &ids,
-        profile.direct_permissions(),
-        profile == BuiltInProfile::Administrator,
-    )
-    .await;
+    let ids = seed(pool, profile).await;
+    use_policy_one(pool, ids.org_id).await;
     ids
 }
 
@@ -86,8 +78,8 @@ pub(crate) async fn policy_one(
     .unwrap();
 }
 
-/// Stores a permission state for the seeded person without touching the
-/// organization's policy, for tests of domains still on legacy roles.
+/// Replaces the seeded person's permission state with an individual one
+/// holding `grants`, without touching the organization's policy.
 pub(crate) async fn provision(
     pool: &PgPool,
     ids: &SeedIds,
@@ -96,6 +88,7 @@ pub(crate) async fn provision(
 ) {
     let grants: Vec<String> =
         serde_json::from_value(serde_json::json!(PermissionSelection::new(grants))).unwrap();
+    clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
          VALUES ($1,$2,$3,1,$4,$5,'individual')",

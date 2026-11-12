@@ -1,11 +1,12 @@
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn detail_view_contains_only_scoped_workflow_labels_and_current_edit_authority(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -84,7 +85,12 @@ async fn detail_view_contains_only_scoped_workflow_labels_and_current_edit_autho
 async fn detail_view_shared_member_gets_own_identity_not_other_people_or_legacy_actions(
     pool: PgPool,
 ) {
-    let (ids, viewer) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
+    let (ids, viewer) = fixture(
+        &pool,
+        BuiltInProfile::Administrator,
+        PermissionSelection::new(&[]),
+    )
+    .await;
     team::teammate(&pool, &ids).await;
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
@@ -111,7 +117,7 @@ async fn detail_view_shared_member_gets_own_identity_not_other_people_or_legacy_
 async fn detail_view_rejects_changed_requester_and_current_resource_denial(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -136,7 +142,7 @@ async fn detail_view_rejects_changed_requester_and_current_resource_denial(pool:
             })
         ));
     }
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     assert!(matches!(
         detail_view::fetch(
             &pool,
@@ -186,14 +192,14 @@ async fn detail_view_rejects_changed_requester_and_current_resource_denial(pool:
     ));
 }
 
-pub(super) fn legacy_viewer(ids: &SeedIds, role: OrgRole) -> User {
+pub(super) fn legacy_viewer(ids: &SeedIds, role: BuiltInProfile) -> User {
     User {
         id: ids.user_id,
         org_id: ids.org_id,
         email: format!("{}@test.com", ids.user_id),
         name: "Test User".into(),
         oidc_subject: None,
-        org_role: role,
+        org_role: crate::server_fns::provisioning::placeholder_role(role),
         cost_rate_cents: None,
         billable_rate_cents: None,
         active: true,
@@ -207,9 +213,9 @@ async fn detail_view_identity_and_lifecycle_affordances_match_policy_zero_author
     // `set_project_active` requires a legacy Manager or Administrator; any
     // active policy-zero reader may open the client's detail page.
     for (role, can_change_status) in [
-        (OrgRole::Admin, true),
-        (OrgRole::Manager, true),
-        (OrgRole::Member, false),
+        (BuiltInProfile::Administrator, true),
+        (BuiltInProfile::ExecutiveManager, true),
+        (BuiltInProfile::Member, false),
     ] {
         let ids = seed(&pool, role).await;
         sqlx::query!(
@@ -263,7 +269,7 @@ async fn detail_view_policy_one_offers_no_role_derived_status_change_and_scopes_
     // status mutation still checks only the legacy role, so policy one offers none.
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Manager,
+        BuiltInProfile::ExecutiveManager,
         PermissionSelection::new(&[Permission::ProjectReadAll, Permission::ProjectWriteAll]),
     )
     .await;
