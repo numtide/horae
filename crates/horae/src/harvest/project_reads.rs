@@ -1,6 +1,4 @@
 use super::*;
-use crate::server_fns::ProjectReadAccess;
-use horae_core::permissions::catalog::Permission;
 
 pub(super) async fn read(
     db: &PgPool,
@@ -17,17 +15,7 @@ pub(super) async fn read(
         filters.client_id.as_deref(),
     )
     .await?;
-    let mut access = ProjectReadAccess::begin(db, caller.org_id, caller.user_id)
-        .await
-        .map_err(|error| match error {
-            dioxus::prelude::ServerFnError::ServerError { code, .. }
-                if code == StatusCode::FORBIDDEN.as_u16() =>
-            {
-                forbidden("Project permission state is unavailable")
-            }
-            error => internal(error),
-        })?
-        .ok_or_else(|| forbidden("Project access is unavailable"))?;
+    let mut read = begin_read(db, caller, "Project").await?;
     // Count and page must use the same visible set, including out-of-range pages.
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
@@ -60,9 +48,9 @@ pub(super) async fn read(
            FROM totals LEFT JOIN page p ON true ORDER BY p.name,p.id"#,
         caller.org_id, caller.user_id, filters.is_active, client_id,
         filters.updated_since as Option<DateTime<Utc>>, project_id, limit, offset,
-        access.has(Permission::ProjectReadAll), access.has(Permission::ProjectReadManaged),
-        access.has(Permission::BillableRateReadAll), access.has(Permission::BillableRateReadManaged),
-    ).fetch_all(&mut *access.tx).await.map_err(internal)?;
+        read.actor.has(Permission::ProjectReadAll), read.actor.has(Permission::ProjectReadManaged),
+        read.actor.has(Permission::BillableRateReadAll), read.actor.has(Permission::BillableRateReadManaged),
+    ).fetch_all(&mut *read.tx).await.map_err(internal)?;
     let total = records
         .first()
         .ok_or_else(|| internal("Missing project count"))?
@@ -102,6 +90,6 @@ pub(super) async fn read(
                 .ok_or_else(|| internal("Missing client name"))?,
         });
     }
-    access.tx.commit().await.map_err(internal)?;
+    read.tx.commit().await.map_err(internal)?;
     Ok((total, rows))
 }

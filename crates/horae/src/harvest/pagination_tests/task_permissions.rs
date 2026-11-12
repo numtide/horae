@@ -15,7 +15,7 @@ async fn task_api_uses_canonical_catalog_scope_for_count_list_and_direct_id(pool
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn task_api_does_not_inherit_legacy_admin_or_tracking_identity(pool: PgPool) {
+async fn task_api_does_not_follow_the_seeded_profile_or_tracking_identity(pool: PgPool) {
     let (ids, app) = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     for query in ["", "?per_page=1&page=2", "?is_active=true"] {
@@ -190,7 +190,7 @@ async fn task_api_rechecks_deactivation_after_session_lookup(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn task_api_rejects_malformed_canonical_state_without_legacy_fallback(pool: PgPool) {
+async fn task_api_rejects_malformed_stored_state(pool: PgPool) {
     let (ids, app) = canonical(
         &pool,
         BuiltInProfile::Administrator,

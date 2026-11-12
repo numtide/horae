@@ -1,6 +1,4 @@
 use super::*;
-use crate::server_fns::ProjectReadAccess;
-use horae_core::permissions::catalog::Permission;
 
 pub(super) async fn read(
     db: &PgPool,
@@ -10,17 +8,7 @@ pub(super) async fn read(
     limit: i64,
     offset: i64,
 ) -> Result<(i64, Vec<ClientRow>), ApiError> {
-    let mut access = ProjectReadAccess::begin(db, caller.org_id, caller.user_id)
-        .await
-        .map_err(|error| match error {
-            dioxus::prelude::ServerFnError::ServerError { code, .. }
-                if code == StatusCode::FORBIDDEN.as_u16() =>
-            {
-                forbidden("Client permission state is unavailable")
-            }
-            error => internal(error),
-        })?
-        .ok_or_else(|| forbidden("Client access is unavailable"))?;
+    let mut read = begin_read(db, caller, "Client").await?;
     // Count and page share one source snapshot, including exhausted pages.
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
@@ -40,11 +28,11 @@ pub(super) async fn read(
         filters.is_active,
         filters.updated_since as Option<DateTime<Utc>>,
         client_id,
-        access.has(Permission::ClientReadAll),
+        read.actor.has(Permission::ClientReadAll),
         limit,
         offset,
     )
-    .fetch_all(&mut *access.tx)
+    .fetch_all(&mut *read.tx)
     .await
     .map_err(internal)?;
     let total = records
@@ -70,6 +58,6 @@ pub(super) async fn read(
                 .ok_or_else(|| internal("Missing client timestamp"))?,
         });
     }
-    access.tx.commit().await.map_err(internal)?;
+    read.tx.commit().await.map_err(internal)?;
     Ok((total, rows))
 }

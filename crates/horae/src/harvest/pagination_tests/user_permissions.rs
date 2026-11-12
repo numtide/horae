@@ -34,8 +34,8 @@ fn rates(user: &Value) -> (Option<f64>, Option<f64>) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn user_api_follows_people_and_rate_grants_not_the_legacy_role(pool: PgPool) {
-    // A legacy manager whose detailed permissions carry no rate grant.
+async fn user_api_follows_people_and_rate_grants_not_the_seeded_profile(pool: PgPool) {
+    // An Executive Manager seed whose stored grants carry no rate grant.
     let (ids, app) = canonical(
         &pool,
         BuiltInProfile::ExecutiveManager,
@@ -90,7 +90,7 @@ async fn user_api_follows_people_and_rate_grants_not_the_legacy_role(pool: PgPoo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn user_api_gives_a_legacy_admin_nothing_their_grants_do_not(pool: PgPool) {
+async fn user_api_gives_an_administrator_seed_nothing_their_grants_do_not(pool: PgPool) {
     let (ids, app) = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
     with_rates(&pool, ids.user_id).await;
     assert_eq!(
