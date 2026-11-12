@@ -375,12 +375,18 @@ pub(super) async fn project_budget(
             })
         })
     };
+    // `None` means the budget readers withheld this project from the viewer.
+    // The detail reader can still admit them while it answers for a
+    // policy-zero organization, so the figures stay hidden but the page loads.
     let headline = match consumption {
         Ok(Some(headline)) => {
             savepoint.commit().await.map_err(server_err)?;
             headline
         }
-        Ok(None) => return Err(server_err("Readable project budget has no consumption")),
+        Ok(None) => {
+            savepoint.commit().await.map_err(server_err)?;
+            BudgetHeadline::Unavailable
+        }
         Err(error) if numeric_overflow(&error) => {
             savepoint.rollback().await.map_err(server_err)?;
             BudgetHeadline::Unavailable
