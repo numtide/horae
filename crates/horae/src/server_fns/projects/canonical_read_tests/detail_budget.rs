@@ -2,6 +2,7 @@ use super::*;
 use crate::models::project::ProjectDetailBudget;
 use chrono::NaiveDate;
 use horae_core::budget::BudgetHeadline;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::BudgetKind;
 
 fn exact(budget: i64, spent: i64, remaining: i64) -> BudgetHeadline {
@@ -135,13 +136,17 @@ async fn link_task(pool: &PgPool, ids: &SeedIds, task: Uuid, budget: Option<i64>
 }
 
 async fn reader(pool: &PgPool, permissions: &[Permission]) -> (SeedIds, User) {
-    fixture(pool, OrgRole::Member, PermissionSelection::new(permissions)).await
+    fixture(
+        pool,
+        BuiltInProfile::Member,
+        PermissionSelection::new(permissions),
+    )
+    .await
 }
 
 /// Budgets without settings value money, so these readers hold
 /// Administrator's grants, which include reading every billable rate.
 async fn administrator(pool: &PgPool) -> (SeedIds, User) {
-    use horae_core::permissions::catalog::BuiltInProfile;
     reader(pool, BuiltInProfile::Administrator.direct_permissions()).await
 }
 
@@ -464,7 +469,7 @@ async fn foreign_client_parent_hides_configured_and_legacy_budgets(pool: PgPool)
     .await;
     fee_budget(&pool, &ids, Some(10_000)).await;
     entry(&pool, &ids, ids.task_id, "2026-09-01", 60, true).await;
-    let other = seed(&pool, OrgRole::Admin).await;
+    let other = seed(&pool, BuiltInProfile::Administrator).await;
     sqlx::query!(
         "UPDATE projects SET client_id=$2 WHERE id=$1",
         ids.project_id,

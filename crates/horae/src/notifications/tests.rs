@@ -224,7 +224,7 @@ async fn queued(
     crate::server_fns::test_seed::SeedIds,
     crate::jobs::OutboxEvent,
 ) {
-    let ids = crate::ops::testing::seed_profile(
+    let ids = crate::server_fns::test_seed::seed(
         pool,
         horae_core::permissions::catalog::BuiltInProfile::ExecutiveManager,
     )

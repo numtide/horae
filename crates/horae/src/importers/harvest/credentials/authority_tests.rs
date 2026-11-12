@@ -1,6 +1,7 @@
 use super::*;
 use crate::importers::harvest::{ApiImportError, account_switch};
 use crate::server_fns::test_seed::{seed, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use std::time::Duration;
@@ -47,7 +48,7 @@ async fn run(pool: &PgPool, org: Uuid, actor: Uuid, change: Change) -> anyhow::R
 }
 
 async fn connected(pool: &PgPool) -> crate::server_fns::test_seed::SeedIds {
-    let ids = seed(pool, OrgRole::Admin).await;
+    let ids = seed(pool, BuiltInProfile::Administrator).await;
     store(
         pool,
         ids.org_id,
@@ -114,7 +115,7 @@ async fn connection_changes_require_current_tenant_bound_administrator(pool: PgP
             assert_denied(run(&pool, ids.org_id, ids.user_id, change).await, change);
             assert_eq!(snapshot(&pool, ids.org_id).await, before);
         }
-        let foreign = seed(&pool, OrgRole::Admin).await;
+        let foreign = seed(&pool, BuiltInProfile::Administrator).await;
         for actor in [foreign.user_id, Uuid::now_v7()] {
             assert_denied(run(&pool, ids.org_id, actor, change).await, change);
             assert_eq!(snapshot(&pool, ids.org_id).await, before);
@@ -133,7 +134,7 @@ async fn connection_changes_require_current_tenant_bound_administrator(pool: PgP
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn disconnected_noop_still_requires_authority(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let before = snapshot(&pool, ids.org_id).await;
     assert_denied(
         run(&pool, ids.org_id, ids.user_id, Change::Disconnect).await,
@@ -145,7 +146,7 @@ async fn disconnected_noop_still_requires_authority(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn denied_first_connection_creates_no_binding_credentials_or_generation(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let before = snapshot(&pool, ids.org_id).await;
     let result = store_for_attempt(
         &pool,

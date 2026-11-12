@@ -1,10 +1,11 @@
 //! Canonical Clients page context through registered functions and real session cookies.
 
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
     let restricted = user(pool, ids.org_id, OrgRole::Admin).await;
     for (actor, permissions) in [
         (ids.user_id, vec![Permission::ClientReadAll]),
@@ -12,6 +13,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     ] {
         let grants: Vec<String> =
             serde_json::from_value(json!(PermissionSelection::new(&permissions))).unwrap();
+        crate::server_fns::test_seed::clear_state(pool, actor).await;
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
             VALUES ($1,$2,$3,1,$4,false,'individual')",
             Uuid::now_v7(), ids.org_id, actor, &grants).execute(pool).await.unwrap();

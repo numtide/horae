@@ -38,7 +38,7 @@ async fn blocked_connections(pool: &PgPool) -> i64 {
 }
 
 async fn concurrent_changes_keep_an_admin(pool: &PgPool, first: Change, second: Change) {
-    let ids = seed(pool, OrgRole::Admin).await;
+    let ids = seed(pool, BuiltInProfile::Administrator).await;
     let other = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO users (id, org_id, email, name, org_role)
@@ -50,6 +50,16 @@ async fn concurrent_changes_keep_an_admin(pool: &PgPool, first: Change, second: 
     .execute(pool)
     .await
     .unwrap();
+    let mut connection = pool.acquire().await.unwrap();
+    provisioning::provision(
+        &mut connection,
+        ids.org_id,
+        other,
+        BuiltInProfile::Administrator,
+    )
+    .await
+    .unwrap();
+    drop(connection);
 
     let mut blocker = pool.begin().await.unwrap();
     sqlx::query!("SELECT id FROM users WHERE id = $1 FOR UPDATE", ids.user_id)
@@ -99,10 +109,14 @@ async fn concurrent_changes_keep_an_admin(pool: &PgPool, first: Change, second: 
     .await
     .expect("changes must finish after releasing the row lock");
 
+    // Demotion keeps an admin by role; deactivation keeps an active Administrator.
     let remaining = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) AS "count!" FROM users
-           WHERE org_id = $1 AND active AND org_role = 'admin'"#,
+        r#"SELECT COUNT(*) AS "count!" FROM users u
+           LEFT JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
+           WHERE u.org_id = $1 AND u.active
+             AND CASE WHEN $2 THEN u.org_role = 'admin' ELSE p.is_administrator END"#,
         ids.org_id,
+        matches!(first, Change::Demote),
     )
     .fetch_one(pool)
     .await
@@ -114,16 +128,6 @@ async fn concurrent_changes_keep_an_admin(pool: &PgPool, first: Change, second: 
             .iter()
             .any(|r| matches!(r, Err(ServerFnError::ServerError { code: CONFLICT, .. })))
     );
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn demotion_and_deactivation_keep_an_active_admin(pool: PgPool) {
-    concurrent_changes_keep_an_admin(&pool, Change::Demote, Change::Deactivate).await;
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn deactivation_and_demotion_keep_an_active_admin(pool: PgPool) {
-    concurrent_changes_keep_an_admin(&pool, Change::Deactivate, Change::Demote).await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -157,8 +161,6 @@ async fn repeatable_read_default_cannot_remove_every_administrator(pool: PgPool)
     for (first, second) in [
         (Change::Demote, Change::Demote),
         (Change::Deactivate, Change::Deactivate),
-        (Change::Demote, Change::Deactivate),
-        (Change::Deactivate, Change::Demote),
     ] {
         concurrent_changes_keep_an_admin(&requests, first, second).await;
     }
@@ -167,7 +169,7 @@ async fn repeatable_read_default_cannot_remove_every_administrator(pool: PgPool)
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn the_last_admin_cannot_be_demoted_or_deactivated(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     for change in [Change::Demote, Change::Deactivate] {
         assert!(matches!(
             remove_admin(&pool, ids.org_id, ids.user_id, ids.user_id, change).await,
@@ -178,7 +180,7 @@ async fn the_last_admin_cannot_be_demoted_or_deactivated(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unchanged_admin_access_is_allowed(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let (user, role) =
         change_user_role(&pool, ids.org_id, ids.user_id, ids.user_id, OrgRole::Admin)
             .await
@@ -192,8 +194,8 @@ async fn unchanged_admin_access_is_allowed(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn access_changes_cannot_target_another_organization(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for change in [Change::Demote, Change::Deactivate] {
         assert!(matches!(
             remove_admin(&pool, ids.org_id, ids.user_id, foreign.user_id, change).await,

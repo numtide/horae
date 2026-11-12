@@ -3,7 +3,6 @@
 
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::Permission::{self, *};
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
 
 use super::*;
@@ -33,7 +32,7 @@ async fn fixture(pool: &PgPool, who: Who) -> SeedIds {
     let ids = match who {
         Who::Profile(profile) => seed_profile(pool, profile).await,
         Who::Grants(grants) => {
-            let ids = seed(pool, OrgRole::Admin).await;
+            let ids = seed(pool, BuiltInProfile::Administrator).await;
             policy_one(pool, &ids, grants, false).await;
             ids
         }

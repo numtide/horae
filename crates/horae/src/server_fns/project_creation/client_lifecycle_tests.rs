@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, repeatable_read_pool, seed, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use std::time::Duration;
 use uuid::Uuid;
@@ -95,7 +96,7 @@ async fn creation_and_reassignment_waiting_for_a_client_archive_write_nothing(po
     let rr = repeatable_read_pool(&pool).await;
     for writer in [Writer::Finalize, Writer::Reassign] {
         for (isolation, writer_pool) in [("default", &pool), ("repeatable read", &rr)] {
-            let ids = seed(&pool, OrgRole::Admin).await;
+            let ids = seed(&pool, BuiltInProfile::Administrator).await;
             let (target, request, draft) = prepare(&pool, &ids, writer).await;
             let (archive, blocker) = hold_archive(&pool, ids.org_id, target).await;
             let run_pool = writer_pool.clone();

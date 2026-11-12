@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -79,7 +80,7 @@ fn is_forbidden<T: std::fmt::Debug>(result: &Result<T, ServerFnError>) -> bool {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_manager_cannot_approve_their_own_submission(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let (approval, entry) = submitted_week(&pool, &ids).await;
 
     let result = approve_periods(&pool, &requester(&ids, OrgRole::Manager), &[approval.id]).await;
@@ -94,7 +95,7 @@ async fn a_manager_cannot_approve_their_own_submission(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_manager_cannot_reject_or_reopen_their_own_submission(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let (approval, entry) = submitted_week(&pool, &ids).await;
 
     let result = reopen_period(&pool, &requester(&ids, OrgRole::Manager), approval.id).await;
@@ -109,7 +110,7 @@ async fn a_manager_cannot_reject_or_reopen_their_own_submission(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_bulk_approval_including_the_managers_own_week_changes_nothing(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let other = colleague(&pool, &ids).await;
     let (own, own_entry) = submitted_week(&pool, &ids).await;
     let (theirs, their_entry) = submitted_week(&pool, &other).await;
@@ -133,7 +134,7 @@ async fn a_bulk_approval_including_the_managers_own_week_changes_nothing(pool: P
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_manager_can_approve_someone_elses_submission(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let other = colleague(&pool, &ids).await;
     let (theirs, entry) = submitted_week(&pool, &other).await;
 
@@ -152,7 +153,7 @@ async fn a_manager_can_approve_someone_elses_submission(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn an_admin_can_approve_and_reopen_their_own_submission(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let (own, entry) = submitted_week(&pool, &ids).await;
     let admin = requester(&ids, OrgRole::Admin);
 
@@ -170,7 +171,7 @@ async fn an_admin_can_approve_and_reopen_their_own_submission(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_demoted_admin_is_judged_by_their_current_role(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let (own, entry) = submitted_week(&pool, &ids).await;
     sqlx::query!(
         "UPDATE users SET org_role = $2 WHERE id = $1",
