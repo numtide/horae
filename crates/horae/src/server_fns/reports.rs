@@ -58,6 +58,7 @@ pub async fn list_visible_time_report_entries(
             TimeReadError::Forbidden => {
                 forbidden("Current time-report access or identity has changed")
             }
+            TimeReadError::Conflict(message) => conflict(message),
             TimeReadError::InvalidQuery => {
                 err(BAD_REQUEST, "Invalid time-report date range or cursor")
             }
@@ -93,6 +94,7 @@ pub async fn list_visible_time_report_groups(
             TimeReadError::Forbidden => {
                 forbidden("Current time-report access or identity has changed")
             }
+            TimeReadError::Conflict(message) => conflict(message),
             TimeReadError::InvalidQuery => {
                 err(BAD_REQUEST, "Invalid time-report date range or cursor")
             }

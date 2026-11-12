@@ -62,6 +62,7 @@ pub async fn load_timesheet_page(
             TimeReadError::Forbidden => {
                 forbidden("Timesheet access or identity has changed; refresh the page")
             }
+            TimeReadError::Conflict(message) => conflict(message),
             TimeReadError::InvalidQuery => {
                 err(BAD_REQUEST, "Invalid Timesheet date range or cursor")
             }
@@ -93,6 +94,7 @@ pub async fn list_timesheet_people(
         .await
         .map_err(|error| match error {
             TimeReadError::Forbidden => forbidden("Current time-read authority is required"),
+            TimeReadError::Conflict(message) => conflict(message),
             TimeReadError::InvalidQuery => err(BAD_REQUEST, "Invalid timesheet people query"),
             error => {
                 tracing::error!(%error, "Scoped timesheet people read failed");
@@ -122,6 +124,7 @@ pub async fn list_visible_time_entries(
         .await
         .map_err(|error| match error {
             TimeReadError::Forbidden => forbidden("Current time-read authority is required"),
+            TimeReadError::Conflict(message) => conflict(message),
             TimeReadError::InvalidQuery => {
                 err(BAD_REQUEST, "Invalid time-entry date range or cursor")
             }

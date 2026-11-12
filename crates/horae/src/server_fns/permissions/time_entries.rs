@@ -26,8 +26,22 @@ pub(crate) enum TimeReadError {
     Storage(#[from] PermissionStorageError),
     #[error(transparent)]
     Database(#[from] sqlx::Error),
+    /// A deadlock or serialization failure while loading the actor; a retry may succeed.
+    #[error("{0}")]
+    Conflict(String),
     #[error(transparent)]
     Op(OpError),
+}
+
+impl From<OpError> for TimeReadError {
+    fn from(error: OpError) -> Self {
+        match error {
+            // Only missing or invalid stored state is refused while loading.
+            OpError::Forbidden(_) => TimeReadError::Unavailable,
+            OpError::Conflict(message) => TimeReadError::Conflict(message),
+            error => TimeReadError::Op(error),
+        }
+    }
 }
 
 const TIME_READS: [Permission; 3] = [
@@ -45,13 +59,7 @@ pub(super) async fn begin_read(
     actor_id: Uuid,
 ) -> Result<(Transaction<'static, Postgres>, PermissionSelection), TimeReadError> {
     let mut tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
-    let actor = Actor::load(&mut tx, Caller::session(org_id, actor_id))
-        .await
-        .map_err(|error| match error {
-            // Only missing or invalid stored state is refused while loading.
-            OpError::Forbidden(_) => TimeReadError::Unavailable,
-            error => TimeReadError::Op(error),
-        })?;
+    let actor = Actor::load(&mut tx, Caller::session(org_id, actor_id)).await?;
     let held: Vec<Permission> = TIME_READS
         .into_iter()
         .filter(|permission| actor.has(*permission))
@@ -299,4 +307,27 @@ async fn fetch_entries(
         entries,
         next_after,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{OpError, TimeReadError};
+
+    /// A lost race while loading the actor stays retryable (409 in the
+    /// adapters); missing stored state stays "unavailable".
+    #[test]
+    fn actor_load_errors_keep_their_meaning() {
+        assert!(matches!(
+            TimeReadError::from(OpError::conflict("retry")),
+            TimeReadError::Conflict(message) if message == "retry"
+        ));
+        assert!(matches!(
+            TimeReadError::from(OpError::forbidden("no state")),
+            TimeReadError::Unavailable
+        ));
+        assert!(matches!(
+            TimeReadError::from(OpError::Internal("boom".into())),
+            TimeReadError::Op(OpError::Internal(_))
+        ));
+    }
 }
