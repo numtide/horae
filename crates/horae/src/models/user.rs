@@ -1,5 +1,6 @@
 #[cfg(feature = "server")]
 use chrono::{DateTime, Utc};
+#[cfg(feature = "server")]
 use horae_core::types::OrgRole;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
