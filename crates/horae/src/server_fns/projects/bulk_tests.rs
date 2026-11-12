@@ -442,13 +442,93 @@ async fn managed_project_writer_changes_only_the_projects_they_manage(pool: PgPo
     let mut ordered = [ids.project_id, other];
     ordered.sort_unstable();
     let before = snapshot(&pool, ids.org_id).await;
-    // One unmanaged project refuses the whole batch.
-    assert!(matches!(
-        set_projects_active_records(&pool, ids.org_id, ids.user_id, &ordered, true).await,
-        Err(ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        })
-    ));
+    // One unmanaged project refuses the whole batch. Without `ProjectReadAll`
+    // the writer cannot see it, so it is not found rather than forbidden,
+    // exactly like a project that does not exist.
+    for batch in [&ordered[..], &[ids.project_id, Uuid::now_v7()][..]] {
+        assert!(matches!(
+            set_projects_active_records(&pool, ids.org_id, ids.user_id, batch, true).await,
+            Err(ServerFnError::ServerError {
+                code: NOT_FOUND,
+                ..
+            })
+        ));
+    }
     assert_eq!(snapshot(&pool, ids.org_id).await, before);
+    // A managed project alone restores.
+    let restored =
+        set_projects_active_records(&pool, ids.org_id, ids.user_id, &[ids.project_id], true)
+            .await
+            .unwrap();
+    assert!(restored[0].0.active);
+    assert_eq!(
+        restored[0].1,
+        Some(crate::plugin::event::ActiveTransition::Reactivated)
+    );
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn status_changes_return_the_rate_and_money_budget_only_to_their_readers(pool: PgPool) {
+    use horae_core::permissions::catalog::Permission::{
+        BillableRateReadManaged, ProjectReadManaged, ProjectWriteManaged,
+    };
+    for (case, profile, grants, sees_money) in [
+        ("administrator", BuiltInProfile::Administrator, None, true),
+        (
+            "project manager",
+            BuiltInProfile::ProjectManager,
+            None,
+            false,
+        ),
+        (
+            "managed rate reader",
+            BuiltInProfile::Member,
+            Some(
+                &[
+                    ProjectReadManaged,
+                    ProjectWriteManaged,
+                    BillableRateReadManaged,
+                ][..],
+            ),
+            true,
+        ),
+    ] {
+        let ids = seed(&pool, profile).await;
+        if let Some(grants) = grants {
+            crate::ops::testing::provision(&pool, &ids, grants, false).await;
+        }
+        sqlx::query!(
+            "UPDATE projects SET rate_cents = 15000, budget_kind = 'amount', budget_amount_cents = 500000
+             WHERE id = $1",
+            ids.project_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "INSERT INTO project_management_assignments (id, org_id, project_id, manager_id)
+             VALUES ($1, $2, $3, $4)",
+            Uuid::now_v7(),
+            ids.org_id,
+            ids.project_id,
+            ids.user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let (archived, _) =
+            set_project_active_record(&pool, ids.org_id, ids.user_id, ids.project_id, false)
+                .await
+                .unwrap();
+        let restored =
+            set_projects_active_records(&pool, ids.org_id, ids.user_id, &[ids.project_id], true)
+                .await
+                .unwrap();
+        for project in [&archived, &restored[0].0] {
+            let money = (project.rate_cents, project.budget_amount_cents);
+            let expected = sees_money.then_some((Some(15000), Some(500000)));
+            assert_eq!(money, expected.unwrap_or((None, None)), "{case}");
+        }
+        assert!(!archived.active && restored[0].0.active, "{case}");
+    }
 }

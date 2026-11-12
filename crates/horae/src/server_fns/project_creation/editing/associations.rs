@@ -3,9 +3,13 @@ use super::*;
 use crate::models::project_creation::{
     ProjectFormField, ProjectMemberInput, ProtectedProjectField,
 };
+use crate::plugin::AppEvent;
+use crate::plugin::event::AssignmentPayload;
 use horae_core::permissions::rates::RateEdit;
 use std::collections::HashSet;
 
+/// Saves the team and tasks. Returns the plugin events for the people added
+/// to or removed from the team, to dispatch once the edit commits.
 pub(super) async fn save(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
@@ -14,7 +18,7 @@ pub(super) async fn save(
     may_write_costs: bool,
     may_write_tasks: bool,
     unchanged: &[ProtectedProjectField],
-) -> Result<(), ServerFnError> {
+) -> Result<Vec<AppEvent>, ServerFnError> {
     let org_currency = sqlx::query_scalar!(
         "SELECT default_currency FROM organizations WHERE id=$1",
         org_id
@@ -22,6 +26,8 @@ pub(super) async fn save(
     .fetch_one(&mut **tx)
     .await
     .map_err(storage_error)?;
+    let occurred_at = chrono::Utc::now();
+    let mut events = Vec::new();
     let mut members: Vec<_> = form.team.iter().collect();
     members.sort_by_key(|member| member.user_id);
     let keep_budget = unchanged.contains(&ProtectedProjectField::Budget);
@@ -35,7 +41,15 @@ pub(super) async fn save(
                 None => RateEdit::Reset,
             }
         };
-        save_member(tx, org_id, before, form, member, cost_edit, &org_currency).await?;
+        if let Some(assignment) =
+            save_member(tx, org_id, before, form, member, cost_edit, &org_currency).await?
+        {
+            events.push(AppEvent::UserAssignedToProject {
+                occurred_at,
+                org_id,
+                assignment,
+            });
+        }
         if !keep_budget {
             save_member_budget(tx, org_id, before.id, member, form.budget_mode).await?;
         }
@@ -69,17 +83,30 @@ pub(super) async fn save(
                     ));
                 }
             }
-            sqlx::query!(
-                "DELETE FROM assignments WHERE project_id=$1 AND user_id=$2",
+            let removed = sqlx::query!(
+                r#"DELETE FROM assignments WHERE project_id=$1 AND user_id=$2
+                   RETURNING id, role::text AS "role!""#,
                 before.id,
                 member.user_id
             )
-            .execute(&mut **tx)
+            .fetch_optional(&mut **tx)
             .await
             .map_err(storage_error)?;
+            if let Some(removed) = removed {
+                events.push(AppEvent::AssignmentRemoved {
+                    occurred_at,
+                    org_id,
+                    assignment: AssignmentPayload {
+                        id: removed.id,
+                        project_id: before.id,
+                        user_id: member.user_id,
+                        role: removed.role,
+                    },
+                });
+            }
         }
     }
-    Ok(())
+    Ok(events)
 }
 
 async fn save_member(
@@ -90,7 +117,7 @@ async fn save_member(
     member: &ProjectMemberInput,
     cost_edit: RateEdit,
     org_currency: &str,
-) -> Result<(), ServerFnError> {
+) -> Result<Option<AssignmentPayload>, ServerFnError> {
     let previous = before
         .form
         .team
@@ -160,10 +187,13 @@ async fn save_member(
     } else {
         ProjectRole::Freelancer
     };
-    sqlx::query!(
-        "INSERT INTO assignments (id,project_id,user_id,role,rate_cents) VALUES ($1,$2,$3,$4,$5)
+    // `xmax = 0` only on a freshly inserted row: an update of an existing
+    // assignment is not a new member.
+    let saved = sqlx::query!(
+        r#"INSERT INTO assignments (id,project_id,user_id,role,rate_cents) VALUES ($1,$2,$3,$4,$5)
          ON CONFLICT (project_id,user_id) DO UPDATE SET rate_cents=EXCLUDED.rate_cents,
-           role=CASE WHEN $6 THEN EXCLUDED.role ELSE assignments.role END",
+           role=CASE WHEN $6 THEN EXCLUDED.role ELSE assignments.role END
+         RETURNING id, role::text AS "role!", (xmax = 0) AS "inserted!""#,
         Uuid::now_v7(),
         before.id,
         member.user_id,
@@ -171,7 +201,7 @@ async fn save_member(
         rate,
         manager_changed,
     )
-    .execute(&mut **tx)
+    .fetch_one(&mut **tx)
     .await
     .map_err(storage_error)?;
     match cost_edit {
@@ -194,7 +224,12 @@ async fn save_member(
             .map_err(storage_error)?;
         }
     }
-    Ok(())
+    Ok(saved.inserted.then(|| AssignmentPayload {
+        id: saved.id,
+        project_id: before.id,
+        user_id: member.user_id,
+        role: saved.role,
+    }))
 }
 
 async fn save_member_budget(

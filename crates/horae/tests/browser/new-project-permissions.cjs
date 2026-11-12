@@ -10,7 +10,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.ok(database.searchParams.get('host')?.startsWith('/tmp/'));
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id, org_id, active, cost_rate_cents FROM users WHERE email = 'admin@example.com') u"));
+const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id, org_id, active, cost_rate_cents, billable_rate_cents FROM users WHERE email = 'admin@example.com') u"));
 assert.match(actor.id, /^[0-9a-f-]{36}$/);
 assert.match(actor.org_id, /^[0-9a-f-]{36}$/);
 assert.equal(actor.active, true);
@@ -67,7 +67,7 @@ const name = 'Permission fixture project';
   const absent = (value, field) => assert.equal(Object.hasOwn(value, field), false, `${field} must be omitted, not merely hidden by the UI`);
   let projectId;
   try {
-    sql(`UPDATE users SET cost_rate_cents = 4321 WHERE id = '${actor.id}';
+    sql(`UPDATE users SET cost_rate_cents = 4321, billable_rate_cents = 9876 WHERE id = '${actor.id}';
       INSERT INTO users (id, org_id, email, name) VALUES ('${other}', '${actor.org_id}', 'permission-owner@example.test', 'Other draft owner');
       INSERT INTO organizations (id, name) VALUES ('${foreignOrg}', 'Permission foreign organization');
       INSERT INTO clients (id, org_id, name, currency) VALUES ('${foreignClient}', '${foreignOrg}', 'Permission foreign client', 'EUR');
@@ -216,6 +216,11 @@ const name = 'Permission fixture project';
         assert.equal(options.can_edit_billable_settings, scenario.setRates, scenario.label);
         assert.equal(options.clients.some(client => client.id === foreignClient), false);
         if (!scenario.costRead) for (const person of options.people) absent(person, 'cost_rate_cents');
+        // Billable rates the form would inherit need `BillableRateReadAll`.
+        if (!scenario.rates) {
+          for (const person of options.people) absent(person, 'billable_rate_cents');
+          for (const item of [...options.clients, ...options.tasks, ...options.common_tasks]) absent(item, 'default_rate_cents');
+        } else assert.equal(options.people.find(person => person.id === actor.id).billable_rate_cents, 9876, scenario.label);
         // A saved draft is pruned to what the creator may still write.
         const draft = await json('load_project_draft');
         assert.equal(draft.id, ownDraft);
@@ -301,7 +306,7 @@ const name = 'Permission fixture project';
     console.log('PASS: inactive/anonymous requests are denied and project-creation grants create a real project without private overrides');
   } finally {
     await browser.close();
-    sql(`UPDATE users SET active = true, cost_rate_cents = ${actor.cost_rate_cents ?? 'NULL'} WHERE id = '${actor.id}'`);
+    sql(`UPDATE users SET active = true, cost_rate_cents = ${actor.cost_rate_cents ?? 'NULL'}, billable_rate_cents = ${actor.billable_rate_cents ?? 'NULL'} WHERE id = '${actor.id}'`);
     restoreState();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -18,19 +18,30 @@ pub(super) async fn load_selected_catalog(
     let private = PrivateFields::of(&actor);
     let tasks = sqlx::query_as!(
         CreationTask,
-        "SELECT id, name, billable_default as billable, default_rate_cents, default_rate_currency FROM tasks
+        "SELECT id, name, billable_default as billable,
+                CASE WHEN $3 THEN default_rate_cents END as default_rate_cents,
+                CASE WHEN $3 THEN default_rate_currency END as default_rate_currency FROM tasks
          WHERE org_id = $1 AND active AND id = ANY($2) ORDER BY lower(name), id",
         org_id,
         task_ids,
+        private.read_billable,
     )
     .fetch_all(&mut *tx)
     .await
     .map_err(storage_error)?;
-    let people = sqlx::query_as!(CreationPerson,
-        "SELECT id, name, billable_rate_cents, CASE WHEN $3 THEN cost_rate_cents END as cost_rate_cents FROM users
+    let people = sqlx::query_as!(
+        CreationPerson,
+        "SELECT id, name, CASE WHEN $4 THEN billable_rate_cents END as billable_rate_cents,
+                CASE WHEN $3 THEN cost_rate_cents END as cost_rate_cents FROM users
          WHERE org_id = $1 AND active AND id = ANY($2) ORDER BY lower(name), id",
-        org_id, user_ids, private.read_costs,
-    ).fetch_all(&mut *tx).await.map_err(storage_error)?;
+        org_id,
+        user_ids,
+        private.read_costs,
+        private.read_billable,
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(storage_error)?;
     tx.commit().await.map_err(storage_error)?;
     Ok(CreationSelection { tasks, people })
 }
@@ -42,10 +53,11 @@ pub(super) async fn load_selected_client(
     client_id: uuid::Uuid,
 ) -> Result<Option<CreationClient>, ServerFnError> {
     let mut tx = pool.begin().await.map_err(storage_error)?;
-    lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
+    let actor = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
     let client = sqlx::query_as!(CreationClient,
-        "SELECT id, name, currency, active, default_rate_cents FROM clients WHERE org_id = $1 AND id = $2",
-        org_id, client_id,
+        "SELECT id, name, currency, active, CASE WHEN $3 THEN default_rate_cents END as default_rate_cents
+         FROM clients WHERE org_id = $1 AND id = $2",
+        org_id, client_id, PrivateFields::of(&actor).read_billable,
     ).fetch_optional(&mut *tx).await.map_err(storage_error)?;
     tx.commit().await.map_err(storage_error)?;
     Ok(client)
@@ -83,24 +95,29 @@ pub(super) async fn load_creation_options(
     // Archived clients are explicitly labelled rather than silently replaced.
     let mut clients = sqlx::query_as!(
         CreationClient,
-        "SELECT id, name, currency, active, default_rate_cents FROM clients
+        "SELECT id, name, currency, active, CASE WHEN $4 THEN default_rate_cents END as default_rate_cents
+         FROM clients
          WHERE org_id = $1 AND strpos(lower(name), lower($2)) > 0
          ORDER BY active DESC, lower(name), id LIMIT 51 OFFSET $3",
         org_id,
         search.clients.query.trim(),
         i64::from(search.clients.offset),
+        private.read_billable,
     )
     .fetch_all(&mut *tx)
     .await
     .map_err(storage_error)?;
     let mut tasks = sqlx::query_as!(
         CreationTask,
-        "SELECT id, name, billable_default as billable, default_rate_cents, default_rate_currency FROM tasks
+        "SELECT id, name, billable_default as billable,
+                CASE WHEN $4 THEN default_rate_cents END as default_rate_cents,
+                CASE WHEN $4 THEN default_rate_currency END as default_rate_currency FROM tasks
          WHERE org_id = $1 AND active AND strpos(lower(name), lower($2)) > 0
          ORDER BY lower(name), id LIMIT 51 OFFSET $3",
         org_id,
         search.tasks.query.trim(),
         i64::from(search.tasks.offset),
+        private.read_billable,
     )
     .fetch_all(&mut *tx)
     .await
@@ -108,20 +125,32 @@ pub(super) async fn load_creation_options(
     // A project holds at most 500 tasks, so that bounds the common ones too.
     let common_tasks = sqlx::query_as!(
         CreationTask,
-        "SELECT id, name, billable_default as billable, default_rate_cents, default_rate_currency FROM tasks
+        "SELECT id, name, billable_default as billable,
+                CASE WHEN $2 THEN default_rate_cents END as default_rate_cents,
+                CASE WHEN $2 THEN default_rate_currency END as default_rate_currency FROM tasks
          WHERE org_id = $1 AND active AND is_default
          ORDER BY lower(name), id LIMIT 500",
         org_id,
+        private.read_billable,
     )
     .fetch_all(&mut *tx)
     .await
     .map_err(storage_error)?;
-    let mut people = sqlx::query_as!(CreationPerson,
-        "SELECT id, name, billable_rate_cents, CASE WHEN $4 THEN cost_rate_cents END as cost_rate_cents FROM users
+    let mut people = sqlx::query_as!(
+        CreationPerson,
+        "SELECT id, name, CASE WHEN $5 THEN billable_rate_cents END as billable_rate_cents,
+                CASE WHEN $4 THEN cost_rate_cents END as cost_rate_cents FROM users
          WHERE org_id = $1 AND active AND strpos(lower(name), lower($2)) > 0
          ORDER BY lower(name), id LIMIT 51 OFFSET $3",
-        org_id, search.people.query.trim(), i64::from(search.people.offset), private.read_costs,
-    ).fetch_all(&mut *tx).await.map_err(storage_error)?;
+        org_id,
+        search.people.query.trim(),
+        i64::from(search.people.offset),
+        private.read_costs,
+        private.read_billable,
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(storage_error)?;
     let previous_code = sqlx::query_scalar!(
         "SELECT code FROM projects WHERE org_id = $1 AND code IS NOT NULL AND btrim(code) <> ''
          ORDER BY created_at DESC, id DESC LIMIT 1",

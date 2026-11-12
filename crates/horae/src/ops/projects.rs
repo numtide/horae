@@ -28,7 +28,11 @@ pub(crate) fn writes_any(actor: &Actor) -> bool {
 /// archive locks the same project rows, so the two serialize here.
 ///
 /// Locks: the organization and the person ([`Actor::load`]), then each
-/// project `FOR UPDATE`, then its client `FOR SHARE`.
+/// project `FOR UPDATE`, then its client `FOR SHARE`. A managed-only writer
+/// is checked before the lock, so it never locks a project it may not write.
+///
+/// The returned rows carry the rate and money budget only when the actor may
+/// read them, by the rule of the project overview.
 pub(crate) async fn set_active(
     tx: &mut Tx,
     actor: &Actor,
@@ -42,10 +46,13 @@ pub(crate) async fn set_active(
     let mut projects = Vec::with_capacity(sorted_ids.len());
     let mut events = Vec::new();
     for &project_id in sorted_ids {
-        let before = lock(tx, org_id, project_id).await?;
-        if !actor.has(Permission::ProjectWriteAll) && !manages(tx, actor, project_id).await? {
-            return Err(OpError::forbidden(WRITE_REQUIRED));
+        let designated = is_designated(tx, actor, project_id).await?;
+        if !actor.has(Permission::ProjectWriteAll)
+            && !(designated && actor.has(Permission::ProjectWriteManaged))
+        {
+            return Err(refusal(tx, actor, project_id).await?);
         }
+        let before = lock(tx, org_id, project_id).await?;
         if active && !before.active {
             let client_active = sqlx::query_scalar!(
                 "SELECT active FROM clients WHERE id = $1 AND org_id = $2 FOR SHARE",
@@ -82,7 +89,7 @@ pub(crate) async fn set_active(
         if let Some(transition) = transition {
             events.push(event(org_id, &project, transition));
         }
-        projects.push(project);
+        projects.push(redact_money(actor, designated, project));
     }
     let mut done = Done::new(projects);
     done.events = events;
@@ -106,17 +113,47 @@ fn event(org_id: Uuid, project: &Project, transition: ActiveTransition) -> AppEv
     }
 }
 
-async fn manages(tx: &mut Tx, actor: &Actor, project_id: Uuid) -> Result<bool, OpError> {
-    Ok(actor.has(Permission::ProjectWriteManaged)
+/// Hides the rate and the money budget from an actor without
+/// `BillableRateReadAll`, or `BillableRateReadManaged` on a project they manage.
+fn redact_money(actor: &Actor, designated: bool, mut project: Project) -> Project {
+    if !(actor.has(Permission::BillableRateReadAll)
+        || (designated && actor.has(Permission::BillableRateReadManaged)))
+    {
+        project.rate_cents = None;
+        project.budget_amount_cents = None;
+    }
+    project
+}
+
+async fn is_designated(tx: &mut Tx, actor: &Actor, project_id: Uuid) -> Result<bool, OpError> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM project_management_assignments
+            WHERE org_id = $1 AND project_id = $2 AND manager_id = $3) AS "managed!""#,
+        actor.org_id(),
+        project_id,
+        actor.id(),
+    )
+    .fetch_one(&mut **tx)
+    .await?)
+}
+
+/// The refusal for a project the actor may not write: forbidden when they can
+/// see that it exists, not found otherwise, so a managed-only writer without
+/// `ProjectReadAll` learns nothing about projects outside their own.
+async fn refusal(tx: &mut Tx, actor: &Actor, project_id: Uuid) -> Result<OpError, OpError> {
+    let visible = actor.has(Permission::ProjectReadAll)
         && sqlx::query_scalar!(
-            r#"SELECT EXISTS(SELECT 1 FROM project_management_assignments
-                WHERE org_id = $1 AND project_id = $2 AND manager_id = $3) AS "managed!""#,
-            actor.org_id(),
+            r#"SELECT EXISTS(SELECT 1 FROM projects WHERE id = $1 AND org_id = $2) AS "exists!""#,
             project_id,
-            actor.id(),
+            actor.org_id(),
         )
         .fetch_one(&mut **tx)
-        .await?)
+        .await?;
+    Ok(if visible {
+        OpError::forbidden(WRITE_REQUIRED)
+    } else {
+        OpError::not_found(NOT_FOUND)
+    })
 }
 
 /// Locks the project before comparing, so competing edits and status changes

@@ -5,7 +5,7 @@ use crate::models::project_creation::{
     ProjectFieldAccess, ProjectFormField, ProtectedProjectField,
 };
 use crate::models::project_managers::{ProjectManagersCommand, ProjectManagersCommandKind};
-use crate::server_fns::{permissions::project_management, project_managers::map_error};
+use crate::server_fns::permissions::project_management;
 use horae_core::permissions::catalog::Permission;
 use horae_core::project::FeeSchedule;
 
@@ -17,13 +17,22 @@ struct CanonicalReceipt {
     effects: super::protected::RequiredWrites,
 }
 
+/// A committed project edit.
+pub(in crate::server_fns) struct Saved {
+    pub(in crate::server_fns) project: Project,
+    /// Whether the project or its managers changed.
+    pub(in crate::server_fns) changed: bool,
+    /// People added to or removed from the team, to dispatch to plugins.
+    pub(in crate::server_fns) team_events: Vec<crate::plugin::AppEvent>,
+}
+
 pub(super) async fn save(
     pool: &sqlx::PgPool,
     actor_id: Uuid,
     org_id: Uuid,
     request: &ProjectEditRequest,
     email_available: bool,
-) -> Result<(Project, bool), ServerFnError> {
+) -> Result<Saved, ServerFnError> {
     if request.id.get_version_num() != 7 || request.expected_revision <= 0 {
         return Err(err(BAD_REQUEST, "Invalid edit identity or revision"));
     }
@@ -152,7 +161,11 @@ pub(super) async fn save(
         }
         let project = project_record(&mut tx, org_id, request.project_id).await?;
         tx.commit().await.map_err(storage_error)?;
-        return Ok((project, false));
+        return Ok(Saved {
+            project,
+            changed: false,
+            team_events: Vec::new(),
+        });
     }
     if sqlx::query_scalar!(
         "SELECT EXISTS(SELECT 1 FROM project_edit_requests WHERE id=$1)",
@@ -296,6 +309,7 @@ pub(super) async fn save(
                     .contains(&ProtectedProjectField::TaskRate(task.id))
         });
     let changed = form != &before.form || reset_task_default;
+    let mut team_events = Vec::new();
     if changed {
         // Keeping row values does not keep a removed row's contribution. Only
         // recompute the active aggregate; unrelated edits must not repair money.
@@ -357,7 +371,7 @@ pub(super) async fn save(
             ).execute(&mut *tx).await.map_err(storage_error)?;
         }
         save_tags(&mut tx, org_id, request.project_id, &parsed.tags).await?;
-        super::associations::save(
+        team_events = super::associations::save(
             &mut tx,
             org_id,
             &before,
@@ -386,7 +400,7 @@ pub(super) async fn save(
         },
     )
     .await
-    .map_err(map_error)?
+    .map_err(managers_error)?
     .changed;
     let completed_revision = sqlx::query_scalar!(
         "SELECT edit_revision FROM projects WHERE id = $1",
@@ -402,7 +416,11 @@ pub(super) async fn save(
     ).execute(&mut *tx).await.map_err(storage_error)?;
     let project = project_record(&mut tx, org_id, request.project_id).await?;
     tx.commit().await.map_err(storage_error)?;
-    Ok((project, completed_revision != revision || managers_changed))
+    Ok(Saved {
+        project,
+        changed: completed_revision != revision || managers_changed,
+        team_events,
+    })
 }
 
 fn validate_edit(

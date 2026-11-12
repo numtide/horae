@@ -383,6 +383,19 @@ async fn load_tasks(
 #[cfg(test)]
 mod tests;
 
+pub(in crate::server_fns) async fn save_project_edit(
+    pool: &sqlx::PgPool,
+    actor_id: Uuid,
+    org_id: Uuid,
+    request: &ProjectEditRequest,
+    email_available: bool,
+) -> Result<save::Saved, ServerFnError> {
+    save::save(pool, actor_id, org_id, request, email_available).await
+}
+
+/// [`save_project_edit`] as most tests check it: the project and whether it
+/// changed.
+#[cfg(test)]
 pub(in crate::server_fns) async fn save_editable_project(
     pool: &sqlx::PgPool,
     actor_id: Uuid,
@@ -390,5 +403,6 @@ pub(in crate::server_fns) async fn save_editable_project(
     request: &ProjectEditRequest,
     email_available: bool,
 ) -> Result<(Project, bool), ServerFnError> {
-    save::save(pool, actor_id, org_id, request, email_available).await
+    let saved = save_project_edit(pool, actor_id, org_id, request, email_available).await?;
+    Ok((saved.project, saved.changed))
 }

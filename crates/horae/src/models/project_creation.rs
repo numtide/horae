@@ -335,6 +335,9 @@ pub struct CreationClient {
     pub name: String,
     pub currency: String,
     pub active: bool,
+    /// Absent without `BillableRateReadAll`, like every billable rate in the
+    /// creation catalogs.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub default_rate_cents: Option<i64>,
 }
 
@@ -343,7 +346,9 @@ pub struct CreationTask {
     pub id: Uuid,
     pub name: String,
     pub billable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub default_rate_cents: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub default_rate_currency: Option<String>,
 }
 
@@ -351,6 +356,7 @@ pub struct CreationTask {
 pub struct CreationPerson {
     pub id: Uuid,
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub billable_rate_cents: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cost_rate_cents: Option<i64>,
