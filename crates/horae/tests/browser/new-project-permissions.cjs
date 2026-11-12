@@ -143,7 +143,9 @@ const name = 'Permission fixture project';
         else absent(project, 'rate_cents');
       }
       await expect(page.locator('.proj-row').filter({ hasText: name })).toHaveCount(scenario.progress ? 1 : 0);
-      for (const method of ['list_project_spend', 'list_project_budget_progress', 'list_project_tags']) {
+      // Budget progress answers from the stored permission state, not from the
+      // role these scenarios vary; `server_fns::budget_tests` covers its grants.
+      for (const method of ['list_project_spend', 'list_project_tags']) {
         assert.equal((await json(method)).some(item => item.project_id === projectId), scenario.progress, `${scenario.label}: ${method}`);
       }
       const tracking = (await json('list_tracking_projects')).find(item => item.id === projectId);
