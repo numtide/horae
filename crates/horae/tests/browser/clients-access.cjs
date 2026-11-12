@@ -155,7 +155,7 @@ const setAccess = (actorId, role, grants) => sql(`UPDATE users SET org_role = '$
         await expect(page.getByRole('alert')).toContainText('Could not load project settings');
         await expect(page.locator('.np-page')).toHaveCount(0);
         await visit(`/invoices/new/client/${client}`);
-        await expect(page.getByRole('status')).toContainText('Invoices require manager access');
+        await expect(page.getByRole('status')).toContainText('Invoices require access to all invoices');
         await expect(page.locator('#inv-client')).toHaveCount(0);
       }
       const foreign = await post('get_client_details', { client_id: foreignClient });
