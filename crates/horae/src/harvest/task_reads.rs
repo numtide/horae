@@ -58,6 +58,6 @@ pub(super) async fn read(
             default_rate_currency: record.default_rate_currency,
         });
     }
-    read.tx.commit().await.map_err(internal)?;
+    read.finish(Ok(())).await.map_err(internal)?;
     Ok((total, rows))
 }
