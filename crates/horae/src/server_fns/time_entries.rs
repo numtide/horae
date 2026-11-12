@@ -62,6 +62,7 @@ pub async fn load_timesheet_page(
             TimeReadError::Forbidden => {
                 forbidden("Timesheet access or identity has changed; refresh the page")
             }
+            TimeReadError::Conflict(message) => conflict(message),
             TimeReadError::InvalidQuery => {
                 err(BAD_REQUEST, "Invalid Timesheet date range or cursor")
             }
@@ -93,6 +94,7 @@ pub async fn list_timesheet_people(
         .await
         .map_err(|error| match error {
             TimeReadError::Forbidden => forbidden("Current time-read authority is required"),
+            TimeReadError::Conflict(message) => conflict(message),
             TimeReadError::InvalidQuery => err(BAD_REQUEST, "Invalid timesheet people query"),
             error => {
                 tracing::error!(%error, "Scoped timesheet people read failed");
@@ -122,6 +124,7 @@ pub async fn list_visible_time_entries(
         .await
         .map_err(|error| match error {
             TimeReadError::Forbidden => forbidden("Current time-read authority is required"),
+            TimeReadError::Conflict(message) => conflict(message),
             TimeReadError::InvalidQuery => {
                 err(BAD_REQUEST, "Invalid time-entry date range or cursor")
             }
@@ -579,6 +582,21 @@ mod tests {
         ids
     }
 
+    /// Give the person the dead role that contradicts their stored profile:
+    /// `admin` for anyone but an Administrator, `member` for an Administrator.
+    /// Eligibility follows the stored state, so a view that still read
+    /// `org_role` fails the tests that use this.
+    async fn contradict_role(pool: &PgPool, user_id: Uuid, profile: BuiltInProfile) {
+        sqlx::query!(
+            "UPDATE users SET org_role = CASE WHEN $2 THEN 'member'::org_role ELSE 'admin'::org_role END WHERE id = $1",
+            user_id,
+            profile == BuiltInProfile::Administrator
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
     fn manual_entry(ids: &crate::server_fns::test_seed::SeedIds) -> NewTimeEntry<'static> {
         NewTimeEntry {
             project_id: ids.project_id,
@@ -603,6 +621,7 @@ mod tests {
         for profile in BuiltInProfile::ALL.iter().copied() {
             for assigned in [false, true] {
                 let ids = linked_seed(&pool, profile).await;
+                contradict_role(&pool, ids.user_id, profile).await;
                 if assigned {
                     sqlx::query!(
                         "INSERT INTO assignments (id, project_id, user_id) VALUES ($1, $2, $3)",
@@ -630,6 +649,44 @@ mod tests {
                 assert_eq!(choices.len(), expected, "{profile:?} assigned={assigned}");
                 let started = insert_time_entry(&pool, ids.user_id, manual_entry(&ids)).await;
                 assert_eq!(started.is_ok(), expected == 1, "{profile:?} {started:?}");
+            }
+        }
+    }
+
+    /// A disabled project-task link closes the shared view for every profile,
+    /// Administrator included. Seeded organizations start on policy zero,
+    /// where the previous view still offered the link.
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn disabled_project_task_link_closes_the_view_for_every_profile(pool: PgPool) {
+        for profile in BuiltInProfile::ALL.iter().copied() {
+            let ids = linked_seed(&pool, profile).await;
+            sqlx::query!(
+                "INSERT INTO assignments (id, project_id, user_id) VALUES ($1, $2, $3)",
+                Uuid::now_v7(),
+                ids.project_id,
+                ids.user_id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let offered = fetch_time_entry_contexts(&pool, ids.user_id).await.unwrap();
+            assert_eq!(offered.len(), 1, "{profile:?}");
+            sqlx::query!(
+                "UPDATE project_tasks SET active = false WHERE project_id = $1",
+                ids.project_id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let offered = fetch_time_entry_contexts(&pool, ids.user_id).await.unwrap();
+            assert!(offered.is_empty(), "{profile:?}");
+            for is_running in [false, true] {
+                let input = NewTimeEntry {
+                    is_running,
+                    ..manual_entry(&ids)
+                };
+                let refused = insert_time_entry(&pool, ids.user_id, input).await;
+                assert!(refused.is_err(), "{profile:?} running={is_running}");
             }
         }
     }
@@ -894,6 +951,7 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn unassigned_member_is_forbidden(pool: PgPool) {
         let ids = linked_seed(&pool, BuiltInProfile::Member).await;
+        contradict_role(&pool, ids.user_id, BuiltInProfile::Member).await;
 
         let err = insert_time_entry(&pool, ids.user_id, manual_entry(&ids))
             .await
@@ -927,6 +985,7 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn admin_may_log_time_without_assignment(pool: PgPool) {
         let ids = linked_seed(&pool, BuiltInProfile::Administrator).await;
+        contradict_role(&pool, ids.user_id, BuiltInProfile::Administrator).await;
 
         assert!(
             insert_time_entry(&pool, ids.user_id, manual_entry(&ids))
