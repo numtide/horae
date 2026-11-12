@@ -362,14 +362,16 @@ pub(crate) async fn reopen(
     .await?
     .ok_or_else(|| OpError::not_found("Approval not found"))?;
 
+    // Reopening an approved week is the same decision as rejecting it. Decided
+    // before the state, so someone who may not decide this week cannot learn
+    // whether it has been invoiced.
+    require_others(actor, &[approval.user_id])?;
+    require_coverage(tx, actor, &[approval.user_id]).await?;
     // Rejecting a pending week and reopening an approved one are both a move
     // back to open; invoiced time never reopens.
     if !horae_core::state::can_transition(approval.state, EntryState::Open) {
         return Err(OpError::conflict("This week can no longer be reopened"));
     }
-    // Reopening an approved week is the same decision as rejecting it.
-    require_others(actor, &[approval.user_id])?;
-    require_coverage(tx, actor, &[approval.user_id]).await?;
 
     // Reopen submitted entries (pending week) or approved ones (reopened
     // week), clearing the rounding persisted at submission.

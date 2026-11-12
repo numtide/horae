@@ -58,9 +58,24 @@ fn caller(ids: &SeedIds) -> Caller {
 /// Submits `ids`' week with one open entry in it.
 async fn submitted(pool: &PgPool, ids: &SeedIds) -> Approval {
     time_entry(pool, ids, EntryState::Open).await;
-    let mut write = ops::begin(pool, caller(ids)).await.unwrap();
+    submit_as(pool, caller(ids)).await.unwrap()
+}
+
+async fn submit_as(pool: &PgPool, caller: Caller) -> Result<Approval, OpError> {
+    let mut write = ops::begin(pool, caller).await?;
     let result = submit_week(&mut write.tx, &write.actor, week()).await;
-    write.commit(result, &Recorder::default()).await.unwrap()
+    write.commit(result, &Recorder::default()).await
+}
+
+/// The approvals stored for `ids`' person.
+async fn approvals_of(pool: &PgPool, ids: &SeedIds) -> i64 {
+    sqlx::query_scalar!(
+        r#"SELECT count(*) as "count!" FROM approvals WHERE user_id = $1"#,
+        ids.user_id
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
 }
 
 async fn list_as(pool: &PgPool, ids: &SeedIds) -> Result<Vec<ApprovalSummary>, OpError> {
@@ -202,6 +217,148 @@ async fn every_profile_submits_its_own_week(pool: PgPool) {
         assert_eq!(
             (approval.user_id, approval.state),
             (ids.user_id, EntryState::Submitted),
+            "{profile:?}"
+        );
+    }
+}
+
+/// Submitting rests on `TimeWriteOwn`, which every valid stored state holds
+/// through the Member floor: the narrowest grant set still submits, and a
+/// stored state without it is refused before anything is written.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn submitting_requires_writing_ones_own_time(pool: PgPool) {
+    let floor_only = seed_profile(&pool, BuiltInProfile::Member).await;
+    crate::ops::testing::provision(&pool, &floor_only, &[], false).await;
+    assert_eq!(
+        submitted(&pool, &floor_only).await.state,
+        EntryState::Submitted
+    );
+
+    let without = seed_profile(&pool, BuiltInProfile::Member).await;
+    let write_own: String =
+        serde_json::from_value(serde_json::json!(Permission::TimeWriteOwn)).unwrap();
+    sqlx::query!(
+        "UPDATE person_permission_states SET grants = array_remove(grants, $2) WHERE user_id = $1",
+        without.user_id,
+        write_own,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let entry = time_entry(&pool, &without, EntryState::Open).await;
+    assert!(matches!(
+        submit_as(&pool, caller(&without)).await,
+        Err(OpError::Forbidden(_))
+    ));
+    assert_eq!(approvals_of(&pool, &without).await, 0);
+    let state = sqlx::query_scalar!(
+        r#"SELECT state as "state: EntryState" FROM time_entries WHERE id = $1"#,
+        entry
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(state, EntryState::Open);
+}
+
+/// An approver who is no longer an active person of the organization holds
+/// no authority, whatever their stored grants: every action is refused and
+/// the week stays pending. The same holds for a session naming another
+/// organization.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn inactive_or_foreign_approvers_decide_nothing(pool: PgPool) {
+    for (who, refusal) in MATRIX {
+        if refusal.is_some() {
+            continue;
+        }
+        let (approver, _, approval) = fixture(&pool, who).await;
+        let foreign = seed_profile(&pool, BuiltInProfile::Member).await;
+        sqlx::query!(
+            "UPDATE users SET active = false WHERE id = $1",
+            approver.user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let inactive = caller(&approver);
+        let elsewhere = Caller::session(foreign.org_id, approver.user_id);
+        let refused = OpError::forbidden(ACTIVE_REQUIRED);
+
+        for caller in [inactive, elsewhere] {
+            let mut read = ops::begin_read(&pool, caller).await.unwrap();
+            let result = list(&mut read.tx, &read.actor, None, week()).await;
+            assert_eq!(read.finish(result).await, Err(refused.clone()), "{who:?}");
+            let mut write = ops::begin(&pool, caller).await.unwrap();
+            let result = approve(&mut write.tx, &write.actor, &[approval.id]).await;
+            assert_eq!(
+                write.commit(result, &Recorder::default()).await.map(|_| ()),
+                Err(refused.clone()),
+                "{who:?}"
+            );
+            let mut write = ops::begin(&pool, caller).await.unwrap();
+            let result = reopen(&mut write.tx, &write.actor, approval.id).await;
+            assert_eq!(
+                write.commit(result, &Recorder::default()).await.map(drop),
+                Err(refused.clone()),
+                "{who:?}"
+            );
+            assert_eq!(
+                submit_as(&pool, caller).await.map(drop),
+                Err(refused.clone())
+            );
+            assert_eq!(state(&pool, approval.id).await, Some(EntryState::Submitted));
+        }
+        assert_eq!(approvals_of(&pool, &approver).await, 0);
+    }
+}
+
+/// Whether an invoiced week could be reopened is told only to someone who may
+/// decide it; everyone else gets the same refusal as for any other week.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_invoiced_week_reveals_its_state_only_to_its_deciders(pool: PgPool) {
+    async fn invoice(pool: &PgPool, approval: Uuid) {
+        sqlx::query!(
+            "UPDATE approvals SET state = $2 WHERE id = $1",
+            approval,
+            EntryState::Invoiced as EntryState,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    for (who, refusal) in MATRIX {
+        let (approver, _, approval) = fixture(&pool, who).await;
+        invoice(&pool, approval.id).await;
+        let expected = match refusal {
+            None => OpError::conflict("This week can no longer be reopened"),
+            Some(message) => OpError::forbidden(message),
+        };
+        assert_eq!(
+            reopen_as(&pool, &approver, approval.id).await,
+            Err(expected),
+            "{who:?}"
+        );
+        assert_eq!(state(&pool, approval.id).await, Some(EntryState::Invoiced));
+    }
+
+    // Someone's own invoiced week: only an administrator learns its state.
+    for (profile, expected) in [
+        (
+            BuiltInProfile::Administrator,
+            OpError::conflict("This week can no longer be reopened"),
+        ),
+        (
+            BuiltInProfile::ExecutiveManager,
+            OpError::forbidden(OWN_SUBMISSION_FORBIDDEN),
+        ),
+    ] {
+        let ids = seed_profile(&pool, profile).await;
+        let own = submitted(&pool, &ids).await;
+        invoice(&pool, own.id).await;
+        assert_eq!(
+            reopen_as(&pool, &ids, own.id).await,
+            Err(expected),
             "{profile:?}"
         );
     }
