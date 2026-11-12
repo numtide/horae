@@ -111,7 +111,7 @@ mod tests {
     use super::super::canonical_read_tests::fixture;
     use super::*;
     use crate::server_fns::test_seed::{seed, wait_for_blocked};
-    use horae_core::permissions::catalog::PermissionSelection;
+    use horae_core::permissions::catalog::{BuiltInProfile, PermissionSelection};
     use sqlx::PgPool;
     use uuid::Uuid;
 
@@ -122,11 +122,11 @@ mod tests {
     ) {
         let (ids, _) = fixture(
             &pool,
-            OrgRole::Member,
+            BuiltInProfile::Member,
             PermissionSelection::new(&[Permission::TaskReadAll]),
         )
         .await;
-        let foreign = seed(&pool, OrgRole::Admin).await;
+        let foreign = seed(&pool, BuiltInProfile::Administrator).await;
         let requester = PermissionRequester {
             org_id: ids.org_id,
             user_id: ids.user_id,
@@ -203,9 +203,9 @@ mod tests {
     #[serial_test::serial]
     async fn policy_zero_opens_the_catalog_to_admins_and_managers_only(pool: PgPool) {
         for (role, allowed) in [
-            (OrgRole::Admin, true),
-            (OrgRole::Manager, true),
-            (OrgRole::Member, false),
+            (BuiltInProfile::Administrator, true),
+            (BuiltInProfile::ExecutiveManager, true),
+            (BuiltInProfile::Member, false),
         ] {
             let ids = seed(&pool, role).await;
             let requester = PermissionRequester {
@@ -245,7 +245,7 @@ mod tests {
     async fn catalog_observes_revocation_after_waiting_for_current_authority(pool: PgPool) {
         let (ids, _) = fixture(
             &pool,
-            OrgRole::Admin,
+            BuiltInProfile::Administrator,
             PermissionSelection::new(&[Permission::TaskReadAll]),
         )
         .await;

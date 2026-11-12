@@ -1,6 +1,7 @@
 use super::canonical_read_tests::project_team;
 use super::*;
 use crate::server_fns::test_seed::seed;
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -60,7 +61,7 @@ async fn project_rate_helper_has_no_public_execute_grant(pool: PgPool) {
 }
 
 async fn project_with_assignment(pool: &PgPool) -> (User, Uuid) {
-    let ids = seed(pool, OrgRole::Member).await;
+    let ids = seed(pool, BuiltInProfile::Member).await;
     let colleague = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO users (id, org_id, email, name)
@@ -144,7 +145,7 @@ async fn managers_and_admins_see_the_project_team(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn assignments_are_scoped_to_the_viewers_organization(pool: PgPool) {
     let (mut viewer, project) = project_with_assignment(&pool).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     viewer.org_id = foreign.org_id;
     viewer.id = foreign.user_id;
     viewer.org_role = OrgRole::Admin;

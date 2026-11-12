@@ -1,6 +1,7 @@
 use super::canonical_read_tests::fixture;
 use super::*;
 use crate::server_fns::test_seed::{time_entry, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::PermissionSelection;
 use sqlx::PgPool;
 
@@ -18,10 +19,10 @@ async fn project_task_activity_migration_preserves_legacy_and_archives_canonical
             .collect(),
     );
     previous.run(&pool).await.unwrap();
-    let legacy = crate::server_fns::test_seed::seed(&pool, OrgRole::Admin).await;
+    let legacy = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
     let (canonical, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskWriteAll]),
     )
     .await;
@@ -77,7 +78,7 @@ async fn global_restore_does_not_restore_project_tracking_and_archive_invalidate
 ) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskWriteAll]),
     )
     .await;
@@ -137,7 +138,7 @@ async fn global_restore_does_not_restore_project_tracking_and_archive_invalidate
 async fn activity_separates_session_rates_from_events_and_preserves_noops(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskWriteAll]),
     )
     .await;
@@ -212,7 +213,7 @@ async fn activity_rejects_unavailable_authority_even_for_noops(pool: PgPool) {
     ] {
         let (ids, _) = fixture(
             &pool,
-            OrgRole::Admin,
+            BuiltInProfile::Administrator,
             PermissionSelection::new(&[Permission::TaskWriteAll]),
         )
         .await;
@@ -289,7 +290,7 @@ async fn activity_rejects_unavailable_authority_even_for_noops(pool: PgPool) {
 async fn activity_observes_revocation_after_organization_wait(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::TaskWriteAll]),
     )
     .await;
@@ -343,7 +344,7 @@ async fn activity_observes_revocation_after_organization_wait(pool: PgPool) {
 async fn archive_waits_for_existing_time_writer_and_observes_committed_timer(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskWriteAll]),
     )
     .await;
@@ -390,7 +391,7 @@ async fn archive_waits_for_existing_time_writer_and_observes_committed_timer(poo
 async fn archive_excludes_new_tracking_writers_before_task_lock_and_commit(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskWriteAll]),
     )
     .await;

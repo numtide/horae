@@ -1,5 +1,6 @@
 use super::linking::{identity, wait_for_links};
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use tokio::{task::JoinSet, time::timeout};
 
@@ -88,6 +89,13 @@ async fn first_sign_in_creates_an_active_member_bound_to_the_identity(pool: PgPo
         (org_id, "Ada@Example.com", "Ada Lovelace")
     );
     assert_eq!(user.org_role, OrgRole::Member);
+    assert_eq!(
+        crate::server_fns::test_seed::built_in_profile(&pool, org_id, user.id).await,
+        Some((
+            horae_core::permissions::catalog::BuiltInProfile::Member,
+            false
+        ))
+    );
     assert_eq!(
         (user.cost_rate_cents, user.billable_rate_cents),
         (None, None)
@@ -408,7 +416,7 @@ async fn concurrent_sign_ins_with_case_variant_emails_create_one_account(pool: P
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn admin_creation_and_provisioning_of_case_variant_emails_create_one_account(pool: PgPool) {
-    let ids = crate::server_fns::test_seed::seed(&pool, OrgRole::Admin).await;
+    let ids = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
     // Hold the email lock. The sign-in takes its share of the organization row
     // and queues on the email; the administrator's exclusive organization lock
     // then queues behind the sign-in, so the sign-in commits first and the
@@ -437,7 +445,7 @@ async fn admin_creation_and_provisioning_of_case_variant_emails_create_one_accou
             ids.user_id,
             "Ada@example.com",
             "Ada",
-            OrgRole::Member,
+            BuiltInProfile::Member,
         )
         .await
     });

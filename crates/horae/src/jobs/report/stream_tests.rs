@@ -2,6 +2,7 @@ use futures_util::StreamExt;
 use horae_core::importers::harvest::types::{
     EntityType, ImportMode, ImportReport, RowError, RowOutcome, SourceKind,
 };
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -201,7 +202,7 @@ async fn download_preparation_is_tenant_bound_and_releases_failed_transactions(p
     use axum::http::StatusCode;
     use horae_core::types::OrgRole;
     let job = archived_job(&pool).await;
-    let foreign = crate::server_fns::test_seed::seed(&pool, OrgRole::Admin).await;
+    let foreign = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
     for (org, actor, id, expected) in [
         (job.org, foreign.user_id, job.id, StatusCode::FORBIDDEN),
         (job.org, Uuid::now_v7(), job.id, StatusCode::FORBIDDEN),

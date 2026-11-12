@@ -226,8 +226,11 @@ mod tests {
     async fn successful_change_preserves_business_rows_and_failure_rolls_back_secrets(
         pool: PgPool,
     ) {
-        let seed =
-            crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
+        let seed = crate::server_fns::test_seed::seed(
+            &pool,
+            horae_core::permissions::catalog::BuiltInProfile::Administrator,
+        )
+        .await;
         let org = seed.org_id;
         let entry = Uuid::now_v7();
         sqlx::query!("INSERT INTO time_entries (id, org_id, user_id, project_id, task_id, spent_date, minutes, billable) VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, 60, true)", entry, org, seed.user_id, seed.project_id, seed.task_id).execute(&pool).await.unwrap();

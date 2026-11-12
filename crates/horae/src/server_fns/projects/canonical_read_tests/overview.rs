@@ -1,5 +1,6 @@
 use super::*;
 use crate::models::permission_editor::PermissionRequester;
+use horae_core::permissions::catalog::BuiltInProfile;
 
 fn requester(viewer: &User) -> PermissionRequester {
     PermissionRequester {
@@ -13,7 +14,7 @@ fn requester(viewer: &User) -> PermissionRequester {
 async fn overview_resolves_only_visible_client_identity_without_directory_or_rates(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::ProjectReadManaged]),
     )
     .await;
@@ -65,7 +66,12 @@ async fn overview_resolves_only_visible_client_identity_without_directory_or_rat
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn overview_rejects_changed_requester_including_empty_results(pool: PgPool) {
-    let (_, viewer) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
+    let (_, viewer) = fixture(
+        &pool,
+        BuiltInProfile::Administrator,
+        PermissionSelection::new(&[]),
+    )
+    .await;
     let initial = fetch_project_overview(&pool, &viewer, None).await.unwrap();
     assert!(initial.projects.is_empty());
     let same = fetch_project_overview(&pool, &viewer, Some(initial.requester))
@@ -100,7 +106,7 @@ async fn overview_rejects_changed_requester_including_empty_results(pool: PgPool
 async fn overview_edit_affordance_requires_current_project_write_scope(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -143,7 +149,12 @@ async fn overview_edit_affordance_requires_current_project_write_scope(pool: PgP
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn overview_denies_unavailable_actor_instead_of_binding_an_empty_success(pool: PgPool) {
-    let (ids, viewer) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
+    let (ids, viewer) = fixture(
+        &pool,
+        BuiltInProfile::Administrator,
+        PermissionSelection::new(&[]),
+    )
+    .await;
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
         .execute(&pool)
         .await
@@ -163,7 +174,7 @@ async fn overview_denies_unavailable_actor_instead_of_binding_an_empty_success(p
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_overview_uses_current_role_not_the_captured_user_role(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let viewer = User {
         id: ids.user_id,
         org_id: ids.org_id,
@@ -207,7 +218,7 @@ async fn legacy_overview_uses_current_role_not_the_captured_user_role(pool: PgPo
 async fn overview_observes_edit_revocation_after_waiting_for_organization(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectWriteAll]),
     )
     .await;

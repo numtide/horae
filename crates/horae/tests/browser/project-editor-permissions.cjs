@@ -4,6 +4,7 @@ const { execFileSync } = require('node:child_process');
 const { mkdirSync } = require('node:fs');
 const { join } = require('node:path');
 const assert = require('node:assert/strict');
+const { setAsideSeededStates } = require('./seeded-permissions.cjs');
 const evidence = process.env.HORAE_PROJECT_TASK_EVIDENCE;
 if (evidence) mkdirSync(evidence, { recursive: true });
 const base = process.env.HORAE_TEST_URL;
@@ -39,7 +40,7 @@ const leaves = value => value && typeof value === 'object' ? Object.values(value
 const receipts = () => sql(`SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY id), '[]'::jsonb) FROM permission_change_receipts r WHERE org_id='${org}'`);
 const initialReceipts = receipts();
 assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
-assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
+let restoreSeededStates = () => {};
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -60,6 +61,8 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
+    restoreSeededStates = setAsideSeededStates(org);
+    assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
     const originalHistory = history();
     sql(`BEGIN;
       INSERT INTO clients (id,org_id,name,currency) VALUES ('${client}','${org}','Permission editor client','EUR');
@@ -271,6 +274,7 @@ assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${
       DELETE FROM tasks WHERE id IN ('${task}','${archivedTask}','${globalArchivedTask}');
       DELETE FROM clients WHERE id='${client}';
       DELETE FROM users WHERE id IN ('${archived}','${outside}','${active}'); COMMIT;`);
+    restoreSeededStates();
     assert.equal(receipts(), initialReceipts, 'Editor fixture must remove only its own receipts');
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

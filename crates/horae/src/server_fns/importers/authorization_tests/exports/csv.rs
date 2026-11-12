@@ -1,8 +1,9 @@
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = seed(pool, OrgRole::Member).await;
-    let foreign = seed(pool, OrgRole::Admin).await;
+    let ids = seed(pool, BuiltInProfile::Member).await;
+    let foreign = seed(pool, BuiltInProfile::Administrator).await;
     sqlx::query!(
         "UPDATE projects SET name='Other tenant secret' WHERE id=$1",
         foreign.project_id

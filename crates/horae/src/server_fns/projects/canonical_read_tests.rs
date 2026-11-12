@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -20,10 +21,11 @@ pub(super) fn today() -> chrono::NaiveDate {
 
 pub(super) async fn fixture(
     pool: &PgPool,
-    legacy_role: OrgRole,
+    legacy_role: BuiltInProfile,
     grants: PermissionSelection,
 ) -> (SeedIds, User) {
     let ids = seed(pool, legacy_role).await;
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     let stored: Vec<String> =
         serde_json::from_value(serde_json::to_value(grants).unwrap()).unwrap();
     sqlx::query!(
@@ -51,7 +53,7 @@ pub(super) async fn fixture(
         email: format!("{}@test.com", ids.user_id),
         name: "Canonical project reader".into(),
         oidc_subject: None,
-        org_role: legacy_role,
+        org_role: crate::server_fns::provisioning::placeholder_role(legacy_role),
         cost_rate_cents: None,
         billable_rate_cents: None,
         active: true,
@@ -117,7 +119,7 @@ pub(super) async fn project_team(
 async fn canonical_project_reader_lists_without_legacy_management_or_tracking(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -135,7 +137,7 @@ async fn canonical_project_reader_lists_without_legacy_management_or_tracking(po
 async fn canonical_project_reader_opens_without_legacy_management_or_tracking(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -148,7 +150,12 @@ async fn canonical_project_reader_opens_without_legacy_management_or_tracking(po
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_own_only_member_does_not_inherit_legacy_manager_project_list(pool: PgPool) {
-    let (_, viewer) = fixture(&pool, OrgRole::Manager, PermissionSelection::new(&[])).await;
+    let (_, viewer) = fixture(
+        &pool,
+        BuiltInProfile::ExecutiveManager,
+        PermissionSelection::new(&[]),
+    )
+    .await;
     let projects = projects_for_viewer(&pool, &viewer, None, true, ProjectRead::Overview)
         .await
         .unwrap();
@@ -161,7 +168,12 @@ async fn canonical_own_only_member_does_not_inherit_legacy_manager_project_list(
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_own_only_member_does_not_inherit_legacy_manager_project_details(pool: PgPool) {
-    let (ids, _) = fixture(&pool, OrgRole::Manager, PermissionSelection::new(&[])).await;
+    let (ids, _) = fixture(
+        &pool,
+        BuiltInProfile::ExecutiveManager,
+        PermissionSelection::new(&[]),
+    )
+    .await;
     let details = project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
         .await
         .unwrap();
@@ -173,7 +185,7 @@ async fn canonical_own_only_member_does_not_inherit_legacy_manager_project_detai
 async fn canonical_project_read_does_not_inherit_legacy_admin_financial_fields(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -233,7 +245,7 @@ async fn designate(pool: &PgPool, ids: &SeedIds) {
 async fn canonical_managed_project_reads_require_current_designation(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Manager,
+        BuiltInProfile::ExecutiveManager,
         PermissionSelection::new(&[Permission::ProjectReadManaged]),
     )
     .await;
@@ -266,7 +278,7 @@ async fn canonical_managed_project_reads_require_current_designation(pool: PgPoo
 async fn canonical_tags_follow_project_reads_and_revocation(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Manager,
+        BuiltInProfile::ExecutiveManager,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -311,7 +323,7 @@ async fn canonical_tags_follow_project_reads_and_revocation(pool: PgPool) {
 async fn canonical_project_details_withhold_legacy_admin_notes_and_rate_controls(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -340,7 +352,7 @@ async fn canonical_project_financial_projection_matches_owning_project_evaluator
 
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -401,7 +413,7 @@ async fn canonical_project_financial_projection_matches_owning_project_evaluator
 async fn canonical_project_reads_reject_unknown_policy_and_invalid_grants(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -461,7 +473,7 @@ async fn canonical_project_reads_reject_unknown_policy_and_invalid_grants(pool: 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_shared_report_and_historical_tracking_are_distinct(pool: PgPool) {
-    let (ids, viewer) = fixture(&pool, OrgRole::Member, PermissionSelection::new(&[])).await;
+    let (ids, viewer) = fixture(&pool, BuiltInProfile::Member, PermissionSelection::new(&[])).await;
     sqlx::query!(
         "INSERT INTO assignments (id, project_id, user_id) VALUES ($1,$2,$3)",
         Uuid::now_v7(),
@@ -514,11 +526,11 @@ async fn canonical_shared_report_and_historical_tracking_are_distinct(pool: PgPo
 async fn canonical_project_reads_exclude_foreign_client_parent_links(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
-    let other = seed(&pool, OrgRole::Admin).await;
+    let other = seed(&pool, BuiltInProfile::Administrator).await;
     sqlx::query!(
         "UPDATE projects SET client_id=$2 WHERE id=$1",
         ids.project_id,
