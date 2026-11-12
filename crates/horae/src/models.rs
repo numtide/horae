@@ -39,6 +39,7 @@ pub use project::ProjectBudgetProgress;
 pub use project::{Project, ProjectBudgetOverview, ProjectDetails, ProjectTagLink};
 pub use task::Task;
 pub use time_entry::TimeEntry;
+#[cfg(feature = "server")]
 pub use user::User;
 
 /// Per-project tracked totals: all logged minutes, and the billable amount in

@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.id, u.name, u.email, u.active,\n                  COALESCE(p.is_administrator, false) AS \"administrator!\", d.managed AS \"managed!\"\n             FROM users u\n             CROSS JOIN LATERAL (SELECT EXISTS (\n               SELECT 1 FROM person_management_assignments m\n               WHERE m.org_id=u.org_id AND m.manager_id=$2 AND m.managed_user_id=u.id) AS managed) d\n             LEFT JOIN person_permission_states p ON p.org_id=u.org_id AND p.user_id=u.id\n            WHERE u.org_id=$1\n              AND ($3::bool OR d.managed)\n              AND ($4::bool IS NULL OR u.active=$4)\n              AND ($5::text IS NULL OR (u.name,u.id)>($5::text,$6::uuid))\n            ORDER BY u.name,u.id LIMIT 51",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "administrator!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "managed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "3c21a23548c084172a60e0dd4868ba924e3dd209d92ab43e199f8a3f9405e721"
+}

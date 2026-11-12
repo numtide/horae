@@ -68,7 +68,7 @@ pub async fn create_user(
     email: String,
     name: String,
     profile: String,
-) -> Result<User, ServerFnError> {
+) -> Result<UserListItem, ServerFnError> {
     let user = require_user().await?;
     let profile = provisioning::parse_profile(&profile)
         .ok_or_else(|| err(BAD_REQUEST, "Choose one of the built-in profiles"))?;
@@ -110,7 +110,7 @@ pub async fn add_harvest_people(
 /// Archive or restore a person. Archived people cannot sign in but their
 /// time entries are kept (FR-002).
 #[server]
-pub async fn set_user_active(user_id: String, active: bool) -> Result<User, ServerFnError> {
+pub async fn set_user_active(user_id: String, active: bool) -> Result<UserListItem, ServerFnError> {
     let user = require_user().await?;
     let user_id = parse_uuid(&user_id, "user_id")?;
     let state = crate::state::global_state().await;
@@ -133,7 +133,7 @@ pub(crate) async fn insert_user(
     email: &str,
     name: &str,
     profile: BuiltInProfile,
-) -> Result<User, ServerFnError> {
+) -> Result<UserListItem, ServerFnError> {
     let person = NewPerson {
         email: email.to_owned(),
         name: name.to_owned(),
@@ -181,7 +181,7 @@ pub(crate) async fn change_user_active(
     caller: Caller,
     user_id: uuid::Uuid,
     active: bool,
-) -> Result<User, ServerFnError> {
+) -> Result<UserListItem, ServerFnError> {
     let mut write = ops::begin(db, caller).await?;
     let result = ops::people::set_active(&mut write.tx, &write.actor, user_id, active).await;
     Ok(write.commit(result, events).await?)

@@ -147,7 +147,7 @@ async fn create(
     pool: &PgPool,
     ids: &SeedIds,
     profile: BuiltInProfile,
-) -> Result<User, ServerFnError> {
+) -> Result<UserListItem, ServerFnError> {
     insert_user(
         pool,
         &Recorder::default(),
@@ -394,7 +394,6 @@ async fn active_administrator_can_create_and_archive(pool: PgPool) {
     )
     .await
     .unwrap();
-    assert_eq!(created.org_id, ids.org_id);
     assert!(matches!(
         events.take().as_slice(),
         [crate::plugin::AppEvent::UserCreated { user, .. }] if user.id == created.id
@@ -521,4 +520,230 @@ async fn only_an_administrator_archives_or_restores_an_administrator(pool: PgPoo
     // Other people stay within the People Admin's reach.
     let member = target(&pool, ids.org_id).await;
     change(people_admin, member, false).await.unwrap();
+}
+
+/// Managing people opens identity only: a People Admin holds no rate grant,
+/// so archiving, restoring or adding someone must not answer with their rates
+/// or sign-in binding.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn people_answers_carry_no_rates_or_sign_in_details(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let people_admin = create(&pool, &ids, BuiltInProfile::PeopleAdmin)
+        .await
+        .unwrap()
+        .id;
+    let member = target(&pool, ids.org_id).await;
+    sqlx::query!(
+        "UPDATE users SET cost_rate_cents = 4321, billable_rate_cents = 8765,
+                oidc_subject = 'subject-of-target' WHERE id = $1",
+        member
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let caller = Caller::session(ids.org_id, people_admin);
+    let mut answers = Vec::new();
+    for active in [false, true, true] {
+        let answer = change_user_active(&pool, &Recorder::default(), caller, member, active)
+            .await
+            .unwrap();
+        assert_eq!((answer.id, answer.active), (member, active));
+        answers.push(serde_json::to_string(&answer).unwrap());
+    }
+    let added = insert_user(
+        &pool,
+        &Recorder::default(),
+        caller,
+        "added@test.com",
+        "Added",
+        BuiltInProfile::Member,
+    )
+    .await
+    .unwrap();
+    answers.push(serde_json::to_string(&added).unwrap());
+    for answer in answers {
+        for leak in [
+            "rate",
+            "4321",
+            "8765",
+            "oidc",
+            "subject-of-target",
+            "org_role",
+        ] {
+            assert!(!answer.contains(leak), "{leak} in {answer}");
+        }
+    }
+    // The People Admin still cannot read those rates directly.
+    assert!(matches!(
+        crate::server_fns::users::rates::read_person_rates(&pool, ids.org_id, people_admin, member)
+            .await,
+        Err(ServerFnError::ServerError {
+            code: FORBIDDEN,
+            ..
+        })
+    ));
+}
+
+/// Gives `user` exactly `permissions` (with prerequisites and the Member
+/// floor) as an individual state.
+async fn grant(pool: &PgPool, user: Uuid, permissions: &[Permission]) {
+    let grants: Vec<String> = serde_json::from_value(serde_json::json!(
+        horae_core::permissions::catalog::PermissionSelection::new(permissions)
+    ))
+    .unwrap();
+    sqlx::query!(
+        "UPDATE person_permission_states
+            SET grants = $2, source = 'individual', built_in_profile = NULL
+          WHERE user_id = $1",
+        user,
+        &grants
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn assign(pool: &PgPool, org: Uuid, manager: Uuid, managed: Uuid) {
+    sqlx::query!(
+        "INSERT INTO person_management_assignments (id, org_id, manager_id, managed_user_id)
+         VALUES ($1, $2, $3, $4)",
+        Uuid::now_v7(),
+        org,
+        manager,
+        managed
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn is_active(pool: &PgPool, user: Uuid) -> bool {
+    sqlx::query_scalar!("SELECT active FROM users WHERE id = $1", user)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+/// `PeopleWriteManaged` archives and restores the people one manages, but
+/// not an administrator, nobody else, and it adds nobody.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn managed_people_writers_archive_only_the_people_they_manage(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let manager = target(&pool, ids.org_id).await;
+    let managed = target(&pool, ids.org_id).await;
+    let unmanaged = target(&pool, ids.org_id).await;
+    let managed_admin = target(&pool, ids.org_id).await;
+    sqlx::query!(
+        "UPDATE person_permission_states SET is_administrator = true WHERE user_id = $1",
+        managed_admin
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for person in [managed, managed_admin] {
+        assign(&pool, ids.org_id, manager, person).await;
+    }
+    let change = |user, active| {
+        let pool = pool.clone();
+        async move {
+            change_user_active(
+                &pool,
+                &Recorder::default(),
+                Caller::session(ids.org_id, manager),
+                user,
+                active,
+            )
+            .await
+            .map(|_| ())
+        }
+    };
+
+    // Reading managed people alone allows no change.
+    grant(&pool, manager, &[Permission::PeopleReadManaged]).await;
+    assert_forbidden(change(managed, false).await, "read only");
+    assert!(is_active(&pool, managed).await);
+
+    grant(&pool, manager, &[Permission::PeopleWriteManaged]).await;
+    change(managed, false).await.unwrap();
+    assert!(!is_active(&pool, managed).await);
+    change(managed, true).await.unwrap();
+    assert!(is_active(&pool, managed).await);
+
+    // Someone they do not manage, and someone who does not exist, look alike.
+    let refusal = |result: Result<(), ServerFnError>| match result {
+        Err(ServerFnError::ServerError {
+            code: FORBIDDEN,
+            message,
+            ..
+        }) => message,
+        other => panic!("{other:?}"),
+    };
+    let unmanaged_refusal = refusal(change(unmanaged, false).await);
+    assert_eq!(
+        refusal(change(Uuid::now_v7(), false).await),
+        unmanaged_refusal
+    );
+    assert!(is_active(&pool, unmanaged).await);
+    assert_forbidden(change(managed_admin, false).await, "administrator");
+    assert!(is_active(&pool, managed_admin).await);
+    assert_forbidden(
+        attempt(&pool, ids.org_id, manager, managed, Change::Create).await,
+        "create",
+    );
+}
+
+/// The People page offers archiving exactly where the operation allows it.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn the_directory_offers_archiving_where_the_operation_allows_it(pool: PgPool) {
+    use crate::models::people::PeopleActivity;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let people_admin = create(&pool, &ids, BuiltInProfile::PeopleAdmin)
+        .await
+        .unwrap()
+        .id;
+    let manager = target(&pool, ids.org_id).await;
+    let managed = target(&pool, ids.org_id).await;
+    let managed_admin = target(&pool, ids.org_id).await;
+    sqlx::query!(
+        "UPDATE person_permission_states SET is_administrator = true WHERE user_id = $1",
+        managed_admin
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for person in [managed, managed_admin] {
+        assign(&pool, ids.org_id, manager, person).await;
+    }
+    grant(&pool, manager, &[Permission::PeopleWriteManaged]).await;
+    for actor in [ids.user_id, people_admin, manager] {
+        let page = crate::server_fns::permissions::directory::read(
+            &pool,
+            ids.org_id,
+            actor,
+            PeopleActivity::All,
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(!page.people.is_empty());
+        for person in page.people {
+            let allowed = change_user_active(
+                &pool,
+                &Recorder::default(),
+                Caller::session(ids.org_id, actor),
+                person.id,
+                person.active,
+            )
+            .await
+            .is_ok();
+            assert_eq!(
+                person.can_change_active, allowed,
+                "{actor} on {}",
+                person.id
+            );
+        }
+    }
 }

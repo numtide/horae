@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use dioxus::prelude::*;
 use horae_core::importers::harvest::types::{PersonErrorKind, SourceKind};
 
-use super::missing_person_row::MissingPersonRow;
+use super::missing_person_row::{MissingPersonRow, UNAVAILABLE};
 use crate::models::MissingPerson;
 use crate::models::user::{Activation, AddedPeople, NewPerson};
 use crate::route::Route;
@@ -18,9 +18,11 @@ pub(super) fn MissingPeople(
     source: Option<SourceKind>,
 ) -> Element {
     // Emails, as `key` normalizes them, added from this page, and those that
-    // turned out to have an account already (another tab, or a reload).
+    // turned out to have an account already (another tab, or a reload), or
+    // that the server refused.
     let mut added = use_signal(HashSet::<String>::new);
     let mut present = use_signal(HashSet::<String>::new);
+    let mut unavailable = use_signal(HashSet::<String>::new);
     let mut busy = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let key = |email: &str| email.trim().to_lowercase();
@@ -31,6 +33,9 @@ pub(super) fn MissingPeople(
         present
             .write()
             .extend(result.present.iter().map(|email| key(email)));
+        unavailable
+            .write()
+            .extend(result.unavailable.iter().map(|email| key(email)));
     });
     let outcome = move |email: Option<&str>| {
         let email = key(email?);
@@ -38,6 +43,8 @@ pub(super) fn MissingPeople(
             Some("Added")
         } else if present.read().contains(&email) {
             Some("Already in Horae")
+        } else if unavailable.read().contains(&email) {
+            Some(UNAVAILABLE)
         } else {
             None
         }

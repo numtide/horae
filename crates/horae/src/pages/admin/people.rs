@@ -115,7 +115,10 @@ pub(super) fn CanonicalPeople(
                 Ok(loaded) if loaded.people.is_empty() => rsx! {
                     p { class: "text-secondary", role: "status", "No people match this filter within your access. Try another filter." }
                 },
-                Ok(loaded) => rsx! {
+                Ok(loaded) => {
+                    // Archiving is decided row by row (managed people, administrators).
+                    let actions = actions || loaded.people.iter().any(|entry| entry.can_change_active);
+                    rsx! {
                     DataTable {
                         table {
                             thead { tr {
@@ -155,7 +158,7 @@ pub(super) fn CanonicalPeople(
                                                         "Permissions"
                                                     }
                                                 }
-                                                if can_manage_people {
+                                                if entry.can_change_active {
                                                     button { id: "people-active-{entry.id}", r#type: "button", class: "btn btn-secondary btn-sm",
                                                         aria_label: if entry.active { "Archive {entry.name}" } else { "Restore {entry.name}" },
                                                         disabled: changing().is_some(),
@@ -173,7 +176,8 @@ pub(super) fn CanonicalPeople(
                             }
                         }
                     }
-                },
+                    }
+                }
             }
         }
         nav { class: "flex flex-wrap items-center gap-3 mt-4", aria_label: "People pages",

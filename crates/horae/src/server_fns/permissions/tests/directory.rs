@@ -346,7 +346,7 @@ async fn directory_scopes_before_activity_pagination_and_only_returns_basic_iden
             .map(String::as_str)
             .collect();
         keys.sort();
-        assert_eq!(keys, ["active", "email", "id", "name"]);
+        assert_eq!(keys, ["active", "can_change_active", "email", "id", "name"]);
         assert_ne!(row.id, foreign.user_id);
     }
     let archived = read(
