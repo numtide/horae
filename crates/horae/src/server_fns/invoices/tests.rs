@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::{seed, time_entry};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 
 mod authority;
@@ -9,7 +10,7 @@ mod imported_rates;
 #[serial_test::serial]
 async fn assignment_gate_allows_inflight_invoice_organization_fks_to_finish(pool: PgPool) {
     use crate::server_fns::test_seed::wait_for_blocked;
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE projects SET rate_cents=10000 WHERE id=$1",
@@ -86,7 +87,7 @@ async fn assignment_gate_allows_inflight_invoice_organization_fks_to_finish(pool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_preview_keeps_time_rates_and_defaults_in_one_snapshot(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE projects SET rate_cents = 10001 WHERE id = $1",
@@ -140,7 +141,7 @@ async fn invoice_preview_keeps_time_rates_and_defaults_in_one_snapshot(pool: PgP
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_preview_rejects_large_results_instead_of_truncating_them(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entries: Vec<_> = (0..10000).map(|_| uuid::Uuid::now_v7()).collect();
     sqlx::query!("INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable,state)
         SELECT id,$2,$3,$4,$5,'2026-09-07',60,true,'open' FROM unnest($1::uuid[]) id",
@@ -181,7 +182,7 @@ async fn invoice_preview_rejects_large_results_instead_of_truncating_them(pool: 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_preview_requires_explicit_resolution_and_scopes_selected_projects(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     let other = uuid::Uuid::now_v7();
     sqlx::query!(
@@ -194,7 +195,7 @@ async fn invoice_preview_requires_explicit_resolution_and_scopes_selected_projec
     .await
     .unwrap();
     sqlx::query!("INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode,terms_days) VALUES ($1,$2,$3,$4,'person',14)", uuid::Uuid::now_v7(), ids.org_id, other, ids.user_id).execute(&pool).await.unwrap();
-    let foreign = seed(&pool, OrgRole::Manager).await;
+    let foreign = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let day = "2026-09-07".parse().unwrap();
     let selected = [ids.project_id, other, ids.project_id];
     let preview = preview::prepare(
@@ -284,7 +285,7 @@ async fn invoice_preview_requires_explicit_resolution_and_scopes_selected_projec
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_preview_matches_generation_without_claiming_time(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE projects SET rate_cents = 10001 WHERE id = $1",
@@ -378,7 +379,7 @@ async fn invoice_preview_matches_generation_without_claiming_time(pool: PgPool) 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_defaults_apply_exact_adjustments_and_payment_terms(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE projects SET rate_cents = 10001 WHERE id = $1",
@@ -423,7 +424,7 @@ async fn invoice_defaults_apply_exact_adjustments_and_payment_terms(pool: PgPool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_defaults_conflict_rolls_back_all_claims(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let first_entry = time_entry(&pool, &ids, EntryState::Open).await;
     let other = crate::server_fns::test_seed::SeedIds {
         project_id: uuid::Uuid::now_v7(),
@@ -494,7 +495,7 @@ async fn invoice_defaults_conflict_rolls_back_all_claims(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_defaults_are_invoice_owned_and_only_drafts_are_editable(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE projects SET rate_cents = 10000 WHERE id = $1",
@@ -559,7 +560,7 @@ async fn invoice_defaults_are_invoice_owned_and_only_drafts_are_editable(pool: P
         ),
         (90, 0, "")
     );
-    let foreign = seed(&pool, OrgRole::Manager).await;
+    let foreign = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     assert!(matches!(
         update_invoice_defaults_in_db(&pool, foreign.org_id, stored.id, &overrides).await,
         Err(ServerFnError::ServerError {
@@ -618,7 +619,7 @@ async fn invoice_defaults_are_invoice_owned_and_only_drafts_are_editable(pool: P
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_defaults_selection_rejects_unavailable_projects_before_claiming(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     let unselected = crate::server_fns::test_seed::SeedIds {
         project_id: uuid::Uuid::now_v7(),
@@ -627,7 +628,7 @@ async fn invoice_defaults_selection_rejects_unavailable_projects_before_claiming
     sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency,rate_cents) VALUES ($1,$2,$3,'Unselected','EUR',10000)", unselected.project_id, ids.org_id, ids.client_id)
         .execute(&pool).await.unwrap();
     let unselected_entry = time_entry(&pool, &unselected, EntryState::Open).await;
-    let foreign = seed(&pool, OrgRole::Manager).await;
+    let foreign = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let day = "2026-09-07".parse().unwrap();
     for selected in [
         vec![],
@@ -674,7 +675,7 @@ async fn invoice_defaults_selection_rejects_unavailable_projects_before_claiming
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_defaults_edit_rechecks_status_after_waiting_for_a_concurrent_send(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     let day = "2026-09-07".parse().unwrap();
     let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
@@ -739,7 +740,8 @@ async fn invoice_defaults_legacy_insert_preserves_dates_and_exact_total(pool: Pg
             .collect(),
     );
     previous.run(&pool).await.unwrap();
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids =
+        crate::server_fns::test_seed::seed_before_permission_state(&pool, OrgRole::Manager).await;
     let id = uuid::Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents)
@@ -839,7 +841,7 @@ fn invoice_defaults_validate_all_override_fields() {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_project_currency_and_cost_override_keep_their_denominations(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id,role) VALUES ($1,$2,$3,'lead')",
@@ -902,7 +904,7 @@ async fn configured_project_currency_and_cost_override_keep_their_denominations(
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn configured_fixed_fee_hours_are_not_invoiced_but_legacy_fees_are_unchanged(pool: PgPool) {
     for configured in [false, true] {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let entry = time_entry(&pool, &ids, EntryState::Open).await;
         sqlx::query!(
             "UPDATE projects SET project_type = 'fixed_fee', rate_cents = 6000, starts_on = '2026-10-01' WHERE id = $1",
@@ -955,7 +957,7 @@ async fn configured_fixed_fee_hours_are_not_invoiced_but_legacy_fees_are_unchang
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn mixed_project_currencies_cannot_partially_create_an_invoice(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     let second_project = uuid::Uuid::now_v7();
     sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency,rate_cents) VALUES ($1,$2,$3,'USD project','USD',6000)", second_project, ids.org_id, ids.client_id)
@@ -1067,7 +1069,7 @@ async fn selected_project_rate_modes_agree_across_billing_consumers(pool: PgPool
             0,
         ),
     ] {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         time_entry(&pool, &ids, EntryState::Open).await;
         sqlx::query!(
             "UPDATE users SET billable_rate_cents = $2 WHERE id = $1",
@@ -1141,7 +1143,7 @@ async fn billing_cascade_agrees_across_all_four_levels_including_zero(pool: PgPo
         (None, Some(0), Some(3500), Some(3000), 0),
         (None, None, Some(0), Some(3000), 0),
     ] {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         time_entry(&pool, &ids, EntryState::Open).await;
         sqlx::query!(
             "UPDATE users SET billable_rate_cents = $2 WHERE id = $1",
@@ -1195,7 +1197,7 @@ async fn billing_cascade_agrees_across_all_four_levels_including_zero(pool: PgPo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn project_rate_is_used_by_invoices_reports_and_spend(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE users SET billable_rate_cents = 3000 WHERE id = $1",
@@ -1235,7 +1237,7 @@ async fn project_rate_is_used_by_invoices_reports_and_spend(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoiced_amounts_survive_rate_changes_and_void_uses_current_rates(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE users SET billable_rate_cents = 3000 WHERE id = $1",
@@ -1295,7 +1297,7 @@ async fn invoiced_amounts_survive_rate_changes_and_void_uses_current_rates(pool:
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn non_billable_context_produces_no_unbilled_amount_on_any_report(pool: PgPool) {
     for project_billable in [false, true] {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         time_entry(&pool, &ids, EntryState::Open).await;
         sqlx::query!(
             "UPDATE users SET billable_rate_cents = 6000 WHERE id = $1",
@@ -1360,7 +1362,7 @@ async fn non_billable_context_produces_no_unbilled_amount_on_any_report(pool: Pg
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoiced_billability_survives_later_project_changes(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE users SET billable_rate_cents = 6000 WHERE id = $1",
@@ -1395,7 +1397,7 @@ async fn invoiced_billability_survives_later_project_changes(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoice_total_overflow_leaves_all_time_unbilled(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     for _ in 0..3 {
         time_entry(&pool, &ids, EntryState::Open).await;
     }
@@ -1420,7 +1422,7 @@ async fn invoice_total_overflow_leaves_all_time_unbilled(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoice_line_overflow_leaves_time_unbilled(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE users SET billable_rate_cents = $2 WHERE id = $1",
@@ -1460,7 +1462,7 @@ async fn assert_no_partial_invoice(pool: &PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE users SET billable_rate_cents = $2 WHERE id = $1",
@@ -1523,7 +1525,7 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoicing_uses_and_freezes_effective_minutes(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let open = time_entry(&pool, &ids, EntryState::Open).await;
     let approved = time_entry(&pool, &ids, EntryState::Approved).await;
     sqlx::query!(
@@ -1710,7 +1712,8 @@ async fn effective_minutes_migration_preserves_historical_invoice_quantities(poo
             .collect(),
     );
     previous.run(&pool).await.unwrap();
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids =
+        crate::server_fns::test_seed::seed_before_permission_state(&pool, OrgRole::Manager).await;
     let legacy = time_entry(&pool, &ids, EntryState::Open).await;
     let frozen = time_entry(&pool, &ids, EntryState::Open).await;
     let open = time_entry(&pool, &ids, EntryState::Open).await;
@@ -1785,7 +1788,7 @@ async fn effective_minutes_migration_preserves_historical_invoice_quantities(poo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoicing_leaves_running_time_open(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let running = time_entry(&pool, &ids, EntryState::Open).await;
     let stopped = time_entry(&pool, &ids, EntryState::Open).await;
     let approved = time_entry(&pool, &ids, EntryState::Approved).await;
@@ -1819,7 +1822,7 @@ async fn invoicing_leaves_running_time_open(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn only_running_time_does_not_create_an_invoice(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let running = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE time_entries SET is_running = true, started_at = now() WHERE id = $1",
@@ -1850,7 +1853,7 @@ async fn only_running_time_does_not_create_an_invoice(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn void_waits_for_a_concurrent_payment_and_then_refuses(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(&pool, &ids, EntryState::Approved).await;
     let day = "2026-09-07".parse().unwrap();
     let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
@@ -1936,7 +1939,7 @@ async fn void_waits_for_a_concurrent_payment_and_then_refuses(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn void_reopens_time_without_stale_rounding(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(&pool, &ids, EntryState::Approved).await;
     sqlx::query!(
         "UPDATE time_entries SET rounded_minutes = 75 WHERE id = $1",
@@ -1978,8 +1981,8 @@ async fn void_reopens_time_without_stale_rounding(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoice_transitions_reject_invalid_states_and_foreign_organizations(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
-    let foreign = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+    let foreign = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     let day = "2026-09-07".parse().unwrap();
     let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
@@ -2061,7 +2064,7 @@ async fn invoice_transitions_reject_invalid_states_and_foreign_organizations(poo
 /// invoiced and released by a void; only raising its minutes is refused.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_legacy_entry_over_the_limit_is_invoiced_and_voided(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     crate::server_fns::test_seed::legacy_minutes(&pool, entry, 20_000).await;
     let day = "2026-09-07".parse().unwrap();
@@ -2091,7 +2094,7 @@ async fn a_legacy_entry_over_the_limit_is_invoiced_and_voided(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn new_invoices_start_with_the_organization_default_notes(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE projects SET rate_cents = 10000 WHERE id = $1",

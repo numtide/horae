@@ -1,12 +1,13 @@
 use super::*;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
-async fn canonical(pool: &PgPool, role: OrgRole, permissions: &[Permission]) -> SeedIds {
+async fn canonical(pool: &PgPool, role: BuiltInProfile, permissions: &[Permission]) -> SeedIds {
     let ids = seed(pool, role).await;
     let grants: Vec<String> = serde_json::from_value(
         serde_json::to_value(PermissionSelection::new(permissions)).unwrap(),
     )
     .unwrap();
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
          VALUES ($1,$2,$3,1,$4,false,'individual')",
@@ -32,7 +33,7 @@ async fn canonical(pool: &PgPool, role: OrgRole, permissions: &[Permission]) -> 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_export_accepts_project_reader_with_legacy_member_role(pool: PgPool) {
-    let ids = canonical(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;
+    let ids = canonical(&pool, BuiltInProfile::Member, &[Permission::ProjectReadAll]).await;
     let rows = projects(&pool, ids.org_id, ids.user_id, "active")
         .await
         .unwrap();
@@ -45,7 +46,7 @@ async fn canonical_project_export_accepts_project_reader_with_legacy_member_role
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_export_does_not_inherit_legacy_administrator_scope(pool: PgPool) {
-    let ids = canonical(&pool, OrgRole::Admin, &[]).await;
+    let ids = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
     let rows = projects(&pool, ids.org_id, ids.user_id, "active")
         .await
         .unwrap();
@@ -59,7 +60,12 @@ async fn canonical_project_export_does_not_inherit_legacy_administrator_scope(po
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_export_withholds_ordinary_monetary_budget(pool: PgPool) {
-    let ids = canonical(&pool, OrgRole::Admin, &[Permission::ProjectReadAll]).await;
+    let ids = canonical(
+        &pool,
+        BuiltInProfile::Administrator,
+        &[Permission::ProjectReadAll],
+    )
+    .await;
     let rows = projects(&pool, ids.org_id, ids.user_id, "active")
         .await
         .unwrap();
@@ -72,7 +78,7 @@ async fn canonical_project_export_withholds_ordinary_monetary_budget(pool: PgPoo
 async fn canonical_project_workbook_rejects_financial_revocation_during_render(pool: PgPool) {
     let ids = canonical(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         &[Permission::ProjectReadAll, Permission::BillableRateReadAll],
     )
     .await;

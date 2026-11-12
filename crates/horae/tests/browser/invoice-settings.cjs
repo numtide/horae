@@ -2,6 +2,7 @@
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
+const { setAsideSeededStates } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 const target = new URL(base), database = new URL(process.env.DATABASE_URL);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
@@ -15,6 +16,7 @@ const columns = ['provider_name', 'provider_address', 'provider_tax_id', 'provid
   'bank_name', 'bank_iban', 'bank_bic', 'bank_routing', 'bank_account', 'invoice_notes', 'invoice_payment_terms'];
 const before = JSON.parse(sql(`SELECT row_to_json(o) FROM (SELECT ${columns.join(',')}, permission_policy_version FROM organizations WHERE id='${org}') o`));
 assert.equal(before.permission_policy_version, 0);
+let restoreSeededStates = () => {};
 const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll("'", "''")}'`;
 
 (async () => {
@@ -33,6 +35,7 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
+    restoreSeededStates = setAsideSeededStates(org);
 
     await asRole('admin');
     await settingsLink.click();
@@ -138,6 +141,7 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
       UPDATE organizations SET permission_policy_version=0,
         ${columns.map(column => `${column}=${literal(before[column])}`).join(', ')}
         WHERE id='${org}'; COMMIT;`);
+    restoreSeededStates();
     await browser.close();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

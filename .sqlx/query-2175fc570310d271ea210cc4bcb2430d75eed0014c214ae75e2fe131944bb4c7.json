@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) AS \"count!\" FROM users u\n           LEFT JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id\n           WHERE u.org_id = $1 AND u.active\n             AND CASE WHEN $2 THEN u.org_role = 'admin' ELSE p.is_administrator END",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2175fc570310d271ea210cc4bcb2430d75eed0014c214ae75e2fe131944bb4c7"
+}

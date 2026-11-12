@@ -1,10 +1,11 @@
 //! Time-entry billing identities stay private across session-authenticated reads.
 
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
     let target = user(pool, ids.org_id, OrgRole::Member).await;
     let target_ids = crate::server_fns::test_seed::SeedIds {
         user_id: target,

@@ -2,11 +2,12 @@
 
 use super::*;
 use crate::server_fns::test_seed::{seed, time_entry, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = seed(pool, OrgRole::Manager).await;
-    let foreign = seed(pool, OrgRole::Admin).await;
+    let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
+    let foreign = seed(pool, BuiltInProfile::Administrator).await;
     time_entry(pool, &ids, EntryState::Open).await;
     let invoice = Uuid::now_v7();
     sqlx::query!("INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents) VALUES ($1,$2,$3,'PRIVATE-HTTP','2026-09-07','2026-10-07','EUR',1200)", invoice, ids.org_id, ids.client_id).execute(pool).await.unwrap();

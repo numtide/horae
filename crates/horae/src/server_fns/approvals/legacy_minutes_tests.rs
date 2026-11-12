@@ -4,12 +4,13 @@
 use super::tests::insert_entry;
 use super::*;
 use crate::server_fns::test_seed::{assert_minutes_cannot_rise, legacy_minutes, seed};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_legacy_entry_over_the_limit_is_submitted_approved_rejected_and_reopened(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let week: chrono::NaiveDate = "2026-09-07".parse().unwrap();
     let entry = insert_entry(&pool, &ids, week, false).await;
     legacy_minutes(&pool, entry, 20_000).await;

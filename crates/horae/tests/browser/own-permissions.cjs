@@ -4,6 +4,7 @@ const { execFileSync } = require('node:child_process');
 const { readFileSync, mkdirSync } = require('node:fs');
 const { join } = require('node:path');
 const assert = require('node:assert/strict');
+const { setAsideSeededStates } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 const target = new URL(base);
 const database = new URL(process.env.DATABASE_URL);
@@ -23,7 +24,7 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   let releaseRead;
-  let actor, fixtureStarted = false;
+  let actor, fixtureStarted = false, restoreSeededStates;
   page.on('pageerror', error => errors.push(error.stack || error.message));
   const section = page.getByRole('region', { name: 'Your permissions', exact: true });
   const refresh = section.getByRole('button', { name: 'Refresh permissions', exact: true });
@@ -39,6 +40,7 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
     assert.equal(actor.org_role, 'admin');
     assert.equal(sql(`SELECT active FROM users WHERE id='${actor.id}' AND org_id='${actor.org_id}'`), 't');
     assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
+    restoreSeededStates = setAsideSeededStates(actor.org_id);
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
     await page.goto(`${base}/settings`);
     await expect(section).toContainText('Detailed permissions are not enabled');
@@ -119,5 +121,6 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
       UPDATE users SET active=true WHERE id='${actor.id}';
       UPDATE organizations SET permission_policy_version=0 WHERE id='${actor.org_id}';
       DELETE FROM person_permission_states WHERE id='${stateId}' AND org_id='${actor.org_id}'; COMMIT;`);
+    restoreSeededStates?.();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

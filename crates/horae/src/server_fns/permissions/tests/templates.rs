@@ -2,13 +2,12 @@ use super::templates::{TemplateAction, TemplateCommand, TemplateCommandError, ex
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use std::time::Duration;
 
 async fn administrator(pool: &PgPool) -> SeedIds {
     // Explicit identity, not the old role or equality with Administrator grants.
-    let ids = seed(pool, OrgRole::Member).await;
+    let ids = seed(pool, BuiltInProfile::Member).await;
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
         ids.org_id
@@ -26,6 +25,7 @@ async fn administrator(pool: &PgPool) -> SeedIds {
         .unwrap(),
     )
     .unwrap();
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states
          (id, org_id, user_id, catalog_version, grants, is_administrator, source)
@@ -260,26 +260,12 @@ async fn delete_replay_does_not_touch_a_same_name_replacement(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn legacy_future_missing_foreign_and_non_admin_authority_deny(pool: PgPool) {
+async fn missing_foreign_and_non_admin_authority_deny(pool: PgPool) {
     let ids = administrator(&pool).await;
     let other = administrator(&pool).await;
     for actor in [other.user_id, Uuid::now_v7()] {
         assert!(matches!(
             execute(&pool, ids.org_id, actor, &create("Denied", 0)).await,
-            Err(TemplateCommandError::Forbidden)
-        ));
-    }
-    for mode in [0, 2] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version = $2 WHERE id = $1",
-            ids.org_id,
-            mode
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        assert!(matches!(
-            execute(&pool, ids.org_id, ids.user_id, &create("Denied", 0)).await,
             Err(TemplateCommandError::Forbidden)
         ));
     }

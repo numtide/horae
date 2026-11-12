@@ -4,6 +4,7 @@ use super::*;
 use crate::models::project_creation::{
     EditableProject, ProjectEditRequest, ProjectTaskActivity, ProtectedProjectField,
 };
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
@@ -11,35 +12,35 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     for (case, role, grants, running, expected) in [
         (
             "member_archives",
-            OrgRole::Member,
+            BuiltInProfile::Member,
             vec![Permission::TaskWriteAll],
             false,
             StatusCode::OK,
         ),
         (
             "legacy_admin_is_not_authority",
-            OrgRole::Admin,
+            BuiltInProfile::Administrator,
             vec![],
             false,
             StatusCode::FORBIDDEN,
         ),
         (
             "archive_hides_rate",
-            OrgRole::Admin,
+            BuiltInProfile::Administrator,
             vec![Permission::TaskWriteAll],
             false,
             StatusCode::OK,
         ),
         (
             "running_timer_blocks_archive",
-            OrgRole::Admin,
+            BuiltInProfile::Administrator,
             vec![Permission::TaskWriteAll],
             true,
             StatusCode::CONFLICT,
         ),
         (
             "rate_reader_may_see_rate",
-            OrgRole::Member,
+            BuiltInProfile::Member,
             vec![Permission::TaskWriteAll, Permission::BillableRateReadAll],
             false,
             StatusCode::OK,
@@ -49,6 +50,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         let grants = PermissionSelection::new(&grants);
         let may_read_rate = grants.contains(Permission::BillableRateReadAll);
         let stored: Vec<String> = serde_json::from_value(json!(grants)).unwrap();
+        crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
             VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &stored)
             .execute(pool).await.unwrap();
@@ -99,7 +101,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                     .status(),
                 StatusCode::FORBIDDEN
             );
-            let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+            let foreign =
+                crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
             let mut foreign_request = request.clone();
             foreign_request["task_id"] = json!(foreign.task_id);
             assert_eq!(
