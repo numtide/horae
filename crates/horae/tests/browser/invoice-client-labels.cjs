@@ -20,6 +20,11 @@ sql(`BEGIN;
     SELECT '${invoiceId}', org_id, id, 'LABEL-REGRESSION', 'paid', '2026-10-01', '2026-10-31', 'EUR'
     FROM clients WHERE id='${clientId}';
   COMMIT;`);
+// The invoice pages read the session's own permissions, which an organization
+// still on the legacy policy does not report. Restored when the suite ends.
+const org = sql(`SELECT org_id FROM clients WHERE id='${clientId}'`);
+const policy = sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`);
+sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'`);
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
@@ -52,5 +57,6 @@ sql(`BEGIN;
     console.log('invoice client labels: active/inactive list, detail, reload and creation picker passed');
   } finally {
     await browser.close();
+    sql(`UPDATE organizations SET permission_policy_version=${policy} WHERE id='${org}'`);
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });
