@@ -67,7 +67,7 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
     for (const [path, resource] of [
       ['/clients', 'client_overview'], ['/projects', 'get_project_overview'],
       ['/invoices', 'list_invoices'], ['/reports', 'report_time'],
-      ['/admin/users', 'get_my_permissions'], ['/approvals', 'list_approvals'],
+      ['/admin/workspace', 'get_profile_options'], ['/approvals', 'list_approvals'],
       ['/settings', 'get_me'], ['/admin/importers', 'get_me'],
       [`/timesheet/week/${week}`, 'load_timesheet_page'],
       [`/timesheet/day/${week}`, 'load_timesheet_page'],

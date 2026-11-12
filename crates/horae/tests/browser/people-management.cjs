@@ -18,10 +18,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
 const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id FROM users WHERE email='admin@example.com' AND active) u"));
 const email = `people-management-${Date.now()}@example.com`;
 const state = '019f4500-0000-7000-8000-000000000001';
-const peopleAdmin = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own',
-  'time_read_all', 'time_write_all', 'time_approve_all', 'expense_read_all', 'expense_write_all',
-  'project_read_all', 'people_read_managed', 'people_read_all', 'people_write_managed', 'people_write_all',
-  'report_contractor_read', 'approval_withdraw_managed'];
+const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
 const array = values => `ARRAY[${values.map(value => `'${value}'`).join(',')}]`;
 const policy = sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`);
 let restoreSeededStates = () => {};
@@ -47,13 +44,13 @@ let restoreSeededStates = () => {};
     await expect(form.locator('#people-add-profile option[value="administrator"]')).toHaveCount(0);
     await form.getByLabel('Email', { exact: true }).fill(email);
     await form.getByLabel('Name', { exact: true }).fill('Managed Person');
-    await form.locator('#people-add-profile').selectOption('project_manager');
+    await form.locator('#people-add-profile').selectOption('people_admin');
     if (evidence) await page.screenshot({ path: join(evidence, 'people-add-1440.png') });
     await form.getByRole('button', { name: 'Add person', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Managed Person was added.' })).toBeVisible();
     await expect(row('Managed Person')).toBeVisible();
     assert.equal(sql(`SELECT p.built_in_profile || '/' || u.active FROM users u
-      JOIN person_permission_states p ON p.user_id = u.id WHERE u.email='${email}'`), 'project_manager/true');
+      JOIN person_permission_states p ON p.user_id = u.id WHERE u.email='${email}'`), 'people_admin/true');
 
     // Archiving moves the person out of the active list; restoring brings them back.
     await page.getByRole('button', { name: 'Archive Managed Person', exact: true }).click();
@@ -72,10 +69,13 @@ let restoreSeededStates = () => {};
     assert.equal(sql(`SELECT active FROM users WHERE id='${actor.id}'`), 't');
     console.log('PASS: an administrator adds people with a profile, archives and restores them, and keeps an administrator');
 
-    // A People Admin adds Members only and cannot edit permissions.
+    // A People Admin adds Members only and cannot edit permissions. The actor
+    // takes the grants the new People Admin was given.
+    const peopleAdmin = sql(`SELECT p.grants FROM person_permission_states p
+      JOIN users u ON u.id = p.user_id WHERE u.email='${email}'`);
     restoreSeededStates = setAsideSeededStates(actor.org_id);
     sql(`INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-      VALUES ('${state}','${actor.org_id}','${actor.id}',1,${array(peopleAdmin)},false,'individual')`);
+      VALUES ('${state}','${actor.org_id}','${actor.id}',1,'${peopleAdmin}',false,'individual')`);
     await page.reload();
     await expect(row('Managed Person')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Edit permissions for Managed Person', exact: true })).toHaveCount(0);
@@ -86,7 +86,7 @@ let restoreSeededStates = () => {};
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 
     // Without people management there is nothing to add or archive.
-    sql(`UPDATE person_permission_states SET grants=${array(peopleAdmin.filter(grant => !grant.startsWith('people_write')))} WHERE id='${state}'`);
+    sql(`UPDATE person_permission_states SET grants=${array([...floor, 'people_read_managed', 'people_read_all'])} WHERE id='${state}'`);
     await page.reload();
     await expect(row('Managed Person')).toBeVisible();
     await expect(page.locator('#people-add')).toHaveCount(0);
@@ -95,10 +95,11 @@ let restoreSeededStates = () => {};
     console.log('PASS: People Admins add Members only, and the page offers no management without the grant');
   } finally {
     await browser.close();
+    // The set-aside states include the added person's, so they go back first.
+    sql(`DELETE FROM person_permission_states WHERE id='${state}'`);
+    restoreSeededStates();
     sql(`BEGIN; UPDATE organizations SET permission_policy_version=${policy} WHERE id='${actor.org_id}';
-      DELETE FROM person_permission_states WHERE id='${state}';
       DELETE FROM person_permission_states WHERE user_id IN (SELECT id FROM users WHERE email='${email}');
       DELETE FROM users WHERE email='${email}'; COMMIT;`);
-    restoreSeededStates();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });
