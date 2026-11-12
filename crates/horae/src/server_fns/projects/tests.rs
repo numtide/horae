@@ -60,7 +60,9 @@ async fn project_rate_helper_has_no_public_execute_grant(pool: PgPool) {
     assert!(!public_execute);
 }
 
-async fn project_with_assignment(pool: &PgPool) -> (User, Uuid) {
+async fn project_with_assignment(
+    pool: &PgPool,
+) -> (User, Uuid, crate::server_fns::test_seed::SeedIds) {
     let ids = seed(pool, BuiltInProfile::Member).await;
     let colleague = Uuid::now_v7();
     sqlx::query!(
@@ -95,12 +97,12 @@ async fn project_with_assignment(pool: &PgPool) -> (User, Uuid) {
         active: true,
         created_at: chrono::Utc::now(),
     };
-    (viewer, ids.project_id)
+    (viewer, ids.project_id, ids)
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn members_see_the_project_team_without_rates(pool: PgPool) {
-    let (viewer, project) = project_with_assignment(&pool).await;
+async fn members_see_only_themselves_in_the_project_team(pool: PgPool) {
+    let (viewer, project, _) = project_with_assignment(&pool).await;
     sqlx::query!(
         "INSERT INTO assignments (id, project_id, user_id) VALUES ($1,$2,$3)",
         Uuid::now_v7(),
@@ -114,7 +116,8 @@ async fn members_see_the_project_team_without_rates(pool: PgPool) {
         .await
         .unwrap()
         .expect("a member opens the project");
-    assert_eq!(team.len(), 2);
+    assert_eq!(team.len(), 1);
+    assert_eq!(team[0].id, viewer.id);
     for member in team {
         let payload = serde_json::to_value(member).unwrap();
         assert!(payload.get("rate_cents").is_none(), "{payload}");
@@ -122,18 +125,13 @@ async fn members_see_the_project_team_without_rates(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn managers_and_admins_see_the_project_team(pool: PgPool) {
-    let (mut viewer, project) = project_with_assignment(&pool).await;
-    for role in [OrgRole::Manager, OrgRole::Admin] {
-        viewer.org_role = role;
-        sqlx::query!(
-            "UPDATE users SET org_role = $2 WHERE id = $1",
-            viewer.id,
-            role as OrgRole
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
+async fn project_readers_see_the_project_team(pool: PgPool) {
+    let (viewer, project, ids) = project_with_assignment(&pool).await;
+    for role in [
+        BuiltInProfile::ExecutiveManager,
+        BuiltInProfile::Administrator,
+    ] {
+        crate::ops::testing::become_profile(&pool, &ids, role).await;
         let team = project_team(&pool, &viewer, project)
             .await
             .unwrap()
@@ -144,11 +142,10 @@ async fn managers_and_admins_see_the_project_team(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn assignments_are_scoped_to_the_viewers_organization(pool: PgPool) {
-    let (mut viewer, project) = project_with_assignment(&pool).await;
+    let (mut viewer, project, _) = project_with_assignment(&pool).await;
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     viewer.org_id = foreign.org_id;
     viewer.id = foreign.user_id;
-    viewer.org_role = OrgRole::Admin;
     assert!(
         project_team(&pool, &viewer, project)
             .await

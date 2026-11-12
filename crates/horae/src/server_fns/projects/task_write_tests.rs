@@ -409,36 +409,58 @@ async fn global_task_creation_does_not_inherit_legacy_administrator_authority(po
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn global_task_creation_rejects_unknown_policy_without_inserting(pool: PgPool) {
-    let (ids, _) = fixture(
-        &pool,
-        BuiltInProfile::Administrator,
-        PermissionSelection::new(&[Permission::TaskWriteAll]),
-    )
-    .await;
+async fn task_creation_waits_behind_the_organization_before_authorizing(pool: PgPool) {
+    let ids = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
+    let mut revocation = pool.begin().await.unwrap();
+    let pid = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
+        .fetch_one(&mut *revocation)
+        .await
+        .unwrap();
     sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 99 WHERE id = $1",
+        "SELECT id FROM organizations WHERE id=$1 FOR NO KEY UPDATE",
         ids.org_id
     )
-    .execute(&pool)
+    .fetch_one(&mut *revocation)
     .await
     .unwrap();
-    let result = create_catalog_task(
-        &pool,
-        ids.org_id,
-        ids.user_id,
-        "Unknown-policy task",
-        true,
-        false,
-        &TaskRateEdit::Preserve {},
+    let db = pool.clone();
+    let (org_id, actor_id) = (ids.org_id, ids.user_id);
+    let request = tokio::spawn(async move {
+        create_catalog_task(
+            &db,
+            org_id,
+            actor_id,
+            "Blocked task",
+            true,
+            false,
+            &TaskRateEdit::Preserve {},
+        )
+        .await
+        .map(|_| ())
+    });
+    wait_for_blocked(&pool, pid).await;
+    sqlx::query!(
+        "SELECT id FROM users WHERE id=$1 FOR UPDATE NOWAIT",
+        actor_id
     )
-    .await;
-    assert!(result.is_err());
-    assert_eq!(
-        sqlx::query_scalar!("SELECT COUNT(*) FROM tasks WHERE org_id=$1", ids.org_id)
-            .fetch_one(&pool)
-            .await
-            .unwrap(),
-        Some(1),
+    .fetch_one(&mut *revocation)
+    .await
+    .expect("gate must precede actor");
+    sqlx::query!("UPDATE users SET active=false WHERE id=$1", actor_id)
+        .execute(&mut *revocation)
+        .await
+        .unwrap();
+    revocation.commit().await.unwrap();
+    let result = request.await.unwrap();
+    assert!(
+        matches!(
+            result,
+            Err(ServerFnError::ServerError {
+                code: FORBIDDEN,
+                ..
+            })
+        ),
+        "{result:?}"
     );
+    assert_eq!(task_count(&pool, ids.org_id).await, 1);
 }

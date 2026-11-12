@@ -33,21 +33,18 @@ pub(super) async fn read(
         r#"WITH visible AS MATERIALIZED (
              SELECT p.id,p.harvest_id,p.name,p.code,p.project_type::text project_type,p.active,
                     p.budget_kind::text budget_kind,
-                    CASE WHEN $9 OR $12 OR ($13 AND management.id IS NOT NULL)
+                    CASE WHEN $11 OR ($12 AND management.id IS NOT NULL)
                       THEN p.budget_amount_cents END budget_amount_cents,
-                    CASE WHEN $9 OR p.budget_kind='hours' THEN p.budget_minutes END budget_minutes,
+                    CASE WHEN p.budget_kind='hours' THEN p.budget_minutes END budget_minutes,
                     p.currency::text currency,
                     p.starts_on,p.ends_on,p.created_at,p.client_id,c.harvest_id client_harvest_id,c.name client_name
              FROM projects p JOIN clients c ON c.id=p.client_id AND c.org_id=p.org_id
-             LEFT JOIN project_read_access legacy ON legacy.org_id=p.org_id
-               AND legacy.project_id=p.id AND legacy.user_id=$2
              LEFT JOIN project_management_assignments management ON management.org_id=p.org_id
                AND management.project_id=p.id AND management.manager_id=$2
              LEFT JOIN assignments member ON member.project_id=p.id AND member.user_id=$2
              LEFT JOIN project_settings settings ON settings.org_id=p.org_id AND settings.project_id=p.id
-             WHERE p.org_id=$1 AND (CASE WHEN $9 THEN COALESCE(legacy.can_view_progress,false)
-               ELSE $10 OR ($11 AND management.id IS NOT NULL)
-                 OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility,'project_members')='project_members') END)
+             WHERE p.org_id=$1 AND ($9 OR ($10 AND management.id IS NOT NULL)
+                 OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility,'project_members')='project_members'))
                AND ($3::boolean IS NULL OR p.active=$3)
                AND ($4::uuid IS NULL OR p.client_id=$4)
                AND ($5::timestamptz IS NULL OR p.created_at >= $5)
@@ -63,7 +60,7 @@ pub(super) async fn read(
            FROM totals LEFT JOIN page p ON true ORDER BY p.name,p.id"#,
         caller.org_id, caller.user_id, filters.is_active, client_id,
         filters.updated_since as Option<DateTime<Utc>>, project_id, limit, offset,
-        access.legacy(), access.has(Permission::ProjectReadAll), access.has(Permission::ProjectReadManaged),
+        access.has(Permission::ProjectReadAll), access.has(Permission::ProjectReadManaged),
         access.has(Permission::BillableRateReadAll), access.has(Permission::BillableRateReadManaged),
     ).fetch_all(&mut *access.tx).await.map_err(internal)?;
     let total = records

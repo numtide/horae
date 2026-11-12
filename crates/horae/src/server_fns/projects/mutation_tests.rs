@@ -203,9 +203,14 @@ mod project {
             .await
             .unwrap()
             .unwrap();
-        lock_project(&mut first, ids.org_id, ids.project_id)
-            .await
-            .unwrap();
+        sqlx::query!(
+            "SELECT id FROM projects WHERE id = $1 AND org_id = $2 FOR UPDATE",
+            ids.project_id,
+            ids.org_id
+        )
+        .fetch_one(&mut *first)
+        .await
+        .unwrap();
         sqlx::query!(
             "INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode, budget_scope)
              VALUES ($1, $2, $3, $4, $5, $6)",
@@ -559,6 +564,10 @@ mod project {
             } else {
                 other.user_id
             };
+            pending.expected_requester = Some(PermissionRequester {
+                org_id,
+                user_id: actor,
+            });
             let error = save_editable_project(&pool, actor, org_id, &pending, false)
                 .await
                 .unwrap_err();

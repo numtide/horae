@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT EXISTS(SELECT 1 FROM permission_change_receipts\n             WHERE org_id=$1 AND actor_user_id=$2 AND request_id=$3)",
+  "query": "SELECT EXISTS(SELECT 1 FROM project_management_assignments\n                WHERE org_id = $1 AND project_id = $2 AND manager_id = $3) AS \"managed!\"",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "exists",
+        "name": "managed!",
         "type_info": "Bool"
       }
     ],
@@ -20,5 +20,5 @@
       null
     ]
   },
-  "hash": "ff334f4721d3c94874ebb6b57622a59d1425eec9745e5f75940df50c867d449f"
+  "hash": "a0abfb4a68209af8a70a1dcdf07e6900cb0b8b9e6416a3dd0040bf089b5dead3"
 }

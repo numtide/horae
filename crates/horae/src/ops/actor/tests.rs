@@ -66,6 +66,7 @@ async fn foreign_missing_and_inactive_people_have_no_authority(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn missing_or_invalid_state_fails_closed(pool: PgPool) {
+    // A person with no stored state has no authority.
     let unprovisioned = seed(&pool, BuiltInProfile::Administrator).await;
     clear_state(&pool, unprovisioned.user_id).await;
     let error = load(&pool, unprovisioned.org_id, unprovisioned.user_id)

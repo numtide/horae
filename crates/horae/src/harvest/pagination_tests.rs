@@ -2,7 +2,7 @@ use super::*;
 use crate::server_fns::test_seed::{seed, time_entry};
 use axum::{Extension, body::Body, http::Request};
 use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::types::{EntryState, OrgRole};
+use horae_core::types::EntryState;
 use serde_json::Value;
 use std::sync::Arc;
 use tower::ServiceExt;
@@ -359,7 +359,11 @@ async fn harvest_pagination_empty_and_out_of_range_pages_keep_the_contract(pool:
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_pagination_router_preserves_session_and_tenant_guards(pool: PgPool) {
+    use horae_core::permissions::catalog::Permission;
     let ids = seed(&pool, BuiltInProfile::Member).await;
+    // A member who may also read the client and task catalogs.
+    let catalogs = [Permission::ClientReadAll, Permission::TaskReadAll];
+    crate::ops::testing::provision(&pool, &ids, &catalogs, false).await;
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
         Uuid::now_v7(),
@@ -476,43 +480,28 @@ async fn harvest_project_progress_permissions_cover_counts_pages_and_details(poo
         page(&app, &format!("/harvest/v2/time_entries/{own_entry}")).await["project"]["id"],
         api_id(&pool, "project", ids.project_id).await
     );
-    for lead in [false, true] {
-        sqlx::query!(
-            "UPDATE assignments SET role = $2 WHERE project_id = $1 AND user_id = $3",
-            ids.project_id,
-            if lead {
-                horae_core::types::ProjectRole::Lead
-            } else {
-                horae_core::types::ProjectRole::Freelancer
-            } as horae_core::types::ProjectRole,
-            ids.user_id
+    // A member reads an assigned project whose report is shared with members.
+    sqlx::query!(
+        "UPDATE project_settings SET report_visibility = 'project_members' WHERE project_id = $1",
+        ids.project_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    walk(&pool, &app, "projects", "is_active=true", &[ids.project_id]).await;
+    let body = page(&app, &detail).await;
+    assert_eq!(body["budget"], 10.0);
+    assert!(body.get("rate_cents").is_none());
+    assert!(body.get("admin_notes").is_none());
+    assert_eq!(
+        request(
+            &app,
+            &format!("/harvest/v2/projects/{}", foreign.project_id)
         )
-        .execute(&pool)
         .await
-        .unwrap();
-        sqlx::query!(
-            "UPDATE project_settings SET report_visibility = $2 WHERE project_id = $1",
-            ids.project_id,
-            if lead { "managers" } else { "project_members" }
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        walk(&pool, &app, "projects", "is_active=true", &[ids.project_id]).await;
-        let body = page(&app, &detail).await;
-        assert_eq!(body["budget"], 10.0);
-        assert!(body.get("rate_cents").is_none());
-        assert!(body.get("admin_notes").is_none());
-        assert_eq!(
-            request(
-                &app,
-                &format!("/harvest/v2/projects/{}", foreign.project_id)
-            )
-            .await
-            .0,
-            StatusCode::NOT_FOUND
-        );
-    }
+        .0,
+        StatusCode::NOT_FOUND
+    );
     sqlx::query!(
         "DELETE FROM assignments WHERE project_id = $1 AND user_id = $2",
         ids.project_id,
@@ -522,15 +511,17 @@ async fn harvest_project_progress_permissions_cover_counts_pages_and_details(poo
     .await
     .unwrap();
     assert_eq!(request(&app, &detail).await.0, StatusCode::NOT_FOUND);
-    for role in [OrgRole::Manager, OrgRole::Admin] {
-        sqlx::query!(
-            "UPDATE users SET org_role = $2 WHERE id = $1",
-            ids.user_id,
-            role as OrgRole
+    for profile in [
+        BuiltInProfile::ExecutiveManager,
+        BuiltInProfile::Administrator,
+    ] {
+        crate::ops::testing::provision(
+            &pool,
+            &ids,
+            profile.direct_permissions(),
+            profile == BuiltInProfile::Administrator,
         )
-        .execute(&pool)
-        .await
-        .unwrap();
+        .await;
         walk(
             &pool,
             &app,
@@ -554,7 +545,7 @@ async fn harvest_project_progress_permissions_cover_counts_pages_and_details(poo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn harvest_task_access_filters_counts_and_preserves_rate_free_history(pool: PgPool) {
+async fn harvest_task_access_follows_the_task_catalog_grant(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
     let other = seed(&pool, BuiltInProfile::Administrator).await;
     let hidden = Uuid::now_v7();
@@ -573,14 +564,7 @@ async fn harvest_task_access_filters_counts_and_preserves_rate_free_history(pool
     .execute(&pool)
     .await
     .unwrap();
-    let app = signed_in(&pool, ids.user_id).await;
-    assert_eq!(page(&app, "/harvest/v2/tasks").await["total_entries"], 0);
-    assert_eq!(
-        request(&app, &format!("/harvest/v2/tasks/{}", ids.task_id))
-            .await
-            .0,
-        StatusCode::NOT_FOUND
-    );
+    // Membership and own history give a Member no catalog access.
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
         Uuid::now_v7(),
@@ -598,49 +582,32 @@ async fn harvest_task_access_filters_counts_and_preserves_rate_free_history(pool
     .execute(&pool)
     .await
     .unwrap();
-    walk(&pool, &app, "tasks", "is_active=true", &[ids.task_id]).await;
-    for body in [
-        page(&app, &format!("/harvest/v2/tasks/{}", ids.task_id)).await,
-        page(&app, "/harvest/v2/tasks").await["tasks"][0].clone(),
-    ] {
-        assert!(
-            body.get("default_hourly_rate").is_none(),
-            "member received task rate: {body}"
-        );
-    }
     time_entry(&pool, &ids, EntryState::Open).await;
-    sqlx::query!(
-        "DELETE FROM assignments WHERE project_id = $1 AND user_id = $2",
-        ids.project_id,
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query!("UPDATE tasks SET active = false WHERE id = $1", ids.task_id)
-        .execute(&pool)
-        .await
-        .unwrap();
+    let app = signed_in(&pool, ids.user_id).await;
+    assert_eq!(page(&app, "/harvest/v2/tasks").await["total_entries"], 0);
     assert_eq!(
-        page(&app, "/harvest/v2/tasks?is_active=true").await["total_entries"],
-        0
-    );
-    walk(&pool, &app, "tasks", "is_active=false", &[ids.task_id]).await;
-    assert_eq!(
-        request(&app, &format!("/harvest/v2/tasks/{}", other.task_id))
+        request(&app, &format!("/harvest/v2/tasks/{}", ids.task_id))
             .await
             .0,
         StatusCode::NOT_FOUND
     );
-    for role in [OrgRole::Manager, OrgRole::Admin] {
-        sqlx::query!(
-            "UPDATE users SET org_role = $2 WHERE id = $1",
-            ids.user_id,
-            role as OrgRole
+    for profile in [
+        BuiltInProfile::ExecutiveManager,
+        BuiltInProfile::Administrator,
+    ] {
+        crate::ops::testing::provision(
+            &pool,
+            &ids,
+            profile.direct_permissions(),
+            profile == BuiltInProfile::Administrator,
         )
-        .execute(&pool)
-        .await
-        .unwrap();
+        .await;
+        assert_eq!(
+            request(&app, &format!("/harvest/v2/tasks/{}", other.task_id))
+                .await
+                .0,
+            StatusCode::NOT_FOUND
+        );
         walk(&pool, &app, "tasks", "", &[ids.task_id, hidden]).await;
         assert_eq!(
             page(&app, &format!("/harvest/v2/tasks/{}", ids.task_id)).await["default_hourly_rate"],

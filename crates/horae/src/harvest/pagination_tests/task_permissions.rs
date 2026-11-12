@@ -86,25 +86,6 @@ async fn task_api_filters_archived_tasks_and_preserves_total_past_last_page(pool
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn task_api_rejects_unknown_policy_before_empty_or_direct_results(pool: PgPool) {
-    let (ids, app) = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 99 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    for uri in [
-        "/harvest/v2/tasks?is_active=false".to_owned(),
-        format!("/harvest/v2/tasks/{}", ids.task_id),
-    ] {
-        assert_eq!(request(&app, &uri).await.0, StatusCode::FORBIDDEN);
-    }
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-#[serial_test::serial]
 async fn task_api_rechecks_catalog_and_financial_grants_after_authority_wait(pool: PgPool) {
     for detail in [false, true] {
         for financial_only in [false, true] {

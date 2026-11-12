@@ -1,10 +1,12 @@
+pub(super) use crate::ops::testing::become_profile;
 use crate::server_fns::test_seed::seed;
 use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::{OrganizationLock, lock_creation_actor, lock_creation_client, validate_draft_form};
+use super::{
+    OrganizationLock, PrivateFields, lock_creation_actor, lock_creation_client, validate_draft_form,
+};
 use crate::models::project_creation::{ProjectForm, ProjectMemberInput};
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -52,13 +54,14 @@ async fn selected_catalog_is_scoped_deduplicated_and_redacts_manager_costs(pool:
     );
     assert_eq!(selected.people[0].cost_rate_cents, Some(6200));
 
-    sqlx::query!(
-        "UPDATE users SET org_role = 'manager' WHERE id = $1",
-        owner.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    // An Executive Manager reads cost rates; a Project Manager does not.
+    become_profile(&pool, &owner, BuiltInProfile::ExecutiveManager).await;
+    let selected =
+        super::load_selected_catalog(&pool, owner.user_id, owner.org_id, &task_ids, &user_ids)
+            .await
+            .unwrap();
+    assert_eq!(selected.people[0].cost_rate_cents, Some(6200));
+    become_profile(&pool, &owner, BuiltInProfile::ProjectManager).await;
     let selected =
         super::load_selected_catalog(&pool, owner.user_id, owner.org_id, &task_ids, &user_ids)
             .await
@@ -82,13 +85,7 @@ async fn selected_catalog_is_scoped_deduplicated_and_redacts_manager_costs(pool:
         .unwrap();
     assert!(selected.tasks.is_empty());
     assert!(selected.people.is_empty());
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        owner.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    become_profile(&pool, &owner, BuiltInProfile::Member).await;
     assert!(
         super::load_selected_catalog(&pool, owner.user_id, owner.org_id, &[], &[])
             .await
@@ -101,7 +98,7 @@ async fn selected_catalog_bounds_requests_and_excludes_inactive_people(pool: PgP
     let owner = seed(&pool, BuiltInProfile::Administrator).await;
     let person_id = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO users (id,org_id,email,name,org_role,active) VALUES ($1,$2,$3,'Inactive teammate','member',false)",
+        "INSERT INTO users (id,org_id,email,name,active) VALUES ($1,$2,$3,'Inactive teammate',false)",
         person_id, owner.org_id, format!("{person_id}@example.test"),
     ).execute(&pool).await.unwrap();
     let selected =
@@ -155,13 +152,7 @@ async fn selected_client_lookup_is_scoped_and_keeps_archived_identity(pool: PgPo
         .unwrap();
     assert!(!archived.active);
     assert_eq!(archived.id, owner.client_id);
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        owner.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    become_profile(&pool, &owner, BuiltInProfile::Member).await;
     assert!(
         super::load_selected_client(&pool, owner.user_id, owner.org_id, owner.client_id)
             .await
@@ -213,7 +204,11 @@ async fn missing_draft_responses_do_not_disclose_foreign_ownership(pool: PgPool)
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_dialog_validates_details_and_persists_an_explicit_zero_rate(pool: PgPool) {
     use crate::ops::testing::{seed_profile, set_grants};
-    let ids = seed_profile(&pool, BuiltInProfile::Administrator).await;
+    let ids = seed_profile(
+        &pool,
+        horae_core::permissions::catalog::BuiltInProfile::Administrator,
+    )
+    .await;
     let client =
         super::create_client_record(&pool, ids.user_id, ids.org_id, "  New client  ", "USD", "0")
             .await
@@ -291,24 +286,32 @@ async fn creation_options_are_scoped_bounded_and_redact_manager_costs(pool: PgPo
     assert_eq!(options.people.len(), 1);
     assert_eq!(options.people[0].cost_rate_cents, Some(6200));
     assert_eq!(options.suggested_code.as_deref(), Some("0010"));
-    sqlx::query!(
-        "UPDATE users SET org_role = 'manager' WHERE id = $1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let options = super::load_creation_options(
-        &pool,
-        ids.user_id,
-        ids.org_id,
-        &CreationSearch::default(),
-        false,
-    )
-    .await
-    .unwrap();
-    assert!(!options.can_edit_private_settings);
-    assert!(options.people[0].cost_rate_cents.is_none());
+    assert!(
+        options.can_edit_cost_rates
+            && options.can_edit_private_notes
+            && options.can_edit_billable_settings
+    );
+    // Private notes follow `ProjectWriteAll`, cost rates `CostRateWriteAll`
+    // and billable rates `BillableRateWriteAll`, which only Administrator has.
+    for (profile, notes, costs) in [
+        (BuiltInProfile::ExecutiveManager, true, Some(6200)),
+        (BuiltInProfile::ProjectManager, false, None),
+    ] {
+        become_profile(&pool, &ids, profile).await;
+        let options = super::load_creation_options(
+            &pool,
+            ids.user_id,
+            ids.org_id,
+            &CreationSearch::default(),
+            false,
+        )
+        .await
+        .unwrap();
+        assert!(!options.can_edit_cost_rates, "{profile:?}");
+        assert!(!options.can_edit_billable_settings, "{profile:?}");
+        assert_eq!(options.can_edit_private_notes, notes, "{profile:?}");
+        assert_eq!(options.people[0].cost_rate_cents, costs, "{profile:?}");
+    }
     for _ in 0..51 {
         sqlx::query!(
             "INSERT INTO clients (id,org_id,name,currency) VALUES ($1,$2,'Searchable','EUR')",
@@ -424,6 +427,16 @@ async fn finalization_persists_task_access_and_project_only_financial_overrides(
     let project = super::finalize_draft_record(&pool, ids.user_id, ids.org_id, id, 1, &form, false)
         .await
         .unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT manager_id FROM project_management_assignments WHERE project_id = $1",
+            project
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap(),
+        [ids.user_id]
+    );
     let task = sqlx::query!("SELECT p.rate_cents, s.restricted, s.budget_minutes FROM project_tasks p JOIN project_task_settings s USING(project_id,task_id) WHERE p.project_id = $1", project).fetch_one(&pool).await.unwrap();
     assert_eq!(
         (task.rate_cents, task.restricted, task.budget_minutes),
@@ -544,20 +557,15 @@ async fn finalization_rechecks_client_role_revision_and_rate_currency(pool: PgPo
     .execute(&pool)
     .await
     .unwrap();
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    become_profile(&pool, &ids, BuiltInProfile::Member).await;
     assert!(
         super::finalize_draft_record(&pool, ids.user_id, ids.org_id, id, 1, &form, false)
             .await
             .is_err()
     );
+    become_profile(&pool, &ids, BuiltInProfile::Administrator).await;
     sqlx::query!(
-        "UPDATE users SET org_role = 'admin', billable_rate_cents = 9500 WHERE id = $1",
+        "UPDATE users SET billable_rate_cents = 9500 WHERE id = $1",
         ids.user_id
     )
     .execute(&pool)
@@ -906,7 +914,7 @@ async fn draft_save_retries_do_not_overwrite_a_newer_revision(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn draft_ownership_discard_and_role_changes_are_enforced(pool: PgPool) {
+async fn draft_ownership_discard_and_permission_changes_are_enforced(pool: PgPool) {
     let owner = seed(&pool, BuiltInProfile::Administrator).await;
     let other = seed(&pool, BuiltInProfile::Administrator).await;
     let id = Uuid::now_v7();
@@ -947,13 +955,8 @@ async fn draft_ownership_discard_and_role_changes_are_enforced(pool: PgPool) {
             .await
             .is_err()
     );
-    sqlx::query!(
-        "UPDATE users SET org_role = 'manager' WHERE id = $1",
-        owner.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    // The creator keeps project creation but loses both private-field grants.
+    become_profile(&pool, &owner, BuiltInProfile::ProjectManager).await;
     let draft = super::load_draft_record(&pool, owner.user_id, owner.org_id)
         .await
         .unwrap()
@@ -1066,29 +1069,35 @@ async fn simultaneous_draft_updates_have_one_winner(pool: PgPool) {
 
 #[test]
 fn draft_validation_preserves_incomplete_input_but_bounds_its_size() {
+    let all = PrivateFields {
+        read_costs: true,
+        write_costs: true,
+        write_notes: true,
+        write_billable: true,
+    };
     let form = ProjectForm {
         starts_on: "2026-".into(),
         ..Default::default()
     };
     assert_eq!(
-        validate_draft_form(&form, true).unwrap()["starts_on"],
+        validate_draft_form(&form, all).unwrap()["starts_on"],
         "2026-"
     );
     let oversized = ProjectForm {
         name: "x".repeat(256 * 1024),
         ..Default::default()
     };
-    assert!(validate_draft_form(&oversized, true).is_err());
+    assert!(validate_draft_form(&oversized, all).is_err());
     let too_many_tags = ProjectForm {
         tags: vec!["tag".into(); 51],
         ..Default::default()
     };
-    assert!(validate_draft_form(&too_many_tags, true).is_err());
+    assert!(validate_draft_form(&too_many_tags, all).is_err());
     let null_character = ProjectForm {
         admin_notes: "before\0after".into(),
         ..Default::default()
     };
-    assert!(validate_draft_form(&null_character, true).is_err());
+    assert!(validate_draft_form(&null_character, all).is_err());
 }
 
 #[test]
@@ -1097,8 +1106,23 @@ fn managers_cannot_store_administrator_notes_or_costs_in_a_draft() {
         admin_notes: "Private".into(),
         ..Default::default()
     };
-    assert!(validate_draft_form(&notes, false).is_err());
-    assert!(validate_draft_form(&notes, true).is_ok());
+    let none = PrivateFields {
+        read_costs: true,
+        write_costs: false,
+        write_notes: false,
+        write_billable: false,
+    };
+    let notes_only = PrivateFields {
+        write_notes: true,
+        ..none
+    };
+    let costs_only = PrivateFields {
+        write_costs: true,
+        ..none
+    };
+    assert!(validate_draft_form(&notes, none).is_err());
+    assert!(validate_draft_form(&notes, costs_only).is_err());
+    assert!(validate_draft_form(&notes, notes_only).is_ok());
     let costs = ProjectForm {
         team: vec![ProjectMemberInput {
             user_id: Uuid::now_v7(),
@@ -1109,8 +1133,182 @@ fn managers_cannot_store_administrator_notes_or_costs_in_a_draft() {
         }],
         ..Default::default()
     };
-    assert!(validate_draft_form(&costs, false).is_err());
-    assert!(validate_draft_form(&costs, true).is_ok());
+    assert!(validate_draft_form(&costs, none).is_err());
+    assert!(validate_draft_form(&costs, notes_only).is_err());
+    assert!(validate_draft_form(&costs, costs_only).is_ok());
+}
+
+#[test]
+fn billable_settings_in_a_draft_need_the_billable_rate_grant() {
+    use crate::models::project_creation::{
+        InvoiceDefaultsInput, ProjectTaskInput, TaskAccess, TaskSource,
+    };
+    use horae_core::project::BudgetMode;
+    use horae_core::types::ProjectType;
+    let without = PrivateFields {
+        read_costs: false,
+        write_costs: false,
+        write_notes: false,
+        write_billable: false,
+    };
+    let with = PrivateFields {
+        write_billable: true,
+        ..without
+    };
+    let blank_member = ProjectMemberInput {
+        user_id: Uuid::now_v7(),
+        manager: false,
+        billable_rate: String::new(),
+        cost_rate: String::new(),
+        budget: String::new(),
+    };
+    let blank_task = ProjectTaskInput {
+        id: Uuid::now_v7(),
+        source: TaskSource::New {
+            name: "Design".into(),
+        },
+        billable: true,
+        rate: String::new(),
+        budget: String::new(),
+        access: TaskAccess::Everyone,
+    };
+    let blank = ProjectForm {
+        team: vec![blank_member.clone()],
+        tasks: vec![blank_task.clone()],
+        ..Default::default()
+    };
+    // Blank rates inherit, so creating without the grant stays possible.
+    assert!(validate_draft_form(&blank, without).is_ok());
+    let project_rate = ProjectForm {
+        project_rate: "0".into(),
+        ..blank.clone()
+    };
+    let person_rate = ProjectForm {
+        team: vec![ProjectMemberInput {
+            billable_rate: "80".into(),
+            ..blank_member
+        }],
+        ..blank.clone()
+    };
+    let task_rate = ProjectForm {
+        tasks: vec![ProjectTaskInput {
+            rate: "95".into(),
+            ..blank_task.clone()
+        }],
+        ..blank.clone()
+    };
+    let fixed_fee = ProjectForm {
+        project_type: ProjectType::FixedFee,
+        fee_amount: "1000".into(),
+        ..blank.clone()
+    };
+    let money_budget = ProjectForm {
+        budget_mode: BudgetMode::TotalFees,
+        budget_value: "5000".into(),
+        ..blank.clone()
+    };
+    let task_fee_budget = ProjectForm {
+        budget_mode: BudgetMode::FeesPerTask,
+        tasks: vec![ProjectTaskInput {
+            budget: "300".into(),
+            ..blank_task
+        }],
+        ..blank.clone()
+    };
+    let invoice_defaults = ProjectForm {
+        invoice_defaults: InvoiceDefaultsInput {
+            po_number: "PO-1".into(),
+            ..Default::default()
+        },
+        ..blank.clone()
+    };
+    // An hour budget and a fee left behind by a type switch are not billable.
+    let hours_budget = ProjectForm {
+        budget_mode: BudgetMode::TotalHours,
+        budget_value: "40".into(),
+        fee_amount: "1000".into(),
+        ..blank
+    };
+    assert!(validate_draft_form(&hours_budget, without).is_ok());
+    for form in [
+        project_rate,
+        person_rate,
+        task_rate,
+        fixed_fee,
+        money_budget,
+        task_fee_budget,
+        invoice_defaults,
+    ] {
+        assert!(matches!(
+            validate_draft_form(&form, without),
+            Err(super::ServerFnError::ServerError {
+                code: super::FORBIDDEN,
+                ..
+            })
+        ));
+        assert!(validate_draft_form(&form, with).is_ok());
+        let mut pruned = form.clone();
+        without.prune(&mut pruned);
+        assert!(validate_draft_form(&pruned, without).is_ok());
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn creation_refuses_billable_rates_without_the_grant_and_prunes_old_drafts(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let id = Uuid::now_v7();
+    let form = ProjectForm {
+        client_id: Some(ids.client_id),
+        name: "Rates".into(),
+        team: vec![ProjectMemberInput {
+            user_id: ids.user_id,
+            manager: false,
+            billable_rate: "80".into(),
+            cost_rate: String::new(),
+            budget: String::new(),
+        }],
+        ..Default::default()
+    };
+    super::save_draft_record(&pool, ids.user_id, ids.org_id, id, 0, &form)
+        .await
+        .unwrap();
+    // Executive Manager creates projects but has no `BillableRateWriteAll`.
+    become_profile(&pool, &ids, BuiltInProfile::ExecutiveManager).await;
+    let draft = super::load_draft_record(&pool, ids.user_id, ids.org_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(draft.form.team[0].billable_rate.is_empty());
+    for result in [
+        super::save_draft_record(&pool, ids.user_id, ids.org_id, id, 1, &form)
+            .await
+            .map(|_| ()),
+        super::finalize_draft_record(&pool, ids.user_id, ids.org_id, id, 1, &form, false)
+            .await
+            .map(|_| ()),
+    ] {
+        assert!(matches!(
+            result,
+            Err(super::ServerFnError::ServerError {
+                code: super::FORBIDDEN,
+                ..
+            })
+        ));
+    }
+    let project =
+        super::finalize_draft_record(&pool, ids.user_id, ids.org_id, id, 1, &draft.form, false)
+            .await
+            .unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT rate_cents FROM assignments WHERE project_id = $1",
+            project
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        None
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -1118,7 +1316,7 @@ async fn creation_actor_is_revalidated_inside_the_transaction(pool: PgPool) {
     let admin = seed(&pool, BuiltInProfile::Administrator).await;
     let member = seed(&pool, BuiltInProfile::Member).await;
     let mut tx = pool.begin().await.unwrap();
-    assert_eq!(
+    assert!(
         lock_creation_actor(
             &mut tx,
             admin.user_id,
@@ -1126,8 +1324,8 @@ async fn creation_actor_is_revalidated_inside_the_transaction(pool: PgPool) {
             OrganizationLock::Shared
         )
         .await
-        .unwrap(),
-        OrgRole::Admin
+        .unwrap()
+        .administrator()
     );
     assert!(
         lock_creation_actor(

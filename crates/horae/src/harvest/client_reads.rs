@@ -40,7 +40,7 @@ pub(super) async fn read(
         filters.is_active,
         filters.updated_since as Option<DateTime<Utc>>,
         client_id,
-        access.legacy() || access.has(Permission::ClientReadAll),
+        access.has(Permission::ClientReadAll),
         limit,
         offset,
     )

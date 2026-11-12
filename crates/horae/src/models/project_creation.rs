@@ -359,7 +359,12 @@ pub struct CreationPerson {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreationOptions {
     pub organization_currency: String,
-    pub can_edit_private_settings: bool,
+    /// Team members' cost rates.
+    pub can_edit_cost_rates: bool,
+    /// The project's private notes.
+    pub can_edit_private_notes: bool,
+    /// Billable rates, fixed fees, budgets in money and invoice defaults.
+    pub can_edit_billable_settings: bool,
     pub email_available: bool,
     pub clients: Vec<CreationClient>,
     pub tasks: Vec<CreationTask>,

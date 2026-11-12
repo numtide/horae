@@ -312,44 +312,31 @@ async fn status_writes(
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn status_writes_recheck_current_actor_role_and_policy(pool: PgPool) {
-    for change in [
-        "member",
-        "inactive",
-        "policy one",
-        "unknown policy",
-        "foreign actor",
-    ] {
+async fn status_writes_recheck_current_actor_grants(pool: PgPool) {
+    use horae_core::permissions::catalog::Permission::{ProjectReadAll, ProjectWriteManaged};
+    for change in ["member", "reader", "unmanaged", "inactive", "foreign actor"] {
         let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let foreign = seed(&pool, BuiltInProfile::Administrator).await;
         let mut actor = ids.user_id;
+        let grants: &[_] = match change {
+            "member" => &[],
+            "reader" => &[ProjectReadAll],
+            // Managed-project writing, on a project nobody manages.
+            "unmanaged" => &[ProjectReadAll, ProjectWriteManaged],
+            _ => BuiltInProfile::ExecutiveManager.direct_permissions(),
+        };
+        crate::ops::testing::set_grants(&mut pool.acquire().await.unwrap(), &ids, grants)
+            .await
+            .unwrap();
         match change {
-            "member" => {
-                sqlx::query!(
-                    "UPDATE users SET org_role = 'member' WHERE id = $1",
-                    ids.user_id
-                )
-                .execute(&pool)
-                .await
-                .unwrap();
-            }
             "inactive" => {
                 sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
                     .execute(&pool)
                     .await
                     .unwrap();
             }
-            "policy one" | "unknown policy" => {
-                sqlx::query!(
-                    "UPDATE organizations SET permission_policy_version = $2 WHERE id = $1",
-                    ids.org_id,
-                    if change == "policy one" { 1 } else { 2 },
-                )
-                .execute(&pool)
-                .await
-                .unwrap();
-            }
-            _ => actor = foreign.user_id,
+            "foreign actor" => actor = foreign.user_id,
+            _ => {}
         }
         let before = snapshot(&pool, ids.org_id).await;
         for result in status_writes(&pool, &ids, actor).await {
@@ -373,7 +360,7 @@ async fn status_writes_recheck_current_actor_role_and_policy(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn status_write_waits_for_a_policy_change_and_then_fails_closed(pool: PgPool) {
+async fn status_write_waits_for_a_grants_change_and_then_fails_closed(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let (org_id, user_id, project_id) = (ids.org_id, ids.user_id, ids.project_id);
     let mut change = pool.begin().await.unwrap();
@@ -385,14 +372,9 @@ async fn status_write_waits_for_a_policy_change_and_then_fails_closed(pool: PgPo
     lock_organization(&mut change, org_id, OrganizationLock::AccessChange)
         .await
         .unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = $2 WHERE id = $1",
-        org_id,
-        1,
-    )
-    .execute(&mut *change)
-    .await
-    .unwrap();
+    crate::ops::testing::set_grants(&mut change, &ids, &[])
+        .await
+        .unwrap();
     let run_pool = pool.clone();
     let write = tokio::spawn(async move {
         set_project_active_record(&run_pool, org_id, user_id, project_id, false)
@@ -421,6 +403,52 @@ async fn status_write_waits_for_a_policy_change_and_then_fails_closed(pool: PgPo
         .unwrap();
     assert!(
         active,
-        "A policy change committed while waiting must prevent the write"
+        "A grants change committed while waiting must prevent the write"
     );
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn managed_project_writer_changes_only_the_projects_they_manage(pool: PgPool) {
+    use horae_core::permissions::catalog::Permission::{ProjectReadManaged, ProjectWriteManaged};
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    crate::ops::testing::provision(
+        &pool,
+        &ids,
+        &[ProjectReadManaged, ProjectWriteManaged],
+        false,
+    )
+    .await;
+    let other = extra_project(&pool, &ids).await;
+    sqlx::query!(
+        "INSERT INTO project_management_assignments (id, org_id, project_id, manager_id)
+         VALUES ($1, $2, $3, $4)",
+        Uuid::now_v7(),
+        ids.org_id,
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (project, transition) =
+        set_project_active_record(&pool, ids.org_id, ids.user_id, ids.project_id, false)
+            .await
+            .unwrap();
+    assert!(!project.active);
+    assert_eq!(
+        transition,
+        Some(crate::plugin::event::ActiveTransition::Deactivated)
+    );
+    let mut ordered = [ids.project_id, other];
+    ordered.sort_unstable();
+    let before = snapshot(&pool, ids.org_id).await;
+    // One unmanaged project refuses the whole batch.
+    assert!(matches!(
+        set_projects_active_records(&pool, ids.org_id, ids.user_id, &ordered, true).await,
+        Err(ServerFnError::ServerError {
+            code: FORBIDDEN,
+            ..
+        })
+    ));
+    assert_eq!(snapshot(&pool, ids.org_id).await, before);
 }
