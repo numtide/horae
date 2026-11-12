@@ -46,8 +46,8 @@ pub(super) fn database_error(error: sqlx::Error) -> StatusCode {
     }
 }
 
-/// The person's stored grants. Missing or unreadable state is a server fault,
-/// not a refusal: provisioning gives every person a state.
+/// The person's stored grants. Missing or invalid state is refused, as
+/// `ops::Actor::load` refuses it on screen; only storage faults are 5xx.
 async fn load_grants(
     connection: &mut PgConnection,
     org_id: Uuid,
@@ -58,9 +58,12 @@ async fn load_grants(
         .await
         .map_err(|error| match error {
             PermissionStorageError::Database(error) => database_error(error),
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
+            error => {
+                tracing::error!(%error, "Invalid stored permission state");
+                StatusCode::FORBIDDEN
+            }
         })?
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::FORBIDDEN)?
         .grants)
 }
 
