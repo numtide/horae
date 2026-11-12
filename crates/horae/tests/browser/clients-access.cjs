@@ -2,6 +2,7 @@
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
+const { setAsideSeededStates } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 const target = new URL(base);
 const database = new URL(process.env.DATABASE_URL);
@@ -28,7 +29,7 @@ const setAccess = (actorId, role, grants) => sql(`UPDATE users SET org_role = '$
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
   const context = await browser.newContext();
   const page = await context.newPage();
-  let actor;
+  let actor, restoreSeededStates;
   const endpoints = new Map(), pending = new Set(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => {
@@ -64,6 +65,7 @@ const setAccess = (actorId, role, grants) => sql(`UPDATE users SET org_role = '$
     assert.equal(actor.org_role, 'admin');
     assert.deepEqual(Object.keys(actor).sort(), ['email', 'id', 'name', 'org_id', 'org_role', 'timezone', 'utc_offset_seconds', 'workspace_timezone']);
     assert.equal(sql(`SELECT active FROM users WHERE id='${actor.id}' AND org_id='${actor.org_id}'`), 't');
+    restoreSeededStates = setAsideSeededStates(actor.org_id);
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE user_id='${actor.id}'`), '0');
     sql(`INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
       VALUES ('${state}','${actor.org_id}','${actor.id}',1,${grantsSql(billing)},false,'individual')`);
@@ -189,5 +191,6 @@ const setAccess = (actorId, role, grants) => sql(`UPDATE users SET org_role = '$
     await browser.close();
     if (actor) sql(`UPDATE users SET org_role = '${actor.org_role}', active = true WHERE id = '${actor.id}';
       DELETE FROM person_permission_states WHERE id = '${state}'`);
+    restoreSeededStates?.();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });
