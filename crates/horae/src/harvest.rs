@@ -97,6 +97,8 @@ async fn begin_read(
     let read = ops::begin_read(db, Caller::session(caller.org_id, caller.user_id))
         .await
         .map_err(|error| match error {
+            // `Actor::load` refuses only a missing or invalid permission state.
+            // Revisit this text if `ops::begin_read` gains other refusals.
             OpError::Forbidden(_) => {
                 forbidden(&format!("{subject} permission state is unavailable"))
             }
@@ -205,7 +207,7 @@ async fn users_me(user: AuthUser, State(db): State<PgPool>) -> ApiResult<Harvest
     .fetch_one(&mut *access.read.tx)
     .await
     .map_err(internal)?;
-    access.read.tx.commit().await.map_err(internal)?;
+    access.read.finish(Ok(())).await.map_err(internal)?;
 
     Ok(Json(user_row_to_harvest(&row, access.rates)))
 }
@@ -483,7 +485,7 @@ async fn time_entries_page(
     .fetch_all(&mut *read.tx)
     .await
     .map_err(internal)?;
-    read.tx.commit().await.map_err(internal)?;
+    read.finish(Ok(())).await.map_err(internal)?;
 
     let entries: Vec<HarvestTimeEntry> = rows
         .iter()
@@ -583,7 +585,7 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
     .await
     .map_err(internal)?
     .ok_or_else(not_found)?;
-    read.tx.commit().await.map_err(internal)?;
+    read.finish(Ok(())).await.map_err(internal)?;
 
     Ok(Json(time_entry_row_to_harvest(&row, round_min, round_dir)))
 }
@@ -940,7 +942,7 @@ async fn users_page(
     .fetch_all(&mut *access.read.tx)
     .await
     .map_err(internal)?;
-    access.read.tx.commit().await.map_err(internal)?;
+    access.read.finish(Ok(())).await.map_err(internal)?;
 
     let items: Vec<HarvestUser> = rows
         .iter()

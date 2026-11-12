@@ -90,6 +90,6 @@ pub(super) async fn read(
                 .ok_or_else(|| internal("Missing client name"))?,
         });
     }
-    read.tx.commit().await.map_err(internal)?;
+    read.finish(Ok(())).await.map_err(internal)?;
     Ok((total, rows))
 }
