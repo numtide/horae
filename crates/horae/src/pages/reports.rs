@@ -401,7 +401,7 @@ fn LegacyTimeReport(filters: LegacyFilters, group_by: Signal<String>) -> Element
                 let grand_total: i64 = rows.iter().map(|r| r.total_minutes).sum();
                 let grand_rounded: i64 = rows.iter().map(|r| r.rounded_minutes).sum();
                 let grand_billable: i64 = rows.iter().map(|r| r.billable_minutes).sum();
-                let grand_bill_amount = money_totals(rows, |r| Some(r.billable_cents), |r| &r.currency);
+                let grand_bill_amount = money_totals(rows, |r| r.billable_cents, |r| &r.currency);
                 let grand_cost_amount = money_totals(rows, |r| r.cost_cents, |r| &r.cost_currency);
                 rsx! {
                     DataTable {
@@ -423,7 +423,9 @@ fn LegacyTimeReport(filters: LegacyFilters, group_by: Signal<String>) -> Element
                                         td { class: "text-mono text-right", "{hours(row.total_minutes)}" }
                                         td { class: "text-mono text-right", "{hours(row.rounded_minutes)}" }
                                         td { class: "text-mono text-right", "{hours(row.billable_minutes)}" }
-                                        td { class: "text-mono text-right", "{money(row.billable_cents, &row.currency)}" }
+                                        td { class: "text-mono text-right",
+                                            {row.billable_cents.map(|cents| money(cents, &row.currency)).unwrap_or_else(|| "Restricted".into())}
+                                        }
                                         td { class: "text-mono text-right",
                                             {row.cost_cents.map(|cents| money(cents, &row.cost_currency)).unwrap_or_else(|| "Restricted".into())}
                                         }
@@ -531,7 +533,7 @@ mod tests {
             total_minutes: 60,
             rounded_minutes: 60,
             billable_minutes: 60,
-            billable_cents: cents,
+            billable_cents: Some(cents),
             cost_cents: Some(0),
             currency: currency.into(),
             cost_currency: "EUR".into(),
@@ -539,7 +541,7 @@ mod tests {
     }
 
     fn billable(rows: &[ReportRow]) -> Vec<String> {
-        money_totals(rows, |r| Some(r.billable_cents), |r| &r.currency)
+        money_totals(rows, |r| r.billable_cents, |r| &r.currency)
     }
 
     fn cost(rows: &[ReportRow]) -> Vec<String> {

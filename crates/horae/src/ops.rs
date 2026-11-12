@@ -23,6 +23,7 @@ use crate::plugin::{AppEvent, PluginRegistry};
 mod actor;
 pub(crate) mod clients;
 mod error;
+pub(crate) mod reports;
 
 pub(crate) use actor::{Actor, Channel};
 pub(crate) use error::OpError;

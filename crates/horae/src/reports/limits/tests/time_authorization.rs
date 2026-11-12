@@ -105,13 +105,6 @@ async fn project(pool: &PgPool, ids: &SeedIds) -> Uuid {
 
 async fn scoped(pool: &PgPool, role: BuiltInProfile, grants: &[Permission]) -> SeedIds {
     let ids = seed(pool, role).await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     let grants: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(grants)).unwrap())
             .unwrap();
@@ -139,7 +132,7 @@ async fn scoped_xlsx_member_reads_own_rows_without_financial_or_directory_access
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn scoped_xlsx_legacy_manager_role_does_not_expand_canonical_scope(pool: PgPool) {
+async fn scoped_xlsx_profile_name_does_not_expand_own_scope(pool: PgPool) {
     let ids = scoped(
         &pool,
         BuiltInProfile::ExecutiveManager,
@@ -359,8 +352,8 @@ async fn scoped_xlsx_deletion_keeps_recorded_scope_but_loss_of_person_access_den
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn scoped_xlsx_empty_files_still_validate_state_actor_and_policy_at_release(pool: PgPool) {
-    for change in ["unsupported", "missing", "inactive", "policy", "grants"] {
+async fn scoped_xlsx_empty_files_still_validate_state_and_actor_at_release(pool: PgPool) {
+    for change in ["unsupported", "missing", "inactive", "grants"] {
         let ids = scoped(
             &pool,
             BuiltInProfile::ExecutiveManager,
@@ -394,15 +387,6 @@ async fn scoped_xlsx_empty_files_still_validate_state_actor_and_policy_at_releas
                     .await
                     .unwrap();
             }
-            "policy" => {
-                sqlx::query!(
-                    "UPDATE organizations SET permission_policy_version=0 WHERE id=$1",
-                    ids.org_id
-                )
-                .execute(&pool)
-                .await
-                .unwrap();
-            }
             "grants" => {
                 sqlx::query!(
                     "UPDATE person_permission_states SET grants=ARRAY['unknown'] WHERE user_id=$1",
@@ -414,7 +398,7 @@ async fn scoped_xlsx_empty_files_still_validate_state_actor_and_policy_at_releas
             }
             _ => unreachable!(),
         }
-        let expected = if matches!(change, "inactive" | "policy") {
+        let expected = if change == "inactive" {
             StatusCode::FORBIDDEN
         } else {
             StatusCode::INTERNAL_SERVER_ERROR
@@ -424,28 +408,6 @@ async fn scoped_xlsx_empty_files_still_validate_state_actor_and_policy_at_releas
         let second = ExportPermit::acquire().unwrap();
         drop((first, second));
     }
-    let ids = scoped(
-        &pool,
-        BuiltInProfile::ExecutiveManager,
-        &[Permission::TimeReadAll],
-    )
-    .await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=0 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let export = capture(&pool, &ids).await.unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    assert_eq!(render(&pool, export).await, Err(StatusCode::FORBIDDEN));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

@@ -44,18 +44,20 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .status(),
         StatusCode::UNAUTHORIZED
     );
+    // Report access answers from the stored grants: the Member's own-time
+    // grant admits it.
     assert_eq!(
         api.call(ACCESS, access_request.clone(), Some(&cookie), false)
             .await
             .status(),
-        StatusCode::FORBIDDEN
+        StatusCode::OK
     );
     let other_cookie = api.cookie(other.user_id).await;
     assert_eq!(
         api.json(ACCESS, access_request.clone(), &other_cookie)
             .await,
         json!({
-            "requester":{"org_id":other.org_id,"user_id":other.user_id}, "policy":"legacy"
+            "requester":{"org_id":other.org_id,"user_id":other.user_id}, "policy":"scoped"
         })
     );
     let binding = json!({"expected_requester":{"org_id":ids.org_id,"user_id":ids.user_id}});
@@ -72,12 +74,9 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     );
     assert_eq!(
         download(api, Some(&cookie), "csv", "").await.status(),
-        StatusCode::FORBIDDEN
+        StatusCode::OK
     );
-    assert_eq!(
-        xlsx(api, Some(&cookie), "").await.status(),
-        StatusCode::FORBIDDEN
-    );
+    assert_eq!(xlsx(api, Some(&cookie), "").await.status(), StatusCode::OK);
     let request = json!({"query": {
         "date_from":"2026-09-01", "date_to":"2026-09-30",
         "client_ids":[], "project_ids":[], "user_ids":[], "task_ids":[], "tag_ids":[],
@@ -96,6 +95,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .status(),
         StatusCode::FORBIDDEN
     );
+    // The scoped entry reader is the time domain's and still reads the policy.
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
         ids.org_id
@@ -327,8 +327,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .status(),
         StatusCode::UNAUTHORIZED
     );
-    // A previously accepted scoped screen must not become an unrestricted
-    // legacy download after a mode change, even with the same Admin session.
+    // A scoped screen's download link never becomes a legacy one.
     crate::server_fns::test_seed::clear_state(pool, other.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), other.org_id, other.user_id, &grants).execute(pool).await.unwrap();
@@ -337,63 +336,29 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         other.org_id, other.user_id
     );
     let legacy_link = scoped_link.replace("expected_policy=scoped", "expected_policy=legacy");
-    for mode in [1, 0] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
-            other.org_id,
-            mode
-        )
-        .execute(pool)
-        .await
-        .unwrap();
-        let snapshot = api
-            .json(ACCESS, json!({"expected_requester":null}), &other_cookie)
-            .await;
-        assert_eq!(
-            snapshot["policy"],
-            if mode == 1 { "scoped" } else { "legacy" }
-        );
-        for format in ["csv", "xlsx"] {
-            let matching = if mode == 1 {
-                &scoped_link
-            } else {
-                &legacy_link
-            };
-            let stale = if mode == 1 {
-                &legacy_link
-            } else {
-                &scoped_link
-            };
-            assert_eq!(
-                download(api, Some(&other_cookie), format, matching)
-                    .await
-                    .status(),
-                StatusCode::OK
-            );
-            assert_eq!(
-                download(api, Some(&other_cookie), format, stale)
-                    .await
-                    .status(),
-                StatusCode::FORBIDDEN
-            );
-            assert_eq!(
-                download(api, Some(&other_cookie), format, "")
-                    .await
-                    .status(),
-                StatusCode::OK
-            );
-            for invalid in [
-                "&expected_policy=",
-                "&expected_policy=future",
+    let snapshot = api
+        .json(ACCESS, json!({"expected_requester":null}), &other_cookie)
+        .await;
+    assert_eq!(snapshot["policy"], "scoped");
+    for format in ["csv", "xlsx"] {
+        for (link, status) in [
+            (scoped_link.as_str(), StatusCode::OK),
+            (legacy_link.as_str(), StatusCode::FORBIDDEN),
+            ("", StatusCode::OK),
+            ("&expected_policy=", StatusCode::BAD_REQUEST),
+            ("&expected_policy=future", StatusCode::BAD_REQUEST),
+            (
                 "&expected_policy=scoped&expected_policy=legacy",
-            ] {
-                assert_eq!(
-                    download(api, Some(&other_cookie), format, invalid)
-                        .await
-                        .status(),
-                    StatusCode::BAD_REQUEST
-                );
-            }
+                StatusCode::BAD_REQUEST,
+            ),
+        ] {
+            assert_eq!(
+                download(api, Some(&other_cookie), format, link)
+                    .await
+                    .status(),
+                status,
+                "{format}{link}"
+            );
         }
     }
     groups::check(pool, api).await;

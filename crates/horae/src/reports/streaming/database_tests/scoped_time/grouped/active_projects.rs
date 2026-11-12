@@ -225,7 +225,7 @@ async fn active_projects_only_csv_captures_activity_at_source_snapshot(pool: PgP
         .await
         .unwrap();
         let mut tx = pool.begin().await.unwrap();
-        let (_, policy) = Authority::time(&mut tx, ids.org_id, ids.user_id)
+        Authority::time(&mut tx, ids.org_id, ids.user_id)
             .await
             .unwrap();
         if grouped {
@@ -265,7 +265,7 @@ async fn active_projects_only_csv_captures_activity_at_source_snapshot(pool: PgP
                 .await
                 .unwrap()
                 .into_iter()
-                .filter_map(|row| row.into_entry(policy).unwrap())
+                .filter_map(|row| row.into_entry().unwrap())
                 .collect::<Vec<_>>();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].context, (ids.user_id, ids.project_id));

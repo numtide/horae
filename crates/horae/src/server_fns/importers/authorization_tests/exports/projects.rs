@@ -76,6 +76,14 @@ async fn export_after_writer(
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
     let member = user(pool, ids.org_id, OrgRole::Member).await;
+    crate::server_fns::provisioning::provision(
+        &mut pool.acquire().await.unwrap(),
+        ids.org_id,
+        member,
+        BuiltInProfile::Member,
+    )
+    .await
+    .unwrap();
     let manager_cookie = api.cookie(ids.user_id).await;
     let member_cookie = api.cookie(member).await;
     denied(download(api, PATH, None).await, StatusCode::UNAUTHORIZED).await;

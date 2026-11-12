@@ -129,9 +129,10 @@ pub(super) async fn entries(
     if query.date_from > query.date_to || query.after.is_some() {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if query
-        .expected_requester
-        .is_some_and(|expected| expected.org_id != org_id || expected.user_id != actor_id)
+    if params.expected_policy == Some(crate::models::time_report::TimeReportPolicy::Legacy)
+        || query
+            .expected_requester
+            .is_some_and(|expected| expected.org_id != org_id || expected.user_id != actor_id)
     {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -144,16 +145,7 @@ pub(super) async fn entries(
             // pool. SQLx retains its pool slot while closing it on cancellation.
             connection.close_on_drop();
             let mut tx = connection.begin().await.map_err(database_error)?;
-            let (authority, policy) = Authority::time(&mut tx, org_id, actor_id).await?;
-            if params
-                .expected_policy
-                .is_some_and(|expected| match expected {
-                    crate::models::time_report::TimeReportPolicy::Legacy => policy != 0,
-                    crate::models::time_report::TimeReportPolicy::Scoped => policy != 1,
-                })
-            {
-                return Err(StatusCode::FORBIDDEN);
-            }
+            let authority = Authority::time(&mut tx, org_id, actor_id).await?;
             cursor::declare_entries(&mut tx, org_id, actor_id, &query).await?;
             let _ = filename.send("timesheet.csv".to_owned());
             let mut output = CsvBuffer::new(&super::ENTRY_EXPORT_HEADERS)?;
@@ -164,7 +156,7 @@ pub(super) async fn entries(
                     break;
                 }
                 for row in rows {
-                    let entry = row.into_entry(policy)?;
+                    let entry = row.into_entry()?;
                     source_checked = true;
                     let Some(entry) = entry else { continue };
                     super::write_entry_csv(&mut output.writer, &entry.row)

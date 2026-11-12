@@ -30,10 +30,7 @@ pub(in crate::reports) async fn download(
             let mut connection = pool.acquire().await.map_err(database_error)?;
             connection.close_on_drop();
             let mut tx = connection.begin().await.map_err(database_error)?;
-            let (authority, policy) = Authority::time(&mut tx, org_id, actor_id).await?;
-            if policy != 1 {
-                return Err(StatusCode::FORBIDDEN);
-            }
+            let authority = Authority::time(&mut tx, org_id, actor_id).await?;
             cursor::groups::declare(&mut tx, org_id, actor_id, &query, dimension).await?;
             let _ = filename.send("time-report.csv".to_owned());
             deliver(&mut tx, &sender, &authority, dimension).await?;

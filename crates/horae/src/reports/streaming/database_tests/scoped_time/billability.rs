@@ -227,7 +227,7 @@ async fn billability_csv_uses_the_captured_source_after_entry_changes(pool: PgPo
         .time_query()
         .unwrap();
         let mut tx = pool.begin().await.unwrap();
-        let (_, policy) = Authority::time(&mut tx, ids.org_id, ids.user_id)
+        Authority::time(&mut tx, ids.org_id, ids.user_id)
             .await
             .unwrap();
         if grouped {
@@ -269,7 +269,7 @@ async fn billability_csv_uses_the_captured_source_after_entry_changes(pool: PgPo
                 .await
                 .unwrap()
                 .into_iter()
-                .filter_map(|row| row.into_entry(policy).unwrap())
+                .filter_map(|row| row.into_entry().unwrap())
                 .collect::<Vec<_>>();
             assert_eq!(rows.len(), 3);
             assert!(rows.iter().all(|row| row.row.billable));

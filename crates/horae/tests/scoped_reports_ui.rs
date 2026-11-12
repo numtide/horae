@@ -40,7 +40,7 @@ mod models {
         pub total_minutes: i64,
         pub rounded_minutes: i64,
         pub billable_minutes: i64,
-        pub billable_cents: i64,
+        pub billable_cents: Option<i64>,
         pub cost_cents: Option<i64>,
         pub currency: String,
         pub cost_currency: String,
