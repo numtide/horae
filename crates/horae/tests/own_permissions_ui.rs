@@ -31,7 +31,7 @@ mod models {
 #[path = "../src/pages/settings/own_permissions.rs"]
 mod own_permissions;
 
-type Response = Result<Option<own_permissions_model::OwnPermissions>, ServerFnError>;
+type Response = Result<own_permissions_model::OwnPermissions, ServerFnError>;
 
 #[derive(Clone, Default)]
 struct Probe {
@@ -111,15 +111,16 @@ async fn refresh_uses_a_fresh_read_hides_stale_grants_and_recovers_from_errors()
     let second = probe.request();
     click(&mut dom, refresh);
     second
-        .send(Ok(Some(own_permissions_model::OwnPermissions {
+        .send(Ok(own_permissions_model::OwnPermissions {
             catalog_version: PERMISSION_CATALOG_VERSION,
             grants: vec![Permission::TimeReadOwn],
             is_administrator: false,
+            profile: None,
             access_revision: 2,
             person_revision: 1,
             managed_person_ids: vec![],
             managed_project_ids: vec![],
-        })))
+        }))
         .unwrap();
     settle(&mut dom);
     assert!(dioxus::ssr::render(&dom).contains("View your own time"));

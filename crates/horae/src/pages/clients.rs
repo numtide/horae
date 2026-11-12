@@ -2,7 +2,6 @@ use dioxus::prelude::*;
 use std::collections::BTreeSet;
 use uuid::Uuid;
 
-use super::is_admin;
 use crate::components::badge::Badge;
 use crate::components::icons::NavIcon;
 use crate::components::menu::{Menu, MenuItem};
@@ -96,7 +95,7 @@ pub fn ClientList() -> Element {
         )?;
         Ok::<_, ServerFnError>(overview)
     });
-    let me = use_session().me;
+    let own = use_session().permissions;
     use_effect(move || {
         if clients.state()() != UseResourceState::Ready {
             return;
@@ -124,7 +123,8 @@ pub fn ClientList() -> Element {
         .flatten();
     // `can_manage` reflects `ClientWriteAll`; every write rechecks it.
     let is_manager = overview.is_some_and(|overview| overview.can_manage);
-    let can_import = is_manager && is_admin(&me);
+    // The Harvest importer is for administrators; it rechecks that itself.
+    let can_import = is_manager && super::is_administrator(&own);
     let denied = overview.is_some_and(|overview| !overview.can_read);
     let list = overview
         .filter(|overview| overview.can_read)

@@ -10,7 +10,7 @@ use dioxus::core::{AttributeValue, DynamicNode, ElementId, TemplateAttribute, Te
 use dioxus::prelude::*;
 use dioxus_html::{SerializedFormData, SerializedHtmlEventConverter, SerializedMouseData};
 use futures_util::FutureExt;
-use horae_core::types::OrgRole;
+use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
 #[allow(dead_code)]
 #[path = "../src/components/form.rs"]
@@ -47,7 +47,7 @@ type ProfileSaves = Vec<(String, Option<String>)>;
 struct Probe {
     me: Rc<RefCell<CurrentUser>>,
     me_reads: Rc<Cell<usize>>,
-    /// `None` is policy zero (no detailed permissions).
+    /// `None` is a failed permission read.
     permissions: Option<OwnPermissions>,
     sign_in: Option<String>,
     profile_saves: Rc<RefCell<ProfileSaves>>,
@@ -64,13 +64,21 @@ impl Probe {
                 org_id: uuid::Uuid::nil(),
                 email: "mia@example.test".into(),
                 name: "Mia Member".into(),
-                org_role: OrgRole::Member,
                 timezone: None,
                 workspace_timezone: "Europe/Madrid".into(),
                 utc_offset_seconds: 3600,
             })),
             me_reads: Rc::default(),
-            permissions: None,
+            permissions: Some(OwnPermissions {
+                catalog_version: PERMISSION_CATALOG_VERSION,
+                grants: Vec::new(),
+                is_administrator: false,
+                profile: Some("Member".into()),
+                access_revision: 1,
+                person_revision: 1,
+                managed_person_ids: Vec::new(),
+                managed_project_ids: Vec::new(),
+            }),
             sign_in: Some("sso.example.test".into()),
             profile_saves: Rc::default(),
             workspace_saves: Rc::default(),
@@ -220,7 +228,7 @@ fn read_only(html: &str, value: &str) -> bool {
 }
 
 #[tokio::test]
-async fn profile_shows_identity_read_only_and_the_role_at_policy_zero() {
+async fn profile_shows_identity_and_the_permission_profile_read_only() {
     let probe = Probe::new();
     let dom = mount(profile_app, &probe);
     let html = html(&dom);
@@ -232,7 +240,7 @@ async fn profile_shows_identity_read_only_and_the_role_at_policy_zero() {
         assert!(read_only(&html, value), "{value} must be read-only: {html}");
     }
     assert!(
-        html.contains("Only an Administrator can change your role."),
+        html.contains("Only an Administrator can change your permissions."),
         "{html}"
     );
     assert!(html.contains("Workspace default (Europe/Madrid)"), "{html}");
@@ -240,20 +248,22 @@ async fn profile_shows_identity_read_only_and_the_role_at_policy_zero() {
 }
 
 #[tokio::test]
-async fn detailed_permissions_take_over_from_the_role_row() {
+async fn individually_chosen_permissions_are_named_as_such() {
     let mut probe = Probe::new();
-    probe.permissions = Some(OwnPermissions {
-        catalog_version: 1,
-        grants: Vec::new(),
-        is_administrator: false,
-        access_revision: 1,
-        person_revision: 1,
-        managed_person_ids: Vec::new(),
-        managed_project_ids: Vec::new(),
-    });
+    if let Some(own) = probe.permissions.as_mut() {
+        own.profile = None;
+    }
+    let html = html(&mount(profile_app, &probe));
+    assert!(read_only(&html, "Individual configuration"), "{html}");
+}
+
+#[tokio::test]
+async fn an_unreadable_permission_state_leaves_the_access_row_out() {
+    let mut probe = Probe::new();
+    probe.permissions = None;
     probe.sign_in = None;
     let html = html(&mount(profile_app, &probe));
-    assert!(!html.contains("profile-role"), "{html}");
+    assert!(!html.contains("profile-access"), "{html}");
     assert!(read_only(&html, "Development sign-in"), "{html}");
 }
 
@@ -392,8 +402,10 @@ mod server_fns {
         Ok(probe.me.borrow().clone())
     }
 
-    pub async fn get_my_permissions() -> Result<Option<OwnPermissions>, ServerFnError> {
-        Ok(use_context::<Probe>().permissions)
+    pub async fn get_my_permissions() -> Result<OwnPermissions, ServerFnError> {
+        use_context::<Probe>()
+            .permissions
+            .ok_or_else(|| ServerFnError::new("Permission state is unavailable"))
     }
 
     pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {

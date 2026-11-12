@@ -105,13 +105,13 @@ fn spawn_action(
 }
 
 /// Whether to ask for the list: `None` until the own-permissions read
-/// answers, `false` when the stored grants hold no approval access. Without
-/// stored grants to show (the read failed or had none), the server decides.
-fn review_access(own: &Option<Result<Option<OwnPermissions>, ServerFnError>>) -> Option<bool> {
+/// answers, `false` when the stored grants hold no approval access. When the
+/// read failed there are no grants to show, so the server decides.
+fn review_access(own: &Option<Result<OwnPermissions, ServerFnError>>) -> Option<bool> {
     match own {
         None => None,
-        Some(Ok(Some(own))) => Some(reviews_approvals(own)),
-        Some(_) => Some(true),
+        Some(Ok(own)) => Some(reviews_approvals(own)),
+        Some(Err(_)) => Some(true),
     }
 }
 
@@ -154,7 +154,7 @@ pub fn Approvals(week: String) -> Element {
 
     let access = review_access(&own.read());
     // Hide decisions the server would refuse; it re-checks every one.
-    let is_administrator = matches!(&*own.read(), Some(Ok(Some(own))) if own.is_administrator);
+    let is_administrator = matches!(&*own.read(), Some(Ok(own)) if own.is_administrator);
     let viewer = match &*me.read() {
         Some(Ok(u)) => Some(u.id),
         _ => None,

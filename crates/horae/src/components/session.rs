@@ -16,7 +16,7 @@ use crate::server_fns;
 #[derive(Clone, Copy)]
 pub struct Session {
     pub me: Resource<Result<CurrentUser, ServerFnError>>,
-    pub permissions: Resource<Result<Option<OwnPermissions>, ServerFnError>>,
+    pub permissions: Resource<Result<OwnPermissions, ServerFnError>>,
     /// Read through [`use_week_start`], which starts the fetch.
     week_start: Resource<Result<chrono::Weekday, ServerFnError>>,
     week_start_wanted: Signal<bool>,
@@ -40,16 +40,13 @@ impl Session {
     }
 
     /// Whether to offer project creation, by the same rule the projects page
-    /// uses: the canonical grant, or manager and above under legacy roles.
+    /// uses: the `ProjectCreateAll` grant.
     pub fn can_create_projects(&self) -> bool {
-        match &*self.permissions.read() {
-            Some(Ok(Some(access))) => {
-                access.catalog_version == PERMISSION_CATALOG_VERSION
-                    && access.grants.contains(&Permission::ProjectCreateAll)
-            }
-            Some(Ok(None)) => matches!(&*self.me.read(), Some(Ok(me)) if me.is_manager_or_above()),
-            _ => false,
-        }
+        matches!(
+            &*self.permissions.read(),
+            Some(Ok(access)) if access.catalog_version == PERMISSION_CATALOG_VERSION
+                && access.grants.contains(&Permission::ProjectCreateAll)
+        )
     }
 }
 

@@ -7,6 +7,7 @@ fn snapshot() -> OwnPermissions {
         catalog_version: PERMISSION_CATALOG_VERSION,
         grants: vec![Permission::TimeReadOwn, Permission::InvoiceReadManaged],
         is_administrator: false,
+        profile: None,
         access_revision: 928314,
         person_revision: 817243,
         managed_person_ids: vec![Uuid::now_v7()],
@@ -14,35 +15,21 @@ fn snapshot() -> OwnPermissions {
     }
 }
 
-fn render(
-    pending: bool,
-    response: Option<Result<Option<OwnPermissions>, ServerFnError>>,
-) -> String {
+fn render(pending: bool, response: Option<Result<OwnPermissions, ServerFnError>>) -> String {
     dioxus::ssr::render_element(permission_content(pending, &response))
 }
 
 #[test]
 fn own_permissions_view_loading_hides_previous_snapshot() {
-    let html = render(true, Some(Ok(Some(snapshot()))));
+    let html = render(true, Some(Ok(snapshot())));
     assert!(html.contains("Loading your permissions"), "{html}");
     assert!(!html.contains("View your own time"), "{html}");
     assert!(!html.contains("Managed projects"), "{html}");
 }
 
 #[test]
-fn own_permissions_view_legacy_is_not_empty_or_a_profile() {
-    let html = render(false, Some(Ok(None)));
-    assert!(
-        html.contains("Detailed permissions are not enabled"),
-        "{html}"
-    );
-    assert!(!html.contains("No configured permissions"), "{html}");
-    assert!(!html.contains("Member"), "{html}");
-}
-
-#[test]
 fn own_permissions_view_preserves_exact_grants_without_profile_inference() {
-    let html = render(false, Some(Ok(Some(snapshot()))));
+    let html = render(false, Some(Ok(snapshot())));
     assert!(html.contains("View your own time"), "{html}");
     assert!(
         html.contains("View invoices for managed projects"),
@@ -62,7 +49,7 @@ fn own_permissions_view_does_not_disclose_internal_fields_or_offer_edits() {
         .chain(&own.managed_project_ids)
         .copied()
         .collect::<Vec<_>>();
-    let html = render(false, Some(Ok(Some(own))));
+    let html = render(false, Some(Ok(own)));
     for id in ids {
         assert!(!html.contains(&id.to_string()), "{html}");
     }
@@ -86,17 +73,17 @@ fn own_permissions_view_does_not_disclose_internal_fields_or_offer_edits() {
 fn own_permissions_view_admin_identity_is_explicit_not_derived_from_grants() {
     let mut own = snapshot();
     own.grants = Permission::ALL.to_vec();
-    assert!(!render(false, Some(Ok(Some(own.clone())))).contains("Administrator access"));
+    assert!(!render(false, Some(Ok(own.clone()))).contains("Administrator access"));
     own.is_administrator = true;
     own.grants.clear();
-    assert!(render(false, Some(Ok(Some(own)))).contains("Administrator access"));
+    assert!(render(false, Some(Ok(own))).contains("Administrator access"));
 }
 
 #[test]
 fn own_permissions_view_empty_grants_are_not_normalized() {
     let mut own = snapshot();
     own.grants.clear();
-    let html = render(false, Some(Ok(Some(own))));
+    let html = render(false, Some(Ok(own)));
     assert!(html.contains("No configured permissions"), "{html}");
     assert!(!html.contains("View your own time"), "{html}");
 }
@@ -127,7 +114,7 @@ fn own_permissions_view_distinguishes_authentication_forbidden_and_failure() {
 fn own_permissions_view_unsupported_catalog_hides_uninterpretable_grants() {
     let mut own = snapshot();
     own.catalog_version += 1;
-    let html = render(false, Some(Ok(Some(own))));
+    let html = render(false, Some(Ok(own)));
     assert!(html.contains("Could not load your permissions"), "{html}");
     assert!(!html.contains("View your own time"), "{html}");
 }
@@ -139,7 +126,7 @@ fn own_permissions_view_grants_do_not_promise_unavailable_features() {
         Permission::SavedReportReadInactive,
         Permission::SavedReportWriteInactive,
     ];
-    let html = render(false, Some(Ok(Some(own))));
+    let html = render(false, Some(Ok(own)));
     assert!(
         html.contains("View saved reports owned by inactive people"),
         "{html}"

@@ -13,7 +13,6 @@ use dioxus::router::Navigator;
 use dioxus::router::components::HistoryProvider;
 use futures_util::FutureExt;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
-use horae_core::types::OrgRole;
 use horae_core::week::week_bounds;
 use uuid::Uuid;
 
@@ -596,9 +595,10 @@ async fn a_pending_session_user_shows_loading_not_a_denial() {
     assert!(probe.requests.borrow().is_empty());
 }
 
-/// With no stored grants to show, the page asks and the server decides.
+/// When the permission read fails there are no grants to show, so the page
+/// asks and the server decides.
 #[tokio::test]
-async fn unknown_permissions_leave_the_decision_to_the_server() {
+async fn a_failed_permission_read_leaves_the_decision_to_the_server() {
     let probe = Probe {
         approves: false,
         permissions_unknown: true,
@@ -637,11 +637,11 @@ async fn bulk_approval_reports_the_servers_count_for_its_week_only() {
 pub mod server_fns {
     use super::*;
 
-    pub async fn get_my_permissions()
-    -> Result<Option<own_permissions_model::OwnPermissions>, ServerFnError> {
+    pub async fn get_my_permissions() -> Result<own_permissions_model::OwnPermissions, ServerFnError>
+    {
         let probe = use_context::<Probe>();
         if probe.permissions_unknown {
-            return Ok(None);
+            return Err(ServerFnError::new("Permission state is unavailable"));
         }
         let mut grants = vec![Permission::TimeReadOwn, Permission::TimeWriteOwn];
         if probe.approves {
@@ -652,15 +652,16 @@ pub mod server_fns {
                 Permission::TimeApproveAll,
             ]);
         }
-        Ok(Some(own_permissions_model::OwnPermissions {
+        Ok(own_permissions_model::OwnPermissions {
             catalog_version: PERMISSION_CATALOG_VERSION,
             grants,
             is_administrator: probe.administrator,
+            profile: None,
             access_revision: 1,
             person_revision: 1,
             managed_person_ids: Vec::new(),
             managed_project_ids: Vec::new(),
-        }))
+        })
     }
 
     pub async fn get_me() -> Result<user_model::CurrentUser, ServerFnError> {
@@ -673,9 +674,6 @@ pub mod server_fns {
             org_id: Uuid::now_v7(),
             name: "Reviewer".into(),
             email: "reviewer@example.test".into(),
-            // Leftover data the page must not read: it says Member even for
-            // approvers and administrators.
-            org_role: OrgRole::Member,
             timezone: None,
             workspace_timezone: "UTC".into(),
             utc_offset_seconds: 0,

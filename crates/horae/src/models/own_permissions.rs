@@ -11,6 +11,9 @@ pub struct OwnPermissions {
     pub catalog_version: u32,
     pub grants: Vec<Permission>,
     pub is_administrator: bool,
+    /// The built-in profile's label or the template's name; `None` for
+    /// individually chosen grants.
+    pub profile: Option<String>,
     pub access_revision: i64,
     pub person_revision: i64,
     pub managed_person_ids: Vec<Uuid>,

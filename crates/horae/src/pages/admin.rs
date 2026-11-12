@@ -37,7 +37,7 @@ pub fn AdminUsers() -> Element {
         return rsx! { p { role: "status", "Loading people access…" } };
     }
     let content = match &*own.read() {
-        Some(Ok(Some(access)))
+        Some(Ok(access))
             if access.catalog_version
                 == horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION
                 && (access

@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
 use crate::components::form::{FormGroup, Input};
 use crate::components::select_field::SelectField;
@@ -12,9 +13,14 @@ use crate::server_fns;
 pub(super) fn ProfileSection() -> Element {
     let session = use_session();
     let options = use_resource(server_fns::get_profile_options);
-    // Policy zero has no permission panel to name the person's access, so the
-    // legacy role is shown here instead.
-    let show_role = matches!(&*session.permissions.read(), Some(Ok(None)));
+    let access = match &*session.permissions.read() {
+        Some(Ok(own)) if own.catalog_version == PERMISSION_CATALOG_VERSION => Some(
+            own.profile
+                .clone()
+                .unwrap_or_else(|| "Individual configuration".into()),
+        ),
+        _ => None,
+    };
     // Only the first load is gated: re-reading the session after a save keeps
     // the previous value, so the form stays mounted.
     let me = session.me.read();
@@ -26,7 +32,7 @@ pub(super) fn ProfileSection() -> Element {
                 Some(Err(_)) => rsx! {
                     p { class: "alert alert-danger", role: "alert", "Could not load your profile. Reload the page to try again." }
                 },
-                Some(Ok(me)) => rsx! { ProfileForm { key: "{me.id}", me: me.clone(), options, show_role } },
+                Some(Ok(me)) => rsx! { ProfileForm { key: "{me.id}", me: me.clone(), options, access: access.clone() } },
             }
         }
     }
@@ -36,7 +42,8 @@ pub(super) fn ProfileSection() -> Element {
 fn ProfileForm(
     me: CurrentUser,
     options: Resource<Result<ProfileOptions, ServerFnError>>,
-    show_role: bool,
+    /// The profile or template the person's permissions come from, once known.
+    access: Option<String>,
 ) -> Element {
     let mut session_me = use_session().me;
     let saved_zone = me.timezone.clone().unwrap_or_default();
@@ -71,8 +78,6 @@ fn ProfileForm(
     ))
     .chain(zones.into_iter().map(|zone| (zone.clone(), zone)))
     .collect();
-    let role = me.org_role.to_string();
-    let role = role[..1].to_uppercase() + &role[1..];
     let edit_name = use_callback(move |e: FormEvent| {
         name.set(e.value());
         saved.set(false);
@@ -141,9 +146,9 @@ fn ProfileForm(
         FormGroup { label: "Signed in with", id: "profile-sign-in",
             Input { id: "profile-sign-in", value: sign_in, readonly: true }
         }
-        if show_role {
-            FormGroup { label: "Role", id: "profile-role", hint: "Only an Administrator can change your role.",
-                Input { id: "profile-role", value: role, readonly: true }
+        if let Some(access) = access {
+            FormGroup { label: "Permissions", id: "profile-access", hint: "Only an Administrator can change your permissions.",
+                Input { id: "profile-access", value: access, readonly: true }
             }
         }
         FormGroup { label: "Time zone", id: "profile-timezone",
