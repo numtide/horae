@@ -1,8 +1,9 @@
-// Legacy Reports screen, Export links and downloads against hand-derived
+// Financial Reports screen, Export links and downloads against hand-derived
 // fixture values (specs/004-invoice-timesheet-exports plan, "Acceptance
 // Increment"). XLSX contents are proven by the Rust legacy_exports check for
 // the same links; this suite proves the screen, both links and the CSV bytes.
-// Needs the fresh seed at policy 0: run before reports-permissions.
+// Needs the seeded Administrator, who reads everyone's time and so gets the
+// financial view.
 const { chromium, expect: baseExpect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const expect = baseExpect.configure({ timeout: 15000 });
 const { execFileSync } = require('node:child_process');
@@ -14,7 +15,9 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id,name FROM users WHERE email='admin@example.com' AND active AND org_role='admin') u"));
+const actor = JSON.parse(sql(`SELECT row_to_json(u) FROM (SELECT u.id,u.org_id,u.name FROM users u
+  JOIN person_permission_states s ON s.org_id=u.org_id AND s.user_id=u.id
+  WHERE u.email='admin@example.com' AND u.active AND s.is_administrator) u`));
 const org = actor.org_id;
 const id = n => `019f3200-0000-7000-8000-${n.toString(16).padStart(12, '0')}`;
 const [from, to] = ['2041-03-04', '2041-03-06'];
@@ -50,7 +53,6 @@ const field = value => /[",\n\r]/.test(value) ? `"${value.replaceAll('"', '""')}
 const csvFor = picked => ['Date,Project,Task,User,Hours,Rounded Hours,Billable,Notes',
   ...picked.map(entry => [...row(entry), entry.notes].map(field).join(','))].map(line => `${line}\n`).join('');
 
-assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
 assert.equal(sql(`SELECT round_minutes||'|'||round_dir FROM organizations WHERE id='${org}'`), '15|nearest');
 assert.equal(sql(`SELECT count(*) FROM time_entries WHERE org_id='${org}' AND spent_date BETWEEN '2041-03-01' AND '2041-03-31'`), '0');
 const fixtureIds = [...clients.map(([key]) => key), ...projects.map(([key]) => key), task, colleague, ...entries.map(entry => entry.id)].map(key => `'${key}'`).join(',');

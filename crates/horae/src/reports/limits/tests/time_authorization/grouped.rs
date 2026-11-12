@@ -120,7 +120,7 @@ async fn grouped_xlsx_limits_groups_not_source_entries_and_preserves_scope(pool:
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn grouped_xlsx_rejects_wrong_identity_legacy_policy_and_page_cursor(pool: PgPool) {
+async fn grouped_xlsx_rejects_wrong_identity_inactive_actor_and_page_cursor(pool: PgPool) {
     let ids = scoped(
         &pool,
         BuiltInProfile::Administrator,
@@ -152,13 +152,10 @@ async fn grouped_xlsx_rejects_wrong_identity_legacy_policy_and_page_cursor(pool:
         Err(StatusCode::BAD_REQUEST)
     ));
     query.after = None;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=0 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
     assert!(matches!(
         time::groups::read(&pool, requester, &query, TimeReportGrouping::Client).await,
         Err(StatusCode::FORBIDDEN)

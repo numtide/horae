@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "CREATE VIEW project_export_test.assignments AS\n        SELECT * FROM public.assignments WHERE project_export_test.pause()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "03bef11c5356c599ca371713b18c8440a3aa6ffca09968cb78bfd8dcd18c07db"
+}

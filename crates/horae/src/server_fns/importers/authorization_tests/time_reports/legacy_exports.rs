@@ -1,5 +1,6 @@
-//! Legacy Reports downloads checked against hand-derived fixture values
-//! (specs/004-invoice-timesheet-exports plan, "Acceptance Increment").
+//! Scalar-filter Reports downloads, as the financial Reports view links them,
+//! checked against hand-derived fixture values for a reader of everyone's
+//! time (specs/004-invoice-timesheet-exports plan, "Acceptance Increment").
 
 use super::*;
 use crate::reports::xlsx_cells::{assert_cell, assert_text_cell, xlsx_part};
@@ -235,7 +236,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .await
         .unwrap();
     }
-    // Another organization's client with an entry in the period: a legacy
+    // Another organization's client with an entry in the period: a scalar
     // filter naming it must not reach across tenants.
     let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     sqlx::query!(
@@ -254,15 +255,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .execute(pool)
     .await
     .unwrap();
-    // The route takes the legacy path only at policy 0; never rely on a default.
-    let policy = sqlx::query_scalar!(
-        "SELECT permission_policy_version FROM organizations WHERE id = $1",
-        ids.org_id
-    )
-    .fetch_one(pool)
-    .await
-    .unwrap();
-    assert_eq!(policy, 0);
     let cookie = api.cookie(ids.user_id).await;
 
     let (client_a, beta, gamma) = (fixture_id(10), fixture_id(21), fixture_id(22));

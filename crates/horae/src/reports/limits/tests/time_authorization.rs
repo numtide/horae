@@ -62,7 +62,6 @@ async fn capture(pool: &PgPool, ids: &SeedIds) -> Result<time::TimeExport, Statu
         ids.org_id,
         ids.user_id,
         &params().time_query().unwrap(),
-        None,
     )
     .await
 }
@@ -105,13 +104,6 @@ async fn project(pool: &PgPool, ids: &SeedIds) -> Uuid {
 
 async fn scoped(pool: &PgPool, role: BuiltInProfile, grants: &[Permission]) -> SeedIds {
     let ids = seed(pool, role).await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     let grants: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(grants)).unwrap())
             .unwrap();
@@ -139,7 +131,7 @@ async fn scoped_xlsx_member_reads_own_rows_without_financial_or_directory_access
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn scoped_xlsx_legacy_manager_role_does_not_expand_canonical_scope(pool: PgPool) {
+async fn scoped_xlsx_profile_name_does_not_expand_own_scope(pool: PgPool) {
     let ids = scoped(
         &pool,
         BuiltInProfile::ExecutiveManager,
@@ -216,7 +208,7 @@ async fn scoped_xlsx_scope_union_and_multi_filters_precede_size_checks(pool: PgP
     query.user_ids = vec![target, outsider];
     query.task_ids = vec![ids.task_id];
     query.client_ids = vec![ids.client_id];
-    let selected = time::entries(&pool, ids.org_id, ids.user_id, &query, None)
+    let selected = time::entries(&pool, ids.org_id, ids.user_id, &query)
         .await
         .unwrap();
     assert_eq!(selected.rows.len(), 1);
@@ -359,8 +351,8 @@ async fn scoped_xlsx_deletion_keeps_recorded_scope_but_loss_of_person_access_den
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn scoped_xlsx_empty_files_still_validate_state_actor_and_policy_at_release(pool: PgPool) {
-    for change in ["unsupported", "missing", "inactive", "policy", "grants"] {
+async fn scoped_xlsx_empty_files_still_validate_state_and_actor_at_release(pool: PgPool) {
+    for change in ["unsupported", "missing", "inactive", "grants"] {
         let ids = scoped(
             &pool,
             BuiltInProfile::ExecutiveManager,
@@ -394,15 +386,6 @@ async fn scoped_xlsx_empty_files_still_validate_state_actor_and_policy_at_releas
                     .await
                     .unwrap();
             }
-            "policy" => {
-                sqlx::query!(
-                    "UPDATE organizations SET permission_policy_version=0 WHERE id=$1",
-                    ids.org_id
-                )
-                .execute(&pool)
-                .await
-                .unwrap();
-            }
             "grants" => {
                 sqlx::query!(
                     "UPDATE person_permission_states SET grants=ARRAY['unknown'] WHERE user_id=$1",
@@ -414,7 +397,7 @@ async fn scoped_xlsx_empty_files_still_validate_state_actor_and_policy_at_releas
             }
             _ => unreachable!(),
         }
-        let expected = if matches!(change, "inactive" | "policy") {
+        let expected = if change == "inactive" {
             StatusCode::FORBIDDEN
         } else {
             StatusCode::INTERNAL_SERVER_ERROR
@@ -424,28 +407,6 @@ async fn scoped_xlsx_empty_files_still_validate_state_actor_and_policy_at_releas
         let second = ExportPermit::acquire().unwrap();
         drop((first, second));
     }
-    let ids = scoped(
-        &pool,
-        BuiltInProfile::ExecutiveManager,
-        &[Permission::TimeReadAll],
-    )
-    .await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=0 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let export = capture(&pool, &ids).await.unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    assert_eq!(render(&pool, export).await, Err(StatusCode::FORBIDDEN));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -522,7 +483,7 @@ async fn scoped_xlsx_rejects_paged_reversed_or_wrong_requester_queries(pool: PgP
     let mut query = params().time_query().unwrap();
     query.date_to = "2026-09-06".parse().unwrap();
     assert!(matches!(
-        time::entries(&pool, ids.org_id, ids.user_id, &query, None).await,
+        time::entries(&pool, ids.org_id, ids.user_id, &query).await,
         Err(StatusCode::BAD_REQUEST)
     ));
     let mut query = params().time_query().unwrap();
@@ -533,7 +494,7 @@ async fn scoped_xlsx_rejects_paged_reversed_or_wrong_requester_queries(pool: PgP
         id: Uuid::now_v7(),
     });
     assert!(matches!(
-        time::entries(&pool, ids.org_id, ids.user_id, &query, None).await,
+        time::entries(&pool, ids.org_id, ids.user_id, &query).await,
         Err(StatusCode::BAD_REQUEST)
     ));
     let mut query = params().time_query().unwrap();
@@ -542,7 +503,7 @@ async fn scoped_xlsx_rejects_paged_reversed_or_wrong_requester_queries(pool: PgP
         user_id: Uuid::now_v7(),
     });
     assert!(matches!(
-        time::entries(&pool, ids.org_id, ids.user_id, &query, None).await,
+        time::entries(&pool, ids.org_id, ids.user_id, &query).await,
         Err(StatusCode::FORBIDDEN)
     ));
 }
@@ -704,4 +665,31 @@ async fn scoped_xlsx_revoked_grants_after_render_deny_other_peoples_captured_row
     writer.commit().await.unwrap();
     release.send(()).unwrap();
     assert!(matches!(pending.await.unwrap(), Err(StatusCode::FORBIDDEN)));
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn report_view_follows_the_time_read_grants_not_the_profile(pool: PgPool) {
+    for (profile, grants, financial) in [
+        (
+            BuiltInProfile::Administrator,
+            &[Permission::TimeReadOwn][..],
+            false,
+        ),
+        (
+            BuiltInProfile::Member,
+            &[Permission::TimeReadManaged][..],
+            true,
+        ),
+        (BuiltInProfile::Member, &[Permission::TimeReadAll][..], true),
+    ] {
+        let ids = scoped(&pool, profile, grants).await;
+        let requester = crate::models::permission_editor::PermissionRequester {
+            org_id: ids.org_id,
+            user_id: ids.user_id,
+        };
+        let access = time::read_access(&pool, requester).await.unwrap();
+        assert_eq!(access.requester, requester);
+        assert_eq!(access.financial, financial, "{grants:?}");
+    }
 }

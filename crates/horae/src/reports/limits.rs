@@ -46,6 +46,24 @@ pub(super) fn database_error(error: sqlx::Error) -> StatusCode {
     }
 }
 
+/// The person's stored grants. Missing or unreadable state is a server fault,
+/// not a refusal: provisioning gives every person a state.
+async fn load_grants(
+    connection: &mut PgConnection,
+    org_id: Uuid,
+    user_id: Uuid,
+) -> Result<horae_core::permissions::catalog::PermissionSelection, StatusCode> {
+    use crate::server_fns::{PermissionStorageError, load_person_permissions};
+    Ok(load_person_permissions(connection, org_id, user_id)
+        .await
+        .map_err(|error| match error {
+            PermissionStorageError::Database(error) => database_error(error),
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        })?
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
+        .grants)
+}
+
 #[cfg(test)]
 async fn begin(pool: &PgPool) -> Result<Transaction<'_, Postgres>, StatusCode> {
     let mut tx = pool.begin().await.map_err(database_error)?;
@@ -216,15 +234,9 @@ mod tests {
         actor_id: Uuid,
         params: &ExportParams,
     ) -> Result<Vec<DetailedReportRow>, StatusCode> {
-        Ok(time::entries(
-            pool,
-            org_id,
-            actor_id,
-            &params.time_query()?,
-            params.expected_policy,
-        )
-        .await?
-        .rows)
+        Ok(time::entries(pool, org_id, actor_id, &params.time_query()?)
+            .await?
+            .rows)
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]

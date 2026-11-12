@@ -65,6 +65,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                     .await
                     .unwrap();
             } else {
+                // Invoices still decide by role; the detailed report by the
+                // stored grants.
                 sqlx::query!(
                     "UPDATE users SET org_role='member' WHERE id=$1",
                     ids.user_id
@@ -72,6 +74,9 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 .execute(&mut *writer)
                 .await
                 .unwrap();
+                crate::ops::testing::set_grants(&mut writer, &ids, &[])
+                    .await
+                    .unwrap();
             }
             let pid = sqlx::query_scalar!("SELECT pg_backend_pid() as \"pid!\"")
                 .fetch_one(&mut *writer)
@@ -106,6 +111,13 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .execute(pool)
             .await
             .unwrap();
+            crate::ops::testing::provision(
+                pool,
+                &ids,
+                BuiltInProfile::ExecutiveManager.direct_permissions(),
+                false,
+            )
+            .await;
             assert_eq!(api.json(name, body.clone(), &cookie).await, expected);
         }
     }
