@@ -27,7 +27,8 @@ async fn visible_scopes(
 
 async fn configured(pool: &PgPool) -> SeedIds {
     let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
-    // The overview reader still loads grants only on policy one.
+    // Budget readers answer from the stored state whatever the policy; these
+    // tests run on policy one, where every reader is headed.
     use_policy_one(pool, ids.org_id).await;
     sqlx::query!(
         "UPDATE projects SET budget_kind = 'hours', budget_minutes = 100, rate_cents = 6000 WHERE id = $1",
