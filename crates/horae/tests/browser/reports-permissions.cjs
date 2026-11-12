@@ -13,13 +13,16 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id FROM users WHERE email='admin@example.com' AND active AND org_role='admin') u"));
+const actor = JSON.parse(sql(`SELECT row_to_json(u) FROM (SELECT u.id,u.org_id FROM users u
+  JOIN person_permission_states s ON s.org_id=u.org_id AND s.user_id=u.id
+  WHERE u.email='admin@example.com' AND u.active AND s.is_administrator) u`));
 const org = actor.org_id;
 const id = n => `019f3000-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const person = id(1), client = id(2), project = id(3), task = id(4), state = id(5);
 const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expense_write_own']";
+// Reading everyone's time opens the financial view instead of the scoped one.
+const wider = "ARRAY['time_read_own','time_write_own','expense_read_own','expense_write_own','time_read_managed','time_read_all']";
 const date = '2040-01-02';
-assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
 let restoreSeededStates = () => {};
 
 (async () => {
@@ -35,11 +38,12 @@ let restoreSeededStates = () => {};
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: /Sign in as Admin/ }).click();
     await page.waitForURL(url => !url.pathname.startsWith('/auth/'));
-    restoreSeededStates = setAsideSeededStates(org);
-    assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
+    // The seeded Administrator reads everyone's time: the financial view.
     await page.goto(`${base}/reports`);
     await expect(page.getByRole('button', { name: 'Time', exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Export CSV', exact: true })).toBeVisible();
+    restoreSeededStates = setAsideSeededStates(org);
+    assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${org}'`), '0');
 
     sql(`BEGIN;
       INSERT INTO users (id,org_id,email,name) VALUES ('${person}','${org}','report-fixture@example.test','Private colleague');
@@ -54,6 +58,7 @@ let restoreSeededStates = () => {};
         VALUES ('${id(6)}','${org}','${person}','${project}','${task}','${date}',120,false,'Private report note');
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ('${state}','${org}','${actor.id}',1,${floor},false,'individual');
+      -- The scoped entry reader belongs to the time domain and still reads the policy.
       UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
     requests.length = 0;
     await page.goto(`${base}/reports`);
@@ -64,12 +69,12 @@ let restoreSeededStates = () => {};
     await expect(page.locator('tbody tr')).toHaveCount(500);
     await expect(page.locator('dl')).toContainText('503.00');
     await expect(page.locator('tbody')).not.toContainText('Private report note');
-    assert.equal(requests.filter(path => /\/api\/(list_clients|list_users|list_project_tags|list_projects|report_time|report_detailed)(\b|_)/.test(path)).length, 0, 'canonical report must not mount legacy resources');
+    assert.equal(requests.filter(path => /\/api\/(list_clients|list_users|list_project_tags|list_projects|report_time|report_detailed)(\b|_)/.test(path)).length, 0, 'canonical report must not mount financial resources');
     await expect(page.locator('tbody')).toContainText('<Report & note>');
     const csvLink = await page.getByRole('link', { name: 'Export CSV', exact: true }).getAttribute('href');
     const xlsxLink = await page.getByRole('link', { name: 'Export XLSX', exact: true }).getAttribute('href');
     for (const link of [csvLink, xlsxLink]) {
-      assert.ok(link.includes('expected_policy=scoped') && link.includes(`expected_user_id=${actor.id}`));
+      assert.ok(!link.includes('expected_policy') && link.includes(`expected_user_id=${actor.id}`));
       assert.ok(!link.includes('after='));
     }
     const csv = await context.request.get(`${base}${csvLink}`);
@@ -127,7 +132,7 @@ let restoreSeededStates = () => {};
       assert.equal(groupedUrl.pathname, '/api/reports/time/grouped/xlsx');
       assert.equal(groupedUrl.searchParams.get('group_by'), dimension);
       assert.equal(groupedUrl.searchParams.get('expected_user_id'), actor.id);
-      assert.equal(groupedUrl.searchParams.get('expected_policy'), 'scoped');
+      assert.equal(groupedUrl.searchParams.has('expected_policy'), false);
       assert.equal(groupedUrl.searchParams.has('after'), false);
       const workbook = await context.request.get(groupedUrl.href);
       assert.equal(workbook.status(), 200);
@@ -187,7 +192,7 @@ let restoreSeededStates = () => {};
         assert.equal(params.get('from'), date);
         assert.equal(params.get('to'), date);
         assert.equal(params.get('expected_user_id'), actor.id);
-        assert.equal(params.get('expected_policy'), 'scoped');
+        assert.equal(params.has('expected_policy'), false);
         for (const other of ['client_ids', 'project_ids', 'task_ids', 'user_ids'].filter(key => key !== filter)) {
           assert.equal(params.has(other), false, 'a previous grouping must not leak into the drilldown');
         }
@@ -236,7 +241,7 @@ let restoreSeededStates = () => {};
         assert.equal(url.searchParams.get('from'), date);
         assert.equal(url.searchParams.get('to'), date);
         assert.equal(url.searchParams.get('expected_user_id'), actor.id);
-        assert.equal(url.searchParams.get('expected_policy'), 'scoped');
+        assert.equal(url.searchParams.has('expected_policy'), false);
         assert.equal(url.searchParams.has('after'), false);
         const response = await context.request.get(url.href);
         assert.equal(response.status(), 200);
@@ -440,7 +445,7 @@ let restoreSeededStates = () => {};
         await expect(link).toHaveAttribute('href', new RegExp(`billability=${filter}`));
         const url = new URL(await link.getAttribute('href'), base);
         assert.equal(url.searchParams.get('expected_user_id'), actor.id);
-        assert.equal(url.searchParams.get('expected_policy'), 'scoped');
+        assert.equal(url.searchParams.has('expected_policy'), false);
         const response = await context.request.get(url.href);
         assert.equal(response.status(), 200);
         if (format === 'CSV') {
@@ -504,28 +509,27 @@ let restoreSeededStates = () => {};
     await page.locator('#report-view-time').click();
     await page.locator('#report-group-project').click();
     await expect(page.locator(`#report-hours-${project}`)).toBeVisible();
-    // No grant change is needed: even an Admin's captured scoped link must not
-    // adopt the wider policy-0 scope after the mode changes.
-    sql(`UPDATE organizations SET permission_policy_version=0 WHERE id='${org}'`);
-    for (const link of [csvLink, xlsxLink, ...filteredLinks]) {
-      assert.equal((await context.request.get(`${base}${link}`)).status(), 403);
-    }
-    await page.locator('#report-group-refresh').click();
-    await expect(page.getByRole('alert')).toContainText('Could not load the report');
-    await expect(page.locator('tbody')).toHaveCount(0);
+    // Widening the grants moves this person to the financial view. The open
+    // scoped page does not switch under them: refreshing access asks for a reload.
+    sql(`UPDATE person_permission_states SET grants=${wider} WHERE id='${state}'`);
     await page.locator('#reports-retry-access').click();
-    await expect(page.getByRole('alert')).toContainText('session or report policy changed');
+    await expect(page.getByRole('alert')).toContainText('session or report access changed');
     await expect(page.locator('tbody')).toHaveCount(0);
-    sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'`);
+    assert.equal(requests.filter(path => /\/api\/(report_time|report_detailed)(\b|_)/.test(path)).length, 0, 'a changed view must not load financial reports');
+    sql(`UPDATE person_permission_states SET grants=${floor} WHERE id='${state}'`);
     await page.locator('#reports-retry-access').click();
     await expect(page.locator('#report-refresh')).toBeEnabled();
+    // Captured links stay bound to their requester and answer with current grants.
+    for (const link of [csvLink, xlsxLink, ...filteredLinks]) {
+      assert.equal((await context.request.get(`${base}${link}`)).status(), 200, link);
+    }
     sql(`UPDATE users SET active=false WHERE id='${actor.id}'`);
     await page.locator('#report-refresh').click();
     await expect(page.getByRole('alert')).toContainText('Could not load the report');
     await expect(page.locator('tbody')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Export CSV', exact: true })).toHaveCount(0);
     assert.deepEqual(errors, []);
-    console.log(`PASS: scoped report paging, totals, four individual reports, four nested breakdowns, filtered exports, stale/invalid states and policy binding; Chromium ${browser.version()}`);
+    console.log(`PASS: scoped report paging, totals, four individual reports, four nested breakdowns, filtered exports, stale/invalid states and view binding; Chromium ${browser.version()}`);
   } finally {
     if (release) release();
     await page.unrouteAll({ behavior: 'wait' });

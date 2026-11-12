@@ -57,7 +57,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         api.json(ACCESS, access_request.clone(), &other_cookie)
             .await,
         json!({
-            "requester":{"org_id":other.org_id,"user_id":other.user_id}, "policy":"scoped"
+            "requester":{"org_id":other.org_id,"user_id":other.user_id}, "financial":true
         })
     );
     let binding = json!({"expected_requester":{"org_id":ids.org_id,"user_id":ids.user_id}});
@@ -137,7 +137,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         "totals":{"entry_count":1,"total_minutes":60,"rounded_minutes":60,"billable_minutes":60}
     });
     let expected_access =
-        json!({"requester":{"org_id":ids.org_id,"user_id":ids.user_id},"policy":"scoped"});
+        json!({"requester":{"org_id":ids.org_id,"user_id":ids.user_id},"financial":false});
     assert_eq!(
         api.json(ACCESS, access_request.clone(), &cookie).await,
         expected_access
@@ -327,30 +327,28 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .status(),
         StatusCode::UNAUTHORIZED
     );
-    // A scoped screen's download link never becomes a legacy one.
+    // Narrowing the Administrator to the Member floor moves them to the scoped
+    // view; downloads stay bound to the requester the view was opened for.
     crate::server_fns::test_seed::clear_state(pool, other.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), other.org_id, other.user_id, &grants).execute(pool).await.unwrap();
-    let scoped_link = format!(
-        "&expected_org_id={}&expected_user_id={}&expected_policy=scoped",
+    let bound_link = format!(
+        "&expected_org_id={}&expected_user_id={}",
         other.org_id, other.user_id
     );
-    let legacy_link = scoped_link.replace("expected_policy=scoped", "expected_policy=legacy");
+    let foreign_link = format!(
+        "&expected_org_id={}&expected_user_id={}",
+        ids.org_id, ids.user_id
+    );
     let snapshot = api
         .json(ACCESS, json!({"expected_requester":null}), &other_cookie)
         .await;
-    assert_eq!(snapshot["policy"], "scoped");
+    assert_eq!(snapshot["financial"], false);
     for format in ["csv", "xlsx"] {
         for (link, status) in [
-            (scoped_link.as_str(), StatusCode::OK),
-            (legacy_link.as_str(), StatusCode::FORBIDDEN),
+            (bound_link.as_str(), StatusCode::OK),
+            (foreign_link.as_str(), StatusCode::FORBIDDEN),
             ("", StatusCode::OK),
-            ("&expected_policy=", StatusCode::BAD_REQUEST),
-            ("&expected_policy=future", StatusCode::BAD_REQUEST),
-            (
-                "&expected_policy=scoped&expected_policy=legacy",
-                StatusCode::BAD_REQUEST,
-            ),
         ] {
             assert_eq!(
                 download(api, Some(&other_cookie), format, link)

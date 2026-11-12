@@ -5,8 +5,8 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use super::*;
 use crate::models::DetailedReportRow;
 use crate::models::permission_editor::PermissionRequester;
+use crate::models::time_report::TimeReportAccess;
 use crate::models::time_report::TimeReportQuery;
-use crate::models::time_report::{TimeReportAccess, TimeReportPolicy};
 use crate::reports::bounded::ExportPermit;
 
 pub(in crate::reports) mod groups;
@@ -42,16 +42,18 @@ async fn begin(
     Ok((tx, grants))
 }
 
-/// Resolve presentation mode with the same current authority as time downloads.
+/// Resolve the Reports view with the same current authority as time
+/// downloads. The financial view is for whoever `ops::reports` serves.
 pub(crate) async fn read_access(
     pool: &PgPool,
     requester: PermissionRequester,
 ) -> Result<TimeReportAccess, StatusCode> {
-    let (tx, _) = begin(pool, requester).await?;
+    let (tx, grants) = begin(pool, requester).await?;
     tx.commit().await.map_err(database_error)?;
     Ok(TimeReportAccess {
         requester,
-        policy: TimeReportPolicy::Scoped,
+        financial: grants.contains(Permission::TimeReadManaged)
+            || grants.contains(Permission::TimeReadAll),
     })
 }
 
@@ -97,7 +99,6 @@ pub(in crate::reports) async fn entries(
     org_id: Uuid,
     actor_id: Uuid,
     query: &TimeReportQuery,
-    expected_policy: Option<TimeReportPolicy>,
 ) -> Result<TimeExport, StatusCode> {
     let requester = PermissionRequester {
         org_id,
@@ -111,9 +112,6 @@ pub(in crate::reports) async fn entries(
     }
     if query.date_from > query.date_to || query.after.is_some() {
         return Err(StatusCode::BAD_REQUEST);
-    }
-    if expected_policy == Some(TimeReportPolicy::Legacy) {
-        return Err(StatusCode::FORBIDDEN);
     }
     let (mut tx, grants) = begin(pool, requester).await?;
     // A single snapshot both bounds and materializes the authorized projection.

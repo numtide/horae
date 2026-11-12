@@ -129,10 +129,9 @@ pub(super) async fn entries(
     if query.date_from > query.date_to || query.after.is_some() {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if params.expected_policy == Some(crate::models::time_report::TimeReportPolicy::Legacy)
-        || query
-            .expected_requester
-            .is_some_and(|expected| expected.org_id != org_id || expected.user_id != actor_id)
+    if query
+        .expected_requester
+        .is_some_and(|expected| expected.org_id != org_id || expected.user_id != actor_id)
     {
         return Err(StatusCode::FORBIDDEN);
     }

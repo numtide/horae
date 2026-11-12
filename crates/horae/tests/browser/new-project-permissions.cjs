@@ -102,8 +102,6 @@ const name = 'Permission fixture project';
     await visit('/reports');
     await expect.poll(() => endpoints.has('report_time')).toBe(true);
     await readsFinished();
-    const today = sql('SELECT CURRENT_DATE::text');
-    const reportArgs = { from: today, to: today, group_by: 'project', client_id: null, project_id: projectId, user_id: null, tag_id: null };
     const optionsArgs = { search: { clients: { query: '', offset: 0 }, tasks: { query: '', offset: 0 }, people: { query: '', offset: 0 } } };
     const cases = [
       { label: 'organization admin', role: 'admin', assignment: 'freelancer', visibility: 'managers', progress: true, rates: true, private: true },
@@ -166,17 +164,6 @@ const name = 'Permission fixture project';
         for (const task of body.tasks) absent(task, 'default_rate_cents');
       }
       assert.equal((await post('get_project_detail_view', { project_id: foreignProject })).status(), 404);
-      const exported = await context.request.get(`${base}/api/projects/export/csv?scope=active`);
-      assert.equal(exported.status(), 200);
-      assert.equal((await exported.text()).includes(name), scenario.progress);
-      const report = await post('report_time', reportArgs);
-      assert.equal(report.status(), scenario.rates ? 200 : 403);
-      if (scenario.rates) {
-        const [row] = await report.json();
-        assert.equal(row.billable_cents, 12345);
-        if (scenario.private) assert.equal(row.cost_cents, 4725);
-        else absent(row, 'cost_cents');
-      }
       await visit(`/projects/${projectId}`);
       const detailRegion = page.getByRole('region', { name: 'Project details', exact: true });
       if (scenario.progress) await expect(detailRegion).toContainText(name);

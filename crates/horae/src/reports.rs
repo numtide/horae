@@ -108,7 +108,6 @@ pub struct ExportParams {
     pub tag_ids: Option<String>,
     pub expected_org_id: Option<uuid::Uuid>,
     pub expected_user_id: Option<uuid::Uuid>,
-    pub expected_policy: Option<crate::models::time_report::TimeReportPolicy>,
     pub after: Option<String>,
 }
 
@@ -315,14 +314,7 @@ pub async fn export_xlsx(
     let permit = bounded::ExportPermit::acquire()?;
 
     let state = crate::state::global_state().await;
-    let export = limits::time::entries(
-        &state.db,
-        org_id,
-        actor_id,
-        &params.time_query()?,
-        params.expected_policy,
-    )
-    .await?;
+    let export = limits::time::entries(&state.db, org_id, actor_id, &params.time_query()?).await?;
     let data = export
         .scope
         .render(permit, &state.db, move || entries_xlsx(&export.rows))

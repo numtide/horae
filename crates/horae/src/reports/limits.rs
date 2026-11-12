@@ -234,15 +234,9 @@ mod tests {
         actor_id: Uuid,
         params: &ExportParams,
     ) -> Result<Vec<DetailedReportRow>, StatusCode> {
-        Ok(time::entries(
-            pool,
-            org_id,
-            actor_id,
-            &params.time_query()?,
-            params.expected_policy,
-        )
-        .await?
-        .rows)
+        Ok(time::entries(pool, org_id, actor_id, &params.time_query()?)
+            .await?
+            .rows)
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]

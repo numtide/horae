@@ -1,6 +1,6 @@
 use super::*;
 use crate::models::permission_editor::PermissionRequester;
-use crate::models::time_report::{TimeReportGrouping, TimeReportPolicy};
+use crate::models::time_report::TimeReportGrouping;
 use crate::reports::limits::time::authorize_rows;
 use cursor::groups::{Fragment, GroupRow};
 
@@ -16,10 +16,9 @@ pub(in crate::reports) async fn download(
         org_id,
         user_id: actor_id,
     };
-    if params.expected_policy == Some(TimeReportPolicy::Legacy)
-        || query
-            .expected_requester
-            .is_some_and(|expected| expected != requester)
+    if query
+        .expected_requester
+        .is_some_and(|expected| expected != requester)
     {
         return Err(StatusCode::FORBIDDEN);
     }

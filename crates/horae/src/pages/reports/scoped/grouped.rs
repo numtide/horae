@@ -102,7 +102,7 @@ pub(super) fn GroupedTimeReport(
             TimeReportGrouping::Person => "person",
         };
         let filter = key.4.as_ref().map(|selected| format!("&{}={}", selected.filter_key(), selected.id)).unwrap_or_default();
-        format!("group_by={group_by}&from={}&to={}&active_projects_only={}&billability={}&expected_org_id={}&expected_user_id={}&expected_policy=scoped{filter}", key.2, key.3, key.5, billability_value(key.6), requester.org_id, requester.user_id)
+        format!("group_by={group_by}&from={}&to={}&active_projects_only={}&billability={}&expected_org_id={}&expected_user_id={}{filter}", key.2, key.3, key.5, billability_value(key.6), requester.org_id, requester.user_id)
     });
     let expansion = key
         .4
