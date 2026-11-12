@@ -1,7 +1,7 @@
 use super::claim_budget_band;
 use crate::ops::testing::set_grants;
 use crate::server_fns::test_seed::{seed, use_policy_one};
-use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
+use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use sqlx::PgPool;
 
 use super::budgets::configured_progress;
@@ -27,7 +27,8 @@ async fn visible_scopes(
 
 async fn configured(pool: &PgPool) -> SeedIds {
     let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
-    // The overview reader still loads grants only on policy one.
+    // Budget readers answer from the stored state whatever the policy; these
+    // tests run on policy one, where every reader is headed.
     use_policy_one(pool, ids.org_id).await;
     sqlx::query!(
         "UPDATE projects SET budget_kind = 'hours', budget_minutes = 100, rate_cents = 6000 WHERE id = $1",
@@ -900,149 +901,6 @@ async fn configured_budget_sweep_dates_the_period_in_the_workspace_zone(pool: Pg
             .unwrap(),
         ["2026-09"]
     );
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn configured_alert_recipients_are_active_people_who_can_read_the_project(pool: PgPool) {
-    use BuiltInProfile::{Administrator, ExecutiveManager, Member, ProjectManager};
-    const MANAGED: &[Permission] = &[Permission::ProjectReadManaged];
-    let ids = configured(&pool).await;
-    let foreign = seed(&pool, Administrator).await;
-    sqlx::query!("UPDATE project_settings SET alert_enabled = true, alert_threshold = 0 WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
-    let mut expected = vec![ids.user_id];
-    // (stored grants, administrator, active, designated manager of the project,
-    //  tracking lead, receives the alert). Project Manager reads every project:
-    // its project creation grant requires `ProjectReadAll`.
-    for (grants, administrator, active, manager, lead, receives) in [
-        (
-            Some(Administrator.direct_permissions()),
-            true,
-            true,
-            false,
-            false,
-            true,
-        ),
-        (
-            Some(ExecutiveManager.direct_permissions()),
-            false,
-            true,
-            false,
-            false,
-            true,
-        ),
-        (
-            Some(ProjectManager.direct_permissions()),
-            false,
-            true,
-            false,
-            true,
-            true,
-        ),
-        (Some(MANAGED), false, true, true, false, true),
-        (Some(MANAGED), false, true, false, true, false),
-        (
-            Some(Member.direct_permissions()),
-            false,
-            true,
-            true,
-            true,
-            false,
-        ),
-        (None, false, true, false, true, false),
-        (
-            Some(Administrator.direct_permissions()),
-            true,
-            false,
-            true,
-            false,
-            false,
-        ),
-    ] {
-        let user = Uuid::now_v7();
-        sqlx::query!(
-            "INSERT INTO users (id,org_id,email,name,active) VALUES ($1,$2,$3,'Recipient',$4)",
-            user,
-            ids.org_id,
-            format!("{user}@test.com"),
-            active
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        if let Some(grants) = grants {
-            let grants: Vec<String> =
-                serde_json::from_value(serde_json::json!(PermissionSelection::new(grants)))
-                    .unwrap();
-            sqlx::query!(
-                "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-                 VALUES ($1,$2,$3,1,$4,$5,'individual')",
-                Uuid::now_v7(),
-                ids.org_id,
-                user,
-                &grants,
-                administrator,
-            )
-            .execute(&pool)
-            .await
-            .unwrap();
-        }
-        if manager {
-            sqlx::query!(
-                "INSERT INTO project_management_assignments (id,org_id,project_id,manager_id) VALUES ($1,$2,$3,$4)",
-                Uuid::now_v7(),
-                ids.org_id,
-                ids.project_id,
-                user
-            )
-            .execute(&pool)
-            .await
-            .unwrap();
-        }
-        if lead {
-            sqlx::query!(
-                "INSERT INTO assignments (id,project_id,user_id,role) VALUES ($1,$2,$3,'lead')",
-                Uuid::now_v7(),
-                ids.project_id,
-                user
-            )
-            .execute(&pool)
-            .await
-            .unwrap();
-        }
-        if receives {
-            expected.push(user);
-        }
-    }
-    assert_eq!(
-        super::budgets::enqueue_alerts(
-            &pool,
-            foreign.org_id,
-            ids.project_id,
-            "2026-09-01".parse().unwrap()
-        )
-        .await
-        .unwrap(),
-        0
-    );
-    assert_eq!(
-        super::budgets::enqueue_alerts(
-            &pool,
-            ids.org_id,
-            ids.project_id,
-            "2026-09-01".parse().unwrap()
-        )
-        .await
-        .unwrap(),
-        expected.len()
-    );
-    let actual = sqlx::query_scalar!(
-        "SELECT recipient_id FROM project_budget_notifications ORDER BY recipient_id"
-    )
-    .fetch_all(&pool)
-    .await
-    .unwrap();
-    expected.sort_unstable();
-    assert_eq!(actual, expected);
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

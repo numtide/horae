@@ -318,6 +318,16 @@ async fn budget_delivery_skips_retargeted_notification_without_terminalizing(poo
     let recipient = Uuid::now_v7();
     sqlx::query!("INSERT INTO users(id,org_id,name,email) VALUES($1,$2,'Replacement','replacement@example.test')", recipient, ids.org_id)
         .execute(&pool).await.unwrap();
+    // The replacement could receive this alert, so only the claimed target
+    // keeps the worker from sending it to them.
+    store_grants(
+        &pool,
+        ids.org_id,
+        recipient,
+        horae_core::permissions::catalog::BuiltInProfile::ExecutiveManager.direct_permissions(),
+        1,
+    )
+    .await;
     let notification = BudgetEmail::deserialize(&event.payload)
         .unwrap()
         .notification_id;

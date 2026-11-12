@@ -433,6 +433,321 @@ async fn recipient_without_permission_state_never_receives_budget_figures(pool: 
     );
 }
 
+/// Stores `grants` (with prerequisites and the Member floor) as a person's
+/// individual permission state.
+async fn store_grants(
+    pool: &sqlx::PgPool,
+    org_id: Uuid,
+    user_id: Uuid,
+    grants: &[horae_core::permissions::catalog::Permission],
+    catalog_version: i32,
+) {
+    let selection = horae_core::permissions::catalog::PermissionSelection::new(grants);
+    let grants: Vec<String> = serde_json::from_value(serde_json::json!(selection)).unwrap();
+    sqlx::query!(
+        "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
+         VALUES ($1,$2,$3,$4,$5,false,'individual')",
+        Uuid::now_v7(),
+        org_id,
+        user_id,
+        catalog_version,
+        &grants,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// One person in the recipient matrix, and whether an alert for an hours and
+/// for an amount budget reaches them.
+struct Recipient {
+    grants: Option<&'static [horae_core::permissions::catalog::Permission]>,
+    catalog_version: i32,
+    active: bool,
+    manager: bool,
+    lead: bool,
+    hours: bool,
+    amount: bool,
+}
+
+const fn reads(
+    grants: &'static [horae_core::permissions::catalog::Permission],
+    hours: bool,
+    amount: bool,
+) -> Recipient {
+    Recipient {
+        grants: Some(grants),
+        catalog_version: 1,
+        active: true,
+        manager: false,
+        lead: false,
+        hours,
+        amount,
+    }
+}
+
+/// Enqueueing chooses recipients and the mail worker rechecks them with a
+/// second copy of the rule. Both run over the same matrix: everyone the first
+/// skips is handed a pending alert anyway, and the worker must send exactly
+/// the alerts the first chose. An amount budget's progress is valued at
+/// billable rates, so its alerts also need a billable-rate read.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn alert_recipients_and_delivery_follow_project_and_billable_rate_reads(pool: sqlx::PgPool) {
+    use horae_core::permissions::catalog::BuiltInProfile::{
+        Accounting, Administrator, ExecutiveManager, Member, PeopleAdmin, ProjectManager,
+    };
+    use horae_core::permissions::catalog::Permission::{
+        BillableRateReadManaged, ProjectReadAll, ProjectReadManaged,
+    };
+    const MANAGED: &[horae_core::permissions::catalog::Permission] = &[ProjectReadManaged];
+    const MANAGED_RATES: &[horae_core::permissions::catalog::Permission] =
+        &[ProjectReadManaged, BillableRateReadManaged];
+    const ALL_MANAGED_RATES: &[horae_core::permissions::catalog::Permission] =
+        &[ProjectReadAll, BillableRateReadManaged];
+    // Project Manager reads every project (project creation requires
+    // `ProjectReadAll`) but no rates; People Admin likewise.
+    let matrix = [
+        reads(Administrator.direct_permissions(), true, true),
+        reads(ExecutiveManager.direct_permissions(), true, true),
+        reads(Accounting.direct_permissions(), true, true),
+        reads(PeopleAdmin.direct_permissions(), true, false),
+        Recipient {
+            lead: true,
+            ..reads(ProjectManager.direct_permissions(), true, false)
+        },
+        Recipient {
+            manager: true,
+            ..reads(MANAGED, true, false)
+        },
+        Recipient {
+            manager: true,
+            ..reads(MANAGED_RATES, true, true)
+        },
+        reads(ALL_MANAGED_RATES, true, false),
+        Recipient {
+            lead: true,
+            ..reads(MANAGED, false, false)
+        },
+        Recipient {
+            manager: true,
+            lead: true,
+            ..reads(Member.direct_permissions(), false, false)
+        },
+        Recipient {
+            grants: None,
+            lead: true,
+            ..reads(&[], false, false)
+        },
+        Recipient {
+            active: false,
+            manager: true,
+            ..reads(Administrator.direct_permissions(), false, false)
+        },
+        Recipient {
+            catalog_version: 2,
+            ..reads(Administrator.direct_permissions(), false, false)
+        },
+    ];
+    let stub = Stub::new("cat > /dev/null");
+    let date = "2026-09-21".parse().unwrap();
+    for amount in [false, true] {
+        let ids = crate::server_fns::test_seed::seed(&pool, ExecutiveManager).await;
+        if amount {
+            sqlx::query!(
+                "UPDATE projects SET budget_kind = 'amount', budget_minutes = NULL, budget_amount_cents = 10000 WHERE id = $1",
+                ids.project_id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+        } else {
+            sqlx::query!(
+                "UPDATE projects SET budget_kind = 'hours', budget_minutes = 100 WHERE id = $1",
+                ids.project_id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        sqlx::query!("INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode,alert_enabled,alert_threshold) VALUES ($1,$2,$3,$4,'project',true,0)", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id).execute(&pool).await.unwrap();
+        let mut everyone = vec![ids.user_id];
+        let mut expected = vec![ids.user_id];
+        for recipient in &matrix {
+            let user = Uuid::now_v7();
+            sqlx::query!(
+                "INSERT INTO users (id,org_id,email,name,active) VALUES ($1,$2,$3,'Recipient',$4)",
+                user,
+                ids.org_id,
+                format!("{user}@test.com"),
+                recipient.active
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            if let Some(grants) = recipient.grants {
+                store_grants(&pool, ids.org_id, user, grants, recipient.catalog_version).await;
+            }
+            if recipient.manager {
+                sqlx::query!(
+                    "INSERT INTO project_management_assignments (id,org_id,project_id,manager_id) VALUES ($1,$2,$3,$4)",
+                    Uuid::now_v7(),
+                    ids.org_id,
+                    ids.project_id,
+                    user
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+            if recipient.lead {
+                sqlx::query!(
+                    "INSERT INTO assignments (id,project_id,user_id,role) VALUES ($1,$2,$3,'lead')",
+                    Uuid::now_v7(),
+                    ids.project_id,
+                    user
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+            everyone.push(user);
+            if (amount && recipient.amount) || (!amount && recipient.hours) {
+                expected.push(user);
+            }
+        }
+        expected.sort_unstable();
+        let enqueued =
+            crate::server_fns::budgets::enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
+                .await
+                .unwrap();
+        assert_eq!(enqueued, expected.len(), "amount budget: {amount}");
+        let chosen = sqlx::query_scalar!(
+            "SELECT recipient_id FROM project_budget_notifications WHERE org_id = $1 ORDER BY recipient_id",
+            ids.org_id
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(chosen, expected, "amount budget: {amount}");
+        for user in everyone.into_iter().filter(|user| !chosen.contains(user)) {
+            let notification = Uuid::now_v7();
+            sqlx::query!(
+                "INSERT INTO project_budget_notifications
+                   (id,org_id,project_id,task_id,user_id,recipient_id,period_key,threshold)
+                 SELECT $1,org_id,project_id,task_id,user_id,$2,period_key,threshold
+                 FROM project_budget_notifications WHERE org_id = $3 LIMIT 1",
+                notification,
+                user,
+                ids.org_id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            sqlx::query!(
+                "INSERT INTO horae_outbox (id,org_id,event_kind,payload)
+                 VALUES ($1,$2,'budget_email',jsonb_build_object('notification_id',$3::uuid))",
+                Uuid::now_v7(),
+                ids.org_id,
+                notification
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        while let Some(event) = crate::jobs::claim_outbox(&pool, "budget_email")
+            .await
+            .unwrap()
+        {
+            deliver(&pool, &stub.config, &event).await.unwrap();
+        }
+        let delivered = sqlx::query_scalar!(
+            "SELECT n.recipient_id FROM horae_outbox o
+             JOIN project_budget_notifications n ON n.id = (o.payload->>'notification_id')::uuid
+             WHERE o.org_id = $1 AND o.delivered_at IS NOT NULL ORDER BY n.recipient_id",
+            ids.org_id
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(delivered, expected, "amount budget: {amount}");
+    }
+    let foreign = crate::server_fns::test_seed::seed(&pool, Administrator).await;
+    let project = sqlx::query_scalar!(
+        "SELECT project_id FROM project_settings WHERE org_id <> $1 LIMIT 1",
+        foreign.org_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        crate::server_fns::budgets::enqueue_alerts(&pool, foreign.org_id, project, date)
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+/// A pending amount alert is withheld once the recipient can no longer read
+/// billable rates for the project, though they still read the project.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn amount_alert_needs_billable_rate_read_at_delivery(pool: sqlx::PgPool) {
+    use horae_core::permissions::catalog::Permission::{
+        BillableRateReadAll, BillableRateReadManaged, ProjectReadAll, ProjectReadManaged,
+    };
+    // (grants left before delivery, designated manager, sent)
+    for (grants, designated, sent) in [
+        (&[ProjectReadAll, BillableRateReadAll][..], false, true),
+        (
+            &[ProjectReadManaged, BillableRateReadManaged][..],
+            true,
+            true,
+        ),
+        (&[ProjectReadAll][..], true, false),
+        (&[ProjectReadAll, BillableRateReadManaged][..], false, false),
+    ] {
+        let stub = Stub::new("touch \"$0.called\"\ncat > /dev/null");
+        let (ids, event) = queued(&pool).await;
+        sqlx::query!(
+            "UPDATE projects SET budget_kind = 'amount', budget_minutes = NULL, budget_amount_cents = 10000 WHERE id = $1",
+            ids.project_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        if designated {
+            sqlx::query!(
+                "INSERT INTO project_management_assignments (id,org_id,project_id,manager_id) VALUES ($1,$2,$3,$4)",
+                Uuid::now_v7(),
+                ids.org_id,
+                ids.project_id,
+                ids.user_id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        crate::ops::testing::set_grants(&mut pool.acquire().await.unwrap(), &ids, grants)
+            .await
+            .unwrap();
+        deliver(&pool, &stub.config, &event).await.unwrap();
+        assert_eq!(
+            PathBuf::from(format!("{}.called", stub.program.display())).exists(),
+            sent,
+            "{grants:?}"
+        );
+        assert_eq!(
+            sqlx::query_scalar!(
+                "SELECT delivered_at IS NOT NULL FROM horae_outbox WHERE id = $1",
+                event.id
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+            Some(sent)
+        );
+    }
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn stale_email_lease_cannot_start_delivery(pool: sqlx::PgPool) {
     let stub = Stub::new("touch \"$0.called\"\ncat > /dev/null");

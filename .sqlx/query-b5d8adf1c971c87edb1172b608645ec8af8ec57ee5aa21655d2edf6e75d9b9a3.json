@@ -1,0 +1,68 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT n.id, n.created_at AS \"created_at: DateTime<Utc>\", n.period_key, n.threshold,\n                  p.name, u.email,\n                  CASE WHEN n.task_id IS NOT NULL THEN 'task' WHEN n.user_id IS NOT NULL THEN 'person' ELSE 'project' END AS \"scope!\",\n                  (p.active AND u.active AND COALESCE(ps.alert_enabled, false)\n                   AND COALESCE(s.catalog_version = $5\n                     AND ('project_read_all' = ANY(s.grants)\n                       OR ('project_read_managed' = ANY(s.grants) AND EXISTS (\n                         SELECT 1 FROM project_management_assignments m\n                         WHERE m.org_id=n.org_id AND m.project_id=p.id AND m.manager_id=u.id)))\n                     AND (p.budget_kind <> 'amount'\n                       OR 'billable_rate_read_all' = ANY(s.grants)\n                       OR ('billable_rate_read_managed' = ANY(s.grants) AND EXISTS (\n                         SELECT 1 FROM project_management_assignments m\n                         WHERE m.org_id=n.org_id AND m.project_id=p.id AND m.manager_id=u.id))), false)) AS \"eligible!\"\n           FROM project_budget_notifications n\n           JOIN projects p ON p.id=n.project_id AND p.org_id=n.org_id\n           JOIN users u ON u.id=n.recipient_id AND u.org_id=n.org_id\n           LEFT JOIN project_settings ps ON ps.project_id=p.id AND ps.org_id=n.org_id\n           LEFT JOIN person_permission_states s ON s.org_id=n.org_id AND s.user_id=u.id\n           WHERE n.id=$1 AND n.org_id=$2 AND n.recipient_id=$3 AND n.project_id=$4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at: DateTime<Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "period_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "threshold",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "scope!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "eligible!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "b5d8adf1c971c87edb1172b608645ec8af8ec57ee5aa21655d2edf6e75d9b9a3"
+}
