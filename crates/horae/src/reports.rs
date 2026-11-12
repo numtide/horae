@@ -65,7 +65,7 @@ async fn require_invoice_reader(session: &Session) -> Result<(uuid::Uuid, uuid::
     let read = crate::ops::begin_read(&state.db, crate::ops::Caller::session(org_id, user_id))
         .await
         .map_err(status)?;
-    let allowed = read.actor.has(crate::ops::invoices::READ);
+    let allowed = crate::ops::invoices::holds(&read.actor, crate::ops::invoices::READ);
     read.finish(Ok(())).await.map_err(status)?;
     if allowed {
         Ok((user_id, org_id))

@@ -307,7 +307,7 @@ pub(super) async fn fetch_detailed(
         pool,
         org_id,
         actor_id,
-        horae_core::permissions::catalog::Permission::TimeReadAll,
+        &[horae_core::permissions::catalog::Permission::TimeReadAll],
     )
     .await?;
     let rows = crate::reports::fetch_entries(&mut *tx, org_id, period, filters)

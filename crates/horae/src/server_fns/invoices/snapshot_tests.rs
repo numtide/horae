@@ -49,7 +49,7 @@ fn assert_denied(result: Result<i64, ServerFnError>) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn financial_snapshots_require_current_same_tenant_invoice_writer(pool: PgPool) {
+async fn financial_snapshots_require_current_same_tenant_invoice_preparer(pool: PgPool) {
     let ids = fee_tests::single_fee(&pool).await;
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let mut connection = pool.acquire().await.unwrap();
@@ -60,11 +60,16 @@ async fn financial_snapshots_require_current_same_tenant_invoice_writer(pool: Pg
         assert_denied(read(&pool, (ids.org_id, Uuid::now_v7()), &ids, reader).await);
         assert_denied(read(&pool, (ids.org_id, foreign.user_id), &ids, reader).await);
         assert_denied(read(&pool, (Uuid::now_v7(), ids.user_id), &ids, reader).await);
-        // Reading every invoice is not enough to prepare one.
-        set_grants(&mut connection, &ids, &[Permission::InvoiceReadAll])
-            .await
-            .unwrap();
-        assert_denied(read(&pool, (ids.org_id, ids.user_id), &ids, reader).await);
+        // Neither reading every invoice, managing them without everyone's
+        // billable rates, nor those rates alone is enough to prepare one.
+        for grants in [
+            &[Permission::InvoiceReadAll, Permission::BillableRateReadAll][..],
+            &[Permission::InvoiceWriteAll],
+            &[Permission::BillableRateWriteAll],
+        ] {
+            set_grants(&mut connection, &ids, grants).await.unwrap();
+            assert_denied(read(&pool, (ids.org_id, ids.user_id), &ids, reader).await);
+        }
         // Being an administrator is not the grant.
         crate::ops::testing::provision(&pool, &ids, &[], true).await;
         assert_denied(read(&pool, (ids.org_id, ids.user_id), &ids, reader).await);
@@ -79,9 +84,13 @@ async fn financial_snapshots_require_current_same_tenant_invoice_writer(pool: Pg
             .execute(&pool)
             .await
             .unwrap();
-        set_grants(&mut connection, &ids, &[Permission::InvoiceWriteAll])
-            .await
-            .unwrap();
+        set_grants(
+            &mut connection,
+            &ids,
+            &[Permission::InvoiceWriteAll, Permission::BillableRateReadAll],
+        )
+        .await
+        .unwrap();
         read(&pool, (ids.org_id, ids.user_id), &ids, reader)
             .await
             .unwrap();

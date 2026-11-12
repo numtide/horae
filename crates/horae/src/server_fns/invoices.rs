@@ -56,8 +56,8 @@ async fn begin_invoice_read(
     super::snapshot::authorized(pool, org_id, actor_id, crate::ops::invoices::READ).await
 }
 
-/// A snapshot read for the invoice workflows that lead to a write (preparing
-/// and editing drafts), holding the actor's whole-invoice write grant.
+/// A snapshot read for editing a draft, holding the actor's whole-invoice
+/// write grant.
 #[cfg(feature = "server")]
 async fn begin_invoice_draft_read(
     pool: &sqlx::PgPool,
@@ -65,6 +65,18 @@ async fn begin_invoice_draft_read(
     actor_id: uuid::Uuid,
 ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
     super::snapshot::authorized(pool, org_id, actor_id, crate::ops::invoices::WRITE).await
+}
+
+/// A snapshot read for previewing a new invoice, which prices uninvoiced
+/// work from current billable rates: the invoice write grant and
+/// `BillableRateReadAll`.
+#[cfg(feature = "server")]
+async fn begin_invoice_preparation_read(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
+    super::snapshot::authorized(pool, org_id, actor_id, crate::ops::invoices::PREPARE).await
 }
 
 #[server]
@@ -416,7 +428,10 @@ async fn generate_invoice_with_request(
         "projects": selected, "overrides": overrides, "request": canonical,
     });
     if let Some((_, actor_id)) = request {
-        editing::lock_actor(&mut tx, org_id, actor_id).await?;
+        // Generation prices the work from current billable rates, as its
+        // preview did.
+        let actor = editing::lock_actor(&mut tx, org_id, actor_id).await?;
+        crate::ops::invoices::authorize_prepare(&actor)?;
         let size = sqlx::query_scalar!(
             r#"SELECT octet_length($1::jsonb::text) AS "size!""#,
             payload

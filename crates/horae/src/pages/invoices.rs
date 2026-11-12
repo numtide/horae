@@ -23,14 +23,29 @@ mod settings;
 
 pub use settings::InvoiceSettings;
 
-/// Whether to offer generating invoices, editing drafts and changing status:
-/// the grant those server functions require, from a catalog this build
-/// understands. Reading needs `InvoiceReadAll`, which `RecoveryGate` checks.
-fn manages_invoices(session: crate::components::session::Session) -> bool {
+/// Whether the session's own permissions, from a catalog this build
+/// understands, hold every `required` grant. Reading needs `InvoiceReadAll`,
+/// which `RecoveryGate` checks.
+fn holds(session: crate::components::session::Session, required: &[Permission]) -> bool {
     matches!(
         &*session.permissions.read(),
         Some(Ok(Some(own))) if own.catalog_version == PERMISSION_CATALOG_VERSION
-            && own.grants.contains(&Permission::InvoiceWriteAll)
+            && required.iter().all(|grant| own.grants.contains(grant))
+    )
+}
+
+/// Whether to offer editing drafts and changing status: the grant those
+/// server functions require.
+fn manages_invoices(session: crate::components::session::Session) -> bool {
+    holds(session, &[Permission::InvoiceWriteAll])
+}
+
+/// Whether to offer preparing and generating a new invoice, which prices
+/// uninvoiced work from current billable rates.
+fn prepares_invoices(session: crate::components::session::Session) -> bool {
+    holds(
+        session,
+        &[Permission::InvoiceWriteAll, Permission::BillableRateReadAll],
     )
 }
 
@@ -82,7 +97,7 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
         Some(Ok(me)) => Some(me.org_role),
         _ => None,
     });
-    let manages = manages_invoices(session);
+    let prepares = prepares_invoices(session);
 
     rsx! {
         div {
@@ -92,7 +107,7 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                     if configures {
                         Link { to: Route::InvoiceSettings {}, class: "btn btn-secondary", "Settings" }
                     }
-                    if manages && storage.ready() {
+                    if prepares && storage.ready() {
                     button {
                         class: "btn btn-primary",
                         disabled: busy(),
@@ -105,7 +120,7 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                 }
             }
 
-            if manages && storage.ready() && show_form() {
+            if prepares && storage.ready() && show_form() {
                 if clients.state()() != UseResourceState::Ready {
                     p { role: "status", "Loading clients…" }
                 } else if matches!(&*clients.read(), Some(Err(_))) {

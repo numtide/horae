@@ -471,7 +471,7 @@ async fn authorized_commits_asynchronously_only_inside_its_snapshot(pool: PgPool
                 &reader_pool,
                 fixture.ids.org_id,
                 fixture.ids.user_id,
-                Permission::InvoiceReadAll,
+                &[Permission::InvoiceReadAll],
             )
             .await
             .unwrap();
@@ -517,7 +517,7 @@ async fn authorized_bounds_its_authority_lock_wait(pool: PgPool) {
         &pool,
         fixture.ids.org_id,
         fixture.ids.user_id,
-        Permission::InvoiceReadAll,
+        &[Permission::InvoiceReadAll],
     )
     .await
     .map(|_| ());

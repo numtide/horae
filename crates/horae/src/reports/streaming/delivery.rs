@@ -99,7 +99,7 @@ impl Authority {
             crate::ops::OpError::Conflict(_) => StatusCode::CONFLICT,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         })?;
-        if !actor.has(crate::ops::invoices::READ) {
+        if !crate::ops::invoices::holds(&actor, crate::ops::invoices::READ) {
             return Err(StatusCode::FORBIDDEN);
         }
         release_authority(connection).await

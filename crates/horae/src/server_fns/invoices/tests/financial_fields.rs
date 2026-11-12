@@ -77,6 +77,9 @@ fn forbidden<T: std::fmt::Debug>(result: Result<T, ServerFnError>) {
     );
 }
 
+/// Issued invoices disclose the rates they recorded to their invoice grants
+/// alone; preparing a new one prices work from current billable rates and
+/// needs `BillableRateReadAll` too. No payload carries a cost rate.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_managers_without_rate_or_cost_grants_receive_no_cost_rates(pool: PgPool) {
@@ -93,11 +96,76 @@ async fn invoice_managers_without_rate_or_cost_grants_receive_no_cost_rates(pool
     assert_no_cost(json(fetch_list(&pool, org, actor, None).await.unwrap()));
     assert_no_cost(json(fetch_detail(&pool, org, actor, id).await.unwrap()));
     assert_no_cost(json(editing::load(&pool, org, actor, id).await.unwrap()));
+    forbidden(preview::prepare(&pool, (org, actor), ids.client_id, (day, day), None, None).await);
+    set_grants(
+        &mut pool.acquire().await.unwrap(),
+        &ids,
+        &[Permission::InvoiceWriteAll, Permission::BillableRateReadAll],
+    )
+    .await
+    .unwrap();
     assert_no_cost(json(
         preview::prepare(&pool, (org, actor), ids.client_id, (day, day), None, None)
             .await
             .unwrap(),
     ));
+}
+
+/// Generation rechecks the billable-rate grant inside its own transaction:
+/// a review prepared with it cannot be generated once it is gone.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn generating_an_invoice_needs_everyones_billable_rates(pool: PgPool) {
+    let (ids, _) = costed_draft(&pool).await;
+    let day: chrono::NaiveDate = "2026-09-07".parse().unwrap();
+    let (org, actor) = (ids.org_id, ids.user_id);
+    let preparer = [Permission::InvoiceWriteAll, Permission::BillableRateReadAll];
+    set_grants(&mut pool.acquire().await.unwrap(), &ids, &preparer)
+        .await
+        .unwrap();
+    let request = InvoiceGenerationRequest {
+        request_id: uuid::Uuid::now_v7(),
+        review: preview::prepare(&pool, (org, actor), ids.client_id, (day, day), None, None)
+            .await
+            .unwrap(),
+        confirmed_excess: vec![],
+    };
+    let generate = || {
+        generate_invoice_with_request(
+            &pool,
+            org,
+            ids.client_id,
+            (day, day),
+            None,
+            None,
+            Some((&request, actor)),
+        )
+    };
+    for grants in [
+        &[Permission::InvoiceWriteAll][..],
+        &[Permission::BillableRateReadAll, Permission::InvoiceReadAll],
+    ] {
+        set_grants(&mut pool.acquire().await.unwrap(), &ids, grants)
+            .await
+            .unwrap();
+        forbidden(generate().await);
+    }
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM invoice_generation_requests WHERE org_id = $1",
+            org
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    set_grants(&mut pool.acquire().await.unwrap(), &ids, &preparer)
+        .await
+        .unwrap();
+    let (generated, created) = generate().await.unwrap();
+    assert!(created);
+    assert_no_cost(json(generated));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

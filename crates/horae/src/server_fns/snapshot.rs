@@ -18,30 +18,30 @@ fn database_error(error: sqlx::Error) -> ServerFnError {
     server_err("Unable to prepare a consistent snapshot")
 }
 
-/// Whether the actor's stored state grants `required`. The actor loads with
-/// the organization, then the person, locked `FOR SHARE`.
+/// Whether the actor's stored state grants every `required` permission. The
+/// actor loads with the organization, then the person, locked `FOR SHARE`.
 async fn authorize(
     tx: &mut Transaction<'_, Postgres>,
     org_id: Uuid,
     actor_id: Uuid,
-    required: Permission,
+    required: &[Permission],
 ) -> Result<bool, OpError> {
     let actor = Actor::load(tx, Caller::session(org_id, actor_id)).await?;
-    Ok(actor.has(required))
+    Ok(required.iter().all(|&permission| actor.has(permission)))
 }
 
 /// Use session-derived IDs. Materialize and commit before external/client waits.
-/// The transaction holds the actor's `required` grant from the stored
+/// The transaction holds every `required` grant from the actor's stored
 /// permission state until it ends.
 ///
 /// No INSERT/UPDATE/DELETE/nextval on the returned transaction: it commits
 /// asynchronously. Writes belong in their own transaction.
-pub(crate) async fn authorized(
-    pool: &PgPool,
+pub(crate) async fn authorized<'p>(
+    pool: &'p PgPool,
     org_id: Uuid,
     actor_id: Uuid,
-    required: Permission,
-) -> Result<Transaction<'_, Postgres>, ServerFnError> {
+    required: &[Permission],
+) -> Result<Transaction<'p, Postgres>, ServerFnError> {
     for _ in 0..MAX_ATTEMPTS {
         let mut tx = pool
             .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ WRITE")

@@ -50,7 +50,7 @@ pub(super) async fn prepare_with_edits(
             .into_iter()
             .collect::<Vec<_>>()
     });
-    let mut tx = begin_invoice_draft_read(pool, org_id, actor_id).await?;
+    let mut tx = begin_invoice_preparation_read(pool, org_id, actor_id).await?;
     sqlx::query_scalar!(
         "SELECT id FROM clients WHERE id = $1 AND org_id = $2",
         client_id,

@@ -6,15 +6,15 @@ use uuid::Uuid;
 /// Holds the writer's authority for the rest of the transaction: the actor
 /// loads with the organization (already held by `begin_invoice_write`) and
 /// then the person locked `FOR SHARE`, and must hold the whole-invoice write
-/// grant.
+/// grant. Returns the actor for writes that need more.
 pub(super) async fn lock_actor(
     tx: &mut Transaction<'_, Postgres>,
     org_id: Uuid,
     actor_id: Uuid,
-) -> Result<(), ServerFnError> {
+) -> Result<crate::ops::Actor, ServerFnError> {
     let actor = crate::ops::Actor::load(tx, crate::ops::Caller::session(org_id, actor_id)).await?;
     crate::ops::invoices::authorize_write(&actor)?;
-    Ok(())
+    Ok(actor)
 }
 
 async fn snapshot(
