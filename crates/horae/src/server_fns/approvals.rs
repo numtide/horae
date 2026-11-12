@@ -1,37 +1,11 @@
-//! Approval server functions.
+//! Approval server functions: session adapters over `ops::approvals`.
 
 use super::*;
 use crate::models::scoped_time::TimesheetWriteContext;
 #[cfg(feature = "server")]
-use horae_core::permissions::approvals::may_decide_submission;
+use crate::ops::{self, Caller};
 
 // ── Approvals (M7) ──────────────────────────────────────────────────────────
-
-/// The conflict submit_week returns when a running timer sits inside the week
-/// — one string for both return sites so they cannot drift.
-#[cfg(feature = "server")]
-const RUNNING_TIMER_CONFLICT: &str = "A timer is running in this week. Stop it before submitting.";
-
-/// True when the user has a running timer dated inside `[ws, we]`.
-#[cfg(feature = "server")]
-async fn week_has_running_timer(
-    db: impl sqlx::PgExecutor<'_>,
-    user_id: uuid::Uuid,
-    ws: chrono::NaiveDate,
-    we: chrono::NaiveDate,
-) -> Result<bool, ServerFnError> {
-    Ok(sqlx::query_scalar!(
-        "SELECT EXISTS(SELECT 1 FROM time_entries
-           WHERE user_id = $1 AND spent_date BETWEEN $2 AND $3 AND is_running)",
-        user_id,
-        ws as chrono::NaiveDate,
-        we as chrono::NaiveDate,
-    )
-    .fetch_one(db)
-    .await
-    .map_err(server_err)?
-    .unwrap_or(false))
-}
 
 /// Submit a week of time entries for approval.
 /// Transitions all 'open' entries in [week_start, week_start+6] to 'submitted'
@@ -53,562 +27,200 @@ pub async fn submit_week(
     let state = crate::state::global_state().await;
 
     let ws = parse_date(&week_start, "week_start")?;
-    let (approval, total_minutes) = submit_user_week(&state.db, user_id, org_id, ws)
-        .await
-        .map_err(|error| match error {
-            error @ ServerFnError::ServerError {
-                code: BAD_REQUEST | FORBIDDEN | CONFLICT | NOT_FOUND,
-                ..
-            } => error,
-            error => {
-                tracing::error!(%error, "Timesheet submission failed");
-                server_err("Timesheet submission is unavailable")
-            }
-        })?;
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::TimesheetSubmitted {
-            occurred_at: chrono::Utc::now(),
-            org_id,
-            submission: submission_payload(&approval, total_minutes),
-        });
-    Ok(approval)
+    submit_as(
+        &state.db,
+        Caller::session(org_id, user_id),
+        ws,
+        &*state.plugins,
+    )
+    .await
 }
 
 #[cfg(feature = "server")]
-async fn submit_user_week(
+async fn submit_as(
     pool: &sqlx::PgPool,
-    user_id: uuid::Uuid,
-    org_id: uuid::Uuid,
-    ws: chrono::NaiveDate,
-) -> Result<(Approval, i32), ServerFnError> {
-    use chrono::Datelike;
-    let we = ws
-        .checked_add_days(chrono::Days::new(6))
-        .ok_or_else(|| err(BAD_REQUEST, "week_start is out of range"))?;
-
-    let mut tx = pool.begin().await.map_err(server_err)?;
-    permissions::configure_administration(&mut tx)
-        .await
-        .map_err(server_err)?;
-    let config = sqlx::query!(
-        r#"SELECT permission_policy_version, week_start, round_minutes,
-                  round_dir as "round_dir: horae_core::types::RoundDir"
-           FROM organizations WHERE id = $1 FOR SHARE"#,
-        org_id,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| forbidden("Timesheet context changed; refresh the page"))?;
-    if config.permission_policy_version != 0 {
-        return Err(forbidden("Timesheet policy changed; refresh the page"));
-    }
-    let active_owner = sqlx::query_scalar!(
-        "SELECT id FROM users WHERE org_id=$1 AND id=$2 AND active FOR SHARE",
-        org_id,
-        user_id
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?;
-    if active_owner.is_none() {
-        return Err(forbidden("Active same-organization account required"));
-    }
-    // Writers acquire the shared form before changing any entries. Taking the
-    // user-wide lock first covers inserts and cross-week moves, not just rows
-    // that happened to exist when submission started.
-    sqlx::query!(
-        r#"SELECT pg_advisory_xact_lock(hashtextextended('horae.timesheet:' || $1::uuid::text, 0)) as "lock!: ()""#,
-        user_id,
-    ).execute(&mut *tx).await.map_err(server_err)?;
-    if ws.weekday().number_from_monday() as i16 != config.week_start {
-        return Err(err(
-            BAD_REQUEST,
-            "week_start must match the organization's first weekday",
-        ));
-    }
-
-    // A week a manager has already approved cannot be resubmitted — silently
-    // downgrading the approval back to pending would erase who approved it and
-    // when. It must be reopened (rejected) first. The row lock keeps a
-    // concurrent approve from slipping between this check and the upsert below.
-    let existing = sqlx::query_scalar!(
-        r#"SELECT state as "state: EntryState" FROM approvals
-           WHERE user_id = $1 AND period_start = $2
-           FOR UPDATE"#,
-        user_id,
-        ws as chrono::NaiveDate,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?;
-    if existing == Some(EntryState::Approved) {
-        return Err(conflict(
-            "This week is already approved; a manager must reopen it before it can be resubmitted",
-        ));
-    }
-
-    // A running timer cannot be frozen before its elapsed minutes are known.
-    // The write barrier prevents a timer from starting after this check.
-    if week_has_running_timer(&mut *tx, user_id, ws, we).await? {
-        return Err(conflict(RUNNING_TIMER_CONFLICT));
-    }
-
-    // Freeze and transition in the same UPDATE, using the shared SQL rounding
-    // function already checked against horae-core. A competing row update is
-    // re-evaluated against its current minutes, not a previously fetched vector.
-    let result = sqlx::query!(
-        "UPDATE time_entries
-         SET state = $4,
-             rounded_minutes = effective_minutes(minutes, NULL, $7, $8)
-         WHERE user_id = $1
-           AND org_id = $6
-           AND spent_date BETWEEN $2 AND $3
-           AND state = $5
-           AND NOT EXISTS (SELECT 1 FROM time_entries r
-                            WHERE r.user_id = $1
-                              AND r.spent_date BETWEEN $2 AND $3
-                              AND r.is_running)",
-        user_id,
-        ws as chrono::NaiveDate,
-        we as chrono::NaiveDate,
-        EntryState::Submitted as EntryState,
-        EntryState::Open as EntryState,
-        org_id,
-        config.round_minutes,
-        config.round_dir as horae_core::types::RoundDir,
-    )
-    .execute(&mut *tx)
-    .await
-    .map_err(server_err)?;
-
-    if result.rows_affected() == 0 {
-        if week_has_running_timer(&mut *tx, user_id, ws, we).await? {
-            return Err(conflict(RUNNING_TIMER_CONFLICT));
-        }
-        return Err(not_found("No open entries found for this week"));
-    }
-
-    // Retain the conditional upsert as a backstop against downgrading approval.
-    let id = uuid::Uuid::now_v7();
-    let approval = sqlx::query_as!(
-        Approval,
-        r#"INSERT INTO approvals (id, org_id, user_id, period_start, period_end, state)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (user_id, period_start) DO UPDATE
-           SET state = $6, submitted_at = now()
-           WHERE approvals.state <> $7
-         RETURNING id, org_id, user_id,
-                   period_start as "period_start: chrono::NaiveDate",
-                   period_end as "period_end: chrono::NaiveDate",
-                   state as "state: EntryState",
-                   submitted_at as "submitted_at: chrono::DateTime<chrono::Utc>",
-                   approved_by,
-                   approved_at as "approved_at: chrono::DateTime<chrono::Utc>""#,
-        id,
-        org_id,
-        user_id,
-        ws as chrono::NaiveDate,
-        we as chrono::NaiveDate,
-        EntryState::Submitted as EntryState,
-        EntryState::Approved as EntryState,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| {
-        conflict(
-            "This week is already approved; a manager must reopen it before it can be resubmitted",
-        )
-    })?;
-
-    let total_minutes = week_total_minutes(&mut *tx, user_id, org_id, ws, we).await?;
-    tx.commit().await.map_err(server_err)?;
-    Ok((approval, total_minutes))
+    caller: Caller,
+    week_start: chrono::NaiveDate,
+    events: &dyn ops::EventSink,
+) -> Result<Approval, ServerFnError> {
+    let mut write = ops::begin(pool, caller).await?;
+    let result = ops::approvals::submit_week(&mut write.tx, &write.actor, week_start).await;
+    Ok(write.commit(result, events).await?)
 }
 
-/// List one week's approvals, optionally filtered by state. Requires manager role.
+/// List one week's approvals, optionally filtered by state. Requires approval
+/// access covering everyone in the week.
 #[server]
 pub async fn list_approvals(
     status: Option<String>,
     week_start: String,
 ) -> Result<Vec<ApprovalSummary>, ServerFnError> {
-    let manager = require_manager().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
-    list_week(&state.db, &manager, status, &week_start).await
+    list_week(
+        &state.db,
+        Caller::session(user.org_id, user.id),
+        status,
+        &week_start,
+    )
+    .await
 }
 
 #[cfg(feature = "server")]
 async fn list_week(
     pool: &sqlx::PgPool,
-    manager: &User,
+    caller: Caller,
     status: Option<String>,
     week_start: &str,
 ) -> Result<Vec<ApprovalSummary>, ServerFnError> {
-    use chrono::Datelike;
-    let ws: chrono::NaiveDate = week_start
+    let week_start: chrono::NaiveDate = week_start
         .parse()
         .map_err(|_| err(BAD_REQUEST, "Invalid week_start (use YYYY-MM-DD)"))?;
-    let first_day = sqlx::query_scalar!(
-        "SELECT week_start FROM organizations WHERE id = $1",
-        manager.org_id
-    )
-    .fetch_one(pool)
-    .await
-    .map_err(server_err)?;
-    if ws.weekday().number_from_monday() as i16 != first_day {
-        return Err(err(
-            BAD_REQUEST,
-            "week_start must match the organization's first weekday",
-        ));
-    }
-    if ws.checked_add_days(chrono::Days::new(6)).is_none() {
-        return Err(err(BAD_REQUEST, "week_start is out of range"));
-    }
-    let state_filter: Option<EntryState> = status.map(|s| parse_enum(&s, "status")).transpose()?;
-
-    // Hours are aggregated per row from the user's entries in the approval's
-    // period (actual `minutes`, split by `billable`) via a lateral join, so the
-    // whole table comes back in one query rather than a lookup per approval.
-    let rows = sqlx::query!(
-        r#"SELECT a.id, a.org_id, a.user_id, u.name as user_name,
-                a.period_start as "period_start: chrono::NaiveDate",
-                a.period_end as "period_end: chrono::NaiveDate",
-                a.state as "state: EntryState",
-                a.submitted_at as "submitted_at: chrono::DateTime<chrono::Utc>",
-                a.approved_by,
-                a.approved_at as "approved_at: chrono::DateTime<chrono::Utc>",
-                COALESCE(t.total_minutes, 0) as "total_minutes!",
-                COALESCE(t.billable_minutes, 0) as "billable_minutes!"
-         FROM approvals a
-         JOIN users u ON u.id = a.user_id AND u.org_id = a.org_id
-         LEFT JOIN LATERAL (
-             SELECT (SUM(minutes))::bigint as total_minutes,
-                    (SUM(minutes) FILTER (WHERE billable))::bigint as billable_minutes
-             FROM time_entries te
-             WHERE te.org_id = a.org_id
-               AND te.user_id = a.user_id
-               AND te.spent_date BETWEEN a.period_start AND a.period_end
-         ) t ON true
-         WHERE a.org_id = $2
-           AND a.period_start = $3
-           AND ($1::entry_state IS NULL OR a.state = $1)
-         ORDER BY u.name, a.id"#,
-        state_filter as Option<EntryState>,
-        manager.org_id,
-        ws as chrono::NaiveDate,
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(server_err)?;
-
-    Ok(rows
-        .into_iter()
-        .map(|r| ApprovalSummary {
-            approval: Approval {
-                id: r.id,
-                org_id: r.org_id,
-                user_id: r.user_id,
-                period_start: r.period_start,
-                period_end: r.period_end,
-                state: r.state,
-                submitted_at: r.submitted_at,
-                approved_by: r.approved_by,
-                approved_at: r.approved_at,
-            },
-            user_name: r.user_name,
-            total_minutes: r.total_minutes,
-            billable_minutes: r.billable_minutes,
-        })
-        .collect())
+    let state: Option<EntryState> = status.map(|s| parse_enum(&s, "status")).transpose()?;
+    let mut read = ops::begin_read(pool, caller).await?;
+    let result = ops::approvals::list(&mut read.tx, &read.actor, state, week_start).await;
+    Ok(read.finish(result).await?)
 }
 
-/// The denial for approving or rejecting one's own submission. It names no
-/// other record, so a bulk request reveals nothing about the rest.
 #[cfg(feature = "server")]
-const OWN_SUBMISSION_FORBIDDEN: &str = "You cannot approve or reject your own submission";
-
-/// The requester's current role, read in the deciding transaction rather than
-/// trusted from the session. The row lock makes a concurrent role change or
-/// deactivation wait until this decision commits.
-#[cfg(feature = "server")]
-async fn current_role(
-    tx: &mut sqlx::PgConnection,
-    requester: &User,
-) -> Result<OrgRole, ServerFnError> {
-    sqlx::query_scalar!(
-        r#"SELECT org_role as "org_role: OrgRole" FROM users
-           WHERE id = $1 AND org_id = $2 AND active FOR SHARE"#,
-        requester.id,
-        requester.org_id,
-    )
-    .fetch_optional(tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| forbidden("Active same-organization account required"))
-}
-
-/// Approve every submitted approval in `ids` within one transaction: flip each
-/// row Submitted→Approved, transition its period's submitted entries, and return
-/// the rows actually approved (foreign or non-submitted ids are skipped). Shared by the
-/// single- and bulk-approve server functions so the transition lives in one place.
-/// If any of them is the requester's own and self-approval is not allowed, the
-/// whole request is denied and nothing changes.
-#[cfg(feature = "server")]
-async fn approve_periods(
+async fn approve_as(
     pool: &sqlx::PgPool,
-    manager: &User,
+    caller: Caller,
     ids: &[uuid::Uuid],
+    events: &dyn ops::EventSink,
 ) -> Result<Vec<Approval>, ServerFnError> {
-    let mut tx = pool.begin().await.map_err(server_err)?;
-    let role = current_role(&mut tx, manager).await?;
-    if !horae_core::state::can_transition(EntryState::Submitted, EntryState::Approved, role) {
-        return Err(forbidden("Insufficient role to approve submissions"));
-    }
-
-    let approvals = sqlx::query_as!(
-        Approval,
-        r#"UPDATE approvals
-             SET state = $2, approved_by = $3, approved_at = now()
-           WHERE id = ANY($1) AND state = $4 AND org_id = $5
-        RETURNING id, org_id, user_id,
-                  period_start as "period_start: chrono::NaiveDate",
-                  period_end as "period_end: chrono::NaiveDate",
-                  state as "state: EntryState",
-                  submitted_at as "submitted_at: chrono::DateTime<chrono::Utc>",
-                  approved_by,
-                  approved_at as "approved_at: chrono::DateTime<chrono::Utc>""#,
-        ids,
-        EntryState::Approved as EntryState,
-        manager.id,
-        EntryState::Submitted as EntryState,
-        manager.org_id,
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .map_err(server_err)?;
-    // Judge exactly the rows this request changed; returning drops `tx`, which
-    // rolls the update back.
-    if approvals
-        .iter()
-        .any(|a| !may_decide_submission(manager.id, role, a.user_id))
-    {
-        return Err(forbidden(OWN_SUBMISSION_FORBIDDEN));
-    }
-
-    // Transition the submitted entries of every approved period to approved.
-    let approved_ids: Vec<uuid::Uuid> = approvals.iter().map(|a| a.id).collect();
-    sqlx::query!(
-        r#"UPDATE time_entries te
-              SET state = $2
-             FROM approvals a
-            WHERE a.id = ANY($1)
-              AND te.user_id = a.user_id
-              AND te.org_id = a.org_id
-              AND te.spent_date BETWEEN a.period_start AND a.period_end
-              AND te.state = $3"#,
-        &approved_ids,
-        EntryState::Approved as EntryState,
-        EntryState::Submitted as EntryState,
-    )
-    .execute(&mut *tx)
-    .await
-    .map_err(server_err)?;
-
-    tx.commit().await.map_err(server_err)?;
-    Ok(approvals)
+    let mut write = ops::begin(pool, caller).await?;
+    let result = ops::approvals::approve(&mut write.tx, &write.actor, ids).await;
+    Ok(write.commit(result, events).await?)
 }
 
-#[cfg(feature = "server")]
-async fn approve_ids(manager: &User, ids: &[uuid::Uuid]) -> Result<Vec<Approval>, ServerFnError> {
-    let state = crate::state::global_state().await;
-    let approvals = approve_periods(&state.db, manager, ids).await?;
-    let approved_ids: Vec<uuid::Uuid> = approvals.iter().map(|a| a.id).collect();
-
-    // Sum every approved period's tracked minutes in one grouped query instead of
-    // a round-trip per approval. This matches `week_total_minutes` exactly: all of
-    // the user's entries in the period, unfiltered by state.
-    let total_rows = sqlx::query!(
-        r#"SELECT a.id as "id!",
-                  COALESCE(SUM(te.minutes), 0)::int as "total!"
-           FROM approvals a
-           LEFT JOIN time_entries te
-             ON te.user_id = a.user_id
-            AND te.org_id = a.org_id
-            AND te.spent_date BETWEEN a.period_start AND a.period_end
-           WHERE a.id = ANY($1) AND a.org_id = $2
-           GROUP BY a.id"#,
-        &approved_ids,
-        manager.org_id,
-    )
-    .fetch_all(&state.db)
-    .await
-    .map_err(server_err)?;
-    let totals: std::collections::HashMap<uuid::Uuid, i32> =
-        total_rows.into_iter().map(|r| (r.id, r.total)).collect();
-
-    // Announce each approval (FR-019) once the transition is durably committed.
-    for a in &approvals {
-        let total_minutes = totals.get(&a.id).copied().unwrap_or(0);
-        state
-            .plugins
-            .dispatch(crate::plugin::AppEvent::SubmissionApproved {
-                occurred_at: chrono::Utc::now(),
-                org_id: a.org_id,
-                submission: submission_payload(a, total_minutes),
-            });
-    }
-
-    Ok(approvals)
-}
-
-/// Approve a single submitted week. Requires manager role.
+/// Approve a single submitted week.
 #[server]
 pub async fn approve_submission(approval_id: String) -> Result<Approval, ServerFnError> {
-    let manager = require_manager().await?;
+    let user = require_user().await?;
     let id = parse_uuid(&approval_id, "approval_id")?;
-
-    approve_ids(&manager, &[id])
-        .await?
-        .into_iter()
-        .next()
-        .ok_or_else(|| not_found("Approval not found or not in 'submitted' state"))
+    let state = crate::state::global_state().await;
+    approve_as(
+        &state.db,
+        Caller::session(user.org_id, user.id),
+        &[id],
+        &*state.plugins,
+    )
+    .await?
+    .into_iter()
+    .next()
+    .ok_or_else(|| not_found("Approval not found or not in 'submitted' state"))
 }
 
 /// Approve several submitted weeks at once (the "approve visible" action).
-/// Returns the number actually approved; foreign or non-submitted ids are skipped,
-/// but a selection that includes the requester's own week is denied outright.
+/// Returns the number actually approved; foreign or non-submitted ids are
+/// skipped, but a selection including a week the requester may not decide is
+/// denied outright.
 #[server]
 pub async fn approve_submissions(approval_ids: Vec<String>) -> Result<usize, ServerFnError> {
-    let manager = require_manager().await?;
+    let user = require_user().await?;
     let ids = approval_ids
         .iter()
         .map(|s| parse_uuid(s, "approval_id"))
         .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(approve_ids(&manager, &ids).await?.len())
+    let state = crate::state::global_state().await;
+    Ok(approve_as(
+        &state.db,
+        Caller::session(user.org_id, user.id),
+        &ids,
+        &*state.plugins,
+    )
+    .await?
+    .len())
 }
 
-/// Reject a submitted week, or reopen an already-approved one. Requires
-/// manager role. Reopens the period's time entries and deletes the approval
-/// row, exactly reversing what submit (and approve) wrote.
+/// Reject a submitted week, or reopen an already-approved one. Reopens the
+/// period's time entries and deletes the approval row, exactly reversing what
+/// submit (and approve) wrote.
 #[server]
 pub async fn reject_submission(approval_id: String) -> Result<(), ServerFnError> {
-    let manager = require_manager().await?;
-
-    let state = crate::state::global_state().await;
+    let user = require_user().await?;
     let approval_id = parse_uuid(&approval_id, "approval_id")?;
-    let approval = reopen_period(&state.db, &manager, approval_id).await?;
-
-    let total_minutes = week_total_minutes(
+    let state = crate::state::global_state().await;
+    reopen_as(
         &state.db,
-        approval.user_id,
-        approval.org_id,
-        approval.period_start,
-        approval.period_end,
+        Caller::session(user.org_id, user.id),
+        approval_id,
+        &*state.plugins,
     )
     .await?;
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::SubmissionRejected {
-            occurred_at: chrono::Utc::now(),
-            org_id: approval.org_id,
-            submission: submission_payload(&approval, total_minutes),
-        });
-
     Ok(())
 }
 
 #[cfg(feature = "server")]
-async fn reopen_period(
+async fn reopen_as(
     pool: &sqlx::PgPool,
-    manager: &User,
+    caller: Caller,
     approval_id: uuid::Uuid,
+    events: &dyn ops::EventSink,
 ) -> Result<Approval, ServerFnError> {
-    let mut tx = pool.begin().await.map_err(server_err)?;
-    let role = current_role(&mut tx, manager).await?;
-
-    // Fetch the approval to know user + period + current state, locking the
-    // row so a concurrent approve can't interleave with the reopen below.
-    let approval = sqlx::query_as!(
-        Approval,
-        r#"SELECT id, org_id, user_id,
-                period_start as "period_start: chrono::NaiveDate",
-                period_end as "period_end: chrono::NaiveDate",
-                state as "state: EntryState",
-                submitted_at as "submitted_at: chrono::DateTime<chrono::Utc>",
-                approved_by,
-                approved_at as "approved_at: chrono::DateTime<chrono::Utc>"
-         FROM approvals WHERE id = $1 AND org_id = $2
-         FOR UPDATE"#,
-        approval_id,
-        manager.org_id,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Approval not found"))?;
-
-    // Rejecting a pending week and reopening an approved one are both a
-    // transition back to 'open'; the core state machine decides who may do
-    // which from the approval's current state.
-    if !horae_core::state::can_transition(approval.state, EntryState::Open, role) {
-        return Err(forbidden("Insufficient role to reject submissions"));
-    }
-    // Reopening an approved week is the same decision as rejecting it.
-    if !may_decide_submission(manager.id, role, approval.user_id) {
-        return Err(forbidden(OWN_SUBMISSION_FORBIDDEN));
-    }
-
-    // Reopen entries: submitted ones (pending week) or approved ones
-    // (reopened week), clearing the rounding persisted at submit time.
-    sqlx::query!(
-        "UPDATE time_entries
-         SET state = $4, rounded_minutes = NULL
-         WHERE user_id = $1
-           AND org_id = $7
-           AND spent_date BETWEEN $2 AND $3
-           AND (state = $5 OR state = $6)",
-        approval.user_id,
-        approval.period_start as chrono::NaiveDate,
-        approval.period_end as chrono::NaiveDate,
-        EntryState::Open as EntryState,
-        EntryState::Submitted as EntryState,
-        EntryState::Approved as EntryState,
-        manager.org_id,
-    )
-    .execute(&mut *tx)
-    .await
-    .map_err(server_err)?;
-
-    // Delete the approval row (per schema: "reject deletes the row")
-    sqlx::query!(
-        "DELETE FROM approvals WHERE id = $1 AND org_id = $2",
-        approval_id,
-        manager.org_id,
-    )
-    .execute(&mut *tx)
-    .await
-    .map_err(server_err)?;
-
-    tx.commit().await.map_err(server_err)?;
-
-    Ok(approval)
+    let mut write = ops::begin(pool, caller).await?;
+    let result = ops::approvals::reopen(&mut write.tx, &write.actor, approval_id).await;
+    Ok(write.commit(result, events).await?)
 }
 
-// DB-backed guard tests (`#[sqlx::test]`, throwaway database per test). They
-// call the crate-internal guard directly, which `tests/` cannot do for a bin
+// DB-backed tests (`#[sqlx::test]`, throwaway database per test). They call
+// the crate-internal functions directly, which `tests/` cannot do for a bin
 // crate — so the real behaviour is pinned here, and the integration tests only
 // mirror the SQL statements.
 #[cfg(all(test, feature = "server"))]
 mod tests {
-    use super::week_has_running_timer;
+    use super::{Approval, approve_as, reopen_as, submit_as};
+    use crate::ops::Caller;
+    use crate::ops::approvals::week_has_running_timer;
+    use crate::ops::testing::Recorder;
+    use crate::plugin::AppEvent;
     use crate::server_fns::test_seed::{SeedIds, seed};
+    use dioxus::prelude::ServerFnError;
     use horae_core::permissions::catalog::BuiltInProfile;
     use horae_core::types::EntryState;
     use sqlx::PgPool;
     use uuid::Uuid;
+
+    /// The seeded person, as a signed-in session.
+    pub(super) fn caller(ids: &SeedIds) -> Caller {
+        Caller::session(ids.org_id, ids.user_id)
+    }
+
+    /// Submits as the given person and returns the approval with the total the
+    /// submission event announced.
+    pub(super) async fn submit_user_week(
+        pool: &PgPool,
+        user_id: Uuid,
+        org_id: Uuid,
+        week_start: chrono::NaiveDate,
+    ) -> Result<(Approval, i32), ServerFnError> {
+        let events = Recorder::default();
+        let approval =
+            submit_as(pool, Caller::session(org_id, user_id), week_start, &events).await?;
+        match events.take().as_slice() {
+            [AppEvent::TimesheetSubmitted { submission, .. }] => {
+                Ok((approval, submission.total_minutes))
+            }
+            other => panic!("expected one submission event, got {other:?}"),
+        }
+    }
+
+    pub(super) async fn approve_periods(
+        pool: &PgPool,
+        caller: Caller,
+        ids: &[Uuid],
+    ) -> Result<Vec<Approval>, ServerFnError> {
+        approve_as(pool, caller, ids, &Recorder::default()).await
+    }
+
+    pub(super) async fn reopen_period(
+        pool: &PgPool,
+        caller: Caller,
+        approval_id: Uuid,
+    ) -> Result<Approval, ServerFnError> {
+        reopen_as(pool, caller, approval_id, &Recorder::default()).await
+    }
 
     pub(super) async fn insert_entry(
         pool: &PgPool,

@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id FROM users WHERE org_id=$1 AND id=$2 AND active FOR SHARE",
+  "query": "SELECT managed_user_id FROM person_management_assignments\n         WHERE org_id = $1 AND manager_id = $2",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
+        "name": "managed_user_id",
         "type_info": "Uuid"
       }
     ],
@@ -19,5 +19,5 @@
       false
     ]
   },
-  "hash": "f44ea73c5cde9e25e7e2991e0c396373fa42847f3c7eea0d17db24ddb0fa5616"
+  "hash": "3b96ce8445a3c6e2635890d09f190f7511cbcdbf0b2867960c1e07d5d5e81410"
 }

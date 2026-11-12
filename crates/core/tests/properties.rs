@@ -616,7 +616,7 @@ mod project_activity {
 
 mod state {
     use horae_core::state::can_transition;
-    use horae_core::types::{EntryState, OrgRole};
+    use horae_core::types::EntryState;
 
     const STATES: [EntryState; 4] = [
         EntryState::Open,
@@ -624,54 +624,38 @@ mod state {
         EntryState::Approved,
         EntryState::Invoiced,
     ];
-    const ROLES: [OrgRole; 3] = [OrgRole::Admin, OrgRole::Manager, OrgRole::Member];
 
-    /// Over every (from, to, role) triple: invoiced time is final, nothing
-    /// transitions to itself, a member only moves time between open and
-    /// submitted, approved time leaves only by a manager's reopen or invoice,
-    /// and submitted time cannot be invoiced without an approval decision.
+    /// Over every (from, to) pair: invoiced time is final, nothing transitions
+    /// to itself, approved time leaves only by a reopen or an invoice, and
+    /// submitted time cannot be invoiced without an approval decision.
     #[test]
     fn entry_state_machine_upholds_its_locks() {
         use EntryState::*;
         for from in STATES {
             for to in STATES {
-                for role in ROLES {
-                    if !can_transition(from, to, role) {
-                        continue;
-                    }
-                    let step = format!("{from:?} -> {to:?} as {role:?}");
-                    assert_ne!(from, Invoiced, "{step}");
-                    assert_ne!(from, to, "{step}");
-                    if role == OrgRole::Member {
-                        assert!(
-                            matches!((from, to), (Open, Submitted) | (Submitted, Open)),
-                            "{step}"
-                        );
-                    }
-                    if from == Approved {
-                        assert!(
-                            role.is_manager_or_above() && matches!(to, Open | Invoiced),
-                            "{step}"
-                        );
-                    }
-                    assert_ne!((from, to), (Submitted, Invoiced), "{step}");
-                    // Managers and admins hold the same entry-state authority.
-                    assert!(can_transition(from, to, OrgRole::Admin), "{step}");
-                    assert!(can_transition(from, to, OrgRole::Manager), "{step}");
+                if !can_transition(from, to) {
+                    continue;
                 }
+                let step = format!("{from:?} -> {to:?}");
+                assert_ne!(from, Invoiced, "{step}");
+                assert_ne!(from, to, "{step}");
+                if from == Approved {
+                    assert!(matches!(to, Open | Invoiced), "{step}");
+                }
+                assert_ne!((from, to), (Submitted, Invoiced), "{step}");
             }
         }
     }
 
-    /// The workflow is usable: from open, a member can submit and a manager
-    /// can approve and invoice, and every non-final state can return to open.
+    /// The workflow is usable: from open, time can be submitted, approved and
+    /// invoiced, and every non-final state can return to open.
     #[test]
     fn entry_state_machine_reaches_every_state() {
         use EntryState::*;
-        assert!(can_transition(Open, Submitted, OrgRole::Member));
-        assert!(can_transition(Submitted, Approved, OrgRole::Manager));
-        assert!(can_transition(Approved, Invoiced, OrgRole::Manager));
-        assert!(can_transition(Submitted, Open, OrgRole::Member));
-        assert!(can_transition(Approved, Open, OrgRole::Manager));
+        assert!(can_transition(Open, Submitted));
+        assert!(can_transition(Submitted, Approved));
+        assert!(can_transition(Approved, Invoiced));
+        assert!(can_transition(Submitted, Open));
+        assert!(can_transition(Approved, Open));
     }
 }
