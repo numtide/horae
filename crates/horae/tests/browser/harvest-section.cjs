@@ -39,11 +39,8 @@ const summary = {
   ],
   omitted_errors: 0, omitted_people: 0,
 };
-const user = email => ({
-  id: '019956ed-0000-7000-8000-0000000000a0', org_id: '019956ed-0000-7000-8000-0000000000b0', email, name: email,
-  oidc_subject: null, org_role: 'member', cost_rate_cents: null, billable_rate_cents: null, active: false,
-  created_at: '2026-09-15T10:30:00Z',
-});
+// `add_harvest_people` answers with list rows, not whole accounts.
+const user = email => ({ id: '019956ed-0000-7000-8000-0000000000a0', email, name: email, active: false });
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
@@ -82,7 +79,11 @@ const user = email => ({
       // Sam was added from another tab meanwhile.
       const present = people.filter(person => person.email === 'sam@example.com');
       const added = people.filter(person => !present.includes(person));
-      return reply({ added: added.map(person => user(person.email)), present: present.map(person => person.email) });
+      return reply({
+        added: added.map(person => user(person.email)),
+        present: present.map(person => person.email),
+        unavailable: [],
+      });
     }
     errors.push(`Unrecognized importer request was blocked: ${pathname}`);
     return route.abort('failed');
