@@ -1,5 +1,6 @@
 use super::*;
 use crate::models::project_creation::{ProjectForm, ProjectMemberInput, ReportVisibility};
+use horae_core::permissions::catalog::BuiltInProfile;
 
 const PATH: &str = "/api/projects/export/xlsx";
 
@@ -73,7 +74,7 @@ async fn export_after_writer(
 }
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = seed(pool, OrgRole::Manager).await;
+    let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
     let member = user(pool, ids.org_id, OrgRole::Member).await;
     let manager_cookie = api.cookie(ids.user_id).await;
     let member_cookie = api.cookie(member).await;
@@ -183,7 +184,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .await;
     assert!(exported.contains(&form.name));
 
-    let foreign = seed(pool, OrgRole::Admin).await;
+    let foreign = seed(pool, BuiltInProfile::Administrator).await;
     let forged = format!(
         "{PATH}?org_id={}&viewer_id={}&actor_id={}",
         foreign.org_id, foreign.user_id, foreign.user_id

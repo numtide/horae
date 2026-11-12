@@ -1,11 +1,12 @@
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn project_task_reader_requires_current_manager_designation(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadManaged]),
     )
     .await;
@@ -41,8 +42,13 @@ async fn project_task_reader_requires_current_manager_designation(pool: PgPool) 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_workflow_identity_rejects_foreign_client_parents(pool: PgPool) {
-    let (ids, viewer) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let (ids, viewer) = fixture(
+        &pool,
+        BuiltInProfile::Administrator,
+        PermissionSelection::new(&[]),
+    )
+    .await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     crate::server_fns::test_seed::time_entry(&pool, &ids, horae_core::types::EntryState::Open)
         .await;
     sqlx::query!(
@@ -92,7 +98,7 @@ async fn task_workflow_identity_rejects_foreign_client_parents(pool: PgPool) {
 async fn task_catalog_accepts_current_read_grant_without_legacy_role(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskReadAll]),
     )
     .await;
@@ -108,7 +114,12 @@ async fn task_catalog_accepts_current_read_grant_without_legacy_role(pool: PgPoo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_reads_do_not_inherit_legacy_administrator_catalog(pool: PgPool) {
-    let (_, viewer) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
+    let (_, viewer) = fixture(
+        &pool,
+        BuiltInProfile::Administrator,
+        PermissionSelection::new(&[]),
+    )
+    .await;
     for purpose in [TaskRead::Catalog, TaskRead::Tracking] {
         let rows = tasks_for_viewer(&pool, &viewer, None, purpose)
             .await
@@ -128,7 +139,7 @@ async fn task_catalog_withholds_global_rates_without_all_rate_read(pool: PgPool)
         permissions.extend(rates);
         let (ids, viewer) = fixture(
             &pool,
-            OrgRole::Admin,
+            BuiltInProfile::Administrator,
             PermissionSelection::new(&permissions),
         )
         .await;
@@ -157,7 +168,7 @@ async fn task_catalog_withholds_global_rates_without_all_rate_read(pool: PgPool)
 async fn task_catalog_all_rate_grant_is_independent_of_legacy_role(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskReadAll, Permission::BillableRateReadAll]),
     )
     .await;
@@ -184,7 +195,7 @@ async fn task_catalog_all_rate_grant_is_independent_of_legacy_role(pool: PgPool)
 async fn task_reader_rejects_unknown_policy_even_with_legacy_admin(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::TaskReadAll]),
     )
     .await;
@@ -205,7 +216,12 @@ async fn task_reader_rejects_unknown_policy_even_with_legacy_admin(pool: PgPool)
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn tracking_history_is_not_task_catalog_authority(pool: PgPool) {
-    let (ids, viewer) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
+    let (ids, viewer) = fixture(
+        &pool,
+        BuiltInProfile::Administrator,
+        PermissionSelection::new(&[]),
+    )
+    .await;
     crate::server_fns::test_seed::time_entry(&pool, &ids, horae_core::types::EntryState::Open)
         .await;
     sqlx::query!("UPDATE tasks SET active = false WHERE id = $1", ids.task_id)
@@ -235,8 +251,12 @@ async fn project_task_labels_require_project_scope_not_global_task_scope(pool: P
         vec![Permission::TaskReadAll],
         vec![Permission::ProjectReadAll],
     ] {
-        let (ids, viewer) =
-            fixture(&pool, OrgRole::Member, PermissionSelection::new(&grants)).await;
+        let (ids, viewer) = fixture(
+            &pool,
+            BuiltInProfile::Member,
+            PermissionSelection::new(&grants),
+        )
+        .await;
         sqlx::query!(
             "INSERT INTO project_tasks (project_id,task_id,billable) VALUES ($1,$2,true)",
             ids.project_id,
@@ -266,7 +286,7 @@ async fn project_task_labels_require_project_scope_not_global_task_scope(pool: P
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn assigned_tracking_task_survives_private_progress_without_catalog_grant(pool: PgPool) {
-    let (ids, viewer) = fixture(&pool, OrgRole::Member, PermissionSelection::new(&[])).await;
+    let (ids, viewer) = fixture(&pool, BuiltInProfile::Member, PermissionSelection::new(&[])).await;
     sqlx::query!(
         "INSERT INTO project_tasks (project_id,task_id,billable) VALUES ($1,$2,true)",
         ids.project_id,
@@ -322,11 +342,11 @@ async fn assigned_tracking_task_survives_private_progress_without_catalog_grant(
 async fn task_catalog_uses_current_actor_and_never_foreign_tasks(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskReadAll]),
     )
     .await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let rows = tasks_for_viewer(&pool, &viewer, None, TaskRead::Catalog)
         .await
         .unwrap();
@@ -358,7 +378,7 @@ async fn task_catalog_refreshes_permissions_after_organization_wait(pool: PgPool
     use crate::server_fns::test_seed::wait_for_blocked;
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::TaskReadAll, Permission::BillableRateReadAll]),
     )
     .await;

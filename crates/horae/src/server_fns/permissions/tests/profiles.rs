@@ -2,7 +2,6 @@ use super::profiles::{ProfileAction, ProfileCommand, ProfileCommandError, execut
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use std::time::Duration;
 
@@ -41,6 +40,7 @@ async fn save_state(
     grants: &PermissionSelection,
 ) {
     let ids: Vec<String> = serde_json::from_value(serde_json::to_value(grants).unwrap()).unwrap();
+    crate::server_fns::test_seed::clear_state(pool, user).await;
     sqlx::query!(
         "INSERT INTO person_permission_states
          (id, org_id, user_id, catalog_version, grants, is_administrator, source)
@@ -57,7 +57,7 @@ async fn save_state(
 }
 
 async fn fixture(pool: &PgPool) -> SeedIds {
-    let ids = seed(pool, OrgRole::Member).await;
+    let ids = seed(pool, BuiltInProfile::Member).await;
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
         ids.org_id
@@ -988,7 +988,7 @@ async fn management_schema_rejects_foreign_parents_self_links_and_duplicate_pair
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_actor_policy_tenant_and_target_checks_precede_mutation(pool: PgPool) {
+async fn canonical_actor_tenant_and_target_checks_precede_mutation(pool: PgPool) {
     let ids = fixture(&pool).await;
     let foreign = fixture(&pool).await;
     let non_admin = person(&pool, ids.org_id, false, BuiltInProfile::Administrator).await;
@@ -996,20 +996,6 @@ async fn canonical_actor_policy_tenant_and_target_checks_precede_mutation(pool: 
     for actor in [non_admin, foreign.user_id, Uuid::now_v7()] {
         assert!(matches!(
             execute(&pool, ids.org_id, actor, &request).await,
-            Err(ProfileCommandError::Forbidden)
-        ));
-    }
-    for version in [0, 2] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version = $2 WHERE id = $1",
-            ids.org_id,
-            version
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        assert!(matches!(
-            execute(&pool, ids.org_id, ids.user_id, &request).await,
             Err(ProfileCommandError::Forbidden)
         ));
     }

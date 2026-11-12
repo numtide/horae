@@ -8,7 +8,7 @@ async fn project_api_refreshes_scope_and_money_after_authority_wait(pool: PgPool
         for financial_only in [false, true] {
             let (ids, app) = canonical(
                 &pool,
-                OrgRole::Admin,
+                BuiltInProfile::Administrator,
                 &[Permission::ProjectReadAll, Permission::BillableRateReadAll],
             )
             .await;
@@ -76,7 +76,8 @@ async fn project_api_refreshes_scope_and_money_after_authority_wait(pool: PgPool
 #[serial_test::serial]
 async fn project_api_rejects_actor_deactivated_after_session_lookup(pool: PgPool) {
     for detail in [false, true] {
-        let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::ProjectReadAll]).await;
+        let (ids, app) =
+            canonical(&pool, BuiltInProfile::Member, &[Permission::ProjectReadAll]).await;
         let uri = if detail {
             format!("/harvest/v2/projects/{}", ids.project_id)
         } else {

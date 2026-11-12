@@ -1,6 +1,7 @@
 use super::canonical_read_tests::fixture;
 use super::*;
 use crate::server_fns::test_seed::{seed, time_entry, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::PermissionSelection;
 use sqlx::PgPool;
 
@@ -16,7 +17,7 @@ fn set_rate(amount_cents: i64) -> TaskRateEdit {
 async fn task_name_editor_preserves_unknown_currency_and_hides_rate_even_on_noop(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskWriteAll]),
     )
     .await;
@@ -65,7 +66,7 @@ async fn task_name_editor_preserves_unknown_currency_and_hides_rate_even_on_noop
 async fn task_rate_edit_does_not_rewrite_project_overrides_or_time_history(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskWriteAll, Permission::BillableRateWriteAll]),
     )
     .await;
@@ -124,7 +125,7 @@ async fn explicit_task_rate_noops_still_require_global_write_authority(pool: PgP
         if let Some(extra) = extra {
             grants.add(extra);
         }
-        let (ids, _) = fixture(&pool, OrgRole::Admin, grants).await;
+        let (ids, _) = fixture(&pool, BuiltInProfile::Administrator, grants).await;
         for (stored, edit) in [
             (None, TaskRateEdit::Clear {}),
             (Some(0), set_rate(0)),
@@ -179,11 +180,11 @@ async fn explicit_task_rate_noops_still_require_global_write_authority(pool: PgP
 async fn task_edit_validates_currency_amount_name_and_foreign_targets_atomically(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskWriteAll, Permission::BillableRateWriteAll]),
     )
     .await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for (id, name, rate, code) in [
         (ids.task_id, "Negative", set_rate(-1), BAD_REQUEST),
         (ids.task_id, " ", TaskRateEdit::Preserve {}, CONFLICT),
@@ -227,7 +228,7 @@ async fn task_edit_observes_task_and_rate_revocation_after_organization_wait(poo
     for revoke in [Permission::TaskWriteAll, Permission::BillableRateWriteAll] {
         let mut grants =
             PermissionSelection::new(&[Permission::TaskWriteAll, Permission::BillableRateWriteAll]);
-        let (ids, _) = fixture(&pool, OrgRole::Admin, grants.clone()).await;
+        let (ids, _) = fixture(&pool, BuiltInProfile::Administrator, grants.clone()).await;
         let mut hold = pool.begin().await.unwrap();
         sqlx::query!(
             "UPDATE organizations SET access_revision=access_revision+1 WHERE id=$1",
@@ -294,7 +295,7 @@ async fn task_edit_observes_task_and_rate_revocation_after_organization_wait(poo
 async fn task_rate_edit_refuses_stale_currency_after_organization_wait(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskWriteAll, Permission::BillableRateWriteAll]),
     )
     .await;
@@ -357,7 +358,7 @@ async fn task_rate_edit_refuses_stale_currency_after_organization_wait(pool: PgP
 async fn task_edit_holds_authority_while_waiting_for_task_and_commit(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::TaskWriteAll]),
     )
     .await;
@@ -410,7 +411,7 @@ async fn task_edit_holds_authority_while_waiting_for_task_and_commit(pool: PgPoo
 async fn task_edit_rejects_actor_deactivated_after_waiting_for_actor_lock(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::TaskWriteAll]),
     )
     .await;

@@ -3,10 +3,13 @@
 //! untouched: restarting the demo must not add time or restore deleted data.
 use anyhow::Context;
 use chrono::{NaiveDate, Utc};
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::{BudgetKind, OrgRole, ProjectRole, ProjectType, RoundDir};
 use horae_core::week::iso_week_monday;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+use crate::server_fns::provisioning;
 
 #[cfg(test)]
 mod tests;
@@ -73,10 +76,11 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
          VALUES ($1, $2, 'admin@example.com', 'Admin User', $3, 10000)",
         ADMIN_ID,
         ORG_ID,
-        OrgRole::Admin as OrgRole,
+        provisioning::placeholder_role(BuiltInProfile::Administrator) as OrgRole,
     )
     .execute(&mut *tx)
     .await?;
+    provisioning::provision(&mut tx, ORG_ID, ADMIN_ID, BuiltInProfile::Administrator).await?;
 
     // Clients
     sqlx::query!(

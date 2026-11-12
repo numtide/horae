@@ -2,9 +2,10 @@
 
 use super::*;
 use crate::server_fns::test_seed::{seed, time_entry};
+use horae_core::permissions::catalog::BuiltInProfile;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = seed(pool, OrgRole::Member).await;
+    let ids = seed(pool, BuiltInProfile::Member).await;
     let entry = time_entry(pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE users SET oidc_subject=id::text WHERE id=$1",

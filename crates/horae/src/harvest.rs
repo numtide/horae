@@ -859,6 +859,7 @@ async fn users_page(
 mod tests {
     use super::*;
     use crate::server_fns::test_seed::{SeedIds, seed};
+    use horae_core::permissions::catalog::BuiltInProfile;
     use horae_core::types::{EntryState, OrgRole};
 
     #[test]
@@ -909,7 +910,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn members_cannot_read_own_project_rates_or_cost_overrides(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Member).await;
+        let ids = seed(&pool, BuiltInProfile::Member).await;
         let id = insert_entry(&pool, &ids, ids.user_id, "Private costs").await;
         sqlx::query!(
             "INSERT INTO assignments (id,project_id,user_id,role) VALUES ($1,$2,$3,'freelancer')",
@@ -948,7 +949,7 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn imported_legacy_rates_survive_retry_in_harvest_list_and_detail(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         sqlx::query!(
             "UPDATE users SET billable_rate_cents = 3000, cost_rate_cents = 1200 WHERE id = $1",
             ids.user_id,
@@ -1005,7 +1006,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn harvest_entry_rates_respect_selected_project_mode(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let id = insert_entry(&pool, &ids, ids.user_id, "Selected rates").await;
         let caller = caller(&ids, OrgRole::Admin);
         sqlx::query!(
@@ -1064,7 +1065,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn harvest_entry_rates_follow_the_cascade_and_frozen_invoice_line(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let id = insert_entry(&pool, &ids, ids.user_id, "Rates").await;
         let caller = caller(&ids, OrgRole::Manager);
         sqlx::query!(
@@ -1152,7 +1153,7 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn harvest_marks_unbilled_non_billable_contexts_consistently(pool: PgPool) {
         for project_billable in [false, true] {
-            let ids = seed(&pool, OrgRole::Manager).await;
+            let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
             let id = insert_entry(&pool, &ids, ids.user_id, "Non-billable context").await;
             sqlx::query!("UPDATE projects SET project_type = CASE WHEN $2 THEN 'time_and_materials'::project_type ELSE 'non_billable'::project_type END WHERE id = $1", ids.project_id, project_billable).execute(&pool).await.unwrap();
             sqlx::query!(
@@ -1177,7 +1178,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn harvest_effective_minutes_match_sql_for_open_and_frozen_time(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let id = insert_entry(&pool, &ids, ids.user_id, "rounding").await;
         sqlx::query!(
             "UPDATE organizations SET round_minutes = 15, round_dir = 'nearest' WHERE id = $1",
@@ -1277,7 +1278,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_member_cannot_list_users(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Member).await;
+        let ids = seed(&pool, BuiltInProfile::Member).await;
         colleague(&pool, &ids).await;
 
         let status = refused(
@@ -1290,7 +1291,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_manager_lists_billable_rates_and_only_an_admin_cost_rates(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let other = colleague(&pool, &ids).await;
         sqlx::query!(
             "UPDATE users SET billable_rate_cents = 9000 WHERE id = $1",
@@ -1324,7 +1325,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_member_does_not_read_their_own_rates(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Member).await;
+        let ids = seed(&pool, BuiltInProfile::Member).await;
         sqlx::query!(
             "UPDATE users SET billable_rate_cents = 9000, cost_rate_cents = 4000 WHERE id = $1",
             ids.user_id
@@ -1341,7 +1342,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_member_sees_only_their_own_time_entries(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Member).await;
+        let ids = seed(&pool, BuiltInProfile::Member).await;
         let other = colleague(&pool, &ids).await;
         insert_entry(&pool, &ids, ids.user_id, "mine").await;
         insert_entry(&pool, &ids, other, "theirs").await;
@@ -1368,7 +1369,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_manager_sees_the_whole_org(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Manager).await;
+        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let other = colleague(&pool, &ids).await;
         insert_entry(&pool, &ids, ids.user_id, "mine").await;
         insert_entry(&pool, &ids, other, "theirs").await;
@@ -1387,7 +1388,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_member_cannot_filter_to_a_colleague(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Member).await;
+        let ids = seed(&pool, BuiltInProfile::Member).await;
         let other = colleague(&pool, &ids).await;
         insert_entry(&pool, &ids, other, "theirs").await;
 
@@ -1405,7 +1406,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_member_cannot_fetch_a_colleagues_entry(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Member).await;
+        let ids = seed(&pool, BuiltInProfile::Member).await;
         let other = colleague(&pool, &ids).await;
         let theirs = insert_entry(&pool, &ids, other, "theirs").await;
 

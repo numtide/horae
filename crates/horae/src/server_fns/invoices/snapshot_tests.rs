@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -49,7 +50,7 @@ fn assert_denied(result: Result<i64, ServerFnError>) {
 #[serial_test::serial]
 async fn financial_snapshots_require_current_same_tenant_manager(pool: PgPool) {
     let ids = fee_tests::single_fee(&pool).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for reader in [Reader::Invoice, Reader::Fees] {
         read(&pool, (ids.org_id, ids.user_id), &ids, reader)
             .await

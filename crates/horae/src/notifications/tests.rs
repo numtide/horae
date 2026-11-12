@@ -224,7 +224,11 @@ async fn queued(
     crate::server_fns::test_seed::SeedIds,
     crate::jobs::OutboxEvent,
 ) {
-    let ids = crate::server_fns::test_seed::seed(pool, horae_core::types::OrgRole::Manager).await;
+    let ids = crate::server_fns::test_seed::seed(
+        pool,
+        horae_core::permissions::catalog::BuiltInProfile::ExecutiveManager,
+    )
+    .await;
     sqlx::query!(
         "UPDATE projects SET budget_kind = 'hours', budget_minutes = 100 WHERE id = $1",
         ids.project_id

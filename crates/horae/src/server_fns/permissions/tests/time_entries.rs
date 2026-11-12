@@ -200,7 +200,7 @@ async fn time_reads_cancel_without_leaking_locks_or_changing_pool_defaults(pool:
 #[serial_test::serial]
 async fn time_reads_exclude_foreign_parents_but_preserve_archived_history(pool: PgPool) {
     let ids = fixture(&pool).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let target = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
     let history = SeedIds {
         user_id: target,

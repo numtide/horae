@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use tokio::task::JoinSet;
 use uuid::Uuid;
@@ -79,7 +80,7 @@ async fn every_project_entry_gates_before_actor_and_rechecks_revocation(pool: Pg
         Operation::SaveEditor,
         Operation::Finalize,
     ] {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         // Client operations authorize from stored grants; the project
         // operations here still read the legacy role.
         let grants = matches!(operation, Operation::CreateClient);
