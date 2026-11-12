@@ -628,10 +628,8 @@ mod state {
 
     /// Over every (from, to, role) triple: invoiced time is final, nothing
     /// transitions to itself, a member only moves time between open and
-    /// submitted or invoices it (the invoice write grant, not the role, is
-    /// the caller's check), approved time leaves only by a manager's reopen
-    /// or an invoice, and submitted time cannot be invoiced without an
-    /// approval decision.
+    /// submitted, approved time leaves only by a manager's reopen or invoice,
+    /// and submitted time cannot be invoiced without an approval decision.
     #[test]
     fn entry_state_machine_upholds_its_locks() {
         use EntryState::*;
@@ -646,16 +644,13 @@ mod state {
                     assert_ne!(from, to, "{step}");
                     if role == OrgRole::Member {
                         assert!(
-                            matches!(
-                                (from, to),
-                                (Open, Submitted) | (Submitted, Open) | (_, Invoiced)
-                            ),
+                            matches!((from, to), (Open, Submitted) | (Submitted, Open)),
                             "{step}"
                         );
                     }
                     if from == Approved {
                         assert!(
-                            to == Invoiced || (role.is_manager_or_above() && to == Open),
+                            role.is_manager_or_above() && matches!(to, Open | Invoiced),
                             "{step}"
                         );
                     }
