@@ -1,13 +1,12 @@
 //! Loading the actor and answering from the stored permission state.
 
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::*;
 use crate::ops::testing::policy_one;
-use crate::server_fns::test_seed::{seed, seed_before_permission_state};
+use crate::server_fns::test_seed::{clear_state, seed};
 
 async fn load(pool: &PgPool, org_id: Uuid, user_id: Uuid) -> Result<Actor, OpError> {
     let mut tx: Tx = pool.begin().await.unwrap();
@@ -67,8 +66,8 @@ async fn foreign_missing_and_inactive_people_have_no_authority(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn missing_or_invalid_state_fails_closed(pool: PgPool) {
-    // A person created before permission states existed has none.
-    let unprovisioned = seed_before_permission_state(&pool, OrgRole::Admin).await;
+    let unprovisioned = seed(&pool, BuiltInProfile::Administrator).await;
+    clear_state(&pool, unprovisioned.user_id).await;
     let error = load(&pool, unprovisioned.org_id, unprovisioned.user_id)
         .await
         .unwrap_err();

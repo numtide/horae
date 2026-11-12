@@ -4,10 +4,9 @@ use std::sync::Mutex;
 
 use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use super::{AppEvent, EventSink};
-use crate::server_fns::test_seed::{SeedIds, clear_state, seed, use_policy_one};
+use crate::server_fns::test_seed::{SeedIds, seed};
 
 /// Keeps dispatched events so a test can inspect them.
 #[derive(Default)]
@@ -26,11 +25,16 @@ impl EventSink for Recorder {
 }
 
 /// Seeds an organization on policy one whose person holds a built-in profile.
-/// Operations ignore the policy; readers not yet moved to `ops/` (such as
-/// `projects::read_access`) still need it to load the stored grants.
+/// The seeded `org_role` is dead data that no operation reads.
 pub(crate) async fn seed_profile(pool: &PgPool, profile: BuiltInProfile) -> SeedIds {
     let ids = seed(pool, profile).await;
-    use_policy_one(pool, ids.org_id).await;
+    sqlx::query!(
+        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
+        ids.org_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
     ids
 }
 
@@ -52,10 +56,7 @@ pub(crate) async fn set_grants(
     .execute(&mut *tx)
     .await?;
     sqlx::query!(
-        "UPDATE person_permission_states
-         SET grants = $2, source = 'individual', built_in_profile = NULL,
-             template_id = NULL, applied_template_revision = NULL
-         WHERE user_id = $1",
+        "UPDATE person_permission_states SET grants = $2 WHERE user_id = $1",
         ids.user_id,
         &grants
     )
@@ -73,10 +74,16 @@ pub(crate) async fn policy_one(
     administrator: bool,
 ) {
     provision(pool, ids, grants, administrator).await;
-    use_policy_one(pool, ids.org_id).await;
+    sqlx::query!(
+        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
+        ids.org_id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
-/// Replaces the seeded person's permission state with an individual one,
+/// Replaces the seeded person's permission state with an individual one
 /// without touching the organization's policy.
 pub(crate) async fn provision(
     pool: &PgPool,
@@ -86,12 +93,10 @@ pub(crate) async fn provision(
 ) {
     let grants: Vec<String> =
         serde_json::from_value(serde_json::json!(PermissionSelection::new(grants))).unwrap();
-    clear_state(pool, ids.user_id).await;
     sqlx::query!(
-        "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-         VALUES ($1,$2,$3,1,$4,$5,'individual')",
-        Uuid::now_v7(),
-        ids.org_id,
+        "UPDATE person_permission_states
+         SET grants = $2, is_administrator = $3, source = 'individual', built_in_profile = NULL
+         WHERE user_id = $1",
         ids.user_id,
         &grants,
         administrator,
