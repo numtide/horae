@@ -6,7 +6,7 @@ use horae_core::types::EntryState;
 use std::io::{Cursor, Read};
 
 mod export_filters;
-mod legacy_exports;
+mod financial_exports;
 
 async fn xlsx(api: &Api, cookie: Option<&str>, filter: &str) -> reqwest::Response {
     download(api, cookie, "xlsx", filter).await
@@ -105,22 +105,24 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .execute(pool)
     .await
     .unwrap();
-    // A person without permission state cannot read anything.
+    // A person without permission state cannot read anything. The view and
+    // the downloads refuse, as the financial report does.
     crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     assert_eq!(
         api.call(ACCESS, access_request.clone(), Some(&cookie), false)
             .await
             .status(),
-        StatusCode::INTERNAL_SERVER_ERROR
+        StatusCode::FORBIDDEN
     );
     assert_eq!(
         xlsx(api, Some(&cookie), "").await.status(),
-        StatusCode::INTERNAL_SERVER_ERROR
+        StatusCode::FORBIDDEN
     );
     assert_eq!(
         download(api, Some(&cookie), "csv", "").await.status(),
-        StatusCode::INTERNAL_SERVER_ERROR
+        StatusCode::FORBIDDEN
     );
+    // The scoped entry reader belongs to the time domain.
     assert_eq!(
         api.call(ENDPOINT, request.clone(), Some(&cookie), false)
             .await
@@ -297,7 +299,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         api.call(ACCESS, access_request.clone(), Some(&cookie), false)
             .await
             .status(),
-        StatusCode::INTERNAL_SERVER_ERROR
+        StatusCode::FORBIDDEN
     );
     assert_eq!(
         api.call(ENDPOINT, request.clone(), Some(&cookie), false)
@@ -363,5 +365,5 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     }
     groups::check(pool, api).await;
     export_filters::check(pool, api).await;
-    legacy_exports::check(pool, api).await;
+    financial_exports::check(pool, api).await;
 }

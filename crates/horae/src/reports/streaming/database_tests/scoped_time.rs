@@ -539,14 +539,7 @@ async fn scoped_csv_empty_header_rechecks_activity_and_state_after_capacity(pool
             .unwrap();
         }
         assert_eq!(receiver.recv().await.unwrap(), b"queued");
-        assert_eq!(
-            pending.await.unwrap().unwrap_err(),
-            if deactivate {
-                StatusCode::FORBIDDEN
-            } else {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
-        );
+        assert_eq!(pending.await.unwrap().unwrap_err(), StatusCode::FORBIDDEN);
         assert!(receiver.recv().await.is_none());
     }
 }

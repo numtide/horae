@@ -1,6 +1,6 @@
 // Financial Reports screen, Export links and downloads against hand-derived
 // fixture values (specs/004-invoice-timesheet-exports plan, "Acceptance
-// Increment"). XLSX contents are proven by the Rust legacy_exports check for
+// Increment"). XLSX contents are proven by the Rust financial_exports check for
 // the same links; this suite proves the screen, both links and the CSV bytes.
 // Needs the seeded Administrator, who reads everyone's time and so gets the
 // financial view.
@@ -173,7 +173,7 @@ assert.equal(sql(`SELECT (SELECT count(*) FROM clients WHERE id IN (${fixtureIds
     await verify(states[4]);
 
     assert.deepEqual(errors, []);
-    console.log(`PASS: legacy report exports for ${states.map(state => state.name).join(', ')}: links, Time and Detailed rows, CSV bytes and XLSX downloads; Chromium ${browser.version()}`);
+    console.log(`PASS: financial report exports for ${states.map(state => state.name).join(', ')}: links, Time and Detailed rows, CSV bytes and XLSX downloads; Chromium ${browser.version()}`);
   } finally {
     try {
       await browser.close();

@@ -397,12 +397,11 @@ async fn scoped_xlsx_empty_files_still_validate_state_and_actor_at_release(pool:
             }
             _ => unreachable!(),
         }
-        let expected = if change == "inactive" {
-            StatusCode::FORBIDDEN
-        } else {
-            StatusCode::INTERNAL_SERVER_ERROR
-        };
-        assert_eq!(render(&pool, export).await, Err(expected), "{change}");
+        assert_eq!(
+            render(&pool, export).await,
+            Err(StatusCode::FORBIDDEN),
+            "{change}"
+        );
         let first = ExportPermit::acquire().unwrap();
         let second = ExportPermit::acquire().unwrap();
         drop((first, second));
@@ -691,5 +690,61 @@ async fn report_view_follows_the_time_read_grants_not_the_profile(pool: PgPool) 
         let access = time::read_access(&pool, requester).await.unwrap();
         assert_eq!(access.requester, requester);
         assert_eq!(access.financial, financial, "{grants:?}");
+    }
+}
+
+/// A person without a readable permission state is refused (403) by the
+/// downloads, the Reports view and the on-screen report alike.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn missing_or_invalid_permission_state_is_forbidden_for_every_profile(pool: PgPool) {
+    use crate::ops::{Caller, OpError, begin_read};
+    for &profile in BuiltInProfile::ALL {
+        for change in ["missing", "grants"] {
+            let ids = seed(&pool, profile).await;
+            let requester = crate::models::permission_editor::PermissionRequester {
+                org_id: ids.org_id,
+                user_id: ids.user_id,
+            };
+            assert!(capture(&pool, &ids).await.is_ok(), "{profile:?}");
+            assert!(time::read_access(&pool, requester).await.is_ok());
+            assert!(
+                projects(&pool, ids.org_id, ids.user_id, "active")
+                    .await
+                    .is_ok()
+            );
+            if change == "missing" {
+                crate::server_fns::test_seed::clear_state(&pool, ids.user_id).await;
+            } else {
+                sqlx::query!(
+                    "UPDATE person_permission_states SET grants=ARRAY['unknown'] WHERE user_id=$1",
+                    ids.user_id
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+            let denied = Err(StatusCode::FORBIDDEN);
+            assert_eq!(
+                capture(&pool, &ids).await.map(|_| ()),
+                denied,
+                "{profile:?} {change}"
+            );
+            assert_eq!(
+                time::read_access(&pool, requester).await.map(|_| ()),
+                denied
+            );
+            assert_eq!(
+                projects(&pool, ids.org_id, ids.user_id, "active")
+                    .await
+                    .map(|_| ()),
+                denied
+            );
+            let error = begin_read(&pool, Caller::session(ids.org_id, ids.user_id))
+                .await
+                .err()
+                .unwrap();
+            assert!(matches!(error, OpError::Forbidden(_)), "{error:?}");
+        }
     }
 }
