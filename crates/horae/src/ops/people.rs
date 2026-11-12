@@ -1,22 +1,27 @@
 //! People operations: adding people and archiving or restoring them.
 //!
-//! Adding and archiving need `PeopleWriteAll`, which the Administrator,
-//! Executive Manager and People Admin profiles hold. Who is an administrator
-//! is decided only in the permission editor, so these operations never name
-//! one and leave an administrator's account to another administrator.
+//! Adding people needs `PeopleWriteAll`, which the Administrator, Executive
+//! Manager and People Admin profiles hold. Archiving and restoring also accept
+//! `PeopleWriteManaged` for the people the actor manages. Who is an
+//! administrator is decided only in the permission editor, so these operations
+//! never name one and leave an administrator's account to another
+//! administrator.
+//!
+//! Answers carry identity only (`UserListItem`): a people grant does not open
+//! rates or sign-in details.
 
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use uuid::Uuid;
 
 use super::{Actor, Done, OpError, Tx};
-use crate::models::User;
 use crate::models::user::{Activation, AddedPeople, NewPerson, UserListItem};
 use crate::plugin::AppEvent;
-use crate::plugin::event::{ActiveTransition, active_transition};
+use crate::plugin::event::{ActiveTransition, UserPayload, active_transition};
 use crate::server_fns::provisioning;
 
 const NOT_FOUND: &str = "Person not found";
 const WRITE_REQUIRED: &str = "Permission to manage people is required";
+const MANAGED_REQUIRED: &str = "You can archive or restore only the people you manage";
 const ACTIVE_REQUIRED: &str = "An active account is required";
 const READ_REQUIRED: &str = "Permission to view everyone is required to list archived people";
 const ADMINISTRATOR_PROFILE: &str =
@@ -25,6 +30,13 @@ const PROFILE_NEEDS_ADMINISTRATOR: &str =
     "Only an administrator can add a person with a profile other than Member";
 const ADMINISTRATOR_TARGET: &str = "Only an administrator can archive or restore an administrator";
 const LAST_ADMINISTRATOR: &str = "The organization must keep at least one active administrator.";
+
+/// Emails are unique across organizations, so an email can belong to an
+/// account the actor may not know about. The refusal never says that an
+/// account exists or where.
+fn unavailable_email(email: &str) -> String {
+    format!("The email {email} can't be used for a new person. Use another address.")
+}
 
 /// The most people one request may add, matching the importer's bounded list
 /// of missing people.
@@ -39,12 +51,18 @@ pub(crate) enum Existing {
     Skip,
 }
 
-fn authorize_write(actor: &Actor) -> Result<(), OpError> {
-    if actor.has(Permission::PeopleWriteAll) {
-        Ok(())
-    } else {
-        Err(OpError::forbidden(WRITE_REQUIRED))
-    }
+/// Whether an actor may archive or restore a person: with `PeopleWriteAll`,
+/// or with `PeopleWriteManaged` for a person they manage, and an
+/// administrator's account only as another administrator. The People page
+/// asks the same question to decide which rows offer the action.
+pub(crate) fn may_change_active(
+    write_all: bool,
+    write_managed: bool,
+    manages: bool,
+    actor_administrator: bool,
+    target_administrator: bool,
+) -> bool {
+    (write_all || (write_managed && manages)) && (actor_administrator || !target_administrator)
 }
 
 /// Identities for the directory pickers. Archived people need `PeopleReadAll`;
@@ -83,7 +101,9 @@ pub(crate) async fn add(
     activation: Activation,
     existing: Existing,
 ) -> Result<Done<AddedPeople>, OpError> {
-    authorize_write(actor)?;
+    if !actor.has(Permission::PeopleWriteAll) {
+        return Err(OpError::forbidden(WRITE_REQUIRED));
+    }
     if profile == BuiltInProfile::Administrator {
         return Err(OpError::invalid("profile", ADMINISTRATOR_PROFILE));
     }
@@ -122,29 +142,43 @@ pub(crate) async fn add(
     let org_id = actor.org_id();
     let mut added = Vec::with_capacity(order.len());
     let mut present = Vec::new();
+    let mut unavailable = Vec::new();
+    let mut events = Vec::new();
+    let now = chrono::Utc::now();
     for person in order {
-        let taken = crate::db::lock_new_user_email(tx,&person.email).await?;
-        match (taken, existing) {
-            (false, _) => {}
-            (true, Existing::Skip) => {
-                present.push(person.email.clone());
+        let owner = if crate::db::lock_new_user_email(tx, &person.email).await? {
+            sqlx::query_scalar!(
+                "SELECT org_id FROM users WHERE lower(email) = lower($1)",
+                person.email,
+            )
+            .fetch_optional(&mut **tx)
+            .await?
+        } else {
+            None
+        };
+        match (owner, existing) {
+            (None, _) => {}
+            (Some(owner), Existing::Skip) => {
+                if owner == org_id {
+                    present.push(person.email.clone());
+                } else {
+                    unavailable.push(person.email.clone());
+                }
                 continue;
             }
-            (true, Existing::Refuse) => {
-                return Err(OpError::conflict(format!(
-                    "A user with the email {} already exists",
-                    person.email
-                )));
+            (Some(owner), Existing::Refuse) => {
+                return Err(OpError::conflict(if owner == org_id {
+                    format!("A user with the email {} already exists", person.email)
+                } else {
+                    unavailable_email(&person.email)
+                }));
             }
         }
-        let user = sqlx::query_as!(
-            User,
+        let user = sqlx::query!(
             r#"INSERT INTO users (id, org_id, email, name, org_role, active)
              VALUES ($1, $2, $3, $4, $5, $6)
-             RETURNING id, org_id, email, name, oidc_subject,
-                       org_role as "org_role: horae_core::types::OrgRole",
-                       cost_rate_cents, billable_rate_cents, active,
-                       created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+             RETURNING id, email, name, active,
+                       org_role as "org_role: horae_core::types::OrgRole""#,
             Uuid::now_v7(),
             org_id,
             person.email,
@@ -159,27 +193,26 @@ pub(crate) async fn add(
                 .as_database_error()
                 .and_then(|error| error.constraint())
             {
-                Some("users_email_key") => OpError::conflict(format!(
-                    "A user with the email {} already exists",
-                    person.email
-                )),
+                Some("users_email_key") => OpError::conflict(unavailable_email(&person.email)),
                 _ => OpError::from(error),
             }
         })?;
-        provisioning::provision(tx,org_id, user.id, profile).await?;
-        added.push(user);
-    }
-    let now = chrono::Utc::now();
-    let events = added
-        .iter()
-        .map(|user| AppEvent::UserCreated {
+        provisioning::provision(tx, org_id, user.id, profile).await?;
+        let (person, payload) =
+            identity(user.id, user.email, user.name, user.active, user.org_role);
+        events.push(AppEvent::UserCreated {
             occurred_at: now,
             org_id,
-            user: crate::server_fns::user_payload(user),
-        })
-        .collect();
+            user: payload,
+        });
+        added.push(person);
+    }
     Ok(Done {
-        value: AddedPeople { added, present },
+        value: AddedPeople {
+            added,
+            present,
+            unavailable,
+        },
         events,
     })
 }
@@ -191,25 +224,47 @@ pub(crate) async fn set_active(
     actor: &Actor,
     user_id: Uuid,
     active: bool,
-) -> Result<Done<User>, OpError> {
-    authorize_write(actor)?;
+) -> Result<Done<UserListItem>, OpError> {
+    let write_all = actor.has(Permission::PeopleWriteAll);
+    let write_managed = actor.has(Permission::PeopleWriteManaged);
+    if !write_all && !write_managed {
+        return Err(OpError::forbidden(WRITE_REQUIRED));
+    }
     let org_id = actor.org_id();
     // The target is locked before the other administrators are, so two
     // administrators archiving each other cannot both pass the check below:
     // one waits for the other, or the deadlock check refuses it.
     let target = sqlx::query!(
-        r#"SELECT u.active, COALESCE(p.is_administrator, false) AS "administrator!"
+        r#"SELECT u.active, COALESCE(p.is_administrator, false) AS "administrator!",
+                  EXISTS (SELECT 1 FROM person_management_assignments m
+                           WHERE m.org_id = u.org_id AND m.manager_id = $3
+                             AND m.managed_user_id = u.id) AS "managed!"
              FROM users u
              LEFT JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
             WHERE u.id = $1 AND u.org_id = $2
             FOR NO KEY UPDATE OF u"#,
         user_id,
         org_id,
+        actor.id(),
     )
     .fetch_optional(&mut **tx)
-    .await?
-    .ok_or_else(|| OpError::not_found(NOT_FOUND))?;
-    if target.administrator && !actor.administrator() {
+    .await?;
+    // Someone who manages only some people learns nothing about the rest: a
+    // person they do not manage and no person at all get the same refusal.
+    let Some(target) = target.filter(|target| write_all || target.managed) else {
+        return Err(if write_all {
+            OpError::not_found(NOT_FOUND)
+        } else {
+            OpError::forbidden(MANAGED_REQUIRED)
+        });
+    };
+    if !may_change_active(
+        write_all,
+        write_managed,
+        target.managed,
+        actor.administrator(),
+        target.administrator,
+    ) {
         return Err(OpError::forbidden(ADMINISTRATOR_TARGET));
     }
     if target.active
@@ -219,31 +274,56 @@ pub(crate) async fn set_active(
     {
         return Err(OpError::conflict(LAST_ADMINISTRATOR));
     }
-    let user = sqlx::query_as!(
-        User,
+    let user = sqlx::query!(
         r#"UPDATE users SET active = $3
          WHERE id = $1 AND org_id = $2
-         RETURNING id, org_id, email, name, oidc_subject,
-                   org_role as "org_role: horae_core::types::OrgRole",
-                   cost_rate_cents, billable_rate_cents, active,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+         RETURNING id, email, name, active,
+                   org_role as "org_role: horae_core::types::OrgRole""#,
         user_id,
         org_id,
         active,
     )
     .fetch_one(&mut **tx)
     .await?;
-    let done = Done::new(user);
+    let (person, payload) = identity(user.id, user.email, user.name, user.active, user.org_role);
+    let done = Done::new(person);
     // Plugins hear only about archiving; there is no restore event.
     if active_transition(Some(target.active), active) == Some(ActiveTransition::Deactivated) {
         let event = AppEvent::UserDeactivated {
             occurred_at: chrono::Utc::now(),
             org_id,
-            user: crate::server_fns::user_payload(&done.value),
+            user: payload,
         };
         return Ok(done.with(event));
     }
     Ok(done)
+}
+
+/// The answer for the caller and the plugin payload for one person. Plugins
+/// still receive `org_role` because the event ABI carries it.
+fn identity(
+    id: Uuid,
+    email: String,
+    name: String,
+    active: bool,
+    org_role: horae_core::types::OrgRole,
+) -> (UserListItem, UserPayload) {
+    let payload = UserPayload {
+        id,
+        email: email.clone(),
+        name: name.clone(),
+        org_role: org_role.to_string(),
+        method: None,
+    };
+    (
+        UserListItem {
+            id,
+            email,
+            name,
+            active,
+        },
+        payload,
+    )
 }
 
 /// Whether another active administrator remains. Their accounts are locked

@@ -718,6 +718,7 @@ fn directory_page(probe: &Probe, next: bool) -> people_model::PeoplePage {
             name: "Directory person".into(),
             email: "person@example.test".into(),
             active: true,
+            can_change_active: probe.manage_people,
         }],
         next_after: next.then(|| people_model::PeopleCursor {
             name: "Directory person".into(),
@@ -804,6 +805,20 @@ async fn directory_offers_people_management_by_grant() {
             assert!(!html.contains("value=\"administrator\""));
         }
     }
+    // A row the server says cannot be archived (an administrator, or someone
+    // not managed) offers no Archive button even to someone who adds people.
+    let mut probe = Probe::new();
+    probe.directory = Some(false);
+    probe.manage_people = true;
+    let reply = directory_reply(&probe);
+    let mut ui = Ui::new(probe.clone());
+    let mut page = directory_page(&probe, false);
+    page.people[0].can_change_active = false;
+    reply.send(Ok(page)).unwrap();
+    ui.settle();
+    let html = ui.html();
+    assert!(html.contains("id=\"people-add\""));
+    assert!(!html.contains("Archive Directory person"));
 }
 
 #[tokio::test]
@@ -1921,14 +1936,14 @@ mod server_fns {
         _email: String,
         _name: String,
         _profile: String,
-    ) -> Result<models::user::User, ServerFnError> {
+    ) -> Result<models::user::UserListItem, ServerFnError> {
         unreachable!("the directory tests never add people")
     }
 
     pub async fn set_user_active(
         _user_id: String,
         _active: bool,
-    ) -> Result<models::user::User, ServerFnError> {
+    ) -> Result<models::user::UserListItem, ServerFnError> {
         unreachable!("the directory tests never archive people")
     }
 

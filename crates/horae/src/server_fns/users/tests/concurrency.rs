@@ -5,7 +5,12 @@ use sqlx::PgPool;
 use tokio::{task::JoinSet, time::timeout};
 use uuid::Uuid;
 
-async fn archive(pool: &PgPool, org: Uuid, actor: Uuid, user: Uuid) -> Result<User, ServerFnError> {
+async fn archive(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+    user: Uuid,
+) -> Result<UserListItem, ServerFnError> {
     change_user_active(
         pool,
         &Recorder::default(),

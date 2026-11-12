@@ -218,3 +218,72 @@ async fn adding_people_needs_permission_to_manage_people(pool: PgPool) {
         "{result:?}"
     );
 }
+
+/// Emails are unique across organizations. An email another organization
+/// uses gets a refusal that says neither that it exists nor where.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn an_email_used_elsewhere_is_refused_without_saying_why(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let other = seed(&pool, BuiltInProfile::Administrator).await;
+    let elsewhere = sqlx::query_scalar!("SELECT email FROM users WHERE id = $1", other.user_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let before = emails(&pool, ids.org_id).await;
+
+    // The importer adds the rest and lists the email apart from "present".
+    let result = add(
+        &pool,
+        ids.org_id,
+        ids.user_id,
+        &[person(&elsewhere.to_uppercase()), person("fresh@x.com")],
+        Activation::Deactivated,
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.unavailable, [elsewhere.to_uppercase()]);
+    assert!(result.present.is_empty());
+    assert_eq!(result.added.len(), 1);
+
+    // Adding one person refuses it with the generic message.
+    let message = |result: Result<UserListItem, ServerFnError>| match result {
+        Err(ServerFnError::ServerError {
+            code: CONFLICT,
+            message,
+            ..
+        }) => message,
+        other => panic!("{other:?}"),
+    };
+    let refused = message(
+        insert_user(
+            &pool,
+            &Recorder::default(),
+            Caller::session(ids.org_id, ids.user_id),
+            &elsewhere,
+            "Elsewhere",
+            BuiltInProfile::Member,
+        )
+        .await,
+    );
+    assert!(!refused.contains("exists"), "{refused}");
+    assert!(refused.contains("can't be used"), "{refused}");
+
+    // An email in the actor's own organization is still named as present.
+    let again = message(
+        insert_user(
+            &pool,
+            &Recorder::default(),
+            Caller::session(ids.org_id, ids.user_id),
+            "fresh@x.com",
+            "Fresh",
+            BuiltInProfile::Member,
+        )
+        .await,
+    );
+    assert!(again.contains("already exists"), "{again}");
+    let mut expected = before;
+    expected.push(("fresh@x.com".to_owned(), false));
+    expected.sort();
+    assert_eq!(emails(&pool, ids.org_id).await, expected);
+}

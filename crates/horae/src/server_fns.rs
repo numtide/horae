@@ -4,12 +4,12 @@ pub(crate) use horae_core::types::{
     BudgetKind, EntryState, InvoiceStatus, OrgRole, ProjectRole, ProjectType,
 };
 
-#[cfg(feature = "server")]
-pub(crate) use crate::models::InvoiceLine;
 pub(crate) use crate::models::{
     Approval, ApprovalSummary, Assignment, Client, DetailedReportRow, Invoice, InvoiceWithLines,
-    OrgBranding, Project, ProjectSpend, ReportRow, Task, TimeEntry, User,
+    OrgBranding, Project, ProjectSpend, ReportRow, Task, TimeEntry,
 };
+#[cfg(feature = "server")]
+pub(crate) use crate::models::{InvoiceLine, User};
 
 // HTTP status codes for `ServerFnError::ServerError { code, .. }` — named so
 // error paths read at a glance (see AGENTS.md conventions). Server-only: on the
@@ -321,17 +321,6 @@ pub(crate) fn assignment_payload(
         project_id: a.project_id,
         user_id: a.user_id,
         role: a.role.to_string(),
-    }
-}
-
-#[cfg(feature = "server")]
-pub(crate) fn user_payload(u: &crate::models::User) -> crate::plugin::event::UserPayload {
-    crate::plugin::event::UserPayload {
-        id: u.id,
-        email: u.email.clone(),
-        name: u.name.clone(),
-        org_role: u.org_role.to_string(),
-        method: None,
     }
 }
 

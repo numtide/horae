@@ -1,3 +1,4 @@
+#[cfg(feature = "server")]
 use chrono::{DateTime, Utc};
 use horae_core::types::OrgRole;
 use serde::{Deserialize, Serialize};
@@ -81,12 +82,14 @@ impl NewPerson {
     }
 }
 
-/// The outcome of adding several people: the accounts created, and the
-/// emails that already had one and were left alone.
+/// The outcome of adding several people: the accounts created, the emails
+/// that already had an account in this organization and were left alone, and
+/// the emails that can't be used, without saying why.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AddedPeople {
-    pub added: Vec<User>,
+    pub added: Vec<UserListItem>,
     pub present: Vec<String>,
+    pub unavailable: Vec<String>,
 }
 
 /// Whether a new account can sign in straight away.
@@ -114,8 +117,10 @@ pub struct PersonRate {
     pub editable: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(sqlx::FromRow))]
+/// The whole account row, rates and sign-in binding included. Server-only:
+/// answers to the browser use `UserListItem` or `CurrentUser`.
+#[cfg(feature = "server")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
 pub struct User {
     pub id: Uuid,
     pub org_id: Uuid,

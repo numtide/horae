@@ -66,16 +66,19 @@ pub(crate) async fn read(
         PeopleActivity::Archived => Some(false),
         PeopleActivity::All => None,
     };
-    let mut people = sqlx::query_as!(
-        PersonSummary,
-        "SELECT u.id, u.name, u.email, u.active FROM users u
-         WHERE u.org_id=$1
-           AND ($3::bool OR EXISTS (
-             SELECT 1 FROM person_management_assignments m
-             WHERE m.org_id=u.org_id AND m.manager_id=$2 AND m.managed_user_id=u.id))
-           AND ($4::bool IS NULL OR u.active=$4)
-           AND ($5::text IS NULL OR (u.name,u.id)>($5::text,$6::uuid))
-         ORDER BY u.name,u.id LIMIT 51",
+    let rows = sqlx::query!(
+        r#"SELECT u.id, u.name, u.email, u.active,
+                  COALESCE(p.is_administrator, false) AS "administrator!", d.managed AS "managed!"
+             FROM users u
+             CROSS JOIN LATERAL (SELECT EXISTS (
+               SELECT 1 FROM person_management_assignments m
+               WHERE m.org_id=u.org_id AND m.manager_id=$2 AND m.managed_user_id=u.id) AS managed) d
+             LEFT JOIN person_permission_states p ON p.org_id=u.org_id AND p.user_id=u.id
+            WHERE u.org_id=$1
+              AND ($3::bool OR d.managed)
+              AND ($4::bool IS NULL OR u.active=$4)
+              AND ($5::text IS NULL OR (u.name,u.id)>($5::text,$6::uuid))
+            ORDER BY u.name,u.id LIMIT 51"#,
         org_id,
         actor_id,
         all_people,
@@ -85,6 +88,24 @@ pub(crate) async fn read(
     )
     .fetch_all(&mut *tx)
     .await?;
+    let write_all = state.grants.contains(Permission::PeopleWriteAll);
+    let write_managed = state.grants.contains(Permission::PeopleWriteManaged);
+    let mut people: Vec<PersonSummary> = rows
+        .into_iter()
+        .map(|row| PersonSummary {
+            can_change_active: crate::ops::people::may_change_active(
+                write_all,
+                write_managed,
+                row.managed,
+                state.is_administrator,
+                row.administrator,
+            ),
+            id: row.id,
+            name: row.name,
+            email: row.email,
+            active: row.active,
+        })
+        .collect();
     let next_after = if people.len() > 50 {
         people.truncate(50);
         people.last().map(|person| PeopleCursor {

@@ -50,7 +50,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .unwrap();
     let expected = json!({
         "requester":{"org_id":ids.org_id,"user_id":ids.user_id},
-        "people":[{"id":target,"name":"Test User","email":format!("{target}@test.com"),"active":true}],
+        "people":[{"id":target,"name":"Test User","email":format!("{target}@test.com"),"active":true,"can_change_active":false}],
         "next_after":null
     });
     assert_eq!(

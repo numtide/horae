@@ -52,6 +52,7 @@ mod models {
         pub struct AddedPeople {
             pub added: Vec<User>,
             pub present: Vec<String>,
+            pub unavailable: Vec<String>,
         }
     }
 }
@@ -1723,6 +1724,7 @@ mod server_fns {
                 })
                 .collect(),
             present: present.into_iter().map(|person| person.email).collect(),
+            unavailable: Vec::new(),
         })
     }
 

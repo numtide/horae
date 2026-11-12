@@ -114,22 +114,30 @@ async fn observe(pool: &PgPool, org: Uuid, actor: Uuid, target: Uuid) -> Access 
 async fn built_in_profiles_follow_their_rate_grants(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let target = person(&pool, ids.org_id, BuiltInProfile::Member).await;
-    let executive = person(&pool, ids.org_id, BuiltInProfile::ExecutiveManager).await;
-    let people_admin = person(&pool, ids.org_id, BuiltInProfile::PeopleAdmin).await;
-    let member = person(&pool, ids.org_id, BuiltInProfile::Member).await;
-
-    assert_eq!(
-        observe(&pool, ids.org_id, ids.user_id, target).await,
-        Some((true, true, true, true))
-    );
-    // Executive Managers read both rates but change neither.
-    assert_eq!(
-        observe(&pool, ids.org_id, executive, target).await,
-        Some((true, false, true, false))
-    );
-    assert_eq!(observe(&pool, ids.org_id, people_admin, target).await, None);
-    assert_eq!(observe(&pool, ids.org_id, member, target).await, None);
+    for &profile in BuiltInProfile::ALL {
+        let actor = match profile {
+            BuiltInProfile::Administrator => ids.user_id,
+            profile => person(&pool, ids.org_id, profile).await,
+        };
+        let expected = match profile {
+            BuiltInProfile::Administrator => Some((true, true, true, true)),
+            // Executive Managers read both rates but change neither.
+            BuiltInProfile::ExecutiveManager => Some((true, false, true, false)),
+            // Accounting holds both rate reads but cannot see people, and
+            // rates are read per person.
+            BuiltInProfile::Accounting
+            | BuiltInProfile::PeopleAdmin
+            | BuiltInProfile::ProjectManager
+            | BuiltInProfile::Member => None,
+        };
+        assert_eq!(
+            observe(&pool, ids.org_id, actor, target).await,
+            expected,
+            "{profile:?}"
+        );
+    }
     // Being the person does not reveal one's own rates.
+    let member = person(&pool, ids.org_id, BuiltInProfile::Member).await;
     assert_eq!(observe(&pool, ids.org_id, member, member).await, None);
 }
 
