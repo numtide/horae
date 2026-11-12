@@ -44,7 +44,7 @@ fn typing_in_another_cell_survives_a_save_refresh() {
                     }]
                 }),
                 busy: use_memo(|| false),
-                policy: use_memo(|| Some(TimesheetPolicy::Scoped)),
+                loaded: use_memo(|| true),
             };
             if !ready.get() {
                 return rsx! { div { "Loading timesheet…" } };
@@ -156,7 +156,7 @@ fn typing_in_a_cell_renders_only_that_cell() {
                     }]
                 }),
                 busy: use_memo(|| false),
-                policy: use_memo(|| Some(TimesheetPolicy::Scoped)),
+                loaded: use_memo(|| true),
             };
             seen.borrow_mut().push(actions);
             render_week_view(

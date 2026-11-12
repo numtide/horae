@@ -47,7 +47,6 @@ pub async fn submit_week(
     if context.expected_requester.user_id != user_id
         || context.expected_requester.org_id != org_id
         || context.subject_id != user_id
-        || context.expected_policy != crate::models::scoped_time::TimesheetPolicy::LegacyOwn
     {
         return Err(forbidden("Timesheet context changed; refresh the page"));
     }

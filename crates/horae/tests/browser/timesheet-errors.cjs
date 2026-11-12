@@ -66,7 +66,6 @@ function resetEntries() {
     assert.deepEqual(body.context, {
       expected_requester: { org_id: org, user_id: user },
       subject_id: user,
-      expected_policy: 'legacy_own',
     });
     return body.command;
   }

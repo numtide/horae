@@ -21,7 +21,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         "week_start":"2026-09-07",
         "context": {
             "expected_requester":{"org_id":ids.org_id,"user_id":ids.user_id},
-            "subject_id":ids.user_id,"expected_policy":"legacy_own"
+            "subject_id":ids.user_id
         }
     });
     assert_eq!(
@@ -38,7 +38,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     );
     for (field, value) in [
         ("subject_id", json!(other)),
-        ("expected_policy", json!("scoped")),
         (
             "expected_requester",
             json!({"org_id":Uuid::now_v7(),"user_id":ids.user_id}),
