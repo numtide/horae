@@ -221,7 +221,7 @@ pkgs.testers.nixosTest {
     server.succeed("sudo -u horae DATABASE_URL=postgres:///horae horae seed")
     server.succeed(
       "sudo -u horae DATABASE_URL=postgres:///horae horae user create "
-      "--email kilgore@kilgore.trout --name 'Kilgore Trout' --role member"
+      "--email kilgore@kilgore.trout --name 'Kilgore Trout' --profile member"
     )
 
     # /auth/login now serves the SSO landing page; /auth/oidc/start begins the
@@ -345,7 +345,7 @@ pkgs.testers.nixosTest {
 
     # The same subject cannot be linked to a second account.
     status, output = horae(
-        "user create --email other@kilgore.trout --name Other --role member"
+        "user create --email other@kilgore.trout --name Other --profile member"
     )
     assert status == 0, output
     other = sql("SELECT id FROM users WHERE email = 'other@kilgore.trout'")

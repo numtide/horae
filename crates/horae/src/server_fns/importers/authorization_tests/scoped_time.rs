@@ -1,13 +1,14 @@
 //! Scoped entry payloads through the real session-authenticated route.
 
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use horae_core::types::EntryState;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     check_people(pool, api).await;
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
+    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     let target = user(pool, ids.org_id, OrgRole::Member).await;
     let target_ids = crate::server_fns::test_seed::SeedIds {
         user_id: target,
@@ -84,6 +85,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         Permission::TimeReadManaged
     ])))
     .unwrap();
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants).execute(pool).await.unwrap();
     sqlx::query!(
@@ -266,8 +268,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
 }
 
 async fn check_people(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
+    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     let target = user(pool, ids.org_id, OrgRole::Member).await;
     let cookie = api.cookie(ids.user_id).await;
     let request = json!({"query":{"search":"","user_id":target,"after":null}});
@@ -292,6 +294,7 @@ async fn check_people(pool: &PgPool, api: &Api) {
         Permission::TimeReadManaged
     ])))
     .unwrap();
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants).execute(pool).await.unwrap();
     sqlx::query!(

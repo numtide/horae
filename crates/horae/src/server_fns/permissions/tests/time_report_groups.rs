@@ -368,7 +368,7 @@ async fn grouped_reports_reject_wrong_requesters_cursors_and_policy(pool: PgPool
 async fn grouped_reports_keep_history_but_exclude_foreign_parent_records(pool: PgPool) {
     let ids = fixture(&pool).await;
     let target = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let historical = time_entry(
         &pool,
         &SeedIds {
@@ -465,7 +465,7 @@ async fn grouped_reports_filter_before_aggregation_and_keep_empty_totals(pool: P
         EntryState::Open,
     )
     .await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     time_entry(&pool, &foreign, EntryState::Open).await;
     let mut filter = query(TimeReportGrouping::Client);
     filter.user_ids = vec![other, other, foreign.user_id];

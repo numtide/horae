@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::wait_for_blocked;
+use horae_core::permissions::catalog::BuiltInProfile;
 use serde_json::Value;
 use std::{sync::Arc, time::Duration};
 
@@ -96,7 +97,7 @@ async fn editor_snapshots_preserve_rows_and_override_inherited_read_only(pool: P
         .connect_with((*pool.connect_options()).clone())
         .await
         .unwrap();
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for reader in [EditorRead::Load, EditorRead::Review] {
         let expected = case
             .read(&pool, (case.ids.org_id, case.ids.user_id), reader)

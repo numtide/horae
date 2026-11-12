@@ -143,9 +143,19 @@ fn main() -> anyhow::Result<()> {
                 init_tracing(&cfg.log_level);
                 let pool = db::create_pool(&cfg.database_url).await?;
                 match action {
-                    cli::UserAction::Create { email, name, role } => {
-                        let org_role: horae_core::types::OrgRole =
-                            role.parse().map_err(|e: String| anyhow::anyhow!(e))?;
+                    cli::UserAction::Create {
+                        email,
+                        name,
+                        profile,
+                    } => {
+                        use server_fns::provisioning;
+                        let built_in = provisioning::parse_profile(&profile).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "Unknown profile {profile:?}; use administrator, \
+                                 executive_manager, project_manager, accounting, \
+                                 people_admin or member"
+                            )
+                        })?;
 
                         let mut tx = pool.begin().await?;
                         sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
@@ -173,13 +183,14 @@ fn main() -> anyhow::Result<()> {
                             org_id,
                             email,
                             name,
-                            org_role as horae_core::types::OrgRole,
+                            provisioning::placeholder_role(built_in) as horae_core::types::OrgRole,
                         )
                         .execute(&mut *tx)
                         .await?;
+                        provisioning::provision(&mut tx, org_id, id, built_in).await?;
                         tx.commit().await?;
 
-                        println!("Created user: {} ({}) [{}]", name, email, role);
+                        println!("Created user: {name} ({email}) [{profile}]");
                     }
                     cli::UserAction::LinkOidc {
                         user_id,
@@ -198,8 +209,12 @@ fn main() -> anyhow::Result<()> {
                     }
                     cli::UserAction::List => {
                         let users = sqlx::query!(
-                            "SELECT id, name, email, org_role::text as role, active \
-                             FROM users ORDER BY name ASC"
+                            "SELECT u.id, u.name, u.email, u.active, \
+                                    coalesce(p.built_in_profile, p.source) AS profile \
+                             FROM users u \
+                             LEFT JOIN person_permission_states p \
+                               ON p.org_id = u.org_id AND p.user_id = u.id \
+                             ORDER BY u.name ASC"
                         )
                         .fetch_all(&pool)
                         .await?;
@@ -208,17 +223,18 @@ fn main() -> anyhow::Result<()> {
                             println!("No users found.");
                         } else {
                             println!(
-                                "{:<36} {:<30} {:<30} {:<10} STATUS",
-                                "ID", "NAME", "EMAIL", "ROLE"
+                                "{:<36} {:<30} {:<30} {:<17} STATUS",
+                                "ID", "NAME", "EMAIL", "PROFILE"
                             );
                             for u in &users {
                                 let status = if u.active { "active" } else { "inactive" };
                                 println!(
-                                    "{:<36} {:<30} {:<30} {:<10} {}",
+                                    "{:<36} {:<30} {:<30} {:<17} {}",
                                     u.id,
                                     u.name,
                                     u.email,
-                                    u.role.as_deref().unwrap_or("?"),
+                                    // A template or individual selection shows its source.
+                                    u.profile.as_deref().unwrap_or("none"),
                                     status,
                                 );
                             }

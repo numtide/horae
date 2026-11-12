@@ -1,4 +1,5 @@
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 
 async fn snapshot(pool: &PgPool, org: Uuid) -> Option<serde_json::Value> {
     sqlx::query_scalar!(
@@ -227,7 +228,7 @@ async fn project_management_covers_only_its_project_and_checks_both_move_ends(po
 async fn bulk_sets_do_not_partially_modify_foreign_locked_or_duplicate_entries(pool: PgPool) {
     let f = fixture(&pool).await;
     let id = f.entry(&pool).await;
-    let foreign = seed(&pool, OrgRole::Member).await;
+    let foreign = seed(&pool, BuiltInProfile::Member).await;
     let foreign_id = time_entry(&pool, &foreign, EntryState::Open).await;
     let locked = f.entry(&pool).await;
     sqlx::query!(
@@ -304,6 +305,7 @@ async fn delegated_stop_requires_restored_tracking_but_owner_keeps_terminal_reco
         serde_json::to_value(PermissionSelection::new(&[Permission::TimeWriteOwn])).unwrap(),
     )
     .unwrap();
+    crate::server_fns::test_seed::clear_state(&pool, f.context.subject_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source) VALUES ($1,$2,$3,1,$4,false,'individual')",Uuid::now_v7(),f.ids.org_id,f.context.subject_id,&stored).execute(&pool).await.unwrap();
     let own = TimesheetWriteContext {
         expected_requester: PermissionRequester {

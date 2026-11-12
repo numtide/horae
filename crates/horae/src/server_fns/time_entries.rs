@@ -554,15 +554,19 @@ mod activity_tests;
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::{
-        CONFLICT, NewTimeEntry, OrgRole, fetch_time_entry_contexts, insert_time_entry,
-        normalize_start, start_timer_record,
+        CONFLICT, NewTimeEntry, fetch_time_entry_contexts, insert_time_entry, normalize_start,
+        start_timer_record,
     };
     use crate::server_fns::test_seed::seed;
     use dioxus::prelude::ServerFnError;
+    use horae_core::permissions::catalog::BuiltInProfile;
     use sqlx::PgPool;
     use uuid::Uuid;
 
-    async fn linked_seed(pool: &PgPool, role: OrgRole) -> crate::server_fns::test_seed::SeedIds {
+    async fn linked_seed(
+        pool: &PgPool,
+        role: BuiltInProfile,
+    ) -> crate::server_fns::test_seed::SeedIds {
         let ids = seed(pool, role).await;
         sqlx::query!(
             "INSERT INTO project_tasks (project_id, task_id, billable) VALUES ($1, $2, true)",
@@ -591,7 +595,7 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn a_timer_is_dated_in_the_persons_zone(pool: PgPool) {
         use chrono::Timelike;
-        let ids = linked_seed(&pool, OrgRole::Admin).await;
+        let ids = linked_seed(&pool, BuiltInProfile::Administrator).await;
         // UTC+14 or UTC−12, whichever is on another date than UTC right now.
         let (zone, hours) = if chrono::Utc::now().hour() >= 11 {
             ("Pacific/Kiritimati", 14)
@@ -616,8 +620,8 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn new_time_and_picker_reject_inactive_or_foreign_contexts(pool: PgPool) {
-        let ids = linked_seed(&pool, OrgRole::Admin).await;
-        let other = linked_seed(&pool, OrgRole::Admin).await;
+        let ids = linked_seed(&pool, BuiltInProfile::Administrator).await;
+        let other = linked_seed(&pool, BuiltInProfile::Administrator).await;
         assert_eq!(
             fetch_time_entry_contexts(&pool, ids.user_id)
                 .await
@@ -707,7 +711,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn new_time_and_picker_require_a_project_task_link(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         assert!(
             fetch_time_entry_contexts(&pool, ids.user_id)
                 .await
@@ -736,7 +740,7 @@ mod tests {
             for task_billable in [false, true] {
                 for requested_billable in [false, true] {
                     for is_running in [false, true] {
-                        let ids = linked_seed(&pool, OrgRole::Admin).await;
+                        let ids = linked_seed(&pool, BuiltInProfile::Administrator).await;
                         sqlx::query!("UPDATE projects SET project_type = CASE WHEN $2 THEN 'time_and_materials'::project_type ELSE 'non_billable'::project_type END WHERE id = $1", ids.project_id, project_billable).execute(&pool).await.unwrap();
                         sqlx::query!("UPDATE project_tasks SET billable = $3 WHERE project_id = $1 AND task_id = $2", ids.project_id, ids.task_id, task_billable).execute(&pool).await.unwrap();
                         let context = fetch_time_entry_contexts(&pool, ids.user_id).await.unwrap();
@@ -766,7 +770,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn concurrent_timer_starts_insert_exactly_one_entry(pool: PgPool) {
-        let ids = linked_seed(&pool, OrgRole::Admin).await;
+        let ids = linked_seed(&pool, BuiltInProfile::Administrator).await;
         let (first, second) = tokio::join!(
             insert_time_entry(
                 &pool,
@@ -797,7 +801,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn inactive_project_cannot_accept_new_time_even_for_admin(pool: PgPool) {
-        let ids = linked_seed(&pool, OrgRole::Admin).await;
+        let ids = linked_seed(&pool, BuiltInProfile::Administrator).await;
         sqlx::query!(
             "UPDATE projects SET active = false WHERE id = $1",
             ids.project_id
@@ -847,7 +851,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn unassigned_member_is_forbidden(pool: PgPool) {
-        let ids = linked_seed(&pool, OrgRole::Member).await;
+        let ids = linked_seed(&pool, BuiltInProfile::Member).await;
 
         let err = insert_time_entry(&pool, ids.user_id, manual_entry(&ids))
             .await
@@ -860,7 +864,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn assigned_member_may_log_time(pool: PgPool) {
-        let ids = linked_seed(&pool, OrgRole::Member).await;
+        let ids = linked_seed(&pool, BuiltInProfile::Member).await;
         sqlx::query!(
             "INSERT INTO assignments (id, project_id, user_id) VALUES ($1, $2, $3)",
             Uuid::now_v7(),
@@ -880,7 +884,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn admin_may_log_time_without_assignment(pool: PgPool) {
-        let ids = linked_seed(&pool, OrgRole::Admin).await;
+        let ids = linked_seed(&pool, BuiltInProfile::Administrator).await;
 
         assert!(
             insert_time_entry(&pool, ids.user_id, manual_entry(&ids))
@@ -892,7 +896,7 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn submission_barrier_blocks_manual_entries_and_timer_starts(pool: PgPool) {
         for is_running in [false, true] {
-            let ids = linked_seed(&pool, OrgRole::Admin).await;
+            let ids = linked_seed(&pool, BuiltInProfile::Administrator).await;
             let mut submission = pool.begin().await.unwrap();
             let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
                 .fetch_one(&mut *submission)

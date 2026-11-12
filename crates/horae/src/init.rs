@@ -4,9 +4,12 @@
 //! clients, no projects, no tasks, no time entries. Demo content belongs to
 //! `horae seed`, which is for trying the app out, not for standing one up.
 
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+use crate::server_fns::provisioning;
 
 /// Create the organization and its first admin user.
 ///
@@ -53,10 +56,11 @@ pub async fn run(
         org_id,
         admin_email,
         admin_name,
-        OrgRole::Admin as OrgRole,
+        provisioning::placeholder_role(BuiltInProfile::Administrator) as OrgRole,
     )
     .execute(&mut *tx)
     .await?;
+    provisioning::provision(&mut tx, org_id, user_id, BuiltInProfile::Administrator).await?;
 
     tx.commit().await?;
 

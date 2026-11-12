@@ -3,6 +3,7 @@ const { chromium, expect: baseExpect } = require(process.env.PLAYWRIGHT_MODULE |
 const expect = baseExpect.configure({ timeout: 15000 });
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
+const { setAsideSeededStates } = require('./seeded-permissions.cjs');
 const base = process.env.HORAE_TEST_URL;
 const target = new URL(base), database = new URL(process.env.DATABASE_URL);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093');
@@ -17,7 +18,7 @@ const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_w
 const catalog = [...floor, 'client_read_all'];
 const grantsSql = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
 const setGrants = grants => sql(`UPDATE person_permission_states SET grants=${grantsSql(grants)} WHERE id='${state}'`);
-let actor, org, owned = false;
+let actor, org, owned = false, restoreSeededStates;
 const setPolicy = version => sql(`UPDATE organizations SET permission_policy_version=${version} WHERE id='${org}'`);
 
 (async () => {
@@ -67,6 +68,7 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
     assert.equal(actor.org_role, 'admin');
     // Only this suite's rows are created and removed; the policy is restored to its observed value.
     assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
+    restoreSeededStates = setAsideSeededStates(org);
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE user_id='${actor.id}'`), '0');
     assert.equal(sql(`SELECT count(*) FROM clients WHERE id IN ('${unset}','${zero}')`), '0');
     owned = true;
@@ -203,5 +205,6 @@ const setPolicy = version => sql(`UPDATE organizations SET permission_policy_ver
       DELETE FROM project_management_assignments WHERE id='${assignment}';
       DELETE FROM projects WHERE id='${project}';
       DELETE FROM clients WHERE id IN ('${unset}','${zero}'); COMMIT;`);
+    restoreSeededStates?.();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

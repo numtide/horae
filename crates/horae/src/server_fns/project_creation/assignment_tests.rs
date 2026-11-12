@@ -4,8 +4,9 @@ use crate::models::project_creation::{
 };
 use crate::server_fns::test_seed::seed;
 use dioxus::prelude::ServerFnError;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::project::BudgetMode;
-use horae_core::types::{OrgRole, ProjectRole};
+use horae_core::types::ProjectRole;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -42,7 +43,7 @@ fn task_input(source: TaskSource) -> ProjectTaskInput {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn finalization_reuses_catalog_and_keeps_lead_overrides_local_on_retry(pool: PgPool) {
-    let owner = seed(&pool, OrgRole::Admin).await;
+    let owner = seed(&pool, BuiltInProfile::Administrator).await;
     let teammate = member(&pool, owner.org_id, true).await;
     sqlx::query!(
         "INSERT INTO assignments (id, project_id, user_id, role, rate_cents) VALUES ($1, $2, $3, 'freelancer', 8000)",
@@ -193,8 +194,8 @@ async fn creation_counts(pool: &PgPool, org: Uuid) -> Vec<i64> {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invalid_assignment_graphs_leave_no_partial_creation_or_draft_change(pool: PgPool) {
     use crate::server_fns::{BAD_REQUEST, CONFLICT, NOT_FOUND};
-    let owner = seed(&pool, OrgRole::Admin).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let owner = seed(&pool, BuiltInProfile::Administrator).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let teammate = member(&pool, owner.org_id, true).await;
     let inactive = member(&pool, owner.org_id, false).await;
     let archived_task = Uuid::now_v7();

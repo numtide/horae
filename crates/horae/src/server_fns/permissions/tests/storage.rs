@@ -1,11 +1,18 @@
 use super::*;
-use crate::server_fns::test_seed::seed;
+use crate::server_fns::test_seed::{SeedIds, clear_state, seed};
 use horae_core::permissions::catalog::{
     BuiltInProfile, Permission, PermissionSelection, validate_template_name,
 };
 use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+/// A seeded member with no permission state yet, for the storage commands to write.
+async fn stateless(pool: &PgPool) -> SeedIds {
+    let ids = seed(pool, BuiltInProfile::Member).await;
+    clear_state(pool, ids.user_id).await;
+    ids
+}
 
 fn grant_ids(selection: &PermissionSelection) -> Vec<String> {
     selection
@@ -59,28 +66,6 @@ fn constraint(error: sqlx::Error, expected: &str) {
     assert_eq!(error.code().as_deref(), Some(expected));
 }
 
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-#[serial_test::serial]
-async fn storage_does_not_activate_or_infer_legacy_roles(pool: PgPool) {
-    for role in [OrgRole::Admin, OrgRole::Manager, OrgRole::Member] {
-        let ids = seed(&pool, role).await;
-        let row = sqlx::query!(
-            "SELECT permission_policy_version, access_revision FROM organizations WHERE id = $1",
-            ids.org_id
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        assert_eq!((row.permission_policy_version, row.access_revision), (0, 0));
-        assert!(
-            load_person_permissions(&mut pool.acquire().await.unwrap(), ids.org_id, ids.user_id)
-                .await
-                .unwrap()
-                .is_none()
-        );
-    }
-}
-
 #[sqlx::test(migrations = false)]
 #[serial_test::serial]
 async fn additive_migration_preserves_populated_legacy_records(pool: PgPool) {
@@ -93,7 +78,8 @@ async fn additive_migration_preserves_populated_legacy_records(pool: PgPool) {
             .collect(),
     );
     previous.run(&pool).await.unwrap();
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids =
+        crate::server_fns::test_seed::seed_before_permission_state(&pool, OrgRole::Manager).await;
     let membership = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO assignments (id, project_id, user_id, role, rate_cents)
@@ -160,7 +146,7 @@ async fn additive_migration_preserves_populated_legacy_records(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn concurrent_equivalent_names_create_only_one_template(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = stateless(&pool).await;
     let (first, second) = tokio::join!(
         template(&pool, ids.org_id, "Equipo"),
         template(
@@ -192,7 +178,7 @@ async fn concurrent_equivalent_names_create_only_one_template(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn person_grants_and_identity_round_trip_independently_of_source(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = stateless(&pool).await;
     person(&pool, ids.org_id, ids.user_id).await.unwrap();
     for profile in BuiltInProfile::ALL {
         let mut adjusted = profile.selection();
@@ -254,7 +240,7 @@ async fn legacy_template_storage(pool: &PgPool) {
 #[serial_test::serial]
 async fn unicode_name_migration_preserves_existing_templates(pool: PgPool) {
     legacy_template_storage(&pool).await;
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = stateless(&pool).await;
     let id = template(&pool, ids.org_id, "Ágil").await.unwrap();
     let before = load_permission_template(&mut pool.acquire().await.unwrap(), ids.org_id, id)
         .await
@@ -275,7 +261,7 @@ async fn unicode_name_migration_preserves_existing_templates(pool: PgPool) {
 #[serial_test::serial]
 async fn unicode_name_collision_rolls_back_migration_without_changing_profiles(pool: PgPool) {
     legacy_template_storage(&pool).await;
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = stateless(&pool).await;
     let first = template(&pool, ids.org_id, "Ágil").await.unwrap();
     let second = template(&pool, ids.org_id, "ágil").await.unwrap();
     let migrator = sqlx::migrate!("./migrations");
@@ -304,8 +290,8 @@ async fn unicode_name_collision_rolls_back_migration_without_changing_profiles(p
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn template_names_are_case_insensitive_and_tenant_local(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Member).await;
-    let foreign = seed(&pool, OrgRole::Member).await;
+    let local = stateless(&pool).await;
+    let foreign = stateless(&pool).await;
     for (first, second) in [("Equipo", "equipo"), ("Ágil", "ágil"), ("Роль", "роль")] {
         let id = template(&pool, local.org_id, first).await.unwrap();
         constraint(
@@ -344,8 +330,8 @@ async fn template_names_are_case_insensitive_and_tenant_local(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn person_state_rejects_duplicates_and_foreign_users_and_templates(pool: PgPool) {
-    let local = seed(&pool, OrgRole::Member).await;
-    let foreign = seed(&pool, OrgRole::Member).await;
+    let local = stateless(&pool).await;
+    let foreign = stateless(&pool).await;
     person(&pool, local.org_id, local.user_id).await.unwrap();
     constraint(
         person(&pool, local.org_id, local.user_id)
@@ -385,7 +371,7 @@ async fn person_state_rejects_duplicates_and_foreign_users_and_templates(pool: P
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn malformed_stored_grants_fail_without_repair(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = stateless(&pool).await;
     person(&pool, ids.org_id, ids.user_id).await.unwrap();
     let template_id = template(&pool, ids.org_id, "Team").await.unwrap();
     let valid = grant_ids(&BuiltInProfile::Member.selection());
@@ -436,7 +422,7 @@ async fn malformed_stored_grants_fail_without_repair(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn source_shape_and_revision_constraints_reject_invalid_rows(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = stateless(&pool).await;
     person(&pool, ids.org_id, ids.user_id).await.unwrap();
     for (source, builtin, template, applied, revision) in [
         ("unknown", None, None, None, 0_i64),
@@ -470,7 +456,7 @@ async fn source_shape_and_revision_constraints_reject_invalid_rows(pool: PgPool)
 async fn referenced_template_deletion_requires_detaching_without_grant_or_identity_loss(
     pool: PgPool,
 ) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = stateless(&pool).await;
     person(&pool, ids.org_id, ids.user_id).await.unwrap();
     let id = template(&pool, ids.org_id, "Administrator").await.unwrap();
     sqlx::query!(

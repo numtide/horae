@@ -3,6 +3,7 @@ use super::*;
 use crate::models::project::ProjectDetailBudget;
 use chrono::NaiveDate;
 use horae_core::budget::BudgetHeadline;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::BudgetKind;
 
 fn exact(budget: i64, spent: i64, remaining: i64) -> BudgetHeadline {
@@ -136,14 +137,19 @@ async fn link_task(pool: &PgPool, ids: &SeedIds, task: Uuid, budget: Option<i64>
 }
 
 async fn reader(pool: &PgPool, permissions: &[Permission]) -> (SeedIds, User) {
-    fixture(pool, OrgRole::Member, PermissionSelection::new(permissions)).await
+    fixture(
+        pool,
+        BuiltInProfile::Member,
+        PermissionSelection::new(permissions),
+    )
+    .await
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_budget_uses_lifetime_raw_minutes_and_list_fee_spend(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
-    let viewer = legacy_viewer(&ids, OrgRole::Admin);
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let viewer = legacy_viewer(&ids, BuiltInProfile::Administrator);
     assert_eq!(budget_on(&pool, &viewer, &ids, today()).await, None);
     entry(&pool, &ids, ids.task_id, "2026-01-01", 90, true).await;
     entry(&pool, &ids, ids.task_id, "2026-09-07", 60, false).await;
@@ -459,7 +465,7 @@ async fn foreign_client_parent_hides_configured_and_legacy_budgets(pool: PgPool)
     .await;
     fee_budget(&pool, &ids, Some(10_000)).await;
     entry(&pool, &ids, ids.task_id, "2026-09-01", 60, true).await;
-    let other = seed(&pool, OrgRole::Admin).await;
+    let other = seed(&pool, BuiltInProfile::Administrator).await;
     sqlx::query!(
         "UPDATE projects SET client_id=$2 WHERE id=$1",
         ids.project_id,
@@ -517,8 +523,8 @@ async fn configured_fee_valuation_overflow_is_unavailable_not_a_failed_detail(po
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn legacy_hours_budget_ignores_unrelated_money_overflow(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
-    let viewer = legacy_viewer(&ids, OrgRole::Admin);
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let viewer = legacy_viewer(&ids, BuiltInProfile::Administrator);
     hours_budget(&pool, &ids, Some(120)).await;
     maximum_project_rate(&pool, &ids).await;
     entry(&pool, &ids, ids.task_id, "2026-09-01", 120, true).await;
@@ -575,8 +581,8 @@ async fn configured_fee_sum_overflow_is_unavailable(pool: PgPool) {
 #[serial_test::serial]
 async fn legacy_fee_line_and_sum_overflow_are_unavailable(pool: PgPool) {
     for summed in [false, true] {
-        let ids = seed(&pool, OrgRole::Admin).await;
-        let viewer = legacy_viewer(&ids, OrgRole::Admin);
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
+        let viewer = legacy_viewer(&ids, BuiltInProfile::Administrator);
         fee_budget(&pool, &ids, Some(10_000)).await;
         if summed {
             summed_overflow(&pool, &ids).await;

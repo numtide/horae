@@ -1,4 +1,5 @@
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 
 async fn add_member(pool: &PgPool, ids: &SeedIds, user_id: Uuid) -> Uuid {
     let id = Uuid::now_v7();
@@ -37,7 +38,7 @@ async fn team_ids(pool: &PgPool, viewer: &User, project_id: Uuid) -> Option<Vec<
 async fn project_reader_can_read_retained_team_without_people_directory_or_rates(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -68,7 +69,12 @@ async fn project_reader_can_read_retained_team_without_people_directory_or_rates
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_member_does_not_inherit_legacy_admin_team(pool: PgPool) {
-    let (ids, viewer) = fixture(&pool, OrgRole::Admin, PermissionSelection::new(&[])).await;
+    let (ids, viewer) = fixture(
+        &pool,
+        BuiltInProfile::Administrator,
+        PermissionSelection::new(&[]),
+    )
+    .await;
     teammate(&pool, &ids).await;
     assert_eq!(team_ids(&pool, &viewer, ids.project_id).await, None);
     // Membership opens the project, but the teammate stays hidden.
@@ -90,7 +96,7 @@ async fn canonical_member_does_not_inherit_legacy_admin_team(pool: PgPool) {
 async fn project_team_follows_current_project_scope(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadManaged]),
     )
     .await;
@@ -121,12 +127,12 @@ async fn project_team_follows_current_project_scope(pool: PgPool) {
 async fn team_reader_denies_foreign_projects_and_unavailable_actors(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
     teammate(&pool, &ids).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     add_member(&pool, &foreign, foreign.user_id).await;
     assert_eq!(team_ids(&pool, &viewer, foreign.project_id).await, None);
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
@@ -147,7 +153,7 @@ async fn team_reader_denies_foreign_projects_and_unavailable_actors(pool: PgPool
 async fn team_reader_rejects_malformed_canonical_state_including_empty_projects(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
@@ -176,11 +182,11 @@ async fn team_reader_rejects_malformed_canonical_state_including_empty_projects(
 async fn team_reader_does_not_disclose_cross_tenant_assignment_targets(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll, Permission::BillableRateReadAll]),
     )
     .await;
-    let foreign = seed(&pool, OrgRole::Member).await;
+    let foreign = seed(&pool, BuiltInProfile::Member).await;
     add_member(&pool, &ids, foreign.user_id).await;
     let local = teammate(&pool, &ids).await;
     assert_eq!(
@@ -196,7 +202,7 @@ async fn team_reader_does_not_disclose_cross_tenant_assignment_targets(pool: PgP
 /// the only, untested guard.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn legacy_progress_access_implies_team_access(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let mut viewers = vec![ids.user_id];
     for (role, assignment) in [
         (OrgRole::Manager, None),
