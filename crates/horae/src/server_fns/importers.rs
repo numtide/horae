@@ -1,8 +1,10 @@
-//! Admin-only server functions for the Harvest importer (contracts/importer-api.md).
+//! Administrator-only server functions for the Harvest importer
+//! (contracts/importer-api.md).
 //!
 //! These are the SPA's entry points: start the OAuth connect, read connection
-//! status, and enqueue durable API or CSV imports. All reject
-//! non-admins with `FORBIDDEN` (FR-001) and use named status codes.
+//! status, and enqueue durable API or CSV imports. No permission grant covers
+//! them: all reject anyone without the stored administrator identity with
+//! `FORBIDDEN` (FR-001) and use named status codes.
 
 use super::*;
 use horae_core::importers::harvest::client::ClientSettings;
@@ -22,7 +24,7 @@ mod authorization_tests;
 /// to (contracts/importer-api.md §1).
 #[server]
 pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let cfg = harvest_config(admin.org_id).await?;
     let current = harvest_connection_status().await?;
 
@@ -55,7 +57,7 @@ pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
 /// Report whether the org has a usable Harvest connection (never the tokens).
 #[dioxus_fullstack::post("/api/import/harvest/connection")]
 pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
     let configured = crate::importers::harvest::client_settings::resolve(
         &state.db,
@@ -74,7 +76,7 @@ pub async fn harvest_connection_status() -> Result<ConnectionStatus, ServerFnErr
 /// never the secret (contracts/client-settings.md).
 #[dioxus_fullstack::post("/api/import/harvest/client")]
 pub async fn harvest_client_settings() -> Result<ClientSettings, ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
     crate::importers::harvest::client_settings::view(&state.db, &state.harvest, admin.org_id)
         .await
@@ -91,7 +93,7 @@ pub async fn save_harvest_client(
     redirect_url: String,
     confirm_disconnect: bool,
 ) -> Result<ClientSettings, ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
     crate::importers::harvest::client_settings::save(
         &state.db,
@@ -114,7 +116,7 @@ pub async fn save_harvest_client(
 pub async fn remove_harvest_client(
     confirm_disconnect: bool,
 ) -> Result<ClientSettings, ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
     crate::importers::harvest::client_settings::remove(
         &state.db,
@@ -155,7 +157,7 @@ pub async fn harvest_change_account(
     expected_generation: i64,
     expected_revision: i64,
 ) -> Result<(), ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
     crate::importers::harvest::account_switch::change(
         &state.db,
@@ -201,7 +203,7 @@ fn map_connection_error(error: anyhow::Error) -> ServerFnError {
 /// binding for a safe reconnect (contracts/importer-api.md). Admin-only (FR-001).
 #[server]
 pub async fn harvest_disconnect() -> Result<(), ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
 
     crate::importers::harvest::credentials::disconnect(&state.db, admin.org_id, admin.id)
@@ -217,7 +219,7 @@ pub async fn start_harvest_api_import(
     sync: SyncScope,
     generation: Option<i64>,
 ) -> Result<crate::models::JobStatus, ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
     let payload = crate::jobs::JobPayload::HarvestApi { mode, sync };
     let key = submission_key("api").await?;
@@ -239,7 +241,7 @@ pub async fn start_harvest_api_import(
 pub async fn get_harvest_import_job(
     job_id: uuid::Uuid,
 ) -> Result<Option<crate::models::JobStatus>, ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
     commands::status(&state.db, admin.org_id, admin.id, job_id).await
 }
@@ -249,7 +251,7 @@ pub async fn list_harvest_import_jobs(
     before: Option<uuid::Uuid>,
     limit: Option<i64>,
 ) -> Result<Vec<crate::models::JobStatus>, ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
     commands::history(
         &state.db,
@@ -268,7 +270,7 @@ pub async fn start_harvest_csv_import(
     mode: ImportMode,
     file: CsvUpload,
 ) -> Result<crate::models::JobStatus, ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let key = submission_key("csv").await?;
     let body = axum::body::to_bytes(file.into_body()?, 50 * 1024 * 1024)
         .await
@@ -292,7 +294,7 @@ pub async fn start_harvest_csv_import(
 pub async fn commit_harvest_import_preview(
     job_id: uuid::Uuid,
 ) -> Result<crate::models::JobStatus, ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
     commands::commit_preview(&state.db, admin.org_id, admin.id, job_id, state.job_policy).await
 }
@@ -302,7 +304,7 @@ pub async fn commit_harvest_import_preview(
 pub async fn harvest_import_error_summary(
     job_id: uuid::Uuid,
 ) -> Result<crate::models::ErrorSummary, ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
     commands::error_summary(&state.db, admin.org_id, admin.id, job_id).await
 }
@@ -311,7 +313,7 @@ pub async fn harvest_import_error_summary(
 pub async fn cancel_harvest_import_job(
     job_id: uuid::Uuid,
 ) -> Result<crate::models::JobStatus, ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
     commands::cancel(&state.db, admin.org_id, admin.id, job_id).await
 }
@@ -320,9 +322,26 @@ pub async fn cancel_harvest_import_job(
 pub async fn retry_harvest_import_job(
     job_id: uuid::Uuid,
 ) -> Result<crate::models::JobStatus, ServerFnError> {
-    let admin = require_admin().await?;
+    let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
     commands::retry(&state.db, admin.org_id, admin.id, job_id).await
+}
+
+/// The signed-in person, if they are an active administrator. This refuses
+/// early and without locks; each change and job read checks again inside its
+/// own transaction (`credentials::authorize_change`, `jobs::access`).
+#[cfg(feature = "server")]
+async fn require_administrator() -> Result<crate::models::User, ServerFnError> {
+    let user = require_user().await?;
+    let state = crate::state::global_state().await;
+    let mut connection = state.db.acquire().await.map_err(server_err)?;
+    crate::ops::Actor::load_unlocked(
+        &mut connection,
+        crate::ops::Caller::session(user.org_id, user.id),
+    )
+    .await?
+    .require_administrator()?;
+    Ok(user)
 }
 
 #[cfg(feature = "server")]
