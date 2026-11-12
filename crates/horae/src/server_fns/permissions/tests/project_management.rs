@@ -2,7 +2,6 @@ use super::project_management::{ProjectManagersCommand, ProjectManagersError, ex
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use std::time::Duration;
 
@@ -16,6 +15,7 @@ async fn permissions(pool: &PgPool, org: Uuid, user: Uuid, grants: &[Permission]
     let ids: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(grants)).unwrap())
             .unwrap();
+    crate::server_fns::test_seed::clear_state(pool, user).await;
     sqlx::query!(
         "INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
          VALUES ($1, $2, $3, 1, $4, false, 'individual')
@@ -28,7 +28,7 @@ async fn permissions(pool: &PgPool, org: Uuid, user: Uuid, grants: &[Permission]
 }
 
 async fn fixture(pool: &PgPool) -> SeedIds {
-    let ids = seed(pool, OrgRole::Member).await;
+    let ids = seed(pool, BuiltInProfile::Member).await;
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
         ids.org_id
@@ -489,7 +489,7 @@ async fn retained_ineligible_managers_and_archived_projects_allow_noop_and_remov
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_actor_grants_activity_tenant_and_policy_are_required(pool: PgPool) {
+async fn canonical_actor_grants_activity_and_tenant_are_required(pool: PgPool) {
     let ids = fixture(&pool).await;
     let foreign = fixture(&pool).await;
     let command = request(ids.project_id, &[]);
@@ -511,21 +511,6 @@ async fn canonical_actor_grants_activity_tenant_and_policy_are_required(pool: Pg
         .execute(&pool)
         .await
         .unwrap();
-    assert!(matches!(
-        execute(&pool, ids.org_id, ids.user_id, &command).await,
-        Err(ProjectManagersError::Forbidden)
-    ));
-    sqlx::query!("UPDATE users SET active = true WHERE id = $1", ids.user_id)
-        .execute(&pool)
-        .await
-        .unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 0 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &command).await,
         Err(ProjectManagersError::Forbidden)

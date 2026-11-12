@@ -251,7 +251,7 @@ async fn detailed_report_profiles_and_custom_scope_union_do_not_duplicate_rows(p
 #[serial_test::serial]
 async fn detailed_report_filters_are_any_within_and_between_dimensions(pool: PgPool) {
     let ids = fixture(&pool).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     time_entry(&pool, &foreign, EntryState::Open).await;
     let tags = [Uuid::now_v7(), Uuid::now_v7()];
@@ -494,7 +494,7 @@ async fn detailed_report_observes_revocation_after_wait_and_releases_on_cancel(p
 #[serial_test::serial]
 async fn detailed_report_excludes_malformed_tenant_parents(pool: PgPool) {
     let ids = fixture(&pool).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let valid = time_entry(&pool, &ids, EntryState::Open).await;
     for malformed in [
         SeedIds {

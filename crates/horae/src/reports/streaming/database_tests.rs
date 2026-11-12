@@ -1,4 +1,5 @@
-use horae_core::types::{EntryState, OrgRole};
+use horae_core::permissions::catalog::BuiltInProfile;
+use horae_core::types::EntryState;
 
 use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
 
@@ -23,7 +24,7 @@ fn params() -> ExportParams {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_project_exports_deny_inactive_actors(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
         .execute(&pool)
         .await
@@ -59,7 +60,7 @@ async fn add_entries(pool: &PgPool, ids: &SeedIds, count: usize) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_tag_filter_excludes_other_projects_without_duplicating_rows(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let other = SeedIds {
         project_id: Uuid::now_v7(),
         org_id: ids.org_id,
@@ -138,8 +139,8 @@ async fn streamed_tag_filter_excludes_other_projects_without_duplicating_rows(po
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_timesheet_preserves_csv_escaping_frozen_zero_and_all_filters(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
-    let other = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+    let other = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &other, EntryState::Open).await;
     let id = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
@@ -210,7 +211,7 @@ async fn streamed_timesheet_preserves_csv_escaping_frozen_zero_and_all_filters(p
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_timesheet_exceeds_xlsx_row_limit_without_one_large_body_chunk(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     add_entries(&pool, &ids, 10_001).await;
     let response = entries(pool, ids.org_id, ids.user_id, params())
         .await
@@ -236,7 +237,7 @@ async fn streamed_timesheet_exceeds_xlsx_row_limit_without_one_large_body_chunk(
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_projects_preserve_scope_budget_and_tenant_isolation(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
         Uuid::now_v7(),
@@ -246,7 +247,7 @@ async fn streamed_projects_preserve_scope_budget_and_tenant_isolation(pool: PgPo
     .execute(&pool)
     .await
     .unwrap();
-    let _other = seed(&pool, OrgRole::Member).await;
+    let _other = seed(&pool, BuiltInProfile::Member).await;
     sqlx::query!("UPDATE projects SET code = 'A,B', budget_kind = 'hours', budget_minutes = 90 WHERE id = $1",
         ids.project_id).execute(&pool).await.unwrap();
     for scope in [None, Some("active"), Some("budgeted"), Some("unknown")] {
@@ -305,8 +306,8 @@ async fn streamed_projects_preserve_scope_budget_and_tenant_isolation(pool: PgPo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_invoice_uses_stored_exact_cents_and_tenant_scoped_metadata(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
-    let other = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+    let other = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     let invoice_id = Uuid::now_v7();
     sqlx::query!(
@@ -362,7 +363,7 @@ async fn export_connection(pool: &PgPool) -> (PgPool, i32) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_fee_invoice_has_no_fabricated_hours_or_hourly_rate(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let invoice_id = Uuid::now_v7();
     let fee_id = Uuid::now_v7();
     sqlx::query!("INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents,po_number,discount_bps,discount_cents,tax1_bps,tax1_cents,tax2_name,tax2_bps,tax2_cents) VALUES ($1,$2,$3,'FEE-1','2026-09-01','2026-09-22','EUR',13782,$4,1000,1250,2100,2363,$5,150,169)", invoice_id, ids.org_id, ids.client_id, "PO \"界\",\n123", "Local \"tax\"").execute(&pool).await.unwrap();
@@ -409,7 +410,7 @@ async fn streamed_fee_invoice_has_no_fabricated_hours_or_hourly_rate(pool: PgPoo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn dropping_streamed_timesheet_closes_its_database_connection(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     add_entries(&pool, &ids, 10_001).await;
     let (export_pool, pid) = export_connection(&pool).await;
     let response = entries(export_pool.clone(), ids.org_id, ids.user_id, params())
@@ -458,7 +459,7 @@ async fn a_real_database_error_interrupts_the_csv_body(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn streamed_invoice_metadata_and_lines_share_one_snapshot(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     let invoice_id = Uuid::now_v7();
     sqlx::query!(
@@ -551,7 +552,7 @@ async fn streamed_invoice_metadata_and_lines_share_one_snapshot(pool: PgPool) {
 #[serial_test::serial]
 #[ignore = "Manual release measurement of a 100,000-row CSV download"]
 async fn measure_streaming_csv_export(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     add_entries(&pool, &ids, 100_000).await;
     let started = std::time::Instant::now();
     let result = entries(pool, ids.org_id, ids.user_id, params())

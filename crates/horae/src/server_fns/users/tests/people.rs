@@ -23,7 +23,7 @@ async fn add(
         org,
         actor,
         people,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         activation,
         Existing::Skip,
     )
@@ -67,7 +67,7 @@ fn a_new_person_needs_an_email_and_falls_back_to_it_for_a_name() {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn people_are_added_deactivated_or_active_as_chosen(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let before = emails(&pool, ids.org_id).await;
     let added = add(
         &pool,
@@ -107,7 +107,7 @@ async fn people_are_added_deactivated_or_active_as_chosen(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn an_email_already_in_use_is_reported_present_and_the_rest_are_added(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     add(
         &pool,
         ids.org_id,
@@ -146,7 +146,7 @@ async fn an_email_already_in_use_is_reported_present_and_the_rest_are_added(pool
         ids.user_id,
         "DANA@x.com",
         "Dana",
-        OrgRole::Member,
+        BuiltInProfile::Member,
     )
     .await;
     assert!(
@@ -161,7 +161,7 @@ async fn an_email_already_in_use_is_reported_present_and_the_rest_are_added(pool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn an_email_listed_twice_in_any_case_refuses_the_batch(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let before = emails(&pool, ids.org_id).await;
     for batch in [
         vec![person("twice@x.com"), person("TWICE@x.com")],
@@ -192,7 +192,7 @@ async fn an_email_listed_twice_in_any_case_refuses_the_batch(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn only_an_active_administrator_adds_people(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     sqlx::query!(
         "UPDATE users SET org_role = 'manager' WHERE id = $1",
         ids.user_id

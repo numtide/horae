@@ -1,6 +1,7 @@
 //! The management catalog binds both rows and affordances to its requester.
 
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
@@ -43,9 +44,10 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             true,
         ),
     ] {
-        let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+        let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
         let stored: Vec<String> =
             serde_json::from_value(json!(PermissionSelection::new(&grants))).unwrap();
+        crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source) VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &stored)
             .execute(pool).await.unwrap();
         sqlx::query!(

@@ -3,7 +3,7 @@ use crate::models::permission_editor::PermissionRequester;
 use crate::reports::limits::time;
 
 async fn fixture(pool: &PgPool) -> SeedIds {
-    let ids = scoped(pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
     add_entries(pool, &ids, 1).await;
     let projects = project_entries(pool, &ids, ids.user_id, 3).await;
     sqlx::query!(

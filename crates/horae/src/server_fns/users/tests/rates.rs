@@ -68,6 +68,7 @@ async fn policy_one(
     .execute(pool)
     .await
     .unwrap();
+    crate::server_fns::test_seed::clear_state(pool, actor).await;
     sqlx::query!(
         "INSERT INTO person_permission_states
            (id, org_id, user_id, catalog_version, grants, is_administrator, source)
@@ -127,7 +128,7 @@ async fn observe(pool: &PgPool, org: Uuid, actor: Uuid, target: Uuid) -> Access 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn policy_zero_follows_the_legacy_role_rule(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let target = person(&pool, ids.org_id, OrgRole::Member).await;
     let manager = person(&pool, ids.org_id, OrgRole::Manager).await;
     let member = person(&pool, ids.org_id, OrgRole::Member).await;
@@ -152,7 +153,7 @@ async fn policy_zero_follows_the_legacy_role_rule(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn policy_zero_manager_cannot_write_or_see_a_cost_rate(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let target = person(&pool, ids.org_id, OrgRole::Member).await;
     let manager = person(&pool, ids.org_id, OrgRole::Manager).await;
     let eur = currency(&pool, ids.org_id).await;
@@ -200,7 +201,7 @@ async fn policy_zero_manager_cannot_write_or_see_a_cost_rate(pool: PgPool) {
 #[serial_test::serial]
 async fn policy_one_uses_each_rate_grant_and_its_managed_scope(pool: PgPool) {
     use Permission::*;
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let managed = person(&pool, ids.org_id, OrgRole::Member).await;
     let other = person(&pool, ids.org_id, OrgRole::Member).await;
     // The legacy role must not matter once detailed permissions are on.
@@ -268,7 +269,7 @@ async fn policy_one_uses_each_rate_grant_and_its_managed_scope(pool: PgPool) {
 #[serial_test::serial]
 async fn policy_one_rate_grants_need_people_access_and_never_cover_oneself(pool: PgPool) {
     use Permission::*;
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let managed = person(&pool, ids.org_id, OrgRole::Member).await;
     let actor = person(&pool, ids.org_id, OrgRole::Manager).await;
 
@@ -299,7 +300,7 @@ async fn policy_one_rate_grants_need_people_access_and_never_cover_oneself(pool:
 #[serial_test::serial]
 async fn policy_one_refuses_writes_beyond_the_grant(pool: PgPool) {
     use Permission::*;
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let managed = person(&pool, ids.org_id, OrgRole::Member).await;
     let other = person(&pool, ids.org_id, OrgRole::Member).await;
     let actor = person(&pool, ids.org_id, OrgRole::Member).await;
@@ -359,7 +360,7 @@ async fn policy_one_refuses_writes_beyond_the_grant(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn rates_round_trip_exact_minor_units(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let target = person(&pool, ids.org_id, OrgRole::Member).await;
     let eur = currency(&pool, ids.org_id).await;
     let write = |billable, cost| {
@@ -388,7 +389,7 @@ async fn rates_round_trip_exact_minor_units(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn writes_refuse_negative_amounts_and_a_stale_currency(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let target = person(&pool, ids.org_id, OrgRole::Member).await;
     let eur = currency(&pool, ids.org_id).await;
 
@@ -427,8 +428,8 @@ async fn writes_refuse_negative_amounts_and_a_stale_currency(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn another_organizations_person_is_not_found(pool: PgPool) {
-    let ours = seed(&pool, OrgRole::Admin).await;
-    let theirs = seed(&pool, OrgRole::Admin).await;
+    let ours = seed(&pool, BuiltInProfile::Administrator).await;
+    let theirs = seed(&pool, BuiltInProfile::Administrator).await;
     let target = person(&pool, theirs.org_id, OrgRole::Member).await;
     let eur = currency(&pool, ours.org_id).await;
 

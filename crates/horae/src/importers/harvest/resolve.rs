@@ -908,6 +908,14 @@ async fn create_person(
             (None, None) => return Err(RowFailure::new("no free id for the record")),
         }
     };
+    // Imported people never bring Harvest privileges with them (015).
+    crate::server_fns::provisioning::provision(
+        &mut *conn,
+        org_id,
+        id,
+        horae_core::permissions::catalog::BuiltInProfile::Member,
+    )
+    .await?;
     let event = crate::plugin::AppEvent::UserCreated {
         occurred_at: Utc::now(),
         org_id,
