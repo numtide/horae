@@ -1701,10 +1701,7 @@ mod tests {
 
         // The Project Manager profile reads managed time but no rates. Own
         // time stays visible; the stranger is out of scope.
-        let only_managed_people = vec![
-            ("managed".into(), None, None),
-            ("mine".into(), None, None),
-        ];
+        let only_managed_people = vec![("managed".into(), None, None), ("mine".into(), None, None)];
         assert_eq!(rates(&pool, &ids).await, only_managed_people);
         let Json(page) = time_entries_page(&pool, &caller(&ids), no_time_entry_filters())
             .await
