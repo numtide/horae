@@ -18,11 +18,10 @@ mod pagination_tests;
 use axum::{
     Json, Router,
     extract::{OriginalUri, Path, Query, State},
-    http::StatusCode,
     routing::{MethodRouter, get},
 };
 use chrono::{DateTime, NaiveDate, Utc};
-use horae_core::types::OrgRole;
+use horae_core::permissions::catalog::Permission;
 use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -31,6 +30,11 @@ use auth::AuthUser;
 use errors::ApiError;
 use horae_harvest::v2::compat::*;
 use ids::Kind;
+
+use crate::ops::{self, Actor, Caller, OpError};
+
+#[cfg(test)]
+use axum::http::StatusCode;
 
 pub fn router(db: PgPool) -> Router {
     let routes: [(&str, MethodRouter<PgPool>); 10] = [
@@ -81,22 +85,80 @@ fn forbidden(msg: &str) -> ApiError {
     ApiError::forbidden(msg)
 }
 
+/// Opens a read for `caller` and loads their stored permission state, held
+/// until the read finishes. `subject` names the collection in refusals: an
+/// actor without valid stored state, or no longer an active person of the
+/// organization, is refused rather than shown an empty collection.
+async fn begin_read(
+    db: &PgPool,
+    caller: &AuthUser,
+    subject: &str,
+) -> Result<ops::ReadTx, ApiError> {
+    let read = ops::begin_read(db, Caller::session(caller.org_id, caller.user_id))
+        .await
+        .map_err(|error| match error {
+            OpError::Forbidden(_) => {
+                forbidden(&format!("{subject} permission state is unavailable"))
+            }
+            error => ApiError::from(dioxus::prelude::ServerFnError::from(error)),
+        })?;
+    if !read.actor.is_active() {
+        return Err(forbidden(&format!("{subject} access is unavailable")));
+    }
+    Ok(read)
+}
+
+/// What the caller's stored grants let them read from time entries. Managed
+/// grants cover entries of the people they manage and of the projects they
+/// manage, as in the timesheet.
+#[derive(Clone, Copy)]
+struct TimeView {
+    own: bool,
+    managed: bool,
+    all: bool,
+    billable_rates_managed: bool,
+    billable_rates_all: bool,
+    /// Cost rates have no managed scope.
+    cost_rates: bool,
+    projects_managed: bool,
+    projects_all: bool,
+}
+
+impl TimeView {
+    fn of(actor: &Actor) -> Self {
+        Self {
+            own: actor.has(Permission::TimeReadOwn),
+            managed: actor.has(Permission::TimeReadManaged),
+            all: actor.has(Permission::TimeReadAll),
+            billable_rates_managed: actor.has(Permission::BillableRateReadManaged),
+            billable_rates_all: actor.has(Permission::BillableRateReadAll),
+            cost_rates: actor.has(Permission::CostRateReadAll),
+            projects_managed: actor.has(Permission::ProjectReadManaged),
+            projects_all: actor.has(Permission::ProjectReadAll),
+        }
+    }
+}
+
 /// The `user_id` a time-entry query may read, given what the caller asked for.
 ///
-/// Managers and admins see the whole org and may filter to anyone; a member is
-/// confined to their own rows, exactly as the SPA's `list_time_entries` scopes
-/// its listing to the session user. Asking for a colleague's rows is refused
-/// rather than quietly answered with a different row set.
+/// Someone who reads only their own time is confined to their own rows, and
+/// asking for a colleague's rows is refused rather than quietly answered with
+/// a different row set. Managed and organization-wide readers may filter to
+/// anyone; the row scope still decides what they see.
 fn scoped_user_filter(
     caller: &AuthUser,
+    view: TimeView,
     requested: Option<Uuid>,
 ) -> Result<Option<Uuid>, ApiError> {
-    if caller.org_role.is_manager_or_above() {
+    if view.all || view.managed {
         return Ok(requested);
+    }
+    if !view.own {
+        return Err(forbidden("Reading time entries requires time access"));
     }
     match requested {
         Some(id) if id != caller.user_id => Err(forbidden(
-            "Reading another user's time entries requires manager access",
+            "Reading another user's time entries requires access to their time",
         )),
         _ => Ok(Some(caller.user_id)),
     }
@@ -127,18 +189,20 @@ async fn users_me(user: AuthUser, State(db): State<PgPool>) -> ApiResult<Harvest
     let mut access = user_access::begin(&db, &user).await?;
     let row: UserRow = sqlx::query_as!(
         UserRow,
-        r#"SELECT harvest_id AS id, name, email, active,
-         org_role::text AS "org_role!: String",
-         cost_rate_cents, billable_rate_cents,
-         (SELECT default_currency FROM organizations o WHERE o.id = org_id) AS "org_currency!",
-         created_at as "created_at: chrono::DateTime<chrono::Utc>"
-         FROM users WHERE id = $1"#,
+        r#"SELECT u.harvest_id AS id, u.name, u.email, u.active,
+         COALESCE(p.is_administrator, false) AS "is_admin!",
+         u.cost_rate_cents, u.billable_rate_cents,
+         (SELECT default_currency FROM organizations o WHERE o.id = u.org_id) AS "org_currency!",
+         u.created_at as "created_at: chrono::DateTime<chrono::Utc>"
+         FROM users u
+         LEFT JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
+         WHERE u.id = $1"#,
         user.user_id,
     )
-    .fetch_one(&mut *access.access.tx)
+    .fetch_one(&mut *access.read.tx)
     .await
     .map_err(internal)?;
-    access.access.tx.commit().await.map_err(internal)?;
+    access.read.tx.commit().await.map_err(internal)?;
 
     Ok(Json(user_row_to_harvest(&row, access.rates)))
 }
@@ -194,9 +258,7 @@ fn time_entry_row_to_harvest(
     row: &TimeEntryRow,
     org_round_min: u32,
     org_round_dir: horae_core::types::RoundDir,
-    caller_role: horae_core::types::OrgRole,
 ) -> HarvestTimeEntry {
-    let can_view_rates = caller_role.is_manager_or_above();
     let hours = Hours(row.minutes.into());
     let rounded_hours = Hours(
         horae_core::rounding::effective_minutes(
@@ -245,13 +307,12 @@ fn time_entry_row_to_harvest(
         timer_started_at: row.started_at.map(|t| t.to_rfc3339()),
         billable: row.billable,
         budgeted: row.budget_kind.as_deref().map(|kind| kind != "none"),
+        // The query already withheld the rates the caller may not read.
         billable_rate: row
             .billable_rate_cents
-            .filter(|_| can_view_rates)
             .map(|cents| Amount::new(cents, &row.project_currency)),
         cost_rate: row
             .user_cost_rate_cents
-            .filter(|_| can_view_rates)
             .map(|cents| Amount::new(cents, &row.org_currency)),
         created_at: row.created_at.to_rfc3339(),
         updated_at: row.updated_at.to_rfc3339(),
@@ -286,8 +347,9 @@ async fn list_time_entries(
     Ok(Json(page.with_query(uri.query())))
 }
 
-/// Members receive their own entries without rates; managers can read the
-/// organization's entries and billing rates. Project cost overrides are admin-only.
+/// The entries the caller's `TimeRead*` grants cover. Billable rates need
+/// `BillableRateReadAll`, or `BillableRateReadManaged` for managed people and
+/// projects; cost rates need `CostRateReadAll`. Withheld rates are null.
 async fn time_entries_page(
     db: &PgPool,
     caller: &AuthUser,
@@ -296,7 +358,6 @@ async fn time_entries_page(
     let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
     let requested_user =
         ids::filter(db, caller.org_id, Kind::User, filters.user_id.as_deref()).await?;
-    let user_id_filter = scoped_user_filter(caller, requested_user)?;
     let project_id = ids::filter(
         db,
         caller.org_id,
@@ -307,13 +368,20 @@ async fn time_entries_page(
     let (round_min, round_dir) = crate::db::org_rounding(db, caller.org_id)
         .await
         .map_err(internal)?;
+    // Count and rows are read under the grants held for the whole read.
+    let mut read = begin_read(db, caller, "Time entry").await?;
+    let view = TimeView::of(&read.actor);
+    let user_id_filter = scoped_user_filter(caller, view, requested_user)?;
 
     let total_entries = sqlx::query_scalar!(
-        // Revalidate the active actor alongside the count so a stale role cannot
-        // turn an own-timesheet request into organization-wide metadata.
         "SELECT COUNT(*) FROM time_entries te
-         JOIN users viewer ON viewer.id = $8 AND viewer.org_id = te.org_id AND viewer.active
-         WHERE te.org_id = $1 AND (viewer.org_role IN ('admin', 'manager') OR te.user_id = viewer.id)
+         CROSS JOIN LATERAL (SELECT
+           EXISTS (SELECT 1 FROM person_management_assignments m WHERE m.org_id = te.org_id
+             AND m.manager_id = $8 AND m.managed_user_id = te.user_id) AS person,
+           EXISTS (SELECT 1 FROM project_management_assignments m WHERE m.org_id = te.org_id
+             AND m.manager_id = $8 AND m.project_id = te.project_id) AS project) managed
+         WHERE te.org_id = $1
+           AND ($11 OR ($9 AND te.user_id = $8) OR ($10 AND (managed.person OR managed.project)))
            AND ($2::uuid IS NULL OR te.user_id = $2)
            AND ($3::uuid IS NULL OR te.project_id = $3)
            AND ($4::date IS NULL OR te.spent_date >= $4::date)
@@ -328,8 +396,11 @@ async fn time_entries_page(
         filters.is_running,
         filters.updated_since as Option<DateTime<Utc>>,
         caller.user_id,
+        view.own,
+        view.managed,
+        view.all,
     )
-    .fetch_one(db)
+    .fetch_one(&mut *read.tx)
     .await
     .map_err(internal)?
     .unwrap_or(0);
@@ -349,30 +420,36 @@ async fn time_entries_page(
                p.name AS project_name, p.code AS project_code,
                t.harvest_id AS task_id, t.name AS task_name,
                c.harvest_id AS client_id, c.name AS client_name,
-               CASE WHEN viewer.org_role IN ('admin', 'manager') THEN COALESCE(line.rate_cents,
+               CASE WHEN $15 OR ($14 AND (managed.person OR managed.project)) THEN COALESCE(line.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
                  THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
                  CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
                ) END) END AS "billable_rate_cents?",
-               CASE WHEN viewer.org_role = 'admin' OR (viewer.org_role = 'manager' AND mc.id IS NULL)
-                 THEN COALESCE(mc.cost_rate_cents, u.cost_rate_cents) END AS user_cost_rate_cents,
+               CASE WHEN $16 THEN COALESCE(mc.cost_rate_cents, u.cost_rate_cents) END AS user_cost_rate_cents,
                p.currency AS project_currency, o.default_currency AS org_currency,
-               CASE WHEN access.can_view_progress THEN p.budget_kind::text END AS "budget_kind?: String"
+               CASE WHEN $18 OR ($17 AND managed.project)
+                 OR (member.id IS NOT NULL AND COALESCE(ps.report_visibility, 'project_members') = 'project_members')
+                 THEN p.budget_kind::text END AS "budget_kind?: String"
          FROM time_entries te
-         JOIN users viewer ON viewer.id = $10 AND viewer.org_id = te.org_id AND viewer.active
          JOIN users u ON u.id = te.user_id
          JOIN projects p ON p.id = te.project_id
-         LEFT JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id AND access.user_id = viewer.id
          JOIN tasks t ON t.id = te.task_id
          LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
          LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
+         LEFT JOIN assignments member ON member.project_id = te.project_id AND member.user_id = $10
          LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
          JOIN clients c ON c.id = p.client_id
          JOIN organizations o ON o.id = te.org_id
          LEFT JOIN project_settings ps ON ps.project_id = p.id
          LEFT JOIN project_member_costs mc ON mc.project_id = te.project_id AND mc.user_id = te.user_id
-         WHERE te.org_id = $1 AND (viewer.org_role IN ('admin', 'manager') OR te.user_id = viewer.id)
+         CROSS JOIN LATERAL (SELECT
+           EXISTS (SELECT 1 FROM person_management_assignments m WHERE m.org_id = te.org_id
+             AND m.manager_id = $10 AND m.managed_user_id = te.user_id) AS person,
+           EXISTS (SELECT 1 FROM project_management_assignments m WHERE m.org_id = te.org_id
+             AND m.manager_id = $10 AND m.project_id = te.project_id) AS project) managed
+         WHERE te.org_id = $1
+           AND ($13 OR ($11 AND te.user_id = $10) OR ($12 AND (managed.person OR managed.project)))
            AND ($2::uuid IS NULL OR te.user_id = $2)
            AND ($3::uuid IS NULL OR te.project_id = $3)
            AND ($4::date IS NULL OR te.spent_date >= $4::date)
@@ -391,14 +468,23 @@ async fn time_entries_page(
         per_page,
         offset,
         caller.user_id,
+        view.own,
+        view.managed,
+        view.all,
+        view.billable_rates_managed,
+        view.billable_rates_all,
+        view.cost_rates,
+        view.projects_managed,
+        view.projects_all,
     )
-    .fetch_all(db)
+    .fetch_all(&mut *read.tx)
     .await
     .map_err(internal)?;
+    read.tx.commit().await.map_err(internal)?;
 
     let entries: Vec<HarvestTimeEntry> = rows
         .iter()
-        .map(|r| time_entry_row_to_harvest(r, round_min, round_dir, caller.org_role))
+        .map(|r| time_entry_row_to_harvest(r, round_min, round_dir))
         .collect();
 
     Ok(Json(HarvestPagination::new(
@@ -420,15 +506,18 @@ async fn get_time_entry(
     time_entry_by_id(&db, &user, id).await
 }
 
-/// A single entry out of the same scoped row set as the listing. To a member a
-/// colleague's entry is simply not in their collection, so it reads as missing
-/// rather than forbidden — the answer an id from another org already gets.
+/// A single entry out of the same scoped row set as the listing, with the same
+/// rate redaction. An entry outside the caller's time scope is simply not in
+/// their collection, so it reads as missing rather than forbidden — the answer
+/// an id from another org already gets.
 async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult<HarvestTimeEntry> {
-    let user_scope = scoped_user_filter(caller, None)?;
-
     let (round_min, round_dir) = crate::db::org_rounding(db, caller.org_id)
         .await
         .map_err(internal)?;
+    let mut read = begin_read(db, caller, "Time entry").await?;
+    let view = TimeView::of(&read.actor);
+    // Refuses a caller without any time-read grant.
+    scoped_user_filter(caller, view, None)?;
 
     let row = sqlx::query_as!(
         TimeEntryRow,
@@ -445,21 +534,20 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
                p.name AS project_name, p.code AS project_code,
                t.harvest_id AS task_id, t.name AS task_name,
                c.harvest_id AS client_id, c.name AS client_name,
-               CASE WHEN viewer.org_role IN ('admin', 'manager') THEN COALESCE(line.rate_cents,
+               CASE WHEN $8 OR ($7 AND (managed.person OR managed.project)) THEN COALESCE(line.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.project_type = 'time_and_materials'
                  THEN resolve_project_rate(ps.rate_mode, pt.rate_cents, a.rate_cents, p.rate_cents,
                  CASE WHEN ps.project_id IS NULL OR p.currency = o.default_currency THEN u.billable_rate_cents END,
                  CASE WHEN p.currency = c.currency THEN c.default_rate_cents END
                ) END) END AS "billable_rate_cents?",
-               CASE WHEN viewer.org_role = 'admin' OR (viewer.org_role = 'manager' AND mc.id IS NULL)
-                 THEN COALESCE(mc.cost_rate_cents, u.cost_rate_cents) END AS user_cost_rate_cents,
+               CASE WHEN $9 THEN COALESCE(mc.cost_rate_cents, u.cost_rate_cents) END AS user_cost_rate_cents,
                p.currency AS project_currency, o.default_currency AS org_currency,
-               CASE WHEN access.can_view_progress THEN p.budget_kind::text END AS "budget_kind?: String"
+               CASE WHEN $11 OR ($10 AND managed.project)
+                 OR (member.id IS NOT NULL AND COALESCE(ps.report_visibility, 'project_members') = 'project_members')
+                 THEN p.budget_kind::text END AS "budget_kind?: String"
          FROM time_entries te
-         JOIN users viewer ON viewer.id = $4 AND viewer.org_id = te.org_id AND viewer.active
          JOIN users u ON u.id = te.user_id
          JOIN projects p ON p.id = te.project_id
-         LEFT JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id AND access.user_id = viewer.id
          JOIN tasks t ON t.id = te.task_id
          JOIN clients c ON c.id = p.client_id
          JOIN organizations o ON o.id = te.org_id
@@ -467,25 +555,34 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
          LEFT JOIN project_member_costs mc ON mc.project_id = te.project_id AND mc.user_id = te.user_id
          LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
          LEFT JOIN assignments a ON a.project_id = te.project_id AND a.user_id = te.user_id
+         LEFT JOIN assignments member ON member.project_id = te.project_id AND member.user_id = $3
          LEFT JOIN invoice_line_items line ON line.invoice_id = te.invoice_id AND line.time_entry_id = te.id
-         WHERE te.id = $1 AND te.org_id = $2 AND (viewer.org_role IN ('admin', 'manager') OR te.user_id = viewer.id)
-           AND ($3::uuid IS NULL OR te.user_id = $3)"#,
+         CROSS JOIN LATERAL (SELECT
+           EXISTS (SELECT 1 FROM person_management_assignments m WHERE m.org_id = te.org_id
+             AND m.manager_id = $3 AND m.managed_user_id = te.user_id) AS person,
+           EXISTS (SELECT 1 FROM project_management_assignments m WHERE m.org_id = te.org_id
+             AND m.manager_id = $3 AND m.project_id = te.project_id) AS project) managed
+         WHERE te.id = $1 AND te.org_id = $2
+           AND ($6 OR ($4 AND te.user_id = $3) OR ($5 AND (managed.person OR managed.project)))"#,
         id,
         caller.org_id,
-        user_scope,
         caller.user_id,
+        view.own,
+        view.managed,
+        view.all,
+        view.billable_rates_managed,
+        view.billable_rates_all,
+        view.cost_rates,
+        view.projects_managed,
+        view.projects_all,
     )
-    .fetch_optional(db)
+    .fetch_optional(&mut *read.tx)
     .await
     .map_err(internal)?
     .ok_or_else(not_found)?;
+    read.tx.commit().await.map_err(internal)?;
 
-    Ok(Json(time_entry_row_to_harvest(
-        &row,
-        round_min,
-        round_dir,
-        caller.org_role,
-    )))
+    Ok(Json(time_entry_row_to_harvest(&row, round_min, round_dir)))
 }
 
 // ── Projects ────────────────────────────────────────────────────────────────
@@ -744,7 +841,8 @@ struct UserRow {
     name: String,
     email: String,
     active: bool,
-    org_role: String,
+    /// The person's stored Administrator identity, not their grants.
+    is_admin: bool,
     cost_rate_cents: Option<i64>,
     billable_rate_cents: Option<i64>,
     /// A person's rates are in the organization's currency.
@@ -752,8 +850,8 @@ struct UserRow {
     created_at: DateTime<Utc>,
 }
 
-/// Rates follow the SPA's legacy rule: billable for managers and
-/// administrators, cost for administrators, never by being the person.
+/// Rates follow the caller's grants (see [`user_access::begin`]), never being
+/// the person.
 fn user_row_to_harvest(row: &UserRow, rates: user_access::RateView) -> HarvestUser {
     // Split "First Last" into first_name / last_name
     let (first, last) = match row.name.split_once(' ') {
@@ -767,7 +865,7 @@ fn user_row_to_harvest(row: &UserRow, rates: user_access::RateView) -> HarvestUs
         last_name: last,
         email: row.email.clone(),
         is_active: row.active,
-        is_admin: row.org_role == "admin",
+        is_admin: row.is_admin,
         cost_rate: row
             .cost_rate_cents
             .filter(|_| rates.cost)
@@ -792,8 +890,8 @@ async fn list_users(
 }
 
 /// The org's people, with the rates the caller may read and the others
-/// omitted. Without detailed permissions listing needs Manager/Admin; with
-/// them it needs `PeopleReadAll`. Everyone still reads their own `/users/me`.
+/// omitted. Listing needs `PeopleReadAll`; everyone still reads their own
+/// `/users/me`.
 async fn users_page(
     db: &PgPool,
     caller: &AuthUser,
@@ -813,32 +911,33 @@ async fn users_page(
         caller.org_id,
         filters.is_active,
     )
-    .fetch_one(&mut *access.access.tx)
+    .fetch_one(&mut *access.read.tx)
     .await
     .map_err(internal)?
     .unwrap_or(0);
 
     let rows = sqlx::query_as!(
         UserRow,
-        r#"SELECT harvest_id AS id, name, email, active,
-         org_role::text AS "org_role!: String",
-         cost_rate_cents, billable_rate_cents,
-         (SELECT default_currency FROM organizations o WHERE o.id = org_id) AS "org_currency!",
-         created_at as "created_at: chrono::DateTime<chrono::Utc>"
-         FROM users
-         WHERE org_id = $1
-           AND ($2::bool IS NULL OR active = $2)
-         ORDER BY name, id
+        r#"SELECT u.harvest_id AS id, u.name, u.email, u.active,
+         COALESCE(p.is_administrator, false) AS "is_admin!",
+         u.cost_rate_cents, u.billable_rate_cents,
+         (SELECT default_currency FROM organizations o WHERE o.id = u.org_id) AS "org_currency!",
+         u.created_at as "created_at: chrono::DateTime<chrono::Utc>"
+         FROM users u
+         LEFT JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
+         WHERE u.org_id = $1
+           AND ($2::bool IS NULL OR u.active = $2)
+         ORDER BY u.name, u.id
          LIMIT $3 OFFSET $4"#,
         caller.org_id,
         filters.is_active,
         per_page,
         offset,
     )
-    .fetch_all(&mut *access.access.tx)
+    .fetch_all(&mut *access.read.tx)
     .await
     .map_err(internal)?;
-    access.access.tx.commit().await.map_err(internal)?;
+    access.read.tx.commit().await.map_err(internal)?;
 
     let items: Vec<HarvestUser> = rows
         .iter()
@@ -858,9 +957,10 @@ async fn users_page(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ops::testing::provision;
     use crate::server_fns::test_seed::{SeedIds, seed};
     use horae_core::permissions::catalog::BuiltInProfile;
-    use horae_core::types::{EntryState, OrgRole};
+    use horae_core::types::EntryState;
 
     #[test]
     fn page_window_defaults_and_checked_offsets() {
@@ -880,18 +980,18 @@ mod tests {
 
     // ── Authorization ───────────────────────────────────────────────────────
     // This API rides the same session cookie as the SPA, so these assert that it
-    // applies the same policy: rates and other people's rows need a manager.
+    // decides with the same stored grants: other people's rows need a time
+    // grant that covers them, and each rate its own rate grant.
 
     /// Seeded projects and organizations bill in euros.
     fn eur(cents: i64) -> Amount {
         Amount::new(cents, "EUR")
     }
 
-    fn caller(ids: &SeedIds, org_role: OrgRole) -> AuthUser {
+    fn caller(ids: &SeedIds) -> AuthUser {
         AuthUser {
             user_id: ids.user_id,
             org_id: ids.org_id,
-            org_role,
         }
     }
 
@@ -930,7 +1030,7 @@ mod tests {
         .unwrap();
         sqlx::query!("INSERT INTO project_member_costs (id,org_id,project_id,user_id,cost_rate_cents) VALUES ($1,$2,$3,$4,1500)", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id)
             .execute(&pool).await.unwrap();
-        let member = caller(&ids, OrgRole::Member);
+        let member = caller(&ids);
         let Json(entry) = time_entry_by_id(&pool, &member, id).await.unwrap();
         let Json(page) = time_entries_page(&pool, &member, no_time_entry_filters())
             .await
@@ -976,7 +1076,7 @@ mod tests {
             .unwrap();
             assert_eq!(report.error_count(), 0, "{report:?}");
         }
-        let caller = caller(&ids, OrgRole::Admin);
+        let caller = caller(&ids);
         let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
             .await
             .unwrap();
@@ -1008,7 +1108,7 @@ mod tests {
     async fn harvest_entry_rates_respect_selected_project_mode(pool: PgPool) {
         let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let id = insert_entry(&pool, &ids, ids.user_id, "Selected rates").await;
-        let caller = caller(&ids, OrgRole::Admin);
+        let caller = caller(&ids);
         sqlx::query!(
             "UPDATE users SET billable_rate_cents = 3000 WHERE id = $1",
             ids.user_id
@@ -1067,7 +1167,7 @@ mod tests {
     async fn harvest_entry_rates_follow_the_cascade_and_frozen_invoice_line(pool: PgPool) {
         let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let id = insert_entry(&pool, &ids, ids.user_id, "Rates").await;
-        let caller = caller(&ids, OrgRole::Manager);
+        let caller = caller(&ids);
         sqlx::query!(
             "UPDATE users SET billable_rate_cents = 3000 WHERE id = $1",
             ids.user_id
@@ -1165,7 +1265,7 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-            let caller = caller(&ids, OrgRole::Manager);
+            let caller = caller(&ids);
             let Json(entry) = time_entry_by_id(&pool, &caller, id).await.unwrap();
             let Json(page) = time_entries_page(&pool, &caller, no_time_entry_filters())
                 .await
@@ -1191,7 +1291,7 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-        let caller = caller(&ids, OrgRole::Manager);
+        let caller = caller(&ids);
         for frozen in [None, Some(10), Some(0)] {
             sqlx::query!(
                 "UPDATE time_entries SET rounded_minutes = $2 WHERE id = $1",
@@ -1242,12 +1342,11 @@ mod tests {
     async fn colleague(pool: &PgPool, ids: &SeedIds) -> Uuid {
         let id = Uuid::now_v7();
         sqlx::query!(
-            "INSERT INTO users (id, org_id, email, name, org_role, cost_rate_cents) \
-             VALUES ($1, $2, $3, 'Coworker', $4, 12345)",
+            "INSERT INTO users (id, org_id, email, name, cost_rate_cents) \
+             VALUES ($1, $2, $3, 'Coworker', 12345)",
             id,
             ids.org_id,
             format!("{id}@test.com"),
-            OrgRole::Member as OrgRole,
         )
         .execute(pool)
         .await
@@ -1282,7 +1381,7 @@ mod tests {
         colleague(&pool, &ids).await;
 
         let status = refused(
-            users_page(&pool, &caller(&ids, OrgRole::Member), no_user_filters()).await,
+            users_page(&pool, &caller(&ids), no_user_filters()).await,
             "a member read the org's pay rates",
         );
 
@@ -1290,8 +1389,8 @@ mod tests {
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-    async fn a_manager_lists_billable_rates_and_only_an_admin_cost_rates(pool: PgPool) {
-        let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+    async fn listed_user_rates_follow_each_rate_grant(pool: PgPool) {
+        let ids = seed(&pool, BuiltInProfile::Member).await;
         let other = colleague(&pool, &ids).await;
         sqlx::query!(
             "UPDATE users SET billable_rate_cents = 9000 WHERE id = $1",
@@ -1301,11 +1400,29 @@ mod tests {
         .await
         .unwrap();
 
-        let Json(page) = users_page(&pool, &caller(&ids, OrgRole::Manager), no_user_filters())
+        provision(&pool, &ids, &[Permission::PeopleReadAll], false).await;
+        let Json(page) = users_page(&pool, &caller(&ids), no_user_filters())
             .await
-            .expect("a manager was refused the user list");
+            .expect("people access was refused the user list");
         let users = &page.data["users"];
         assert_eq!(users.len(), 2);
+        assert!(
+            users
+                .iter()
+                .all(|u| u.cost_rate.is_none() && u.default_hourly_rate.is_none())
+        );
+
+        provision(
+            &pool,
+            &ids,
+            &[Permission::PeopleReadAll, Permission::BillableRateReadAll],
+            false,
+        )
+        .await;
+        let Json(page) = users_page(&pool, &caller(&ids), no_user_filters())
+            .await
+            .unwrap();
+        let users = &page.data["users"];
         assert!(users.iter().all(|u| u.cost_rate.is_none()));
         assert!(
             users
@@ -1313,14 +1430,37 @@ mod tests {
                 .any(|u| u.default_hourly_rate == Some(eur(9000)))
         );
 
-        let Json(page) = users_page(&pool, &caller(&ids, OrgRole::Admin), no_user_filters())
+        provision(
+            &pool,
+            &ids,
+            &[Permission::PeopleReadAll, Permission::CostRateReadAll],
+            false,
+        )
+        .await;
+        let Json(page) = users_page(&pool, &caller(&ids), no_user_filters())
             .await
             .unwrap();
-        assert!(
-            page.data["users"]
-                .iter()
-                .any(|u| u.cost_rate == Some(eur(12345)))
-        );
+        let users = &page.data["users"];
+        assert!(users.iter().all(|u| u.default_hourly_rate.is_none()));
+        assert!(users.iter().any(|u| u.cost_rate == Some(eur(12345))));
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn is_admin_reports_the_stored_administrator_identity(pool: PgPool) {
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
+        colleague(&pool, &ids).await;
+        let Json(me) = users_me(caller(&ids), State(pool.clone())).await.unwrap();
+        assert!(me.is_admin);
+        let Json(page) = users_page(&pool, &caller(&ids), no_user_filters())
+            .await
+            .unwrap();
+        let admins: Vec<bool> = page.data["users"].iter().map(|u| u.is_admin).collect();
+        assert_eq!(admins.iter().filter(|admin| **admin).count(), 1);
+
+        // Every grant without the identity is not an administrator.
+        provision(&pool, &ids, Permission::ALL, false).await;
+        let Json(me) = users_me(caller(&ids), State(pool.clone())).await.unwrap();
+        assert!(!me.is_admin);
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -1334,9 +1474,7 @@ mod tests {
         .await
         .unwrap();
 
-        let Json(me) = users_me(caller(&ids, OrgRole::Member), State(pool.clone()))
-            .await
-            .unwrap();
+        let Json(me) = users_me(caller(&ids), State(pool.clone())).await.unwrap();
         assert_eq!((me.default_hourly_rate, me.cost_rate), (None, None));
     }
 
@@ -1347,13 +1485,9 @@ mod tests {
         insert_entry(&pool, &ids, ids.user_id, "mine").await;
         insert_entry(&pool, &ids, other, "theirs").await;
 
-        let Json(page) = time_entries_page(
-            &pool,
-            &caller(&ids, OrgRole::Member),
-            no_time_entry_filters(),
-        )
-        .await
-        .expect("a member was refused their own entries");
+        let Json(page) = time_entries_page(&pool, &caller(&ids), no_time_entry_filters())
+            .await
+            .expect("a member was refused their own entries");
 
         let entries = &page.data["time_entries"];
         assert_eq!(entries.len(), 1);
@@ -1374,13 +1508,9 @@ mod tests {
         insert_entry(&pool, &ids, ids.user_id, "mine").await;
         insert_entry(&pool, &ids, other, "theirs").await;
 
-        let Json(page) = time_entries_page(
-            &pool,
-            &caller(&ids, OrgRole::Manager),
-            no_time_entry_filters(),
-        )
-        .await
-        .expect("a manager was refused the org's entries");
+        let Json(page) = time_entries_page(&pool, &caller(&ids), no_time_entry_filters())
+            .await
+            .expect("a manager was refused the org's entries");
 
         assert_eq!(page.data["time_entries"].len(), 2);
         assert_eq!(page.total_entries, 2);
@@ -1397,7 +1527,7 @@ mod tests {
             ..no_time_entry_filters()
         };
         let status = refused(
-            time_entries_page(&pool, &caller(&ids, OrgRole::Member), filters).await,
+            time_entries_page(&pool, &caller(&ids), filters).await,
             "a member read a colleague's entries by filter",
         );
 
@@ -1413,30 +1543,244 @@ mod tests {
         // Outside the member's row set, so it reads as missing rather than
         // forbidden — the same answer an id from another org gets.
         let status = refused(
-            time_entry_by_id(&pool, &caller(&ids, OrgRole::Member), theirs).await,
+            time_entry_by_id(&pool, &caller(&ids), theirs).await,
             "a member fetched a colleague's entry by id",
         );
         assert_eq!(status, StatusCode::NOT_FOUND);
 
-        let status = refused(
-            time_entry_by_id(&pool, &caller(&ids, OrgRole::Manager), theirs).await,
-            "a stale manager role bypassed the current member's scope",
-        );
-        assert_eq!(status, StatusCode::NOT_FOUND);
-
-        sqlx::query!(
-            "UPDATE users SET org_role = 'manager' WHERE id = $1",
-            ids.user_id
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        let Json(entry) = time_entry_by_id(&pool, &caller(&ids, OrgRole::Manager), theirs)
+        // The grant is read inside each request, not from the session.
+        provision(&pool, &ids, &[Permission::TimeReadAll], false).await;
+        let Json(entry) = time_entry_by_id(&pool, &caller(&ids), theirs)
             .await
-            .expect("a manager was refused an entry in their own org");
+            .expect("an organization-wide time reader was refused an entry");
         assert_eq!(
             entry.id,
             pagination_tests::api_id(&pool, "time_entry", theirs).await
         );
+    }
+
+    /// Gives the seeded person and `other` the rates the redaction cases look
+    /// for: a billable rate on the project and a cost rate on each person.
+    async fn priced(pool: &PgPool, ids: &SeedIds, other: Uuid) {
+        sqlx::query!(
+            "UPDATE projects SET rate_cents = 3500 WHERE id = $1",
+            ids.project_id
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "UPDATE users SET cost_rate_cents = 1000 WHERE id = $1",
+            ids.user_id
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        // The colleague already costs 12345; give them a project override too,
+        // which hangs off their assignment.
+        sqlx::query!(
+            "INSERT INTO assignments (id, project_id, user_id) VALUES ($1, $2, $3)",
+            Uuid::now_v7(),
+            ids.project_id,
+            other
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query!("INSERT INTO project_member_costs (id,org_id,project_id,user_id,cost_rate_cents) VALUES ($1,$2,$3,$4,1500)", Uuid::now_v7(), ids.org_id, ids.project_id, other)
+            .execute(pool).await.unwrap();
+    }
+
+    /// `(notes, billable_rate, cost_rate)` for every listed entry, checked
+    /// against the detail endpoint for the same entry.
+    async fn rates(pool: &PgPool, ids: &SeedIds) -> Vec<(String, Option<Amount>, Option<Amount>)> {
+        let Json(page) = time_entries_page(pool, &caller(ids), no_time_entry_filters())
+            .await
+            .unwrap();
+        let mut seen = Vec::new();
+        for entry in &page.data["time_entries"] {
+            let id = ids::path(pool, ids.org_id, Kind::TimeEntry, &entry.id.to_string())
+                .await
+                .unwrap();
+            let Json(detail) = time_entry_by_id(pool, &caller(ids), id).await.unwrap();
+            assert_eq!(
+                (&detail.billable_rate, &detail.cost_rate),
+                (&entry.billable_rate, &entry.cost_rate),
+                "detail and listing disagree on {:?}",
+                entry.notes
+            );
+            seen.push((
+                entry.notes.clone().unwrap_or_default(),
+                entry.billable_rate.clone(),
+                entry.cost_rate.clone(),
+            ));
+        }
+        seen.sort_by(|a, b| a.0.cmp(&b.0));
+        seen
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn time_access_without_rate_grants_reads_no_rates(pool: PgPool) {
+        // People Admin reads every entry but holds no rate grant.
+        let ids = seed(&pool, BuiltInProfile::PeopleAdmin).await;
+        let other = colleague(&pool, &ids).await;
+        priced(&pool, &ids, other).await;
+        insert_entry(&pool, &ids, ids.user_id, "mine").await;
+        insert_entry(&pool, &ids, other, "theirs").await;
+
+        assert_eq!(
+            rates(&pool, &ids).await,
+            vec![("mine".into(), None, None), ("theirs".into(), None, None)]
+        );
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn billable_and_cost_rates_need_their_own_grants(pool: PgPool) {
+        let ids = seed(&pool, BuiltInProfile::Member).await;
+        let other = colleague(&pool, &ids).await;
+        priced(&pool, &ids, other).await;
+        insert_entry(&pool, &ids, ids.user_id, "mine").await;
+        insert_entry(&pool, &ids, other, "theirs").await;
+
+        provision(
+            &pool,
+            &ids,
+            &[Permission::TimeReadAll, Permission::BillableRateReadAll],
+            false,
+        )
+        .await;
+        assert_eq!(
+            rates(&pool, &ids).await,
+            vec![
+                ("mine".into(), Some(eur(3500)), None),
+                ("theirs".into(), Some(eur(3500)), None)
+            ]
+        );
+
+        provision(
+            &pool,
+            &ids,
+            &[Permission::TimeReadAll, Permission::CostRateReadAll],
+            false,
+        )
+        .await;
+        // Cost covers project overrides too; there is no managed cost scope.
+        assert_eq!(
+            rates(&pool, &ids).await,
+            vec![
+                ("mine".into(), None, Some(eur(1000))),
+                ("theirs".into(), None, Some(eur(1500)))
+            ]
+        );
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn managed_grants_cover_managed_people_and_projects_only(pool: PgPool) {
+        let ids = seed(&pool, BuiltInProfile::Member).await;
+        let managed = colleague(&pool, &ids).await;
+        let stranger = colleague(&pool, &ids).await;
+        priced(&pool, &ids, managed).await;
+        insert_entry(&pool, &ids, ids.user_id, "mine").await;
+        insert_entry(&pool, &ids, managed, "managed").await;
+        insert_entry(&pool, &ids, stranger, "stranger").await;
+        provision(
+            &pool,
+            &ids,
+            &[
+                Permission::TimeReadManaged,
+                Permission::BillableRateReadManaged,
+            ],
+            false,
+        )
+        .await;
+        sqlx::query!(
+            "INSERT INTO person_management_assignments (id, org_id, manager_id, managed_user_id) VALUES ($1, $2, $3, $4)",
+            Uuid::now_v7(),
+            ids.org_id,
+            ids.user_id,
+            managed
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Own time stays visible without a rate; the stranger is out of scope.
+        assert_eq!(
+            rates(&pool, &ids).await,
+            vec![
+                ("managed".into(), Some(eur(3500)), None),
+                ("mine".into(), None, None)
+            ]
+        );
+        let Json(page) = time_entries_page(&pool, &caller(&ids), no_time_entry_filters())
+            .await
+            .unwrap();
+        assert_eq!(page.total_entries, 2);
+
+        // Managing the project brings in everyone's time on it, with rates.
+        sqlx::query!(
+            "INSERT INTO project_management_assignments (id, org_id, manager_id, project_id) VALUES ($1, $2, $3, $4)",
+            Uuid::now_v7(),
+            ids.org_id,
+            ids.user_id,
+            ids.project_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            rates(&pool, &ids).await,
+            vec![
+                ("managed".into(), Some(eur(3500)), None),
+                ("mine".into(), Some(eur(3500)), None),
+                ("stranger".into(), Some(eur(3500)), None)
+            ]
+        );
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn a_managed_time_reader_may_filter_to_anyone_but_sees_only_their_scope(pool: PgPool) {
+        let ids = seed(&pool, BuiltInProfile::Member).await;
+        let stranger = colleague(&pool, &ids).await;
+        insert_entry(&pool, &ids, stranger, "stranger").await;
+        provision(&pool, &ids, &[Permission::TimeReadManaged], false).await;
+
+        let filters = TimeEntryFilters {
+            user_id: Some(stranger.to_string()),
+            ..no_time_entry_filters()
+        };
+        let Json(page) = time_entries_page(&pool, &caller(&ids), filters)
+            .await
+            .unwrap();
+        assert_eq!(page.total_entries, 0);
+        assert!(page.data["time_entries"].is_empty());
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn budget_kind_needs_access_to_the_project(pool: PgPool) {
+        let ids = seed(&pool, BuiltInProfile::Member).await;
+        let other = colleague(&pool, &ids).await;
+        let id = insert_entry(&pool, &ids, other, "theirs").await;
+        sqlx::query!(
+            "UPDATE projects SET budget_kind = 'hours', budget_minutes = 600 WHERE id = $1",
+            ids.project_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        provision(&pool, &ids, &[Permission::TimeReadAll], false).await;
+        let Json(entry) = time_entry_by_id(&pool, &caller(&ids), id).await.unwrap();
+        assert_eq!(entry.budgeted, None);
+
+        provision(
+            &pool,
+            &ids,
+            &[Permission::TimeReadAll, Permission::ProjectReadAll],
+            false,
+        )
+        .await;
+        let Json(entry) = time_entry_by_id(&pool, &caller(&ids), id).await.unwrap();
+        assert_eq!(entry.budgeted, Some(true));
     }
 }
