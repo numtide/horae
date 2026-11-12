@@ -4,7 +4,6 @@
 
 use horae_core::client::{optional_text, parse_default_rate, validate_profile};
 use horae_core::permissions::catalog::Permission;
-use horae_core::types::InvoiceStatus;
 use uuid::Uuid;
 
 use super::{Actor, Done, OpError, Tx};
@@ -405,24 +404,7 @@ pub(crate) async fn invoices(
         return Err(OpError::forbidden(INVOICES_REQUIRED));
     }
     details(tx, actor, client_id).await?;
-    Ok(sqlx::query_as!(
-        Invoice,
-        r#"SELECT id, org_id, client_id, number,
-                  status as "status: InvoiceStatus",
-                  issued_on as "issued_on: chrono::NaiveDate",
-                  due_on as "due_on: chrono::NaiveDate",
-                  currency, total_cents, notes, terms_days, po_number,
-                  discount_bps, tax1_bps, tax2_name, tax2_bps,
-                  subtotal_cents, discount_cents, tax1_cents, tax2_cents,
-                  created_at as "created_at: chrono::DateTime<chrono::Utc>"
-           FROM invoices
-           WHERE org_id = $1 AND client_id = $2
-           ORDER BY created_at DESC, id DESC"#,
-        actor.org_id(),
-        client_id,
-    )
-    .fetch_all(&mut **tx)
-    .await?)
+    Ok(super::invoices::list(tx, actor.org_id(), None, Some(client_id)).await?)
 }
 
 /// Clients for pickers and filters. Catalog readers get every client; anyone

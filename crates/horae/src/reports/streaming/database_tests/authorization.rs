@@ -87,15 +87,8 @@ async fn streamed_exports_require_current_tenant_bound_actors_even_when_empty(po
         .await;
         assert!(!bytes.is_empty());
     }
-    // Invoice downloads still decide by role; time and project downloads
-    // answer from the stored state, here narrowed to the Member floor.
-    sqlx::query!(
-        "UPDATE users SET org_role='member' WHERE id=$1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    // Every download answers from the stored state, here narrowed to the
+    // Member floor.
     crate::ops::testing::provision(&pool, &ids, &[], false).await;
     assert_eq!(
         Surface::Invoice
@@ -432,7 +425,7 @@ async fn streamed_compressible_unicode_payload_bounds_native_prefetch(pool: PgPo
     let authority = Authority {
         org_id: ids.org_id,
         actor_id: ids.user_id,
-        purpose: Purpose::Manager,
+        purpose: Purpose::Invoice,
     };
     authority.begin(&mut tx).await.unwrap();
     cursor::declare_entries(
@@ -507,7 +500,7 @@ async fn streamed_invoice_keeps_original_metadata_lines_and_totals_between_batch
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn streamed_header_and_total_blocks_recheck_manager_after_capacity(pool: PgPool) {
+async fn streamed_header_and_total_blocks_recheck_invoice_reader_after_capacity(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     for tail in [false, true] {
         let (sender, mut receiver) = mpsc::channel(1);
@@ -521,7 +514,7 @@ async fn streamed_header_and_total_blocks_recheck_manager_after_capacity(pool: P
             let authority = Authority {
                 org_id: ids.org_id,
                 actor_id: ids.user_id,
-                purpose: Purpose::Manager,
+                purpose: Purpose::Invoice,
             };
             authority.begin(&mut tx).await.unwrap();
             let mut output = CsvBuffer::new(&["Amount"])?;
@@ -537,22 +530,18 @@ async fn streamed_header_and_total_blocks_recheck_manager_after_capacity(pool: P
             .execute(&mut *writer)
             .await
             .unwrap();
-        sqlx::query!(
-            "UPDATE users SET org_role='member' WHERE id=$1",
-            ids.user_id
-        )
-        .execute(&mut *writer)
-        .await
-        .unwrap();
+        crate::ops::testing::set_grants(&mut writer, &ids, &[])
+            .await
+            .unwrap();
         writer.commit().await.unwrap();
         assert_eq!(receiver.recv().await.unwrap(), b"queued");
         assert_eq!(task.await.unwrap().unwrap_err(), StatusCode::FORBIDDEN);
         assert!(receiver.recv().await.is_none());
-        sqlx::query!(
-            "UPDATE users SET org_role='manager' WHERE id=$1",
-            ids.user_id
+        crate::ops::testing::set_grants(
+            &mut pool.acquire().await.unwrap(),
+            &ids,
+            BuiltInProfile::ExecutiveManager.direct_permissions(),
         )
-        .execute(&pool)
         .await
         .unwrap();
     }
@@ -632,7 +621,7 @@ async fn streamed_authority_releases_successful_locks_and_overrides_inherited_se
     let authority = Authority {
         org_id: ids.org_id,
         actor_id: ids.user_id,
-        purpose: Purpose::Manager,
+        purpose: Purpose::Invoice,
     };
     authority.begin(&mut tx).await.unwrap();
     for _ in 0..10 {

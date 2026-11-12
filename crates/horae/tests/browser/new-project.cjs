@@ -6,6 +6,21 @@ assert.ok(base, 'Set HORAE_TEST_URL to the isolated design-check runner');
 const target = new URL(base);
 assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port === '8093',
   'New-project checks require the disposable runner on port 8093');
+const sql = query => require('node:child_process').execFileSync('psql',
+  [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-At', '-c', query], { encoding: 'utf8' }).trim();
+// The invoice pages read the session's own permissions, which an organization
+// still on the legacy policy does not report: the invoice steps run on policy
+// one and put the observed policy back.
+let restorePolicy = () => {};
+const useStoredPermissions = () => {
+  const org = sql("SELECT org_id FROM users WHERE email='admin@example.com'");
+  const policy = sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`);
+  sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'`);
+  restorePolicy = () => {
+    sql(`UPDATE organizations SET permission_policy_version=${policy} WHERE id='${org}'`);
+    restorePolicy = () => {};
+  };
+};
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
@@ -1319,7 +1334,9 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(page.locator('tbody tr')).not.toHaveCount(0);
     await readsFinished(page);
     console.log('PASS: a new tagged project reaches reports and both exports; pending/error filters never show stale rows');
-    await page.getByRole('link', { name: 'Invoices', exact: true }).click();
+    useStoredPermissions();
+    // A full load, so the session reads the permissions the policy now reports.
+    await page.goto(`${base}/invoices`);
     await page.getByRole('button', { name: 'New Invoice', exact: true }).click();
     await page.getByLabel('Client', { exact: true }).selectOption({ label: 'New project browser client' });
     await page.getByLabel('Period from', { exact: true }).fill(entryDate);
@@ -1409,6 +1426,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
     await expect(page.getByRole('button', { name: 'Edit invoice values', exact: true })).toHaveCount(0);
     await readsFinished(page);
     console.log('PASS: project invoice defaults prefill real estimates, stale reviews cannot generate, and editable draft values persist independently');
+    restorePolicy();
     await page.goto(`${base}/projects/new`);
     await expect(screen.getByLabel('Project name', { exact: true })).toHaveValue('');
     await expect(draftStatus).toHaveText('No draft saved yet');
@@ -1457,5 +1475,6 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
   } finally {
     releaseMenuScript?.();
     await browser.close();
+    restorePolicy();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

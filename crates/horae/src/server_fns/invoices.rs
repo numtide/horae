@@ -46,14 +46,47 @@ async fn begin_invoice_write(
     Ok(tx)
 }
 
+/// A snapshot read holding the actor's whole-invoice read grant.
+#[cfg(feature = "server")]
+async fn begin_invoice_read(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
+    super::snapshot::authorized(pool, org_id, actor_id, crate::ops::invoices::READ).await
+}
+
+/// A snapshot read for editing a draft, holding the actor's whole-invoice
+/// write grant.
+#[cfg(feature = "server")]
+async fn begin_invoice_draft_read(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
+    super::snapshot::authorized(pool, org_id, actor_id, crate::ops::invoices::WRITE).await
+}
+
+/// A snapshot read for previewing a new invoice, which prices uninvoiced
+/// work from current billable rates: the invoice write grant and
+/// `BillableRateReadAll`.
+#[cfg(feature = "server")]
+async fn begin_invoice_preparation_read(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
+    super::snapshot::authorized(pool, org_id, actor_id, crate::ops::invoices::PREPARE).await
+}
+
 #[server]
 pub async fn get_invoice_editor(invoice_id: String) -> Result<InvoiceEditor, ServerFnError> {
-    let manager = require_manager().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
     editing::load(
         &state.db,
-        manager.org_id,
-        manager.id,
+        user.org_id,
+        user.id,
         parse_uuid(&invoice_id, "invoice_id")?,
     )
     .await
@@ -64,12 +97,12 @@ pub async fn review_invoice_edit(
     invoice_id: String,
     edit: InvoiceDraftEdit,
 ) -> Result<InvoiceEditReview, ServerFnError> {
-    let manager = require_manager().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
     editing::review(
         &state.db,
-        manager.org_id,
-        manager.id,
+        user.org_id,
+        user.id,
         parse_uuid(&invoice_id, "invoice_id")?,
         &edit,
     )
@@ -81,12 +114,12 @@ pub async fn save_invoice_draft(
     invoice_id: String,
     request: InvoiceDraftSave,
 ) -> Result<InvoiceWithLines, ServerFnError> {
-    let manager = require_manager().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
     editing::save(
         &state.db,
-        manager.org_id,
-        manager.id,
+        user.org_id,
+        user.id,
         parse_uuid(&invoice_id, "invoice_id")?,
         &request,
     )
@@ -109,7 +142,7 @@ pub async fn prepare_invoice(
     overrides: Option<InvoiceDefaults>,
     fees: Option<Vec<InvoiceFeeSelection>>,
 ) -> Result<InvoicePreparation, ServerFnError> {
-    let manager = require_manager().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
     if project_ids
         .as_ref()
@@ -126,7 +159,7 @@ pub async fn prepare_invoice(
         .transpose()?;
     preview::prepare_with_edits(
         &state.db,
-        (manager.org_id, manager.id),
+        (user.org_id, user.id),
         parse_uuid(&client_id, "client_id")?,
         (
             parse_date(&period_from, "period_from")?,
@@ -155,7 +188,7 @@ mod client_label_tests;
 
 #[server]
 pub async fn list_invoices(status: Option<String>) -> Result<Vec<InvoiceListItem>, ServerFnError> {
-    let manager = require_manager().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
 
     let status_filter: Option<InvoiceStatus> = status
@@ -163,7 +196,7 @@ pub async fn list_invoices(status: Option<String>) -> Result<Vec<InvoiceListItem
         .map(|s| parse_enum(s, "status"))
         .transpose()?;
 
-    fetch_list(&state.db, manager.org_id, manager.id, status_filter).await
+    fetch_list(&state.db, user.org_id, user.id, status_filter).await
 }
 
 #[cfg(feature = "server")]
@@ -173,8 +206,10 @@ pub(super) async fn fetch_list(
     actor_id: uuid::Uuid,
     status_filter: Option<InvoiceStatus>,
 ) -> Result<Vec<InvoiceListItem>, ServerFnError> {
-    let mut tx = super::snapshot::manager(pool, org_id, actor_id).await?;
-    let invoices = fetch_invoices(&mut *tx, org_id, status_filter, None).await?;
+    let mut tx = begin_invoice_read(pool, org_id, actor_id).await?;
+    let invoices = crate::ops::invoices::list(&mut tx, org_id, status_filter, None)
+        .await
+        .map_err(server_err)?;
     let client_ids: Vec<_> = invoices.iter().map(|invoice| invoice.client_id).collect();
     let names = fetch_client_names(&mut tx, org_id, &client_ids).await?;
     let invoices = invoices
@@ -216,46 +251,13 @@ async fn fetch_client_names(
         .collect())
 }
 
-#[cfg(feature = "server")]
-pub(super) async fn fetch_invoices<'e>(
-    db: impl sqlx::Executor<'e, Database = sqlx::Postgres>,
-    org_id: uuid::Uuid,
-    status_filter: Option<InvoiceStatus>,
-    client_id: Option<uuid::Uuid>,
-) -> Result<Vec<Invoice>, ServerFnError> {
-    let invoices = sqlx::query_as!(
-        Invoice,
-        r#"SELECT id, org_id, client_id, number,
-                  status as "status: InvoiceStatus",
-                  issued_on as "issued_on: chrono::NaiveDate",
-                  due_on as "due_on: chrono::NaiveDate",
-                  currency, total_cents, notes, terms_days, po_number,
-                  discount_bps, tax1_bps, tax2_name, tax2_bps,
-                  subtotal_cents, discount_cents, tax1_cents, tax2_cents,
-                  created_at as "created_at: chrono::DateTime<chrono::Utc>"
-           FROM invoices
-           WHERE org_id = $1
-             AND ($2::invoice_status IS NULL OR status = $2)
-             AND ($3::uuid IS NULL OR client_id = $3)
-           ORDER BY created_at DESC, id DESC"#,
-        org_id,
-        status_filter as Option<InvoiceStatus>,
-        client_id,
-    )
-    .fetch_all(db)
-    .await
-    .map_err(server_err)?;
-
-    Ok(invoices)
-}
-
 #[server]
 pub async fn get_invoice(invoice_id: String) -> Result<InvoiceDetailView, ServerFnError> {
-    let manager = require_manager().await?;
+    let user = require_user().await?;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
 
     let state = crate::state::global_state().await;
-    fetch_detail(&state.db, manager.org_id, manager.id, id).await
+    fetch_detail(&state.db, user.org_id, user.id, id).await
 }
 
 #[cfg(feature = "server")]
@@ -265,7 +267,7 @@ pub(super) async fn fetch_detail(
     actor_id: uuid::Uuid,
     invoice_id: uuid::Uuid,
 ) -> Result<InvoiceDetailView, ServerFnError> {
-    let mut tx = super::snapshot::manager(pool, org_id, actor_id).await?;
+    let mut tx = begin_invoice_read(pool, org_id, actor_id).await?;
     let (invoice, lines) = crate::reports::fetch_invoice_from(&mut tx, invoice_id, org_id)
         .await
         .map_err(server_err)?
@@ -292,7 +294,7 @@ pub async fn generate_invoice(
     overrides: Option<InvoiceDefaults>,
     request: InvoiceGenerationRequest,
 ) -> Result<InvoiceWithLines, ServerFnError> {
-    let manager = require_manager().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
     let client_id = parse_uuid(&client_id, "client_id")?;
     let from = parse_date(&period_from, "period_from")?;
@@ -313,12 +315,12 @@ pub async fn generate_invoice(
         .transpose()?;
     let (result, created) = generate_invoice_with_request(
         &state.db,
-        manager.org_id,
+        user.org_id,
         client_id,
         (from, to),
         project_ids.as_deref(),
         overrides.as_ref(),
-        Some((&request, manager.id)),
+        Some((&request, user.id)),
     )
     .await?;
     if created {
@@ -326,7 +328,7 @@ pub async fn generate_invoice(
             .plugins
             .dispatch(crate::plugin::AppEvent::InvoiceCreated {
                 occurred_at: chrono::Utc::now(),
-                org_id: manager.org_id,
+                org_id: user.org_id,
                 invoice: invoice_payload(&result.invoice),
             });
     }
@@ -401,17 +403,6 @@ async fn generate_invoice_with_request(
             .into_iter()
             .collect::<Vec<_>>()
     });
-    // Verify client belongs to this org before selecting any billable work.
-    sqlx::query_scalar!(
-        "SELECT id FROM clients WHERE id = $1 AND org_id = $2",
-        client_id,
-        org_id,
-    )
-    .fetch_optional(pool)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Client not found"))?;
-
     // Everything from selecting the entries to flipping them to 'invoiced'
     // runs in one transaction so two concurrent generate calls cannot bill the
     // same time twice or mint the same invoice number.
@@ -437,7 +428,10 @@ async fn generate_invoice_with_request(
         "projects": selected, "overrides": overrides, "request": canonical,
     });
     if let Some((_, actor_id)) = request {
-        editing::lock_actor(&mut tx, org_id, actor_id).await?;
+        // Generation prices the work from current billable rates, as its
+        // preview did.
+        let actor = editing::lock_actor(&mut tx, org_id, actor_id).await?;
+        crate::ops::invoices::authorize_prepare(&actor)?;
         let size = sqlx::query_scalar!(
             r#"SELECT octet_length($1::jsonb::text) AS "size!""#,
             payload
@@ -449,6 +443,17 @@ async fn generate_invoice_with_request(
             return Err(err(BAD_REQUEST, "Invoice request exceeds 256 KiB"));
         }
     }
+    // Verify the client belongs to this org before selecting any billable
+    // work, and only once the actor's authority is held.
+    sqlx::query_scalar!(
+        "SELECT id FROM clients WHERE id = $1 AND org_id = $2",
+        client_id,
+        org_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(server_err)?
+    .ok_or_else(|| not_found("Client not found"))?;
     if let Some((request, actor_id)) = request
         && let Some(previous) = sqlx::query!(
             "SELECT actor_id, invoice_id, payload FROM invoice_generation_requests WHERE id = $1 AND org_id = $2",
@@ -806,12 +811,12 @@ pub async fn update_invoice_status(
     invoice_id: String,
     new_status: String,
 ) -> Result<Invoice, ServerFnError> {
-    let manager = require_manager().await?;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
     let target: InvoiceStatus = parse_enum(&new_status, "status")?;
 
-    let invoice = transition_invoice(&state.db, manager.org_id, id, target, manager.id).await?;
+    let invoice = transition_invoice(&state.db, user.org_id, id, target, user.id).await?;
 
     // Dispatch invoice_sent event when transitioning to Sent (FR-019).
     if target == InvoiceStatus::Sent {
@@ -819,7 +824,7 @@ pub async fn update_invoice_status(
             .plugins
             .dispatch(crate::plugin::AppEvent::InvoiceSent {
                 occurred_at: chrono::Utc::now(),
-                org_id: manager.org_id,
+                org_id: user.org_id,
                 invoice: invoice_payload(&invoice),
             });
     }
@@ -829,7 +834,7 @@ pub async fn update_invoice_status(
             .plugins
             .dispatch(crate::plugin::AppEvent::InvoicePaid {
                 occurred_at: chrono::Utc::now(),
-                org_id: manager.org_id,
+                org_id: user.org_id,
                 invoice: invoice_payload(&invoice),
             });
     } else if target == InvoiceStatus::Void {
@@ -837,7 +842,7 @@ pub async fn update_invoice_status(
             .plugins
             .dispatch(crate::plugin::AppEvent::InvoiceVoided {
                 occurred_at: chrono::Utc::now(),
-                org_id: manager.org_id,
+                org_id: user.org_id,
                 invoice: invoice_payload(&invoice),
             });
     }

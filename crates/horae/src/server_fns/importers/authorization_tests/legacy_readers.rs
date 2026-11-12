@@ -65,15 +65,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                     .await
                     .unwrap();
             } else {
-                // Invoices still decide by role; the detailed report by the
+                // Invoices and the detailed report both answer from the
                 // stored grants.
-                sqlx::query!(
-                    "UPDATE users SET org_role='member' WHERE id=$1",
-                    ids.user_id
-                )
-                .execute(&mut *writer)
-                .await
-                .unwrap();
                 crate::ops::testing::set_grants(&mut writer, &ids, &[])
                     .await
                     .unwrap();
@@ -105,7 +98,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 }
             );
             sqlx::query!(
-                "UPDATE users SET active=true,org_role='manager' WHERE id=$1",
+                "UPDATE users SET active=true WHERE id=$1",
                 ids.user_id
             )
             .execute(pool)

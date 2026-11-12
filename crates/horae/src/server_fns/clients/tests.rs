@@ -833,22 +833,27 @@ async fn client_invoices_keep_exact_client_scope_statuses_and_currencies(pool: P
         .collect();
     currencies.sort_unstable();
     assert_eq!(currencies, ["CHF", "EUR", "GBP", "USD"]);
-    let all = super::super::invoices::fetch_invoices(&pool, ids.org_id, None, None)
+    let mut connection = pool.acquire().await.unwrap();
+    let all = crate::ops::invoices::list(&mut connection, ids.org_id, None, None)
         .await
         .unwrap();
     assert_eq!(all.len(), 5);
-    let drafts =
-        super::super::invoices::fetch_invoices(&pool, ids.org_id, Some(InvoiceStatus::Draft), None)
-            .await
-            .unwrap();
+    let drafts = crate::ops::invoices::list(
+        &mut connection,
+        ids.org_id,
+        Some(InvoiceStatus::Draft),
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(drafts.len(), 2);
     assert!(
         drafts
             .iter()
             .all(|invoice| invoice.status == InvoiceStatus::Draft)
     );
-    let paid = super::super::invoices::fetch_invoices(
-        &pool,
+    let paid = crate::ops::invoices::list(
+        &mut connection,
         ids.org_id,
         Some(InvoiceStatus::Paid),
         Some(ids.client_id),

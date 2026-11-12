@@ -107,29 +107,34 @@ async fn block_payload(tx: &mut Transaction<'_, Postgres>, reader: Reader) {
     };
 }
 
+/// Takes every grant beyond the Member floor away, as the permission editor
+/// would: the organization row moves in the same transaction.
+async fn revoke(connection: &mut sqlx::PgConnection, ids: &SeedIds) {
+    crate::ops::testing::set_grants(connection, ids, &[])
+        .await
+        .unwrap();
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn legacy_readers_reject_revoked_session_identity(pool: PgPool) {
-    let fixture = Fixture::new(&pool).await;
+async fn readers_reject_revoked_session_identity(pool: PgPool) {
     let mut leaks = Vec::new();
     for reader in READERS {
         for inactive in [false, true] {
-            // IDs were captured by the session gate while this actor was Manager.
-            let role = if inactive {
-                OrgRole::Manager
+            // IDs were captured by the session gate while this actor held
+            // every grant the reader needs.
+            let fixture = Fixture::new(&pool).await;
+            if inactive {
+                sqlx::query!(
+                    "UPDATE users SET active=false WHERE id=$1",
+                    fixture.ids.user_id
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
             } else {
-                OrgRole::Member
-            };
-            sqlx::query!(
-                "UPDATE users SET org_role=$2, active=$3 WHERE id=$1",
-                fixture.ids.user_id,
-                role as OrgRole,
-                !inactive
-            )
-            .execute(&pool)
-            .await
-            .unwrap();
-            crate::ops::testing::provision(&pool, &fixture.ids, &[], false).await;
+                revoke(&mut pool.acquire().await.unwrap(), &fixture.ids).await;
+            }
             let result = fixture
                 .read(&pool, fixture.ids.org_id, fixture.ids.user_id, reader)
                 .await;
@@ -148,7 +153,7 @@ async fn legacy_readers_reject_revoked_session_identity(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn legacy_readers_preserve_actor_tenant_filters_and_missing_resources(pool: PgPool) {
+async fn readers_preserve_actor_tenant_filters_and_missing_resources(pool: PgPool) {
     let fixture = Fixture::new(&pool).await;
     let foreign = Fixture::new(&pool).await;
     for reader in READERS {
@@ -204,7 +209,7 @@ async fn legacy_readers_preserve_actor_tenant_filters_and_missing_resources(pool
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn legacy_readers_deny_writer_first_revocation(pool: PgPool) {
+async fn readers_deny_writer_first_revocation(pool: PgPool) {
     for reader in READERS {
         for gated in [false, true] {
             for deactivate in [false, true] {
@@ -228,18 +233,7 @@ async fn legacy_readers_deny_writer_first_revocation(pool: PgPool) {
                     .await
                     .unwrap();
                 } else {
-                    // Invoices still decide by role; the detailed report by
-                    // the stored grants.
-                    sqlx::query!(
-                        "UPDATE users SET org_role='member' WHERE id=$1",
-                        fixture.ids.user_id
-                    )
-                    .execute(&mut *writer)
-                    .await
-                    .unwrap();
-                    crate::ops::testing::set_grants(&mut writer, &fixture.ids, &[])
-                        .await
-                        .unwrap();
+                    revoke(&mut writer, &fixture.ids).await;
                 }
                 let blocker = pid(&mut writer).await;
                 let pending = fixture.spawn(&pool, reader);
@@ -258,7 +252,7 @@ async fn legacy_readers_deny_writer_first_revocation(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn legacy_readers_hold_reader_first_authority_until_materialized(pool: PgPool) {
+async fn readers_hold_reader_first_authority_until_materialized(pool: PgPool) {
     for reader in READERS {
         let fixture = Arc::new(Fixture::new(&pool).await);
         let expected = fixture
@@ -305,7 +299,7 @@ async fn legacy_readers_hold_reader_first_authority_until_materialized(pool: PgP
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn legacy_invoice_detail_keeps_metadata_and_lines_in_one_snapshot(pool: PgPool) {
+async fn invoice_detail_keeps_metadata_and_lines_in_one_snapshot(pool: PgPool) {
     let fixture = Arc::new(Fixture::new(&pool).await);
     let expected = fixture
         .read(
@@ -346,7 +340,7 @@ async fn legacy_invoice_detail_keeps_metadata_and_lines_in_one_snapshot(pool: Pg
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn legacy_readers_cancel_without_retaining_authority_or_pool_connection(pool: PgPool) {
+async fn readers_cancel_without_retaining_authority_or_pool_connection(pool: PgPool) {
     let reader_pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(1)
         .connect_with((*pool.connect_options()).clone())
@@ -396,7 +390,7 @@ async fn legacy_readers_cancel_without_retaining_authority_or_pool_connection(po
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn legacy_readers_preserve_inherited_connection_settings(pool: PgPool) {
+async fn readers_preserve_inherited_connection_settings(pool: PgPool) {
     let fixture = Fixture::new(&pool).await;
     let reader_pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(1)
@@ -443,7 +437,7 @@ async fn legacy_readers_preserve_inherited_connection_settings(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn manager_commits_asynchronously_only_inside_its_snapshot(pool: PgPool) {
+async fn authorized_commits_asynchronously_only_inside_its_snapshot(pool: PgPool) {
     let fixture = Fixture::new(&pool).await;
     let reader_pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(1)
@@ -473,9 +467,14 @@ async fn manager_commits_asynchronously_only_inside_its_snapshot(pool: PgPool) {
                 .fetch_one(&reader_pool)
                 .await
                 .unwrap();
-            let mut tx = manager(&reader_pool, fixture.ids.org_id, fixture.ids.user_id)
-                .await
-                .unwrap();
+            let mut tx = authorized(
+                &reader_pool,
+                fixture.ids.org_id,
+                fixture.ids.user_id,
+                &[Permission::InvoiceReadAll],
+            )
+            .await
+            .unwrap();
             let inside = sqlx::query!("SELECT current_setting('transaction_isolation') AS \"isolation!\", current_setting('transaction_read_only') AS \"read_only!\", current_setting('lock_timeout') AS \"timeout!\", current_setting('synchronous_commit') AS \"commit!\"").fetch_one(&mut *tx).await.unwrap();
             assert_eq!(
                 (
@@ -498,12 +497,12 @@ async fn manager_commits_asynchronously_only_inside_its_snapshot(pool: PgPool) {
 }
 
 /// With no inherited lock_timeout, the organization `FOR SHARE` gives up after
-/// the 5 s bound (55P03) instead of waiting for the holder. `manager` reports
-/// that as an internal error, so the bound shows as the wait ending while the
-/// blocker still holds the row.
+/// the 5 s bound (55P03) instead of waiting for the holder. `authorized`
+/// reports that as an internal error, so the bound shows as the wait ending
+/// while the blocker still holds the row.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn manager_bounds_its_authority_lock_wait(pool: PgPool) {
+async fn authorized_bounds_its_authority_lock_wait(pool: PgPool) {
     let fixture = Fixture::new(&pool).await;
     let mut hold = pool.begin().await.unwrap();
     sqlx::query!(
@@ -514,9 +513,14 @@ async fn manager_bounds_its_authority_lock_wait(pool: PgPool) {
     .await
     .unwrap();
     let started = std::time::Instant::now();
-    let result = manager(&pool, fixture.ids.org_id, fixture.ids.user_id)
-        .await
-        .map(|_| ());
+    let result = authorized(
+        &pool,
+        fixture.ids.org_id,
+        fixture.ids.user_id,
+        &[Permission::InvoiceReadAll],
+    )
+    .await
+    .map(|_| ());
     let waited = started.elapsed();
     assert!(
         matches!(

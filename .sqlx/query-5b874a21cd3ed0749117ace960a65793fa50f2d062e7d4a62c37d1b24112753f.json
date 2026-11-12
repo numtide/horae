@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE users SET org_role='admin', active=false WHERE id=$1",
+  "query": "UPDATE users SET cost_rate_cents = 777123 WHERE id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "cf7d0715fbbdcfb9f4a4966853aff6e2c8db85158249f7111046cb80aa682729"
+  "hash": "5b874a21cd3ed0749117ace960a65793fa50f2d062e7d4a62c37d1b24112753f"
 }

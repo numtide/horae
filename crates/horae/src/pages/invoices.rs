@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use horae_core::money::format_cents_plain;
+use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use horae_core::types::InvoiceStatus;
 use uuid::Uuid;
 
@@ -21,6 +22,32 @@ mod recovery;
 mod settings;
 
 pub use settings::InvoiceSettings;
+
+/// Whether the session's own permissions, from a catalog this build
+/// understands, hold every `required` grant. Reading needs `InvoiceReadAll`,
+/// which `RecoveryGate` checks.
+fn holds(session: crate::components::session::Session, required: &[Permission]) -> bool {
+    matches!(
+        &*session.permissions.read(),
+        Some(Ok(Some(own))) if own.catalog_version == PERMISSION_CATALOG_VERSION
+            && required.iter().all(|grant| own.grants.contains(grant))
+    )
+}
+
+/// Whether to offer editing drafts and changing status: the grant those
+/// server functions require.
+fn manages_invoices(session: crate::components::session::Session) -> bool {
+    holds(session, &[Permission::InvoiceWriteAll])
+}
+
+/// Whether to offer preparing and generating a new invoice, which prices
+/// uninvoiced work from current billable rates.
+fn prepares_invoices(session: crate::components::session::Session) -> bool {
+    holds(
+        session,
+        &[Permission::InvoiceWriteAll, Permission::BillableRateReadAll],
+    )
+}
 
 /// The badge class for an invoice status — one convention for list and detail.
 pub(super) fn invoice_badge_class(status: InvoiceStatus) -> &'static str {
@@ -70,6 +97,7 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
         &*session.permissions.read(),
         Some(Ok(Some(own))) if settings::edits_invoice_settings(own)
     );
+    let prepares = prepares_invoices(session);
 
     rsx! {
         div {
@@ -79,7 +107,7 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                     if configures {
                         Link { to: Route::InvoiceSettings {}, class: "btn btn-secondary", "Settings" }
                     }
-                    if storage.ready() {
+                    if prepares && storage.ready() {
                     button {
                         class: "btn btn-primary",
                         disabled: busy(),
@@ -92,7 +120,7 @@ fn InvoiceListContent(client_context: Option<String>) -> Element {
                 }
             }
 
-            if storage.ready() && show_form() {
+            if prepares && storage.ready() && show_form() {
                 if clients.state()() != UseResourceState::Ready {
                     p { role: "status", "Loading clients…" }
                 } else if matches!(&*clients.read(), Some(Err(_))) {
@@ -193,11 +221,12 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
     let mut error = use_signal(|| None::<String>);
     let editing = use_signal(|| false);
     let mut busy = use_signal(|| false);
+    let manages = manages_invoices(crate::components::session::use_session());
 
     // One button per status transition; the four share everything but the
     // target status, label, and emphasis.
     let status_btn = move |to: &'static str, label: &'static str, primary: bool| {
-        if !storage.ready() {
+        if !manages || !storage.ready() {
             return rsx! {};
         }
         rsx! {
@@ -297,7 +326,7 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                         }
                     }
 
-                    if inv.status == InvoiceStatus::Draft {
+                    if manages && inv.status == InvoiceStatus::Draft {
                         defaults_form::DraftDefaults { invoice: inv.clone(), editing, busy, onsaved: move |_| invoice_data.restart() }
                     }
 

@@ -13,10 +13,9 @@ async fn financial_snapshots_override_isolation_but_restore_connection_settings(
         for timeout in ["0", "250ms", "10s"] {
             sqlx::query!("SELECT set_config('default_transaction_isolation', $1, false) AS isolation, set_config('default_transaction_read_only', 'on', false) AS read_only, set_config('lock_timeout', $2, false) AS timeout", isolation, timeout)
                 .fetch_one(&reader_pool).await.unwrap();
-            let mut tx =
-                crate::server_fns::snapshot::manager(&reader_pool, ids.org_id, ids.user_id)
-                    .await
-                    .unwrap();
+            let mut tx = begin_invoice_read(&reader_pool, ids.org_id, ids.user_id)
+                .await
+                .unwrap();
             let settings = sqlx::query!("SELECT current_setting('transaction_isolation') AS \"isolation!\", current_setting('transaction_read_only') AS \"read_only!\", current_setting('lock_timeout') AS \"timeout!\"")
                 .fetch_one(&mut *tx).await.unwrap();
             assert_eq!(
