@@ -20,7 +20,11 @@ mod lookup_cache;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn imported_project_task_activity_preserves_archival(pool: PgPool) {
-    let ids = crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
+    let ids = crate::server_fns::test_seed::seed(
+        &pool,
+        horae_core::permissions::catalog::BuiltInProfile::Administrator,
+    )
+    .await;
     sqlx::query!("UPDATE tasks SET active=false WHERE id=$1", ids.task_id)
         .execute(&pool)
         .await

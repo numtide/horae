@@ -5,8 +5,8 @@ use crate::server_fns::permissions::templates::{self, TemplateAction, TemplateCo
 use horae_core::permissions::catalog::BuiltInProfile;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
+    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     let cookie = api.cookie(ids.user_id).await;
     let name = "get_permission_audit";
     let missing = json!({"receipt_id": Uuid::now_v7()});
@@ -23,6 +23,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let grants: Vec<String> =
         serde_json::from_value(json!(BuiltInProfile::Administrator.selection())).unwrap();
     for seed in [&ids, &foreign] {
+        crate::server_fns::test_seed::clear_state(pool, seed.user_id).await;
         sqlx::query!("INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
             VALUES ($1,$2,$3,1,$4,true,'individual')", Uuid::now_v7(), seed.org_id, seed.user_id, &grants).execute(pool).await.unwrap();
         sqlx::query!(
@@ -376,13 +377,6 @@ async fn check_browsing(
     .execute(pool)
     .await
     .unwrap();
-    let legacy = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
-    assert_eq!(
-        api.call(name, body, Some(&api.cookie(legacy.user_id).await), false)
-            .await
-            .status(),
-        StatusCode::FORBIDDEN
-    );
 }
 
 async fn assert_unavailable(response: reqwest::Response) {

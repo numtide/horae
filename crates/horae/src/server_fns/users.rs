@@ -3,6 +3,10 @@
 use super::*;
 use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage};
 use crate::models::user::{Activation, AddedPeople, NewPerson, UserListItem};
+#[cfg(feature = "server")]
+use horae_core::permissions::catalog::BuiltInProfile;
+#[cfg(feature = "server")]
+use permissions::provisioning;
 
 mod rates;
 pub use rates::{load_person_rates, update_person_rates};
@@ -68,13 +72,19 @@ pub async fn list_users(include_inactive: bool) -> Result<Vec<UserListItem>, Ser
     .map_err(server_err)
 }
 
-/// Create a new user account. Requires admin role.
+/// Create a new user account with a built-in profile, named as stored
+/// (`member`, `administrator`, …). Requires admin role.
 #[server]
-pub async fn create_user(email: String, name: String, role: String) -> Result<User, ServerFnError> {
+pub async fn create_user(
+    email: String,
+    name: String,
+    profile: String,
+) -> Result<User, ServerFnError> {
     let admin = require_admin().await?;
     let state = crate::state::global_state().await;
-    let org_role: OrgRole = parse_enum(&role, "role (use admin, manager, or member)")?;
-    let user = insert_user(&state.db, admin.org_id, admin.id, &email, &name, org_role).await?;
+    let profile = provisioning::parse_profile(&profile)
+        .ok_or_else(|| err(BAD_REQUEST, "Choose one of the built-in profiles"))?;
+    let user = insert_user(&state.db, admin.org_id, admin.id, &email, &name, profile).await?;
 
     state
         .plugins
@@ -121,7 +131,7 @@ pub async fn add_harvest_people(
         admin.org_id,
         admin.id,
         &people,
-        OrgRole::Member,
+        BuiltInProfile::Member,
         activation,
         Existing::Skip,
     )
@@ -145,7 +155,7 @@ pub(crate) async fn insert_user(
     actor_id: uuid::Uuid,
     email: &str,
     name: &str,
-    org_role: OrgRole,
+    profile: BuiltInProfile,
 ) -> Result<User, ServerFnError> {
     let person = NewPerson {
         email: email.to_owned(),
@@ -156,7 +166,7 @@ pub(crate) async fn insert_user(
         org_id,
         actor_id,
         &[person],
-        org_role,
+        profile,
         Activation::Active,
         Existing::Refuse,
     )
@@ -170,7 +180,7 @@ async fn insert_users(
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
     people: &[NewPerson],
-    org_role: OrgRole,
+    profile: BuiltInProfile,
     activation: Activation,
     existing: Existing,
 ) -> Result<AddedPeople, ServerFnError> {
@@ -219,7 +229,7 @@ async fn insert_users(
             org_id,
             person.email,
             person.name,
-            org_role as OrgRole,
+            provisioning::placeholder_role(profile) as OrgRole,
             activation == Activation::Active,
         )
         .fetch_one(&mut *tx)
@@ -234,6 +244,9 @@ async fn insert_users(
                 server_err(e)
             }
         })?;
+        provisioning::provision(&mut tx, org_id, user.id, profile)
+            .await
+            .map_err(server_err)?;
         users.push(user);
     }
     tx.commit().await.map_err(server_err)?;
@@ -445,11 +458,19 @@ async fn change_user_active(
     let current = user_active_role(&mut tx, user_id, org_id).await?;
     let was_active: Option<bool> = current.map(|(active, _)| active);
 
-    // Deactivating the last active admin would lock the org out.
-    let deactivating_active_admin =
-        !active && current.is_some_and(|(a, role)| a && role == OrgRole::Admin);
-    if deactivating_active_admin {
-        ensure_other_active_admin(&mut tx, org_id, user_id).await?;
+    // Deactivating the last active Administrator would lock the org out. The
+    // permission editor counts administrators the same way.
+    if !active
+        && provisioning::is_active_administrator(&mut tx, org_id, user_id)
+            .await
+            .map_err(server_err)?
+        && !provisioning::other_active_administrator(&mut tx, org_id, user_id)
+            .await
+            .map_err(server_err)?
+    {
+        return Err(conflict(
+            "The organization must keep at least one active administrator.",
+        ));
     }
 
     let user = sqlx::query_as!(
@@ -480,5 +501,6 @@ mod tests {
     mod authority;
     mod concurrency;
     mod people;
+    mod permission_states;
     mod rates;
 }

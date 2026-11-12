@@ -1,6 +1,7 @@
 //! Run alone in release mode: AppState and the process memory peak are global.
 
 use horae_core::importers::harvest::types::{EntityType, RowError, RowOutcome, SourceKind};
+use horae_core::permissions::catalog::BuiltInProfile;
 
 use super::*;
 
@@ -31,7 +32,7 @@ async fn large_report_streams_over_http_without_buffering_the_archive(pool: PgPo
         .connect_with((*pool.connect_options()).clone())
         .await
         .unwrap();
-    let owner = crate::server_fns::test_seed::seed(&pool, OrgRole::Admin).await;
+    let owner = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
     crate::state::init_state(
         pool.clone(),
         Arc::new(crate::plugin::PluginRegistry::empty()),

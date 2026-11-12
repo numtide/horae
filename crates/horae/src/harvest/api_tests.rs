@@ -4,12 +4,13 @@
 use super::pagination_tests::{api_id, page, request, signed_in};
 use super::*;
 use crate::server_fns::test_seed::{seed, time_entry};
-use horae_core::types::{EntryState, OrgRole};
+use horae_core::permissions::catalog::BuiltInProfile;
+use horae_core::types::EntryState;
 use serde_json::{Value, json};
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn responses_carry_integer_ids_for_every_reference(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     let app = signed_in(&pool, ids.user_id).await;
 
@@ -31,7 +32,7 @@ async fn responses_carry_integer_ids_for_every_reference(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn hours_are_exact_decimals(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!("UPDATE time_entries SET minutes = 100 WHERE id = $1", entry)
         .execute(&pool)
@@ -47,7 +48,7 @@ async fn hours_are_exact_decimals(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn records_are_found_by_number_or_by_uuid(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let app = signed_in(&pool, ids.user_id).await;
     let number = api_id(&pool, "project", ids.project_id).await;
 
@@ -62,7 +63,7 @@ async fn records_are_found_by_number_or_by_uuid(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_unknown_number_is_a_harvest_404(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let app = signed_in(&pool, ids.user_id).await;
 
     let (status, body) = request(&app, "/harvest/v2/projects/999999").await;
@@ -74,7 +75,7 @@ async fn an_unknown_number_is_a_harvest_404(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_filter_by_an_unknown_number_matches_nothing(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     let app = signed_in(&pool, ids.user_id).await;
 
@@ -85,7 +86,7 @@ async fn a_filter_by_an_unknown_number_matches_nothing(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn filters_accept_numbers(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     let app = signed_in(&pool, ids.user_id).await;
     let project = api_id(&pool, "project", ids.project_id).await;
@@ -101,7 +102,7 @@ async fn filters_accept_numbers(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_malformed_id_is_a_422_with_a_message(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let app = signed_in(&pool, ids.user_id).await;
 
     let (status, body) = request(&app, "/harvest/v2/projects/not-an-id").await;
@@ -125,7 +126,7 @@ async fn signed_out_requests_get_the_oauth_error_body(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn every_alias_serves_the_canonical_response(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Manager).await;
+    let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let app = signed_in(&pool, ids.user_id).await;
     let canonical = page(&app, "/harvest/v2/users/me").await;
 
@@ -143,7 +144,7 @@ async fn every_alias_serves_the_canonical_response(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn amounts_use_the_currencys_own_decimals(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     sqlx::query!(
         "UPDATE projects SET currency = 'JPY', budget_kind = 'amount', budget_amount_cents = 100000
          WHERE id = $1",
@@ -161,7 +162,7 @@ async fn amounts_use_the_currencys_own_decimals(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_member_filtering_by_an_unknown_person_is_refused(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let app = signed_in(&pool, ids.user_id).await;
 
     // As for a colleague's number: a member's filter names only themselves,
@@ -175,8 +176,8 @@ async fn a_member_filtering_by_an_unknown_person_is_refused(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn every_organization_has_an_account_id(pool: PgPool) {
-    let first = seed(&pool, OrgRole::Admin).await;
-    let second = seed(&pool, OrgRole::Admin).await;
+    let first = seed(&pool, BuiltInProfile::Administrator).await;
+    let second = seed(&pool, BuiltInProfile::Administrator).await;
 
     let accounts = sqlx::query_scalar!(
         "SELECT api_account_id FROM organizations WHERE id = ANY($1) ORDER BY api_account_id",
@@ -192,8 +193,8 @@ async fn every_organization_has_an_account_id(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn numbers_count_up_per_kind_in_creation_order(pool: PgPool) {
-    let first = seed(&pool, OrgRole::Admin).await;
-    let second = seed(&pool, OrgRole::Admin).await;
+    let first = seed(&pool, BuiltInProfile::Administrator).await;
+    let second = seed(&pool, BuiltInProfile::Administrator).await;
     let entry = time_entry(&pool, &first, EntryState::Open).await;
     let later = time_entry(&pool, &second, EntryState::Open).await;
 
@@ -212,7 +213,7 @@ async fn numbers_count_up_per_kind_in_creation_order(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_deleted_records_number_is_not_reused(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     let deleted = api_id(&pool, "time_entry", entry).await;
     sqlx::query!("DELETE FROM time_entries WHERE id = $1", entry)
@@ -229,7 +230,7 @@ async fn a_deleted_records_number_is_not_reused(pool: PgPool) {
 /// allocation must not depend on what the transaction's snapshot can see.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn concurrent_creators_get_numbers_at_every_isolation_level(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     for level in ["REPEATABLE READ", "SERIALIZABLE"] {
         let mut first = pool.begin().await.unwrap();
         let mut second = pool.begin().await.unwrap();
@@ -285,7 +286,7 @@ async fn insert_client(pool: &PgPool, org_id: Uuid, harvest_id: Option<i64>) -> 
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_given_harvest_id_is_kept(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
 
     let imported = insert_client(&pool, ids.org_id, Some(4_200_000)).await;
     let native = insert_client(&pool, ids.org_id, None).await;
@@ -297,7 +298,7 @@ async fn a_given_harvest_id_is_kept(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_native_record_skips_an_id_another_record_has(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let next = api_id(&pool, "client", ids.client_id).await + 1;
     insert_client(&pool, ids.org_id, Some(next)).await;
 
@@ -310,7 +311,7 @@ async fn a_native_record_skips_an_id_another_record_has(pool: PgPool) {
 /// reserved after the record is deleted, so it can come back with it.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_native_record_skips_a_harvest_id_the_import_map_holds(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let next = api_id(&pool, "client", ids.client_id).await + 1;
     crate::importers::harvest::provenance::upsert(
         &pool,
@@ -330,8 +331,8 @@ async fn a_native_record_skips_a_harvest_id_the_import_map_holds(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn ids_are_unique_per_organization_only(pool: PgPool) {
-    let first = seed(&pool, OrgRole::Admin).await;
-    let second = seed(&pool, OrgRole::Admin).await;
+    let first = seed(&pool, BuiltInProfile::Administrator).await;
+    let second = seed(&pool, BuiltInProfile::Administrator).await;
     let held = api_id(&pool, "client", first.client_id).await;
 
     let same = insert_client(&pool, second.org_id, Some(held)).await;
@@ -360,7 +361,7 @@ async fn the_backfill_numbers_existing_records(pool: PgPool) {
         .collect::<Vec<_>>()
         .into();
     before.run(&pool).await.unwrap();
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let mut natives = vec![ids.client_id];
     for _ in 0..3 {
         let id = Uuid::now_v7();
@@ -421,7 +422,7 @@ async fn the_backfill_leaves_edit_stamps_alone(pool: PgPool) {
         .collect::<Vec<_>>()
         .into();
     before.run(&pool).await.unwrap();
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     let stamps = || async {
         sqlx::query!(
@@ -458,7 +459,7 @@ async fn migrate_before(pool: &PgPool, version: i64) {
 #[sqlx::test(migrations = false)]
 async fn the_backfill_resumes_and_spans_batches(pool: PgPool) {
     migrate_before(&pool, 60).await;
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "INSERT INTO clients (id, org_id, name, currency)
@@ -557,7 +558,7 @@ async fn the_backfill_resumes_and_spans_batches(pool: PgPool) {
 #[sqlx::test(migrations = false)]
 async fn a_duplicate_number_stops_the_unique_index_with_a_readable_error(pool: PgPool) {
     migrate_before(&pool, 63).await;
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let held = api_id(&pool, "client", ids.client_id).await;
     insert_client(&pool, ids.org_id, Some(held)).await;
 
@@ -577,7 +578,7 @@ async fn a_duplicate_number_stops_the_unique_index_with_a_readable_error(pool: P
 /// the stamps.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn the_backfill_flag_no_longer_skips_edit_stamps(pool: PgPool) {
-    let ids = seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     let mut tx = pool.begin().await.unwrap();
     sqlx::query!("SELECT set_config('horae.backfill', 'on', true) AS flag")

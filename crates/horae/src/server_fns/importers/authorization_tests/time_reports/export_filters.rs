@@ -38,8 +38,8 @@ async fn assert_download(response: reqwest::Response, format: &str, expected: &[
 }
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, OrgRole::Member).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, OrgRole::Admin).await;
+    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
+    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     let managed = Uuid::now_v7();
     let hidden = Uuid::now_v7();
     for user in [managed, hidden] {
@@ -135,6 +135,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         Permission::TimeReadManaged
     ])))
     .unwrap();
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source) VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants).execute(pool).await.unwrap();
     sqlx::query!("INSERT INTO person_management_assignments (id,org_id,manager_id,managed_user_id) VALUES ($1,$2,$3,$4)", Uuid::now_v7(), ids.org_id, ids.user_id, managed).execute(pool).await.unwrap();
     let cookie = api.cookie(ids.user_id).await;

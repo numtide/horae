@@ -1,11 +1,12 @@
 use super::project_permissions::{canonical, selection};
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_api_uses_canonical_catalog_scope_for_count_list_and_direct_id(pool: PgPool) {
-    let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::TaskReadAll]).await;
+    let (ids, app) = canonical(&pool, BuiltInProfile::Member, &[Permission::TaskReadAll]).await;
     walk(&pool, &app, "tasks", "is_active=true", &[ids.task_id]).await;
     let detail = page(&app, &format!("/harvest/v2/tasks/{}", ids.task_id)).await;
     assert_eq!(detail["id"], api_id(&pool, "task", ids.task_id).await);
@@ -15,7 +16,7 @@ async fn task_api_uses_canonical_catalog_scope_for_count_list_and_direct_id(pool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_api_does_not_inherit_legacy_admin_or_tracking_identity(pool: PgPool) {
-    let (ids, app) = canonical(&pool, OrgRole::Admin, &[]).await;
+    let (ids, app) = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     for query in ["", "?per_page=1&page=2", "?is_active=true"] {
         let body = page(&app, &format!("/harvest/v2/tasks{query}")).await;
@@ -35,7 +36,7 @@ async fn task_api_does_not_inherit_legacy_admin_or_tracking_identity(pool: PgPoo
 async fn task_api_rechecks_global_rate_access_independently_of_catalog(pool: PgPool) {
     let (ids, app) = canonical(
         &pool,
-        OrgRole::Admin,
+        BuiltInProfile::Administrator,
         &[Permission::TaskReadAll, Permission::BillableRateReadAll],
     )
     .await;
@@ -63,8 +64,8 @@ async fn task_api_rechecks_global_rate_access_independently_of_catalog(pool: PgP
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_api_filters_archived_tasks_and_preserves_total_past_last_page(pool: PgPool) {
-    let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::TaskReadAll]).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let (ids, app) = canonical(&pool, BuiltInProfile::Member, &[Permission::TaskReadAll]).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     sqlx::query!("UPDATE tasks SET active = false WHERE id = $1", ids.task_id)
         .execute(&pool)
         .await
@@ -86,7 +87,7 @@ async fn task_api_filters_archived_tasks_and_preserves_total_past_last_page(pool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_api_rejects_unknown_policy_before_empty_or_direct_results(pool: PgPool) {
-    let (ids, app) = canonical(&pool, OrgRole::Admin, &[]).await;
+    let (ids, app) = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version = 99 WHERE id = $1",
         ids.org_id
@@ -109,7 +110,7 @@ async fn task_api_rechecks_catalog_and_financial_grants_after_authority_wait(poo
         for financial_only in [false, true] {
             let (ids, app) = canonical(
                 &pool,
-                OrgRole::Admin,
+                BuiltInProfile::Administrator,
                 &[Permission::TaskReadAll, Permission::BillableRateReadAll],
             )
             .await;
@@ -184,7 +185,7 @@ async fn task_api_rechecks_catalog_and_financial_grants_after_authority_wait(poo
 #[serial_test::serial]
 async fn task_api_rechecks_deactivation_after_session_lookup(pool: PgPool) {
     for detail in [false, true] {
-        let (ids, app) = canonical(&pool, OrgRole::Member, &[Permission::TaskReadAll]).await;
+        let (ids, app) = canonical(&pool, BuiltInProfile::Member, &[Permission::TaskReadAll]).await;
         let uri = if detail {
             format!("/harvest/v2/tasks/{}", ids.task_id)
         } else {
@@ -209,7 +210,12 @@ async fn task_api_rechecks_deactivation_after_session_lookup(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_api_rejects_malformed_canonical_state_without_legacy_fallback(pool: PgPool) {
-    let (ids, app) = canonical(&pool, OrgRole::Admin, &[Permission::TaskReadAll]).await;
+    let (ids, app) = canonical(
+        &pool,
+        BuiltInProfile::Administrator,
+        &[Permission::TaskReadAll],
+    )
+    .await;
     sqlx::query!(
         "UPDATE person_permission_states SET catalog_version=999 WHERE user_id=$1",
         ids.user_id

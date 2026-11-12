@@ -3,6 +3,7 @@ use crate::server_fns::{
     invoices, reports,
     test_seed::{SeedIds, seed, time_entry, wait_for_blocked},
 };
+use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::{EntryState, InvoiceStatus};
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
@@ -23,7 +24,7 @@ struct Fixture {
 
 impl Fixture {
     async fn new(pool: &PgPool) -> Self {
-        let ids = seed(pool, OrgRole::Manager).await;
+        let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
         let entry = time_entry(pool, &ids, EntryState::Open).await;
         let invoice = Uuid::now_v7();
         sqlx::query!("INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents) VALUES ($1,$2,$3,'PRIVATE-1','2026-09-07','2026-10-07','EUR',1200)", invoice, ids.org_id, ids.client_id).execute(pool).await.unwrap();

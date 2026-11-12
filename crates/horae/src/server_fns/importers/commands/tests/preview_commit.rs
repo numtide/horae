@@ -6,6 +6,7 @@ use crate::models::CommitAvailability;
 use horae_core::importers::harvest::types::{
     EntityType, ImportReport, PersonError, PersonErrorKind, RowError, RowOutcome, SourceKind,
 };
+use horae_core::permissions::catalog::BuiltInProfile;
 
 /// Mark a job as a preview that finished with `report`.
 async fn finish(pool: &PgPool, job: Uuid, report: &ImportReport) {
@@ -226,7 +227,7 @@ async fn only_the_latest_finished_preview_of_its_source_commits(pool: PgPool) {
 async fn committing_a_preview_needs_an_administrator_of_its_organization(pool: PgPool) {
     let (ids, _) = fixture(&pool).await;
     let preview = api_preview(&pool, &ids, "preview").await;
-    let foreign = administrator(&pool).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     refused_with(
         commit_preview(
             &pool,
@@ -363,7 +364,7 @@ async fn a_summary_groups_archived_and_inline_errors_for_administrators(pool: Pg
     assert_eq!(summary.people[0].name.as_deref(), Some("Dana Dev"));
     assert_eq!(summary.people[0].entries, 2);
 
-    let foreign = administrator(&pool).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     assert!(matches!(
         error_summary(&pool, foreign.org_id, foreign.user_id, job).await,
         Err(ServerFnError::ServerError {

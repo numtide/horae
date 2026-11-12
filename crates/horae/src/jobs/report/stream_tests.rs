@@ -2,12 +2,12 @@ use futures_util::StreamExt;
 use horae_core::importers::harvest::types::{
     EntityType, ImportMode, ImportReport, RowError, RowOutcome, SourceKind,
 };
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::ops::testing::{assign_profile, revoke};
 use crate::{config::JobPolicy, jobs};
-use horae_core::permissions::catalog::BuiltInProfile;
 
 struct ArchivedJob {
     org: Uuid,
@@ -38,25 +38,8 @@ impl ArchivedJob {
 }
 
 async fn archived_job(pool: &PgPool) -> ArchivedJob {
-    let org = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO organizations (id, name) VALUES ($1, 'Jobs test')",
-        org
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-    let actor = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, 'Report reader')",
-        actor,
-        org,
-        format!("{actor}@example.test"),
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-    assign_profile(pool, org, actor, BuiltInProfile::Administrator).await;
+    let seeded = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+    let (org, actor) = (seeded.org_id, seeded.user_id);
     let id = jobs::enqueue(
         pool,
         org,
@@ -190,7 +173,7 @@ async fn download_rechecks_after_buffered_pages_and_before_the_captured_tail(poo
 async fn download_preparation_is_tenant_bound_and_releases_failed_transactions(pool: PgPool) {
     use axum::http::StatusCode;
     let job = archived_job(&pool).await;
-    let foreign = crate::ops::testing::seed_profile(&pool, BuiltInProfile::Administrator).await;
+    let foreign = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
     for (org, actor, id, expected) in [
         (job.org, foreign.user_id, job.id, StatusCode::FORBIDDEN),
         (job.org, Uuid::now_v7(), job.id, StatusCode::FORBIDDEN),

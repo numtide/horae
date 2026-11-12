@@ -3,7 +3,6 @@
 use std::sync::Mutex;
 
 use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -27,17 +26,15 @@ impl EventSink for Recorder {
 }
 
 /// Seeds an organization on policy one whose person holds a built-in profile.
-/// Stands in for `test_seed::seed(pool, BuiltInProfile)` until it lands; the
-/// seeded `org_role` is dead data that no operation reads.
 pub(crate) async fn seed_profile(pool: &PgPool, profile: BuiltInProfile) -> SeedIds {
-    let ids = seed(pool, OrgRole::Member).await;
-    policy_one(
-        pool,
-        &ids,
-        profile.direct_permissions(),
-        profile == BuiltInProfile::Administrator,
+    let ids = seed(pool, profile).await;
+    sqlx::query!(
+        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
+        ids.org_id
     )
-    .await;
+    .execute(pool)
+    .await
+    .unwrap();
     ids
 }
 
@@ -160,8 +157,8 @@ pub(crate) async fn add_person(pool: &PgPool, org_id: Uuid, profile: BuiltInProf
     id
 }
 
-/// Stores a permission state for the seeded person without touching the
-/// organization's policy, for tests of domains still on legacy roles.
+/// Replaces the seeded person's permission state with exactly `grants`,
+/// without touching the organization's policy.
 pub(crate) async fn provision(
     pool: &PgPool,
     ids: &SeedIds,
@@ -172,7 +169,12 @@ pub(crate) async fn provision(
         serde_json::from_value(serde_json::json!(PermissionSelection::new(grants))).unwrap();
     sqlx::query!(
         "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-         VALUES ($1,$2,$3,1,$4,$5,'individual')",
+         VALUES ($1,$2,$3,1,$4,$5,'individual')
+         ON CONFLICT (org_id,user_id) DO UPDATE
+         SET grants = EXCLUDED.grants, is_administrator = EXCLUDED.is_administrator,
+             source = 'individual', built_in_profile = NULL, template_id = NULL,
+             applied_template_revision = NULL,
+             revision = person_permission_states.revision + 1",
         Uuid::now_v7(),
         ids.org_id,
         ids.user_id,

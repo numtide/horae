@@ -4,7 +4,7 @@ use crate::models::time_report::{TimeReportBillability, TimeReportGrouping};
 use crate::reports::limits::time;
 
 async fn fixture(pool: &PgPool) -> SeedIds {
-    let ids = scoped(pool, OrgRole::Member, &[Permission::TimeReadOwn]).await;
+    let ids = scoped(pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
     let nonbillable_project = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO projects (id,org_id,client_id,name,currency,project_type)

@@ -407,21 +407,6 @@ async fn project_people_denies_invalid_authority_even_for_empty_resolution(pool:
             Err(ProjectPeopleError::Forbidden)
         ));
     }
-    for version in [0, 2] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
-            ids.org_id,
-            version
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        assert!(
-            read(&pool, ids.org_id, ids.user_id, Context::Create, &query)
-                .await
-                .is_err()
-        );
-    }
     sqlx::query!(
         "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
         ids.org_id

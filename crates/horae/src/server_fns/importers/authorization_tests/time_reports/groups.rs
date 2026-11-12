@@ -5,8 +5,8 @@ use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     const ENDPOINT: &str = "list_visible_time_report_groups";
-    let ids = seed(pool, OrgRole::Member).await;
-    let foreign = seed(pool, OrgRole::Admin).await;
+    let ids = seed(pool, BuiltInProfile::Member).await;
+    let foreign = seed(pool, BuiltInProfile::Administrator).await;
     time_entry(pool, &ids, EntryState::Open).await;
     time_entry(pool, &foreign, EntryState::Open).await;
     let hidden = Uuid::now_v7();
@@ -57,6 +57,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .execute(pool)
     .await
     .unwrap();
+    // A person without permission state cannot read anything.
+    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     assert_eq!(
         api.call(ENDPOINT, request.clone(), Some(&cookie), false)
             .await

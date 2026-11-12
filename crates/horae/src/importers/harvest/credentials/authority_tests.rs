@@ -1,7 +1,7 @@
 use super::*;
 use crate::importers::harvest::{ApiImportError, account_switch};
-use crate::ops::testing::{assign_profile, revoke, seed_profile};
-use crate::server_fns::test_seed::wait_for_blocked;
+use crate::ops::testing::{assign_profile, revoke};
+use crate::server_fns::test_seed::{seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use std::time::Duration;
@@ -48,7 +48,7 @@ async fn run(pool: &PgPool, org: Uuid, actor: Uuid, change: Change) -> anyhow::R
 }
 
 async fn connected(pool: &PgPool) -> crate::server_fns::test_seed::SeedIds {
-    let ids = seed_profile(pool, BuiltInProfile::Administrator).await;
+    let ids = seed(pool, BuiltInProfile::Administrator).await;
     store(
         pool,
         ids.org_id,
@@ -120,7 +120,7 @@ async fn connection_changes_require_current_tenant_bound_administrator(pool: PgP
             .execute(&pool)
             .await
             .unwrap();
-        let foreign = seed_profile(&pool, BuiltInProfile::Administrator).await;
+        let foreign = seed(&pool, BuiltInProfile::Administrator).await;
         for actor in [foreign.user_id, Uuid::now_v7()] {
             assert_denied(run(&pool, ids.org_id, actor, change).await, change);
             assert_eq!(snapshot(&pool, ids.org_id).await, before);
@@ -157,7 +157,7 @@ async fn connection_changes_fail_closed_without_stored_permission_state(pool: Pg
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn disconnected_noop_still_requires_authority(pool: PgPool) {
-    let ids = seed_profile(&pool, BuiltInProfile::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let before = snapshot(&pool, ids.org_id).await;
     assert_denied(
         run(&pool, ids.org_id, ids.user_id, Change::Disconnect).await,
@@ -169,7 +169,7 @@ async fn disconnected_noop_still_requires_authority(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn denied_first_connection_creates_no_binding_credentials_or_generation(pool: PgPool) {
-    let ids = seed_profile(&pool, BuiltInProfile::Member).await;
+    let ids = seed(&pool, BuiltInProfile::Member).await;
     let before = snapshot(&pool, ids.org_id).await;
     let result = store_for_attempt(
         &pool,

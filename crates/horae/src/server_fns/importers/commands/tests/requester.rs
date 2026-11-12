@@ -1,4 +1,5 @@
 use super::*;
+use horae_core::permissions::catalog::BuiltInProfile;
 
 async fn requester(pool: &PgPool, job: Uuid) -> Option<Uuid> {
     sqlx::query_scalar!(
@@ -205,7 +206,7 @@ async fn duplicates_and_job_lifecycle_never_replace_or_invent_the_original_reque
 #[serial_test::serial]
 async fn original_requester_foreign_key_preserves_tenant_and_known_identity(pool: PgPool) {
     let (ids, job) = fixture(&pool).await;
-    let foreign = administrator(&pool).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for actor in [foreign.user_id, Uuid::now_v7()] {
         let error = sqlx::query!(
             "UPDATE horae_jobs SET original_requester_id = $1 WHERE id = $2",
@@ -278,7 +279,7 @@ async fn requester_migration_preserves_unknown_authors_in_all_job_states(pool: P
             .collect(),
     );
     previous.run(&pool).await.unwrap();
-    let ids = crate::server_fns::test_seed::seed(&pool, OrgRole::Admin).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let mut jobs = Vec::new();
     for status in ["queued", "running", "succeeded", "failed", "cancelled"] {
         let id = Uuid::now_v7();

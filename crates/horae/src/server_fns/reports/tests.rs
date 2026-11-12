@@ -1,11 +1,12 @@
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed};
+use horae_core::permissions::catalog::BuiltInProfile;
 use serial_test::serial;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 async fn fixtures(pool: &PgPool, currency: &str) -> (SeedIds, SeedIds) {
-    let first = seed(pool, OrgRole::Manager).await;
+    let first = seed(pool, BuiltInProfile::ExecutiveManager).await;
     let second = SeedIds {
         org_id: first.org_id,
         user_id: Uuid::now_v7(),
@@ -82,7 +83,7 @@ async fn report(pool: &PgPool, viewer_id: Uuid, dimension: &str) -> Vec<ReportRo
 async fn tag_filters_keep_report_dimensions_and_details_in_sync(pool: PgPool) {
     use crate::reports::ReportFilters;
     let (first, second) = fixtures(&pool, "EUR").await;
-    let foreign = seed(&pool, OrgRole::Manager).await;
+    let foreign = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     entries(&pool, &first, &[(60, None, true), (30, None, false)]).await;
     entries(&pool, &second, &[(120, None, true)]).await;
     entries(&pool, &foreign, &[(240, None, true)]).await;
@@ -315,8 +316,8 @@ async fn manager_report_omits_groups_containing_private_project_costs(pool: PgPo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn report_uses_current_active_actor_and_tenant_for_every_filter(pool: PgPool) {
-    let first = seed(&pool, OrgRole::Manager).await;
-    let foreign = seed(&pool, OrgRole::Admin).await;
+    let first = seed(&pool, BuiltInProfile::ExecutiveManager).await;
+    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     entries(&pool, &first, &[(60, None, true)]).await;
     entries(&pool, &foreign, &[(120, None, true)]).await;
     let day = "2026-09-07".parse().unwrap();
@@ -450,7 +451,7 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
     let (first, second) = fixtures(&pool, "EUR").await;
     entries(&pool, &first, &[(60, None, true)]).await;
     entries(&pool, &second, &[(30, None, true)]).await;
-    let other = seed(&pool, OrgRole::Manager).await;
+    let other = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     entries(&pool, &other, &[(999, None, true)]).await;
     let day = "2026-09-07".parse().unwrap();
     for (client, project, user) in [

@@ -1,5 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use tokio::task::JoinSet;
 use uuid::Uuid;
@@ -79,14 +80,10 @@ async fn every_project_entry_gates_before_actor_and_rechecks_revocation(pool: Pg
         Operation::SaveEditor,
         Operation::Finalize,
     ] {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         // Client operations authorize from stored grants; the project
         // operations here still read the legacy role.
         let grants = matches!(operation, Operation::CreateClient);
-        if grants {
-            let write = [horae_core::permissions::catalog::Permission::ClientWriteAll];
-            crate::ops::testing::provision(&pool, &ids, &write, false).await;
-        }
         let editor = editing::load_editable_project(&pool, ids.user_id, ids.org_id, ids.project_id)
             .await
             .unwrap();

@@ -1,6 +1,7 @@
 use super::*;
 use crate::plugin::event::ActiveTransition;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use std::time::Duration;
 
@@ -12,7 +13,7 @@ mod project {
     use super::*;
 
     async fn configured_project(pool: &PgPool, mode: &str, scope: &str) -> SeedIds {
-        let ids = seed(pool, OrgRole::Admin).await;
+        let ids = seed(pool, BuiltInProfile::Administrator).await;
         sqlx::query!(
             "UPDATE projects SET budget_kind = 'hours', budget_minutes = 120,
              rate_cents = CASE WHEN $2 = 'project' THEN 10000 ELSE NULL END WHERE id = $1",
@@ -193,7 +194,7 @@ mod project {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn configured_edits_recheck_settings_after_waiting_for_the_project(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let mut edit = request(&pool, &ids).await;
         edit.form.name = "Must not be saved".into();
         let mut first = pool.begin().await.unwrap();
@@ -295,7 +296,7 @@ mod project {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn inactive_project_edits_preserve_identity_and_reject_implicit_migrations(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let (mut expected, _) =
             set_project_active_record(&pool, ids.org_id, ids.user_id, ids.project_id, false)
                 .await
@@ -325,7 +326,7 @@ mod project {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn budgets_and_rates_distinguish_null_zero_and_normalized_values(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         for (budget, value, rate, amount, minutes, cents) in [
             (BudgetMode::TotalFees, "1.25", "", Some(125), None, None),
             (BudgetMode::TotalFees, "0", "", Some(0), None, None),
@@ -373,7 +374,7 @@ mod project {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn invalid_project_fields_leave_the_row_unchanged(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let before = version(&pool, ids.project_id).await;
         for (field, value) in [
             ("amount", "-1"),
@@ -419,7 +420,7 @@ mod project {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn unchanged_edit_preserves_the_row(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let before = version(&pool, ids.project_id).await;
         let (returned, changed) = edit(&pool, &ids, "Widget").await;
         let after = version(&pool, ids.project_id).await;
@@ -431,7 +432,7 @@ mod project {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn unchanged_activation_preserves_the_row(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let before = version(&pool, ids.project_id).await;
         let (returned, transition) =
             set_project_active_record(&pool, ids.org_id, ids.user_id, ids.project_id, true)
@@ -442,7 +443,7 @@ mod project {
     }
 
     async fn competing_edit(pool: &PgPool, name: &'static str) -> ServerFnError {
-        let ids = seed(pool, OrgRole::Admin).await;
+        let ids = seed(pool, BuiltInProfile::Administrator).await;
         let mut pending = request(pool, &ids).await;
         pending.form.name = name.into();
         let mut first = pool.begin().await.unwrap();
@@ -497,7 +498,7 @@ mod project {
         pool: &PgPool,
         active: bool,
     ) -> (Project, Option<ActiveTransition>) {
-        let ids = seed(pool, OrgRole::Admin).await;
+        let ids = seed(pool, BuiltInProfile::Administrator).await;
         let mut first = pool.begin().await.unwrap();
         let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
             .fetch_one(&mut *first)
@@ -544,8 +545,8 @@ mod project {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn missing_and_foreign_rows_are_not_noops(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
-        let other = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
+        let other = seed(&pool, BuiltInProfile::Administrator).await;
         let before = version(&pool, ids.project_id).await;
         for (org_id, id) in [
             (ids.org_id, uuid::Uuid::now_v7()),
@@ -584,7 +585,7 @@ mod project {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn both_activation_transitions_preserve_details_and_change_once(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let (mut expected, _) = edit(&pool, &ids, "Renamed").await;
         for (active, transition) in [
             (false, ActiveTransition::Deactivated),
@@ -609,7 +610,7 @@ mod project {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn concurrent_deletion_is_rejected_by_both_mutations(pool: PgPool) {
         for activation in [false, true] {
-            let ids = seed(&pool, OrgRole::Admin).await;
+            let ids = seed(&pool, BuiltInProfile::Administrator).await;
             let pending = request(&pool, &ids).await;
             let mut first = pool.begin().await.unwrap();
             let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
@@ -687,7 +688,7 @@ mod task {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn rate_edits_set_currency_without_relabelling_renames_or_noops(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         sqlx::query!(
             "UPDATE tasks SET default_rate_cents = 8000 WHERE id = $1",
             ids.task_id
@@ -727,7 +728,7 @@ mod task {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn each_detail_field_changes_once_and_preserves_inactive_status(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let (mut expected, _) = activity(&pool, ids.org_id, ids.user_id, ids.task_id, false)
             .await
             .unwrap();
@@ -800,7 +801,7 @@ mod task {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn unchanged_edit_preserves_the_row(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let before = version(&pool, ids.task_id).await;
         let (returned, changed) = edit(&pool, &ids, "Dev").await;
         let after = version(&pool, ids.task_id).await;
@@ -812,7 +813,7 @@ mod task {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn unchanged_activation_preserves_the_row(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let before = version(&pool, ids.task_id).await;
         let (returned, transition) = activity(&pool, ids.org_id, ids.user_id, ids.task_id, true)
             .await
@@ -822,7 +823,7 @@ mod task {
     }
 
     async fn competing_edit(pool: &PgPool, name: &'static str) -> (Task, bool) {
-        let ids = seed(pool, OrgRole::Admin).await;
+        let ids = seed(pool, BuiltInProfile::Administrator).await;
         let mut first = pool.begin().await.unwrap();
         let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
             .fetch_one(&mut *first)
@@ -861,7 +862,7 @@ mod task {
     }
 
     async fn competing_activation(pool: &PgPool, active: bool) -> (Task, Option<ActiveTransition>) {
-        let ids = seed(pool, OrgRole::Admin).await;
+        let ids = seed(pool, BuiltInProfile::Administrator).await;
         let mut first = pool.begin().await.unwrap();
         let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
             .fetch_one(&mut *first)
@@ -904,8 +905,8 @@ mod task {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn missing_and_foreign_rows_are_not_noops(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
-        let other = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
+        let other = seed(&pool, BuiltInProfile::Administrator).await;
         let before = version(&pool, ids.task_id).await;
         for (org_id, id) in [
             (ids.org_id, uuid::Uuid::now_v7()),
@@ -951,7 +952,7 @@ mod task {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn both_activation_transitions_preserve_details_and_change_once(pool: PgPool) {
-        let ids = seed(&pool, OrgRole::Admin).await;
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let (mut expected, _) = edit(&pool, &ids, "Renamed").await;
         for (active, transition) in [
             (false, ActiveTransition::Deactivated),
@@ -974,7 +975,7 @@ mod task {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn concurrent_deletion_returns_not_found_for_both_mutations(pool: PgPool) {
         for activation in [false, true] {
-            let ids = seed(&pool, OrgRole::Admin).await;
+            let ids = seed(&pool, BuiltInProfile::Administrator).await;
             let mut first = pool.begin().await.unwrap();
             let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
                 .fetch_one(&mut *first)

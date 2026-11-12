@@ -223,8 +223,11 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn checkpoint_retains_link_activity_and_derives_missing_legacy_field(pool: sqlx::PgPool) {
-        let ids =
-            crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
+        let ids = crate::server_fns::test_seed::seed(
+            &pool,
+            horae_core::permissions::catalog::BuiltInProfile::Administrator,
+        )
+        .await;
         for global_active in [false, true] {
             sqlx::query!(
                 "UPDATE tasks SET active=$2 WHERE id=$1",
@@ -266,8 +269,11 @@ mod tests {
     async fn checkpoint_restores_known_task_currency_and_keeps_old_currency_unknown(
         pool: sqlx::PgPool,
     ) {
-        let ids =
-            crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
+        let ids = crate::server_fns::test_seed::seed(
+            &pool,
+            horae_core::permissions::catalog::BuiltInProfile::Administrator,
+        )
+        .await;
         let task_id = Uuid::now_v7();
         let mut tx = pool.begin().await.unwrap();
         sqlx::query!(
@@ -327,8 +333,11 @@ mod tests {
     async fn a_person_whose_email_was_taken_meanwhile_is_reported_not_restored(pool: sqlx::PgPool) {
         use horae_core::importers::harvest::types::{ImportMode, SourceKind};
 
-        let ids =
-            crate::server_fns::test_seed::seed(&pool, horae_core::types::OrgRole::Admin).await;
+        let ids = crate::server_fns::test_seed::seed(
+            &pool,
+            horae_core::permissions::catalog::BuiltInProfile::Administrator,
+        )
+        .await;
         // The real account may differ from the simulated person only in case.
         for (simulated_email, real_email) in [
             ("lost0@example.com", "lost0@example.com"),

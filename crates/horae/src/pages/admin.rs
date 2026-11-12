@@ -100,7 +100,7 @@ fn LegacyAdminUsers() -> Element {
     let mut show_user_form = use_signal(|| false);
     let mut user_email = use_signal(String::new);
     let mut user_name = use_signal(String::new);
-    let mut user_role = use_signal(|| "member".to_string());
+    let mut user_profile = use_signal(|| "member".to_string());
     let user_error = use_signal(|| None::<String>);
     let mut row_error = use_signal(|| None::<String>);
     let mut rates_target = use_signal(|| None::<rates::RatesTarget>);
@@ -162,16 +162,19 @@ fn LegacyAdminUsers() -> Element {
                             oninput: move |e: FormEvent| user_name.set(e.value()),
                         }
                     }
-                    FormGroup { label: "Role", id: "user-role",
+                    FormGroup { label: "Profile", id: "user-profile",
                         Select {
-                            id: "user-role",
+                            id: "user-profile",
                             options: vec![
                                 ("member".to_string(), "Member".to_string()),
-                                ("manager".to_string(), "Manager".to_string()),
-                                ("admin".to_string(), "Admin".to_string()),
+                                ("project_manager".to_string(), "Project Manager".to_string()),
+                                ("accounting".to_string(), "Accounting".to_string()),
+                                ("people_admin".to_string(), "People Admin".to_string()),
+                                ("executive_manager".to_string(), "Executive Manager".to_string()),
+                                ("administrator".to_string(), "Administrator".to_string()),
                             ],
-                            selected: user_role(),
-                            onchange: move |e: FormEvent| user_role.set(e.value()),
+                            selected: user_profile(),
+                            onchange: move |e: FormEvent| user_profile.set(e.value()),
                         }
                     }
                     button {
@@ -179,11 +182,11 @@ fn LegacyAdminUsers() -> Element {
                         onclick: move |_| {
                             let e = user_email();
                             let n = user_name();
-                            let r = user_role();
-                            run_action(server_fns::create_user(e, n, r), users, user_error, move || {
+                            let p = user_profile();
+                            run_action(server_fns::create_user(e, n, p), users, user_error, move || {
                                 user_email.set(String::new());
                                 user_name.set(String::new());
-                                user_role.set("member".to_string());
+                                user_profile.set("member".to_string());
                                 row_error.set(None);
                                 show_user_form.set(false);
                             });
