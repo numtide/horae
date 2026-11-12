@@ -123,7 +123,7 @@ pub(crate) async fn add(
     let mut added = Vec::with_capacity(order.len());
     let mut present = Vec::new();
     for person in order {
-        let taken = crate::db::lock_new_user_email(tx,&person.email).await?;
+        let taken = crate::db::lock_new_user_email(tx, &person.email).await?;
         match (taken, existing) {
             (false, _) => {}
             (true, Existing::Skip) => {
@@ -166,7 +166,7 @@ pub(crate) async fn add(
                 _ => OpError::from(error),
             }
         })?;
-        provisioning::provision(tx,org_id, user.id, profile).await?;
+        provisioning::provision(tx, org_id, user.id, profile).await?;
         added.push(user);
     }
     let now = chrono::Utc::now();
