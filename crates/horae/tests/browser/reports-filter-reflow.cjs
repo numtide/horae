@@ -305,7 +305,7 @@ const sizes = [[320, 900], [390, 900], [768, 900], [1440, 900], [320, 568], [144
     await expect(page.getByText('No entries in this range.', { exact: true })).toBeVisible();
 
     assert.deepEqual(errors, []);
-    console.log(`PASS: legacy report filter labels (with Project tag), tab order, reflow at ${sizes.map(s => s.join('x')).join('/')} in both themes (bare panel below 640px), base and 32px text, both tabs; keyboard date entry, retry, groupings, client reset, exports, empty states and long chosen names; Chromium ${browser.version()}`);
+    console.log(`PASS: financial report filter labels (with Project tag), tab order, reflow at ${sizes.map(s => s.join('x')).join('/')} in both themes (bare panel below 640px), base and 32px text, both tabs; keyboard date entry, retry, groupings, client reset, exports, empty states and long chosen names; Chromium ${browser.version()}`);
   } finally {
     try {
       await page.unrouteAll({ behavior: 'wait' });
