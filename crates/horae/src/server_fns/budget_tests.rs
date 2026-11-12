@@ -1,7 +1,7 @@
 use super::claim_budget_band;
-use crate::server_fns::test_seed::seed;
-use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::types::OrgRole;
+use crate::ops::testing::set_grants;
+use crate::server_fns::test_seed::{seed, use_policy_one};
+use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
 use sqlx::PgPool;
 
 use super::budgets::configured_progress;
@@ -27,6 +27,8 @@ async fn visible_scopes(
 
 async fn configured(pool: &PgPool) -> SeedIds {
     let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
+    // The overview reader still loads grants only on policy one.
+    use_policy_one(pool, ids.org_id).await;
     sqlx::query!(
         "UPDATE projects SET budget_kind = 'hours', budget_minutes = 100, rate_cents = 6000 WHERE id = $1",
         ids.project_id
@@ -89,8 +91,7 @@ async fn overview_budget_progress_is_current_period_scoped_and_authorized(pool: 
             .unwrap()
             .is_empty()
     );
-    // Project readers follow the stored grants: a Member's floor.
-    crate::ops::testing::set_grants(&mut pool.acquire().await.unwrap(), &ids, &[])
+    set_grants(&mut pool.acquire().await.unwrap(), &ids, &[])
         .await
         .unwrap();
     assert!(
@@ -634,11 +635,12 @@ async fn configured_alerts_require_enabled_active_project_and_authorized_recipie
         0
     );
     sqlx::query!("UPDATE project_settings SET alert_enabled = true, alert_threshold = 0 WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        ids.user_id
+    // Managed read alone is not enough: the person must also manage this project.
+    set_grants(
+        &mut pool.acquire().await.unwrap(),
+        &ids,
+        &[Permission::ProjectReadManaged],
     )
-    .execute(&pool)
     .await
     .unwrap();
     assert_eq!(
@@ -648,8 +650,9 @@ async fn configured_alerts_require_enabled_active_project_and_authorized_recipie
         0
     );
     sqlx::query!(
-        "INSERT INTO assignments (id,project_id,user_id,role) VALUES ($1,$2,$3,'lead')",
+        "INSERT INTO project_management_assignments (id,org_id,project_id,manager_id) VALUES ($1,$2,$3,$4)",
         Uuid::now_v7(),
+        ids.org_id,
         ids.project_id,
         ids.user_id
     )
@@ -900,20 +903,101 @@ async fn configured_budget_sweep_dates_the_period_in_the_workspace_zone(pool: Pg
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn configured_alert_recipients_are_active_same_org_managers_and_project_leads(pool: PgPool) {
+async fn configured_alert_recipients_are_active_people_who_can_read_the_project(pool: PgPool) {
+    use BuiltInProfile::{Administrator, ExecutiveManager, Member, ProjectManager};
+    const MANAGED: &[Permission] = &[Permission::ProjectReadManaged];
     let ids = configured(&pool).await;
-    let foreign = seed(&pool, BuiltInProfile::Administrator).await;
+    let foreign = seed(&pool, Administrator).await;
     sqlx::query!("UPDATE project_settings SET alert_enabled = true, alert_threshold = 0 WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
     let mut expected = vec![ids.user_id];
-    for (role, active, lead) in [
-        (OrgRole::Admin, true, false),
-        (OrgRole::Manager, true, true),
-        (OrgRole::Member, true, true),
-        (OrgRole::Member, true, false),
-        (OrgRole::Admin, false, true),
+    // (stored grants, administrator, active, designated manager of the project,
+    //  tracking lead, receives the alert). Project Manager reads every project:
+    // its project creation grant requires `ProjectReadAll`.
+    for (grants, administrator, active, manager, lead, receives) in [
+        (
+            Some(Administrator.direct_permissions()),
+            true,
+            true,
+            false,
+            false,
+            true,
+        ),
+        (
+            Some(ExecutiveManager.direct_permissions()),
+            false,
+            true,
+            false,
+            false,
+            true,
+        ),
+        (
+            Some(ProjectManager.direct_permissions()),
+            false,
+            true,
+            false,
+            true,
+            true,
+        ),
+        (Some(MANAGED), false, true, true, false, true),
+        (Some(MANAGED), false, true, false, true, false),
+        (
+            Some(Member.direct_permissions()),
+            false,
+            true,
+            true,
+            true,
+            false,
+        ),
+        (None, false, true, false, true, false),
+        (
+            Some(Administrator.direct_permissions()),
+            true,
+            false,
+            true,
+            false,
+            false,
+        ),
     ] {
         let user = Uuid::now_v7();
-        sqlx::query!("INSERT INTO users (id,org_id,email,name,org_role,active) VALUES ($1,$2,$3,'Recipient',$4,$5)", user, ids.org_id, format!("{user}@test.com"), role as OrgRole, active).execute(&pool).await.unwrap();
+        sqlx::query!(
+            "INSERT INTO users (id,org_id,email,name,active) VALUES ($1,$2,$3,'Recipient',$4)",
+            user,
+            ids.org_id,
+            format!("{user}@test.com"),
+            active
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        if let Some(grants) = grants {
+            let grants: Vec<String> =
+                serde_json::from_value(serde_json::json!(PermissionSelection::new(grants)))
+                    .unwrap();
+            sqlx::query!(
+                "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
+                 VALUES ($1,$2,$3,1,$4,$5,'individual')",
+                Uuid::now_v7(),
+                ids.org_id,
+                user,
+                &grants,
+                administrator,
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        if manager {
+            sqlx::query!(
+                "INSERT INTO project_management_assignments (id,org_id,project_id,manager_id) VALUES ($1,$2,$3,$4)",
+                Uuid::now_v7(),
+                ids.org_id,
+                ids.project_id,
+                user
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
         if lead {
             sqlx::query!(
                 "INSERT INTO assignments (id,project_id,user_id,role) VALUES ($1,$2,$3,'lead')",
@@ -925,7 +1009,7 @@ async fn configured_alert_recipients_are_active_same_org_managers_and_project_le
             .await
             .unwrap();
         }
-        if active && (role != OrgRole::Member || lead) {
+        if receives {
             expected.push(user);
         }
     }
