@@ -194,13 +194,14 @@ pub(super) async fn progress_for_viewer(
     else {
         return Ok(Vec::new());
     };
+    let permissions = viewer_permissions(&mut access.tx, org_id, viewer_id).await?;
     let rows = fetch_progress(
         &mut access.tx,
         org_id,
         None,
         Some(viewer_id),
         date,
-        access.permissions.as_ref(),
+        permissions.as_ref(),
         false,
     )
     .await
@@ -270,7 +271,8 @@ pub(super) async fn project_budget(
 ) -> Result<Option<crate::models::project::ProjectDetailBudget>, ServerFnError> {
     use horae_core::budget::{BudgetHeadline, headline};
 
-    let permissions = access.permissions.as_ref();
+    let state = viewer_permissions(&mut access.tx, org_id, viewer_id).await?;
+    let permissions = state.as_ref();
     let has = |permission| permissions.is_some_and(|state| state.grants.contains(permission));
     // Non-arithmetic facts first, so withheld or unallocated budgets never
     // value an entry. The predicates and joins match the consumption queries.
@@ -394,6 +396,26 @@ pub(super) async fn project_budget(
         Err(error) => return Err(server_err(error)),
     };
     Ok(Some(budget(headline)))
+}
+
+/// The viewer's stored permission state, read inside the caller's
+/// transaction after `ReadAccess` has locked the organization and the person.
+/// Budgets answer from it whatever the organization's policy, so they do not
+/// take `ReadAccess::permissions`, which is left out on policy zero. Missing
+/// or invalid state reads as no grants.
+async fn viewer_permissions(
+    connection: &mut PgConnection,
+    org_id: Uuid,
+    viewer_id: Uuid,
+) -> Result<Option<PersonPermissions>, ServerFnError> {
+    match super::load_person_permissions(connection, org_id, viewer_id).await {
+        Ok(state) => Ok(state),
+        Err(super::PermissionStorageError::Database(error)) => Err(server_err(error)),
+        Err(error) => {
+            tracing::error!(%error, "Invalid stored permission state");
+            Ok(None)
+        }
+    }
 }
 
 fn numeric_overflow(error: &sqlx::Error) -> bool {
