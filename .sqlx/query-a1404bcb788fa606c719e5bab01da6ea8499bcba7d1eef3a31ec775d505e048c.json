@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO users (id, org_id, email, name, org_role, active)\n             VALUES ($1, $2, $3, $4, $5, $6)\n             RETURNING id, org_id, email, name, oidc_subject,\n                       org_role as \"org_role: OrgRole\",\n                       cost_rate_cents, billable_rate_cents, active,\n                       created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "INSERT INTO users (id, org_id, email, name, org_role, active)\n             VALUES ($1, $2, $3, $4, $5, $6)\n             RETURNING id, org_id, email, name, oidc_subject,\n                       org_role as \"org_role: horae_core::types::OrgRole\",\n                       cost_rate_cents, billable_rate_cents, active,\n                       created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
   "describe": {
     "columns": [
       {
@@ -30,7 +30,7 @@
       },
       {
         "ordinal": 5,
-        "name": "org_role: OrgRole",
+        "name": "org_role: horae_core::types::OrgRole",
         "type_info": {
           "Custom": {
             "name": "org_role",
@@ -99,5 +99,5 @@
       false
     ]
   },
-  "hash": "e98e7649b48a791edbe8f9c910a5d88a07849b7e15c31c1945a8c24721a419ec"
+  "hash": "a1404bcb788fa606c719e5bab01da6ea8499bcba7d1eef3a31ec775d505e048c"
 }

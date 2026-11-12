@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 
+use super::add_person;
 use super::permission_editor::PermissionEditorDialog;
 use super::rates::{PersonRatesDialog, RatesTarget};
 use crate::components::badge::Badge;
@@ -11,13 +12,16 @@ use crate::server_fns;
 #[component]
 pub(super) fn CanonicalPeople(
     can_edit_permissions: bool,
+    can_manage_people: bool,
     can_view_rates: bool,
     on_saved: EventHandler<bool>,
 ) -> Element {
     let mut rates_target = use_signal(|| None::<RatesTarget>);
     let mut rates_notice = use_signal(|| None::<String>);
     let on_rates_saved = use_callback(move |message: String| rates_notice.set(Some(message)));
-    let actions = can_edit_permissions || can_view_rates;
+    let actions = can_edit_permissions || can_view_rates || can_manage_people;
+    let mut row_error = use_signal(|| None::<String>);
+    let mut changing = use_signal(|| None::<uuid::Uuid>);
     let mut activity = use_signal(|| PeopleActivity::Active);
     let mut cursors = use_signal(|| vec![None::<PeopleCursor>]);
     let mut requester = use_signal(|| None::<PermissionRequester>);
@@ -46,6 +50,25 @@ pub(super) fn CanonicalPeople(
     let next = current
         .and_then(|(_, result)| result.as_ref().ok())
         .and_then(|page| page.next_after.clone());
+    let on_added = use_callback(move |name: String| {
+        rates_notice.set(Some(format!("{name} was added.")));
+        page.restart();
+    });
+    // Archiving keeps the person's time; only their sign-in stops.
+    let mut set_active = move |id: uuid::Uuid, active: bool| {
+        if changing.peek().is_some() {
+            return;
+        }
+        changing.set(Some(id));
+        spawn(async move {
+            match server_fns::set_user_active(id.to_string(), active).await {
+                Ok(_) => row_error.set(None),
+                Err(failure) => row_error.set(Some(failure.to_string())),
+            }
+            changing.set(None);
+            page.restart();
+        });
+    };
 
     rsx! {
         div { class: "page-header",
@@ -56,8 +79,14 @@ pub(super) fn CanonicalPeople(
                 }
             }
         }
+        if can_manage_people {
+            add_person::AddPerson { choose_profile: can_edit_permissions, on_added }
+        }
         if let Some(message) = rates_notice() {
             p { class: "text-sm text-secondary mb-4", role: "status", "{message}" }
+        }
+        if let Some(message) = row_error() {
+            p { class: "alert alert-danger", role: "alert", "{message}" }
         }
         div { class: "flex flex-wrap items-center gap-3 mb-4",
             label { r#for: "people-activity", class: "form-label", "Show" }
@@ -124,6 +153,17 @@ pub(super) fn CanonicalPeople(
                                                             move |_| person.set(Some(selection))
                                                         },
                                                         "Permissions"
+                                                    }
+                                                }
+                                                if can_manage_people {
+                                                    button { id: "people-active-{entry.id}", r#type: "button", class: "btn btn-secondary btn-sm",
+                                                        aria_label: if entry.active { "Archive {entry.name}" } else { "Restore {entry.name}" },
+                                                        disabled: changing().is_some(),
+                                                        onclick: {
+                                                            let (id, active) = (entry.id, !entry.active);
+                                                            move |_| set_active(id, active)
+                                                        },
+                                                        if entry.active { "Archive" } else { "Restore" }
                                                     }
                                                 }
                                             } }

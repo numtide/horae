@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT managed_user_id FROM person_management_assignments\n                 WHERE org_id = $1 AND manager_id = $2 AND managed_user_id = $3",
+  "query": "SELECT managed_user_id FROM person_management_assignments\n         WHERE org_id = $1 AND manager_id = $2 AND managed_user_id = $3",
   "describe": {
     "columns": [
       {
@@ -20,5 +20,5 @@
       false
     ]
   },
-  "hash": "d50b60f51fcc1ace41e643fcf10dded17ad2046f66b5eb8122603d0a81cca7bd"
+  "hash": "90feabde26afdddf7660168b68f1ec69116013b7b74700fd6731c4daa313a761"
 }

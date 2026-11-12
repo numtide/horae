@@ -119,10 +119,6 @@ impl Actor {
 
     /// The stored administrator identity. Holding every grant does not make
     /// someone an administrator.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "foundation for the next ops/ domains")
-    )]
     pub fn administrator(&self) -> bool {
         self.permissions
             .as_ref()
