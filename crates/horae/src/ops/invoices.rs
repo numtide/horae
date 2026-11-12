@@ -7,11 +7,12 @@
 //! `specs/015-scoped-permissions/contracts/invoice-scope-evidence.md`), and a
 //! guessed rule could expose a whole invoice through one of its projects.
 //!
-//! Preparing and generating an invoice also requires `BillableRateReadAll`:
-//! they price uninvoiced work from the current billable rates and show each
-//! project's invoice defaults and fee balances. An issued invoice carries the
-//! rates and amounts it recorded, which its invoice grants alone disclose.
-//! No invoice payload carries a cost rate.
+//! Preparing, generating and editing a draft also require
+//! `BillableRateReadAll`: they price uninvoiced work from the current billable
+//! rates, or show each project's invoice defaults, agreed fees and what other
+//! invoices billed against them. An issued invoice carries the rates and
+//! amounts it recorded, which its invoice grants alone disclose. No invoice
+//! payload carries a cost rate.
 
 use horae_core::permissions::catalog::Permission;
 use horae_core::types::InvoiceStatus;
@@ -23,14 +24,15 @@ use crate::models::Invoice;
 
 /// Reading issued invoices, including their exports.
 pub(crate) const READ: &[Permission] = &[Permission::InvoiceReadAll];
-/// Editing drafts and changing an invoice's status.
+/// Changing an invoice's status.
 pub(crate) const WRITE: &[Permission] = &[Permission::InvoiceWriteAll];
-/// Previewing and generating an invoice from uninvoiced work.
+/// Previewing and generating an invoice from uninvoiced work, and editing a
+/// draft's values and fee lines.
 pub(crate) const PREPARE: &[Permission] =
     &[Permission::InvoiceWriteAll, Permission::BillableRateReadAll];
 
 const WRITE_REQUIRED: &str = "Permission to manage all invoices is required";
-const PREPARE_REQUIRED: &str = "Preparing an invoice requires permission to manage all invoices and view everyone's billable rates";
+const PREPARE_REQUIRED: &str = "Preparing or editing an invoice requires permission to manage all invoices and view everyone's billable rates";
 
 /// Whether the actor holds every `required` grant.
 pub(crate) fn holds(actor: &Actor, required: &[Permission]) -> bool {
@@ -46,7 +48,7 @@ pub(crate) fn authorize_write(actor: &Actor) -> Result<(), OpError> {
     }
 }
 
-/// Refuses an actor who may not price uninvoiced work into a new invoice.
+/// Refuses an actor who may not price work into a new invoice or a draft.
 pub(crate) fn authorize_prepare(actor: &Actor) -> Result<(), OpError> {
     if holds(actor, PREPARE) {
         Ok(())

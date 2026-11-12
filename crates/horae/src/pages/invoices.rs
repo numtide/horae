@@ -34,14 +34,14 @@ fn holds(session: crate::components::session::Session, required: &[Permission]) 
     )
 }
 
-/// Whether to offer editing drafts and changing status: the grant those
-/// server functions require.
+/// Whether to offer changing an invoice's status: the grant that server
+/// function requires.
 fn manages_invoices(session: crate::components::session::Session) -> bool {
     holds(session, &[Permission::InvoiceWriteAll])
 }
 
-/// Whether to offer preparing and generating a new invoice, which prices
-/// uninvoiced work from current billable rates.
+/// Whether to offer preparing a new invoice or editing a draft's values,
+/// which show billable pricing beyond what an issued invoice records.
 fn prepares_invoices(session: crate::components::session::Session) -> bool {
     holds(
         session,
@@ -221,7 +221,9 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
     let mut error = use_signal(|| None::<String>);
     let editing = use_signal(|| false);
     let mut busy = use_signal(|| false);
-    let manages = manages_invoices(crate::components::session::use_session());
+    let session = crate::components::session::use_session();
+    let manages = manages_invoices(session);
+    let prepares = prepares_invoices(session);
 
     // One button per status transition; the four share everything but the
     // target status, label, and emphasis.
@@ -326,7 +328,7 @@ fn InvoiceDetailContent(id: Uuid) -> Element {
                         }
                     }
 
-                    if manages && inv.status == InvoiceStatus::Draft {
+                    if prepares && inv.status == InvoiceStatus::Draft {
                         defaults_form::DraftDefaults { invoice: inv.clone(), editing, busy, onsaved: move |_| invoice_data.restart() }
                     }
 

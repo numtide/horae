@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT po_number, (SELECT count(*) FROM invoice_edit_requests WHERE invoice_id = $1) AS requests\n         FROM invoices WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "po_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "requests",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "f283f3b974d2045b35a9729b67807ec5f2a7bf0c5a134bf07a9499590967b5f1"
+}

@@ -56,20 +56,10 @@ async fn begin_invoice_read(
     super::snapshot::authorized(pool, org_id, actor_id, crate::ops::invoices::READ).await
 }
 
-/// A snapshot read for editing a draft, holding the actor's whole-invoice
-/// write grant.
-#[cfg(feature = "server")]
-async fn begin_invoice_draft_read(
-    pool: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    actor_id: uuid::Uuid,
-) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
-    super::snapshot::authorized(pool, org_id, actor_id, crate::ops::invoices::WRITE).await
-}
-
-/// A snapshot read for previewing a new invoice, which prices uninvoiced
-/// work from current billable rates: the invoice write grant and
-/// `BillableRateReadAll`.
+/// A snapshot read for previewing a new invoice or editing a draft. Both show
+/// billable pricing beyond what an issued invoice records (current rates,
+/// project invoice defaults, agreed fees and what other invoices billed), so
+/// they need the invoice write grant and `BillableRateReadAll`.
 #[cfg(feature = "server")]
 async fn begin_invoice_preparation_read(
     pool: &sqlx::PgPool,
