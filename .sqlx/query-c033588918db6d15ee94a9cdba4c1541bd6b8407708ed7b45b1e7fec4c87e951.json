@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT u.id, u.org_id, u.email, u.name,\n                  u.org_role::text as \"org_role!: String\"\n           FROM users u\n           JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id\n           WHERE p.is_administrator AND u.active\n           ORDER BY u.id LIMIT 1",
+  "query": "SELECT u.id, u.org_id, u.email, u.name\n           FROM users u\n           JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id\n           WHERE p.is_administrator AND u.active\n           ORDER BY u.id LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -22,11 +22,6 @@
         "ordinal": 3,
         "name": "name",
         "type_info": "Text"
-      },
-      {
-        "ordinal": 4,
-        "name": "org_role!: String",
-        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -36,9 +31,8 @@
       false,
       false,
       false,
-      false,
-      null
+      false
     ]
   },
-  "hash": "f8dc56c3b8893b6b6307a2f522dc9a03bbc718d6c95e2fbefc3bfac7d1ea8596"
+  "hash": "c033588918db6d15ee94a9cdba4c1541bd6b8407708ed7b45b1e7fec4c87e951"
 }

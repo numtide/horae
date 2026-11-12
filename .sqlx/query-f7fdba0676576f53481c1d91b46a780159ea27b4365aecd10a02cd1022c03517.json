@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id, email, name, org_role::text as \"org_role!: String\"\n               FROM users WHERE id = $1",
+  "query": "SELECT id, org_id, email, name FROM users WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -22,11 +22,6 @@
         "ordinal": 3,
         "name": "name",
         "type_info": "Text"
-      },
-      {
-        "ordinal": 4,
-        "name": "org_role!: String",
-        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -38,9 +33,8 @@
       false,
       false,
       false,
-      false,
-      null
+      false
     ]
   },
-  "hash": "0fca2598e2c017297d83bc0316c95393d2a39145367014f9d4cb98fd86465101"
+  "hash": "f7fdba0676576f53481c1d91b46a780159ea27b4365aecd10a02cd1022c03517"
 }

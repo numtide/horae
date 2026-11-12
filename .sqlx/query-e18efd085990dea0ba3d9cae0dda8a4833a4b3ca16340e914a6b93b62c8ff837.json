@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE users SET org_role = 'member' WHERE id = $1",
+  "query": "UPDATE organizations SET access_revision = 7 WHERE id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "091fc89d228a3c25412d8fa2cecd40d52e6d9ee5466133a8dd6425a475f9bcbe"
+  "hash": "e18efd085990dea0ba3d9cae0dda8a4833a4b3ca16340e914a6b93b62c8ff837"
 }
