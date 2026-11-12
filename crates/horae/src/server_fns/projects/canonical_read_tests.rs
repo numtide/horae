@@ -40,13 +40,9 @@ pub(super) async fn fixture(
     .execute(pool)
     .await
     .unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        ids.org_id,
-    )
-    .execute(pool)
-    .await
-    .unwrap();
+    // Project reads ignore the policy; time contexts and project managers
+    // still read it until their own cut-over.
+    crate::server_fns::test_seed::use_policy_one(pool, ids.org_id).await;
     let viewer = User {
         id: ids.user_id,
         org_id: ids.org_id,
@@ -410,25 +406,19 @@ async fn canonical_project_financial_projection_matches_owning_project_evaluator
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_project_reads_reject_unknown_policy_and_invalid_grants(pool: PgPool) {
+async fn canonical_project_reads_reject_missing_and_invalid_grants(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
         BuiltInProfile::Administrator,
         PermissionSelection::new(&[Permission::ProjectReadAll]),
     )
     .await;
-    for policy in [2, 1] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
-            ids.org_id,
-            policy
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        if policy == 1 {
+    for state in ["malformed", "missing"] {
+        if state == "malformed" {
             sqlx::query!("UPDATE person_permission_states SET grants=ARRAY['unknown_permission'] WHERE org_id=$1",
                 ids.org_id).execute(&pool).await.unwrap();
+        } else {
+            crate::server_fns::test_seed::clear_state(&pool, ids.user_id).await;
         }
         assert!(matches!(
             project_team(&pool, &viewer, ids.project_id).await,

@@ -32,6 +32,16 @@ pub(crate) async fn seed_profile(pool: &PgPool, profile: BuiltInProfile) -> Seed
     ids
 }
 
+/// Replaces the seeded person's permission state with `profile`'s built-in
+/// state, as if the permission editor had assigned it.
+pub(crate) async fn become_profile(pool: &PgPool, ids: &SeedIds, profile: BuiltInProfile) {
+    clear_state(pool, ids.user_id).await;
+    let mut connection = pool.acquire().await.unwrap();
+    crate::server_fns::provisioning::provision(&mut connection, ids.org_id, ids.user_id, profile)
+        .await
+        .unwrap();
+}
+
 /// Gives the seeded person exactly `permissions` (plus prerequisites and the
 /// Member floor), as the permission editor would: the organization's access
 /// revision moves in the same transaction, so a reader holding the

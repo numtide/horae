@@ -503,7 +503,7 @@ fn restore_project_list_focus() {
 
 #[component]
 pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
-    let mut binding = use_signal(|| None::<(PermissionRequester, bool)>);
+    let mut binding = use_signal(|| None::<PermissionRequester>);
     // The last overview admitted under `binding`. It stays on screen while a
     // reload runs or after one fails, so the content below keeps its filters
     // and selection. A denied or changed requester drops it, and the content
@@ -512,11 +512,7 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
     let bulk_success = use_signal(|| None::<String>);
     let mut projects = use_resource(move || async move {
         let expected = *binding.peek();
-        let response = match server_fns::get_project_overview(
-            expected.map(|(requester, _)| requester),
-        )
-        .await
-        {
+        let response = match server_fns::get_project_overview(expected).await {
             Ok(response) => response,
             Err(error) => {
                 if access_denied(&error) {
@@ -525,11 +521,11 @@ pub fn ProjectList(#[props(default)] initial_client: Option<Uuid>) -> Element {
                 return Err(error);
             }
         };
-        let current = (response.requester, response.canonical_permissions);
+        let current = response.requester;
         if expected.is_some_and(|expected| expected != current) {
             admitted.set(None);
             return Err(ServerFnError::new(
-                "Your session or project policy changed. Reload this page to continue.",
+                "Your session changed. Reload this page to continue.",
             ));
         }
         binding.set(Some(current));
@@ -619,7 +615,7 @@ fn ProjectListContent(
 
     let can_import = overview.can_import;
     let can_create = overview.can_create;
-    let is_manager = overview.can_change_legacy_status;
+    let can_change_status = overview.can_change_status;
     let tagged = use_memo(move || {
         tag_filter().map(|tag| {
             let tags = tags_res.read();
@@ -759,7 +755,7 @@ fn ProjectListContent(
                     if can_create {
                         Link { to: Route::NewProject {}, class: "btn btn-primary py-2 px-4", "New project" }
                     }
-                    if is_manager {
+                    if can_change_status {
                         Menu {
                             id: "project-bulk-menu", label: "⚡ Actions", align_right: true,
                             trigger_class: "text-sm py-2 px-4",
@@ -892,7 +888,12 @@ fn ProjectListContent(
                 {
                     let list = &overview.projects;
                     let visible = visible.read();
-                    let visible_ids: BTreeSet<Uuid> = visible.iter().map(|&index| catalog.rows[index].project.id).collect();
+                    // Only rows this viewer may archive can be selected.
+                    let visible_ids: BTreeSet<Uuid> = visible
+                        .iter()
+                        .map(|&index| catalog.rows[index].project.id)
+                        .filter(|id| catalog.editable.contains(id))
+                        .collect();
                     let all_selected = !visible_ids.is_empty() && selected_count == visible_ids.len();
                     // The catalog is already in display order, so consecutive rows
                     // of one client form its group.
@@ -903,9 +904,7 @@ fn ProjectListContent(
                             _ => groups.push((row.project.client_id, row.client_name.as_deref(), vec![row])),
                         }
                     }
-                    // Client Detail admits every legacy reader to their organization's
-                    // clients; the overview carries no policy-one client grant.
-                    let link_clients = !overview.canonical_permissions;
+                    let link_clients = overview.can_open_clients;
                     if groups.is_empty() {
                         rsx! {
                             div { class: "empty-state bg-secondary border rounded-xl px-6 justify-center",
@@ -952,9 +951,9 @@ fn ProjectListContent(
                         rsx! {
                             div { class: "bg-secondary border rounded-xl overflow-hidden",
                                 div { class: "proj-scroll overflow-x-auto", role: "region", aria_label: "Projects by client", tabindex: "0",
-                                div { class: if is_manager { "proj-grid proj-grid-selectable grid" } else { "proj-grid grid" },
+                                div { class: if can_change_status { "proj-grid proj-grid-selectable grid" } else { "proj-grid grid" },
                                 div { class: "proj-head grid items-center py-3 px-5 text-xs uppercase text-label border-b",
-                                    if is_manager {
+                                    if can_change_status {
                                         div { class: "flex items-center",
                                             Checkbox {
                                                 checked: all_selected, mixed: selected_count > 0 && !all_selected,
@@ -992,15 +991,17 @@ fn ProjectListContent(
                                             let pname = &row.label;
                                             rsx! {
                                             div { class: "proj-row grid items-center py-4 px-5 text-sm", key: "{p.id}",
-                                            if is_manager {
+                                            if can_change_status {
                                                 div { class: "flex items-center",
-                                                    Checkbox {
-                                                        checked: selected.read().contains(&p.id), compact: true,
-                                                        label: "Select {pname}", disabled: bulk_busy(),
-                                                        onclick: move |_| {
-                                                            let mut ids = selected.write();
-                                                            if !ids.remove(&id) { ids.insert(id); }
-                                                        },
+                                                    if catalog.editable.contains(&p.id) {
+                                                        Checkbox {
+                                                            checked: selected.read().contains(&p.id), compact: true,
+                                                            label: "Select {pname}", disabled: bulk_busy(),
+                                                            onclick: move |_| {
+                                                                let mut ids = selected.write();
+                                                                if !ids.remove(&id) { ids.insert(id); }
+                                                            },
+                                                        }
                                                     }
                                                 }
                                             }
@@ -1076,9 +1077,8 @@ fn ProjectListContent(
                                                 }
                                             }
                                             div { class: "flex justify-end",
-                                                if catalog.editable.contains(&p.id) || is_manager {
+                                                if catalog.editable.contains(&p.id) {
                                                     Menu { id: "project-actions-{p.id}", label: "Actions", align_right: true,
-                                                        if catalog.editable.contains(&p.id) {
                                                         MenuItem {
                                                             onclick: {
                                                                 let id = p.id;
@@ -1086,8 +1086,6 @@ fn ProjectListContent(
                                                             },
                                                             "Edit"
                                                         }
-                                                        }
-                                                        if is_manager {
                                                         MenuDivider {}
                                                         MenuItem {
                                                             onclick: {
@@ -1101,7 +1099,6 @@ fn ProjectListContent(
                                                                 )
                                                             },
                                                             if p.active { "Archive" } else { "Unarchive" }
-                                                        }
                                                         }
                                                     }
                                                 } else {
@@ -1252,16 +1249,12 @@ const CONFLICT: u16 = 409;
 
 #[component]
 fn ProjectDetailContent(id: Uuid) -> Element {
-    let mut binding = use_signal(|| None::<(PermissionRequester, bool)>);
+    let mut binding = use_signal(|| None::<PermissionRequester>);
     let mut access_lost = use_signal(|| false);
     let mut details = use_resource(move || async move {
         let expected = *binding.peek();
-        let view = server_fns::get_project_detail_view(
-            id.to_string(),
-            expected.map(|(requester, _)| requester),
-        )
-        .await?;
-        let current = (view.requester, view.canonical_permissions);
+        let view = server_fns::get_project_detail_view(id.to_string(), expected).await?;
+        let current = view.requester;
         if view.project.id != id || expected.is_some_and(|expected| expected != current) {
             return Err(ServerFnError::new("Project access changed"));
         }
@@ -1299,7 +1292,7 @@ fn ProjectDetailContent(id: Uuid) -> Element {
     // The confirmation and Undo both write the absolute status under the bound
     // requester. A failure shows where it was requested: the dialog or the toast.
     let mut write_status = move |active: bool| {
-        let Some((requester, _)) = *binding.peek() else {
+        let Some(requester) = *binding.peek() else {
             return;
         };
         if status_busy() {
@@ -1623,10 +1616,10 @@ mod list_tests {
                 org_id: Uuid::nil(),
                 user_id: Uuid::nil(),
             },
-            canonical_permissions: true,
             can_create: false,
             can_import: false,
-            can_change_legacy_status: false,
+            can_change_status: false,
+            can_open_clients: false,
             projects,
         }
     }

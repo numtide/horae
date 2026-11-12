@@ -131,7 +131,7 @@ async fn canonical_project_api_managed_scope_requires_current_designation(pool: 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_api_rejects_malformed_state_even_without_visible_rows(pool: PgPool) {
-    for invalid in ["catalog", "grants", "missing", "policy"] {
+    for invalid in ["catalog", "grants", "missing"] {
         let (ids, app) = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
         match invalid {
             "catalog" => {
@@ -156,15 +156,6 @@ async fn canonical_project_api_rejects_malformed_state_even_without_visible_rows
                 sqlx::query!(
                     "DELETE FROM person_permission_states WHERE user_id=$1",
                     ids.user_id
-                )
-                .execute(&pool)
-                .await
-                .unwrap();
-            }
-            "policy" => {
-                sqlx::query!(
-                    "UPDATE organizations SET permission_policy_version=999 WHERE id=$1",
-                    ids.org_id
                 )
                 .execute(&pool)
                 .await

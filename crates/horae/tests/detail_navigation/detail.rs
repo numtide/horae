@@ -7,7 +7,6 @@ fn view() -> project::ProjectDetailView {
             org_id: Uuid::from_u128(10),
             user_id: Uuid::from_u128(20),
         },
-        canonical_permissions: true,
         project: project::ProjectDetails {
             id: Uuid::from_u128(1),
             name: "Visible project".into(),
@@ -128,8 +127,8 @@ async fn pending_and_denied_detail_never_mount_sensitive_children_or_render_raw_
 }
 
 #[tokio::test]
-async fn detail_refresh_keeps_initial_identity_and_rejects_wrong_project_or_policy() {
-    for change in ["user", "organization", "policy", "project"] {
+async fn detail_refresh_keeps_initial_identity_and_rejects_wrong_project() {
+    for change in ["user", "organization", "project"] {
         let probe = probe();
         let initial = view();
         let mut dom = mount(&probe);
@@ -145,7 +144,6 @@ async fn detail_refresh_keeps_initial_identity_and_rejects_wrong_project_or_poli
         match change {
             "user" => changed.requester.user_id = Uuid::now_v7(),
             "organization" => changed.requester.org_id = Uuid::now_v7(),
-            "policy" => changed.canonical_permissions = false,
             _ => changed.project.id = Uuid::now_v7(),
         }
         changed.project.name = "Other account project".into();
@@ -203,13 +201,12 @@ fn menu_items(html: &str) -> Vec<String> {
         .collect()
 }
 
-/// The only policy that offers status changes: `set_project_active` checks the legacy role.
-fn legacy_probe() -> Probe {
+/// A viewer the server lets change this project's status.
+fn status_probe() -> Probe {
     let probe = probe();
     {
         let mut view = probe.detail_view.borrow_mut();
         let view = view.as_mut().unwrap();
-        view.canonical_permissions = false;
         view.can_change_status = true;
     }
     probe
@@ -218,8 +215,8 @@ fn legacy_probe() -> Probe {
 #[tokio::test]
 async fn header_shows_real_identity_and_only_the_offered_actions() {
     let project = Uuid::from_u128(1);
-    let legacy = legacy_probe();
-    let dom = mount(&legacy);
+    let writer = status_probe();
+    let dom = mount(&writer);
     let html = dioxus::ssr::render(&dom);
     for expected in [
         "[PROJECT-1] Visible project".to_string(),
@@ -234,15 +231,15 @@ async fn header_shows_real_identity_and_only_the_offered_actions() {
         assert!(html.contains(&expected), "missing {expected}: {html}");
     }
     assert_eq!(menu_items(&html), ["Archive"], "{html}");
-    // A legacy manager who can edit gets no separate fee panel or fee read.
+    // A writer who can edit gets no separate fee panel or fee read.
     for hidden in ["Reactivate", "Archived", "Fee balances"] {
         assert!(!html.contains(hidden), "{hidden}: {html}");
     }
-    assert!(legacy.auxiliary_requesters.borrow().is_empty());
+    assert!(writer.auxiliary_requesters.borrow().is_empty());
 
-    // Policy one offers no role-derived status change, even with edit authority.
-    let canonical = probe();
-    let html = dioxus::ssr::render(&mount(&canonical));
+    // The actions menu follows the server's status flag alone.
+    let without_status = probe();
+    let html = dioxus::ssr::render(&mount(&without_status));
     assert!(
         html.contains("[PROJECT-1] Visible project") && html.contains(&edit_href(project)),
         "{html}"
@@ -250,7 +247,7 @@ async fn header_shows_real_identity_and_only_the_offered_actions() {
     assert!(!html.contains("project-detail-actions"), "{html}");
     assert!(menu_items(&html).is_empty(), "{html}");
 
-    let restricted = legacy_probe();
+    let restricted = status_probe();
     {
         let mut view = restricted.detail_view.borrow_mut();
         let view = view.as_mut().unwrap();
@@ -283,16 +280,16 @@ async fn header_shows_real_identity_and_only_the_offered_actions() {
 
 #[tokio::test]
 async fn archived_project_offers_reactivation_and_keeps_saved_information() {
-    let legacy = legacy_probe();
+    let writer = status_probe();
     {
-        let mut view = legacy.detail_view.borrow_mut();
+        let mut view = writer.detail_view.borrow_mut();
         let view = view.as_mut().unwrap();
         view.active = false;
         view.project.tags = vec!["retained-tag".into()];
         view.project.admin_notes = Some("Retained private note".into());
         view.project.starts_on = chrono::NaiveDate::from_ymd_opt(2026, 9, 1);
     }
-    let html = dioxus::ssr::render(&mount(&legacy));
+    let html = dioxus::ssr::render(&mount(&writer));
     for expected in [
         "Archived",
         "Project information",

@@ -81,8 +81,8 @@ async fn client_api_preserves_filters_counts_and_foreign_id_denial(pool: PgPool)
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn client_api_rejects_unavailable_policy_and_inactive_sessions(pool: PgPool) {
-    for state in ["unknown_policy", "missing", "malformed", "inactive"] {
+async fn client_api_rejects_unavailable_state_and_inactive_sessions(pool: PgPool) {
+    for state in ["missing", "malformed", "inactive"] {
         let (ids, app) = canonical(
             &pool,
             BuiltInProfile::Administrator,
@@ -90,15 +90,6 @@ async fn client_api_rejects_unavailable_policy_and_inactive_sessions(pool: PgPoo
         )
         .await;
         match state {
-            "unknown_policy" => {
-                sqlx::query!(
-                    "UPDATE organizations SET permission_policy_version=99 WHERE id=$1",
-                    ids.org_id
-                )
-                .execute(&pool)
-                .await
-                .unwrap();
-            }
             "missing" => {
                 sqlx::query!(
                     "DELETE FROM person_permission_states WHERE user_id=$1",

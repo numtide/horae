@@ -9,8 +9,8 @@ pub(super) struct RateView {
     pub cost: bool,
 }
 
-/// A caller's authority over the users endpoints under the active policy,
-/// held in one transaction with the reads it authorizes.
+/// A caller's authority over the users endpoints, held in one transaction
+/// with the reads it authorizes.
 pub(super) struct UserAccess<'a> {
     pub access: ProjectReadAccess<'a>,
     pub list: bool,
@@ -32,22 +32,12 @@ pub(super) async fn begin<'a>(
             error => internal(error),
         })?
         .ok_or_else(|| forbidden("User access is unavailable"))?;
-    let (list, rates) = if access.legacy() {
-        let manager = caller.org_role.is_manager_or_above();
-        let rates = RateView {
-            billable: manager,
-            cost: caller.org_role == OrgRole::Admin,
-        };
-        (manager, rates)
-    } else {
-        // Managed-only rate grants stay out of the API: honouring them would
-        // need a per-row management lookup, and leaving them out is stricter.
-        let people = access.has(Permission::PeopleReadAll);
-        let rates = RateView {
-            billable: people && access.has(Permission::BillableRateReadAll),
-            cost: people && access.has(Permission::CostRateReadAll),
-        };
-        (people, rates)
+    // Managed-only rate grants stay out of the API: honouring them would need
+    // a per-row management lookup, and leaving them out is stricter.
+    let list = access.has(Permission::PeopleReadAll);
+    let rates = RateView {
+        billable: list && access.has(Permission::BillableRateReadAll),
+        cost: list && access.has(Permission::CostRateReadAll),
     };
     Ok(UserAccess {
         access,

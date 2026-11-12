@@ -269,7 +269,12 @@ async fn foreign_missing_and_rebound_requests_fail_closed(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unavailable_permission_state_and_inactive_actors_fail_closed(pool: PgPool) {
     for state in ["missing", "malformed", "inactive"] {
-        let ids = policy_one(&pool, BuiltInProfile::Administrator, &[Permission::ClientReadAll]).await;
+        let ids = policy_one(
+            &pool,
+            BuiltInProfile::Administrator,
+            &[Permission::ClientReadAll],
+        )
+        .await;
         match state {
             "missing" => sqlx::query!(
                 "DELETE FROM person_permission_states WHERE user_id=$1",

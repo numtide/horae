@@ -191,7 +191,7 @@ pub(super) async fn progress_for_viewer(
         None,
         Some(viewer_id),
         date,
-        access.permissions.as_ref(),
+        Some(&access.permissions),
         false,
     )
     .await
@@ -261,7 +261,7 @@ pub(super) async fn project_budget(
 ) -> Result<Option<crate::models::project::ProjectDetailBudget>, ServerFnError> {
     use horae_core::budget::{BudgetHeadline, headline};
 
-    let permissions = access.permissions.as_ref();
+    let permissions = Some(&access.permissions);
     let has = |permission| permissions.is_some_and(|state| state.grants.contains(permission));
     // Non-arithmetic facts first, so withheld or unallocated budgets never
     // value an entry. The predicates and joins match the consumption queries.
@@ -360,7 +360,7 @@ pub(super) async fn project_budget(
             &mut savepoint,
             org_id,
             viewer_id,
-            permissions,
+            &access.permissions,
             Some(project_id),
             meta.kind == BudgetKind::Amount,
         )

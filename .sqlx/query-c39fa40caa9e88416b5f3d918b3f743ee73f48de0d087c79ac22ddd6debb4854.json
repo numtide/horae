@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE projects SET active = $3\n          WHERE id = $1 AND org_id = $2\n            AND active IS DISTINCT FROM $3\n         RETURNING id, org_id, client_id, code, name,\n                   project_type as \"project_type: ProjectType\", currency, rate_cents,\n                   starts_on as \"starts_on: chrono::NaiveDate\",\n                   ends_on as \"ends_on: chrono::NaiveDate\",\n                   budget_kind as \"budget_kind: BudgetKind\",\n                   budget_amount_cents, budget_minutes, active,\n                   created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "UPDATE projects SET active = $3\n              WHERE id = $1 AND org_id = $2 AND active IS DISTINCT FROM $3\n             RETURNING id, org_id, client_id, code, name,\n                       project_type as \"project_type: ProjectType\", currency, rate_cents,\n                       starts_on as \"starts_on: chrono::NaiveDate\",\n                       ends_on as \"ends_on: chrono::NaiveDate\",\n                       budget_kind as \"budget_kind: BudgetKind\",\n                       budget_amount_cents, budget_minutes, active,\n                       created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
   "describe": {
     "columns": [
       {
@@ -127,5 +127,5 @@
       false
     ]
   },
-  "hash": "bdc526dbbd19635f06492902d4b3bfb10cfa5eb4262a2e8ba7877572386db51b"
+  "hash": "c39fa40caa9e88416b5f3d918b3f743ee73f48de0d087c79ac22ddd6debb4854"
 }

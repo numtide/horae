@@ -38,18 +38,21 @@ pub struct ProjectOverviewClient {
 pub struct ProjectOverviewRow {
     pub project: Project,
     pub client: Option<ProjectOverviewClient>,
-    /// Display affordance only; every edit reloads current server authority.
+    /// Display affordance for editing and archiving; every write reloads
+    /// current server authority.
     pub can_edit: bool,
 }
 
-/// Rows and workflow labels bound to one authenticated requester and policy mode.
+/// Rows and workflow labels bound to one authenticated requester.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProjectOverview {
     pub requester: super::permission_editor::PermissionRequester,
-    pub canonical_permissions: bool,
     pub can_create: bool,
     pub can_import: bool,
-    pub can_change_legacy_status: bool,
+    /// Whether to offer archiving at all; each row's `can_edit` says which.
+    pub can_change_status: bool,
+    /// Whether the Clients page would admit this viewer.
+    pub can_open_clients: bool,
     pub projects: Vec<ProjectOverviewRow>,
 }
 
@@ -114,7 +117,6 @@ pub struct ProjectDetailIdentity {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProjectDetailView {
     pub requester: super::permission_editor::PermissionRequester,
-    pub canonical_permissions: bool,
     pub project: ProjectDetails,
     pub client_id: Uuid,
     pub project_type: ProjectType,
@@ -123,8 +125,7 @@ pub struct ProjectDetailView {
     pub can_edit: bool,
     /// Whether the client's own detail page would admit this viewer.
     pub can_open_client: bool,
-    /// Mirrors `set_project_active`, which still checks only the legacy role,
-    /// so policy one offers no role-derived status change.
+    /// Mirrors `ops::projects::set_active` for this project.
     pub can_change_status: bool,
     pub team: Vec<ProjectDetailIdentity>,
     pub tasks: Vec<ProjectDetailIdentity>,
