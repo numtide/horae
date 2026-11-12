@@ -39,7 +39,6 @@ const protectedState = () => sql(`SELECT json_build_array(
 const leaves = value => value && typeof value === 'object' ? Object.values(value).flatMap(leaves) : [value];
 const receipts = () => sql(`SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY id), '[]'::jsonb) FROM permission_change_receipts r WHERE org_id='${org}'`);
 const initialReceipts = receipts();
-assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
 let restoreSeededStates = () => {};
 
 (async () => {
@@ -98,8 +97,7 @@ let restoreSeededStates = () => {};
       INSERT INTO project_management_assignments (id,org_id,project_id,manager_id) VALUES
         ('${id(9)}','${org}','${project}','${archived}'), ('${id(10)}','${org}','${project}','${outside}');
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-        VALUES ('${id(11)}','${org}','${actor.id}',1,${grantsSql(edit)},false,'individual');
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
+        VALUES ('${id(11)}','${org}','${actor.id}',1,${grantsSql(edit)},false,'individual'); COMMIT;`);
     const protectedBefore = protectedState();
     const editorResponse = page.waitForResponse(response => response.url().includes('/api/load_project_editor'));
     await open();
@@ -260,7 +258,6 @@ let restoreSeededStates = () => {};
   } finally {
     await browser.close();
     sql(`BEGIN;
-      UPDATE organizations SET permission_policy_version=0 WHERE id='${org}';
       DELETE FROM person_permission_states WHERE id='${id(11)}';
       DELETE FROM time_entries WHERE id='${id(30)}';
       DELETE FROM project_management_assignments WHERE project_id='${project}';

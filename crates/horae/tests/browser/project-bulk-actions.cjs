@@ -57,9 +57,6 @@ if (!selectionOnly && !fixturesOnly) {
           projects: fixtures.map(project => ({ ...overview.projects[0], project, can_edit: role !== 'member' })),
         } });
       }
-      if (path.startsWith('/api/get_me')) {
-        return route.fulfill({ json: { ...await (await route.fetch()).json(), org_role: role } });
-      }
       return route.continue();
     });
     async function visit() {

@@ -37,21 +37,19 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
     assert.equal(identity.status(), 200, await identity.text());
     actor = await identity.json();
     for (const id of [actor.id, actor.org_id]) assert.match(id, /^[0-9a-f-]{36}$/);
-    assert.equal(actor.org_role, 'admin');
+    assert.ok(!Object.hasOwn(actor, 'org_role'), 'the session identity carries no role');
     assert.equal(sql(`SELECT active FROM users WHERE id='${actor.id}' AND org_id='${actor.org_id}'`), 't');
-    assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
     restoreSeededStates = setAsideSeededStates(actor.org_id);
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
     await page.goto(`${base}/settings`);
-    await expect(section).toContainText('Detailed permissions are not enabled');
+    // Without a stored state there is nothing to explain, whatever the policy.
+    await expect(section.getByRole('alert')).toContainText('Could not load your permissions');
     await expect(page.getByRole('heading', { name: 'Profile', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Appearance', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Plugins', exact: true })).toBeVisible();
 
-    sql(`BEGIN;
-      INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
-      VALUES ('${stateId}', '${actor.org_id}', '${actor.id}', 1, ${floor} || ARRAY['invoice_read_managed'], false, 'individual');
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'; COMMIT;`);
+    sql(`INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
+      VALUES ('${stateId}', '${actor.org_id}', '${actor.id}', 1, ${floor} || ARRAY['invoice_read_managed'], false, 'individual')`);
     fixtureStarted = true;
     await refresh.focus();
     await page.keyboard.press('Shift+Tab');
@@ -113,13 +111,12 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
     await expect(section.getByRole('alert')).toContainText('Sign in again');
     await expect(section).not.toContainText('View your own time');
     assert.deepEqual(errors, []);
-    console.log(`PASS: own permissions in Chromium ${browser.version()}: real reads, legacy/canonical states, exact grants, independent admin identity, keyboard refresh, pending suppression, error recovery, deactivation, both themes and responsive/CSS-zoom layouts`);
+    console.log(`PASS: own permissions in Chromium ${browser.version()}: real reads, missing and stored states, exact grants, independent admin identity, keyboard refresh, pending suppression, error recovery, deactivation, both themes and responsive/CSS-zoom layouts`);
   } finally {
     releaseRead?.();
     await browser.close();
     if (fixtureStarted) sql(`BEGIN;
       UPDATE users SET active=true WHERE id='${actor.id}';
-      UPDATE organizations SET permission_policy_version=0 WHERE id='${actor.org_id}';
       DELETE FROM person_permission_states WHERE id='${stateId}' AND org_id='${actor.org_id}'; COMMIT;`);
     restoreSeededStates?.();
   }

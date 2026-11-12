@@ -16,7 +16,6 @@ const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id, org_id, nam
 assert.match(actor.id, /^[0-9a-f-]{36}$/);
 assert.match(actor.org_id, /^[0-9a-f-]{36}$/);
 assert.equal(sql("SELECT count(*) FROM users WHERE active AND org_role='admin'"), '1', 'The development login must have exactly one candidate before testing canonical permissions');
-assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
 const restoreSeededStates = setAsideSeededStates(actor.org_id);
 assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
 assert.equal(sql(`SELECT count(*) FROM permission_change_receipts WHERE org_id='${actor.org_id}'`), '0');
@@ -127,7 +126,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
         ('${actorState}', '${actor.org_id}', '${actor.id}', 1, ${array(administrator)}, true, 'built_in', 'administrator'),
         ('${personState}', '${actor.org_id}', '${person}', 1, ${array(floor)}, false, 'built_in', 'member'),
         ('${otherState}', '${actor.org_id}', '${otherActor}', 1, ${array(administrator)}, true, 'built_in', 'administrator');
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'; COMMIT;`);
+      COMMIT;`);
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
@@ -196,31 +195,22 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toBeVisible();
     await readsFinished();
     assert.ok(!requests.slice(readStart).some(path => /^\/api\/(list_people|list_users|list_tasks|load_permission_editor|list_permission_subjects)/.test(path)));
-    // A legacy admin role grants no directory read once canonical grants apply.
+    // A stored `admin` role grants no directory read and opens no admin
+    // section: with floor grants there is no Administration entry.
     await expect(railTeam).toHaveCount(0);
-    // Importers are still open to that legacy admin, so Administration leads
-    // there. Workspace settings need the company grant, not the role.
-    await expectUserMenu('/admin/importers');
-    await expect(page.locator('.adm-main .page-title')).toHaveText('Importers');
-    // A plain member with floor grants has no admin section, so no entry.
-    sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`);
-    await page.reload();
     // The server render only says "Loading…", so this waits for hydration too.
-    await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toBeVisible();
     await expect(page.locator('.adm-nav')).toHaveCount(0);
     await expectUserMenu(null);
-    sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'`);
-    await page.goto(`${base}/admin/users`);
-    await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toBeVisible();
-    sql(`UPDATE organizations SET permission_policy_version=0 WHERE id='${actor.org_id}'`);
+    // The Administrator identity alone opens Importers, so Administration
+    // leads there. Workspace settings need the company grant.
+    sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}';
+      UPDATE person_permission_states SET is_administrator=true WHERE id='${actorState}'`);
     await page.reload();
-    // People has no role-based fallback: without stored own access it says so.
-    await expect(page.getByRole('alert').filter({ hasText: 'People access is unavailable' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Invite User', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /^Edit permissions for/ })).toHaveCount(0);
-    await expect(railTeam).toBeVisible();
-    await expectUserMenu('/admin/users');
-    sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}';
+    await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toBeVisible();
+    await expectUserMenu('/admin/importers');
+    await expect(page.locator('.adm-main .page-title')).toHaveText('Importers');
+    await expect(railTeam).toHaveCount(0);
+    sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}';
       UPDATE person_permission_states SET grants=${array(administrator)}, is_administrator=true WHERE id='${actorState}';
       DELETE FROM person_management_assignments WHERE id='01960000-0000-7000-8000-000000000708'`);
     console.log('PASS: canonical People separates read scope, Administrator editing and legacy roles without legacy reads');
@@ -425,13 +415,11 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     assert.equal(await record(), templateRecord);
     assert.equal(receipts(), templateCount);
     await expect(recovery.locator('#permission-recovery-discard')).toBeDisabled();
-    sql(`UPDATE organizations SET permission_policy_version=0 WHERE id='${actor.org_id}'`);
     await page.reload();
     await expect(recovery).toBeVisible();
     assert.equal(await record(), templateRecord);
     assert.equal(saves.length, callsBeforeSwitch + 1);
-    sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}';
-      UPDATE person_permission_states SET is_administrator=true, grants=${array(administrator)} WHERE id='${actorState}'`);
+    sql(`UPDATE person_permission_states SET is_administrator=true, grants=${array(administrator)} WHERE id='${actorState}'`);
     await recovery.locator('#permission-recovery-retry').click();
     await expect(recovery.getByText(/Custom profile request completed/)).toBeVisible();
     assert.deepEqual(saves.at(-1), templateCommand);
@@ -614,10 +602,9 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
       DELETE FROM users WHERE id='${person}' AND email='permission-browser@example.test';
       DELETE FROM users WHERE id='${otherActor}' AND email='permission-other-browser@example.test';
       UPDATE users SET org_role='admin' WHERE id='${actor.id}';
-      UPDATE organizations SET permission_policy_version=0, access_revision=${originalRevision} WHERE id='${actor.org_id}'; COMMIT;`);
+      UPDATE organizations SET access_revision=${originalRevision} WHERE id='${actor.org_id}'; COMMIT;`);
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
     assert.equal(sql(`SELECT count(*) FROM permission_change_receipts WHERE org_id='${actor.org_id}'`), '0');
-    assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
     restoreSeededStates();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -57,9 +57,7 @@ let restoreSeededStates = () => {};
       INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable,notes)
         VALUES ('${id(6)}','${org}','${person}','${project}','${task}','${date}',120,false,'Private report note');
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-        VALUES ('${state}','${org}','${actor.id}',1,${floor},false,'individual');
-      -- The scoped entry reader belongs to the time domain and still reads the policy.
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
+        VALUES ('${state}','${org}','${actor.id}',1,${floor},false,'individual'); COMMIT;`);
     requests.length = 0;
     await page.goto(`${base}/reports`);
     await expect(page.locator('#report-refresh')).toBeEnabled();
@@ -536,7 +534,6 @@ let restoreSeededStates = () => {};
     await browser.close();
     sql(`BEGIN;
       UPDATE users SET active=true WHERE id='${actor.id}';
-      UPDATE organizations SET permission_policy_version=0 WHERE id='${org}';
       DELETE FROM person_permission_states WHERE id='${state}';
       DELETE FROM time_entries WHERE project_id IN ('${project}','${id(9)}');
       DELETE FROM project_tag_links WHERE id='${id(8)}';

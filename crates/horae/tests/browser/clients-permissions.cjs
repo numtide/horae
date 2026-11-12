@@ -66,8 +66,7 @@ let actor, org, owned = false, restoreSeededStates;
     await page.goto(`${base}/clients`);
     actor = await (await me).json();
     org = actor.org_id;
-    // Only this suite's rows are created and removed; the policy is restored to its observed value.
-    assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
+    // Only this suite's rows are created and removed.
     restoreSeededStates = setAsideSeededStates(org);
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE user_id='${actor.id}'`), '0');
     assert.equal(sql(`SELECT count(*) FROM clients WHERE id IN ('${unset}','${zero}')`), '0');
@@ -79,7 +78,6 @@ let actor, org, owned = false, restoreSeededStates;
       INSERT INTO project_management_assignments (id,org_id,project_id,manager_id) VALUES ('${assignment}','${org}','${project}','${actor.id}');
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ('${state}','${org}','${actor.id}',1,${grantsSql([...catalog, 'client_write_all'])},false,'individual');
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${org}';
       COMMIT;`);
 
     // A save's reload that fails or is rebound consumes the opener refocus
@@ -211,7 +209,6 @@ let actor, org, owned = false, restoreSeededStates;
   } finally {
     await browser.close();
     if (owned) sql(`BEGIN;
-      UPDATE organizations SET permission_policy_version=0 WHERE id='${org}';
       DELETE FROM person_permission_states WHERE id='${state}';
       DELETE FROM project_management_assignments WHERE id='${assignment}';
       DELETE FROM projects WHERE id='${project}';

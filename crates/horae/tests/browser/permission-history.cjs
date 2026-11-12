@@ -49,11 +49,9 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
     assert.equal(identity.status(), 200, await identity.text());
     actor = await identity.json();
     for (const id of [actor.id, actor.org_id]) assert.match(id, /^[0-9a-f-]{36}$/);
-    assert.equal(actor.org_role, 'admin');
     assert.equal(sql(`SELECT active FROM users WHERE id='${actor.id}' AND org_id='${actor.org_id}'`), 't');
     project = sql(`SELECT id FROM projects WHERE org_id='${actor.org_id}' AND active ORDER BY id LIMIT 1`);
     assert.match(project, /^[0-9a-f-]{36}$/);
-    assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
     restoreSeededStates = setAsideSeededStates(actor.org_id);
     // Earlier suites designate managers when they create projects, which
     // leaves receipts; history starts empty here and gets them back after.
@@ -63,11 +61,9 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
     }
     initialRevision = sql(`SELECT access_revision FROM organizations WHERE id='${actor.org_id}'`);
     assert.match(initialRevision, /^\d+$/);
-    sql(`BEGIN;
-      INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
+    sql(`INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
       VALUES ('${stateId}', '${actor.org_id}', '${actor.id}', 1,
-        ARRAY['time_read_own','time_write_own','expense_read_own','expense_write_own','project_read_managed','project_write_managed','project_read_all','project_write_all'], true, 'individual');
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'; COMMIT;`);
+        ARRAY['time_read_own','time_write_own','expense_read_own','expense_write_own','project_read_managed','project_write_managed','project_read_all','project_write_all'], true, 'individual')`);
     fixtureStarted = true;
     await page.goto(`${base}/admin/audit`);
     await expect(page.getByRole('status')).toContainText('No permission events recorded yet');
@@ -175,7 +171,7 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
       DELETE FROM project_management_assignments WHERE org_id='${actor.org_id}' AND manager_id='${actor.id}' AND project_id='${project}';
       DELETE FROM permission_change_receipts WHERE org_id='${actor.org_id}' AND actor_user_id='${actor.id}' AND request_id::text LIKE '01960000-0000-7000-8000-%';
       DELETE FROM person_permission_states WHERE id='${stateId}' AND org_id='${actor.org_id}';
-      UPDATE organizations SET permission_policy_version=0, access_revision=${initialRevision} WHERE id='${actor.org_id}'; COMMIT;`);
+      UPDATE organizations SET access_revision=${initialRevision} WHERE id='${actor.org_id}'; COMMIT;`);
     restoreSeededStates?.();
     restoreEarlierDelegation?.();
   }

@@ -20,7 +20,6 @@ const email = `people-management-${Date.now()}@example.com`;
 const state = '019f4500-0000-7000-8000-000000000001';
 const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
 const array = values => `ARRAY[${values.map(value => `'${value}'`).join(',')}]`;
-const policy = sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`);
 let restoreSeededStates = () => {};
 
 (async () => {
@@ -31,8 +30,6 @@ let restoreSeededStates = () => {};
   page.on('pageerror', error => errors.push(error.message));
   const row = name => page.locator('tbody tr').filter({ hasText: name });
   try {
-    // The People page answers from stored permissions only.
-    sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'`);
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
@@ -98,7 +95,7 @@ let restoreSeededStates = () => {};
     // The set-aside states include the added person's, so they go back first.
     sql(`DELETE FROM person_permission_states WHERE id='${state}'`);
     restoreSeededStates();
-    sql(`BEGIN; UPDATE organizations SET permission_policy_version=${policy} WHERE id='${actor.org_id}';
+    sql(`BEGIN;
       DELETE FROM person_permission_states WHERE user_id IN (SELECT id FROM users WHERE email='${email}');
       DELETE FROM users WHERE email='${email}'; COMMIT;`);
   }

@@ -29,7 +29,7 @@ const setAccess = (actorId, role, grants) => sql(`UPDATE users SET org_role = '$
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
   const context = await browser.newContext();
   const page = await context.newPage();
-  let actor, restoreSeededStates;
+  let actor, actorRole, restoreSeededStates;
   const endpoints = new Map(), pending = new Set(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => {
@@ -62,9 +62,10 @@ const setAccess = (actorId, role, grants) => sql(`UPDATE users SET org_role = '$
     actor = await json('get_me', {});
     assert.match(actor.id, /^[0-9a-f-]{36}$/);
     assert.match(actor.org_id, /^[0-9a-f-]{36}$/);
-    assert.equal(actor.org_role, 'admin');
-    assert.deepEqual(Object.keys(actor).sort(), ['email', 'id', 'name', 'org_id', 'org_role', 'timezone', 'utc_offset_seconds', 'workspace_timezone']);
+    assert.deepEqual(Object.keys(actor).sort(), ['email', 'id', 'name', 'org_id', 'timezone', 'utc_offset_seconds', 'workspace_timezone']);
     assert.equal(sql(`SELECT active FROM users WHERE id='${actor.id}' AND org_id='${actor.org_id}'`), 't');
+    // The stored role is dead data the scenarios overwrite; it goes back at the end.
+    actorRole = sql(`SELECT org_role FROM users WHERE id='${actor.id}'`);
     restoreSeededStates = setAsideSeededStates(actor.org_id);
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE user_id='${actor.id}'`), '0');
     sql(`INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
@@ -189,7 +190,7 @@ const setAccess = (actorId, role, grants) => sql(`UPDATE users SET org_role = '$
     console.log('PASS: clients inactive/anonymous access, foreign mutation and direct validation boundaries');
   } finally {
     await browser.close();
-    if (actor) sql(`UPDATE users SET org_role = '${actor.org_role}', active = true WHERE id = '${actor.id}';
+    if (actor) sql(`UPDATE users SET org_role = '${actorRole ?? 'admin'}', active = true WHERE id = '${actor.id}';
       DELETE FROM person_permission_states WHERE id = '${state}'`);
     restoreSeededStates?.();
   }
