@@ -475,10 +475,15 @@ fn form_payload(form: &ProjectForm) -> Result<serde_json::Value, ServerFnError> 
 /// settings (see [`Self::has_billable_settings`]) with `BillableRateWriteAll`.
 /// Blank rates inherit and untouched invoice defaults are the form's own, so
 /// creating a time-and-materials or non-billable project needs no such grant.
+///
+/// The catalogs the form offers show the people's, clients' and tasks'
+/// billable rates only with `BillableRateReadAll`: a project being created has
+/// no managers yet, so `BillableRateReadManaged` does not apply.
 #[cfg(feature = "server")]
 #[derive(Clone, Copy)]
 struct PrivateFields {
     read_costs: bool,
+    read_billable: bool,
     write_costs: bool,
     write_notes: bool,
     write_billable: bool,
@@ -490,6 +495,7 @@ impl PrivateFields {
         use horae_core::permissions::catalog::Permission;
         Self {
             read_costs: actor.has(Permission::CostRateReadAll),
+            read_billable: actor.has(Permission::BillableRateReadAll),
             write_costs: actor.has(Permission::CostRateWriteAll),
             write_notes: actor.has(Permission::ProjectWriteAll),
             write_billable: actor.has(Permission::BillableRateWriteAll),

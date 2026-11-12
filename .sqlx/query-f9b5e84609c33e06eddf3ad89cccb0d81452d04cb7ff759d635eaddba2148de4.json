@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, billable_default as billable, default_rate_cents, default_rate_currency FROM tasks\n         WHERE org_id = $1 AND active AND is_default\n         ORDER BY lower(name), id LIMIT 500",
+  "query": "SELECT id, name, billable_default as billable,\n                CASE WHEN $3 THEN default_rate_cents END as default_rate_cents,\n                CASE WHEN $3 THEN default_rate_currency END as default_rate_currency FROM tasks\n         WHERE org_id = $1 AND active AND id = ANY($2) ORDER BY lower(name), id",
   "describe": {
     "columns": [
       {
@@ -31,16 +31,18 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "UuidArray",
+        "Bool"
       ]
     },
     "nullable": [
       false,
       false,
       false,
-      true,
-      true
+      null,
+      null
     ]
   },
-  "hash": "e72ed2389a80bf5d66de537b3740620a888c0b518cfd07db85e44c9d0855074e"
+  "hash": "f9b5e84609c33e06eddf3ad89cccb0d81452d04cb7ff759d635eaddba2148de4"
 }

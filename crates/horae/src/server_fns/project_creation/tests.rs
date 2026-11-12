@@ -204,11 +204,7 @@ async fn missing_draft_responses_do_not_disclose_foreign_ownership(pool: PgPool)
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_dialog_validates_details_and_persists_an_explicit_zero_rate(pool: PgPool) {
     use crate::ops::testing::{seed_profile, set_grants};
-    let ids = seed_profile(
-        &pool,
-        horae_core::permissions::catalog::BuiltInProfile::Administrator,
-    )
-    .await;
+    let ids = seed_profile(&pool, BuiltInProfile::Administrator).await;
     let client =
         super::create_client_record(&pool, ids.user_id, ids.org_id, "  New client  ", "USD", "0")
             .await
@@ -1071,6 +1067,7 @@ async fn simultaneous_draft_updates_have_one_winner(pool: PgPool) {
 fn draft_validation_preserves_incomplete_input_but_bounds_its_size() {
     let all = PrivateFields {
         read_costs: true,
+        read_billable: true,
         write_costs: true,
         write_notes: true,
         write_billable: true,
@@ -1108,6 +1105,7 @@ fn managers_cannot_store_administrator_notes_or_costs_in_a_draft() {
     };
     let none = PrivateFields {
         read_costs: true,
+        read_billable: true,
         write_costs: false,
         write_notes: false,
         write_billable: false,
@@ -1147,6 +1145,7 @@ fn billable_settings_in_a_draft_need_the_billable_rate_grant() {
     use horae_core::types::ProjectType;
     let without = PrivateFields {
         read_costs: false,
+        read_billable: false,
         write_costs: false,
         write_notes: false,
         write_billable: false,
@@ -1595,4 +1594,185 @@ async fn finalized_task_links_inherit_default_rates_only_for_task_billing(pool: 
             );
         }
     }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn creation_catalogs_show_billable_rates_only_to_rate_readers(pool: PgPool) {
+    use crate::models::project_creation::CreationSearch;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    sqlx::query!(
+        "UPDATE users SET billable_rate_cents = 9000 WHERE id = $1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE tasks SET default_rate_cents = 7000, default_rate_currency = 'EUR', is_default = true
+         WHERE id = $1",
+        ids.task_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE clients SET default_rate_cents = 8000 WHERE id = $1",
+        ids.client_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    // A project being created has no managers, so only `BillableRateReadAll`
+    // shows the rates the form would inherit.
+    for (profile, reads) in [
+        (BuiltInProfile::Administrator, true),
+        (BuiltInProfile::ExecutiveManager, true),
+        (BuiltInProfile::ProjectManager, false),
+    ] {
+        become_profile(&pool, &ids, profile).await;
+        let options = super::load_creation_options(
+            &pool,
+            ids.user_id,
+            ids.org_id,
+            &CreationSearch::default(),
+            false,
+        )
+        .await
+        .unwrap();
+        let selected = super::load_selected_catalog(
+            &pool,
+            ids.user_id,
+            ids.org_id,
+            &[ids.task_id],
+            &[ids.user_id],
+        )
+        .await
+        .unwrap();
+        let client = super::load_selected_client(&pool, ids.user_id, ids.org_id, ids.client_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let task_rate = reads.then_some(7000);
+        let task_currency = reads.then(|| "EUR".to_owned());
+        for task in [
+            &options.tasks[0],
+            &options.common_tasks[0],
+            &selected.tasks[0],
+        ] {
+            assert_eq!(task.default_rate_cents, task_rate, "{profile:?}");
+            assert_eq!(task.default_rate_currency, task_currency, "{profile:?}");
+        }
+        for person in [&options.people[0], &selected.people[0]] {
+            assert_eq!(
+                person.billable_rate_cents,
+                reads.then_some(9000),
+                "{profile:?}"
+            );
+        }
+        for client in [&options.clients[0], &client] {
+            assert_eq!(
+                client.default_rate_cents,
+                reads.then_some(8000),
+                "{profile:?}"
+            );
+        }
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn hourly_projects_in_another_currency_need_the_billable_rate_grant(pool: PgPool) {
+    use horae_core::project::RateMode;
+    use horae_core::types::ProjectType;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let org_currency = sqlx::query_scalar!(
+        "SELECT default_currency FROM organizations WHERE id = $1",
+        ids.org_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let other = if org_currency == "USD" { "EUR" } else { "USD" };
+    let form = |name: &str, currency: &str, project_type, rate_mode, rate: &str| ProjectForm {
+        client_id: Some(ids.client_id),
+        name: name.into(),
+        currency: Some(currency.into()),
+        project_type,
+        rate_mode,
+        team: vec![ProjectMemberInput {
+            user_id: ids.user_id,
+            manager: false,
+            billable_rate: rate.into(),
+            cost_rate: String::new(),
+            budget: String::new(),
+        }],
+        ..Default::default()
+    };
+    let (user_id, org_id) = (ids.user_id, ids.org_id);
+    let create = |form: ProjectForm| {
+        let pool = pool.clone();
+        async move {
+            // A refused creation leaves its draft open, and a creator has one.
+            sqlx::query!(
+                "DELETE FROM project_drafts WHERE creator_id = $1 AND completed_project_id IS NULL",
+                user_id
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            let id = Uuid::now_v7();
+            super::save_draft_record(&pool, user_id, org_id, id, 0, &form).await?;
+            super::finalize_draft_record(&pool, user_id, org_id, id, 1, &form, false).await
+        }
+    };
+    let hourly = ProjectType::TimeAndMaterials;
+    for profile in [
+        BuiltInProfile::ExecutiveManager,
+        BuiltInProfile::ProjectManager,
+    ] {
+        become_profile(&pool, &ids, profile).await;
+        // Refused on the currency alone: the answer is the same whether or
+        // not the teammate or a task has a rate the project would inherit.
+        let mut messages = Vec::new();
+        for teammate_rate in [None, Some(9000_i64)] {
+            sqlx::query!(
+                "UPDATE users SET billable_rate_cents = $2 WHERE id = $1",
+                ids.user_id,
+                teammate_rate
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            for rate_mode in [RateMode::Person, RateMode::Task] {
+                match create(form("Abroad", other, hourly, rate_mode, "")).await {
+                    Err(super::ServerFnError::ServerError {
+                        code: super::FORBIDDEN,
+                        message,
+                        ..
+                    }) => messages.push(message),
+                    result => panic!("{profile:?} {rate_mode:?}: {result:?}"),
+                }
+            }
+        }
+        messages.dedup();
+        assert_eq!(messages.len(), 1, "{profile:?}: {messages:?}");
+        // The organization's currency, or a project that bills no rates,
+        // needs no grant.
+        create(form("Home", &org_currency, hourly, RateMode::Person, ""))
+            .await
+            .unwrap();
+        create(form(
+            "Unbilled abroad",
+            other,
+            ProjectType::NonBillable,
+            RateMode::Person,
+            "",
+        ))
+        .await
+        .unwrap();
+    }
+    // With the grant, explicit rates make the other currency work.
+    become_profile(&pool, &ids, BuiltInProfile::Administrator).await;
+    create(form("Abroad", other, hourly, RateMode::Person, "80"))
+        .await
+        .unwrap();
 }

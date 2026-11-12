@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, currency, active, default_rate_cents FROM clients\n         WHERE org_id = $1 AND strpos(lower(name), lower($2)) > 0\n         ORDER BY active DESC, lower(name), id LIMIT 51 OFFSET $3",
+  "query": "SELECT id, name, currency, active, CASE WHEN $3 THEN default_rate_cents END as default_rate_cents\n         FROM clients WHERE org_id = $1 AND id = $2",
   "describe": {
     "columns": [
       {
@@ -32,8 +32,8 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Text",
-        "Int8"
+        "Uuid",
+        "Bool"
       ]
     },
     "nullable": [
@@ -41,8 +41,8 @@
       false,
       false,
       false,
-      true
+      null
     ]
   },
-  "hash": "659054f8e457ab64ea55e937296ede4d6af244caa77ee5d6dd6579045db3d043"
+  "hash": "a70e3c0e49c0261b23ad80735c1ca3edefa76de3fa887dddf6ae0342effb4c07"
 }

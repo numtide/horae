@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT EXISTS(SELECT 1 FROM project_management_assignments\n                WHERE org_id = $1 AND project_id = $2 AND manager_id = $3) AS \"managed!\"",
+  "query": "SELECT EXISTS(SELECT 1 FROM project_management_assignments\n            WHERE org_id = $1 AND project_id = $2 AND manager_id = $3) AS \"managed!\"",
   "describe": {
     "columns": [
       {
@@ -20,5 +20,5 @@
       null
     ]
   },
-  "hash": "a0abfb4a68209af8a70a1dcdf07e6900cb0b8b9e6416a3dd0040bf089b5dead3"
+  "hash": "da8bf3a47f58489d251152d96f18154d51546f24aa75143cef0553da11d87ae6"
 }
