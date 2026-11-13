@@ -350,9 +350,8 @@ async fn cancel_restores_the_saved_values() {
 }
 
 #[tokio::test]
-async fn an_administrator_saves_the_workspace_zone() {
+async fn the_workspace_zone_is_saved_and_the_session_re_read() {
     let probe = Probe::new();
-    probe.me.borrow_mut().org_role = OrgRole::Admin;
     let mut dom = mount(workspace_app, &probe);
     assert!(disabled(&html(&dom), "workspace-timezone-save"));
     pick(&mut dom, "Asia/Tokyo");
@@ -370,12 +369,13 @@ async fn an_administrator_saves_the_workspace_zone() {
 #[tokio::test]
 async fn a_refused_workspace_change_is_reported() {
     let probe = Probe::new();
-    probe.refuse_next(403, "Admin access required");
+    let refusal = "Workspace settings need permission to manage the company";
+    probe.refuse_next(403, refusal);
     let mut dom = mount(workspace_app, &probe);
     pick(&mut dom, "Asia/Tokyo");
     click(&mut dom, "workspace-timezone-save");
     let html = html(&dom);
-    assert!(html.contains("Admin access required"), "{html}");
+    assert!(html.contains(refusal), "{html}");
     assert_eq!(probe.me_reads.get(), 1);
 }
 

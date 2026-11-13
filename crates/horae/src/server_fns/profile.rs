@@ -49,12 +49,15 @@ pub async fn update_own_profile(
 }
 
 /// Change the organization's time zone, which every person without their own
-/// follows. Administrators only.
+/// follows. Needs permission to manage the company.
 #[server]
 pub async fn set_workspace_timezone(timezone: String) -> Result<(), ServerFnError> {
-    let admin = require_admin().await?;
+    use crate::ops::{self, Caller};
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
-    set_workspace_timezone_record(&state.db, admin.org_id, admin.id, &timezone).await
+    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::organization::set_timezone(&mut write.tx, &write.actor, &timezone).await;
+    Ok(write.commit(result, &*state.plugins).await?)
 }
 
 /// The host of an issuer URL, which is how people recognise their provider.
@@ -96,33 +99,6 @@ pub(super) async fn update_profile_record(
     .map_err(server_err)?;
     if updated.rows_affected() == 0 {
         return Err(unauthorized("Account is not active"));
-    }
-    Ok(())
-}
-
-#[cfg(feature = "server")]
-pub(super) async fn set_workspace_timezone_record(
-    db: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    actor_id: uuid::Uuid,
-    timezone: &str,
-) -> Result<(), ServerFnError> {
-    let timezone = zone(timezone)?;
-    // Authority is checked in the same statement, so a role revoked meanwhile
-    // cannot slip a change through.
-    let updated = sqlx::query!(
-        "UPDATE organizations SET timezone = $3 WHERE id = $1 AND EXISTS (
-           SELECT 1 FROM users WHERE id = $2 AND org_id = $1 AND active AND org_role = $4)",
-        org_id,
-        actor_id,
-        timezone,
-        OrgRole::Admin as OrgRole,
-    )
-    .execute(db)
-    .await
-    .map_err(server_err)?;
-    if updated.rows_affected() == 0 {
-        return Err(forbidden("Admin access required"));
     }
     Ok(())
 }
