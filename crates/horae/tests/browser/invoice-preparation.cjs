@@ -24,6 +24,11 @@ sql(`BEGIN;
 const project = JSON.parse(sql(`SELECT row_to_json(p) FROM (SELECT id, name FROM projects WHERE code = 'ACME-01') p`));
 const invoicesBefore = Number(sql('SELECT count(*) FROM invoices'));
 const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
+// The invoice pages read the session's own permissions, which an organization
+// still on the legacy policy does not report. Restored when the suite ends.
+const org = sql(`SELECT org_id FROM projects WHERE id='${project.id}'`);
+const policy = sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`);
+sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'`);
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
@@ -555,5 +560,6 @@ const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
     throw error;
   } finally {
     await browser.close();
+    sql(`UPDATE organizations SET permission_policy_version=${policy} WHERE id='${org}'`);
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

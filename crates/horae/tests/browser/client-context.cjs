@@ -100,21 +100,31 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await saved();
     assert.equal(draft(), emptyClientDraft, 'an empty draft client is not overwritten');
     await discard();
-    for (const client of ['not-a-client', '01950000-0000-7000-8000-ffffffffffff']) {
-      await page.goto(`${base}/projects/new/client/${client}`);
-      await expect(page.getByRole('alert')).toContainText(/Invalid client|unavailable/);
-      await expect(editor).toHaveCount(0);
-      assert.equal(draft(), '');
-      await page.goto(`${base}/invoices/new/client/${client}`);
-      await expect(page.getByRole('alert')).toContainText(/Invalid client|unavailable/);
-      await expect(page.locator('#inv-client')).toHaveCount(0);
+    // The invoice pages read the session's own permissions, which an
+    // organization still on the legacy policy does not report. Every step
+    // below loads the page afresh; the observed policy comes back afterwards.
+    const policy = sql(`SELECT permission_policy_version FROM organizations WHERE id = '${actor.org_id}'`);
+    const restorePolicy = () => sql(`UPDATE organizations SET permission_policy_version = ${policy} WHERE id = '${actor.org_id}'`);
+    sql(`UPDATE organizations SET permission_policy_version = 1 WHERE id = '${actor.org_id}'`);
+    try {
+      for (const client of ['not-a-client', '01950000-0000-7000-8000-ffffffffffff']) {
+        await page.goto(`${base}/projects/new/client/${client}`);
+        await expect(page.getByRole('alert')).toContainText(/Invalid client|unavailable/);
+        await expect(editor).toHaveCount(0);
+        assert.equal(draft(), '');
+        await page.goto(`${base}/invoices/new/client/${client}`);
+        await expect(page.getByRole('alert')).toContainText(/Invalid client|unavailable/);
+        await expect(page.locator('#inv-client')).toHaveCount(0);
+      }
+      await page.goto(`${base}/clients/${tech}`);
+      await page.getByRole('link', { name: 'New invoice', exact: true }).click();
+      await expect(page.locator('#inv-client')).toHaveValue(tech);
+      await page.locator('#inv-client').selectOption(acme);
+      await page.locator('#inv-from').fill('2026-09-01');
+      await expect(page.locator('#inv-client')).toHaveValue(acme);
+    } finally {
+      restorePolicy();
     }
-    await page.goto(`${base}/clients/${tech}`);
-    await page.getByRole('link', { name: 'New invoice', exact: true }).click();
-    await expect(page.locator('#inv-client')).toHaveValue(tech);
-    await page.locator('#inv-client').selectOption(acme);
-    await page.locator('#inv-from').fill('2026-09-01');
-    await expect(page.locator('#inv-client')).toHaveValue(acme);
     assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY id), '[]') FROM projects p"), projects);
     assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY id), '[]') FROM invoices i"), invoices);
     // Legacy managers and members follow a client band to that client's record.
