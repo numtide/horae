@@ -97,13 +97,10 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                     StatusCode::FORBIDDEN
                 }
             );
-            sqlx::query!(
-                "UPDATE users SET active=true WHERE id=$1",
-                ids.user_id
-            )
-            .execute(pool)
-            .await
-            .unwrap();
+            sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
+                .execute(pool)
+                .await
+                .unwrap();
             crate::ops::testing::provision(
                 pool,
                 &ids,

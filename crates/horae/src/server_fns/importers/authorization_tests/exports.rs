@@ -259,9 +259,9 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         writer.commit().await.unwrap();
         denied(pending.await.unwrap(), StatusCode::FORBIDDEN).await;
         sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
-        .execute(pool)
-        .await
-        .unwrap();
+            .execute(pool)
+            .await
+            .unwrap();
         crate::ops::testing::set_grants(
             &mut pool.acquire().await.unwrap(),
             &ids,
