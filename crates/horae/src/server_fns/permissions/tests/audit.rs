@@ -16,13 +16,6 @@ async fn fixture(pool: &PgPool, administrator: bool) -> SeedIds {
         serde_json::to_value(BuiltInProfile::Administrator.selection()).unwrap(),
     )
     .unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
         VALUES ($1, $2, $3, 1, $4, $5, 'individual')",
@@ -558,13 +551,6 @@ async fn tenant_and_activity_checks_precede_receipt_existence_and_decode(pool: P
         .execute(&pool)
         .await
         .unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, receipt).await,
         Err(AuditReadError::UnsupportedFormat)

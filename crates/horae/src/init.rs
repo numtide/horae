@@ -86,12 +86,10 @@ mod tests {
         assert_eq!(org.len(), 1);
         assert_eq!(org[0].name, "Contoso");
 
-        let users = sqlx::query!(
-            "SELECT id, org_id, email, name, active FROM users"
-        )
-        .fetch_all(&pool)
-        .await
-        .unwrap();
+        let users = sqlx::query!("SELECT id, org_id, email, name, active FROM users")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
         assert_eq!(users.len(), 1);
         assert_eq!(users[0].org_id, org[0].id);
         assert_eq!(users[0].email, "ops@contoso.example");

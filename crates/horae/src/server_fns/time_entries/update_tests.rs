@@ -202,7 +202,7 @@ async fn assignment_cascade_allows_an_inflight_entry_project_fk_to_finish(pool: 
     restrict_task(&pool, &entry).await;
     grant_task(&pool, &entry).await;
     let actor = sqlx::query_as!(User,
-        r#"SELECT id, org_id, email, name, oidc_subject, org_role AS "org_role: OrgRole",
+        r#"SELECT id, org_id, email, name, oidc_subject,
         cost_rate_cents, billable_rate_cents, active, created_at AS "created_at: chrono::DateTime<chrono::Utc>"
         FROM users WHERE id=$1"#, entry.user_id,
     ).fetch_one(&pool).await.unwrap();

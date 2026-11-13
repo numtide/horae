@@ -373,7 +373,7 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     await archiveDialog(committedName).getByRole('button', { name: 'Archive client', exact: true }).click();
     await expect(committed.getByText('Archived', { exact: true })).toBeVisible();
 
-    // Busy, then denied: a settled reload under changed policy clears even a
+    // Busy, then denied: a settled reload under withdrawn authority clears even a
     // pending confirmation, its late error is dropped, and reopening the same
     // client once authority returns shows no earlier error.
     const busyGates = [];
@@ -430,7 +430,7 @@ const restoreAuthority = org => sql(`UPDATE person_permission_states SET grants 
     await archiveDialog(committedName).getByRole('button', { name: 'Archive client', exact: true }).click();
     await expect(committed.getByText('Archived', { exact: true })).toBeVisible();
 
-    // A policy change during an overlapping reload clears the open
+    // An authority change during an overlapping reload clears the open
     // confirmation and withholds every status control.
     let releaseOverlap, releaseOverview;
     const heldOverlap = new Promise(resolve => { releaseOverlap = resolve; });

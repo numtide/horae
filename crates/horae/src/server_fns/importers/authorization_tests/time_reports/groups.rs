@@ -52,13 +52,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .status(),
         StatusCode::OK
     );
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     // A person without permission state cannot read anything.
     crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     assert_eq!(

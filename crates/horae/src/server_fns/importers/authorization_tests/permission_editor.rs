@@ -8,7 +8,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     check_template_capacity(pool, api).await;
     let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
     let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
-    let target = super::user(pool, ids.org_id, OrgRole::Member).await;
+    let target = super::user(pool, ids.org_id).await;
     let cookie = api.cookie(ids.user_id).await;
     let member_cookie = api.cookie(target).await;
     let expected_requester = json!({"org_id":ids.org_id,"user_id":ids.user_id});
@@ -38,13 +38,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             VALUES ($1,$2,$3,1,$4,$5,'individual')", Uuid::now_v7(), ids.org_id, user, &grants, admin)
             .execute(pool).await.unwrap();
     }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     let loaded = api
         .json("load_permission_editor", lookup.clone(), &cookie)
         .await;
@@ -284,13 +277,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             StatusCode::FORBIDDEN
         );
     }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     let mut invalid = command.clone();
     invalid["expected_access_revision"] = json!(4);
     invalid["request_id"] = json!(Uuid::now_v7());
@@ -357,7 +343,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
 
 async fn check_template_capacity(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
-    let other = super::user(pool, ids.org_id, OrgRole::Member).await;
+    let other = super::user(pool, ids.org_id).await;
     let grants: Vec<String> =
         serde_json::from_value(json!(BuiltInProfile::Administrator.selection())).unwrap();
     for user in [ids.user_id, other] {
@@ -367,13 +353,6 @@ async fn check_template_capacity(pool: &PgPool, api: &Api) {
             VALUES ($1,$2,$3,1,$4,$5,'individual')", Uuid::now_v7(), ids.org_id, user, &grants, admin)
             .execute(pool).await.unwrap();
     }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     let cookies = [api.cookie(ids.user_id).await, api.cookie(other).await];
     let create = |actor, name: String, revision| {
         json!({
@@ -518,7 +497,7 @@ async fn check_template_capacity(pool: &PgPool, api: &Api) {
 
 async fn check_requester_binding(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
-    let other = super::user(pool, ids.org_id, OrgRole::Member).await;
+    let other = super::user(pool, ids.org_id).await;
     let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     for user in [ids.user_id, other] {
         let grants: Vec<String> =
@@ -529,13 +508,6 @@ async fn check_requester_binding(pool: &PgPool, api: &Api) {
             VALUES ($1,$2,$3,1,$4,$5,'individual')", Uuid::now_v7(), ids.org_id, user, &grants, admin)
             .execute(pool).await.unwrap();
     }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     let cookie = api.cookie(ids.user_id).await;
     let other_cookie = api.cookie(other).await;
     let foreign_cookie = api.cookie(foreign.user_id).await;

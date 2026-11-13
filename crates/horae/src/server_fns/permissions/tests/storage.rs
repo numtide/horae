@@ -3,7 +3,6 @@ use crate::server_fns::test_seed::{SeedIds, clear_state, seed};
 use horae_core::permissions::catalog::{
     BuiltInProfile, Permission, PermissionSelection, validate_template_name,
 };
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -78,8 +77,7 @@ async fn additive_migration_preserves_populated_legacy_records(pool: PgPool) {
             .collect(),
     );
     previous.run(&pool).await.unwrap();
-    let ids =
-        crate::server_fns::test_seed::seed_before_permission_state(&pool, OrgRole::Manager).await;
+    let ids = crate::server_fns::test_seed::seed_tenant(&pool).await;
     let membership = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO assignments (id, project_id, user_id, role, rate_cents)
@@ -92,9 +90,10 @@ async fn additive_migration_preserves_populated_legacy_records(pool: PgPool) {
     .await
     .unwrap();
     // `oidc_issuer`, `timezone`, `tasks.is_default` and `harvest_id` are added by
-    // later migrations; the issuer is checked separately and the zone starts NULL.
+    // later migrations, and `org_role` is dropped by one; the issuer is checked
+    // separately and the zone starts NULL.
     let before = sqlx::query_scalar!(
-        "SELECT jsonb_build_object('users', (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer' - 'timezone' - 'harvest_id') FROM users u),
+        "SELECT jsonb_build_object('users', (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer' - 'timezone' - 'harvest_id' - 'org_role') FROM users u),
          'assignments', (SELECT jsonb_agg(a) FROM assignments a),
          'clients', (SELECT jsonb_agg(to_jsonb(c) - 'harvest_id') FROM clients c),
          'projects', (SELECT jsonb_agg(to_jsonb(p) - 'harvest_id') FROM projects p),
@@ -105,7 +104,7 @@ async fn additive_migration_preserves_populated_legacy_records(pool: PgPool) {
     .unwrap();
     sqlx::migrate!("./migrations").run(&pool).await.unwrap();
     let after = sqlx::query_scalar!(
-        "SELECT jsonb_build_object('users', (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer' - 'timezone' - 'harvest_id') FROM users u),
+        "SELECT jsonb_build_object('users', (SELECT jsonb_agg(to_jsonb(u) - 'oidc_issuer' - 'timezone' - 'harvest_id' - 'org_role') FROM users u),
          'assignments', (SELECT jsonb_agg(a) FROM assignments a),
          'clients', (SELECT jsonb_agg(to_jsonb(c) - 'harvest_id') FROM clients c),
          'projects', (SELECT jsonb_agg(to_jsonb(p) - 'harvest_id') FROM projects p),
@@ -123,7 +122,7 @@ async fn additive_migration_preserves_populated_legacy_records(pool: PgPool) {
     .unwrap();
     assert_eq!(issuers, 0);
     let row = sqlx::query!(
-        "SELECT permission_policy_version, access_revision,
+        "SELECT access_revision,
          (SELECT count(*) FROM permission_templates) AS templates,
          (SELECT count(*) FROM person_permission_states) AS people
          FROM organizations WHERE id = $1",
@@ -133,13 +132,8 @@ async fn additive_migration_preserves_populated_legacy_records(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(
-        (
-            row.permission_policy_version,
-            row.access_revision,
-            row.templates,
-            row.people
-        ),
-        (0, 0, Some(0), Some(0))
+        (row.access_revision, row.templates, row.people),
+        (0, Some(0), Some(0))
     );
 }
 

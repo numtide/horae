@@ -563,14 +563,7 @@ async fn people_answers_carry_no_rates_or_sign_in_details(pool: PgPool) {
     .unwrap();
     answers.push(serde_json::to_string(&added).unwrap());
     for answer in answers {
-        for leak in [
-            "rate",
-            "4321",
-            "8765",
-            "oidc",
-            "subject-of-target",
-            "org_role",
-        ] {
+        for leak in ["rate", "4321", "8765", "oidc", "subject-of-target"] {
             assert!(!answer.contains(leak), "{leak} in {answer}");
         }
     }

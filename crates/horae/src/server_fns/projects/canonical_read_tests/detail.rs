@@ -191,14 +191,14 @@ async fn detail_view_rejects_changed_requester_and_current_resource_denial(pool:
     ));
 }
 
-pub(super) fn legacy_viewer(ids: &SeedIds, role: BuiltInProfile) -> User {
+/// The seeded person as the session loads them.
+pub(super) fn session_user(ids: &SeedIds) -> User {
     User {
         id: ids.user_id,
         org_id: ids.org_id,
         email: format!("{}@test.com", ids.user_id),
         name: "Test User".into(),
         oidc_subject: None,
-        org_role: crate::server_fns::provisioning::placeholder_role(role),
         cost_rate_cents: None,
         billable_rate_cents: None,
         active: true,
@@ -226,7 +226,7 @@ async fn detail_view_identity_and_lifecycle_affordances_follow_the_profile(pool:
         .execute(&pool)
         .await
         .unwrap();
-        let viewer = legacy_viewer(&ids, role);
+        let viewer = session_user(&ids);
         let view = detail_view::fetch(&pool, &viewer, ids.project_id, None, today())
             .await
             .unwrap();

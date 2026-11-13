@@ -21,10 +21,10 @@ pub(super) fn today() -> chrono::NaiveDate {
 
 pub(super) async fn fixture(
     pool: &PgPool,
-    legacy_role: BuiltInProfile,
+    created_as: BuiltInProfile,
     grants: PermissionSelection,
 ) -> (SeedIds, User) {
-    let ids = seed(pool, legacy_role).await;
+    let ids = seed(pool, created_as).await;
     crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     let stored: Vec<String> =
         serde_json::from_value(serde_json::to_value(grants).unwrap()).unwrap();
@@ -40,16 +40,12 @@ pub(super) async fn fixture(
     .execute(pool)
     .await
     .unwrap();
-    // Project reads ignore the policy; time contexts and project managers
-    // still read it until their own cut-over.
-    crate::server_fns::test_seed::use_policy_one(pool, ids.org_id).await;
     let viewer = User {
         id: ids.user_id,
         org_id: ids.org_id,
         email: format!("{}@test.com", ids.user_id),
         name: "Canonical project reader".into(),
         oidc_subject: None,
-        org_role: crate::server_fns::provisioning::placeholder_role(legacy_role),
         cost_rate_cents: None,
         billable_rate_cents: None,
         active: true,
@@ -87,7 +83,6 @@ pub(super) async fn project_details(
         email: format!("{viewer_id}@test.com"),
         name: "Project reader".into(),
         oidc_subject: None,
-        org_role: OrgRole::Member,
         cost_rate_cents: None,
         billable_rate_cents: None,
         active: true,

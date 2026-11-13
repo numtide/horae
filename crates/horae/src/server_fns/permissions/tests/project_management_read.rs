@@ -75,10 +75,6 @@ async fn manager_reader_requires_current_project_edit_scope_not_identity_or_memb
             Err(ProjectManagersError::Forbidden)
         ));
     }
-    sqlx::query!("UPDATE users SET org_role='admin' WHERE id=$1", ids.user_id)
-        .execute(&pool)
-        .await
-        .unwrap();
     sqlx::query!(
         "UPDATE person_permission_states SET is_administrator=true WHERE user_id=$1",
         ids.user_id

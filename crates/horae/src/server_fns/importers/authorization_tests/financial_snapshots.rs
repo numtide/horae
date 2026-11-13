@@ -18,16 +18,14 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id
     ).execute(pool).await.unwrap();
     let cookie = api.cookie(ids.user_id).await;
-    let member = api
-        .cookie(user(pool, ids.org_id, OrgRole::Member).await)
-        .await;
+    let member = api.cookie(user(pool, ids.org_id).await).await;
     let name = "prepare_invoice";
     let body = json!({
         "client_id": ids.client_id, "project_id": ids.project_id,
         "period_from": "2026-09-01", "period_to": "2026-09-30",
         "project_ids": null, "overrides": null, "fees": null,
         "actor_id": foreign.user_id, "org_id": foreign.org_id,
-        "org_role": "admin"
+        "is_administrator": true
     });
     assert_eq!(
         api.call(name, body.clone(), None, false).await.status(),
@@ -83,7 +81,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     for name in ["get_invoice_editor", "review_invoice_edit"] {
         let body = json!({
             "invoice_id": invoice_id, "edit": editor["edit"],
-            "org_id": foreign.org_id, "actor_id": foreign.user_id, "org_role": "admin"
+            "org_id": foreign.org_id, "actor_id": foreign.user_id, "is_administrator": true
         });
         let expected = if name == "get_invoice_editor" {
             &editor

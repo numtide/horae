@@ -126,10 +126,6 @@ async fn subject_discovery_requires_current_explicit_identity(pool: PgPool) {
     let ids = fixture(&pool).await;
     let foreign = fixture(&pool).await;
     let all_grants = person(&pool, ids.org_id, false, BuiltInProfile::Administrator).await;
-    sqlx::query!("UPDATE users SET org_role='admin' WHERE id=$1", all_grants)
-        .execute(&pool)
-        .await
-        .unwrap();
     for actor in [all_grants, foreign.user_id, Uuid::now_v7()] {
         assert!(matches!(
             editor::subjects(&pool, ids.org_id, actor, None).await,
@@ -140,13 +136,6 @@ async fn subject_discovery_requires_current_explicit_identity(pool: PgPool) {
             Err(ProfileCommandError::Forbidden)
         ));
     }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
     sqlx::query!("UPDATE person_permission_states SET grants=ARRAY['private-invalid-grant'] WHERE user_id=$1", ids.user_id)
         .execute(&pool).await.unwrap();
     assert!(matches!(

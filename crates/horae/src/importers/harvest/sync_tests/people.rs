@@ -131,7 +131,7 @@ async fn people_are_matched_or_created_and_their_entries_import(pool: PgPool) {
     assert_eq!(person_links(&pool, org).await, vec![4, 5, 6]);
 
     let created = sqlx::query!(
-        r#"SELECT id, name, org_role::text AS "role!", active, cost_rate_cents,
+        r#"SELECT id, name, active, cost_rate_cents,
                   billable_rate_cents, oidc_subject, oidc_issuer
            FROM users WHERE org_id = $1 AND email = 'new@example.com'"#,
         org,
@@ -140,8 +140,8 @@ async fn people_are_matched_or_created_and_their_entries_import(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(
-        (created.name.as_str(), created.role.as_str(), created.active),
-        ("New Person", "member", false)
+        (created.name.as_str(), created.active),
+        ("New Person", false)
     );
     assert_eq!(
         (created.cost_rate_cents, created.billable_rate_cents),

@@ -17,7 +17,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         "from": "2026-09-07", "to": "2026-09-07", "client_id": null,
         "project_id": null, "user_id": null, "tag_id": null, "status": null,
         "invoice_id": invoice, "actor_id": foreign.user_id, "org_id": foreign.org_id,
-        "org_role": "admin"
+        "is_administrator": true
     });
     for name in ["report_detailed", "list_invoices", "get_invoice"] {
         assert_eq!(

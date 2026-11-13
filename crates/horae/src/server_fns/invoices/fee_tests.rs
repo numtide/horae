@@ -1807,7 +1807,7 @@ async fn fee_balance_migration_allocates_discount_without_rewriting_invoice_snap
     previous.run(&pool).await.unwrap();
     let ids = fee_project(
         &pool,
-        crate::server_fns::test_seed::seed_before_permission_state(&pool, OrgRole::Manager).await,
+        crate::server_fns::test_seed::seed_tenant(&pool).await,
     )
     .await;
     let invoice = Uuid::now_v7();

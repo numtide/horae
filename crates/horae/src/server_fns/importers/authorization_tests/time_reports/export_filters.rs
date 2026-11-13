@@ -117,13 +117,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         sqlx::query!("INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable,notes) VALUES ($1,$2,$3,$4,$5,'2026-09-07',60,true,$6)", Uuid::now_v7(), ids.org_id, owner, project, task, note).execute(pool).await.unwrap();
     }
     sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-    sqlx::query!(
         "UPDATE users SET oidc_subject=id::text WHERE id=$1",
         ids.user_id
     )

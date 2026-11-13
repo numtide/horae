@@ -52,13 +52,7 @@ async fn project_reader_can_read_retained_team_without_people_directory_or_rates
         [member]
     );
     let payload = serde_json::to_value(&team[0]).unwrap();
-    for field in [
-        "rate_cents",
-        "email",
-        "cost_rate_cents",
-        "org_role",
-        "grants",
-    ] {
+    for field in ["rate_cents", "email", "cost_rate_cents", "grants"] {
         assert!(
             payload.get(field).is_none(),
             "unexpected {field}: {payload}"

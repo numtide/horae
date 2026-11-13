@@ -194,10 +194,15 @@ async fn imports_preserve_finalized_project_configuration_and_restricted_access(
             let member = Uuid::now_v7();
             let email = format!("{member}@test.com");
             sqlx::query!(
-                "INSERT INTO users (id,org_id,email,name,org_role,billable_rate_cents,cost_rate_cents)
-                 VALUES ($1,$2,$3,'Local member','member',5000,2500)",
-                member, ids.org_id, email,
-            ).execute(&pool).await.unwrap();
+                "INSERT INTO users (id,org_id,email,name,billable_rate_cents,cost_rate_cents)
+                 VALUES ($1,$2,$3,'Local member',5000,2500)",
+                member,
+                ids.org_id,
+                email,
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
             let form = ProjectForm {
                 client_id: Some(ids.client_id),
                 name: "Configured import".into(),
@@ -380,14 +385,6 @@ async fn imports_preserve_finalized_project_configuration_and_restricted_access(
                     can_track,
                     Some(false),
                     "privileged import must not grant ordinary task access"
-                );
-                let access = sqlx::query!(
-                    "SELECT can_view_progress, can_view_rates FROM project_read_access WHERE user_id = $1 AND project_id = $2",
-                    member, project,
-                ).fetch_one(&pool).await.unwrap();
-                assert_eq!(
-                    (access.can_view_progress, access.can_view_rates),
-                    (Some(false), Some(false))
                 );
             }
             let day = "2026-09-07".parse().unwrap();

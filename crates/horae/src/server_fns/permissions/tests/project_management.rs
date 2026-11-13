@@ -29,13 +29,6 @@ async fn permissions(pool: &PgPool, org: Uuid, user: Uuid, grants: &[Permission]
 
 async fn fixture(pool: &PgPool) -> SeedIds {
     let ids = seed(pool, BuiltInProfile::Member).await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     permissions(
         pool,
         ids.org_id,

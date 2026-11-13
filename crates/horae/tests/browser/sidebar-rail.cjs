@@ -23,8 +23,8 @@ assert.ok(base, 'Set HORAE_TEST_URL to an isolated test instance');
     await page.reload();
     await (await ready).finished();
     const sidebar = page.locator('.app-sidebar');
-    // Harvest's sections and order. The seed runs policy zero, which grants a
-    // legacy admin Team, Clients and Tasks (task-catalog.cjs covers the catalog).
+    // Harvest's sections and order. The seeded Administrator sees Team,
+    // Clients and Tasks (task-catalog.cjs covers the catalog).
     const sections = () => sidebar.evaluate(el => [...el.querySelectorAll('.sidebar-section')].map(section => [
       section.textContent,
       [...section.nextElementSibling.querySelectorAll('.nav-item-label')].map(label => label.textContent),

@@ -19,9 +19,6 @@ pub(super) async fn canonical_actor(pool: &PgPool, owner: &SeedIds, grants: &Per
     .execute(pool)
     .await
     .unwrap();
-    // The editor ignores the policy; project managers and people still read
-    // it until their own cut-over.
-    crate::server_fns::test_seed::use_policy_one(pool, owner.org_id).await;
 }
 
 pub(super) fn keep_protected(form: &ProjectForm) -> Vec<ProtectedProjectField> {

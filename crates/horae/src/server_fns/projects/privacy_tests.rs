@@ -51,7 +51,6 @@ async fn fixture(pool: &PgPool) -> (SeedIds, User) {
         email: format!("{}@test.com", ids.user_id),
         name: "Viewer".into(),
         oidc_subject: None,
-        org_role: OrgRole::Member,
         cost_rate_cents: None,
         billable_rate_cents: None,
         active: true,

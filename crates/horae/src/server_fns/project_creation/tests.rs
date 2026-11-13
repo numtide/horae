@@ -203,8 +203,8 @@ async fn missing_draft_responses_do_not_disclose_foreign_ownership(pool: PgPool)
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_dialog_validates_details_and_persists_an_explicit_zero_rate(pool: PgPool) {
-    use crate::ops::testing::{seed_profile, set_grants};
-    let ids = seed_profile(
+    use crate::ops::testing::set_grants;
+    let ids = seed(
         &pool,
         horae_core::permissions::catalog::BuiltInProfile::Administrator,
     )

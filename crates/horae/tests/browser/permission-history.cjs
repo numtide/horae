@@ -152,7 +152,6 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
     await expect(history.locator('tbody tr')).toHaveCount(25);
     assert.deepEqual(await receiptIds(), ids.slice(0, 25).map(id => `Receipt: ${id}`));
 
-    sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`);
     await page.goto(`${base}/settings`);
     await page.getByRole('link', { name: 'View permission audit log', exact: true }).click();
     await page.waitForURL(`${base}/admin/audit`);
@@ -167,7 +166,7 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
     releaseRead?.();
     await browser.close();
     if (fixtureStarted) sql(`BEGIN;
-      UPDATE users SET active=true, org_role='admin' WHERE id='${actor.id}';
+      UPDATE users SET active=true WHERE id='${actor.id}';
       DELETE FROM project_management_assignments WHERE org_id='${actor.org_id}' AND manager_id='${actor.id}' AND project_id='${project}';
       DELETE FROM permission_change_receipts WHERE org_id='${actor.org_id}' AND actor_user_id='${actor.id}' AND request_id::text LIKE '01960000-0000-7000-8000-%';
       DELETE FROM person_permission_states WHERE id='${stateId}' AND org_id='${actor.org_id}';
