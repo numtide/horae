@@ -1,5 +1,7 @@
 use super::*;
+use crate::ops::testing::set_grants;
 use crate::server_fns::test_seed::wait_for_blocked;
+use horae_core::permissions::catalog::Permission;
 use serde::Deserialize;
 use std::io::Write as _;
 
@@ -78,20 +80,22 @@ async fn budget_delivery_waits_for_organization_and_rechecks_recipient(pool: sql
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn budget_delivery_refreshes_after_recipient_and_project_waits(pool: sqlx::PgPool) {
     let reader = restricted_pool(&pool).await;
-    for change in ["recipient", "role", "project", "assignment", "alerts"] {
+    for change in ["recipient", "grants", "project", "manager", "alerts"] {
         let stub = Stub::new("touch \"$0.called\"\ncat > /dev/null");
         let (ids, event) = queued(&pool).await;
-        if change == "assignment" {
-            sqlx::query!(
-                "UPDATE users SET org_role='member' WHERE id=$1",
-                ids.user_id
+        if change == "manager" {
+            // Eligible only as the project's designated manager.
+            set_grants(
+                &mut pool.acquire().await.unwrap(),
+                &ids,
+                &[Permission::ProjectReadManaged],
             )
-            .execute(&pool)
             .await
             .unwrap();
             sqlx::query!(
-                "INSERT INTO assignments(id,project_id,user_id,role) VALUES($1,$2,$3,'lead')",
+                "INSERT INTO project_management_assignments(id,org_id,project_id,manager_id) VALUES($1,$2,$3,$4)",
                 Uuid::now_v7(),
+                ids.org_id,
                 ids.project_id,
                 ids.user_id
             )
@@ -112,22 +116,8 @@ async fn budget_delivery_refreshes_after_recipient_and_project_waits(pool: sqlx:
                     .await
                     .unwrap();
             }
-            "role" => {
-                sqlx::query!(
-                    "UPDATE users SET org_role='member' WHERE id=$1",
-                    ids.user_id
-                )
-                .execute(&mut *writer)
-                .await
-                .unwrap();
-                sqlx::query!(
-                    "DELETE FROM assignments WHERE project_id=$1 AND user_id=$2",
-                    ids.project_id,
-                    ids.user_id
-                )
-                .execute(&mut *writer)
-                .await
-                .unwrap();
+            "grants" => {
+                set_grants(&mut writer, &ids, &[]).await.unwrap();
             }
             "project" => {
                 sqlx::query!(
@@ -138,9 +128,18 @@ async fn budget_delivery_refreshes_after_recipient_and_project_waits(pool: sqlx:
                 .await
                 .unwrap();
             }
-            "assignment" => {
+            "manager" => {
+                // As the managers editor does: the designation and the
+                // organization's access revision change together.
                 sqlx::query!(
-                    "DELETE FROM assignments WHERE project_id=$1 AND user_id=$2",
+                    "UPDATE organizations SET access_revision = access_revision + 1 WHERE id=$1",
+                    ids.org_id
+                )
+                .execute(&mut *writer)
+                .await
+                .unwrap();
+                sqlx::query!(
+                    "DELETE FROM project_management_assignments WHERE project_id=$1 AND manager_id=$2",
                     ids.project_id,
                     ids.user_id
                 )
@@ -317,8 +316,18 @@ async fn budget_delivery_skips_retargeted_notification_without_terminalizing(poo
     let stub = Stub::new("touch \"$0.called\"\ncat > /dev/null");
     let (ids, event) = queued(&pool).await;
     let recipient = Uuid::now_v7();
-    sqlx::query!("INSERT INTO users(id,org_id,name,email,org_role) VALUES($1,$2,'Replacement','replacement@example.test','manager')", recipient, ids.org_id)
+    sqlx::query!("INSERT INTO users(id,org_id,name,email) VALUES($1,$2,'Replacement','replacement@example.test')", recipient, ids.org_id)
         .execute(&pool).await.unwrap();
+    // The replacement could receive this alert, so only the claimed target
+    // keeps the worker from sending it to them.
+    store_grants(
+        &pool,
+        ids.org_id,
+        recipient,
+        horae_core::permissions::catalog::BuiltInProfile::ExecutiveManager.direct_permissions(),
+        1,
+    )
+    .await;
     let notification = BudgetEmail::deserialize(&event.payload)
         .unwrap()
         .notification_id;

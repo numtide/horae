@@ -1,8 +1,8 @@
 use super::*;
 use crate::importers::harvest::{ApiImportError, account_switch};
+use crate::ops::testing::{assign_profile, revoke};
 use crate::server_fns::test_seed::{seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use std::time::Duration;
 
@@ -98,15 +98,16 @@ async fn connection_changes_require_current_tenant_bound_administrator(pool: PgP
     for change in CHANGES {
         let ids = connected(&pool).await;
         let before = snapshot(&pool, ids.org_id).await;
-        for (role, active) in [
-            (OrgRole::Member, true),
-            (OrgRole::Manager, true),
-            (OrgRole::Admin, false),
+        // Every grant short of the administrator identity is still refused.
+        for (profile, active) in [
+            (BuiltInProfile::Member, true),
+            (BuiltInProfile::ExecutiveManager, true),
+            (BuiltInProfile::Administrator, false),
         ] {
+            assign_profile(&pool, ids.org_id, ids.user_id, profile).await;
             sqlx::query!(
-                "UPDATE users SET org_role = $2, active = $3 WHERE id = $1",
+                "UPDATE users SET active = $2 WHERE id = $1",
                 ids.user_id,
-                role as OrgRole,
                 active
             )
             .execute(&pool)
@@ -115,19 +116,41 @@ async fn connection_changes_require_current_tenant_bound_administrator(pool: PgP
             assert_denied(run(&pool, ids.org_id, ids.user_id, change).await, change);
             assert_eq!(snapshot(&pool, ids.org_id).await, before);
         }
+        sqlx::query!("UPDATE users SET active = true WHERE id = $1", ids.user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
         let foreign = seed(&pool, BuiltInProfile::Administrator).await;
         for actor in [foreign.user_id, Uuid::now_v7()] {
             assert_denied(run(&pool, ids.org_id, actor, change).await, change);
             assert_eq!(snapshot(&pool, ids.org_id).await, before);
         }
+        assign_profile(
+            &pool,
+            ids.org_id,
+            ids.user_id,
+            BuiltInProfile::Administrator,
+        )
+        .await;
+        run(&pool, ids.org_id, ids.user_id, change).await.unwrap();
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn connection_changes_fail_closed_without_stored_permission_state(pool: PgPool) {
+    for change in CHANGES {
+        let ids = connected(&pool).await;
+        let before = snapshot(&pool, ids.org_id).await;
         sqlx::query!(
-            "UPDATE users SET org_role = 'admin', active = true WHERE id = $1",
+            "DELETE FROM person_permission_states WHERE user_id = $1",
             ids.user_id
         )
         .execute(&pool)
         .await
         .unwrap();
-        run(&pool, ids.org_id, ids.user_id, change).await.unwrap();
+        assert_denied(run(&pool, ids.org_id, ids.user_id, change).await, change);
+        assert_eq!(snapshot(&pool, ids.org_id).await, before);
     }
 }
 
@@ -196,9 +219,9 @@ async fn connection_changes_recheck_authority_after_organization_wait(pool: PgPo
         for deactivate in [false, true] {
             let ids = connected(&pool).await;
             let before = snapshot(&pool, ids.org_id).await;
-            let mut revoke = pool.begin().await.unwrap();
+            let mut revoker = pool.begin().await.unwrap();
             let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
-                .fetch_one(&mut *revoke)
+                .fetch_one(&mut *revoker)
                 .await
                 .unwrap()
                 .unwrap();
@@ -206,7 +229,7 @@ async fn connection_changes_recheck_authority_after_organization_wait(pool: PgPo
                 "SELECT id FROM organizations WHERE id = $1 FOR UPDATE",
                 ids.org_id
             )
-            .fetch_one(&mut *revoke)
+            .fetch_one(&mut *revoker)
             .await
             .unwrap();
             let db = run_pool.clone();
@@ -216,20 +239,8 @@ async fn connection_changes_recheck_authority_after_organization_wait(pool: PgPo
                 result = pending.join_next() => panic!("{change:?} bypassed organization gate: {result:?}"),
                 () = wait_for_blocked(&pool, blocker) => {},
             }
-            sqlx::query!(
-                "UPDATE users SET org_role = $2, active = $3 WHERE id = $1",
-                ids.user_id,
-                if deactivate {
-                    OrgRole::Admin
-                } else {
-                    OrgRole::Member
-                } as OrgRole,
-                !deactivate
-            )
-            .execute(&mut *revoke)
-            .await
-            .unwrap();
-            revoke.commit().await.unwrap();
+            revoke(&mut revoker, ids.org_id, ids.user_id, deactivate).await;
+            revoker.commit().await.unwrap();
             let result = tokio::time::timeout(Duration::from_secs(5), pending.join_next())
                 .await
                 .unwrap()
@@ -242,48 +253,36 @@ async fn connection_changes_recheck_authority_after_organization_wait(pool: PgPo
     run_pool.close().await;
 }
 
+// A deactivation writes only the person's row, so the change waits on the
+// actor lock rather than the organization's.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn connection_changes_recheck_authority_after_actor_only_wait(pool: PgPool) {
     for change in CHANGES {
-        for deactivate in [false, true] {
-            let ids = connected(&pool).await;
-            let before = snapshot(&pool, ids.org_id).await;
-            let mut revoke = pool.begin().await.unwrap();
-            let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
-                .fetch_one(&mut *revoke)
-                .await
-                .unwrap()
-                .unwrap();
-            sqlx::query!(
-                "UPDATE users SET org_role = $2, active = $3 WHERE id = $1",
-                ids.user_id,
-                if deactivate {
-                    OrgRole::Admin
-                } else {
-                    OrgRole::Member
-                } as OrgRole,
-                !deactivate
-            )
-            .execute(&mut *revoke)
+        let ids = connected(&pool).await;
+        let before = snapshot(&pool, ids.org_id).await;
+        let mut revoker = pool.begin().await.unwrap();
+        let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+            .fetch_one(&mut *revoker)
             .await
+            .unwrap()
             .unwrap();
-            let db = pool.clone();
-            let mut pending = tokio::task::JoinSet::new();
-            pending.spawn(async move { run(&db, ids.org_id, ids.user_id, change).await });
-            tokio::select! {
-                result = pending.join_next() => panic!("{change:?} bypassed actor lock: {result:?}"),
-                () = wait_for_blocked(&pool, blocker) => {},
-            }
-            revoke.commit().await.unwrap();
-            let result = tokio::time::timeout(Duration::from_secs(5), pending.join_next())
-                .await
-                .unwrap()
-                .unwrap()
-                .unwrap();
-            assert_denied(result, change);
-            assert_eq!(snapshot(&pool, ids.org_id).await, before);
+        revoke(&mut revoker, ids.org_id, ids.user_id, true).await;
+        let db = pool.clone();
+        let mut pending = tokio::task::JoinSet::new();
+        pending.spawn(async move { run(&db, ids.org_id, ids.user_id, change).await });
+        tokio::select! {
+            result = pending.join_next() => panic!("{change:?} bypassed actor lock: {result:?}"),
+            () = wait_for_blocked(&pool, blocker) => {},
         }
+        revoker.commit().await.unwrap();
+        let result = tokio::time::timeout(Duration::from_secs(5), pending.join_next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_denied(result, change);
+        assert_eq!(snapshot(&pool, ids.org_id).await, before);
     }
 }
 
@@ -291,61 +290,60 @@ async fn connection_changes_recheck_authority_after_actor_only_wait(pool: PgPool
 #[serial_test::serial]
 async fn connection_changes_hold_authority_until_commit(pool: PgPool) {
     for change in CHANGES {
-        let ids = connected(&pool).await;
-        let before = snapshot(&pool, ids.org_id).await;
-        let mut barrier = pool.begin().await.unwrap();
-        let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+        for deactivate in [false, true] {
+            let ids = connected(&pool).await;
+            let before = snapshot(&pool, ids.org_id).await;
+            let mut barrier = pool.begin().await.unwrap();
+            let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
+                .fetch_one(&mut *barrier)
+                .await
+                .unwrap()
+                .unwrap();
+            // Pause after authorization, before any credential change.
+            sqlx::query!(
+                "SELECT org_id FROM harvest_connection_generations WHERE org_id = $1 FOR UPDATE",
+                ids.org_id
+            )
             .fetch_one(&mut *barrier)
             .await
-            .unwrap()
             .unwrap();
-        // Pause after authorization, before any credential change.
-        sqlx::query!(
-            "SELECT org_id FROM harvest_connection_generations WHERE org_id = $1 FOR UPDATE",
-            ids.org_id
-        )
-        .fetch_one(&mut *barrier)
-        .await
-        .unwrap();
-        let db = pool.clone();
-        let mut write = tokio::task::JoinSet::new();
-        write.spawn(async move { run(&db, ids.org_id, ids.user_id, change).await });
-        wait_for_blocked(&pool, blocker).await;
-        let writer = sqlx::query_scalar!(
-            "SELECT pid AS \"pid!\" FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid))",
-            blocker,
-        ).fetch_one(&pool).await.unwrap();
-        let db = pool.clone();
-        let mut revoke = tokio::task::JoinSet::new();
-        revoke.spawn(async move {
-            sqlx::query!(
-                "UPDATE users SET org_role = 'member' WHERE id = $1",
-                ids.user_id
-            )
-            .execute(&db)
-            .await
-        });
-        tokio::select! {
-            result = revoke.join_next() => panic!("{change:?} lost authority before commit: {result:?}"),
-            () = wait_for_blocked(&pool, writer) => {},
+            let db = pool.clone();
+            let mut write = tokio::task::JoinSet::new();
+            write.spawn(async move { run(&db, ids.org_id, ids.user_id, change).await });
+            wait_for_blocked(&pool, blocker).await;
+            let writer = sqlx::query_scalar!(
+                "SELECT pid AS \"pid!\" FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid))",
+                blocker,
+            ).fetch_one(&pool).await.unwrap();
+            let db = pool.clone();
+            let mut revoker = tokio::task::JoinSet::new();
+            revoker.spawn(async move {
+                let mut tx = db.begin().await.unwrap();
+                revoke(&mut tx, ids.org_id, ids.user_id, deactivate).await;
+                tx.commit().await
+            });
+            tokio::select! {
+                result = revoker.join_next() => panic!("{change:?} lost authority before commit: {result:?}"),
+                () = wait_for_blocked(&pool, writer) => {},
+            }
+            barrier.commit().await.unwrap();
+            tokio::time::timeout(Duration::from_secs(5), write.join_next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            tokio::time::timeout(Duration::from_secs(5), revoker.join_next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap()
+                .unwrap();
+            let after = snapshot(&pool, ids.org_id).await;
+            assert_ne!(after, before);
+            assert_denied(run(&pool, ids.org_id, ids.user_id, change).await, change);
+            assert_eq!(snapshot(&pool, ids.org_id).await, after);
         }
-        barrier.commit().await.unwrap();
-        tokio::time::timeout(Duration::from_secs(5), write.join_next())
-            .await
-            .unwrap()
-            .unwrap()
-            .unwrap()
-            .unwrap();
-        tokio::time::timeout(Duration::from_secs(5), revoke.join_next())
-            .await
-            .unwrap()
-            .unwrap()
-            .unwrap()
-            .unwrap();
-        let after = snapshot(&pool, ids.org_id).await;
-        assert_ne!(after, before);
-        assert_denied(run(&pool, ids.org_id, ids.user_id, change).await, change);
-        assert_eq!(snapshot(&pool, ids.org_id).await, after);
     }
 }
 

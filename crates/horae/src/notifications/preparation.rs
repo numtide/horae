@@ -131,22 +131,33 @@ async fn prepare_locked(
         }
         return Ok(None);
     };
-    // Settings/assignment writers update the parent through revision triggers.
-    // Read after the parent wait; child locks here would invert that order.
+    // Settings writers update the parent through revision triggers, and grant
+    // and project-manager changes move the organization's access revision.
+    // Read after the parent waits; child locks here would invert that order.
+    // The recipient rule matches `server_fns::budgets::enqueue_alerts`.
     let Some(row) = sqlx::query!(
         r#"SELECT n.id, n.created_at AS "created_at: DateTime<Utc>", n.period_key, n.threshold,
                   p.name, u.email,
                   CASE WHEN n.task_id IS NOT NULL THEN 'task' WHEN n.user_id IS NOT NULL THEN 'person' ELSE 'project' END AS "scope!",
                   (p.active AND u.active AND COALESCE(ps.alert_enabled, false)
-                   AND (u.org_role IN ('admin', 'manager') OR EXISTS (
-                       SELECT 1 FROM assignments a WHERE a.project_id=p.id AND a.user_id=u.id
-                       AND (a.role IN ('lead', 'admin') OR u.id=ps.creator_id)))) AS "eligible!"
+                   AND COALESCE(s.catalog_version = $5
+                     AND ('project_read_all' = ANY(s.grants)
+                       OR ('project_read_managed' = ANY(s.grants) AND EXISTS (
+                         SELECT 1 FROM project_management_assignments m
+                         WHERE m.org_id=n.org_id AND m.project_id=p.id AND m.manager_id=u.id)))
+                     AND (p.budget_kind <> 'amount'
+                       OR 'billable_rate_read_all' = ANY(s.grants)
+                       OR ('billable_rate_read_managed' = ANY(s.grants) AND EXISTS (
+                         SELECT 1 FROM project_management_assignments m
+                         WHERE m.org_id=n.org_id AND m.project_id=p.id AND m.manager_id=u.id))), false)) AS "eligible!"
            FROM project_budget_notifications n
            JOIN projects p ON p.id=n.project_id AND p.org_id=n.org_id
            JOIN users u ON u.id=n.recipient_id AND u.org_id=n.org_id
            LEFT JOIN project_settings ps ON ps.project_id=p.id AND ps.org_id=n.org_id
+           LEFT JOIN person_permission_states s ON s.org_id=n.org_id AND s.user_id=u.id
            WHERE n.id=$1 AND n.org_id=$2 AND n.recipient_id=$3 AND n.project_id=$4"#,
         payload.notification_id, event.org_id, target.recipient_id, target.project_id,
+        crate::server_fns::budgets::CATALOG_VERSION,
     ).fetch_optional(&mut **tx).await? else {
         return Ok(None);
     };

@@ -1,5 +1,4 @@
 use super::*;
-use crate::server_fns::{PermissionStorageError, load_person_permissions};
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 async fn begin_project_transaction(pool: &PgPool) -> Result<Transaction<'_, Postgres>, StatusCode> {
@@ -16,15 +15,12 @@ async fn authorize_project_actor(
     connection: &mut PgConnection,
     org_id: Uuid,
     actor_id: Uuid,
-) -> Result<(i32, PermissionSelection), StatusCode> {
-    let policy = sqlx::query_scalar!(
-        "SELECT permission_policy_version FROM organizations WHERE id=$1 FOR SHARE",
-        org_id,
-    )
-    .fetch_optional(&mut *connection)
-    .await
-    .map_err(database_error)?
-    .ok_or(StatusCode::FORBIDDEN)?;
+) -> Result<PermissionSelection, StatusCode> {
+    sqlx::query_scalar!("SELECT id FROM organizations WHERE id=$1 FOR SHARE", org_id,)
+        .fetch_optional(&mut *connection)
+        .await
+        .map_err(database_error)?
+        .ok_or(StatusCode::FORBIDDEN)?;
     sqlx::query_scalar!(
         "SELECT id FROM users WHERE id=$1 AND org_id=$2 AND active FOR SHARE",
         actor_id,
@@ -34,21 +30,7 @@ async fn authorize_project_actor(
     .await
     .map_err(database_error)?
     .ok_or(StatusCode::FORBIDDEN)?;
-    let grants = match policy {
-        0 => PermissionSelection::new(&[]),
-        1 => {
-            load_person_permissions(connection, org_id, actor_id)
-                .await
-                .map_err(|error| match error {
-                    PermissionStorageError::Database(error) => database_error(error),
-                    _ => StatusCode::INTERNAL_SERVER_ERROR,
-                })?
-                .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
-                .grants
-        }
-        _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
-    };
-    Ok((policy, grants))
+    load_grants(connection, org_id, actor_id).await
 }
 
 pub(in crate::reports) async fn projects(
@@ -58,25 +40,23 @@ pub(in crate::reports) async fn projects(
     scope: &str,
 ) -> Result<Vec<ProjectExportRow>, StatusCode> {
     let mut tx = begin_project_transaction(pool).await?;
-    let (policy, grants) = authorize_project_actor(&mut tx, org_id, actor_id).await?;
+    let grants = authorize_project_actor(&mut tx, org_id, actor_id).await?;
     // One fresh statement sees completed scope changes after the gate wait,
     // while keeping size checks and payload on the same database snapshot.
     let records = sqlx::query!(
         r#"WITH bounded AS MATERIALIZED (
              SELECT p.id, c.name client_name, p.code, p.name, p.project_type,
                     p.currency, p.budget_kind,
-                    CASE WHEN $7 OR $10 OR ($11 AND management.id IS NOT NULL)
+                    CASE WHEN $9 OR ($10 AND management.id IS NOT NULL)
                       THEN p.budget_amount_cents END AS budget_amount_cents,
-                    CASE WHEN $7 OR p.budget_kind='hours' THEN p.budget_minutes END AS budget_minutes, p.active
+                    CASE WHEN p.budget_kind='hours' THEN p.budget_minutes END AS budget_minutes, p.active
              FROM projects p JOIN clients c ON c.id=p.client_id AND c.org_id=p.org_id
-             LEFT JOIN project_read_access a ON a.project_id=p.id AND a.org_id=p.org_id AND a.user_id=$2
              LEFT JOIN project_management_assignments management ON management.org_id=p.org_id
                AND management.project_id=p.id AND management.manager_id=$2
              LEFT JOIN assignments member ON member.project_id=p.id AND member.user_id=$2
              LEFT JOIN project_settings settings ON settings.org_id=p.org_id AND settings.project_id=p.id
-             WHERE p.org_id=$1 AND (CASE WHEN $7 THEN COALESCE(a.can_view_progress,false)
-               ELSE $8 OR ($9 AND management.id IS NOT NULL)
-                 OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility,'project_members')='project_members') END)
+             WHERE p.org_id=$1 AND ($7 OR ($8 AND management.id IS NOT NULL)
+                 OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility,'project_members')='project_members'))
                AND CASE $3
                WHEN 'budgeted' THEN p.active AND p.budget_kind <> 'none'
                WHEN 'archived' THEN NOT p.active ELSE p.active END
@@ -97,7 +77,7 @@ pub(in crate::reports) async fn projects(
            FROM stats s LEFT JOIN bounded b ON s.rows <= $4 AND s.bytes <= $5 AND s.field_bytes <= $6
            ORDER BY b.client_name, b.name, b.id"#,
         org_id, actor_id, scope, XLSX.rows, XLSX.bytes, MAX_FIELD_BYTES,
-        policy == 0, grants.contains(Permission::ProjectReadAll), grants.contains(Permission::ProjectReadManaged),
+        grants.contains(Permission::ProjectReadAll), grants.contains(Permission::ProjectReadManaged),
         grants.contains(Permission::BillableRateReadAll), grants.contains(Permission::BillableRateReadManaged),
     ).fetch_all(&mut *tx).await.map_err(database_error)?;
     let mut rows = Vec::with_capacity(records.len());
@@ -146,7 +126,7 @@ pub(in crate::reports) async fn authorize_project_rows(
     project_ids: &[Uuid],
     monetary_project_ids: &[Uuid],
 ) -> Result<(), StatusCode> {
-    let (policy, grants) = authorize_project_actor(connection, org_id, actor_id).await?;
+    let grants = authorize_project_actor(connection, org_id, actor_id).await?;
     let locked = sqlx::query_scalar!(
         "SELECT id FROM projects WHERE org_id=$1 AND id=ANY($2) ORDER BY id FOR SHARE",
         org_id,
@@ -162,21 +142,19 @@ pub(in crate::reports) async fn authorize_project_rows(
     // snapshot only after acquiring those parents, not in the locking query.
     let allowed = sqlx::query!(
         r#"SELECT COUNT(*) AS "count!",
-             COUNT(*) FILTER (WHERE p.id=ANY($4) AND ($5 OR $8 OR ($9 AND management.id IS NOT NULL))) AS "financial!"
+             COUNT(*) FILTER (WHERE p.id=ANY($4) AND ($7 OR ($8 AND management.id IS NOT NULL))) AS "financial!"
            FROM projects p JOIN clients c ON c.id=p.client_id AND c.org_id=p.org_id
-           LEFT JOIN project_read_access a ON a.org_id=p.org_id AND a.project_id=p.id AND a.user_id=$2
            LEFT JOIN project_management_assignments management ON management.org_id=p.org_id
              AND management.project_id=p.id AND management.manager_id=$2
            LEFT JOIN assignments member ON member.project_id=p.id AND member.user_id=$2
            LEFT JOIN project_settings settings ON settings.org_id=p.org_id AND settings.project_id=p.id
-           WHERE p.org_id=$1 AND p.id=ANY($3) AND CASE WHEN $5 THEN COALESCE(a.can_view_progress,false)
-             ELSE $6 OR ($7 AND management.id IS NOT NULL)
-               OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility,'project_members')='project_members') END"#,
+           WHERE p.org_id=$1 AND p.id=ANY($3) AND ($5 OR ($6 AND management.id IS NOT NULL)
+             OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility,'project_members')='project_members'))"#,
         org_id,
         actor_id,
         project_ids,
         monetary_project_ids,
-        policy == 0, grants.contains(Permission::ProjectReadAll), grants.contains(Permission::ProjectReadManaged),
+        grants.contains(Permission::ProjectReadAll), grants.contains(Permission::ProjectReadManaged),
         grants.contains(Permission::BillableRateReadAll), grants.contains(Permission::BillableRateReadManaged),
     )
     .fetch_one(connection)

@@ -50,7 +50,7 @@ const rows = [
           budget_kind: 'none', budget_amount_cents: null, budget_minutes: null,
         }));
         return route.fulfill({ json: {
-          ...overview, canonical_permissions: false, can_create: true, can_change_legacy_status: true,
+          ...overview, can_create: true, can_change_status: true, can_open_clients: true,
           projects: fixtures.map(project => ({
             ...template, project, can_edit: true,
             client: project.client_id === acme.id ? acme : beta,

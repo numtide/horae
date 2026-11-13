@@ -37,9 +37,9 @@ fn people_data() -> HarvestData {
 /// leave every field of it alone.
 async fn add_old_account(pool: &PgPool, org: Uuid) -> serde_json::Value {
     sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role, active, cost_rate_cents,
+        "INSERT INTO users (id, org_id, email, name, active, cost_rate_cents,
                             billable_rate_cents, oidc_subject, oidc_issuer)
-         VALUES ($1, $2, 'old@example.com', 'Old Hand', 'manager', false, 4000, 9000,
+         VALUES ($1, $2, 'old@example.com', 'Old Hand', false, 4000, 9000,
                  'subject-1', 'https://issuer.example')",
         Uuid::now_v7(),
         org,
@@ -478,7 +478,7 @@ async fn an_account_created_while_the_import_waits_is_never_duplicated(pool: PgP
         .await
         .unwrap();
     sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $2, 'Late@Example.com', 'Late', 'member')",
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, 'Late@Example.com', 'Late')",
         Uuid::now_v7(),
         elsewhere,
     )

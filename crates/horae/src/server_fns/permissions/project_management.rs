@@ -8,6 +8,7 @@ use uuid::Uuid;
 use super::{PermissionStorageError, load_person_permissions};
 
 use crate::models::permission_editor::PermissionRequester;
+use crate::models::project_managers::ProjectManagersCommandKind;
 use crate::models::project_managers::{ProjectManager, ProjectManagers};
 pub(crate) use crate::models::project_managers::{ProjectManagersCommand, ProjectManagersOutcome};
 
@@ -204,6 +205,46 @@ pub(crate) async fn execute_in_transaction(
     .await?
     .ok_or(ProjectManagersError::Forbidden)?;
     authorize_actor(tx, org_id, actor_id, request.project_id).await?;
+    replace(tx, org_id, actor_id, org.access_revision, request).await
+}
+
+/// Designate the first managers of a project created in this transaction.
+/// Creation authority (`ProjectCreateAll`, checked by the caller) stands in for
+/// project editing authority, which only a `ProjectWriteAll` holder has before
+/// the first designation. The caller holds the AccessChange organization gate.
+pub(crate) async fn designate_created(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: Uuid,
+    actor_id: Uuid,
+    project_id: Uuid,
+    manager_ids: Vec<Uuid>,
+) -> Result<ProjectManagersOutcome, ProjectManagersError> {
+    let access_revision = sqlx::query_scalar!(
+        "SELECT access_revision FROM organizations WHERE id = $1",
+        org_id
+    )
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or(ProjectManagersError::Forbidden)?;
+    let request = ProjectManagersCommand {
+        kind: ProjectManagersCommandKind::ReplaceProjectManagers,
+        request_id: Uuid::now_v7(),
+        expected_access_revision: access_revision,
+        project_id,
+        manager_ids,
+    };
+    replace(tx, org_id, actor_id, access_revision, &request).await
+}
+
+/// Eligibility, designation rows, access revision and receipt, once the
+/// caller has authorized the actor under the organization gate.
+async fn replace(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org_id: Uuid,
+    actor_id: Uuid,
+    previous_access_revision: i64,
+    request: &ProjectManagersCommand,
+) -> Result<ProjectManagersOutcome, ProjectManagersError> {
     let mut intent = request.clone();
     intent.manager_ids.sort_unstable();
     if intent.manager_ids.windows(2).any(|pair| pair[0] == pair[1]) {
@@ -228,7 +269,7 @@ pub(crate) async fn execute_in_transaction(
         }
         return Ok(serde_json::from_value(receipt.result)?);
     }
-    if intent.expected_access_revision != org.access_revision {
+    if intent.expected_access_revision != previous_access_revision {
         return Err(ProjectManagersError::Stale);
     }
     // The legacy editor holds project UPDATE before requesting organization SHARE.
@@ -295,11 +336,11 @@ pub(crate) async fn execute_in_transaction(
         .collect();
     let changed = !added.is_empty() || !removed.is_empty();
     let access_revision = if changed {
-        org.access_revision
+        previous_access_revision
             .checked_add(1)
             .ok_or(ProjectManagersError::RevisionExhausted)?
     } else {
-        org.access_revision
+        previous_access_revision
     };
     if changed {
         let removed_ids: Vec<_> = removed.iter().map(|row| row.id).collect();
@@ -334,7 +375,7 @@ pub(crate) async fn execute_in_transaction(
     };
     let audit = ProjectManagersAudit {
         project_id: intent.project_id,
-        previous_access_revision: org.access_revision,
+        previous_access_revision,
         access_revision,
         change: changed.then_some(ScopeChange { added, removed }),
     };

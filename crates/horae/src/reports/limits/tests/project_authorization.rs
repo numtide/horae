@@ -1,6 +1,6 @@
 use super::*;
 use crate::server_fns::test_seed::wait_for_blocked;
-use horae_core::permissions::catalog::BuiltInProfile;
+use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use std::time::Duration;
 
 async fn assign(connection: &mut PgConnection, ids: &SeedIds) {
@@ -84,6 +84,7 @@ async fn project_exports_preserve_membership_visibility_and_history_rules(pool: 
             .unwrap()
             .is_empty()
     );
+    // A role inside the project is not project management.
     for role in [
         horae_core::types::ProjectRole::Lead,
         horae_core::types::ProjectRole::Admin,
@@ -97,9 +98,11 @@ async fn project_exports_preserve_membership_visibility_and_history_rules(pool: 
         .execute(&pool)
         .await
         .unwrap();
-        assert_eq!(
-            names(&pool, ids.org_id, ids.user_id).await.unwrap(),
-            ["Widget"]
+        assert!(
+            names(&pool, ids.org_id, ids.user_id)
+                .await
+                .unwrap()
+                .is_empty()
         );
     }
     sqlx::query!(
@@ -109,20 +112,36 @@ async fn project_exports_preserve_membership_visibility_and_history_rules(pool: 
     .execute(&pool)
     .await
     .unwrap();
-    for role in [OrgRole::Manager, OrgRole::Admin] {
-        sqlx::query!(
-            "UPDATE users SET org_role=$1 WHERE id=$2",
-            role as OrgRole,
-            ids.user_id
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        assert_eq!(
-            names(&pool, ids.org_id, ids.user_id).await.unwrap(),
-            ["Widget"]
-        );
-    }
+    crate::ops::testing::provision(&pool, &ids, &[Permission::ProjectReadManaged], false).await;
+    assert!(
+        names(&pool, ids.org_id, ids.user_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    sqlx::query!(
+        "INSERT INTO project_management_assignments (id,org_id,manager_id,project_id) VALUES ($1,$2,$3,$4)",
+        Uuid::now_v7(), ids.org_id, ids.user_id, ids.project_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        names(&pool, ids.org_id, ids.user_id).await.unwrap(),
+        ["Widget"]
+    );
+    crate::ops::testing::provision(&pool, &ids, &[Permission::ProjectReadAll], false).await;
+    sqlx::query!(
+        "DELETE FROM project_management_assignments WHERE project_id=$1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        names(&pool, ids.org_id, ids.user_id).await.unwrap(),
+        ["Widget"]
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -238,9 +257,11 @@ async fn project_exports_refresh_release_scope_after_parent_wait(pool: PgPool) {
         assign(&mut pool.acquire().await.unwrap(), &ids).await;
         if change == "downgrade" {
             visibility(&mut pool.acquire().await.unwrap(), &ids, "managers").await;
+            crate::ops::testing::provision(&pool, &ids, &[Permission::ProjectReadManaged], false)
+                .await;
             sqlx::query!(
-                "UPDATE assignments SET role='lead' WHERE project_id=$1",
-                ids.project_id
+                "INSERT INTO project_management_assignments (id,org_id,manager_id,project_id) VALUES ($1,$2,$3,$4)",
+                Uuid::now_v7(), ids.org_id, ids.user_id, ids.project_id,
             )
             .execute(&pool)
             .await
@@ -262,15 +283,9 @@ async fn project_exports_refresh_release_scope_after_parent_wait(pool: PgPool) {
                 .unwrap();
             }
             "insert_settings" => visibility(&mut writer, &ids, "managers").await,
-            "downgrade" => {
-                sqlx::query!(
-                    "UPDATE assignments SET role='freelancer' WHERE project_id=$1",
-                    ids.project_id
-                )
-                .execute(&mut *writer)
+            "downgrade" => crate::ops::testing::set_grants(&mut writer, &ids, &[])
                 .await
-                .unwrap();
-            }
+                .unwrap(),
             _ => unreachable!(),
         }
         let pid = sqlx::query_scalar!("SELECT pg_backend_pid() as \"pid!\"")
@@ -297,7 +312,7 @@ async fn project_exports_refresh_release_scope_after_parent_wait(pool: PgPool) {
 #[serial_test::serial]
 async fn project_exports_release_every_captured_project_without_render_locks(pool: PgPool) {
     use crate::reports::{bounded::ExportPermit, render_project_export};
-    for change in ["remove", "deactivate", "demote_retained"] {
+    for change in ["remove", "deactivate", "narrow_retained"] {
         let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         assign(&mut pool.acquire().await.unwrap(), &ids).await;
         let second = Uuid::now_v7();
@@ -359,8 +374,13 @@ async fn project_exports_release_every_captured_project_without_render_locks(poo
         .fetch_one(&mut *writer)
         .await
         .unwrap();
+        // Every change narrows the grants to the Member floor, so only the
+        // retained memberships keep the projects readable.
+        crate::ops::testing::set_grants(&mut writer, &ids, &[])
+            .await
+            .unwrap();
         sqlx::query!(
-            "UPDATE users SET org_role='member', active=$2 WHERE id=$1",
+            "UPDATE users SET active=$2 WHERE id=$1",
             ids.user_id,
             change != "deactivate"
         )
@@ -376,7 +396,7 @@ async fn project_exports_release_every_captured_project_without_render_locks(poo
         writer.commit().await.unwrap();
         release.send(()).unwrap();
         let result = pending.await.unwrap();
-        if change == "demote_retained" {
+        if change == "narrow_retained" {
             let body = result.unwrap();
             let mut writer = pool.begin().await.unwrap();
             sqlx::query!(
@@ -438,13 +458,7 @@ async fn project_exports_bound_rows_and_text_after_scope_filtering(pool: PgPool)
     .await
     .unwrap();
     assign(&mut pool.acquire().await.unwrap(), &ids).await;
-    sqlx::query!(
-        "UPDATE users SET org_role='member' WHERE id=$1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    crate::ops::testing::provision(&pool, &ids, &[], false).await;
     assert_eq!(
         names(&pool, ids.org_id, ids.user_id).await.unwrap(),
         ["Widget"]
@@ -506,9 +520,11 @@ async fn paused_project_pool(pool: &PgPool) -> PgPool {
     .execute(pool)
     .await
     .unwrap();
+    // Every paused test reads through a membership, so the pause runs once
+    // the reader reaches the scope join.
     sqlx::query!(
-        "CREATE VIEW project_export_test.project_read_access AS
-        SELECT * FROM public.project_read_access WHERE project_export_test.pause()"
+        "CREATE VIEW project_export_test.assignments AS
+        SELECT * FROM public.assignments WHERE project_export_test.pause()"
     )
     .execute(pool)
     .await
@@ -680,13 +696,7 @@ async fn project_exports_reject_missing_foreign_and_unreadable_captured_ids(pool
     authorize_projects(&pool, ids.org_id, ids.user_id, &[], &[])
         .await
         .unwrap();
-    sqlx::query!(
-        "UPDATE users SET org_role='member' WHERE id=$1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    crate::ops::testing::provision(&pool, &ids, &[], false).await;
     assert_eq!(
         authorize_projects(&pool, ids.org_id, ids.user_id, &[ids.project_id], &[]).await,
         Err(StatusCode::FORBIDDEN)

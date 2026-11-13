@@ -3,7 +3,7 @@
 use super::*;
 use crate::models::{DetailedReportRow, time_report::TimeReportQuery};
 use crate::server_fns::StoredPersonPermissions;
-use horae_core::{permissions::catalog::Permission, types::OrgRole};
+use horae_core::permissions::catalog::Permission;
 
 pub(in crate::reports::streaming) async fn declare_entries(
     connection: &mut PgConnection,
@@ -14,7 +14,7 @@ pub(in crate::reports::streaming) async fn declare_entries(
     sqlx::query!(
         r#"DECLARE horae_csv NO SCROLL CURSOR FOR
            WITH authority AS MATERIALIZED (
-             SELECT o.permission_policy_version policy,u.org_role role,u.active,
+             SELECT u.active,
                     s.catalog_version,s.grants,s.is_administrator,s.source permission_source,
                     s.built_in_profile,s.template_id,s.applied_template_revision,s.revision,
                     COALESCE(octet_length(s.source),0)::bigint + COALESCE(octet_length(s.built_in_profile),0)::bigint
@@ -24,7 +24,7 @@ pub(in crate::reports::streaming) async fn declare_entries(
              LEFT JOIN users u ON u.id=identity.user_id AND u.org_id=identity.org_id
              LEFT JOIN person_permission_states s ON s.org_id=o.id AND s.user_id=u.id
            )
-           SELECT a.policy,a.role,a.active,a.catalog_version,a.grants,a.is_administrator,
+           SELECT a.active,a.catalog_version,a.grants,a.is_administrator,
                   a.permission_source,a.built_in_profile,a.template_id,a.applied_template_revision,a.revision,
                   e.id,e.user_id,e.project_id,e.spent_date,e.project_name,e.task_name,e.user_name,
                   e.minutes,e.rounded_minutes,e.billable,e.notes,
@@ -44,13 +44,12 @@ pub(in crate::reports::streaming) async fn declare_entries(
              JOIN clients c ON c.id=p.client_id AND c.org_id=te.org_id
              LEFT JOIN project_tasks pt ON pt.project_id=p.id AND pt.task_id=t.id
              WHERE te.org_id=$1 AND a.active AND (
-               (a.policy=0 AND a.role IN ('admin','manager')) OR (a.policy=1 AND (
-                 'time_read_all'=ANY(a.grants) OR ('time_read_own'=ANY(a.grants) AND te.user_id=$2)
-                 OR ('time_read_managed'=ANY(a.grants) AND (
-                   EXISTS (SELECT 1 FROM person_management_assignments m
-                     WHERE m.org_id=te.org_id AND m.manager_id=$2 AND m.managed_user_id=te.user_id)
-                   OR EXISTS (SELECT 1 FROM project_management_assignments m
-                     WHERE m.org_id=te.org_id AND m.manager_id=$2 AND m.project_id=te.project_id))))))
+               'time_read_all'=ANY(a.grants) OR ('time_read_own'=ANY(a.grants) AND te.user_id=$2)
+               OR ('time_read_managed'=ANY(a.grants) AND (
+                 EXISTS (SELECT 1 FROM person_management_assignments m
+                   WHERE m.org_id=te.org_id AND m.manager_id=$2 AND m.managed_user_id=te.user_id)
+                 OR EXISTS (SELECT 1 FROM project_management_assignments m
+                   WHERE m.org_id=te.org_id AND m.manager_id=$2 AND m.project_id=te.project_id))))
                AND te.spent_date BETWEEN $3 AND $4
                AND (NOT $10::bool OR p.active)
                AND ($11::bool IS NULL OR $11 = (te.billable AND (te.invoice_id IS NOT NULL
@@ -73,8 +72,6 @@ pub(in crate::reports::streaming) async fn declare_entries(
 }
 
 pub(in crate::reports::streaming) struct TimeRow {
-    policy: Option<i32>,
-    role: Option<OrgRole>,
     active: Option<bool>,
     catalog_version: Option<i32>,
     grants: Option<Vec<String>>,
@@ -103,50 +100,39 @@ pub(in crate::reports::streaming) struct TimeEntry {
 }
 
 impl TimeRow {
-    pub(in crate::reports::streaming) fn into_entry(
-        self,
-        expected_policy: i32,
-    ) -> Result<Option<TimeEntry>, StatusCode> {
-        let policy = self.policy.ok_or(StatusCode::FORBIDDEN)?;
-        if !matches!(policy, 0 | 1) {
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-        if policy != expected_policy || self.active != Some(true) {
+    pub(in crate::reports::streaming) fn into_entry(self) -> Result<Option<TimeEntry>, StatusCode> {
+        // A missing organization or a foreign or inactive person leaves the
+        // identity columns empty.
+        if self.active != Some(true) {
             return Err(StatusCode::FORBIDDEN);
         }
-        match policy {
-            0 if matches!(self.role, Some(OrgRole::Admin | OrgRole::Manager)) => {}
-            0 => return Err(StatusCode::FORBIDDEN),
-            _ => {
-                let state = StoredPersonPermissions {
-                    catalog_version: self
-                        .catalog_version
-                        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
-                    grants: self.grants.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
-                    is_administrator: self
-                        .is_administrator
-                        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
-                    source: self
-                        .permission_source
-                        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
-                    built_in_profile: self.built_in_profile,
-                    template_id: self.template_id,
-                    applied_template_revision: self.applied_template_revision,
-                    revision: self.revision.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
-                }
-                .restore()
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-                if ![
-                    Permission::TimeReadOwn,
-                    Permission::TimeReadManaged,
-                    Permission::TimeReadAll,
-                ]
-                .iter()
-                .any(|permission| state.grants.contains(*permission))
-                {
-                    return Err(StatusCode::FORBIDDEN);
-                }
-            }
+        let state = StoredPersonPermissions {
+            catalog_version: self
+                .catalog_version
+                .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
+            grants: self.grants.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
+            is_administrator: self
+                .is_administrator
+                .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
+            source: self
+                .permission_source
+                .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
+            built_in_profile: self.built_in_profile,
+            template_id: self.template_id,
+            applied_template_revision: self.applied_template_revision,
+            revision: self.revision.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
+        }
+        .restore()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if ![
+            Permission::TimeReadOwn,
+            Permission::TimeReadManaged,
+            Permission::TimeReadAll,
+        ]
+        .iter()
+        .any(|permission| state.grants.contains(*permission))
+        {
+            return Err(StatusCode::FORBIDDEN);
         }
         // Validate authority before discarding an empty-source sentinel.
         if self.id.is_none() {
@@ -179,11 +165,11 @@ pub(in crate::reports::streaming) async fn entries(
     limit: i32,
 ) -> Result<Vec<TimeRow>, StatusCode> {
     sqlx::query_as!(TimeRow,
-        r#"SELECT policy,role AS "role?: OrgRole",active,catalog_version,grants,is_administrator,
+        r#"SELECT active,catalog_version,grants,is_administrator,
                   permission_source,built_in_profile,template_id,applied_template_revision,revision,
                   id,user_id,project_id,spent_date AS "spent_date?: NaiveDate",project_name,task_name,user_name,
                   minutes,rounded_minutes,billable,notes
-           FROM fetch_csv_export_rows($1) AS source(policy integer,role org_role,active boolean,
+           FROM fetch_csv_export_rows($1) AS source(active boolean,
              catalog_version integer,grants text[],is_administrator boolean,permission_source text,
              built_in_profile text,template_id uuid,applied_template_revision bigint,revision bigint,
              id uuid,user_id uuid,project_id uuid,spent_date date,project_name text,task_name text,user_name text,
