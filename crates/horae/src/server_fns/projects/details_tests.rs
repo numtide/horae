@@ -1,5 +1,6 @@
 use super::canonical_read_tests::project_details;
 use super::*;
+use crate::ops::testing::become_profile;
 use crate::server_fns::test_seed::seed;
 use horae_core::permissions::catalog::BuiltInProfile;
 use serial_test::serial;
@@ -37,21 +38,19 @@ async fn project_details_only_offer_task_rate_currency_to_current_managers(pool:
                 sqlx::query!("INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode) VALUES ($1, $2, $3, $4, $5)", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id, mode)
                     .execute(&pool).await.unwrap();
             }
-            for role in [OrgRole::Admin, OrgRole::Manager, OrgRole::Member] {
-                sqlx::query!(
-                    "UPDATE users SET org_role = $2 WHERE id = $1",
-                    ids.user_id,
-                    role as OrgRole
-                )
-                .execute(&pool)
-                .await
-                .unwrap();
+            // Task rates need project and billable-rate writes: only the
+            // Administrator profile holds both for every project.
+            for role in [
+                BuiltInProfile::Administrator,
+                BuiltInProfile::ExecutiveManager,
+            ] {
+                become_profile(&pool, &ids, role).await;
                 let details = project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
                     .await
                     .unwrap()
                     .unwrap();
                 let json = serde_json::to_value(details).unwrap();
-                let expected = if role != OrgRole::Member
+                let expected = if role == BuiltInProfile::Administrator
                     && project_type != ProjectType::NonBillable
                     && (mode.is_none()
                         || (project_type == ProjectType::TimeAndMaterials && mode == Some("task")))
@@ -132,13 +131,8 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
             .is_empty()
     );
 
-    sqlx::query!(
-        "UPDATE users SET org_role = 'manager' WHERE id = $1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    // A Project Manager reads every project but not its private notes.
+    become_profile(&pool, &ids, BuiltInProfile::ProjectManager).await;
     let details = project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
         .await
         .unwrap()
@@ -149,13 +143,7 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
             .get("admin_notes")
             .is_none()
     );
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    become_profile(&pool, &ids, BuiltInProfile::Member).await;
     assert!(
         project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
             .await
@@ -260,8 +248,14 @@ async fn unlinked_and_private_project_tags_do_not_leak_into_filters(pool: PgPool
             .unwrap()
             .is_none()
     );
+    // A designated manager of the project reads it again.
+    use horae_core::permissions::catalog::Permission;
+    crate::ops::testing::provision(&pool, &ids, &[Permission::ProjectReadManaged], false).await;
     sqlx::query!(
-        "UPDATE assignments SET role = 'lead' WHERE project_id = $1 AND user_id = $2",
+        "INSERT INTO project_management_assignments (id, org_id, project_id, manager_id)
+         VALUES ($1, $2, $3, $4)",
+        Uuid::now_v7(),
+        ids.org_id,
         ids.project_id,
         ids.user_id
     )

@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.harvest_id AS id, u.name, u.email, u.active,\n         COALESCE(p.is_administrator, false) AS \"is_admin!\",\n         u.cost_rate_cents, u.billable_rate_cents,\n         (SELECT default_currency FROM organizations o WHERE o.id = u.org_id) AS \"org_currency!\",\n         u.created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n         FROM users u\n         LEFT JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id\n         WHERE u.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_admin!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "cost_rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "billable_rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "org_currency!",
+        "type_info": "Bpchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      true,
+      true,
+      null,
+      false
+    ]
+  },
+  "hash": "2193c058f8464fb7d510c8594635168a1e84efd71b5b24e28ab2ad210f13a871"
+}

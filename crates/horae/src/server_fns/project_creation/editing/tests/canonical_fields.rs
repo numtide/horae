@@ -19,13 +19,9 @@ pub(super) async fn canonical_actor(pool: &PgPool, owner: &SeedIds, grants: &Per
     .execute(pool)
     .await
     .unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        owner.org_id,
-    )
-    .execute(pool)
-    .await
-    .unwrap();
+    // The editor ignores the policy; project managers and people still read
+    // it until their own cut-over.
+    crate::server_fns::test_seed::use_policy_one(pool, owner.org_id).await;
 }
 
 pub(super) fn keep_protected(form: &ProjectForm) -> Vec<ProtectedProjectField> {
@@ -398,8 +394,8 @@ async fn canonical_editor_uses_designations_instead_of_legacy_team_roles(pool: P
 
     let (owner, original) = configured_fixture(&pool).await;
     assert!(
-        original.form.team[0].manager,
-        "legacy lead remains a legacy manager"
+        !original.form.team[0].manager,
+        "the stored lead role is not a designation"
     );
     canonical_actor(
         &pool,
@@ -730,12 +726,15 @@ async fn canonical_save_preserves_withheld_fields_and_original_retry_intent(pool
         .expect("project editing alone can preserve protected fields");
     assert!(changed);
     let mut tx = pool.begin().await.unwrap();
-    let stored = load_project_form(&mut tx, owner.org_id, original.id, true)
+    let stored = load_project_form(&mut tx, owner.org_id, original.id)
         .await
         .unwrap();
     tx.commit().await.unwrap();
     let mut expected = original.form;
     expected.name.clone_from(&request.form.name);
+    // The stored form reads the kept lead role as a manager flag; the editor
+    // shows designations instead.
+    expected.team[0].manager = true;
     assert_eq!(stored.form, expected);
     let task_budget = sqlx::query_scalar!(
         "SELECT budget_cents FROM project_task_settings WHERE project_id=$1 AND task_id=$2",
@@ -759,10 +758,10 @@ async fn canonical_save_preserves_withheld_fields_and_original_retry_intent(pool
     .await
     .unwrap();
     let payload = serde_json::to_string(&receipt).unwrap();
+    // Private notes are visible to whoever edits every project.
     for secret in [
         "25.00",
         "10.00",
-        "Private notes",
         "456.78",
         "9876.54",
         "Inactive milestone",
@@ -900,22 +899,16 @@ async fn canonical_editor_without_rate_read_withholds_stored_task_rate(pool: PgP
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_cost_reader_does_not_require_legacy_administrator(pool: PgPool) {
+async fn cost_reader_does_not_require_administrator(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
     assert_eq!(original.form.team[0].cost_rate, "10.00");
     canonical_actor(
         &pool,
         &owner,
-        &PermissionSelection::new(&[Permission::ProjectWriteAll, Permission::CostRateReadAll]),
+        &PermissionSelection::new(&[Permission::ProjectWriteManaged, Permission::CostRateReadAll]),
     )
     .await;
-    sqlx::query!(
-        "UPDATE users SET org_role='manager' WHERE id=$1",
-        owner.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    super::designate(&pool, &owner, original.id, owner.user_id).await;
 
     let editor = load_editable_project(&pool, owner.user_id, owner.org_id, original.id)
         .await
@@ -938,12 +931,15 @@ async fn canonical_editor_withholds_monetary_settings_without_billable_read(pool
     save_editable_project(&pool, owner.user_id, owner.org_id, &setup, false)
         .await
         .unwrap();
+    // Managed-project writing: private notes belong to whoever may edit
+    // every project.
     canonical_actor(
         &pool,
         &owner,
-        &PermissionSelection::new(&[Permission::ProjectWriteAll]),
+        &PermissionSelection::new(&[Permission::ProjectWriteManaged]),
     )
     .await;
+    super::designate(&pool, &owner, original.id, owner.user_id).await;
     let editor = load_editable_project(&pool, owner.user_id, owner.org_id, original.id)
         .await
         .unwrap();
@@ -1002,8 +998,9 @@ async fn canonical_editor_withholds_monetary_settings_without_billable_read(pool
         let access = editor.access.unwrap();
         assert_eq!(access.billable, expected_access);
         assert_eq!(access.costs, ProjectFieldAccess::Withheld);
-        assert_eq!(access.private_notes, ProjectFieldAccess::Withheld);
-        assert!(editor.form.admin_notes.is_empty());
+        // Editing every project includes its private notes.
+        assert_eq!(access.private_notes, ProjectFieldAccess::Editable);
+        assert_eq!(editor.form.admin_notes, "Private notes");
         assert!(
             editor
                 .form
@@ -1395,29 +1392,6 @@ async fn canonical_read_only_billable_grant_rejects_task_rate_update(pool: PgPoo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_project_editor_is_not_rejected_by_legacy_member_role(pool: PgPool) {
-    let (owner, original) = configured_fixture(&pool).await;
-    canonical_actor(
-        &pool,
-        &owner,
-        &PermissionSelection::new(&[Permission::ProjectWriteAll]),
-    )
-    .await;
-    sqlx::query!(
-        "UPDATE users SET org_role='member' WHERE id=$1",
-        owner.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let editor = load_editable_project(&pool, owner.user_id, owner.org_id, original.id)
-        .await
-        .expect("canonical project-write authority must not depend on the legacy role");
-    assert_eq!(editor.id, original.id);
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-#[serial_test::serial]
 async fn canonical_financial_grants_do_not_replace_project_editing_authority(pool: PgPool) {
     let (owner, original) = configured_fixture(&pool).await;
     canonical_actor(
@@ -1478,13 +1452,7 @@ async fn canonical_managed_editor_requires_the_project_designation(pool: PgPool)
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_save_rejects_unavailable_authority_without_changing_storage(pool: PgPool) {
-    for case in [
-        "missing",
-        "malformed",
-        "unknown_policy",
-        "inactive",
-        "no_grant",
-    ] {
+    for case in ["missing", "malformed", "inactive", "no_grant"] {
         let (owner, original) = configured_fixture(&pool).await;
         canonical_actor(
             &pool,
@@ -1512,15 +1480,6 @@ async fn canonical_save_rejects_unavailable_authority_without_changing_storage(p
                 sqlx::query!(
                     "UPDATE person_permission_states SET grants=ARRAY['unknown.permission'] WHERE user_id=$1",
                     owner.user_id
-                )
-                .execute(&pool)
-                .await
-                .unwrap();
-            }
-            "unknown_policy" => {
-                sqlx::query!(
-                    "UPDATE organizations SET permission_policy_version=2 WHERE id=$1",
-                    owner.org_id
                 )
                 .execute(&pool)
                 .await

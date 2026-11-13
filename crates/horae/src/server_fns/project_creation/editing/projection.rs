@@ -129,7 +129,11 @@ pub(super) async fn redact(
             person.cost_rate_cents = None;
         }
     }
-    if !permissions.is_administrator {
+    // Private notes belong to whoever may edit every project.
+    let notes = permissions
+        .grants
+        .contains(horae_core::permissions::catalog::Permission::ProjectWriteAll);
+    if !notes {
         project.form.admin_notes.clear();
     }
     for task in &mut project.selection.tasks {
@@ -153,7 +157,7 @@ pub(super) async fn redact(
         },
         billable: field_access(read_billable, write_billable),
         costs: field_access(read_cost, write_cost),
-        private_notes: field_access(permissions.is_administrator, permissions.is_administrator),
+        private_notes: field_access(notes, notes),
     });
     Ok(())
 }

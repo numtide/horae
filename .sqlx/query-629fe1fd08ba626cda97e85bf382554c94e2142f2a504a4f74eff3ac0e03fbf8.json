@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_budget_notifications\n                   (id,org_id,project_id,task_id,user_id,recipient_id,period_key,threshold)\n                 SELECT $1,org_id,project_id,task_id,user_id,$2,period_key,threshold\n                 FROM project_budget_notifications WHERE org_id = $3 LIMIT 1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "629fe1fd08ba626cda97e85bf382554c94e2142f2a504a4f74eff3ac0e03fbf8"
+}

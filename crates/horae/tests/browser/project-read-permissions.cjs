@@ -9,7 +9,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id FROM users WHERE email='admin@example.com' AND active AND org_role='admin') u"));
+const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id FROM users WHERE email='admin@example.com' AND active) u"));
 const org = actor.org_id;
 const id = n => `019f4100-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const project = id(1), client = id(2), teammate = id(3), task = id(4);
@@ -126,16 +126,9 @@ let restoreSeededStates = () => {};
     sql(`UPDATE users SET active=true WHERE id='${actor.id}'`);
     await page.locator('#project-detail-retry').click();
     await expect(page.getByRole('region', { name: 'Project team', exact: true })).toBeVisible();
-
-    sql(`UPDATE organizations SET permission_policy_version=0 WHERE id='${org}'`);
-    await page.locator('#project-detail-refresh').click();
-    await assertHidden();
-    sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'`);
-    await page.locator('#project-detail-retry').click();
-    await expect(page.getByRole('region', { name: 'Project team', exact: true })).toBeVisible();
     assert.deepEqual(directories, []);
     assert.deepEqual(errors, []);
-    console.log('PASS: inactive-account and changed-policy responses clear retained detail; retry recovers only the original binding');
+    console.log('PASS: an inactive-account response clears retained detail; retry recovers only the original binding');
   } catch (error) {
     console.error(error);
     console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot({ timeout: 3000 }).catch(failure => failure.message) });

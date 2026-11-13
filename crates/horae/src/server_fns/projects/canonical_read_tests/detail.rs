@@ -24,7 +24,6 @@ async fn detail_view_contains_only_scoped_workflow_labels_and_current_edit_autho
         .unwrap();
     assert_eq!(view.project.id, ids.project_id);
     assert_eq!(view.requester.user_id, ids.user_id);
-    assert!(view.canonical_permissions);
     assert!(!view.can_edit);
     assert_eq!(
         serde_json::to_value(&view.team).unwrap(),
@@ -209,9 +208,9 @@ pub(super) fn legacy_viewer(ids: &SeedIds, role: BuiltInProfile) -> User {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn detail_view_identity_and_lifecycle_affordances_match_policy_zero_authority(pool: PgPool) {
-    // `set_project_active` requires a legacy Manager or Administrator; any
-    // active policy-zero reader may open the client's detail page.
+async fn detail_view_identity_and_lifecycle_affordances_follow_the_profile(pool: PgPool) {
+    // Archiving needs `ProjectWriteAll` here (nobody manages the project), and
+    // the client link needs `ClientReadAll`; a Member has neither.
     for (role, can_change_status) in [
         (BuiltInProfile::Administrator, true),
         (BuiltInProfile::ExecutiveManager, true),
@@ -231,11 +230,10 @@ async fn detail_view_identity_and_lifecycle_affordances_match_policy_zero_author
         let view = detail_view::fetch(&pool, &viewer, ids.project_id, None, today())
             .await
             .unwrap();
-        assert!(!view.canonical_permissions, "{role:?}");
         assert_eq!(view.client_id, ids.client_id, "{role:?}");
         assert_eq!(view.project_type, ProjectType::TimeAndMaterials, "{role:?}");
         assert!(view.active, "{role:?}");
-        assert!(view.can_open_client, "{role:?}");
+        assert_eq!(view.can_open_client, can_change_status, "{role:?}");
         assert_eq!(view.can_change_status, can_change_status, "{role:?}");
 
         sqlx::query!(
@@ -262,11 +260,7 @@ async fn detail_view_identity_and_lifecycle_affordances_match_policy_zero_author
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn detail_view_policy_one_offers_no_role_derived_status_change_and_scopes_client_link(
-    pool: PgPool,
-) {
-    // A legacy Manager label must not substitute for a current grant: the
-    // status mutation still checks only the legacy role, so policy one offers none.
+async fn detail_view_status_follows_project_write_and_scopes_client_link(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
         BuiltInProfile::ExecutiveManager,
@@ -276,10 +270,26 @@ async fn detail_view_policy_one_offers_no_role_derived_status_change_and_scopes_
     let view = detail_view::fetch(&pool, &viewer, ids.project_id, None, today())
         .await
         .unwrap();
-    assert!(view.canonical_permissions);
     assert!(view.can_edit);
-    assert!(!view.can_change_status);
+    assert!(view.can_change_status);
     assert!(!view.can_open_client);
+
+    // Managed-project writing covers only projects the viewer manages.
+    replace_grants(
+        &pool,
+        &ids,
+        &[Permission::ProjectReadAll, Permission::ProjectWriteManaged],
+    )
+    .await;
+    let unmanaged = detail_view::fetch(&pool, &viewer, ids.project_id, None, today())
+        .await
+        .unwrap();
+    assert!(!unmanaged.can_edit && !unmanaged.can_change_status);
+    super::designate(&pool, &ids).await;
+    let managed = detail_view::fetch(&pool, &viewer, ids.project_id, None, today())
+        .await
+        .unwrap();
+    assert!(managed.can_edit && managed.can_change_status);
     assert_eq!(view.project.client_name, "Acme");
     assert_eq!(view.client_id, ids.client_id);
 

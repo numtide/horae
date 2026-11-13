@@ -7,34 +7,21 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
-    let second = user(pool, ids.org_id, OrgRole::Manager).await;
+    let second = user(pool, ids.org_id, OrgRole::Member).await;
     let first_cookie = api.cookie(ids.user_id).await;
     let second_cookie = api.cookie(second).await;
     let lookup = json!({"project_id":ids.project_id});
-    let legacy = api
-        .json("load_project_editor", lookup.clone(), &second_cookie)
-        .await;
-    assert!(legacy["access"].is_null());
-    let legacy_save = json!({"request": {
-        "id": Uuid::now_v7(), "project_id": ids.project_id,
-        "expected_revision": legacy["revision"], "form": legacy["form"],
-    }});
-    // Legacy policy still denies Members, even after the public role guard is removed.
-    for (endpoint, body) in [
-        ("load_project_editor", lookup.clone()),
-        ("save_project_editor", legacy_save.clone()),
-    ] {
-        assert_eq!(
-            api.call(endpoint, body, Some(&first_cookie), false)
-                .await
-                .status(),
-            StatusCode::FORBIDDEN
-        );
-    }
+    // A Member's stored state does not edit projects.
     assert_eq!(
-        api.json("save_project_editor", legacy_save, &second_cookie)
-            .await,
-        json!(ids.project_id)
+        api.call(
+            "load_project_editor",
+            lookup.clone(),
+            Some(&first_cookie),
+            false
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
     );
     let grants: Vec<String> = serde_json::from_value(json!(PermissionSelection::new(&[
         Permission::ProjectWriteAll,
