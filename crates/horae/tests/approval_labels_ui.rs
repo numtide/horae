@@ -12,6 +12,7 @@ use dioxus::prelude::*;
 use dioxus::router::Navigator;
 use dioxus::router::components::HistoryProvider;
 use futures_util::FutureExt;
+use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use horae_core::types::OrgRole;
 use horae_core::week::week_bounds;
 use uuid::Uuid;
@@ -58,8 +59,12 @@ mod route {
 #[derive(Clone, Default)]
 struct Probe {
     rows: Vec<approval_model::ApprovalSummary>,
-    manager: bool,
-    admin: bool,
+    /// The stored grants include approval access.
+    approves: bool,
+    /// The stored state is the Administrator's.
+    administrator: bool,
+    /// The own-permissions read has no stored grants to show.
+    permissions_unknown: bool,
     /// The session user's id; a fresh one when unset.
     me_id: Option<Uuid>,
     /// The session user never resolves.
@@ -84,10 +89,6 @@ struct Probe {
     actions: Rc<RefCell<Vec<Vec<String>>>>,
     /// The page's router and scope, captured on its first list request.
     navigator: Rc<Cell<Option<(Navigator, ScopeId)>>>,
-}
-
-fn is_manager(me: &Resource<Result<user_model::CurrentUser, ServerFnError>>) -> bool {
-    matches!(&*me.read(), Some(Ok(user)) if user.is_manager_or_above())
 }
 
 fn loaded<T>(
@@ -194,9 +195,9 @@ fn row(name: &str) -> approval_model::ApprovalSummary {
     row
 }
 
-fn manager(rows: Vec<approval_model::ApprovalSummary>) -> Probe {
+fn approver(rows: Vec<approval_model::ApprovalSummary>) -> Probe {
     Probe {
-        manager: true,
+        approves: true,
         rows,
         week: "2026-09-21".into(),
         ..Default::default()
@@ -211,7 +212,7 @@ fn this_week(first_day: Weekday) -> NaiveDate {
 
 #[tokio::test]
 async fn approval_names_render_from_rows_without_directory_and_escape_markup() {
-    let probe = manager(vec![
+    let probe = approver(vec![
         row("Álvaro <script> & 王"),
         row("Álvaro <script> & 王"),
     ]);
@@ -247,7 +248,7 @@ fn remountable(probe: Probe) -> Element {
 
 #[tokio::test]
 async fn returning_to_approvals_reuses_the_session_week_start() {
-    let probe = manager(vec![row("Ada")]);
+    let probe = approver(vec![row("Ada")]);
     let mut dom = VirtualDom::new_with_props(remountable, probe.clone());
     dom.rebuild_in_place();
     settle(&mut dom);
@@ -264,7 +265,7 @@ async fn returning_to_approvals_reuses_the_session_week_start() {
 async fn a_failed_week_start_is_retried_when_approvals_is_opened_again() {
     let probe = Probe {
         week_start_fails_once: true,
-        ..manager(vec![row("Ada")])
+        ..approver(vec![row("Ada")])
     };
     let mut dom = VirtualDom::new_with_props(remountable, probe.clone());
     dom.rebuild_in_place();
@@ -288,7 +289,7 @@ async fn a_failed_week_start_is_retried_when_approvals_is_opened_again() {
 async fn a_session_refresh_retries_a_failed_week_start_only() {
     let probe = Probe {
         week_start_fails_once: true,
-        ..manager(vec![row("Ada")])
+        ..approver(vec![row("Ada")])
     };
     let mut dom = VirtualDom::new_with_props(remountable, probe.clone());
     dom.rebuild_in_place();
@@ -304,7 +305,7 @@ async fn a_session_refresh_retries_a_failed_week_start_only() {
 
 #[tokio::test]
 async fn approval_loading_error_empty_and_denied_states_need_no_directory() {
-    for (pending, error, manager, expected) in [
+    for (pending, error, approves, expected) in [
         (true, None, true, "Loading"),
         (
             false,
@@ -313,12 +314,12 @@ async fn approval_loading_error_empty_and_denied_states_need_no_directory() {
             "Approvals unavailable",
         ),
         (false, None, true, "No approvals found"),
-        (false, None, false, "Manager or admin access is required"),
+        (false, None, false, "Approval access is required"),
     ] {
         let probe = Probe {
             pending,
             error,
-            manager,
+            approves,
             week: "2026-09-21".into(),
             ..Default::default()
         };
@@ -332,7 +333,7 @@ async fn approval_loading_error_empty_and_denied_states_need_no_directory() {
 #[tokio::test]
 async fn single_approval_action_keeps_the_record_id_not_the_person_label() {
     dioxus::html::set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
-    let probe = manager(vec![row("Same name")]);
+    let probe = approver(vec![row("Same name")]);
     let (mut dom, edits) = render(&probe);
     let clicks = click_listeners(edits);
     // Three pager links and three status filters, then the row's
@@ -349,7 +350,7 @@ async fn single_approval_action_keeps_the_record_id_not_the_person_label() {
 // T-U1
 #[tokio::test]
 async fn each_row_names_its_own_week_including_across_a_year() {
-    let probe = manager(vec![
+    let probe = approver(vec![
         summary("A", "2026-07-13", "2026-07-19", 60, "submitted"),
         summary("B", "2026-07-20", "2026-07-26", 60, "submitted"),
         summary("C", "2026-12-28", "2027-01-03", 60, "approved"),
@@ -372,7 +373,7 @@ async fn any_date_in_the_address_selects_its_configured_week() {
         let probe = Probe {
             week: "2026-10-29".into(),
             sunday,
-            ..manager(vec![])
+            ..approver(vec![])
         };
         render(&probe);
         assert_eq!(*probe.requests.borrow(), vec![expected.to_string()]);
@@ -386,7 +387,7 @@ async fn a_missing_or_unparseable_week_selects_the_current_week() {
         let before = this_week(Weekday::Mon);
         let probe = Probe {
             week: week.into(),
-            ..manager(vec![])
+            ..approver(vec![])
         };
         let (dom, _) = render(&probe);
         let after = this_week(Weekday::Mon);
@@ -408,7 +409,7 @@ async fn a_missing_or_unparseable_week_selects_the_current_week() {
 async fn an_unrepresentable_week_shows_an_error_and_requests_nothing() {
     let probe = Probe {
         week: NaiveDate::MAX.to_string(),
-        ..manager(vec![])
+        ..approver(vec![])
     };
     let (dom, _) = render(&probe);
     let html = html(&dom);
@@ -428,7 +429,7 @@ async fn an_unrepresentable_week_shows_an_error_and_requests_nothing() {
 async fn the_pager_links_to_the_adjacent_and_current_weeks() {
     let probe = Probe {
         week: "2026-10-19".into(),
-        ..manager(vec![])
+        ..approver(vec![])
     };
     let (dom, _) = render(&probe);
     let html = html(&dom);
@@ -456,7 +457,7 @@ async fn the_pager_links_to_the_adjacent_and_current_weeks() {
 // T-U4
 #[tokio::test]
 async fn totals_are_the_exact_sum_of_the_shown_rows() {
-    let probe = manager(vec![
+    let probe = approver(vec![
         summary("A", "2026-09-21", "2026-09-27", 450, "submitted"),
         summary("B", "2026-09-21", "2026-09-27", 135, "approved"),
     ]);
@@ -468,7 +469,7 @@ async fn totals_are_the_exact_sum_of_the_shown_rows() {
 #[tokio::test]
 async fn approve_visible_submits_exactly_the_shown_pending_approvals() {
     dioxus::html::set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
-    let probe = manager(vec![
+    let probe = approver(vec![
         summary("A", "2026-09-21", "2026-09-27", 60, "submitted"),
         summary("B", "2026-09-21", "2026-09-27", 60, "approved"),
         summary("C", "2026-09-21", "2026-09-27", 60, "submitted"),
@@ -484,9 +485,9 @@ async fn approve_visible_submits_exactly_the_shown_pending_approvals() {
 }
 
 #[tokio::test]
-async fn a_manager_is_offered_no_decision_on_their_own_week() {
+async fn a_non_administrator_is_offered_no_decision_on_their_own_week() {
     dioxus::html::set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
-    let probe = manager(vec![row("Reviewer"), row("Teammate")]);
+    let probe = approver(vec![row("Reviewer"), row("Teammate")]);
     let probe = Probe {
         me_id: Some(probe.rows[0].approval.user_id),
         ..probe
@@ -508,10 +509,10 @@ async fn a_manager_is_offered_no_decision_on_their_own_week() {
 }
 
 #[tokio::test]
-async fn an_admin_is_offered_decisions_on_their_own_week() {
-    let probe = manager(vec![row("Reviewer")]);
+async fn an_administrator_is_offered_decisions_on_their_own_week() {
+    let probe = approver(vec![row("Reviewer")]);
     let probe = Probe {
-        admin: true,
+        administrator: true,
         me_id: Some(probe.rows[0].approval.user_id),
         ..probe
     };
@@ -526,7 +527,7 @@ async fn an_admin_is_offered_decisions_on_their_own_week() {
 async fn a_previous_weeks_rows_never_show_under_another_week() {
     let probe = Probe {
         pending_weeks: vec!["2026-09-28".into()],
-        ..manager(vec![row("Previous week person")])
+        ..approver(vec![row("Previous week person")])
     };
     let (mut dom, _) = render(&probe);
     assert!(html(&dom).contains("Previous week person"));
@@ -542,7 +543,7 @@ async fn every_action_is_disabled_while_one_is_in_flight() {
     dioxus::html::set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
     let probe = Probe {
         action_pending: true,
-        ..manager(vec![row("A"), row("B")])
+        ..approver(vec![row("A"), row("B")])
     };
     let (mut dom, edits) = render(&probe);
     let bulk = *click_listeners(edits).last().unwrap();
@@ -564,18 +565,18 @@ async fn every_action_is_disabled_while_one_is_in_flight() {
 
 // T-U8
 #[tokio::test]
-async fn no_list_is_requested_without_manager_access_or_a_week_start() {
+async fn no_list_is_requested_without_approval_access_or_a_week_start() {
     let member = Probe {
-        manager: false,
-        ..manager(vec![])
+        approves: false,
+        ..approver(vec![])
     };
     let (dom, _) = render(&member);
-    assert!(html(&dom).contains("Manager or admin access is required"));
+    assert!(html(&dom).contains("Approval access is required"));
     assert!(member.requests.borrow().is_empty());
 
     let unconfigured = Probe {
         week_start_error: Some("Week start unavailable".into()),
-        ..manager(vec![])
+        ..approver(vec![])
     };
     let (dom, _) = render(&unconfigured);
     assert!(html(&dom).contains("Week start unavailable"));
@@ -586,16 +587,35 @@ async fn no_list_is_requested_without_manager_access_or_a_week_start() {
 async fn a_pending_session_user_shows_loading_not_a_denial() {
     let probe = Probe {
         me_pending: true,
-        ..manager(vec![row("A")])
+        ..approver(vec![row("A")])
     };
     let (dom, _) = render(&probe);
     let html = html(&dom);
     assert!(html.contains("Loading"), "{html}");
-    assert!(
-        !html.contains("Manager or admin access is required"),
-        "{html}"
-    );
+    assert!(!html.contains("Approval access is required"), "{html}");
     assert!(probe.requests.borrow().is_empty());
+}
+
+/// With no stored grants to show, the page asks and the server decides.
+#[tokio::test]
+async fn unknown_permissions_leave_the_decision_to_the_server() {
+    let probe = Probe {
+        approves: false,
+        permissions_unknown: true,
+        ..approver(vec![row("A")])
+    };
+    let (dom, _) = render(&probe);
+    let page = html(&dom);
+    assert!(page.contains(">A<"), "{page}");
+    assert_eq!(*probe.requests.borrow(), ["2026-09-21"]);
+    // Nobody is known to be an administrator, so the own week offers nothing.
+    let own = Probe {
+        me_id: Some(probe.rows[0].approval.user_id),
+        ..probe
+    };
+    let (dom, _) = render(&own);
+    let page = html(&dom);
+    assert_eq!(page.matches(">Approve<").count(), 0, "{page}");
 }
 
 // T-U9
@@ -604,7 +624,7 @@ async fn bulk_approval_reports_the_servers_count_for_its_week_only() {
     dioxus::html::set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
     let probe = Probe {
         approved: Some(2),
-        ..manager(vec![row("A"), row("B"), row("C")])
+        ..approver(vec![row("A"), row("B"), row("C")])
     };
     let (mut dom, edits) = render(&probe);
     let bulk = *click_listeners(edits).last().unwrap();
@@ -619,7 +639,28 @@ pub mod server_fns {
 
     pub async fn get_my_permissions()
     -> Result<Option<own_permissions_model::OwnPermissions>, ServerFnError> {
-        Ok(None)
+        let probe = use_context::<Probe>();
+        if probe.permissions_unknown {
+            return Ok(None);
+        }
+        let mut grants = vec![Permission::TimeReadOwn, Permission::TimeWriteOwn];
+        if probe.approves {
+            grants.extend([
+                Permission::TimeReadManaged,
+                Permission::TimeApproveManaged,
+                Permission::TimeReadAll,
+                Permission::TimeApproveAll,
+            ]);
+        }
+        Ok(Some(own_permissions_model::OwnPermissions {
+            catalog_version: PERMISSION_CATALOG_VERSION,
+            grants,
+            is_administrator: probe.administrator,
+            access_revision: 1,
+            person_revision: 1,
+            managed_person_ids: Vec::new(),
+            managed_project_ids: Vec::new(),
+        }))
     }
 
     pub async fn get_me() -> Result<user_model::CurrentUser, ServerFnError> {
@@ -632,13 +673,9 @@ pub mod server_fns {
             org_id: Uuid::now_v7(),
             name: "Reviewer".into(),
             email: "reviewer@example.test".into(),
-            org_role: if probe.admin {
-                OrgRole::Admin
-            } else if probe.manager {
-                OrgRole::Manager
-            } else {
-                OrgRole::Member
-            },
+            // Leftover data the page must not read: it says Member even for
+            // approvers and administrators.
+            org_role: OrgRole::Member,
             timezone: None,
             workspace_timezone: "UTC".into(),
             utc_offset_seconds: 0,
