@@ -1,6 +1,4 @@
 use super::*;
-use crate::server_fns::ProjectReadAccess;
-use horae_core::permissions::catalog::Permission;
 
 pub(super) async fn read(
     db: &PgPool,
@@ -10,17 +8,7 @@ pub(super) async fn read(
     limit: i64,
     offset: i64,
 ) -> Result<(i64, Vec<TaskRow>), ApiError> {
-    let mut access = ProjectReadAccess::begin(db, caller.org_id, caller.user_id)
-        .await
-        .map_err(|error| match error {
-            dioxus::prelude::ServerFnError::ServerError { code, .. }
-                if code == StatusCode::FORBIDDEN.as_u16() =>
-            {
-                forbidden("Task permission state is unavailable")
-            }
-            error => internal(error),
-        })?
-        .ok_or_else(|| forbidden("Task access is unavailable"))?;
+    let mut read = begin_read(db, caller, "Task").await?;
     // Count and rows share the authorized snapshot, even beyond the last page.
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
@@ -43,10 +31,10 @@ pub(super) async fn read(
         task_id,
         limit,
         offset,
-        access.has(Permission::TaskReadAll),
-        access.has(Permission::BillableRateReadAll),
+        read.actor.has(Permission::TaskReadAll),
+        read.actor.has(Permission::BillableRateReadAll),
     )
-    .fetch_all(&mut *access.tx)
+    .fetch_all(&mut *read.tx)
     .await
     .map_err(internal)?;
     let total = records
@@ -70,6 +58,6 @@ pub(super) async fn read(
             default_rate_currency: record.default_rate_currency,
         });
     }
-    access.tx.commit().await.map_err(internal)?;
+    read.finish(Ok(())).await.map_err(internal)?;
     Ok((total, rows))
 }

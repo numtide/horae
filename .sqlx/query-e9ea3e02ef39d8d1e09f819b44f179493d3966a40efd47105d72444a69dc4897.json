@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT harvest_id AS id, name, email, active,\n         org_role::text AS \"org_role!: String\",\n         cost_rate_cents, billable_rate_cents,\n         (SELECT default_currency FROM organizations o WHERE o.id = org_id) AS \"org_currency!\",\n         created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n         FROM users\n         WHERE org_id = $1\n           AND ($2::bool IS NULL OR active = $2)\n         ORDER BY name, id\n         LIMIT $3 OFFSET $4",
+  "query": "SELECT u.harvest_id AS id, u.name, u.email, u.active,\n         COALESCE(p.is_administrator, false) AS \"is_admin!\",\n         u.cost_rate_cents, u.billable_rate_cents,\n         (SELECT default_currency FROM organizations o WHERE o.id = u.org_id) AS \"org_currency!\",\n         u.created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n         FROM users u\n         LEFT JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id\n         WHERE u.org_id = $1\n           AND ($2::bool IS NULL OR u.active = $2)\n         ORDER BY u.name, u.id\n         LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -25,8 +25,8 @@
       },
       {
         "ordinal": 4,
-        "name": "org_role!: String",
-        "type_info": "Text"
+        "name": "is_admin!",
+        "type_info": "Bool"
       },
       {
         "ordinal": 5,
@@ -69,5 +69,5 @@
       false
     ]
   },
-  "hash": "2fd31984d3d215ab305e2377f56e7f9122abbb8d9872c6026c8ceaecfad26737"
+  "hash": "e9ea3e02ef39d8d1e09f819b44f179493d3966a40efd47105d72444a69dc4897"
 }

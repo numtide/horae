@@ -1,6 +1,5 @@
 use axum::extract::{FromRef, FromRequestParts};
 use axum::http::request::Parts;
-use horae_core::types::OrgRole;
 use uuid::Uuid;
 
 use super::errors::ApiError;
@@ -11,14 +10,13 @@ use super::errors::ApiError;
 /// A future iteration will add `Authorization: Bearer <token>` support
 /// with an `api_tokens` table.
 ///
-/// It carries the caller's role as well as their identity: this API serves the
-/// same session cookie as the SPA, so it has to apply the same rule that rates
-/// and other people's rows are manager material. The handlers do that gating;
-/// see [`super::forbidden`] and [`super::scoped_user_filter`].
+/// It carries only the caller's identity. Each reader loads the caller's
+/// stored permission state inside its own transaction (see
+/// [`super::begin_read`]), so the grants it decides with cannot go stale
+/// between this extractor and the rows it returns.
 pub struct AuthUser {
     pub user_id: Uuid,
     pub org_id: Uuid,
-    pub org_role: OrgRole,
 }
 
 impl<S: Send + Sync> FromRequestParts<S> for AuthUser
@@ -39,12 +37,11 @@ where
             .await
             .ok_or_else(|| ApiError::unauthorized("Not authenticated"))?;
 
-        // Look up the user's org and role. The `active` filter is what revokes a
+        // Look up the user's org. The `active` filter is what revokes a
         // deactivated user's still-live session (FR-002).
         let db = sqlx::PgPool::from_ref(state);
-        let row = sqlx::query!(
-            r#"SELECT org_id, org_role as "org_role: OrgRole"
-               FROM users WHERE id = $1 AND active = true"#,
+        let org_id = sqlx::query_scalar!(
+            "SELECT org_id FROM users WHERE id = $1 AND active = true",
             user_id
         )
         .fetch_optional(&db)
@@ -52,10 +49,6 @@ where
         .map_err(ApiError::internal)?
         .ok_or_else(|| ApiError::unauthorized("User not found"))?;
 
-        Ok(AuthUser {
-            user_id,
-            org_id: row.org_id,
-            org_role: row.org_role,
-        })
+        Ok(AuthUser { user_id, org_id })
     }
 }

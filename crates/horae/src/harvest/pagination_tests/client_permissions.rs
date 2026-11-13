@@ -5,7 +5,7 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn client_api_allows_read_only_grants_without_legacy_management(pool: PgPool) {
+async fn client_api_allows_read_only_grants_without_client_management(pool: PgPool) {
     let (ids, app) = canonical(&pool, BuiltInProfile::Member, &[Permission::ClientReadAll]).await;
     walk(&pool, &app, "clients", "is_active=true", &[ids.client_id]).await;
     let detail = page(&app, &format!("/harvest/v2/clients/{}", ids.client_id)).await;
@@ -24,7 +24,7 @@ async fn client_api_allows_read_only_grants_without_legacy_management(pool: PgPo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn client_api_does_not_inherit_legacy_role_or_related_workflow_authority(pool: PgPool) {
+async fn client_api_does_not_follow_the_seeded_profile_or_related_workflow_authority(pool: PgPool) {
     let (ids, app) = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
     time_entry(&pool, &ids, EntryState::Open).await;
     for permissions in [
