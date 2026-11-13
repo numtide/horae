@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.email, u.active FROM users u\n           JOIN person_permission_states p ON p.user_id = u.id\n          WHERE u.org_id = $1 AND p.built_in_profile = 'member'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "active",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "67dbfa0fdd33b991be51d4f6f835a90b5eb29efd71d29666bb206846e7298689"
+}
