@@ -136,10 +136,6 @@ pub struct User {
 
 #[cfg(feature = "server")]
 impl User {
-    pub fn is_admin(&self) -> bool {
-        self.org_role == OrgRole::Admin
-    }
-
     pub fn is_manager_or_above(&self) -> bool {
         self.org_role.is_manager_or_above()
     }

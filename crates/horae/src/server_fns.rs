@@ -153,15 +153,6 @@ pub(crate) async fn require_user() -> Result<crate::models::User, ServerFnError>
 }
 
 #[cfg(feature = "server")]
-pub(crate) async fn require_admin() -> Result<crate::models::User, ServerFnError> {
-    let user = require_user().await?;
-    if !user.is_admin() {
-        return Err(forbidden("Admin access required"));
-    }
-    Ok(user)
-}
-
-#[cfg(feature = "server")]
 pub(crate) async fn require_manager() -> Result<crate::models::User, ServerFnError> {
     let user = require_user().await?;
     if !user.is_manager_or_above() {
