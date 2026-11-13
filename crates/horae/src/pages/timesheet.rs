@@ -17,8 +17,7 @@ use crate::components::session::{use_session, use_week_start};
 use crate::components::timer_widget::use_running_timer;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::scoped_time::{
-    TimesheetCommand, TimesheetEntryInput, TimesheetPage, TimesheetPolicy, TimesheetWriteContext,
-    VisibleTimeEntry,
+    TimesheetCommand, TimesheetEntryInput, TimesheetPage, TimesheetWriteContext, VisibleTimeEntry,
 };
 use crate::route::Route;
 use crate::server_fns;
@@ -413,10 +412,9 @@ fn TimesheetContent(
             .map(|page| TimesheetWriteContext {
                 expected_requester: page.requester,
                 subject_id: page.subject.id,
-                expected_policy: page.policy,
             })
     });
-    let policy = use_memo(move || context().map(|context| context.expected_policy));
+    let loaded = use_memo(move || context().is_some());
     use_effect(move || {
         if let Some(context) = context()
             && *last_context.peek() != Some(context)
@@ -598,25 +596,6 @@ fn TimesheetContent(
     // billable flag is carried through (the modal doesn't expose it).
     let mut editing = use_signal(|| None::<Uuid>);
     let mut edit_billable = use_signal(|| true);
-    // Legacy own edits may retain their historical source without making that
-    // pair eligible for a new entry, timer, or another person's sheet.
-    let modal_tracking = use_memo(move || {
-        let mut options = tracking();
-        if policy() == Some(TimesheetPolicy::LegacyOwn)
-            && let Some(id) = editing()
-            && let Some(entry) = entries.read().iter().find(|entry| entry.id == id)
-            && !tracking::eligible(&options, entry.project_id, entry.task_id)
-        {
-            options.push(crate::models::scoped_time::TimesheetTrackingOption {
-                project_id: entry.project_id,
-                project_name: entry.project_name.clone(),
-                task_id: entry.task_id,
-                task_name: entry.task_name.clone(),
-                billable: entry.billable,
-            });
-        }
-        options
-    });
     // The entry's optional start time (minutes since midnight); None = untimed.
     // Set by a calendar drag or when editing a timed entry; carried into save.
     let mut add_start = use_signal(|| None::<i32>);
@@ -660,7 +639,7 @@ fn TimesheetContent(
 
     // Opening the modal does not grant write access to its source or destination.
     let open_edit = use_callback(move |e: VisibleTimeEntry| {
-        if pending_action() || !tracking::editable(policy(), &tracking.read(), &e) {
+        if pending_action() || !tracking::editable(loaded(), &tracking.read(), &e) {
             return;
         }
         editing.set(Some(e.id));
@@ -726,7 +705,7 @@ fn TimesheetContent(
         };
         // Submitted edits still need the approval-coverage integration.
         if let Some(entry) = d.entry.clone()
-            && !tracking::editable(policy(), &tracking.read(), &entry)
+            && !tracking::editable(loaded(), &tracking.read(), &entry)
         {
             open_edit.call(entry);
             return;
@@ -992,7 +971,7 @@ fn TimesheetContent(
                 ));
                 return;
             }
-            if existing.is_some_and(|entry| !tracking::editable(policy(), &tracking.read(), entry))
+            if existing.is_some_and(|entry| !tracking::editable(loaded(), &tracking.read(), entry))
             {
                 return;
             }
@@ -1082,7 +1061,7 @@ fn TimesheetContent(
         }
         if entries
             .iter()
-            .any(|entry| !tracking::editable(policy(), &tracking.read(), entry))
+            .any(|entry| !tracking::editable(loaded(), &tracking.read(), entry))
         {
             grid_error.set(Some(
                 "This row contains entries that cannot currently be removed.".into(),
@@ -1152,7 +1131,7 @@ fn TimesheetContent(
         saving: saving_cells,
         tracking,
         busy,
-        policy,
+        loaded,
     };
 
     // Shared validation for the entry dialog's Start-timer / Save actions: a
@@ -1165,7 +1144,7 @@ fn TimesheetContent(
             add_error.set(Some("Select a project and task.".to_string()));
             return None;
         };
-        if !tracking::eligible(&modal_tracking.read(), project_id, task_id) {
+        if !tracking::eligible(&tracking.read(), project_id, task_id) {
             add_error.set(Some(
                 "This project and task are not currently available for this person.".into(),
             ));
@@ -1355,13 +1334,11 @@ fn TimesheetContent(
             if let Some(page) = current_sheet.read().as_ref().and_then(|result| result.as_ref().ok())
                 .or(held().and(admitted.read().as_ref().map(|(.., page)| page)))
             {
-                if page.policy == TimesheetPolicy::Scoped {
-                    people::PersonPicker {
-                        requester: page.requester, selected: page.subject.clone(), disabled: busy(),
-                        on_selected: move |id: Uuid| {
-                            navigator().push(Route::Timesheet { view, date, span, user: id.to_string() });
-                        },
-                    }
+                people::PersonPicker {
+                    requester: page.requester, selected: page.subject.clone(), disabled: busy(),
+                    on_selected: move |id: Uuid| {
+                        navigator().push(Route::Timesheet { view, date, span, user: id.to_string() });
+                    },
                 }
             }
             if subject.is_some() {
@@ -1402,7 +1379,7 @@ fn TimesheetContent(
                         div { class: "ts-submit-bar",
                             if all_submitted_or_approved {
                                 span { class: "badge badge-success", "Submitted" }
-                            } else if !week_entries.is_empty() && has_open && context().is_some_and(|context| context.subject_id == context.expected_requester.user_id && context.expected_policy == TimesheetPolicy::LegacyOwn) {
+                            } else if !week_entries.is_empty() && has_open && context().is_some_and(|context| context.subject_id == context.expected_requester.user_id) {
                                 div { class: "ts-submit",
                                     button {
                                         class: "ts-submit-main",
@@ -1446,7 +1423,7 @@ fn TimesheetContent(
                             by_day, daily_totals,
                             visible_days: span.visible_days(sel_offset as usize, shown_ws.weekday()),
                             week_start: shown_ws, today, project_names, task_names, project_client,
-                            cal_drag, drag_commit, tracking, busy, policy,
+                            cal_drag, drag_commit, tracking, busy, loaded,
                         }
                     },
                     }
@@ -1469,7 +1446,7 @@ fn TimesheetContent(
                     }
                     div { class: "ts-modal-body",
                         tracking::TrackingPicker {
-                            project: add_project, task: add_task, options: modal_tracking(),
+                            project: add_project, task: add_task, options: tracking(),
                             disabled: add_saving(),
                         }
                         EntryFields { notes: add_notes, duration: add_duration, start: add_start, disabled: add_saving() }
@@ -1483,7 +1460,7 @@ fn TimesheetContent(
                             // it saves a fixed entry.
                             button {
                                 class: "btn btn-primary",
-                                disabled: busy() || context().is_none() || modal_tracking.read().is_empty(),
+                                disabled: busy() || context().is_none() || tracking.read().is_empty(),
                                 onclick: move |_| {
                                     if busy() { return; }
                                     let Some(context) = context() else { return; };
@@ -1904,7 +1881,7 @@ fn render_day_view(
                             let e_start = entry.clone();
                             let e_edit = entry.clone();
                             let e_stop = entry.clone();
-                            let can_edit = !busy && tracking::editable(context.map(|context| context.expected_policy), tracking, entry);
+                            let can_edit = !busy && tracking::editable(context.is_some(), tracking, entry);
                             let can_start = !busy && tracking::eligible(tracking, entry.project_id, entry.task_id);
                             let can_stop = !busy && tracking::stoppable(tracking, entry, context.map(|context| context.expected_requester.user_id));
                             rsx! {
@@ -2033,7 +2010,8 @@ struct WeekActions {
     saving: Signal<HashSet<CellKey>>,
     tracking: Memo<Vec<crate::models::scoped_time::TimesheetTrackingOption>>,
     busy: Memo<bool>,
-    policy: Memo<Option<TimesheetPolicy>>,
+    /// Whether the sheet's write context has arrived.
+    loaded: Memo<bool>,
 }
 
 /// One editable week-grid cell. It reads its own draft and saving state, so
@@ -2217,7 +2195,7 @@ fn render_week_view(
                         let agg = &row_map[key];
                         let row_total: i32 = agg.mins.iter().sum();
                         let eligible = tracking::eligible(&actions.tracking.read(), pid, tid);
-                        let row_editable = entries.iter().filter(|entry| entry.project_id == pid && entry.task_id == tid).all(|entry| tracking::editable((actions.policy)(), &actions.tracking.read(), entry));
+                        let row_editable = entries.iter().filter(|entry| entry.project_id == pid && entry.task_id == tid).all(|entry| tracking::editable((actions.loaded)(), &actions.tracking.read(), entry));
                         rsx! {
                             div { key: "{pid}:{tid}", class: "ts-row ts-body",
                                 div { class: "ts-project",
@@ -2238,7 +2216,7 @@ fn render_week_view(
                                             let existing = agg.ids[i].first().copied();
                                             let editable = match existing {
                                                 None => eligible,
-                                                Some(id) => entries.iter().find(|entry| entry.id == id).is_some_and(|entry| tracking::editable((actions.policy)(), &actions.tracking.read(), entry)),
+                                                Some(id) => entries.iter().find(|entry| entry.id == id).is_some_and(|entry| tracking::editable((actions.loaded)(), &actions.tracking.read(), entry)),
                                             };
                                             let saved = if mins > 0 { format_hhmm(mins.into()) } else { String::new() };
                                             rsx! {
@@ -2442,7 +2420,6 @@ mod tests {
                 user_id: me,
             },
             subject_id,
-            expected_policy: TimesheetPolicy::Scoped,
         };
         // Own sheet: the last own context starts the request early.
         assert_eq!(
@@ -2524,11 +2501,7 @@ mod tests {
         entry.is_running = true;
         assert!(tracking::stoppable(&[], &entry, Some(entry.user_id)));
         assert!(!tracking::stoppable(&[], &entry, Some(Uuid::now_v7())));
-        assert!(!tracking::editable(
-            Some(TimesheetPolicy::Scoped),
-            &[],
-            &entry
-        ));
+        assert!(!tracking::editable(true, &[], &entry));
     }
 
     #[test]
@@ -2561,11 +2534,7 @@ mod tests {
     #[test]
     fn visible_time_without_writable_tracking_does_not_enable_edit_controls() {
         let entry = timed_entry(540, 60);
-        assert!(!tracking::editable(
-            Some(TimesheetPolicy::Scoped),
-            &[],
-            &entry
-        ));
+        assert!(!tracking::editable(true, &[], &entry));
         let options = vec![crate::models::scoped_time::TimesheetTrackingOption {
             project_id: entry.project_id,
             project_name: entry.project_name.clone(),
@@ -2573,28 +2542,8 @@ mod tests {
             task_name: entry.task_name.clone(),
             billable: false,
         }];
-        assert!(tracking::editable(
-            Some(TimesheetPolicy::Scoped),
-            &options,
-            &entry
-        ));
-        assert!(!tracking::editable(None, &options, &entry));
-    }
-
-    #[test]
-    fn legacy_historical_edits_do_not_create_new_tracking_eligibility() {
-        let entry = timed_entry(540, 60);
-        assert!(tracking::editable(
-            Some(TimesheetPolicy::LegacyOwn),
-            &[],
-            &entry
-        ));
-        assert!(!tracking::eligible(&[], entry.project_id, entry.task_id));
-        assert!(!tracking::editable(
-            Some(TimesheetPolicy::Scoped),
-            &[],
-            &entry
-        ));
+        assert!(tracking::editable(true, &options, &entry));
+        assert!(!tracking::editable(false, &options, &entry));
     }
 
     #[test]
@@ -2621,7 +2570,6 @@ mod tests {
                         user_id: Uuid::now_v7(),
                     },
                     subject_id: Uuid::nil(),
-                    expected_policy: TimesheetPolicy::Scoped,
                 }),
             )
         });

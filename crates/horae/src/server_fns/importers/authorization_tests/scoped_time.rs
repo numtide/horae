@@ -38,7 +38,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     sqlx::query!("UPDATE users SET oidc_subject=id::text, cost_rate_cents=6000, billable_rate_cents=10000 WHERE org_id=$1", ids.org_id).execute(pool).await.unwrap();
     let cookie = api.cookie(ids.user_id).await;
     let request = json!({"query":{"date_from":"2026-09-01","date_to":"2026-09-30","user_id":null,"project_id":null,"after":null}});
-    let mut sheet_request = json!({"query":{"subject_id":target,"date_from":"2026-09-01","date_to":"2026-09-30","after":null,"expected_requester":null,"expected_policy":null}});
+    let mut sheet_request = json!({"query":{"subject_id":target,"date_from":"2026-09-01","date_to":"2026-09-30","after":null,"expected_requester":null}});
     assert_eq!(
         api.call("load_timesheet_page", sheet_request.clone(), None, false)
             .await
@@ -60,26 +60,21 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let own_sheet = api
         .json("load_timesheet_page", sheet_request.clone(), &cookie)
         .await;
-    assert_eq!(own_sheet["policy"], "legacy_own");
     assert_eq!(own_sheet["subject"]["id"], json!(ids.user_id));
     assert_eq!(own_sheet["entries"], json!([]));
     sheet_request["query"]["subject_id"] = json!(target);
+    let empty = json!({"requester":{"org_id":ids.org_id,"user_id":ids.user_id},"entries":[],"next_after":null});
     assert_eq!(
         api.call("list_visible_time_entries", request.clone(), None, false)
             .await
             .status(),
         StatusCode::UNAUTHORIZED
     );
+    // A Member reads only their own time: the teammate's entry stays hidden.
     assert_eq!(
-        api.call(
-            "list_visible_time_entries",
-            request.clone(),
-            Some(&cookie),
-            false
-        )
-        .await
-        .status(),
-        StatusCode::FORBIDDEN
+        api.json("list_visible_time_entries", request.clone(), &cookie)
+            .await,
+        empty
     );
     let grants: Vec<String> = serde_json::from_value(json!(PermissionSelection::new(&[
         Permission::TimeReadManaged
@@ -88,14 +83,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants).execute(pool).await.unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-    let empty = json!({"requester":{"org_id":ids.org_id,"user_id":ids.user_id},"entries":[],"next_after":null});
     assert_eq!(
         api.json("list_visible_time_entries", request.clone(), &cookie)
             .await,
@@ -114,14 +101,12 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let mut expected_sheet = expected.clone();
     expected_sheet["subject"] = json!({"id":target,"name":"Test User"});
     expected_sheet["subject_utc_offset_seconds"] = json!(0);
-    expected_sheet["policy"] = json!("scoped");
     assert_eq!(
         api.json("load_timesheet_page", sheet_request.clone(), &cookie)
             .await,
         expected_sheet
     );
     sheet_request["query"]["expected_requester"] = expected["requester"].clone();
-    sheet_request["query"]["expected_policy"] = json!("scoped");
     let mut forged_sheet = sheet_request.clone();
     forged_sheet["org_id"] = json!(foreign.org_id);
     forged_sheet["user_id"] = json!(foreign.user_id);
@@ -279,16 +264,12 @@ async fn check_people(pool: &PgPool, api: &Api) {
             .status(),
         StatusCode::UNAUTHORIZED
     );
+    let empty = json!({"requester":{"org_id":ids.org_id,"user_id":ids.user_id},"people":[],"next_after":null});
+    // A Member discovers only themselves.
     assert_eq!(
-        api.call(
-            "list_timesheet_people",
-            request.clone(),
-            Some(&cookie),
-            false
-        )
-        .await
-        .status(),
-        StatusCode::FORBIDDEN
+        api.json("list_timesheet_people", request.clone(), &cookie)
+            .await,
+        empty
     );
     let grants: Vec<String> = serde_json::from_value(json!(PermissionSelection::new(&[
         Permission::TimeReadManaged
@@ -297,13 +278,6 @@ async fn check_people(pool: &PgPool, api: &Api) {
     crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants).execute(pool).await.unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     sqlx::query!(
         "INSERT INTO assignments (id,user_id,project_id) VALUES ($1,$2,$3)",
         Uuid::now_v7(),
@@ -315,7 +289,6 @@ async fn check_people(pool: &PgPool, api: &Api) {
     .unwrap();
     sqlx::query!("INSERT INTO project_management_assignments (id,org_id,manager_id,project_id) VALUES ($1,$2,$3,$4)", Uuid::now_v7(), ids.org_id, ids.user_id, ids.project_id).execute(pool).await.unwrap();
     let expected = json!({"requester":{"org_id":ids.org_id,"user_id":ids.user_id},"people":[{"id":target,"name":"Test User"}],"next_after":null});
-    let empty = json!({"requester":{"org_id":ids.org_id,"user_id":ids.user_id},"people":[],"next_after":null});
     assert_eq!(
         api.json("list_timesheet_people", request.clone(), &cookie)
             .await,

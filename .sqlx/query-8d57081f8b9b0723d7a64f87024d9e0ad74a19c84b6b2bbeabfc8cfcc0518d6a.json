@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.client_id, p.project_type as \"project_type: ProjectType\", p.active,\n            EXISTS(SELECT 1 FROM project_management_assignments management\n                WHERE management.org_id=p.org_id AND management.project_id=p.id\n                    AND management.manager_id=$2) AS \"managed!\"\n        FROM projects p WHERE p.org_id=$1 AND p.id=$3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_type: ProjectType",
+        "type_info": {
+          "Custom": {
+            "name": "project_type",
+            "kind": {
+              "Enum": [
+                "time_and_materials",
+                "fixed_fee",
+                "non_billable",
+                "retainer"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "managed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "8d57081f8b9b0723d7a64f87024d9e0ad74a19c84b6b2bbeabfc8cfcc0518d6a"
+}

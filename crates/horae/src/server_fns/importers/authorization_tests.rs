@@ -232,11 +232,24 @@ async fn user(pool: &PgPool, org_id: Uuid, role: OrgRole) -> Uuid {
     id
 }
 
+/// Replaces an importer administrator's profile with Member, as the permission
+/// editor would.
+async fn demote(pool: &PgPool, user_id: Uuid) {
+    let mut tx = pool.begin().await.unwrap();
+    let org_id = sqlx::query_scalar!("SELECT org_id FROM users WHERE id = $1", user_id)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    crate::ops::testing::revoke(&mut tx, org_id, user_id, false).await;
+    tx.commit().await.unwrap();
+}
+
 // Keep the HTTP matrix in one test: production AppState is initialized once per
 // process. Other importer tests use their own pools without that singleton.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
+    use crate::ops::testing::add_person;
     let owner = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
     let foreign = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
     crate::state::init_state(
@@ -353,13 +366,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
                         request.map(|_| {
                             Body::from_stream(futures_util::stream::once(async move {
                                 // Body polling follows endpoint admission, before durable acceptance.
-                                sqlx::query!(
-                                    "UPDATE users SET org_role = 'member' WHERE id = $1",
-                                    actor
-                                )
-                                .execute(&upload_pool)
-                                .await
-                                .unwrap();
+                                demote(&upload_pool, actor).await;
                                 Ok::<_, std::io::Error>(axum::body::Bytes::from_static(
                                     b"Date,Client,Project,Task,Hours,Email\n",
                                 ))
@@ -372,10 +379,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
                     if let Some(actor) = revoke_download {
                         assert_eq!(response.status(), StatusCode::OK);
                         // Preparation succeeded, but the client has not polled the body yet.
-                        sqlx::query!("UPDATE users SET org_role = 'member' WHERE id = $1", actor)
-                            .execute(&pool)
-                            .await
-                            .unwrap();
+                        demote(&pool, actor).await;
                     }
                     response
                 }
@@ -436,7 +440,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         StatusCode::NO_CONTENT
     );
     let outsider = api.cookie(foreign.user_id).await;
-    let upload_actor = user(&pool, owner.org_id, OrgRole::Admin).await;
+    let upload_actor = add_person(&pool, owner.org_id, BuiltInProfile::Administrator).await;
     let upload_cookie = api.cookie(upload_actor).await;
     let revoked_upload = api
         .client
@@ -456,34 +460,32 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             .is_empty()
     );
     let member = api
-        .cookie(user(&pool, owner.org_id, OrgRole::Member).await)
+        .cookie(add_person(&pool, owner.org_id, BuiltInProfile::Member).await)
         .await;
     let manager = api
-        .cookie(user(&pool, owner.org_id, OrgRole::Manager).await)
+        .cookie(add_person(&pool, owner.org_id, BuiltInProfile::ExecutiveManager).await)
         .await;
-    let inactive_id = user(&pool, owner.org_id, OrgRole::Admin).await;
+    // A person whose leftover role says admin but who has no stored state.
+    let stateless = api
+        .cookie(user(&pool, owner.org_id, OrgRole::Admin).await)
+        .await;
+    let inactive_id = add_person(&pool, owner.org_id, BuiltInProfile::Administrator).await;
     let inactive = api.cookie(inactive_id).await;
     sqlx::query!("UPDATE users SET active = false WHERE id = $1", inactive_id)
         .execute(&pool)
         .await
         .unwrap();
     let missing = api.cookie(Uuid::now_v7()).await;
-    let demoted_id = user(&pool, owner.org_id, OrgRole::Admin).await;
+    let demoted_id = add_person(&pool, owner.org_id, BuiltInProfile::Administrator).await;
     let demoted = api.cookie(demoted_id).await;
-    sqlx::query!(
-        "UPDATE users SET org_role = $2 WHERE id = $1",
-        demoted_id,
-        OrgRole::Member as OrgRole
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    demote(&pool, demoted_id).await;
 
     let target = Uuid::now_v7();
     for (cookie, expected) in [
         (None, StatusCode::UNAUTHORIZED),
         (Some(member.as_str()), StatusCode::FORBIDDEN),
         (Some(manager.as_str()), StatusCode::FORBIDDEN),
+        (Some(stateless.as_str()), StatusCode::FORBIDDEN),
         (Some(inactive.as_str()), StatusCode::UNAUTHORIZED),
         (Some(missing.as_str()), StatusCode::UNAUTHORIZED),
         (Some(expired.as_str()), StatusCode::UNAUTHORIZED),
@@ -975,7 +977,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
     assert_eq!(actual, expected);
-    let download_actor = user(&pool, owner.org_id, OrgRole::Admin).await;
+    let download_actor = add_person(&pool, owner.org_id, BuiltInProfile::Administrator).await;
     let download_cookie = api.cookie(download_actor).await;
     let interrupted = async {
         let response = api
@@ -1019,7 +1021,9 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         &pool,
         &owner,
         &admin,
-        &[&member, &manager, &inactive, &demoted, &missing, &expired],
+        &[
+            &member, &manager, &stateless, &inactive, &demoted, &missing, &expired,
+        ],
         &outsider,
         (archived_job.id, &bytes),
     )

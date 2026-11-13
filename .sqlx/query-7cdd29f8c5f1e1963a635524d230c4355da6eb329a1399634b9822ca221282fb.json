@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.id FROM users u\n         JOIN person_permission_states s ON s.org_id = u.org_id AND s.user_id = u.id\n         JOIN projects p ON p.org_id = u.org_id AND p.id = $2\n         WHERE u.org_id = $1 AND u.active AND s.catalog_version = $3\n           AND ('project_read_all' = ANY(s.grants)\n             OR ('project_read_managed' = ANY(s.grants) AND EXISTS (\n               SELECT 1 FROM project_management_assignments m\n               WHERE m.org_id = u.org_id AND m.project_id = p.id AND m.manager_id = u.id)))\n           AND (p.budget_kind <> 'amount'\n             OR 'billable_rate_read_all' = ANY(s.grants)\n             OR ('billable_rate_read_managed' = ANY(s.grants) AND EXISTS (\n               SELECT 1 FROM project_management_assignments m\n               WHERE m.org_id = u.org_id AND m.project_id = p.id AND m.manager_id = u.id)))\n         ORDER BY u.id LIMIT 1001 FOR SHARE OF u",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7cdd29f8c5f1e1963a635524d230c4355da6eb329a1399634b9822ca221282fb"
+}

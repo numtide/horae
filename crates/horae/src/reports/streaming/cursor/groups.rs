@@ -21,7 +21,7 @@ pub(in crate::reports::streaming) async fn declare(
     sqlx::query!(
         r#"DECLARE horae_csv NO SCROLL CURSOR FOR
            WITH authority AS MATERIALIZED (
-             SELECT o.permission_policy_version policy,u.active,
+             SELECT u.active,
                     s.catalog_version,s.grants,s.is_administrator,s.source permission_source,
                     s.built_in_profile,s.template_id,s.applied_template_revision,s.revision,
                     COALESCE(octet_length(s.source),0)::bigint + COALESCE(octet_length(s.built_in_profile),0)::bigint
@@ -45,7 +45,7 @@ pub(in crate::reports::streaming) async fn declare(
              JOIN users u ON u.id=te.user_id AND u.org_id=te.org_id
              JOIN clients c ON c.id=p.client_id AND c.org_id=te.org_id
              LEFT JOIN project_tasks pt ON pt.project_id=p.id AND pt.task_id=t.id
-             WHERE te.org_id=$1 AND a.active AND a.policy=1 AND (
+             WHERE te.org_id=$1 AND a.active AND (
                  'time_read_all'=ANY(a.grants) OR ('time_read_own'=ANY(a.grants) AND te.user_id=$2)
                  OR ('time_read_managed'=ANY(a.grants) AND (
                    EXISTS (SELECT 1 FROM person_management_assignments m
@@ -74,7 +74,7 @@ pub(in crate::reports::streaming) async fn declare(
                     ROW_NUMBER() OVER (PARTITION BY group_id ORDER BY user_id DESC,project_id DESC)=1 last_context
              FROM contexts
            )
-           SELECT a.policy,a.active,a.catalog_version,a.grants,a.is_administrator,
+           SELECT a.active,a.catalog_version,a.grants,a.is_administrator,
                   a.permission_source,a.built_in_profile,a.template_id,a.applied_template_revision,a.revision,
                   f.group_id,f.name,f.user_id,f.project_id,f.rounded_minutes,f.billable_minutes,f.last_context,
                   256::bigint + a.authority_bytes + COALESCE(octet_length(f.name),0)::bigint export_bytes
@@ -89,7 +89,6 @@ pub(in crate::reports::streaming) async fn declare(
 }
 
 pub(in crate::reports::streaming) struct GroupRow {
-    policy: Option<i32>,
     active: Option<bool>,
     catalog_version: Option<i32>,
     grants: Option<Vec<String>>,
@@ -121,7 +120,7 @@ impl GroupRow {
     pub(in crate::reports::streaming) fn into_fragment(
         self,
     ) -> Result<Option<Fragment>, StatusCode> {
-        if self.policy != Some(1) || self.active != Some(true) {
+        if self.active != Some(true) {
             return Err(StatusCode::FORBIDDEN);
         }
         let state = StoredPersonPermissions {
@@ -178,10 +177,10 @@ pub(in crate::reports::streaming) async fn fetch(
     limit: i32,
 ) -> Result<Vec<GroupRow>, StatusCode> {
     sqlx::query_as!(GroupRow,
-        r#"SELECT policy,active,catalog_version,grants,is_administrator,
+        r#"SELECT active,catalog_version,grants,is_administrator,
                   permission_source,built_in_profile,template_id,applied_template_revision,revision,
                   group_id,name,user_id,project_id,rounded_minutes,billable_minutes,last_context
-           FROM fetch_csv_export_rows($1) AS source(policy integer,active boolean,
+           FROM fetch_csv_export_rows($1) AS source(active boolean,
              catalog_version integer,grants text[],is_administrator boolean,permission_source text,
              built_in_profile text,template_id uuid,applied_template_revision bigint,revision bigint,
              group_id uuid,name text,user_id uuid,project_id uuid,rounded_minutes bigint,

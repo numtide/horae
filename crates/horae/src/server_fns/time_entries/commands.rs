@@ -1,4 +1,5 @@
-//! Person-bound Timesheet operations; legacy shell commands remain independent.
+//! Person-bound Timesheet operations; the timer endpoints in `time_entries.rs`
+//! remain independent.
 
 use chrono::{NaiveDate, Timelike, Utc};
 use horae_core::permissions::catalog::Permission;
@@ -8,8 +9,7 @@ use uuid::Uuid;
 
 use super::*;
 use crate::models::scoped_time::{
-    TimesheetCommand, TimesheetEntryInput, TimesheetPolicy, TimesheetTrackingOption,
-    TimesheetWriteContext,
+    TimesheetCommand, TimesheetEntryInput, TimesheetTrackingOption, TimesheetWriteContext,
 };
 
 pub(super) fn public_error(error: ServerFnError) -> ServerFnError {
@@ -29,7 +29,6 @@ struct Authority {
     org: Uuid,
     subject: Uuid,
     owner: bool,
-    legacy: bool,
     whole_subject: bool,
     projects: Vec<Uuid>,
 }
@@ -40,12 +39,16 @@ impl Authority {
     }
 }
 
-async fn begin<'a>(
-    pool: &'a PgPool,
+/// Authorizes from the actor's stored permission state, loaded by
+/// [`Actor::load`](crate::ops::Actor::load) inside this transaction. The
+/// command machinery stays here rather than in `ops/`: it shares its locking
+/// and daily-limit helpers with the timer endpoints in `time_entries.rs`.
+async fn begin(
+    pool: &PgPool,
     org: Uuid,
     actor: Uuid,
     context: &TimesheetWriteContext,
-) -> Result<(Transaction<'a, Postgres>, Authority), ServerFnError> {
+) -> Result<(crate::ops::Tx, Authority), ServerFnError> {
     if context.expected_requester.org_id != org || context.expected_requester.user_id != actor {
         return Err(forbidden("Timesheet identity changed; refresh the page"));
     }
@@ -53,59 +56,62 @@ async fn begin<'a>(
     permissions::configure_administration(&mut tx)
         .await
         .map_err(server_err)?;
-    let policy = sqlx::query_scalar!(
-        "SELECT permission_policy_version FROM organizations WHERE id=$1 FOR SHARE",
-        org
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?;
-    let legacy = match (policy, context.expected_policy) {
-        (Some(0), TimesheetPolicy::LegacyOwn) if actor == context.subject_id => true,
-        (Some(1), TimesheetPolicy::Scoped) => false,
-        _ => return Err(forbidden("Timesheet policy changed; refresh the page")),
-    };
-    let users = sqlx::query_scalar!(
-        "SELECT id FROM users WHERE org_id=$1 AND id=ANY($2) AND active ORDER BY id FOR SHARE",
-        org,
-        &[actor, context.subject_id]
-    )
-    .fetch_all(&mut *tx)
-    .await
-    .map_err(server_err)?;
-    if !users.contains(&actor) || !users.contains(&context.subject_id) {
+    // Missing or invalid stored state is an outage of this person's sheet, as
+    // on the Timesheet reads, not a refusal.
+    let requester = crate::ops::Actor::load(&mut tx, crate::ops::Caller::session(org, actor))
+        .await
+        .map_err(|error| match error {
+            crate::ops::OpError::Forbidden(message) => server_err(message),
+            error => error.into(),
+        })?;
+    if !requester.is_active() {
         return Err(forbidden("Active same-organization accounts required"));
     }
+    if !context_subject_is_active(&mut tx, org, context.subject_id).await? {
+        return Err(forbidden("Active same-organization accounts required"));
+    }
+    let owner = actor == context.subject_id;
     let mut authority = Authority {
         org,
         subject: context.subject_id,
-        owner: actor == context.subject_id,
-        legacy,
-        whole_subject: legacy,
+        owner,
+        whole_subject: requester.has(Permission::TimeWriteAll)
+            || (owner && requester.has(Permission::TimeWriteOwn)),
         projects: Vec::new(),
     };
-    if !legacy {
-        let state = permissions::load_person_permissions(&mut tx, org, actor)
-            .await
-            .map_err(server_err)?
-            .ok_or_else(|| forbidden("Current permissions unavailable"))?;
-        authority.whole_subject = state.grants.contains(Permission::TimeWriteAll)
-            || (authority.owner && state.grants.contains(Permission::TimeWriteOwn));
-        if state.grants.contains(Permission::TimeWriteManaged) {
-            let managed = sqlx::query_scalar!(
-                "SELECT managed_user_id FROM person_management_assignments WHERE org_id=$1 AND manager_id=$2 AND managed_user_id=$3 FOR SHARE",
-                org, actor, context.subject_id
-            ).fetch_optional(&mut *tx).await.map_err(server_err)?;
-            authority.whole_subject |= managed.is_some();
-            authority.projects = sqlx::query_scalar!(
-                "SELECT project_id FROM project_management_assignments WHERE org_id=$1 AND manager_id=$2 ORDER BY project_id FOR SHARE",
-                org, actor
-            ).fetch_all(&mut *tx).await.map_err(server_err)?;
-        }
+    if requester.has(Permission::TimeWriteManaged) {
+        let managed = sqlx::query_scalar!(
+            "SELECT managed_user_id FROM person_management_assignments WHERE org_id=$1 AND manager_id=$2 AND managed_user_id=$3 FOR SHARE",
+            org, actor, context.subject_id
+        ).fetch_optional(&mut *tx).await.map_err(server_err)?;
+        authority.whole_subject |= managed.is_some();
+        authority.projects = sqlx::query_scalar!(
+            "SELECT project_id FROM project_management_assignments WHERE org_id=$1 AND manager_id=$2 ORDER BY project_id FOR SHARE",
+            org, actor
+        ).fetch_all(&mut *tx).await.map_err(server_err)?;
     }
     Ok((tx, authority))
 }
 
+/// Locks the selected person's activity for the rest of the transaction.
+async fn context_subject_is_active(
+    tx: &mut crate::ops::Tx,
+    org: Uuid,
+    subject: Uuid,
+) -> Result<bool, ServerFnError> {
+    let found = sqlx::query_scalar!(
+        "SELECT id FROM users WHERE org_id=$1 AND id=$2 AND active FOR SHARE",
+        org,
+        subject
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(server_err)?;
+    Ok(found.is_some())
+}
+
+/// The subject's trackable pairs, as `time_entry_contexts` defines them: an
+/// assignment, or the subject's stored Administrator state, admits a project.
 async fn choices(
     tx: &mut Transaction<'_, Postgres>,
     authority: &Authority,
@@ -119,18 +125,19 @@ async fn choices(
            JOIN project_tasks pt ON pt.project_id=p.id
            JOIN tasks t ON t.id=pt.task_id AND t.org_id=u.org_id
            WHERE u.org_id=$1 AND u.id=$2 AND u.active AND p.active AND c.active AND t.active
-             AND ($5 OR pt.active)
+             AND pt.active
              AND ($3 OR p.id=ANY($4))
-             AND (($5 AND u.org_role='admin') OR EXISTS (
-                 SELECT 1 FROM assignments a WHERE a.user_id=u.id AND a.project_id=p.id))
+             AND (EXISTS (SELECT 1 FROM assignments a WHERE a.user_id=u.id AND a.project_id=p.id)
+                 OR EXISTS (SELECT 1 FROM person_permission_states state
+                     WHERE state.org_id=u.org_id AND state.user_id=u.id AND state.is_administrator))
              AND NOT EXISTS (SELECT 1 FROM project_task_settings s
                  WHERE s.org_id=u.org_id AND s.project_id=p.id AND s.task_id=t.id AND s.restricted
                  AND NOT EXISTS (SELECT 1 FROM project_task_members m
                      WHERE m.org_id=u.org_id AND m.project_id=p.id AND m.task_id=t.id AND m.user_id=u.id))
-             AND ($6::uuid IS NULL OR p.id=$6) AND ($7::uuid IS NULL OR t.id=$7)
+             AND ($5::uuid IS NULL OR p.id=$5) AND ($6::uuid IS NULL OR t.id=$6)
            ORDER BY p.name,p.id,t.name,t.id FOR SHARE OF p,c,pt,t"#,
         authority.org,authority.subject,authority.whole_subject,&authority.projects,
-        authority.legacy,pair.map(|p| p.0),pair.map(|p| p.1)
+        pair.map(|p| p.0),pair.map(|p| p.1)
     ).fetch_all(&mut **tx).await.map_err(server_err)
 }
 
@@ -169,25 +176,6 @@ async fn eligible(
         .first()
         .map(|option| option.billable)
         .ok_or_else(|| conflict("The selected person cannot currently track this project/task"))
-}
-
-/// Legacy own historical edits retain their existing task-grant and billability
-/// rules. This path cannot admit a new context or a canonical-policy operation.
-async fn legacy_billable(
-    tx: &mut Transaction<'_, Postgres>,
-    authority: &Authority,
-    project: Uuid,
-    task: Uuid,
-) -> Result<bool, ServerFnError> {
-    lock_task_access(tx, authority.subject, project, task).await?;
-    sqlx::query_scalar!(
-        r#"SELECT (p.project_type <> 'non_billable' AND COALESCE(pt.billable,t.billable_default)) AS "billable!"
-           FROM projects p JOIN tasks t ON t.id=$3 AND t.org_id=p.org_id
-           LEFT JOIN project_tasks pt ON pt.project_id=p.id AND pt.task_id=t.id
-           WHERE p.org_id=$1 AND p.id=$2 FOR SHARE OF p,t"#,
-        authority.org,project,task
-    ).fetch_optional(&mut **tx).await.map_err(server_err)?
-        .ok_or_else(|| conflict("Historical project/task unavailable"))
 }
 
 /// Events and budget checks are released only after the complete command commits.
@@ -316,11 +304,7 @@ pub(super) async fn apply(
             return Err(forbidden("Current time-write scope required"));
         }
         if !(matches!(command, TimesheetCommand::StopTimer { .. }) && authority.owner) {
-            if authority.legacy {
-                legacy_billable(&mut tx, &authority, entry.project_id, entry.task_id).await?;
-            } else {
-                eligible(&mut tx, &authority, entry.project_id, entry.task_id).await?;
-            }
+            eligible(&mut tx, &authority, entry.project_id, entry.task_id).await?;
         }
     }
     let mut effects = Effects {
@@ -384,14 +368,8 @@ pub(super) async fn apply(
                     TimesheetCommand::Update { entry, .. } => {
                         let mut input = entry.clone();
                         normalize(&mut input)?;
-                        let billable = if authority.legacy
-                            && (row.project_id, row.task_id) == (input.project_id, input.task_id)
-                        {
-                            legacy_billable(&mut tx, &authority, input.project_id, input.task_id)
-                                .await?
-                        } else {
-                            eligible(&mut tx, &authority, input.project_id, input.task_id).await?
-                        };
+                        let billable =
+                            eligible(&mut tx, &authority, input.project_id, input.task_id).await?;
                         row.billable = billable && input.billable;
                         row.project_id = input.project_id;
                         row.task_id = input.task_id;

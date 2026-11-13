@@ -5,8 +5,8 @@ pub(crate) use horae_core::types::{
 };
 
 pub(crate) use crate::models::{
-    Approval, ApprovalSummary, Assignment, Client, DetailedReportRow, Invoice, InvoiceWithLines,
-    OrgBranding, Project, ProjectSpend, ReportRow, Task, TimeEntry,
+    Approval, ApprovalSummary, Client, DetailedReportRow, Invoice, InvoiceWithLines, OrgBranding,
+    Project, ProjectSpend, ReportRow, Task, TimeEntry,
 };
 #[cfg(feature = "server")]
 pub(crate) use crate::models::{InvoiceLine, User};
@@ -312,18 +312,6 @@ pub(crate) fn task_payload(t: &crate::models::Task) -> crate::plugin::event::Tas
     }
 }
 
-#[cfg(feature = "server")]
-pub(crate) fn assignment_payload(
-    a: &crate::models::Assignment,
-) -> crate::plugin::event::AssignmentPayload {
-    crate::plugin::event::AssignmentPayload {
-        id: a.id,
-        project_id: a.project_id,
-        user_id: a.user_id,
-        role: a.role.to_string(),
-    }
-}
-
 /// Compare-and-swap the last announced legacy plugin band.
 #[cfg(feature = "server")]
 async fn claim_budget_band(
@@ -505,8 +493,6 @@ mod profile;
 mod project_creation;
 mod project_managers;
 mod projects;
-#[cfg(feature = "server")]
-pub(crate) use projects::read_access::ReadAccess as ProjectReadAccess;
 mod reports;
 #[cfg(feature = "server")]
 pub(crate) mod snapshot;

@@ -1,6 +1,6 @@
 use super::*;
 use crate::models::permission_editor::PermissionRequester;
-use crate::models::scoped_time::{TimesheetPolicy, TimesheetQuery};
+use crate::models::scoped_time::TimesheetQuery;
 use crate::server_fns::permissions::time_entries::{TimeReadError, sheet};
 use crate::server_fns::test_seed::time_entry;
 use horae_core::types::EntryState;
@@ -12,19 +12,17 @@ fn query(subject_id: Option<Uuid>) -> TimesheetQuery {
         date_to: "2026-09-30".parse().unwrap(),
         after: None,
         expected_requester: None,
-        expected_policy: None,
     }
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn sheet_resolves_legacy_own_context_without_canonical_state(pool: PgPool) {
+async fn sheet_resolves_a_members_own_context(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     let result = sheet(&pool, ids.org_id, ids.user_id, &query(None))
         .await
         .unwrap();
-    assert_eq!(result.policy, TimesheetPolicy::LegacyOwn);
     assert_eq!(
         result.requester,
         PermissionRequester {
@@ -92,7 +90,6 @@ async fn sheet_selects_empty_managed_participant_without_widening_record_scope(p
     let empty = sheet(&pool, ids.org_id, ids.user_id, &selected)
         .await
         .unwrap();
-    assert_eq!(empty.policy, TimesheetPolicy::Scoped);
     assert_eq!(empty.requester.user_id, ids.user_id);
     assert_eq!(empty.subject.id, target);
     assert_eq!(empty.subject_utc_offset_seconds, 3 * 3600);
@@ -135,7 +132,7 @@ async fn sheet_selects_empty_managed_participant_without_widening_record_scope(p
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn sheet_rejects_changed_requester_or_policy_and_inaccessible_subject(pool: PgPool) {
+async fn sheet_rejects_changed_requester_and_inaccessible_subject(pool: PgPool) {
     let ids = fixture(&pool).await;
     let target = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
@@ -144,7 +141,6 @@ async fn sheet_rejects_changed_requester_or_policy_and_inaccessible_subject(pool
         .unwrap();
     let mut request = query(Some(target));
     request.expected_requester = Some(initial.requester);
-    request.expected_policy = Some(initial.policy);
     assert!(
         sheet(&pool, ids.org_id, ids.user_id, &request)
             .await
@@ -172,30 +168,11 @@ async fn sheet_rejects_changed_requester_or_policy_and_inaccessible_subject(pool
         sheet(&pool, ids.org_id, ids.user_id, &request).await,
         Err(TimeReadError::Forbidden)
     ));
-    request.subject_id = None;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 0 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    assert!(matches!(
-        sheet(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(TimeReadError::Forbidden)
-    ));
-    assert_eq!(
-        sheet(&pool, ids.org_id, ids.user_id, &query(None))
-            .await
-            .unwrap()
-            .policy,
-        TimesheetPolicy::LegacyOwn
-    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn sheet_exhausts_pages_and_does_not_reuse_scope_or_silently_change_policy(pool: PgPool) {
+async fn sheet_exhausts_pages_and_does_not_reuse_scope(pool: PgPool) {
     let ids = fixture(&pool).await;
     let target = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
     for _ in 0..501 {
@@ -216,7 +193,6 @@ async fn sheet_exhausts_pages_and_does_not_reuse_scope_or_silently_change_policy
     assert_eq!(first.entries.len(), 500);
     request.after = first.next_after;
     request.expected_requester = Some(first.requester);
-    request.expected_policy = Some(first.policy);
     assert!(request.after.is_some());
     let last = sheet(&pool, ids.org_id, ids.user_id, &request)
         .await
@@ -262,7 +238,7 @@ async fn sheet_exhausts_pages_and_does_not_reuse_scope_or_silently_change_policy
     sqlx::query!("UPDATE person_permission_states SET grants=ARRAY['private_invalid_grant'] WHERE user_id=$1", ids.user_id).execute(&pool).await.unwrap();
     assert!(matches!(
         sheet(&pool, ids.org_id, ids.user_id, &query(None)).await,
-        Err(TimeReadError::Storage(_))
+        Err(TimeReadError::Unavailable)
     ));
 }
 

@@ -191,7 +191,7 @@ pub(super) fn ScopedReports(
     let next = loaded.and_then(|page| page.next_after.clone());
     let download_query = loaded.and_then(|_| dates.ok()).map(|(date_from, date_to)| {
         let filter: String = key.3.iter().map(|selected| format!("&{}={}", selected.filter_key(), selected.id)).collect();
-        format!("from={date_from}&to={date_to}&active_projects_only={}&billability={}&expected_org_id={}&expected_user_id={}&expected_policy=scoped{filter}", key.5, billability_value(key.6), requester.org_id, requester.user_id)
+        format!("from={date_from}&to={date_to}&active_projects_only={}&billability={}&expected_org_id={}&expected_user_id={}{filter}", key.5, billability_value(key.6), requester.org_id, requester.user_id)
     });
     let date_error_id = dates.err().map(|_| "report-date-error".to_string());
 

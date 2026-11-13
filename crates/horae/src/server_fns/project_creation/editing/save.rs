@@ -5,7 +5,7 @@ use crate::models::project_creation::{
     ProjectFieldAccess, ProjectFormField, ProtectedProjectField,
 };
 use crate::models::project_managers::{ProjectManagersCommand, ProjectManagersCommandKind};
-use crate::server_fns::{permissions::project_management, project_managers::map_error};
+use crate::server_fns::permissions::project_management;
 use horae_core::permissions::catalog::Permission;
 use horae_core::project::FeeSchedule;
 
@@ -17,13 +17,22 @@ struct CanonicalReceipt {
     effects: super::protected::RequiredWrites,
 }
 
+/// A committed project edit.
+pub(in crate::server_fns) struct Saved {
+    pub(in crate::server_fns) project: Project,
+    /// Whether the project or its managers changed.
+    pub(in crate::server_fns) changed: bool,
+    /// People added to or removed from the team, to dispatch to plugins.
+    pub(in crate::server_fns) team_events: Vec<crate::plugin::AppEvent>,
+}
+
 pub(super) async fn save(
     pool: &sqlx::PgPool,
     actor_id: Uuid,
     org_id: Uuid,
     request: &ProjectEditRequest,
     email_available: bool,
-) -> Result<(Project, bool), ServerFnError> {
+) -> Result<Saved, ServerFnError> {
     if request.id.get_version_num() != 7 || request.expected_revision <= 0 {
         return Err(err(BAD_REQUEST, "Invalid edit identity or revision"));
     }
@@ -35,7 +44,7 @@ pub(super) async fn save(
     crate::server_fns::permissions::configure_transaction_limits(&mut tx)
         .await
         .map_err(storage_error)?;
-    let (role, permissions) = lock_editor_actor(
+    let permissions = lock_editor_actor(
         &mut tx,
         actor_id,
         org_id,
@@ -47,11 +56,7 @@ pub(super) async fn save(
         org_id,
         user_id: actor_id,
     };
-    if request
-        .expected_requester
-        .is_some_and(|expected| expected != requester)
-        || (permissions.is_some() && request.expected_requester.is_none())
-    {
+    if request.expected_requester != Some(requester) {
         return Err(ServerFnError::ServerError {
             code: CONFLICT,
             message: "The editing session changed. Reload the project before saving.".into(),
@@ -61,56 +66,39 @@ pub(super) async fn save(
         });
     }
     super::protected::validate_intent(request)?;
-    if permissions.is_none()
-        && (!request.unchanged.is_empty()
-            || request.managers.is_some()
-            || !request.task_activity.is_empty())
+    // Private fields are checked against the editor's access in the merge below.
+    let raw_payload = form_payload(&request.form)?;
+    let mut managers = request
+        .managers
+        .clone()
+        .ok_or_else(|| conflict("Reload the complete project manager selection before saving."))?;
+    managers.manager_ids.sort_unstable();
+    if managers
+        .manager_ids
+        .windows(2)
+        .any(|pair| pair[0] == pair[1])
+    {
+        return Err(err(BAD_REQUEST, "A manager may only be selected once"));
+    }
+    if request
+        .form
+        .team
+        .iter()
+        .any(|member| member.manager != managers.manager_ids.binary_search(&member.user_id).is_ok())
     {
         return Err(err(
             BAD_REQUEST,
-            "Protected-field intent requires the current permission policy",
+            "Team manager controls must match the complete manager selection",
         ));
     }
-    let raw_payload = validate_draft_form(
-        &request.form,
-        permissions.is_some() || role == OrgRole::Admin,
-    )?;
-    let managers = if permissions.is_some() {
-        let mut selection = request.managers.clone().ok_or_else(|| {
-            conflict("Reload the complete project manager selection before saving.")
-        })?;
-        selection.manager_ids.sort_unstable();
-        if selection
-            .manager_ids
-            .windows(2)
-            .any(|pair| pair[0] == pair[1])
-        {
-            return Err(err(BAD_REQUEST, "A manager may only be selected once"));
-        }
-        if request.form.team.iter().any(|member| {
-            member.manager != selection.manager_ids.binary_search(&member.user_id).is_ok()
-        }) {
-            return Err(err(
-                BAD_REQUEST,
-                "Team manager controls must match the complete manager selection",
-            ));
-        }
-        Some(selection)
-    } else {
-        None
-    };
-    let mut intent = if permissions.is_some() {
-        let mut unchanged = request.unchanged.clone();
-        unchanged.sort_unstable();
-        serde_json::json!({
-            "form": raw_payload,
-            "unchanged": unchanged,
-            "expected_requester": requester,
-            "managers": managers,
-        })
-    } else {
-        raw_payload
-    };
+    let mut unchanged = request.unchanged.clone();
+    unchanged.sort_unstable();
+    let mut intent = serde_json::json!({
+        "form": raw_payload,
+        "unchanged": unchanged,
+        "expected_requester": requester,
+        "managers": managers,
+    });
     if !request.task_activity.is_empty() {
         let mut activity = request.task_activity.clone();
         activity.sort_by_key(|edit| edit.task_id);
@@ -134,32 +122,17 @@ pub(super) async fn save(
     .await
     .map_err(storage_error)?
     .ok_or_else(|| not_found("Project not found"))?;
-    let mut before = load_project_form(
-        &mut tx,
-        org_id,
-        request.project_id,
-        permissions.is_some() || role == OrgRole::Admin,
-    )
-    .await?;
-    let access = if let Some(permissions) = &permissions {
-        let mut view = before.clone();
-        super::projection::redact(&mut tx, org_id, actor_id, permissions, &mut view).await?;
-        Some(
-            view.access
-                .ok_or_else(|| server_err("Project editor access is unavailable"))?,
-        )
-    } else {
-        None
-    };
-    if let Some(access) = &access {
-        // Validation compares canonical responsibility; persistence separately
-        // preserves legacy membership roles, including archived retained rows.
-        apply_manager_flags(&mut before.form, &access.managers);
-        before.access = Some(access.clone());
-    }
-    let may_write_tasks = permissions
-        .as_ref()
-        .is_none_or(|permissions| permissions.grants.contains(Permission::TaskWriteAll));
+    let mut before = load_project_form(&mut tx, org_id, request.project_id).await?;
+    let mut view = before.clone();
+    super::projection::redact(&mut tx, org_id, actor_id, &permissions, &mut view).await?;
+    let access = view
+        .access
+        .ok_or_else(|| server_err("Project editor access is unavailable"))?;
+    // Validation compares canonical responsibility; persistence separately
+    // preserves stored membership roles, including archived retained rows.
+    apply_manager_flags(&mut before.form, &access.managers);
+    before.access = Some(access.clone());
+    let may_write_tasks = permissions.grants.contains(Permission::TaskWriteAll);
     let completed = sqlx::query!(
         "SELECT expected_revision, completed_revision, payload FROM project_edit_requests
          WHERE id = $1 AND project_id = $2 AND org_id = $3 AND actor_id = $4",
@@ -172,19 +145,14 @@ pub(super) async fn save(
     .await
     .map_err(storage_error)?;
     if let Some(completed) = completed {
-        let saved_intent = if let Some(access) = &access {
-            let receipt: CanonicalReceipt = serde_json::from_value(completed.payload)
-                .map_err(|_| conflict("Reload the project before retrying this edit."))?;
-            if receipt.version != 1 {
-                return Err(conflict("Reload the project before retrying this edit."));
-            }
-            receipt.effects.authorize(access, may_write_tasks)?;
-            receipt.intent
-        } else {
-            completed.payload
-        };
+        let receipt: CanonicalReceipt = serde_json::from_value(completed.payload)
+            .map_err(|_| conflict("Reload the project before retrying this edit."))?;
+        if receipt.version != 1 {
+            return Err(conflict("Reload the project before retrying this edit."));
+        }
+        receipt.effects.authorize(&access, may_write_tasks)?;
         if completed.expected_revision != request.expected_revision
-            || saved_intent != intent
+            || receipt.intent != intent
             || completed.completed_revision != revision
         {
             return Err(conflict(
@@ -193,7 +161,11 @@ pub(super) async fn save(
         }
         let project = project_record(&mut tx, org_id, request.project_id).await?;
         tx.commit().await.map_err(storage_error)?;
-        return Ok((project, false));
+        return Ok(Saved {
+            project,
+            changed: false,
+            team_events: Vec::new(),
+        });
     }
     if sqlx::query_scalar!(
         "SELECT EXISTS(SELECT 1 FROM project_edit_requests WHERE id=$1)",
@@ -213,68 +185,60 @@ pub(super) async fn save(
             "The project changed in another session. Reload before saving.",
         ));
     }
-    if managers.is_some()
-        && sqlx::query_scalar!(
-            "SELECT EXISTS(SELECT 1 FROM permission_change_receipts
-             WHERE org_id=$1 AND actor_user_id=$2 AND request_id=$3)",
-            org_id,
-            actor_id,
-            request.id,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(storage_error)?
-        .unwrap_or(false)
+    if sqlx::query_scalar!(
+        "SELECT EXISTS(SELECT 1 FROM permission_change_receipts
+         WHERE org_id=$1 AND actor_user_id=$2 AND request_id=$3)",
+        org_id,
+        actor_id,
+        request.id,
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(storage_error)?
+    .unwrap_or(false)
     {
         return Err(conflict(
             "This edit request identity has already been used.",
         ));
     }
-    let merged;
-    let payload;
-    let form = if let Some(access) = &access {
-        let (form, mut effects) = super::protected::merge(request, &before.form, access)?;
-        effects.task_catalog = form
-            .tasks
-            .iter()
-            .any(|task| matches!(task.source, TaskSource::New { .. }));
-        let retained_tasks: Vec<_> = form
-            .tasks
-            .iter()
-            .filter_map(|task| match task.source {
-                TaskSource::Existing { task_id } => Some(task_id),
-                TaskSource::New { .. } => None,
-            })
-            .collect();
-        let keep_budget = request.unchanged.contains(&ProtectedProjectField::Budget);
-        // Inspect stored units as well: malformed/stale cents are withheld by
-        // the reader, but deleting them is still a monetary change.
-        effects.billable |= sqlx::query_scalar!(
-            "SELECT EXISTS(SELECT 1 FROM project_task_settings
-             WHERE org_id=$1 AND project_id=$2 AND budget_cents IS NOT NULL
-               AND (NOT $3 OR NOT(task_id=ANY($4))))",
-            org_id,
-            request.project_id,
-            keep_budget,
-            &retained_tasks,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(storage_error)?
-        .unwrap_or(false);
-        effects.authorize(access, may_write_tasks)?;
-        payload = serde_json::to_value(CanonicalReceipt {
-            version: 1,
-            intent,
-            effects,
+    let (merged, mut effects) = super::protected::merge(request, &before.form, &access)?;
+    let form = &merged;
+    effects.task_catalog = form
+        .tasks
+        .iter()
+        .any(|task| matches!(task.source, TaskSource::New { .. }));
+    let retained_tasks: Vec<_> = form
+        .tasks
+        .iter()
+        .filter_map(|task| match task.source {
+            TaskSource::Existing { task_id } => Some(task_id),
+            TaskSource::New { .. } => None,
         })
-        .map_err(server_err)?;
-        merged = form;
-        &merged
-    } else {
-        payload = intent;
-        &request.form
-    };
+        .collect();
+    let unchanged = request.unchanged.as_slice();
+    let keep_budget = unchanged.contains(&ProtectedProjectField::Budget);
+    // Inspect stored units as well: malformed/stale cents are withheld by
+    // the reader, but deleting them is still a monetary change.
+    effects.billable |= sqlx::query_scalar!(
+        "SELECT EXISTS(SELECT 1 FROM project_task_settings
+         WHERE org_id=$1 AND project_id=$2 AND budget_cents IS NOT NULL
+           AND (NOT $3 OR NOT(task_id=ANY($4))))",
+        org_id,
+        request.project_id,
+        keep_budget,
+        &retained_tasks,
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(storage_error)?
+    .unwrap_or(false);
+    effects.authorize(&access, may_write_tasks)?;
+    let payload = serde_json::to_value(CanonicalReceipt {
+        version: 1,
+        intent,
+        effects,
+    })
+    .map_err(server_err)?;
     if serde_json::to_string_pretty(&payload)
         .map_err(server_err)?
         .len()
@@ -282,18 +246,10 @@ pub(super) async fn save(
     {
         return Err(err(BAD_REQUEST, "Project edit exceeds 256 KiB"));
     }
-    let may_write_costs = access.as_ref().map_or(role == OrgRole::Admin, |access| {
-        access.costs == ProjectFieldAccess::Editable
-    });
-    let may_write_notes = access.as_ref().map_or(role == OrgRole::Admin, |access| {
-        access.private_notes == ProjectFieldAccess::Editable
-    });
-    let unchanged = access.as_ref().map(|_| request.unchanged.as_slice());
-    let keep_budget =
-        unchanged.is_some_and(|fields| fields.contains(&ProtectedProjectField::Budget));
-    let keep_rate =
-        unchanged.is_some_and(|fields| fields.contains(&ProtectedProjectField::ProjectRate));
-    let keep_fees = unchanged.is_some_and(|fields| fields.contains(&ProtectedProjectField::Fees));
+    let may_write_costs = access.costs == ProjectFieldAccess::Editable;
+    let may_write_notes = access.private_notes == ProjectFieldAccess::Editable;
+    let keep_rate = unchanged.contains(&ProtectedProjectField::ProjectRate);
+    let keep_fees = unchanged.contains(&ProtectedProjectField::Fees);
     let client_id = form.client_id.ok_or_else(|| {
         with_field(
             err(BAD_REQUEST, "Client is required"),
@@ -343,7 +299,6 @@ pub(super) async fn save(
     let parsed = validate_edit(&before, form, email_available)?;
     super::task_activity::apply(&mut tx, org_id, &before, form, &request.task_activity).await?;
     let reset_task_default = before.configured
-        && access.is_some()
         && (form.rate_mode == RateMode::Legacy
             || (form.project_type == ProjectType::TimeAndMaterials
                 && form.rate_mode == RateMode::Task))
@@ -354,6 +309,7 @@ pub(super) async fn save(
                     .contains(&ProtectedProjectField::TaskRate(task.id))
         });
     let changed = form != &before.form || reset_task_default;
+    let mut team_events = Vec::new();
     if changed {
         // Keeping row values does not keep a removed row's contribution. Only
         // recompute the active aggregate; unrelated edits must not repair money.
@@ -369,8 +325,7 @@ pub(super) async fn save(
                     .any(|person| person.user_id == previous.user_id)
         });
         // Editing hours is not consent to clear an inactive monetary value.
-        let keep_inactive_budget_cents = access.is_some()
-            && !super::protected::monetary(before.form.budget_mode)
+        let keep_inactive_budget_cents = !super::protected::monetary(before.form.budget_mode)
             && !super::protected::monetary(form.budget_mode);
         let keep_budget_cents = (keep_budget
             && !(form.budget_mode == BudgetMode::FeesPerTask && removed_task_budget))
@@ -416,7 +371,7 @@ pub(super) async fn save(
             ).execute(&mut *tx).await.map_err(storage_error)?;
         }
         save_tags(&mut tx, org_id, request.project_id, &parsed.tags).await?;
-        super::associations::save(
+        team_events = super::associations::save(
             &mut tx,
             org_id,
             &before,
@@ -432,25 +387,21 @@ pub(super) async fn save(
     }
     // Run even for an unchanged form: delegation is independent of membership
     // and its access revision must still be checked. Self-removal happens last.
-    let managers_changed = if let Some(selection) = managers {
-        project_management::execute_in_transaction(
-            &mut tx,
-            org_id,
-            actor_id,
-            &ProjectManagersCommand {
-                kind: ProjectManagersCommandKind::ReplaceProjectManagers,
-                request_id: request.id,
-                expected_access_revision: selection.expected_access_revision,
-                project_id: request.project_id,
-                manager_ids: selection.manager_ids,
-            },
-        )
-        .await
-        .map_err(map_error)?
-        .changed
-    } else {
-        false
-    };
+    let managers_changed = project_management::execute_in_transaction(
+        &mut tx,
+        org_id,
+        actor_id,
+        &ProjectManagersCommand {
+            kind: ProjectManagersCommandKind::ReplaceProjectManagers,
+            request_id: request.id,
+            expected_access_revision: managers.expected_access_revision,
+            project_id: request.project_id,
+            manager_ids: managers.manager_ids,
+        },
+    )
+    .await
+    .map_err(managers_error)?
+    .changed;
     let completed_revision = sqlx::query_scalar!(
         "SELECT edit_revision FROM projects WHERE id = $1",
         request.project_id
@@ -465,7 +416,11 @@ pub(super) async fn save(
     ).execute(&mut *tx).await.map_err(storage_error)?;
     let project = project_record(&mut tx, org_id, request.project_id).await?;
     tx.commit().await.map_err(storage_error)?;
-    Ok((project, completed_revision != revision || managers_changed))
+    Ok(Saved {
+        project,
+        changed: completed_revision != revision || managers_changed,
+        team_events,
+    })
 }
 
 fn validate_edit(
@@ -549,7 +504,7 @@ async fn save_settings(
     project_id: Uuid,
     form: &ProjectForm,
     parsed: &ValidatedProject,
-    unchanged: Option<&[ProtectedProjectField]>,
+    unchanged: &[ProtectedProjectField],
 ) -> Result<(), ServerFnError> {
     let (mode, amount, day) = match &parsed.fee {
         None => (None, None, None),
@@ -570,11 +525,9 @@ async fn save_settings(
         ReportVisibility::ProjectMembers => "project_members",
     };
     let has_budget = form.budget_mode != BudgetMode::None;
-    let keep_budget =
-        unchanged.is_some_and(|fields| fields.contains(&ProtectedProjectField::Budget));
-    let keep_fees = unchanged.is_some_and(|fields| fields.contains(&ProtectedProjectField::Fees));
-    let keep_invoice =
-        unchanged.is_some_and(|fields| fields.contains(&ProtectedProjectField::InvoiceDefaults));
+    let keep_budget = unchanged.contains(&ProtectedProjectField::Budget);
+    let keep_fees = unchanged.contains(&ProtectedProjectField::Fees);
+    let keep_invoice = unchanged.contains(&ProtectedProjectField::InvoiceDefaults);
     sqlx::query!(
         "UPDATE project_settings SET rate_mode=$3,
          budget_scope=CASE WHEN $19 THEN budget_scope ELSE $4 END,

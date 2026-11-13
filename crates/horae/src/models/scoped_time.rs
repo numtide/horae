@@ -8,14 +8,6 @@ use uuid::Uuid;
 use super::people::PeopleCursor;
 use super::permission_editor::PermissionRequester;
 
-/// Explicit server policy; a denied canonical read never selects legacy mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TimesheetPolicy {
-    LegacyOwn,
-    Scoped,
-}
-
 /// The selected subject is distinct from the authenticated requester.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -25,7 +17,6 @@ pub struct TimesheetQuery {
     pub date_to: NaiveDate,
     pub after: Option<TimeEntryCursor>,
     pub expected_requester: Option<PermissionRequester>,
-    pub expected_policy: Option<TimesheetPolicy>,
 }
 
 /// A subject, its labels and entries admitted under one current authority fence.
@@ -37,7 +28,6 @@ pub struct TimesheetPage {
     /// Seconds the subject's zone is ahead of UTC: the server dates their
     /// timers in it, so the sheet's "today" must be theirs too.
     pub subject_utc_offset_seconds: i32,
-    pub policy: TimesheetPolicy,
     pub entries: Vec<VisibleTimeEntry>,
     pub next_after: Option<TimeEntryCursor>,
 }
@@ -48,7 +38,6 @@ pub struct TimesheetPage {
 pub struct TimesheetWriteContext {
     pub expected_requester: PermissionRequester,
     pub subject_id: Uuid,
-    pub expected_policy: TimesheetPolicy,
 }
 
 /// Editable entry facts; the context owns the immutable person identity.

@@ -3,9 +3,13 @@ use super::*;
 use crate::models::project_creation::{
     ProjectFormField, ProjectMemberInput, ProtectedProjectField,
 };
+use crate::plugin::AppEvent;
+use crate::plugin::event::AssignmentPayload;
 use horae_core::permissions::rates::RateEdit;
 use std::collections::HashSet;
 
+/// Saves the team and tasks. Returns the plugin events for the people added
+/// to or removed from the team, to dispatch once the edit commits.
 pub(super) async fn save(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
@@ -13,8 +17,8 @@ pub(super) async fn save(
     form: &ProjectForm,
     may_write_costs: bool,
     may_write_tasks: bool,
-    unchanged: Option<&[ProtectedProjectField]>,
-) -> Result<(), ServerFnError> {
+    unchanged: &[ProtectedProjectField],
+) -> Result<Vec<AppEvent>, ServerFnError> {
     let org_currency = sqlx::query_scalar!(
         "SELECT default_currency FROM organizations WHERE id=$1",
         org_id
@@ -22,14 +26,13 @@ pub(super) async fn save(
     .fetch_one(&mut **tx)
     .await
     .map_err(storage_error)?;
+    let occurred_at = chrono::Utc::now();
+    let mut events = Vec::new();
     let mut members: Vec<_> = form.team.iter().collect();
     members.sort_by_key(|member| member.user_id);
-    let keep_budget =
-        unchanged.is_some_and(|fields| fields.contains(&ProtectedProjectField::Budget));
+    let keep_budget = unchanged.contains(&ProtectedProjectField::Budget);
     for member in members {
-        let keep_cost = unchanged.is_some_and(|fields| {
-            fields.contains(&ProtectedProjectField::CostRate(member.user_id))
-        });
+        let keep_cost = unchanged.contains(&ProtectedProjectField::CostRate(member.user_id));
         let cost_edit = if !may_write_costs || keep_cost {
             RateEdit::Unchanged
         } else {
@@ -38,7 +41,15 @@ pub(super) async fn save(
                 None => RateEdit::Reset,
             }
         };
-        save_member(tx, org_id, before, form, member, cost_edit, &org_currency).await?;
+        if let Some(assignment) =
+            save_member(tx, org_id, before, form, member, cost_edit, &org_currency).await?
+        {
+            events.push(AppEvent::UserAssignedToProject {
+                occurred_at,
+                org_id,
+                assignment,
+            });
+        }
         if !keep_budget {
             save_member_budget(tx, org_id, before.id, member, form.budget_mode).await?;
         }
@@ -72,17 +83,30 @@ pub(super) async fn save(
                     ));
                 }
             }
-            sqlx::query!(
-                "DELETE FROM assignments WHERE project_id=$1 AND user_id=$2",
+            let removed = sqlx::query!(
+                r#"DELETE FROM assignments WHERE project_id=$1 AND user_id=$2
+                   RETURNING id, role::text AS "role!""#,
                 before.id,
                 member.user_id
             )
-            .execute(&mut **tx)
+            .fetch_optional(&mut **tx)
             .await
             .map_err(storage_error)?;
+            if let Some(removed) = removed {
+                events.push(AppEvent::AssignmentRemoved {
+                    occurred_at,
+                    org_id,
+                    assignment: AssignmentPayload {
+                        id: removed.id,
+                        project_id: before.id,
+                        user_id: member.user_id,
+                        role: removed.role,
+                    },
+                });
+            }
         }
     }
-    Ok(())
+    Ok(events)
 }
 
 async fn save_member(
@@ -93,7 +117,7 @@ async fn save_member(
     member: &ProjectMemberInput,
     cost_edit: RateEdit,
     org_currency: &str,
-) -> Result<(), ServerFnError> {
+) -> Result<Option<AssignmentPayload>, ServerFnError> {
     let previous = before
         .form
         .team
@@ -163,10 +187,13 @@ async fn save_member(
     } else {
         ProjectRole::Freelancer
     };
-    sqlx::query!(
-        "INSERT INTO assignments (id,project_id,user_id,role,rate_cents) VALUES ($1,$2,$3,$4,$5)
+    // `xmax = 0` only on a freshly inserted row: an update of an existing
+    // assignment is not a new member.
+    let saved = sqlx::query!(
+        r#"INSERT INTO assignments (id,project_id,user_id,role,rate_cents) VALUES ($1,$2,$3,$4,$5)
          ON CONFLICT (project_id,user_id) DO UPDATE SET rate_cents=EXCLUDED.rate_cents,
-           role=CASE WHEN $6 THEN EXCLUDED.role ELSE assignments.role END",
+           role=CASE WHEN $6 THEN EXCLUDED.role ELSE assignments.role END
+         RETURNING id, role::text AS "role!", (xmax = 0) AS "inserted!""#,
         Uuid::now_v7(),
         before.id,
         member.user_id,
@@ -174,7 +201,7 @@ async fn save_member(
         rate,
         manager_changed,
     )
-    .execute(&mut **tx)
+    .fetch_one(&mut **tx)
     .await
     .map_err(storage_error)?;
     match cost_edit {
@@ -197,7 +224,12 @@ async fn save_member(
             .map_err(storage_error)?;
         }
     }
-    Ok(())
+    Ok(saved.inserted.then_some(AssignmentPayload {
+        id: saved.id,
+        project_id: before.id,
+        user_id: member.user_id,
+        role: saved.role,
+    }))
 }
 
 async fn save_member_budget(
@@ -237,7 +269,7 @@ async fn save_tasks(
     before: &EditableProject,
     form: &ProjectForm,
     may_write_tasks: bool,
-    unchanged: Option<&[ProtectedProjectField]>,
+    unchanged: &[ProtectedProjectField],
 ) -> Result<(), ServerFnError> {
     let mut selected = HashSet::new();
     for task in &form.tasks {
@@ -286,10 +318,7 @@ async fn save_tasks(
             .tasks
             .iter()
             .find(|item| item.source == (TaskSource::Existing { task_id }));
-        if unchanged.is_some()
-            && previous.is_some()
-            && matches!(task.source, TaskSource::New { .. })
-        {
+        if previous.is_some() && matches!(task.source, TaskSource::New { .. }) {
             return Err(with_field(
                 err(
                     BAD_REQUEST,
@@ -321,11 +350,7 @@ async fn save_tasks(
             "Task rate",
         )
         .map_err(|error| with_field(error, ProjectFormField::TaskRate(task.id)))?;
-        let rate_changed = previous.is_none_or(|item| item.rate != task.rate)
-            || before.form.rate_mode != form.rate_mode;
-        let reset_rate = unchanged.map_or(rate_changed, |fields| {
-            !fields.contains(&ProtectedProjectField::TaskRate(task.id))
-        });
+        let reset_rate = !unchanged.contains(&ProtectedProjectField::TaskRate(task.id));
         if before.configured && task_rates && reset_rate && rate.is_none() {
             if catalog.default_rate_cents.is_some()
                 && !catalog
@@ -345,9 +370,7 @@ async fn save_tasks(
             }
             rate = catalog.default_rate_cents;
         }
-        let billable = if unchanged.is_some()
-            && previous.is_some_and(|previous| previous.billable == task.billable)
-        {
+        let billable = if previous.is_some_and(|previous| previous.billable == task.billable) {
             task.billable
         } else {
             task.billable && form.project_type != ProjectType::NonBillable
@@ -371,8 +394,7 @@ async fn save_tasks(
             || matches!(task.access, TaskAccess::Restricted { .. })
             || previous.is_some_and(|item| item.access != task.access)
         {
-            let keep_budget =
-                unchanged.is_some_and(|fields| fields.contains(&ProtectedProjectField::Budget));
+            let keep_budget = unchanged.contains(&ProtectedProjectField::Budget);
             sqlx::query!("INSERT INTO project_task_settings (id,org_id,project_id,task_id,restricted,budget_minutes,budget_cents) VALUES ($1,$2,$3,$4,$5,$6,$7)
                 ON CONFLICT (project_id,task_id) DO UPDATE SET restricted=EXCLUDED.restricted,
                   budget_minutes=CASE WHEN $8 THEN project_task_settings.budget_minutes ELSE EXCLUDED.budget_minutes END,

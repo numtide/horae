@@ -1,15 +1,13 @@
 //! Bounded time exports retain private source scope until final authorization.
 
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
-use horae_core::types::OrgRole;
 
 use super::*;
 use crate::models::DetailedReportRow;
 use crate::models::permission_editor::PermissionRequester;
+use crate::models::time_report::TimeReportAccess;
 use crate::models::time_report::TimeReportQuery;
-use crate::models::time_report::{TimeReportAccess, TimeReportPolicy};
 use crate::reports::bounded::ExportPermit;
-use crate::server_fns::{PermissionStorageError, load_person_permissions};
 
 pub(in crate::reports) mod groups;
 
@@ -20,80 +18,69 @@ pub(in crate::reports) struct TimeExport {
 
 pub(in crate::reports) struct TimeExportScope {
     requester: PermissionRequester,
-    policy: i32,
     contexts: Vec<(Uuid, Uuid)>,
 }
 
 async fn begin(
     pool: &PgPool,
     requester: PermissionRequester,
-) -> Result<(Transaction<'_, Postgres>, i32, PermissionSelection), StatusCode> {
+) -> Result<(Transaction<'_, Postgres>, PermissionSelection), StatusCode> {
     let mut tx = pool.begin().await.map_err(database_error)?;
     sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE")
         .execute(&mut *tx)
         .await
         .map_err(database_error)?;
     configure_deadlines(&mut tx).await?;
-    let (policy, grants) = match authorize_current(&mut tx, requester).await {
-        Ok(authority) => authority,
+    let grants = match authorize_current(&mut tx, requester).await {
+        Ok(grants) => grants,
         Err(error) => {
             // Release authority before returning, not during deferred pool cleanup.
             tx.rollback().await.map_err(database_error)?;
             return Err(error);
         }
     };
-    Ok((tx, policy, grants))
+    Ok((tx, grants))
 }
 
-/// Resolve presentation mode with the same current authority as time downloads.
+/// Resolve the Reports view with the same current authority as time
+/// downloads. The financial view is for whoever `ops::reports` serves.
 pub(crate) async fn read_access(
     pool: &PgPool,
     requester: PermissionRequester,
 ) -> Result<TimeReportAccess, StatusCode> {
-    let (tx, policy, _) = begin(pool, requester).await?;
-    let policy = match policy {
-        0 => TimeReportPolicy::Legacy,
-        1 => TimeReportPolicy::Scoped,
-        _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
-    };
+    let (tx, grants) = begin(pool, requester).await?;
     tx.commit().await.map_err(database_error)?;
-    Ok(TimeReportAccess { requester, policy })
+    Ok(TimeReportAccess {
+        requester,
+        financial: grants.contains(Permission::TimeReadManaged)
+            || grants.contains(Permission::TimeReadAll),
+    })
 }
 
-/// The caller configures the transaction and owns the lifetime of these gates.
+/// The caller configures the transaction and owns the lifetime of these gates:
+/// the organization and the person stay locked `FOR SHARE` until it ends.
 pub(in crate::reports) async fn authorize_current(
     connection: &mut PgConnection,
     requester: PermissionRequester,
-) -> Result<(i32, PermissionSelection), StatusCode> {
-    let policy = sqlx::query_scalar!(
-        "SELECT permission_policy_version FROM organizations WHERE id=$1 FOR SHARE",
+) -> Result<PermissionSelection, StatusCode> {
+    sqlx::query_scalar!(
+        "SELECT id FROM organizations WHERE id=$1 FOR SHARE",
         requester.org_id,
     )
     .fetch_optional(&mut *connection)
     .await
     .map_err(database_error)?
     .ok_or(StatusCode::FORBIDDEN)?;
-    let role = sqlx::query_scalar!(
-        r#"SELECT org_role AS "role: OrgRole" FROM users WHERE org_id=$1 AND id=$2 AND active FOR SHARE"#,
-        requester.org_id, requester.user_id,
-    ).fetch_optional(&mut *connection).await.map_err(database_error)?.ok_or(StatusCode::FORBIDDEN)?;
-    let grants = match policy {
-        0 if matches!(role, OrgRole::Manager | OrgRole::Admin) => {
-            PermissionSelection::new(&[Permission::TimeReadAll])
-        }
-        0 => return Err(StatusCode::FORBIDDEN),
-        1 => {
-            load_person_permissions(connection, requester.org_id, requester.user_id)
-                .await
-                .map_err(|error| match error {
-                    PermissionStorageError::Database(error) => database_error(error),
-                    _ => StatusCode::INTERNAL_SERVER_ERROR,
-                })?
-                .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
-                .grants
-        }
-        _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
-    };
+    sqlx::query_scalar!(
+        "SELECT id FROM users WHERE org_id=$1 AND id=$2 AND active FOR SHARE",
+        requester.org_id,
+        requester.user_id,
+    )
+    .fetch_optional(&mut *connection)
+    .await
+    .map_err(database_error)?
+    .ok_or(StatusCode::FORBIDDEN)?;
+    let grants = super::load_grants(connection, requester.org_id, requester.user_id).await?;
     if ![
         Permission::TimeReadOwn,
         Permission::TimeReadManaged,
@@ -104,7 +91,7 @@ pub(in crate::reports) async fn authorize_current(
     {
         return Err(StatusCode::FORBIDDEN);
     }
-    Ok((policy, grants))
+    Ok(grants)
 }
 
 pub(in crate::reports) async fn entries(
@@ -112,7 +99,6 @@ pub(in crate::reports) async fn entries(
     org_id: Uuid,
     actor_id: Uuid,
     query: &TimeReportQuery,
-    expected_policy: Option<TimeReportPolicy>,
 ) -> Result<TimeExport, StatusCode> {
     let requester = PermissionRequester {
         org_id,
@@ -127,13 +113,7 @@ pub(in crate::reports) async fn entries(
     if query.date_from > query.date_to || query.after.is_some() {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let (mut tx, policy, grants) = begin(pool, requester).await?;
-    if expected_policy.is_some_and(|expected| match expected {
-        TimeReportPolicy::Legacy => policy != 0,
-        TimeReportPolicy::Scoped => policy != 1,
-    }) {
-        return Err(StatusCode::FORBIDDEN);
-    }
+    let (mut tx, grants) = begin(pool, requester).await?;
     // A single snapshot both bounds and materializes the authorized projection.
     let records = sqlx::query!(
         r#"WITH bounded AS MATERIALIZED (
@@ -223,7 +203,6 @@ pub(in crate::reports) async fn entries(
         rows,
         scope: TimeExportScope {
             requester,
-            policy,
             contexts,
         },
     })
@@ -237,10 +216,7 @@ impl TimeExportScope {
         render: impl FnOnce() -> Result<Vec<u8>, StatusCode> + Send + 'static,
     ) -> Result<axum::body::Body, StatusCode> {
         let body = permit.render(render).await?;
-        let (mut tx, policy, grants) = begin(pool, self.requester).await?;
-        if policy != self.policy {
-            return Err(StatusCode::FORBIDDEN);
-        }
+        let (mut tx, grants) = begin(pool, self.requester).await?;
         authorize_rows(&mut tx, self.requester, &grants, &self.contexts).await?;
         tx.commit().await.map_err(database_error)?;
         Ok(body)

@@ -21,6 +21,14 @@ async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
         let original = load_editable_project(&pool, manager.id, ids.org_id, ids.project_id)
             .await
             .unwrap();
+        // An Executive Manager edits the project but not its rates: they are
+        // declared unchanged.
+        use crate::models::project_creation::ProtectedProjectField::*;
+        let mut unchanged = vec![ProjectRate, Budget, Fees, InvoiceDefaults, PrivateNotes];
+        unchanged.extend(original.form.tasks.iter().map(|task| TaskRate(task.id)));
+        for member in &original.form.team {
+            unchanged.extend([PersonRate(member.user_id), CostRate(member.user_id)]);
+        }
         let mut request = ProjectEditRequest {
             task_activity: Vec::new(),
             id: Uuid::now_v7(),
@@ -32,7 +40,7 @@ async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
                 .as_ref()
                 .map(|access| (&access.managers).into()),
             form: original.form,
-            unchanged: Vec::new(),
+            unchanged,
         };
         request.form.name = "Committed before revocation".into();
         let mut barrier = pool.begin().await.unwrap();
@@ -111,6 +119,14 @@ async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
                 "Widget"
             }
         );
+        // The project editor answers from stored grants, not the role.
+        let manager_ids = crate::server_fns::test_seed::SeedIds {
+            user_id: manager.id,
+            ..ids
+        };
+        crate::ops::testing::set_grants(&mut pool.acquire().await.unwrap(), &manager_ids, &[])
+            .await
+            .unwrap();
         assert!(matches!(
             save_editable_project(&pool, manager.id, ids.org_id, &request, false).await,
             Err(ServerFnError::ServerError {

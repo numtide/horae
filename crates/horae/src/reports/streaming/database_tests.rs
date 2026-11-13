@@ -277,10 +277,9 @@ async fn streamed_projects_preserve_scope_budget_and_tenant_isolation(pool: PgPo
         assert_eq!(&rows[0][2], "Widget");
         assert_eq!(&rows[0][4], "EUR");
         assert_eq!(&rows[0][6], "Active");
-        let expected =
-            super::super::fetch_projects_export(&pool, ids.org_id, ids.user_id, "active")
-                .await
-                .unwrap();
+        let expected = super::super::limits::projects(&pool, ids.org_id, ids.user_id, "active")
+            .await
+            .unwrap();
         assert_eq!(&rows[0][5], &super::super::budget_cell(&expected[0]));
     }
     let bytes = body(

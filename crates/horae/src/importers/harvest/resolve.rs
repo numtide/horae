@@ -746,9 +746,8 @@ pub async fn ensure_project_task(
     sqlx::query!(
         "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents, active)
          VALUES ($1, $2, $3, $4, (
-           SELECT o.permission_policy_version=0 OR (o.permission_policy_version=1 AND t.active)
-           FROM tasks t JOIN projects p ON p.org_id=t.org_id
-           JOIN organizations o ON o.id=p.org_id WHERE p.id=$1 AND t.id=$2
+           SELECT t.active FROM tasks t JOIN projects p ON p.org_id=t.org_id
+           WHERE p.id=$1 AND t.id=$2
          ))
          ON CONFLICT (project_id, task_id) DO NOTHING",
         project_id,

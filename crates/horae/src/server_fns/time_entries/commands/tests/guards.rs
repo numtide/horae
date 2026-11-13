@@ -86,10 +86,6 @@ async fn all_intents_reject_read_only_inactive_and_stale_identities_atomically(p
     }
     for changed in [
         TimesheetWriteContext {
-            expected_policy: TimesheetPolicy::LegacyOwn,
-            ..f.context
-        },
-        TimesheetWriteContext {
             expected_requester: PermissionRequester {
                 user_id: Uuid::now_v7(),
                 ..f.context.expected_requester
@@ -371,90 +367,9 @@ async fn coverage_conflicts_are_explicit_pending_submitted_editing_integration(p
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn legacy_own_history_is_editable_without_becoming_new_tracking_authority(pool: PgPool) {
-    let mut f = fixture(&pool).await;
-    let owner = f.context.subject_id;
-    f.context.expected_requester.user_id = owner;
-    f.context.expected_policy = TimesheetPolicy::LegacyOwn;
-    f.ids.user_id = owner;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=0 WHERE id=$1",
-        f.ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let id = f.entry(&pool).await;
-    sqlx::query!(
-        "UPDATE projects SET active=false WHERE id=$1",
-        f.ids.project_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query!("DELETE FROM assignments WHERE user_id=$1", owner)
-        .execute(&pool)
-        .await
-        .unwrap();
-    assert!(
-        tracking(&pool, f.ids.org_id, owner, &f.context)
-            .await
-            .unwrap()
-            .is_empty()
-    );
-    f.execute(
-        &pool,
-        TimesheetCommand::Update {
-            entry_id: id,
-            entry: f.input(),
-        },
-    )
-    .await
-    .unwrap();
-    assert!(
-        f.execute(&pool, TimesheetCommand::Create { entry: f.input() })
-            .await
-            .is_err()
-    );
-    assert!(
-        f.execute(
-            &pool,
-            TimesheetCommand::StartTimer {
-                project_id: f.ids.project_id,
-                task_id: f.ids.task_id,
-                notes: None
-            }
-        )
-        .await
-        .is_err()
-    );
-    let mut foreign = f.context;
-    foreign.subject_id = Uuid::now_v7();
-    assert!(
-        apply(
-            &pool,
-            f.ids.org_id,
-            owner,
-            &foreign,
-            TimesheetCommand::Delete {
-                entry_ids: vec![id]
-            }
-        )
-        .await
-        .is_err()
-    );
-    f.execute(
-        &pool,
-        TimesheetCommand::Delete {
-            entry_ids: vec![id],
-        },
-    )
-    .await
-    .unwrap();
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn task_grants_archives_and_canonical_admin_role_do_not_bypass_tracking(pool: PgPool) {
+async fn task_grants_archives_and_the_actors_administrator_state_do_not_bypass_tracking(
+    pool: PgPool,
+) {
     let f = fixture(&pool).await;
     let id = f.entry(&pool).await;
     sqlx::query!("INSERT INTO project_task_settings (id,org_id,project_id,task_id,restricted) VALUES ($1,$2,$3,$4,true)",Uuid::now_v7(),f.ids.org_id,f.ids.project_id,f.ids.task_id).execute(&pool).await.unwrap();
@@ -509,9 +424,11 @@ async fn task_grants_archives_and_canonical_admin_role_do_not_bypass_tracking(po
     .execute(&pool)
     .await
     .unwrap();
+    // The Administrator exception belongs to the person tracking time, not to
+    // whoever writes it for them.
     sqlx::query!(
-        "UPDATE users SET org_role='admin' WHERE org_id=$1",
-        f.ids.org_id
+        "UPDATE person_permission_states SET is_administrator=true WHERE user_id=$1",
+        f.ids.user_id
     )
     .execute(&pool)
     .await
@@ -661,87 +578,4 @@ async fn reorders_reject_locked_timed_and_running_entries_atomically(pool: PgPoo
         "a running timer cannot change day: {result:?}"
     );
     assert_eq!(snapshot(&pool, f.ids.org_id).await, before);
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn legacy_archived_edits_keep_time_but_cannot_override_non_billability(pool: PgPool) {
-    for non_billable_project in [false, true] {
-        let mut f = fixture(&pool).await;
-        let owner = f.context.subject_id;
-        f.context.expected_requester.user_id = owner;
-        f.context.expected_policy = TimesheetPolicy::LegacyOwn;
-        f.ids.user_id = owner;
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=0 WHERE id=$1",
-            f.ids.org_id
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        let id = f.entry(&pool).await;
-        // Exactly one of the project type and the task link is non-billable.
-        sqlx::query!(
-            "UPDATE projects SET active=false, project_type=CASE WHEN $2 THEN 'non_billable'::project_type ELSE project_type END WHERE id=$1",
-            f.ids.project_id,
-            non_billable_project
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        sqlx::query!(
-            "UPDATE project_tasks SET billable=$2 WHERE project_id=$1",
-            f.ids.project_id,
-            non_billable_project
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        let edit = TimesheetEntryInput {
-            minutes: 90,
-            notes: Some("Kept".into()),
-            billable: true,
-            start_minute: Some(540),
-            ..f.input()
-        };
-        let update = |entry: TimesheetEntryInput| TimesheetCommand::Update {
-            entry_id: id,
-            entry,
-        };
-        let effects = apply(&pool, f.ids.org_id, owner, &f.context, update(edit.clone()))
-            .await
-            .unwrap();
-        assert_eq!(effects.entries.len(), 1);
-        let (entry, _) = &effects.entries[0];
-        assert!(
-            !entry.billable,
-            "non_billable_project={non_billable_project}"
-        );
-        assert_eq!(
-            (entry.minutes, entry.start_minute, entry.notes.as_deref()),
-            (90, Some(540), Some("Kept"))
-        );
-        let effects = apply(&pool, f.ids.org_id, owner, &f.context, update(edit.clone()))
-            .await
-            .unwrap();
-        assert!(
-            effects.entries.is_empty(),
-            "effective no-op must not emit an update event"
-        );
-        let effects = apply(
-            &pool,
-            f.ids.org_id,
-            owner,
-            &f.context,
-            update(TimesheetEntryInput {
-                minutes: 60,
-                notes: None,
-                start_minute: Some(1425),
-                ..edit
-            }),
-        )
-        .await
-        .unwrap();
-        let (entry, _) = &effects.entries[0];
-        assert_eq!((entry.minutes, entry.start_minute), (15, Some(1425)));
-    }
 }

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (id, org_id, email, name) VALUES ($1, $1, 'known@example.com', 'Sync User')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d660cf3cd22afd0b81b43e69883a2ade77890b2091b1b2a01117a3bd18e4270a"
+}
