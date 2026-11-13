@@ -11,10 +11,10 @@ fn overview() -> project::ProjectOverview {
             org_id: Uuid::from_u128(10),
             user_id: Uuid::from_u128(20),
         },
-        canonical_permissions: true,
         can_create: false,
         can_import: false,
-        can_change_legacy_status: false,
+        can_change_status: false,
+        can_open_clients: false,
         projects: vec![project::ProjectOverviewRow {
             project: project::Project {
                 id: Uuid::from_u128(30),
@@ -39,8 +39,8 @@ fn overview() -> project::ProjectOverview {
     }
 }
 
-/// A legacy overview whose project names interleave across two clients that
-/// share a name, plus a case-only variant and a project without client details.
+/// An overview whose project names interleave across two clients that share
+/// a name, plus a case-only variant and a project without client details.
 fn same_name_overview() -> project::ProjectOverview {
     let template = overview().projects.remove(0);
     let row = |project: u128, client: u128, name: &str, client_name: Option<&str>| {
@@ -56,7 +56,7 @@ fn same_name_overview() -> project::ProjectOverview {
         row
     };
     project::ProjectOverview {
-        canonical_permissions: false,
+        can_open_clients: true,
         projects: vec![
             row(51, 41, "Alpha", Some("Same name")),
             row(52, 42, "Beta", Some("Same name")),
@@ -114,7 +114,7 @@ async fn overview_uses_workflow_client_labels_and_binds_auxiliary_reads() {
     );
     assert!(
         !html.contains("project-bulk-menu"),
-        "canonical edit is not legacy lifecycle authority: {html}"
+        "bulk archiving follows the overview's status flag: {html}"
     );
     assert!(
         !html.contains("href=\"/projects/new\"") && !html.contains("href=\"/admin/importers\""),
@@ -226,8 +226,8 @@ async fn pending_or_denied_overview_starts_no_auxiliary_reads_or_actions() {
 }
 
 #[tokio::test]
-async fn overview_refresh_rejects_changed_account_organization_or_policy_without_old_rows() {
-    for change in ["user", "organization", "policy"] {
+async fn overview_refresh_rejects_changed_account_or_organization_without_old_rows() {
+    for change in ["user", "organization"] {
         let probe = Probe {
             initial_path: Some("/projects".into()),
             ..Probe::default()
@@ -269,8 +269,7 @@ async fn overview_refresh_rejects_changed_account_organization_or_policy_without
         let mut changed = initial.clone();
         match change {
             "user" => changed.requester.user_id = Uuid::now_v7(),
-            "organization" => changed.requester.org_id = Uuid::now_v7(),
-            _ => changed.canonical_permissions = false,
+            _ => changed.requester.org_id = Uuid::now_v7(),
         }
         changed.projects[0].project.name = "Other account project".into();
         send.send(Ok(changed)).unwrap();
@@ -291,8 +290,8 @@ async fn overview_refresh_rejects_changed_account_organization_or_policy_without
     }
 }
 
-/// A legacy manager's overview: three "Alpha" projects and "Gamma" under Acme,
-/// and "Alpha four" under Beta Corp.
+/// An overview for someone who may archive every row: three "Alpha" projects
+/// and "Gamma" under Acme, and "Alpha four" under Beta Corp.
 fn managed_overview() -> project::ProjectOverview {
     let template = overview().projects.remove(0);
     let row = |project: u128, client: u128, name: &str, client_name: &str| {
@@ -308,8 +307,8 @@ fn managed_overview() -> project::ProjectOverview {
         row
     };
     project::ProjectOverview {
-        canonical_permissions: false,
-        can_change_legacy_status: true,
+        can_change_status: true,
+        can_open_clients: true,
         projects: vec![
             row(61, 41, "Alpha one", "Acme"),
             row(62, 41, "Alpha two", "Acme"),
@@ -471,7 +470,7 @@ async fn project_actions_keep_filters_selection_and_the_list_mounted() {
 
 #[tokio::test]
 async fn denied_or_changed_reloads_drop_the_list_with_its_filters_and_selection() {
-    for change in ["denied", "requester", "policy"] {
+    for change in ["denied", "requester"] {
         let probe = Probe {
             initial_path: Some("/projects".into()),
             allow_project_activity: true,
@@ -495,12 +494,8 @@ async fn denied_or_changed_reloads_drop_the_list_with_its_filters_and_selection(
                     message: "requester changed".into(),
                     details: None,
                 }),
-                "requester" => {
-                    changed.requester.user_id = Uuid::now_v7();
-                    Ok(changed)
-                }
                 _ => {
-                    changed.canonical_permissions = true;
+                    changed.requester.user_id = Uuid::now_v7();
                     Ok(changed)
                 }
             })

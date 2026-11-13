@@ -13,7 +13,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id FROM users WHERE email='admin@example.com' AND active AND org_role='admin') u"));
+const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id FROM users WHERE email='admin@example.com' AND active) u"));
 const org = actor.org_id;
 const id = n => `019f4000-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const project = id(1), client = id(2), archived = id(3), outside = id(4), active = id(12);
@@ -99,18 +99,19 @@ let restoreSeededStates = () => {};
         ('${id(9)}','${org}','${project}','${archived}'), ('${id(10)}','${org}','${project}','${outside}');
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ('${id(11)}','${org}','${actor.id}',1,${grantsSql(edit)},false,'individual');
-      UPDATE users SET org_role='member' WHERE id='${actor.id}';
       UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
     const protectedBefore = protectedState();
     const editorResponse = page.waitForResponse(response => response.url().includes('/api/load_project_editor'));
     await open();
     const disclosed = await (await editorResponse).json();
-    for (const secret of [12345, 56789, 67890, 86753, '123.45', '567.89', '678.90', '867.53', 'Private purchase order', 'Private project note']) {
+    for (const secret of [12345, 56789, 67890, 86753, '123.45', '567.89', '678.90', '867.53', 'Private purchase order']) {
       assert.ok(!leaves(disclosed).includes(secret), `withheld editor response disclosed ${secret}`);
     }
-    for (const field of ['#np-project-rate', '#np-notes', '#np-po-number', `#np-cost-rate-${archived}`, `#np-cost-rate-${active}`]) {
+    for (const field of ['#np-project-rate', '#np-po-number', `#np-cost-rate-${archived}`, `#np-cost-rate-${active}`]) {
       await expect(page.locator(field)).toHaveCount(0);
     }
+    // Private notes belong to whoever may edit every project.
+    await expect(page.locator('#np-notes')).toHaveValue('Private project note');
     await expect(page.locator('#np-budget-value')).toBeEnabled();
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 900 });
@@ -127,7 +128,7 @@ let restoreSeededStates = () => {};
     assert.equal(sql(`SELECT count(*) FROM project_management_assignments WHERE project_id='${project}'`), '0');
     assert.equal(sql(`SELECT count(*) FROM assignments WHERE project_id='${project}' AND user_id='${archived}'`), '1');
     assert.equal(protectedState(), protectedBefore);
-    console.log('PASS: keyboard manager removal preserves archived membership and withheld money/notes at desktop and narrow widths');
+    console.log('PASS: keyboard manager removal preserves archived membership, withheld money and unchanged notes at desktop and narrow widths');
 
     const tasksBefore = taskState();
     assert.equal(taskActivity(archivedTask), 'f', 'unrelated save must not restore a project task');
@@ -188,7 +189,7 @@ let restoreSeededStates = () => {};
     await expect(page.locator(`#np-cost-rate-${archived}`)).toBeDisabled();
     await expect(page.locator(`#np-cost-rate-${active}`)).toHaveValue('678.90');
     await expect(page.locator(`#np-cost-rate-${active}`)).toBeDisabled();
-    await expect(page.locator('#np-notes')).toHaveCount(0);
+    await expect(page.locator('#np-notes')).toBeEnabled();
     await expect(page.locator(`#np-person-manager-${archived}`)).toBeDisabled();
     await page.locator('#np-name').fill('Read-only financial edit');
     await save();
@@ -260,7 +261,6 @@ let restoreSeededStates = () => {};
     await browser.close();
     sql(`BEGIN;
       UPDATE organizations SET permission_policy_version=0 WHERE id='${org}';
-      UPDATE users SET org_role='admin' WHERE id='${actor.id}';
       DELETE FROM person_permission_states WHERE id='${id(11)}';
       DELETE FROM time_entries WHERE id='${id(30)}';
       DELETE FROM project_management_assignments WHERE project_id='${project}';

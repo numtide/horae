@@ -7,7 +7,7 @@ use super::*;
 pub(super) enum Purpose {
     Invoice,
     Projects,
-    Time(i32),
+    Time,
 }
 
 pub(super) struct Authority {
@@ -21,13 +21,13 @@ impl Authority {
         connection: &mut PgConnection,
         org_id: Uuid,
         actor_id: Uuid,
-    ) -> Result<(Self, i32), StatusCode> {
+    ) -> Result<Self, StatusCode> {
         configure(connection).await?;
         sqlx::query!("SAVEPOINT csv_authority")
             .execute(&mut *connection)
             .await
             .map_err(database_error)?;
-        let (policy, _) = authorize_current(
+        authorize_current(
             connection,
             PermissionRequester {
                 org_id,
@@ -36,14 +36,11 @@ impl Authority {
         )
         .await?;
         release_authority(connection).await?;
-        Ok((
-            Self {
-                org_id,
-                actor_id,
-                purpose: Purpose::Time(policy),
-            },
-            policy,
-        ))
+        Ok(Self {
+            org_id,
+            actor_id,
+            purpose: Purpose::Time,
+        })
     }
 
     pub async fn begin(&self, connection: &mut PgConnection) -> Result<(), StatusCode> {
@@ -58,7 +55,7 @@ impl Authority {
         monetary_project_ids: &[Uuid],
         contexts: &[(Uuid, Uuid)],
     ) -> Result<(), StatusCode> {
-        if matches!(self.purpose, Purpose::Time(_)) {
+        if matches!(self.purpose, Purpose::Time) {
             let grants = self.hold_time(connection).await?;
             authorize_rows(
                 connection,
@@ -110,25 +107,21 @@ impl Authority {
         &self,
         connection: &mut PgConnection,
     ) -> Result<PermissionSelection, StatusCode> {
-        let Purpose::Time(expected_policy) = self.purpose else {
+        if !matches!(self.purpose, Purpose::Time) {
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        };
+        }
         sqlx::query!("SAVEPOINT csv_authority")
             .execute(&mut *connection)
             .await
             .map_err(database_error)?;
-        let (policy, grants) = authorize_current(
+        authorize_current(
             connection,
             PermissionRequester {
                 org_id: self.org_id,
                 user_id: self.actor_id,
             },
         )
-        .await?;
-        if policy != expected_policy {
-            return Err(StatusCode::FORBIDDEN);
-        }
-        Ok(grants)
+        .await
     }
 }
 

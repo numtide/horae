@@ -25,6 +25,13 @@ pub(crate) struct Actor {
 }
 
 const STATE_UNAVAILABLE: &str = "Permission state is unavailable";
+pub(crate) const ADMINISTRATOR_REQUIRED: &str = "Active administrator access required";
+
+#[derive(Clone, Copy)]
+enum Lock {
+    Share,
+    None,
+}
 
 impl Actor {
     /// Locks the organization, then the person (`FOR SHARE`, in that order, as
@@ -37,6 +44,24 @@ impl Actor {
     /// found or forbidden. Missing or invalid permission state fails closed
     /// with `Forbidden`; a storage error maps like any other.
     pub async fn load(connection: &mut PgConnection, caller: Caller) -> Result<Self, OpError> {
+        Self::load_with(connection, caller, Lock::Share).await
+    }
+
+    /// [`Actor::load`] without the locks: for refusing early, before the
+    /// operation's own transaction checks again, or for a read that must not
+    /// queue behind an access change. The answer holds only when it was read.
+    pub async fn load_unlocked(
+        connection: &mut PgConnection,
+        caller: Caller,
+    ) -> Result<Self, OpError> {
+        Self::load_with(connection, caller, Lock::None).await
+    }
+
+    async fn load_with(
+        connection: &mut PgConnection,
+        caller: Caller,
+        lock: Lock,
+    ) -> Result<Self, OpError> {
         let mut actor = Self {
             identity: horae_core::permissions::Actor {
                 id: caller.user_id,
@@ -46,22 +71,44 @@ impl Actor {
             channel: caller.channel,
             permissions: None,
         };
-        let organization = sqlx::query_scalar!(
-            "SELECT id FROM organizations WHERE id = $1 FOR SHARE",
-            caller.org_id,
-        )
-        .fetch_optional(&mut *connection)
-        .await?;
+        let organization = match lock {
+            Lock::Share => {
+                sqlx::query_scalar!(
+                    "SELECT id FROM organizations WHERE id = $1 FOR SHARE",
+                    caller.org_id,
+                )
+                .fetch_optional(&mut *connection)
+                .await?
+            }
+            Lock::None => {
+                sqlx::query_scalar!("SELECT id FROM organizations WHERE id = $1", caller.org_id)
+                    .fetch_optional(&mut *connection)
+                    .await?
+            }
+        };
         if organization.is_none() {
             return Ok(actor);
         }
-        let person = sqlx::query_scalar!(
-            "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
-            caller.org_id,
-            caller.user_id,
-        )
-        .fetch_optional(&mut *connection)
-        .await?;
+        let person = match lock {
+            Lock::Share => {
+                sqlx::query_scalar!(
+                    "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
+                    caller.org_id,
+                    caller.user_id,
+                )
+                .fetch_optional(&mut *connection)
+                .await?
+            }
+            Lock::None => {
+                sqlx::query_scalar!(
+                    "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active",
+                    caller.org_id,
+                    caller.user_id,
+                )
+                .fetch_optional(&mut *connection)
+                .await?
+            }
+        };
         if person.is_none() {
             return Ok(actor);
         }
@@ -121,14 +168,20 @@ impl Actor {
 
     /// The stored administrator identity. Holding every grant does not make
     /// someone an administrator.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "foundation for the next ops/ domains")
-    )]
     pub fn administrator(&self) -> bool {
         self.permissions
             .as_ref()
             .is_some_and(|state| state.is_administrator)
+    }
+
+    /// Refuses anyone but an active administrator: the guard for actions no
+    /// grant covers, such as the Harvest importer and its jobs.
+    pub fn require_administrator(&self) -> Result<(), OpError> {
+        if self.administrator() {
+            Ok(())
+        } else {
+            Err(OpError::forbidden(ADMINISTRATOR_REQUIRED))
+        }
     }
 }
 

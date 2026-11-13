@@ -1126,10 +1126,10 @@ mod server_fns {
                     org_id: Uuid::nil(),
                     user_id: Uuid::from_u128(300),
                 },
-                canonical_permissions: false,
                 can_create: true,
                 can_import: true,
-                can_change_legacy_status: true,
+                can_change_status: true,
+                can_open_clients: true,
                 projects: Vec::new(),
             }))
     }
@@ -1203,7 +1203,6 @@ mod server_fns {
                 org_id: Uuid::nil(),
                 user_id: Uuid::from_u128(300),
             },
-            canonical_permissions: false,
             project,
             client_id: Uuid::nil(),
             project_type: horae_core::types::ProjectType::TimeAndMaterials,

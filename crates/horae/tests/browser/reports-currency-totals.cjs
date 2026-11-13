@@ -1,4 +1,4 @@
-// Legacy Time report totals per currency, exclusively in the runner's disposable DB.
+// Financial Time report totals per currency, exclusively in the runner's disposable DB.
 // Needs the freshly seeded EUR (Acme) and USD (TechStart) data: later suites such as
 // invoice-preparation rewrite those projects, so the runner's default list runs this
 // suite first. A focused run must name it first after a fresh migrate and seed.
@@ -14,16 +14,21 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id,org_role FROM users WHERE email='admin@example.com' AND active) u"));
-assert.equal(actor.org_role, 'admin');
-assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
+const { setAsideSeededStates } = require('./seeded-permissions.cjs');
+// The seeded Administrator reads everyone's time, so Reports opens the financial view.
+const actor = JSON.parse(sql(`SELECT row_to_json(u) FROM (SELECT u.id,u.org_id FROM users u
+  JOIN person_permission_states s ON s.org_id=u.org_id AND s.user_id=u.id
+  WHERE u.email='admin@example.com' AND u.active AND s.is_administrator) u`));
+const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
+const timeAll = ['time_read_managed', 'time_read_all'];
+const ratesAll = ['billable_rate_read_managed', 'billable_rate_read_all'];
+const grants = list => `ARRAY[${list.map(grant => `'${grant}'`).join(',')}]::text[]`;
 // The demo seed writes the current week, so the period comes from its entries.
 const seeded = `FROM time_entries te JOIN projects p ON p.id=te.project_id JOIN clients c ON c.id=p.client_id
   WHERE te.org_id='${actor.org_id}' AND c.name IN ('Acme Corp','TechStart Inc')`;
 const [from, to] = sql(`SELECT min(te.spent_date)||'|'||max(te.spent_date) ${seeded}`).split('|');
 assert.match(from, /^\d{4}-\d{2}-\d{2}$/);
-const memberCost = '019f3100-0000-7000-8000-000000000001';
-const fixtureAssignment = '019f3100-0000-7000-8000-000000000002';
+const fixtureState = '019f3100-0000-7000-8000-000000000001';
 
 // "EUR 1,130.00" → ['EUR', 113000n]; integer arithmetic only.
 const parse = text => {
@@ -46,8 +51,8 @@ const format = (code, cents) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.stack || error.message));
   let release;
-  // Set only once the fixture transaction has committed; cleanup depends on it.
-  let fixtureCommitted = false;
+  // Set once the seeded states are set aside; cleanup puts them back.
+  let restoreSeededStates;
   // Resolves once the report for the given arguments has arrived.
   const reportFor = predicate => page.waitForResponse(response => {
     if (!new URL(response.url()).pathname.startsWith('/api/report_time') || !response.ok()) return false;
@@ -253,31 +258,39 @@ const format = (code, cents) => {
 
     await inspectTotals('admin', billable, await totalLines(6));
 
-    // A real manager session with an administrator-only cost override.
-    const [project, user] = sql(`SELECT te.project_id||'|'||te.user_id ${seeded}
-      AND te.spent_date BETWEEN '${from}' AND '${to}' ORDER BY te.id LIMIT 1`).split('|');
-    assert.match(project, /^[0-9a-f-]{36}$/);
-    assert.match(user, /^[0-9a-f-]{36}$/);
-    // Cleanup deletes by these IDs, so they must not already belong to anything.
-    assert.equal(sql(`SELECT count(*) FROM project_member_costs WHERE id='${memberCost}' OR (project_id='${project}' AND user_id='${user}')`), '0');
-    assert.equal(sql(`SELECT count(*) FROM assignments WHERE id='${fixtureAssignment}'`), '0');
-    const fixture = { assignment: sql(`SELECT count(*) FROM assignments WHERE project_id='${project}' AND user_id='${user}'`) === '0' };
-    sql(`BEGIN;
-      ${fixture.assignment ? `INSERT INTO assignments (id,project_id,user_id) VALUES ('${fixtureAssignment}','${project}','${user}');` : ''}
-      INSERT INTO project_member_costs (id,org_id,project_id,user_id,cost_rate_cents) VALUES ('${memberCost}','${actor.org_id}','${project}','${user}',9999);
-      UPDATE users SET org_role='manager' WHERE id='${actor.id}'; COMMIT;`);
-    fixtureCommitted = true;
-    await page.reload();
-    await page.locator('input[type="date"]').first().fill(from);
-    await page.locator('input[type="date"]').last().fill(to);
-    await expect(totalRow).toHaveCount(1);
+    // Report and rate grants are separate (C02). The same session first reads
+    // everyone's time and billable rates but no costs, then time alone.
+    const setGrants = list => sql(`BEGIN;
+      DELETE FROM person_permission_states WHERE id='${fixtureState}';
+      INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
+        VALUES ('${fixtureState}','${actor.org_id}','${actor.id}',1,${grants(list)},false,'individual'); COMMIT;`);
+    const reopen = async () => {
+      await page.reload();
+      await page.locator('input[type="date"]').first().fill(from);
+      await page.locator('input[type="date"]').last().fill(to);
+      await expect(totalRow).toHaveCount(1);
+    };
+    restoreSeededStates = setAsideSeededStates(actor.org_id);
+    setGrants([...floor, ...timeAll, ...ratesAll]);
+    await reopen();
     await expect.poll(() => totalLines(6)).toEqual(['Restricted']);
     assert.deepEqual(await totalLines(5), billable, 'Billable totals are not withheld');
-    await assertTotals('manager with a withheld cost');
-    await inspectTotals('restricted', billable, ['Restricted']);
+    for (const cost of await dataRows.locator('td:nth-child(6)').allInnerTexts()) assert.equal(cost.trim(), 'Restricted');
+    await assertTotals('rates without costs');
+    await inspectTotals('no-costs', billable, ['Restricted']);
+
+    setGrants([...floor, ...timeAll]);
+    await reopen();
+    await expect.poll(() => totalLines(5)).toEqual(['Restricted']);
+    assert.deepEqual(await totalLines(6), ['Restricted']);
+    for (const column of [5, 6]) {
+      for (const amount of await dataRows.locator(`td:nth-child(${column})`).allInnerTexts()) assert.equal(amount.trim(), 'Restricted');
+    }
+    assert.ok((await dataRows.count()) > 0, 'Hours still show without rates');
+    await assertTotals('time without rates');
 
     assert.deepEqual(errors, []);
-    console.log(`PASS: legacy report currency totals ${billable.join(' / ')}, groupings, filter, loading, retry, both themes with base and 32px root text at 1440/390/320px, and withheld cost; Chromium ${browser.version()}`);
+    console.log(`PASS: financial report currency totals ${billable.join(' / ')}, groupings, filter, loading, retry, both themes with base and 32px root text at 1440/390/320px, withheld costs with rates and withheld amounts without rates; Chromium ${browser.version()}`);
   } finally {
     // An intercepted request still waiting on release would block unrouteAll.
     if (release) release();
@@ -288,11 +301,10 @@ const format = (code, cents) => {
       try {
         await browser.close();
       } finally {
-        // A failed precondition never committed, so it must not delete anything.
-        if (fixtureCommitted) sql(`BEGIN;
-          UPDATE users SET org_role='${actor.org_role}' WHERE id='${actor.id}';
-          DELETE FROM project_member_costs WHERE id='${memberCost}';
-          DELETE FROM assignments WHERE id='${fixtureAssignment}'; COMMIT;`);
+        if (restoreSeededStates) {
+          sql(`DELETE FROM person_permission_states WHERE id='${fixtureState}'`);
+          restoreSeededStates();
+        }
       }
     }
   }

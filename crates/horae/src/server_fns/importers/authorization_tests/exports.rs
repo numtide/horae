@@ -54,9 +54,16 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     sqlx::query!("INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents) VALUES ($1,$2,$3,'EXPORT-PRIVATE','2026-09-07','2026-10-07','EUR',1234)", invoice_id, ids.org_id, ids.client_id).execute(pool).await.unwrap();
     sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,time_entry_id,description,minutes,rate_cents,amount_cents) VALUES ($1,$2,$3,'Private export note',60,1234,1234)", Uuid::now_v7(), invoice_id, own_entry).execute(pool).await.unwrap();
     let cookie = api.cookie(ids.user_id).await;
-    let member = api
-        .cookie(user(pool, ids.org_id, OrgRole::Member).await)
-        .await;
+    let member_id = user(pool, ids.org_id, OrgRole::Member).await;
+    crate::server_fns::provisioning::provision(
+        &mut pool.acquire().await.unwrap(),
+        ids.org_id,
+        member_id,
+        BuiltInProfile::Member,
+    )
+    .await
+    .unwrap();
+    let member = api.cookie(member_id).await;
     let other = api.cookie(foreign.user_id).await;
     let expired = api.cookie(ids.user_id).await;
     assert_eq!(
@@ -77,12 +84,27 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         format!("/api/invoices/{invoice_id}/export/csv"),
     ];
     for path in &paths {
+        let report = path.contains("/reports/");
         denied(download(api, path, None).await, StatusCode::UNAUTHORIZED).await;
-        denied(
-            download(api, path, Some(&member)).await,
-            StatusCode::FORBIDDEN,
-        )
-        .await;
+        // A Member downloads their own (here empty) time; invoices still need
+        // the manager role.
+        let response = download(api, path, Some(&member)).await;
+        if report {
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = response.bytes().await.unwrap();
+            for private in [
+                "EXPORT-PRIVATE",
+                "Private export note",
+                "Other tenant secret",
+            ] {
+                assert!(
+                    !body.windows(private.len()).any(|w| w == private.as_bytes()),
+                    "{path}: {private}"
+                );
+            }
+        } else {
+            denied(response, StatusCode::FORBIDDEN).await;
+        }
         denied(
             download(api, path, Some(&expired)).await,
             StatusCode::UNAUTHORIZED,
@@ -222,24 +244,21 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             })
         };
         wait_for_blocked(pool, pid).await;
-        // Invoice exports follow the stored grants; the time exports still
-        // follow the role until the reports domain moves.
-        crate::ops::testing::set_grants(&mut writer, &ids, &[])
-            .await
-            .unwrap();
-        sqlx::query!(
-            "UPDATE users SET org_role='member' WHERE id=$1",
-            ids.user_id
-        )
-        .execute(&mut *writer)
-        .await
-        .unwrap();
+        // Everyone reads their own time, so a report download is revoked by
+        // deactivation; an invoice download by its grants.
+        if report {
+            sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+                .execute(&mut *writer)
+                .await
+                .unwrap();
+        } else {
+            crate::ops::testing::set_grants(&mut writer, &ids, &[])
+                .await
+                .unwrap();
+        }
         writer.commit().await.unwrap();
         denied(pending.await.unwrap(), StatusCode::FORBIDDEN).await;
-        sqlx::query!(
-            "UPDATE users SET org_role='manager' WHERE id=$1",
-            ids.user_id
-        )
+        sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
         .execute(pool)
         .await
         .unwrap();

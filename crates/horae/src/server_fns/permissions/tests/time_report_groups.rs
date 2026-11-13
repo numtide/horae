@@ -313,7 +313,7 @@ async fn grouped_reports_apply_scope_union_before_every_group(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn grouped_reports_reject_wrong_requesters_cursors_and_policy(pool: PgPool) {
+async fn grouped_reports_reject_wrong_requesters_and_cursors(pool: PgPool) {
     use crate::models::permission_editor::PermissionRequester;
     let ids = fixture(&pool).await;
     let mut filter = query(TimeReportGrouping::Project);
@@ -347,17 +347,6 @@ async fn grouped_reports_reject_wrong_requesters_cursors_and_policy(pool: PgPool
         Err(TimeReadError::InvalidQuery)
     ));
     filter.date_to = "2026-09-30".parse().unwrap();
-    for mode in [0, 99] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
-            ids.org_id,
-            mode
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        assert!(read(&pool, ids.org_id, ids.user_id, &filter).await.is_err());
-    }
     let mut wire = serde_json::to_value(&filter).unwrap();
     wire["group_by"] = serde_json::json!("profitability");
     assert!(serde_json::from_value::<TimeReportGroupQuery>(wire).is_err());

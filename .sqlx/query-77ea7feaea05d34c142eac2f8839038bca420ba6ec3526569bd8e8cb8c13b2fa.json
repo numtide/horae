@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM project_drafts WHERE creator_id = $1 AND completed_project_id IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "77ea7feaea05d34c142eac2f8839038bca420ba6ec3526569bd8e8cb8c13b2fa"
+}

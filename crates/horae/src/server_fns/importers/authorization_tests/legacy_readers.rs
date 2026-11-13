@@ -65,19 +65,11 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                     .await
                     .unwrap();
             } else {
-                // The readers hold stored grants in their transaction; the
-                // detailed report's session gate still reads the role until
-                // the reports domain moves.
+                // Invoices and the detailed report both answer from the
+                // stored grants.
                 crate::ops::testing::set_grants(&mut writer, &ids, &[])
                     .await
                     .unwrap();
-                sqlx::query!(
-                    "UPDATE users SET org_role='member' WHERE id=$1",
-                    ids.user_id
-                )
-                .execute(&mut *writer)
-                .await
-                .unwrap();
             }
             let pid = sqlx::query_scalar!("SELECT pg_backend_pid() as \"pid!\"")
                 .fetch_one(&mut *writer)
@@ -106,19 +98,19 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 }
             );
             sqlx::query!(
-                "UPDATE users SET active=true,org_role='manager' WHERE id=$1",
+                "UPDATE users SET active=true WHERE id=$1",
                 ids.user_id
             )
             .execute(pool)
             .await
             .unwrap();
-            crate::ops::testing::set_grants(
-                &mut pool.acquire().await.unwrap(),
+            crate::ops::testing::provision(
+                pool,
                 &ids,
                 BuiltInProfile::ExecutiveManager.direct_permissions(),
+                false,
             )
-            .await
-            .unwrap();
+            .await;
             assert_eq!(api.json(name, body.clone(), &cookie).await, expected);
         }
     }

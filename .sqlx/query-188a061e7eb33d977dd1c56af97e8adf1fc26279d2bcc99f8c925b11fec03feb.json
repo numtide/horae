@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (id, org_id, email, name, cost_rate_cents) VALUES ($1, $2, $3, 'Coworker', 12345)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "188a061e7eb33d977dd1c56af97e8adf1fc26279d2bcc99f8c925b11fec03feb"
+}

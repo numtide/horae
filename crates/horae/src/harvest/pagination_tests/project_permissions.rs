@@ -20,12 +20,14 @@ pub(super) async fn selection(pool: &PgPool, user_id: Uuid, permissions: &[Permi
     .unwrap();
 }
 
+/// Seeds `profile`'s person, then replaces their stored state with an
+/// individual non-administrator one holding exactly `permissions`.
 pub(super) async fn canonical(
     pool: &PgPool,
-    role: BuiltInProfile,
+    profile: BuiltInProfile,
     permissions: &[Permission],
 ) -> (SeedIds, Router) {
-    let ids = seed(pool, role).await;
+    let ids = seed(pool, profile).await;
     crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
@@ -33,13 +35,6 @@ pub(super) async fn canonical(
         Uuid::now_v7(), ids.org_id, ids.user_id,
     ).execute(pool).await.unwrap();
     selection(pool, ids.user_id, permissions).await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id,
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     sqlx::query!(
         "UPDATE projects SET budget_kind='amount',budget_amount_cents=86753 WHERE id=$1",
         ids.project_id,
@@ -53,7 +48,7 @@ pub(super) async fn canonical(
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_project_reader_uses_list_count_and_detail_without_legacy_role(pool: PgPool) {
+async fn canonical_project_reader_uses_list_count_and_detail_from_grants(pool: PgPool) {
     let (ids, app) = canonical(&pool, BuiltInProfile::Member, &[Permission::ProjectReadAll]).await;
     walk(&pool, &app, "projects", "is_active=true", &[ids.project_id]).await;
     let detail = page(&app, &format!("/harvest/v2/projects/{}", ids.project_id)).await;
@@ -63,7 +58,7 @@ async fn canonical_project_reader_uses_list_count_and_detail_without_legacy_role
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_project_api_does_not_inherit_legacy_administrator_scope(pool: PgPool) {
+async fn canonical_project_api_does_not_follow_the_seeded_administrator_profile(pool: PgPool) {
     let (ids, app) = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
     for query in ["", "?per_page=1", "?per_page=1&page=2", "?is_active=true"] {
         let result = page(&app, &format!("/harvest/v2/projects{query}")).await;
@@ -131,7 +126,7 @@ async fn canonical_project_api_managed_scope_requires_current_designation(pool: 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn canonical_project_api_rejects_malformed_state_even_without_visible_rows(pool: PgPool) {
-    for invalid in ["catalog", "grants", "missing", "policy"] {
+    for invalid in ["catalog", "grants", "missing"] {
         let (ids, app) = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
         match invalid {
             "catalog" => {
@@ -156,15 +151,6 @@ async fn canonical_project_api_rejects_malformed_state_even_without_visible_rows
                 sqlx::query!(
                     "DELETE FROM person_permission_states WHERE user_id=$1",
                     ids.user_id
-                )
-                .execute(&pool)
-                .await
-                .unwrap();
-            }
-            "policy" => {
-                sqlx::query!(
-                    "UPDATE organizations SET permission_policy_version=999 WHERE id=$1",
-                    ids.org_id
                 )
                 .execute(&pool)
                 .await

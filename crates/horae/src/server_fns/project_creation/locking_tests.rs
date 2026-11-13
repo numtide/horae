@@ -81,13 +81,6 @@ async fn every_project_entry_gates_before_actor_and_rechecks_revocation(pool: Pg
         Operation::Finalize,
     ] {
         let ids = seed(&pool, BuiltInProfile::Administrator).await;
-        // Client operations authorize from stored grants; the project
-        // operations here still read the legacy role.
-        let grants = matches!(operation, Operation::CreateClient);
-        if grants {
-            let write = [horae_core::permissions::catalog::Permission::ClientWriteAll];
-            crate::ops::testing::provision(&pool, &ids, &write, false).await;
-        }
         let editor = editing::load_editable_project(&pool, ids.user_id, ids.org_id, ids.project_id)
             .await
             .unwrap();
@@ -130,12 +123,10 @@ async fn every_project_entry_gates_before_actor_and_rechecks_revocation(pool: Pg
             .await
             .unwrap();
         }
-        if grants {
-            // Committed together with the role change below.
-            crate::ops::testing::set_grants(&mut revocation, &ids, &[])
-                .await
-                .unwrap();
-        }
+        // Committed once the operation is waiting behind the organization.
+        crate::ops::testing::set_grants(&mut revocation, &ids, &[])
+            .await
+            .unwrap();
         let mut requests = JoinSet::new();
         let request_pool = pool.clone();
         let actor_id = ids.user_id;
@@ -154,14 +145,6 @@ async fn every_project_entry_gates_before_actor_and_rechecks_revocation(pool: Pg
         .fetch_one(&mut *revocation)
         .await
         .expect("organization must precede actor");
-        sqlx::query!(
-            "UPDATE users SET org_role = 'member' WHERE id = $1 AND org_id = $2",
-            actor_id,
-            org_id
-        )
-        .execute(&mut *revocation)
-        .await
-        .unwrap();
         revocation.commit().await.unwrap();
         let (result, ids, request) = requests.join_next().await.unwrap().unwrap();
         let expected = if matches!(operation, Operation::LoadEditor | Operation::SaveEditor) {

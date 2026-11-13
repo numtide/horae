@@ -15,7 +15,7 @@ use super::{
     CAL_HOUR, CalDrag, DragKind, cal_time_label, cal_y_to_min, day_col_class, timed_lanes,
     today_offset, tracking, untimed_ordered,
 };
-use crate::models::scoped_time::{TimesheetPolicy, TimesheetTrackingOption, VisibleTimeEntry};
+use crate::models::scoped_time::{TimesheetTrackingOption, VisibleTimeEntry};
 
 /// A calendar event's pre-computed placement and labels, plus the id of the
 /// entry it came from so a press can find it to drag or edit.
@@ -38,7 +38,7 @@ struct CalEvent {
     time_label: String,
     client: String,
     state: EntryState,
-    /// Whether the policy and choices allow changing it; `busy` locks it too.
+    /// Whether the loaded sheet and choices allow changing it; `busy` locks it too.
     editable: bool,
 }
 
@@ -58,7 +58,7 @@ fn layout(
     projects: &HashMap<Uuid, String>,
     tasks: &HashMap<Uuid, String>,
     clients: &HashMap<Uuid, String>,
-    policy: Option<TimesheetPolicy>,
+    loaded: bool,
     tracking: &[TimesheetTrackingOption],
 ) -> Vec<CalDay> {
     by_day
@@ -104,7 +104,7 @@ fn layout(
                     },
                     client: clients.get(&e.project_id).cloned().unwrap_or_default(),
                     state: e.state,
-                    editable: tracking::editable(policy, tracking, e),
+                    editable: tracking::editable(loaded, tracking, e),
                 });
             }
             CalDay { events, occupied }
@@ -127,7 +127,8 @@ pub(super) fn CalendarView(
     drag_commit: Callback<CalDrag>,
     tracking: Memo<Vec<TimesheetTrackingOption>>,
     busy: Memo<bool>,
-    policy: Memo<Option<TimesheetPolicy>>,
+    /// Whether the sheet's write context has arrived.
+    loaded: Memo<bool>,
 ) -> Element {
     // The free calendar slot the cursor is over: (column, snapped minute). Drives
     // the cursor-following "+ Add time" hint.
@@ -146,7 +147,7 @@ pub(super) fn CalendarView(
             &project_names.read(),
             &task_names.read(),
             &project_client.read(),
-            policy(),
+            loaded(),
             &tracking.read(),
         )
     });

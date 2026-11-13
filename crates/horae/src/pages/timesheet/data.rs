@@ -35,7 +35,6 @@ pub(super) async fn load(
         date_to,
         after: None,
         expected_requester,
-        expected_policy: None,
     };
     let mut complete = fetch(query.clone()).await?;
     if complete.subject.id != subject_id.unwrap_or(complete.requester.user_id)
@@ -47,7 +46,6 @@ pub(super) async fn load(
     }
     query.subject_id = Some(complete.subject.id);
     query.expected_requester = Some(complete.requester);
-    query.expected_policy = Some(complete.policy);
     let mut seen = HashSet::new();
     validate_entries(&complete, date_from, date_to, &mut seen)?;
     while let Some(after) = complete.next_after.take() {
@@ -63,10 +61,7 @@ pub(super) async fn load(
         }
         query.after = Some(after);
         let page = fetch(query.clone()).await?;
-        if page.requester != complete.requester
-            || page.subject.id != complete.subject.id
-            || page.policy != complete.policy
-        {
+        if page.requester != complete.requester || page.subject.id != complete.subject.id {
             return Err(ServerFnError::new(
                 "Timesheet identity changed; reload the page.",
             ));
@@ -99,9 +94,7 @@ fn validate_entries(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::scoped_time::{
-        TimeEntryCursor, TimesheetPerson, TimesheetPolicy, VisibleTimeEntry,
-    };
+    use crate::models::scoped_time::{TimeEntryCursor, TimesheetPerson, VisibleTimeEntry};
 
     fn page() -> TimesheetPage {
         let id = Uuid::now_v7();
@@ -115,7 +108,6 @@ mod tests {
                 name: "Selected person".into(),
             },
             subject_utc_offset_seconds: 0,
-            policy: TimesheetPolicy::Scoped,
             entries: Vec::new(),
             next_after: None,
         }
@@ -169,7 +161,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn completes_pages_while_pinning_subject_requester_and_policy() {
+    async fn completes_pages_while_pinning_subject_and_requester() {
         let mut first = page();
         first.entries.push(entry(first.subject.id, 90));
         first.next_after = Some(cursor());
@@ -190,7 +182,6 @@ mod tests {
         assert_eq!(queries.len(), 2);
         assert_eq!(queries[1].subject_id, Some(first.subject.id));
         assert_eq!(queries[1].expected_requester, Some(first.requester));
-        assert_eq!(queries[1].expected_policy, Some(first.policy));
         assert_eq!(queries[1].after, first.next_after);
         assert_eq!(loaded.next_after, None);
         assert_eq!(
@@ -223,16 +214,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn refuses_a_changed_requester_subject_or_policy_between_pages() {
-        for changed in 0..3 {
+    async fn refuses_a_changed_requester_or_subject_between_pages() {
+        for changed in 0..2 {
             let mut first = page();
             first.next_after = Some(cursor());
             let mut last = first.clone();
             last.next_after = None;
             match changed {
                 0 => last.requester.user_id = Uuid::now_v7(),
-                1 => last.subject.id = Uuid::now_v7(),
-                _ => last.policy = TimesheetPolicy::LegacyOwn,
+                _ => last.subject.id = Uuid::now_v7(),
             }
             let mut calls = 0;
             assert!(

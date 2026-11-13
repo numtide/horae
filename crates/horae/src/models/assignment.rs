@@ -6,10 +6,10 @@ use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 #[cfg_attr(
-    not(feature = "server"),
+    not(test),
     expect(
         dead_code,
-        reason = "Assignment endpoints retain this wire DTO; the project editor uses ProjectForm."
+        reason = "Only membership test helpers build it; the project editor uses ProjectForm."
     )
 )]
 pub struct Assignment {

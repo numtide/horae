@@ -217,7 +217,7 @@ async fn private_progress_does_not_prevent_tracking_or_reveal_financial_fields(p
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn legacy_members_retain_progress_without_new_settings(pool: PgPool) {
+async fn members_read_progress_of_projects_without_settings(pool: PgPool) {
     let (ids, viewer) = fixture(&pool).await;
     sqlx::query!(
         "DELETE FROM project_settings WHERE project_id = $1",
@@ -232,58 +232,58 @@ async fn legacy_members_retain_progress_without_new_settings(pool: PgPool) {
     assert_eq!(projects.len(), 1);
     assert_eq!(projects[0].budget_minutes, Some(600));
     assert!(projects[0].rate_cents.is_none());
+    // Spent money needs a billable-rate read grant.
     let totals = fetch_project_spend(&pool, viewer.org_id, viewer.id)
         .await
         .unwrap();
-    assert_eq!(
-        (totals[0].spent_minutes, totals[0].spent_cents),
-        (60, Some(12345))
-    );
+    assert_eq!((totals[0].spent_minutes, totals[0].spent_cents), (60, None));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn project_members_and_leads_receive_progress_without_rates(pool: PgPool) {
+async fn project_members_receive_progress_without_rates_or_money(pool: PgPool) {
     let (ids, viewer) = fixture(&pool).await;
-    for role in [
-        ProjectRole::Freelancer,
-        ProjectRole::Lead,
-        ProjectRole::Admin,
-    ] {
-        sqlx::query!(
-            "UPDATE project_settings SET report_visibility = $2 WHERE project_id = $1",
-            ids.project_id,
-            if role == ProjectRole::Freelancer {
-                "project_members"
-            } else {
-                "managers"
-            }
-        )
-        .execute(&pool)
+    sqlx::query!(
+        "UPDATE project_settings SET report_visibility = 'project_members' WHERE project_id = $1",
+        ids.project_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let projects = projects_for_viewer(&pool, &viewer, None, true, ProjectRead::Overview)
         .await
         .unwrap();
-        sqlx::query!(
-            "UPDATE assignments SET role = $2 WHERE project_id = $1 AND user_id = $3",
-            ids.project_id,
-            role as ProjectRole,
-            ids.user_id
-        )
-        .execute(&pool)
+    assert_eq!(projects.len(), 1);
+    assert_eq!(projects[0].budget_minutes, Some(600));
+    assert_eq!(projects[0].rate_cents, None);
+    let progress = fetch_project_spend(&pool, viewer.org_id, viewer.id)
         .await
         .unwrap();
-        let projects = projects_for_viewer(&pool, &viewer, None, true, ProjectRead::Overview)
+    assert_eq!(
+        (progress[0].spent_minutes, progress[0].spent_cents),
+        (60, None)
+    );
+    // An assignment role grants nothing once the report is for managers.
+    sqlx::query!(
+        "UPDATE project_settings SET report_visibility = 'managers' WHERE project_id = $1",
+        ids.project_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE assignments SET role = 'lead' WHERE project_id = $1 AND user_id = $2",
+        ids.project_id,
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        projects_for_viewer(&pool, &viewer, None, true, ProjectRead::Overview)
             .await
-            .unwrap();
-        assert_eq!(projects.len(), 1);
-        assert_eq!(projects[0].budget_minutes, Some(600));
-        assert_eq!(projects[0].rate_cents, None);
-        let progress = fetch_project_spend(&pool, viewer.org_id, viewer.id)
-            .await
-            .unwrap();
-        assert_eq!(
-            (progress[0].spent_minutes, progress[0].spent_cents),
-            (60, Some(12345))
-        );
-    }
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -342,22 +342,17 @@ async fn revoked_membership_preserves_only_own_historical_tracking_identity(pool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn project_reads_use_current_authority_and_reject_foreign_scope(pool: PgPool) {
     let (ids, mut viewer) = fixture(&pool).await;
-    viewer.org_role = OrgRole::Admin;
     assert!(
         projects_for_viewer(&pool, &viewer, None, true, ProjectRead::Overview)
             .await
             .unwrap()
             .is_empty()
     );
-    for role in [OrgRole::Manager, OrgRole::Admin] {
-        sqlx::query!(
-            "UPDATE users SET org_role = $2 WHERE id = $1",
-            viewer.id,
-            role as OrgRole
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
+    for profile in [
+        BuiltInProfile::ExecutiveManager,
+        BuiltInProfile::Administrator,
+    ] {
+        crate::ops::testing::become_profile(&pool, &ids, profile).await;
         let rows = projects_for_viewer(&pool, &viewer, None, true, ProjectRead::Overview)
             .await
             .unwrap();
@@ -450,13 +445,10 @@ async fn outsiders_and_inactive_viewers_have_no_project_reads(pool: PgPool) {
             .execute(&pool)
             .await
             .unwrap();
-            sqlx::query!(
-                "UPDATE users SET active = false, org_role = 'admin' WHERE id = $1",
-                ids.user_id
-            )
-            .execute(&pool)
-            .await
-            .unwrap();
+            sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+                .execute(&pool)
+                .await
+                .unwrap();
         }
         for purpose in [ProjectRead::Overview, ProjectRead::Tracking] {
             assert!(

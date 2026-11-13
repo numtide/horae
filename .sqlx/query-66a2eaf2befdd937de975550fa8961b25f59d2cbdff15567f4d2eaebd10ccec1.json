@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) AS \"count!\",\n             COUNT(*) FILTER (WHERE p.id=ANY($4) AND ($7 OR ($8 AND management.id IS NOT NULL))) AS \"financial!\"\n           FROM projects p JOIN clients c ON c.id=p.client_id AND c.org_id=p.org_id\n           LEFT JOIN project_management_assignments management ON management.org_id=p.org_id\n             AND management.project_id=p.id AND management.manager_id=$2\n           LEFT JOIN assignments member ON member.project_id=p.id AND member.user_id=$2\n           LEFT JOIN project_settings settings ON settings.org_id=p.org_id AND settings.project_id=p.id\n           WHERE p.org_id=$1 AND p.id=ANY($3) AND ($5 OR ($6 AND management.id IS NOT NULL)\n             OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility,'project_members')='project_members'))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "financial!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray",
+        "UuidArray",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "66a2eaf2befdd937de975550fa8961b25f59d2cbdff15567f4d2eaebd10ccec1"
+}

@@ -9,7 +9,7 @@ use std::rc::Rc;
 use dioxus::core::Mutation;
 use dioxus::prelude::*;
 use futures_util::FutureExt;
-use models::time_report::{TimeReportAccess, TimeReportPolicy};
+use models::time_report::TimeReportAccess;
 use tokio::sync::oneshot;
 
 // These production modules also define types for unrelated routes.
@@ -24,7 +24,7 @@ pub mod time_report;
 pub mod user;
 mod models {
     pub use super::{permission_editor, time_report, user};
-    // Only the legacy endpoints are stubbed; canonical wire types are production imports.
+    // Only the financial endpoints are stubbed; canonical wire types are production imports.
     pub struct CatalogItem {
         pub id: uuid::Uuid,
         pub tag_id: uuid::Uuid,
@@ -40,7 +40,7 @@ mod models {
         pub total_minutes: i64,
         pub rounded_minutes: i64,
         pub billable_minutes: i64,
-        pub billable_cents: i64,
+        pub billable_cents: Option<i64>,
         pub cost_cents: Option<i64>,
         pub currency: String,
         pub cost_currency: String,
@@ -93,7 +93,7 @@ struct Probe {
     group_queries: Rc<RefCell<Vec<time_report::TimeReportGroupQuery>>>,
     access_reads: Rc<Cell<usize>>,
     identity_reads: Rc<Cell<usize>>,
-    legacy_reads: Rc<RefCell<Vec<&'static str>>>,
+    financial_reads: Rc<RefCell<Vec<&'static str>>>,
     queries: Rc<RefCell<Vec<models::time_report::TimeReportQuery>>>,
     access_bindings: Rc<RefCell<Vec<Option<permission_editor::PermissionRequester>>>>,
 }
@@ -127,9 +127,9 @@ fn mount(probe: &Probe) -> VirtualDom {
     dom
 }
 
-fn access(policy: TimeReportPolicy) -> TimeReportAccess {
+fn access(financial: bool) -> TimeReportAccess {
     TimeReportAccess {
-        policy,
+        financial,
         requester: permission_editor::PermissionRequester {
             org_id: uuid::Uuid::now_v7(),
             user_id: uuid::Uuid::now_v7(),
@@ -144,9 +144,9 @@ async fn unresolved_access_mounts_no_identity_catalog_or_report_resources() {
     let _identity = queue(&probe.identity);
     let dom = mount(&probe);
     assert!(
-        probe.legacy_reads.borrow().is_empty(),
+        probe.financial_reads.borrow().is_empty(),
         "{:?}",
-        probe.legacy_reads
+        probe.financial_reads
     );
     assert_eq!(probe.identity_reads.get(), 0);
     assert_eq!(probe.access_reads.get(), 1);
@@ -155,7 +155,7 @@ async fn unresolved_access_mounts_no_identity_catalog_or_report_resources() {
 }
 
 #[tokio::test]
-async fn denied_or_failed_access_never_falls_back_to_legacy() {
+async fn denied_or_failed_access_never_falls_back_to_financial_reports() {
     const FORBIDDEN: u16 = 403;
     const INTERNAL_ERROR: u16 = 500;
     for code in [FORBIDDEN, INTERNAL_ERROR] {
@@ -170,7 +170,7 @@ async fn denied_or_failed_access_never_falls_back_to_legacy() {
         }))
         .unwrap();
         settle(&mut dom);
-        assert!(probe.legacy_reads.borrow().is_empty());
+        assert!(probe.financial_reads.borrow().is_empty());
         assert_eq!(probe.identity_reads.get(), 0);
         assert!(probe.queries.borrow().is_empty());
         let html = dioxus::ssr::render(&dom);
@@ -181,16 +181,16 @@ async fn denied_or_failed_access_never_falls_back_to_legacy() {
 }
 
 #[tokio::test]
-async fn legacy_catalogs_wait_for_explicit_authenticated_legacy_access() {
+async fn financial_catalogs_wait_for_explicit_authenticated_financial_access() {
     let probe = Probe::default();
     let own = queue(&probe.access);
     let mut dom = mount(&probe);
-    assert!(probe.legacy_reads.borrow().is_empty());
-    own.send(Ok(access(TimeReportPolicy::Legacy))).unwrap();
+    assert!(probe.financial_reads.borrow().is_empty());
+    own.send(Ok(access(true))).unwrap();
     settle(&mut dom);
     // Catalogs and the visible Time tab; Detailed time loads when opened.
-    assert_eq!(probe.legacy_reads.borrow().len(), 5);
-    assert!(!probe.legacy_reads.borrow().contains(&"detailed"));
+    assert_eq!(probe.financial_reads.borrow().len(), 5);
+    assert!(!probe.financial_reads.borrow().contains(&"detailed"));
     assert!(dioxus::ssr::render(&dom).contains("Export CSV"));
     assert_eq!(probe.identity_reads.get(), 0);
     assert!(probe.queries.borrow().is_empty());
@@ -359,7 +359,7 @@ async fn billability_resets_both_pagers_and_binds_drilldown_and_downloads() {
     let probe = Probe::default();
     let own = queue(&probe.access);
     let first = queue(&probe.reports);
-    let allowed = access(TimeReportPolicy::Scoped);
+    let allowed = access(false);
     let mut dom = mount(&probe);
     own.send(Ok(allowed)).unwrap();
     settle(&mut dom);
@@ -448,7 +448,7 @@ async fn billability_resets_both_pagers_and_binds_drilldown_and_downloads() {
         dioxus::ssr::render(&dom).matches("billability=all").count(),
         2
     );
-    assert!(probe.legacy_reads.borrow().is_empty());
+    assert!(probe.financial_reads.borrow().is_empty());
 }
 
 #[tokio::test]
@@ -456,7 +456,7 @@ async fn active_project_filter_resets_detail_paging_and_binds_grouped_downloads(
     let probe = Probe::default();
     let own = queue(&probe.access);
     let first = queue(&probe.reports);
-    let allowed = access(TimeReportPolicy::Scoped);
+    let allowed = access(false);
     let mut dom = mount(&probe);
     own.send(Ok(allowed)).unwrap();
     settle(&mut dom);
@@ -511,7 +511,7 @@ async fn active_project_filter_resets_detail_paging_and_binds_grouped_downloads(
     all.send(Ok(report(allowed, "Archived history"))).unwrap();
     settle(&mut dom);
     assert!(dioxus::ssr::render(&dom).contains("active_projects_only=false"));
-    assert!(probe.legacy_reads.borrow().is_empty());
+    assert!(probe.financial_reads.borrow().is_empty());
 }
 
 #[tokio::test]
@@ -520,7 +520,7 @@ async fn grouped_tabs_reauthorize_and_hour_drilldown_binds_detail_and_download_f
     let probe = Probe::default();
     let own = queue(&probe.access);
     let first = queue(&probe.reports);
-    let allowed = access(TimeReportPolicy::Scoped);
+    let allowed = access(false);
     let mut dom = mount(&probe);
     own.send(Ok(allowed)).unwrap();
     settle(&mut dom);
@@ -568,10 +568,9 @@ async fn grouped_tabs_reauthorize_and_hour_drilldown_binds_detail_and_download_f
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
     assert!(
-        html.contains(&format!("project_ids={project_id}"))
-            && html.contains("expected_policy=scoped")
+        html.contains(&format!("project_ids={project_id}")) && !html.contains("expected_policy")
     );
-    assert!(probe.legacy_reads.borrow().is_empty());
+    assert!(probe.financial_reads.borrow().is_empty());
     assert_eq!(probe.identity_reads.get(), 0);
 }
 
@@ -607,7 +606,7 @@ async fn individual_reports_use_the_documented_tabs_and_bind_grouped_downloads()
         let probe = Probe::default();
         let own = queue(&probe.access);
         let first = queue(&probe.reports);
-        let allowed = access(TimeReportPolicy::Scoped);
+        let allowed = access(false);
         let mut dom = mount(&probe);
         own.send(Ok(allowed)).unwrap();
         settle(&mut dom);
@@ -676,7 +675,7 @@ async fn project_task_expansion_keeps_every_filter_in_detailed_requests_and_down
     let probe = Probe::default();
     let own = queue(&probe.access);
     let first = queue(&probe.reports);
-    let allowed = access(TimeReportPolicy::Scoped);
+    let allowed = access(false);
     let mut dom = mount(&probe);
     own.send(Ok(allowed)).unwrap();
     settle(&mut dom);
@@ -740,7 +739,7 @@ async fn nested_breakdowns_bind_all_contexts_and_discard_late_or_mismatched_page
         let probe = Probe::default();
         let own = queue(&probe.access);
         let first = queue(&probe.reports);
-        let allowed = access(TimeReportPolicy::Scoped);
+        let allowed = access(false);
         let mut dom = mount(&probe);
         own.send(Ok(allowed)).unwrap();
         settle(&mut dom);
@@ -811,10 +810,7 @@ async fn nested_breakdowns_bind_all_contexts_and_discard_late_or_mismatched_page
         click(&mut dom, &format!("report-expand-{row_id}"));
         assert_eq!(probe.group_queries.borrow().last(), Some(&query));
         response
-            .send(Ok(grouped(
-                access(TimeReportPolicy::Scoped),
-                "Wrong session label",
-            )))
+            .send(Ok(grouped(access(false), "Wrong session label")))
             .unwrap();
         settle(&mut dom);
         let html = dioxus::ssr::render(&dom);
@@ -925,7 +921,7 @@ async fn nested_breakdowns_bind_all_contexts_and_discard_late_or_mismatched_page
                 .count(),
             2
         );
-        assert!(probe.legacy_reads.borrow().is_empty());
+        assert!(probe.financial_reads.borrow().is_empty());
     }
 }
 
@@ -935,7 +931,7 @@ async fn grouped_navigation_hides_stale_rows_and_rejects_changed_identity() {
     let probe = Probe::default();
     let own = queue(&probe.access);
     let first = queue(&probe.reports);
-    let allowed = access(TimeReportPolicy::Scoped);
+    let allowed = access(false);
     let mut dom = mount(&probe);
     own.send(Ok(allowed)).unwrap();
     settle(&mut dom);
@@ -959,7 +955,7 @@ async fn grouped_navigation_hides_stale_rows_and_rejects_changed_identity() {
     settle(&mut dom);
     assert_no_results(&dom);
     tasks
-        .send(Ok(grouped(access(TimeReportPolicy::Scoped), "Old project")))
+        .send(Ok(grouped(access(false), "Old project")))
         .unwrap();
     settle(&mut dom);
     assert_no_results(&dom);
@@ -967,7 +963,7 @@ async fn grouped_navigation_hides_stale_rows_and_rejects_changed_identity() {
     type_date(&mut dom, "report-from", "").await;
     assert_eq!(probe.group_queries.borrow().len(), 3);
     assert_no_results(&dom);
-    assert!(probe.legacy_reads.borrow().is_empty());
+    assert!(probe.financial_reads.borrow().is_empty());
 }
 
 #[tokio::test]
@@ -976,7 +972,7 @@ async fn grouped_period_changes_preserve_dimension_reset_cursor_and_replace_read
     let probe = Probe::default();
     let own = queue(&probe.access);
     let first = queue(&probe.reports);
-    let allowed = access(TimeReportPolicy::Scoped);
+    let allowed = access(false);
     let mut dom = mount(&probe);
     own.send(Ok(allowed)).unwrap();
     settle(&mut dom);
@@ -1013,11 +1009,11 @@ async fn grouped_period_changes_preserve_dimension_reset_cursor_and_replace_read
 }
 
 #[tokio::test]
-async fn canonical_pages_use_current_identity_and_full_period_totals_without_legacy_reads() {
+async fn canonical_pages_use_current_identity_and_full_period_totals_without_financial_reads() {
     let probe = Probe::default();
     let own = queue(&probe.access);
     let first = queue(&probe.reports);
-    let allowed = access(TimeReportPolicy::Scoped);
+    let allowed = access(false);
     let mut dom = mount(&probe);
     own.send(Ok(allowed)).unwrap();
     settle(&mut dom);
@@ -1038,8 +1034,8 @@ async fn canonical_pages_use_current_identity_and_full_period_totals_without_leg
     assert!(html.contains("&#60;private &#38; note&#62;"), "{html}");
     assert!(html.contains(&format!("expected_user_id={}", allowed.requester.user_id)));
     assert!(!html.contains("after="));
-    assert!(html.contains("expected_policy=scoped"));
-    assert!(probe.legacy_reads.borrow().is_empty());
+    assert!(!html.contains("expected_policy"));
+    assert!(probe.financial_reads.borrow().is_empty());
     assert_eq!(probe.identity_reads.get(), 0);
 
     let second = queue(&probe.reports);
@@ -1084,7 +1080,7 @@ async fn date_changes_reset_paging_hide_stale_results_and_do_not_fetch_invalid_r
     let probe = Probe::default();
     let own = queue(&probe.access);
     let first = queue(&probe.reports);
-    let allowed = access(TimeReportPolicy::Scoped);
+    let allowed = access(false);
     let mut dom = mount(&probe);
     own.send(Ok(allowed)).unwrap();
     settle(&mut dom);
@@ -1119,12 +1115,12 @@ async fn date_changes_reset_paging_hide_stale_results_and_do_not_fetch_invalid_r
 }
 
 #[tokio::test]
-async fn refresh_keeps_requester_and_policy_across_errors_and_child_remounts() {
-    for change_policy in [false, true] {
+async fn refresh_keeps_requester_and_view_across_errors_and_child_remounts() {
+    for change_view in [false, true] {
         let probe = Probe::default();
         let own = queue(&probe.access);
         let first = queue(&probe.reports);
-        let allowed = access(TimeReportPolicy::Scoped);
+        let allowed = access(false);
         let mut dom = mount(&probe);
         own.send(Ok(allowed)).unwrap();
         settle(&mut dom);
@@ -1141,19 +1137,19 @@ async fn refresh_keeps_requester_and_policy_across_errors_and_child_remounts() {
         assert_no_results(&dom);
         let changed = queue(&probe.access);
         click(&mut dom, "reports-retry-access");
-        let other = if change_policy {
+        let other = if change_view {
             TimeReportAccess {
-                policy: TimeReportPolicy::Legacy,
+                financial: true,
                 ..allowed
             }
         } else {
-            access(TimeReportPolicy::Scoped)
+            access(false)
         };
         changed.send(Ok(other)).unwrap();
         settle(&mut dom);
         assert_no_results(&dom);
-        assert!(dioxus::ssr::render(&dom).contains("session or report policy changed"));
-        assert!(probe.legacy_reads.borrow().is_empty());
+        assert!(dioxus::ssr::render(&dom).contains("session or report access changed"));
+        assert!(probe.financial_reads.borrow().is_empty());
         assert_eq!(probe.queries.borrow().len(), 1);
 
         let restored = queue(&probe.access);
@@ -1178,12 +1174,12 @@ async fn a_mismatched_page_identity_never_displays_results_or_downloads() {
     let probe = Probe::default();
     let own = queue(&probe.access);
     let first = queue(&probe.reports);
-    let allowed = access(TimeReportPolicy::Scoped);
+    let allowed = access(false);
     let mut dom = mount(&probe);
     own.send(Ok(allowed)).unwrap();
     settle(&mut dom);
     first
-        .send(Ok(report(access(TimeReportPolicy::Scoped), "Old project")))
+        .send(Ok(report(access(false), "Old project")))
         .unwrap();
     settle(&mut dom);
     assert_no_results(&dom);
@@ -1245,26 +1241,29 @@ mod server_fns {
         response.await.expect("report sender dropped")
     }
 
-    fn legacy<T>(name: &'static str) -> Result<Vec<T>, ServerFnError> {
-        use_context::<Probe>().legacy_reads.borrow_mut().push(name);
+    fn financial<T>(name: &'static str) -> Result<Vec<T>, ServerFnError> {
+        use_context::<Probe>()
+            .financial_reads
+            .borrow_mut()
+            .push(name);
         Ok(vec![])
     }
     pub async fn list_clients(_: bool) -> Result<Vec<models::Client>, ServerFnError> {
-        legacy("clients")
+        financial("clients")
     }
     pub async fn list_users(_: bool) -> Result<Vec<models::user::UserListItem>, ServerFnError> {
-        legacy("users")
+        financial("users")
     }
     pub async fn list_project_tags(
         _: Option<permission_editor::PermissionRequester>,
     ) -> Result<Vec<models::ProjectTagLink>, ServerFnError> {
-        legacy("tags")
+        financial("tags")
     }
     pub async fn list_projects(
         _: Option<String>,
         _: bool,
     ) -> Result<Vec<models::Project>, ServerFnError> {
-        legacy("projects")
+        financial("projects")
     }
     pub async fn report_time(
         _: String,
@@ -1275,7 +1274,7 @@ mod server_fns {
         _: Option<String>,
         _: Option<String>,
     ) -> Result<Vec<models::ReportRow>, ServerFnError> {
-        legacy("summary")
+        financial("summary")
     }
     pub async fn report_detailed(
         _: String,
@@ -1285,6 +1284,6 @@ mod server_fns {
         _: Option<String>,
         _: Option<String>,
     ) -> Result<Vec<models::DetailedReportRow>, ServerFnError> {
-        legacy("detailed")
+        financial("detailed")
     }
 }

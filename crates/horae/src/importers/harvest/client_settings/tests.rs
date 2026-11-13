@@ -18,13 +18,20 @@ async fn organization(pool: &PgPool) -> Uuid {
     .unwrap();
     // The administrator shares the organization's id, as in the credential tests.
     sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $1, $2, 'Client admin', 'admin')",
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $1, $2, 'Client admin')",
         org,
         format!("{org}@test.com"),
     )
     .execute(pool)
     .await
     .unwrap();
+    crate::ops::testing::assign_profile(
+        pool,
+        org,
+        org,
+        horae_core::permissions::catalog::BuiltInProfile::Administrator,
+    )
+    .await;
     org
 }
 

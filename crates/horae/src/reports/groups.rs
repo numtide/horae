@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::models::permission_editor::PermissionRequester;
-use crate::models::time_report::{TimeReportGroup, TimeReportGrouping, TimeReportPolicy};
+use crate::models::time_report::{TimeReportGroup, TimeReportGrouping};
 
 #[derive(Deserialize)]
 pub struct GroupExportParams {
@@ -32,9 +32,6 @@ pub async fn export_xlsx(
     Query(params): Query<GroupExportParams>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let (user_id, org_id) = require_session(&session).await?;
-    if params.filters.expected_policy == Some(TimeReportPolicy::Legacy) {
-        return Err(StatusCode::FORBIDDEN);
-    }
     let query = params.filters.time_query()?;
     let permit = bounded::ExportPermit::acquire()?;
     let state = crate::state::global_state().await;
@@ -185,7 +182,6 @@ mod tests {
         for suffix in [
             "&group_by=client",
             "&from=2026-09-08",
-            "&expected_policy=",
             "&user_ids=x&user_ids=y",
         ] {
             assert!(parse(&format!("{base}{suffix}")).is_err(), "{suffix}");

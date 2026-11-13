@@ -175,13 +175,6 @@ async fn profiles_and_custom_grants_use_time_scope_not_legacy_role_or_directory(
     )
     .await;
     sqlx::query!(
-        "UPDATE users SET org_role='admin' WHERE id=$1",
-        seed.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query!(
         "UPDATE person_permission_states SET is_administrator=true WHERE user_id=$1",
         seed.user_id
     )
@@ -655,7 +648,7 @@ async fn cancellation_releases_discovery_locks_and_keeps_pool_defaults(pool: PgP
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn discovery_fails_closed_for_policy_identity_and_invalid_state(pool: PgPool) {
+async fn discovery_fails_closed_for_identity_and_invalid_state(pool: PgPool) {
     let seed = fixture(&pool).await;
     let foreign = fixture(&pool).await;
     let query = TimesheetPeopleQuery::default();
@@ -663,29 +656,6 @@ async fn discovery_fails_closed_for_policy_identity_and_invalid_state(pool: PgPo
         people(&pool, seed.org_id, foreign.user_id, &query).await,
         Err(TimeReadError::Forbidden)
     ));
-    for version in [0, 2] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
-            seed.org_id,
-            version
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        let result = people(&pool, seed.org_id, seed.user_id, &query).await;
-        assert!(if version == 0 {
-            matches!(result, Err(TimeReadError::Forbidden))
-        } else {
-            matches!(result, Err(TimeReadError::Unavailable))
-        });
-    }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        seed.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
     sqlx::query!(
         "UPDATE person_permission_states SET grants=ARRAY['invalid_grant'] WHERE user_id=$1",
         seed.user_id
@@ -695,7 +665,7 @@ async fn discovery_fails_closed_for_policy_identity_and_invalid_state(pool: PgPo
     .unwrap();
     assert!(matches!(
         people(&pool, seed.org_id, seed.user_id, &query).await,
-        Err(TimeReadError::Storage(_))
+        Err(TimeReadError::Unavailable)
     ));
     sqlx::query!(
         "DELETE FROM person_permission_states WHERE user_id=$1",

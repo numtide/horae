@@ -42,7 +42,6 @@ async fn overview_resolves_only_visible_client_identity_without_directory_or_rat
 
     let overview = fetch_project_overview(&pool, &viewer, None).await.unwrap();
     assert_eq!(overview.requester, requester(&viewer));
-    assert!(overview.canonical_permissions);
     assert_eq!(overview.projects.len(), 1);
     let row = &overview.projects[0];
     assert_eq!(row.project.id, ids.project_id);
@@ -173,30 +172,14 @@ async fn overview_denies_unavailable_actor_instead_of_binding_an_empty_success(p
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn legacy_overview_uses_current_role_not_the_captured_user_role(pool: PgPool) {
+async fn overview_uses_the_stored_state_not_the_captured_session(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
-    let viewer = User {
-        id: ids.user_id,
-        org_id: ids.org_id,
-        email: "reader@test.invalid".into(),
-        name: "Reader".into(),
-        oidc_subject: None,
-        org_role: OrgRole::Manager,
-        cost_rate_cents: None,
-        billable_rate_cents: None,
-        active: true,
-        created_at: chrono::Utc::now(),
-    };
+    let viewer = super::detail::legacy_viewer(&ids, BuiltInProfile::ExecutiveManager);
     let before = fetch_project_overview(&pool, &viewer, None).await.unwrap();
-    assert!(!before.canonical_permissions);
+    assert!(before.can_create && before.can_change_status && before.can_open_clients);
+    assert!(!before.can_import);
     assert!(before.projects[0].can_edit);
-    sqlx::query!(
-        "UPDATE users SET org_role='member' WHERE id=$1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    replace_grants(&pool, &ids, BuiltInProfile::Member.direct_permissions()).await;
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
         Uuid::now_v7(),

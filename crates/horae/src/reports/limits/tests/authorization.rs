@@ -72,25 +72,17 @@ async fn block_payload(pool: &PgPool, reader: Reader) -> (Transaction<'_, Postgr
     (tx, pid)
 }
 
-/// Takes the reader's authority away the way its domain decides it. Invoice
-/// exports read the stored grants, which the permission editor changes
-/// together with the organization row. The time export still follows the
-/// legacy role until the reports domain moves to stored permissions.
+/// Takes an invoice reader's grants away, as the permission editor does. The
+/// time export has no grant to take: every person keeps reading their own
+/// time, so it is revoked by deactivation instead.
 async fn revoke(connection: &mut sqlx::PgConnection, ids: &SeedIds, reader: Reader) {
-    match reader {
-        Reader::Entries => {
-            sqlx::query!(
-                "UPDATE users SET org_role='member' WHERE id=$1",
-                ids.user_id
-            )
-            .execute(connection)
-            .await
-            .unwrap();
-        }
-        Reader::Invoice | Reader::Pdf => crate::ops::testing::set_grants(connection, ids, &[])
-            .await
-            .unwrap(),
-    }
+    assert!(
+        !matches!(reader, Reader::Entries),
+        "the time export is revoked by deactivation"
+    );
+    crate::ops::testing::set_grants(connection, ids, &[])
+        .await
+        .unwrap();
 }
 
 fn spawn_read(
@@ -112,13 +104,14 @@ async fn materialized_exports_deny_revoked_readers(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let (id, _) = add_invoice(&pool, &ids, 1).await;
     let mut connection = pool.acquire().await.unwrap();
-    for reader in READERS {
-        revoke(&mut connection, &ids, reader).await;
-    }
-    assert!(matches!(
-        entries(&pool, ids.org_id, ids.user_id, &params()).await,
-        Err(StatusCode::FORBIDDEN)
-    ));
+    revoke(&mut connection, &ids, Reader::Invoice).await;
+    // Every person keeps reading their own time, so only the invoice exports
+    // close.
+    assert!(
+        entries(&pool, ids.org_id, ids.user_id, &params())
+            .await
+            .is_ok()
+    );
     assert!(matches!(
         invoice(&pool, ids.org_id, ids.user_id, id).await,
         Err(StatusCode::FORBIDDEN)
@@ -234,8 +227,14 @@ async fn materialized_exports_require_same_tenant_active_actor(pool: PgPool) {
 #[serial_test::serial]
 async fn materialized_exports_deny_winning_revocations(pool: PgPool) {
     for reader in READERS {
+        // Only invoice exports still answer from the role; every person keeps
+        // reading their own time, so time exports are revoked by deactivation.
+        let revocations: &[bool] = match reader {
+            Reader::Entries => &[true],
+            Reader::Invoice | Reader::Pdf => &[false, true],
+        };
         for gated in [false, true] {
-            for deactivate in [false, true] {
+            for &deactivate in revocations {
                 let case = Arc::new(Case::new(&pool).await);
                 let before = case.stored(&pool).await;
                 let mut writer = pool.begin().await.unwrap();

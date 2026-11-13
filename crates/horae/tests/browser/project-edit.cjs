@@ -281,7 +281,7 @@ const before = sql(`SELECT json_build_array(
     // below it. The rename is a temporary fixture and is always restored.
     const member = JSON.parse(sql(`SELECT row_to_json(m) FROM (
       SELECT u.id, u.name FROM assignments a JOIN users u ON u.id = a.user_id
-      WHERE a.project_id = '${legacy.id}' ORDER BY (u.org_role = 'admin'), u.name LIMIT 1
+      WHERE a.project_id = '${legacy.id}' ORDER BY (u.email = 'admin@example.com'), u.name LIMIT 1
     ) m`));
     // Long enough to truncate even in the wide desktop identity column.
     const longName = 'Maximiliana Wilhelmina Konstantinopoulou-Ravensworth of Northumberland and the Western Isles of Strathclyde';

@@ -24,6 +24,8 @@ mod actor;
 pub(crate) mod clients;
 mod error;
 pub(crate) mod invoices;
+pub(crate) mod projects;
+pub(crate) mod reports;
 
 pub(crate) use actor::{Actor, Channel};
 pub(crate) use error::OpError;
@@ -137,6 +139,19 @@ pub(crate) async fn begin_read(pool: &PgPool, caller: Caller) -> Result<ReadTx, 
     let mut tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
     let actor = Actor::load(&mut tx, caller).await?;
     Ok(ReadTx { tx, actor })
+}
+
+/// Loads the [`Actor`] inside an open transaction, with [`Actor::load`]'s
+/// locks, and refuses anyone but an active administrator. For actions that run
+/// in a transaction of their own rather than through [`begin`], such as the
+/// Harvest connection changes and the import jobs.
+pub(crate) async fn require_administrator(
+    connection: &mut sqlx::PgConnection,
+    caller: Caller,
+) -> Result<Actor, OpError> {
+    let actor = Actor::load(connection, caller).await?;
+    actor.require_administrator()?;
+    Ok(actor)
 }
 
 impl ReadTx {
