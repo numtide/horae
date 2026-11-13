@@ -40,7 +40,7 @@ pub(in crate::server_fns) async fn load_editable_project(
         .execute(&mut *tx)
         .await
         .map_err(storage_error)?;
-    let (role, permissions) = lock_editor_actor(
+    let permissions = lock_editor_actor(
         &mut tx,
         actor_id,
         org_id,
@@ -48,84 +48,47 @@ pub(in crate::server_fns) async fn load_editable_project(
         OrganizationLock::Shared,
     )
     .await?;
-    let mut project = load_project_form(
-        &mut tx,
-        org_id,
-        project_id,
-        permissions.is_some() || role == OrgRole::Admin,
-    )
-    .await?;
-    if let Some(permissions) = permissions {
-        projection::redact(&mut tx, org_id, actor_id, &permissions, &mut project).await?;
-    }
+    let mut project = load_project_form(&mut tx, org_id, project_id).await?;
+    projection::redact(&mut tx, org_id, actor_id, &permissions, &mut project).await?;
     tx.commit().await.map_err(storage_error)?;
     Ok(project)
 }
 
+/// Takes the organization `gate`, then requires `ProjectWriteAll`, or
+/// `ProjectWriteManaged` on a project the actor manages.
 pub(in crate::server_fns) async fn lock_editor_actor(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     actor_id: Uuid,
     org_id: Uuid,
     project_id: Uuid,
     gate: OrganizationLock,
-) -> Result<
-    (
-        OrgRole,
-        Option<crate::models::permissions::PersonPermissions>,
-    ),
-    ServerFnError,
-> {
+) -> Result<crate::models::permissions::PersonPermissions, ServerFnError> {
+    use crate::server_fns::permissions::project_management::{
+        ProjectManagersError, authorize_actor,
+    };
     lock_organization(tx, org_id, gate)
         .await
         .map_err(storage_error)?;
-    let role = sqlx::query_scalar!(
-        r#"SELECT org_role as "org_role: OrgRole" FROM users
-           WHERE id = $1 AND org_id = $2 AND active FOR SHARE"#,
-        actor_id,
-        org_id,
-    )
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(storage_error)?
-    .ok_or_else(|| forbidden("Current project editing authority is required"))?;
-    let policy = sqlx::query_scalar!(
-        "SELECT permission_policy_version FROM organizations WHERE id=$1",
-        org_id,
-    )
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(storage_error)?;
-    let permissions = match policy {
-        0 if role.is_manager_or_above() => None,
-        0 => return Err(forbidden("Manager access required")),
-        1 => {
-            use crate::server_fns::permissions::project_management::{
-                ProjectManagersError, authorize_actor,
-            };
-            Some(
-                authorize_actor(tx, org_id, actor_id, project_id)
-                    .await
-                    .map_err(|error| match error {
-                        ProjectManagersError::Forbidden => {
-                            forbidden("Current project editing authority is required")
-                        }
-                        error => {
-                            tracing::error!(%error, "Unable to authorize project editor");
-                            server_err("Project editor is unavailable")
-                        }
-                    })?,
-            )
-        }
-        _ => return Err(server_err("Project editor is unavailable")),
-    };
-    Ok((role, permissions))
+    authorize_actor(tx, org_id, actor_id, project_id)
+        .await
+        .map_err(|error| match error {
+            ProjectManagersError::Forbidden => {
+                forbidden("Current project editing authority is required")
+            }
+            // A lost race (for example a person row changed after this
+            // snapshot) is retryable, not an outage.
+            ProjectManagersError::Database(error) => storage_error(error),
+            error => {
+                tracing::error!(%error, "Unable to authorize project editor");
+                server_err("Project editor is unavailable")
+            }
+        })
 }
 
 async fn load_project_form(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
     project_id: Uuid,
-    include_private_settings: bool,
 ) -> Result<EditableProject, ServerFnError> {
     let project = sqlx::query!(
         r#"SELECT client_id, name, code, currency, active, rate_cents, edit_revision,
@@ -245,12 +208,15 @@ async fn load_project_form(
             discount: format_cents_plain(i64::from(settings.discount_bps)),
         };
     }
-    if include_private_settings {
-        form.admin_notes = sqlx::query_scalar!(
-            "SELECT admin_notes FROM project_private_settings WHERE project_id = $1 AND org_id = $2",
-            project_id, org_id,
-        ).fetch_optional(&mut **tx).await.map_err(storage_error)?.unwrap_or_default();
-    }
+    form.admin_notes = sqlx::query_scalar!(
+        "SELECT admin_notes FROM project_private_settings WHERE project_id = $1 AND org_id = $2",
+        project_id,
+        org_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(storage_error)?
+    .unwrap_or_default();
     form.tags = sqlx::query_scalar!(
         "SELECT t.name FROM project_tags t JOIN project_tag_links l ON l.tag_id = t.id AND l.org_id = t.org_id
          WHERE l.project_id = $1 AND l.org_id = $2 ORDER BY lower(t.name), t.id",
@@ -263,7 +229,7 @@ async fn load_project_form(
     ).fetch_all(&mut **tx).await.map_err(storage_error)?.into_iter().map(|row| MilestoneInput {
         id: row.id, name: row.name, due_on: row.due_on.to_string(), amount: format_cents_plain(row.amount_cents),
     }).collect();
-    form.team = load_members(tx, org_id, project_id, include_private_settings).await?;
+    form.team = load_members(tx, org_id, project_id).await?;
     form.tasks = load_tasks(tx, org_id, project_id, budget_mode).await?;
     let client = sqlx::query_as!(CreationClient,
         "SELECT id, name, currency, active, default_rate_cents FROM clients WHERE id = $1 AND org_id = $2",
@@ -299,13 +265,11 @@ async fn load_project_form(
         })
         .collect();
     let people = sqlx::query!(
-        "SELECT u.id, u.name, u.active, u.billable_rate_cents,
-           CASE WHEN $3 THEN u.cost_rate_cents END as cost_rate_cents
+        "SELECT u.id, u.name, u.active, u.billable_rate_cents, u.cost_rate_cents
          FROM users u JOIN assignments a ON a.user_id = u.id
          WHERE a.project_id = $1 AND u.org_id = $2 ORDER BY u.id",
         project_id,
         org_id,
-        include_private_settings,
     )
     .fetch_all(&mut **tx)
     .await
@@ -343,16 +307,15 @@ async fn load_members(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
     project_id: Uuid,
-    include_cost_rates: bool,
 ) -> Result<Vec<ProjectMemberInput>, ServerFnError> {
     let rows = sqlx::query!(
         r#"SELECT a.user_id, a.role as "role: ProjectRole", a.rate_cents,
-           CASE WHEN $3 THEN c.cost_rate_cents END as "cost_rate_cents?", b.budget_minutes as "budget_minutes?"
+           c.cost_rate_cents as "cost_rate_cents?", b.budget_minutes as "budget_minutes?"
            FROM assignments a JOIN users u ON u.id = a.user_id AND u.org_id = $2
            LEFT JOIN project_member_costs c ON c.project_id = a.project_id AND c.user_id = a.user_id AND c.org_id = $2
            LEFT JOIN project_member_budgets b ON b.project_id = a.project_id AND b.user_id = a.user_id AND b.org_id = $2
            WHERE a.project_id = $1 ORDER BY a.user_id"#,
-        project_id, org_id, include_cost_rates,
+        project_id, org_id,
     ).fetch_all(&mut **tx).await.map_err(storage_error)?;
     Ok(rows
         .into_iter()
@@ -420,6 +383,19 @@ async fn load_tasks(
 #[cfg(test)]
 mod tests;
 
+pub(in crate::server_fns) async fn save_project_edit(
+    pool: &sqlx::PgPool,
+    actor_id: Uuid,
+    org_id: Uuid,
+    request: &ProjectEditRequest,
+    email_available: bool,
+) -> Result<save::Saved, ServerFnError> {
+    save::save(pool, actor_id, org_id, request, email_available).await
+}
+
+/// [`save_project_edit`] as most tests check it: the project and whether it
+/// changed.
+#[cfg(test)]
 pub(in crate::server_fns) async fn save_editable_project(
     pool: &sqlx::PgPool,
     actor_id: Uuid,
@@ -427,5 +403,6 @@ pub(in crate::server_fns) async fn save_editable_project(
     request: &ProjectEditRequest,
     email_available: bool,
 ) -> Result<(Project, bool), ServerFnError> {
-    save::save(pool, actor_id, org_id, request, email_available).await
+    let saved = save_project_edit(pool, actor_id, org_id, request, email_available).await?;
+    Ok((saved.project, saved.changed))
 }

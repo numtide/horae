@@ -45,9 +45,6 @@ mod bulk_tests;
 mod client_lifecycle_tests;
 
 #[cfg(all(test, feature = "server"))]
-mod assignment_tests;
-
-#[cfg(all(test, feature = "server"))]
 mod task_write_tests;
 
 #[cfg(all(test, feature = "server"))]
@@ -71,9 +68,8 @@ async fn project_details_in_transaction(
     sqlx::query_as!(
         ProjectDetails,
         r#"SELECT p.id, p.name, p.code, c.name AS client_name, p.currency,
-            CASE WHEN (CASE WHEN $4 THEN u.org_role IN ('admin', 'manager')
-              ELSE ($8 OR ($9 AND management.id IS NOT NULL))
-                AND ($10 OR ($11 AND management.id IS NOT NULL)) END)
+            CASE WHEN ($6 OR ($7 AND management.id IS NOT NULL))
+                AND ($8 OR ($9 AND management.id IS NOT NULL))
               AND p.project_type <> 'non_billable'
               AND (settings.project_id IS NULL
                 OR (p.project_type = 'time_and_materials' AND settings.rate_mode = 'task'))
@@ -84,28 +80,23 @@ async fn project_details_in_transaction(
                 JOIN project_tags t ON t.id = l.tag_id AND t.org_id = l.org_id
                 WHERE l.project_id = p.id AND l.org_id = p.org_id
                 ORDER BY lower(t.name), t.id) as "tags!",
-            CASE WHEN (CASE WHEN $4 THEN u.org_role = 'admin' ELSE $7 END)
-              THEN private.admin_notes END AS admin_notes
+            CASE WHEN $6 THEN private.admin_notes END AS admin_notes
         FROM projects p
         JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
-        JOIN users u ON u.id = $2 AND u.org_id = p.org_id AND u.active
-        LEFT JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id AND a.user_id = u.id
         LEFT JOIN project_management_assignments management ON management.org_id = p.org_id
-          AND management.project_id = p.id AND management.manager_id = u.id
-        LEFT JOIN assignments member ON member.project_id = p.id AND member.user_id = u.id
+          AND management.project_id = p.id AND management.manager_id = $2
+        LEFT JOIN assignments member ON member.project_id = p.id AND member.user_id = $2
         LEFT JOIN project_private_settings private ON private.project_id = p.id AND private.org_id = p.org_id
         LEFT JOIN project_settings settings ON settings.project_id = p.id AND settings.org_id = p.org_id
         WHERE p.org_id = $1 AND p.id = $3
-          AND CASE WHEN $4 THEN COALESCE(a.can_view_progress, false)
-            ELSE $5 OR ($6 AND management.id IS NOT NULL)
-              OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members') = 'project_members') END"#,
+          AND ($4 OR ($5 AND management.id IS NOT NULL)
+            OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members') = 'project_members'))"#,
         org_id,
         viewer_id,
         project_id,
-        access.legacy(),
         access.has(Permission::ProjectReadAll),
         access.has(Permission::ProjectReadManaged),
-        access.administrator(),
+        // Private notes belong to whoever may edit every project.
         access.has(Permission::ProjectWriteAll),
         access.has(Permission::ProjectWriteManaged),
         access.has(Permission::BillableRateWriteAll),
@@ -141,20 +132,17 @@ async fn fetch_project_tags(
         FROM project_tag_links l
         JOIN project_tags t ON t.id = l.tag_id AND t.org_id = l.org_id
         JOIN projects p ON p.id = l.project_id AND p.org_id = l.org_id
-        LEFT JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
-        LEFT JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id AND a.user_id = $2
+        JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
         LEFT JOIN project_management_assignments management ON management.org_id = p.org_id
           AND management.project_id = p.id AND management.manager_id = $2
         LEFT JOIN assignments member ON member.project_id = p.id AND member.user_id = $2
         LEFT JOIN project_settings settings ON settings.project_id = p.id AND settings.org_id = p.org_id
-        WHERE l.org_id = $1 AND ($3 OR c.id IS NOT NULL)
-          AND CASE WHEN $3 THEN COALESCE(a.can_view_progress, false)
-          ELSE $4 OR ($5 AND management.id IS NOT NULL)
-            OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members') = 'project_members') END
+        WHERE l.org_id = $1
+          AND ($3 OR ($4 AND management.id IS NOT NULL)
+            OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members') = 'project_members'))
         ORDER BY lower(t.name), t.id, l.project_id"#,
         org_id,
         viewer_id,
-        access.legacy(),
         access.has(Permission::ProjectReadAll),
         access.has(Permission::ProjectReadManaged),
     )
@@ -185,36 +173,18 @@ async fn fetch_project_overview(
     let mut access = read_access::ReadAccess::begin(pool, viewer.org_id, viewer.id)
         .await?
         .ok_or_else(|| forbidden("Current project access is required"))?;
-    let canonical_permissions = !access.legacy();
-    let role = sqlx::query_scalar!(
-        r#"SELECT org_role as "org_role: OrgRole" FROM users WHERE org_id=$1 AND id=$2"#,
-        viewer.org_id,
-        viewer.id,
-    )
-    .fetch_one(&mut *access.tx)
-    .await
-    .map_err(server_err)?;
-    let can_create = if canonical_permissions {
-        access.has(Permission::ProjectCreateAll)
-    } else {
-        role.is_manager_or_above()
-    };
-    let can_import = if canonical_permissions {
-        access.administrator()
-    } else {
-        role == OrgRole::Admin
-    };
-    let can_change_legacy_status = !canonical_permissions && role.is_manager_or_above();
-    let projects = project_rows(&mut access, viewer, None, true, ProjectRead::Overview).await?;
-    access.tx.commit().await.map_err(server_err)?;
-    Ok(ProjectOverview {
+    let overview = ProjectOverview {
         requester,
-        canonical_permissions,
-        can_create,
-        can_import,
-        can_change_legacy_status,
-        projects,
-    })
+        can_create: access.has(Permission::ProjectCreateAll),
+        can_import: access.administrator(),
+        can_change_status: access.has(Permission::ProjectWriteAll)
+            || access.has(Permission::ProjectWriteManaged),
+        // The Clients page's `ClientReadScope::can_read`.
+        can_open_clients: access.has(Permission::ClientReadAll),
+        projects: project_rows(&mut access, viewer, None, true, ProjectRead::Overview).await?,
+    };
+    access.tx.commit().await.map_err(server_err)?;
+    Ok(overview)
 }
 
 #[cfg(feature = "server")]
@@ -294,35 +264,29 @@ async fn project_rows(
     let projects = sqlx::query!(
         r#"SELECT p.id, p.org_id, p.client_id, p.code, p.name,
                 p.project_type as "project_type: ProjectType", p.currency,
-                CASE WHEN $4 AND (CASE WHEN $6 THEN a.can_view_rates
-                    ELSE $9 OR ($10 AND management.id IS NOT NULL) END)
+                CASE WHEN $4 AND ($8 OR ($9 AND management.id IS NOT NULL))
                   THEN p.rate_cents END AS rate_cents,
                 p.starts_on as "starts_on: chrono::NaiveDate",
                 p.ends_on as "ends_on: chrono::NaiveDate",
                 CASE WHEN $4 THEN p.budget_kind ELSE 'none'::budget_kind END as "budget_kind!: BudgetKind",
-                CASE WHEN $4 AND (CASE WHEN $6 THEN a.can_view_progress
-                    ELSE $9 OR ($10 AND management.id IS NOT NULL) END)
+                CASE WHEN $4 AND ($8 OR ($9 AND management.id IS NOT NULL))
                   THEN p.budget_amount_cents END AS budget_amount_cents,
-                CASE WHEN $4 AND ($6 OR p.budget_kind = 'hours') THEN p.budget_minutes END AS budget_minutes,
+                CASE WHEN $4 AND p.budget_kind = 'hours' THEN p.budget_minutes END AS budget_minutes,
                 p.active, p.created_at as "created_at: chrono::DateTime<chrono::Utc>",
                 CASE WHEN $4 THEN c.name END AS client_name,
                 CASE WHEN $4 THEN c.active END AS client_active,
-                ($4 AND CASE WHEN $6 THEN u.org_role IN ('admin', 'manager')
-                  ELSE $12 OR ($13 AND management.id IS NOT NULL) END) AS "can_edit!"
+                ($4 AND ($11 OR ($12 AND management.id IS NOT NULL))) AS "can_edit!"
          FROM projects p
-         JOIN users u ON u.org_id = p.org_id AND u.id = $3 AND u.active
-         LEFT JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
-         LEFT JOIN project_read_access a ON a.project_id = p.id AND a.org_id = p.org_id AND a.user_id = $3
+         JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
          LEFT JOIN project_management_assignments management ON management.org_id = p.org_id
            AND management.project_id = p.id AND management.manager_id = $3
          LEFT JOIN assignments member ON member.project_id = p.id AND member.user_id = $3
          LEFT JOIN project_settings settings ON settings.project_id = p.id AND settings.org_id = p.org_id
-         WHERE p.org_id = $2 AND ($6 OR c.id IS NOT NULL)
+         WHERE p.org_id = $2
            AND ($1::bool OR p.active) AND ($5::uuid IS NULL OR p.client_id = $5)
-           AND CASE WHEN $6 THEN a.user_id IS NOT NULL AND (NOT $4 OR a.can_view_progress)
-             WHEN $4 THEN $7 OR ($8 AND management.id IS NOT NULL)
+           AND CASE WHEN $4 THEN $6 OR ($7 AND management.id IS NOT NULL)
                OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members') = 'project_members')
-             ELSE member.id IS NOT NULL OR $11 OR EXISTS (
+             ELSE member.id IS NOT NULL OR $10 OR EXISTS (
                SELECT 1 FROM time_entries te WHERE te.org_id = p.org_id
                  AND te.project_id = p.id AND te.user_id = $3) END
          ORDER BY p.name, p.id"#,
@@ -331,7 +295,6 @@ async fn project_rows(
         viewer.id,
         overview,
         client_id,
-        access.legacy(),
         access.has(Permission::ProjectReadAll),
         access.has(Permission::ProjectReadManaged),
         access.has(Permission::BillableRateReadAll),
@@ -421,7 +384,7 @@ pub(super) async fn fetch_project_spend(
         &mut access.tx,
         org_id,
         viewer_id,
-        access.permissions.as_ref(),
+        &access.permissions,
         None,
         true,
     )
@@ -432,18 +395,18 @@ pub(super) async fn fetch_project_spend(
 }
 
 /// Tracked totals for every readable project, or only `project_id`, inside the
-/// caller's authority transaction. `permissions` is `None` under policy zero.
-/// Without `include_money` no amount is valued and `spent_cents` is absent.
+/// caller's authority transaction. Without `include_money` no amount is valued
+/// and `spent_cents` is absent.
 #[cfg(feature = "server")]
 pub(super) async fn spend_in_transaction(
     connection: &mut sqlx::PgConnection,
     org_id: uuid::Uuid,
     viewer_id: uuid::Uuid,
-    permissions: Option<&crate::models::permissions::PersonPermissions>,
+    permissions: &crate::models::permissions::PersonPermissions,
     project_id: Option<uuid::Uuid>,
     include_money: bool,
 ) -> Result<Vec<ProjectSpend>, sqlx::Error> {
-    let has = |permission| permissions.is_some_and(|state| state.grants.contains(permission));
+    let has = |permission| permissions.grants.contains(permission);
     // Grouped in Postgres, not folded here: the overview needs one number per
     // project, and folding in Rust meant fetching one row per time entry to get
     // there. SQL rate resolution preserves legacy precedence for projects
@@ -459,20 +422,16 @@ pub(super) async fn spend_in_transaction(
         ProjectSpend,
         r#"WITH visible AS (
              SELECT p.*,
-               ($9 AND CASE WHEN $3 THEN COALESCE(legacy.can_view_progress, false)
-                 ELSE $6 OR ($7 AND management.id IS NOT NULL) END) AS can_view_money
+               ($8 AND ($5 OR ($6 AND management.id IS NOT NULL))) AS can_view_money
              FROM projects p
              JOIN clients parent ON parent.id=p.client_id AND parent.org_id=p.org_id
-             LEFT JOIN project_read_access legacy ON legacy.org_id=p.org_id
-               AND legacy.project_id=p.id AND legacy.user_id=$2
              LEFT JOIN project_management_assignments management ON management.org_id=p.org_id
                AND management.project_id=p.id AND management.manager_id=$2
              LEFT JOIN assignments member ON member.project_id=p.id AND member.user_id=$2
              LEFT JOIN project_settings settings ON settings.org_id=p.org_id AND settings.project_id=p.id
-             WHERE p.org_id=$1 AND ($8::uuid IS NULL OR p.id=$8)
-               AND CASE WHEN $3 THEN COALESCE(legacy.can_view_progress, false)
-               ELSE $4 OR ($5 AND management.id IS NOT NULL)
-                 OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members')='project_members') END
+             WHERE p.org_id=$1 AND ($7::uuid IS NULL OR p.id=$7)
+               AND ($3 OR ($4 AND management.id IS NOT NULL)
+                 OR (member.id IS NOT NULL AND COALESCE(settings.report_visibility, 'project_members')='project_members'))
            ), spent AS MATERIALIZED (
              SELECT p.id AS project_id, SUM(te.minutes) AS minutes,
                SUM(CASE WHEN p.can_view_money AND te.billable
@@ -507,7 +466,6 @@ pub(super) async fn spend_in_transaction(
            ORDER BY p.id"#,
         org_id,
         viewer_id,
-        permissions.is_none(),
         has(Permission::ProjectReadAll),
         has(Permission::ProjectReadManaged),
         has(Permission::BillableRateReadAll),
@@ -527,15 +485,22 @@ pub async fn set_project_active(
     active: bool,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Project, ServerFnError> {
-    let manager = require_manager().await?;
-    project_requester(&manager, expected_requester)?;
+    let user = require_user().await?;
+    project_requester(&user, expected_requester)?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
-    let (project, transition) =
-        set_project_active_record(&state.db, manager.org_id, manager.id, project_id, active)
-            .await?;
-    dispatch_project_status(state, manager.org_id, &project, transition);
-    Ok(project)
+    let mut projects = set_projects_status(
+        &state.db,
+        &*state.plugins,
+        user.org_id,
+        user.id,
+        &[project_id],
+        active,
+    )
+    .await?;
+    projects
+        .pop()
+        .ok_or_else(|| server_err("Project status change returned no project"))
 }
 
 /// Set up to 100 projects to the requested status in one organization-scoped transaction.
@@ -545,19 +510,19 @@ pub async fn set_projects_active(
     active: bool,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<Project>, ServerFnError> {
-    let manager = require_manager().await?;
-    project_requester(&manager, expected_requester)?;
+    let user = require_user().await?;
+    project_requester(&user, expected_requester)?;
     let ids = parse_bulk_project_ids(&project_ids)?;
     let state = crate::state::global_state().await;
-    let results =
-        set_projects_active_records(&state.db, manager.org_id, manager.id, &ids, active).await?;
-    Ok(results
-        .into_iter()
-        .map(|(project, transition)| {
-            dispatch_project_status(state, manager.org_id, &project, transition);
-            project
-        })
-        .collect())
+    set_projects_status(
+        &state.db,
+        &*state.plugins,
+        user.org_id,
+        user.id,
+        &ids,
+        active,
+    )
+    .await
 }
 
 #[cfg(feature = "server")]
@@ -577,36 +542,26 @@ fn parse_bulk_project_ids(values: &[String]) -> Result<Vec<uuid::Uuid>, ServerFn
     Ok(ids)
 }
 
+/// Archives or restores `sorted_ids` in one transaction through
+/// `ops::projects::set_active`, dispatching its events after the commit.
 #[cfg(feature = "server")]
-fn dispatch_project_status(
-    state: &crate::state::AppState,
+async fn set_projects_status(
+    db: &sqlx::PgPool,
+    events: &dyn crate::ops::EventSink,
     org_id: uuid::Uuid,
-    project: &Project,
-    transition: Option<crate::plugin::event::ActiveTransition>,
-) {
-    if let Some(t) = transition {
-        let occurred_at = chrono::Utc::now();
-        let project = project_payload(project);
-        state.plugins.dispatch(match t {
-            crate::plugin::event::ActiveTransition::Reactivated => {
-                crate::plugin::AppEvent::ProjectReactivated {
-                    occurred_at,
-                    org_id,
-                    project,
-                }
-            }
-            crate::plugin::event::ActiveTransition::Deactivated => {
-                crate::plugin::AppEvent::ProjectDeactivated {
-                    occurred_at,
-                    org_id,
-                    project,
-                }
-            }
-        });
-    }
+    actor_id: uuid::Uuid,
+    sorted_ids: &[uuid::Uuid],
+    active: bool,
+) -> Result<Vec<Project>, ServerFnError> {
+    use crate::ops::{self, Caller};
+    let mut write = ops::begin(db, Caller::session(org_id, actor_id)).await?;
+    let result = ops::projects::set_active(&mut write.tx, &write.actor, sorted_ids, active).await;
+    Ok(write.commit(result, events).await?)
 }
 
-#[cfg(feature = "server")]
+/// The status write as the tests drive it: each project with the transition
+/// its committed event reported.
+#[cfg(all(test, feature = "server"))]
 async fn set_projects_active_records(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
@@ -614,17 +569,28 @@ async fn set_projects_active_records(
     sorted_ids: &[uuid::Uuid],
     active: bool,
 ) -> Result<Vec<(Project, Option<crate::plugin::event::ActiveTransition>)>, ServerFnError> {
-    let mut tx = db.begin().await.map_err(server_err)?;
-    authorize_legacy_status_write(&mut tx, org_id, actor_id, PROJECT_STATUS_UNAVAILABLE).await?;
-    let mut results = Vec::with_capacity(sorted_ids.len());
-    for &id in sorted_ids {
-        results.push(set_project_active_in_transaction(&mut tx, org_id, id, active).await?);
-    }
-    tx.commit().await.map_err(server_err)?;
-    Ok(results)
+    use crate::plugin::{AppEvent, event::ActiveTransition};
+    let recorder = crate::ops::testing::Recorder::default();
+    let projects = set_projects_status(db, &recorder, org_id, actor_id, sorted_ids, active).await?;
+    let events = recorder.take();
+    Ok(projects
+        .into_iter()
+        .map(|project| {
+            let transition = events.iter().find_map(|event| match event {
+                AppEvent::ProjectReactivated { project: p, .. } if p.id == project.id => {
+                    Some(ActiveTransition::Reactivated)
+                }
+                AppEvent::ProjectDeactivated { project: p, .. } if p.id == project.id => {
+                    Some(ActiveTransition::Deactivated)
+                }
+                _ => None,
+            });
+            (project, transition)
+        })
+        .collect())
 }
 
-#[cfg(feature = "server")]
+#[cfg(all(test, feature = "server"))]
 async fn set_project_active_record(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
@@ -632,124 +598,11 @@ async fn set_project_active_record(
     project_id: uuid::Uuid,
     active: bool,
 ) -> Result<(Project, Option<crate::plugin::event::ActiveTransition>), ServerFnError> {
-    let mut tx = db.begin().await.map_err(server_err)?;
-    authorize_legacy_status_write(&mut tx, org_id, actor_id, PROJECT_STATUS_UNAVAILABLE).await?;
-    let result = set_project_active_in_transaction(&mut tx, org_id, project_id, active).await?;
-    tx.commit().await.map_err(server_err)?;
-    Ok(result)
-}
-
-#[cfg(feature = "server")]
-const PROJECT_STATUS_UNAVAILABLE: &str = "Project status changes are unavailable";
-
-/// Status changes still use the legacy role, which policy one does not grant.
-/// Recheck the account, role and policy under the organization gate, so a change
-/// since the session was read fails closed instead of writing.
-#[cfg(feature = "server")]
-pub(super) async fn authorize_legacy_status_write(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    org_id: uuid::Uuid,
-    actor_id: uuid::Uuid,
-    unavailable: &'static str,
-) -> Result<(), ServerFnError> {
-    lock_organization(tx, org_id, OrganizationLock::Shared)
-        .await
-        .map_err(server_err)?;
-    let actor = sqlx::query!(
-        r#"SELECT u.org_role AS "role: OrgRole",o.permission_policy_version
-           FROM users u JOIN organizations o ON o.id=u.org_id
-           WHERE u.org_id=$1 AND u.id=$2 AND u.active FOR SHARE OF u"#,
-        org_id,
-        actor_id,
-    )
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| forbidden("Manager access required"))?;
-    match actor.permission_policy_version {
-        0 if actor.role.is_manager_or_above() => Ok(()),
-        0 => Err(forbidden("Manager access required")),
-        _ => Err(forbidden(unavailable)),
-    }
-}
-
-#[cfg(feature = "server")]
-async fn set_project_active_in_transaction(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    org_id: uuid::Uuid,
-    project_id: uuid::Uuid,
-    active: bool,
-) -> Result<(Project, Option<crate::plugin::event::ActiveTransition>), ServerFnError> {
-    let before = lock_project(tx, org_id, project_id).await?;
-    if active && !before.active {
-        // A client archive locks this row too, so the two serialize here: an
-        // archived client's projects stay archived until it is restored.
-        let client_active = sqlx::query_scalar!(
-            "SELECT active FROM clients WHERE id = $1 AND org_id = $2 FOR SHARE",
-            before.client_id,
-            org_id,
-        )
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(server_err)?;
-        if !client_active {
-            return Err(conflict(
-                "Restore the client before restoring this project.",
-            ));
-        }
-    }
-
-    let project = sqlx::query_as!(
-        Project,
-        r#"UPDATE projects SET active = $3
-          WHERE id = $1 AND org_id = $2
-            AND active IS DISTINCT FROM $3
-         RETURNING id, org_id, client_id, code, name,
-                   project_type as "project_type: ProjectType", currency, rate_cents,
-                   starts_on as "starts_on: chrono::NaiveDate",
-                   ends_on as "ends_on: chrono::NaiveDate",
-                   budget_kind as "budget_kind: BudgetKind",
-                   budget_amount_cents, budget_minutes, active,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        project_id,
-        org_id,
-        active,
-    )
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(server_err)?;
-
-    let transition = project.as_ref().and_then(|updated| {
-        crate::plugin::event::active_transition(Some(before.active), updated.active)
-    });
-    Ok((project.unwrap_or(before), transition))
-}
-
-#[cfg(feature = "server")]
-async fn lock_project(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    org_id: uuid::Uuid,
-    project_id: uuid::Uuid,
-) -> Result<Project, ServerFnError> {
-    // Lock before comparing so competing edits and activation changes use
-    // the latest committed row even when the request initially looked unchanged.
-    sqlx::query_as!(
-        Project,
-        r#"SELECT id, org_id, client_id, code, name,
-                  project_type as "project_type: ProjectType", currency, rate_cents,
-                  starts_on as "starts_on: chrono::NaiveDate",
-                  ends_on as "ends_on: chrono::NaiveDate",
-                  budget_kind as "budget_kind: BudgetKind",
-                  budget_amount_cents, budget_minutes, active,
-                  created_at as "created_at: chrono::DateTime<chrono::Utc>"
-           FROM projects WHERE id = $1 AND org_id = $2 FOR UPDATE"#,
-        project_id,
-        org_id,
-    )
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Project not found"))
+    let mut results =
+        set_projects_active_records(db, org_id, actor_id, &[project_id], active).await?;
+    results
+        .pop()
+        .ok_or_else(|| server_err("Project status change returned no project"))
 }
 
 // ── Tasks ────────────────────────────────────────────────────────────────────
@@ -789,30 +642,9 @@ async fn tasks_for_viewer(
     else {
         return Ok(Vec::new());
     };
-    let rows = if access.legacy() {
-        sqlx::query_as!(
+    let rows = sqlx::query_as!(
         Task,
-        "SELECT t.id, t.org_id, t.name, t.billable_default, t.active,
-                CASE WHEN NOT $4 AND access.can_view_rates THEN t.default_rate_cents END AS default_rate_cents
-         FROM tasks t JOIN task_read_access access ON access.task_id = t.id AND access.org_id = t.org_id
-         WHERE t.org_id = $2 AND access.user_id = $1
-           AND (t.active OR ($4 AND access.has_own_history))
-           AND ($3::uuid IS NULL OR EXISTS (
-             SELECT 1 FROM project_tasks pt JOIN project_read_access a ON a.project_id = pt.project_id
-             WHERE pt.task_id = t.id AND pt.project_id = $3 AND a.org_id = $2 AND a.user_id = $1 AND a.can_view_team))
-         ORDER BY t.name, t.id",
-        viewer.id,
-        viewer.org_id,
-        project_id,
-        tracking,
-    )
-    .fetch_all(&mut *access.tx)
-    .await
-    .map_err(server_err)?
-    } else {
-        sqlx::query_as!(
-            Task,
-            "SELECT t.id,t.org_id,t.name,t.billable_default,t.active,
+        "SELECT t.id,t.org_id,t.name,t.billable_default,t.active,
                CASE WHEN NOT $4 AND $6 THEN t.default_rate_cents END AS default_rate_cents
              FROM tasks t
              CROSS JOIN LATERAL (
@@ -844,19 +676,18 @@ async fn tasks_for_viewer(
                    AND ($7 OR ($8 AND management.id IS NOT NULL) OR member.id IS NOT NULL)
                ))
              ORDER BY t.name,t.id",
-            viewer.id,
-            viewer.org_id,
-            project_id,
-            tracking,
-            access.has(Permission::TaskReadAll),
-            access.has(Permission::BillableRateReadAll),
-            access.has(Permission::ProjectReadAll),
-            access.has(Permission::ProjectReadManaged),
-        )
-        .fetch_all(&mut *access.tx)
-        .await
-        .map_err(server_err)?
-    };
+        viewer.id,
+        viewer.org_id,
+        project_id,
+        tracking,
+        access.has(Permission::TaskReadAll),
+        access.has(Permission::BillableRateReadAll),
+        access.has(Permission::ProjectReadAll),
+        access.has(Permission::ProjectReadManaged),
+    )
+    .fetch_all(&mut *access.tx)
+    .await
+    .map_err(server_err)?;
     access.tx.commit().await.map_err(server_err)?;
     Ok(rows)
 }
@@ -894,47 +725,27 @@ pub async fn create_task(
     Ok(task)
 }
 
+/// Takes the organization `gate`, then loads the actor (whose own locks must
+/// come after the gate: a gate is never upgraded) and requires `TaskWriteAll`.
+/// The gate is why task writes authorize here rather than through `ops::begin`.
 #[cfg(feature = "server")]
 async fn authorize_task_write(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: &mut crate::ops::Tx,
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
     gate: OrganizationLock,
-) -> Result<Option<crate::models::permissions::PersonPermissions>, ServerFnError> {
-    use crate::server_fns::permissions::{configure_administration, load_person_permissions};
+) -> Result<crate::ops::Actor, ServerFnError> {
+    use crate::server_fns::permissions::configure_administration;
 
     configure_administration(tx).await.map_err(server_err)?;
     lock_organization(tx, org_id, gate)
         .await
         .map_err(server_err)?;
-    let actor = sqlx::query!(
-        r#"SELECT u.org_role AS "role: OrgRole",o.permission_policy_version
-           FROM users u JOIN organizations o ON o.id=u.org_id
-           WHERE u.org_id=$1 AND u.id=$2 AND u.active FOR SHARE OF u"#,
-        org_id,
-        actor_id,
-    )
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| forbidden("Current task editing authority is required"))?;
-    match actor.permission_policy_version {
-        0 if actor.role.is_manager_or_above() => return Ok(None),
-        0 => return Err(forbidden("Manager access required")),
-        1 => {}
-        _ => return Err(forbidden("Task permission state is unavailable")),
-    }
-    let permissions = load_person_permissions(tx, org_id, actor_id)
-        .await
-        .map_err(|error| {
-            tracing::error!(%error, "Unable to load task editing permissions");
-            forbidden("Task permission state is unavailable")
-        })?
-        .ok_or_else(|| forbidden("Task permission state is unavailable"))?;
-    if !permissions.grants.contains(Permission::TaskWriteAll) {
+    let actor = crate::ops::Actor::load(tx, crate::ops::Caller::session(org_id, actor_id)).await?;
+    if !actor.has(Permission::TaskWriteAll) {
         return Err(forbidden("Current task editing authority is required"));
     }
-    Ok(Some(permissions))
+    Ok(actor)
 }
 
 /// Adds a task to the organization catalog. Projects link tasks through the
@@ -954,10 +765,8 @@ async fn create_catalog_task(
         return Err(conflict("Task name cannot be empty"));
     }
     let mut tx = db.begin().await.map_err(server_err)?;
-    let permissions =
-        authorize_task_write(&mut tx, org_id, actor_id, OrganizationLock::Shared).await?;
-    let (amount, currency) =
-        authorize_task_rate(&mut tx, org_id, permissions.as_ref(), rate).await?;
+    let actor = authorize_task_write(&mut tx, org_id, actor_id, OrganizationLock::Shared).await?;
+    let (amount, currency) = authorize_task_rate(&mut tx, org_id, &actor, rate).await?;
     let id = uuid::Uuid::now_v7();
     let mut task = sqlx::query_as!(
         Task,
@@ -976,10 +785,7 @@ async fn create_catalog_task(
     .await
     .map_err(server_err)?;
     let event = task_payload(&task);
-    if permissions
-        .as_ref()
-        .is_some_and(|p| !p.grants.contains(Permission::BillableRateReadAll))
-    {
+    if !actor.has(Permission::BillableRateReadAll) {
         task.default_rate_cents = None;
     }
     tx.commit().await.map_err(server_err)?;
@@ -1040,10 +846,8 @@ async fn update_task_record(
         return Err(conflict("Task name cannot be empty"));
     }
     let mut tx = db.begin().await.map_err(server_err)?;
-    let permissions =
-        authorize_task_write(&mut tx, org_id, actor_id, OrganizationLock::Shared).await?;
-    let (amount, currency) =
-        authorize_task_rate(&mut tx, org_id, permissions.as_ref(), rate).await?;
+    let actor = authorize_task_write(&mut tx, org_id, actor_id, OrganizationLock::Shared).await?;
+    let (amount, currency) = authorize_task_rate(&mut tx, org_id, &actor, rate).await?;
     let preserve = matches!(rate, TaskRateEdit::Preserve {});
     let before = lock_task(&mut tx, org_id, task_id).await?;
 
@@ -1076,10 +880,7 @@ async fn update_task_record(
     // inherit that service authority over a hidden global rate.
     let event = task.as_ref().map(task_payload);
     let mut task = task.unwrap_or(before);
-    if permissions
-        .as_ref()
-        .is_some_and(|p| !p.grants.contains(Permission::BillableRateReadAll))
-    {
+    if !actor.has(Permission::BillableRateReadAll) {
         task.default_rate_cents = None;
     }
     tx.commit().await.map_err(server_err)?;
@@ -1090,7 +891,7 @@ async fn update_task_record(
 async fn authorize_task_rate(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: uuid::Uuid,
-    permissions: Option<&crate::models::permissions::PersonPermissions>,
+    actor: &crate::ops::Actor,
     rate: &TaskRateEdit,
 ) -> Result<(Option<i64>, Option<String>), ServerFnError> {
     use horae_core::permissions::rates::RateEdit;
@@ -1101,7 +902,7 @@ async fn authorize_task_rate(
         TaskRateEdit::Set { amount_cents, .. } => RateEdit::Set(*amount_cents),
     };
     intent
-        .authorize(permissions.is_none_or(|p| p.grants.contains(Permission::BillableRateWriteAll)))
+        .authorize(actor.has(Permission::BillableRateWriteAll))
         .map_err(|_| forbidden("Current global billable-rate editing authority is required"))?;
     if let TaskRateEdit::Set {
         amount_cents,
@@ -1163,9 +964,9 @@ async fn set_task_active_record(
 ) -> Result<(Task, Option<crate::plugin::AppEvent>), ServerFnError> {
     let mut tx = db.begin().await.map_err(server_err)?;
     // Tracking writers hold the shared gate through entry insertion.
-    let permissions =
+    let actor =
         authorize_task_write(&mut tx, org_id, actor_id, OrganizationLock::AccessChange).await?;
-    if permissions.is_some() && !active {
+    if !active {
         // Link updates invalidate editors through their parent project trigger.
         // Take every parent before the task/link locks, in stable order.
         sqlx::query_scalar!(
@@ -1181,7 +982,7 @@ async fn set_task_active_record(
     }
     let before = lock_task(&mut tx, org_id, task_id).await?;
 
-    if permissions.is_some() && !active {
+    if !active {
         let running = sqlx::query_scalar!(
             r#"SELECT EXISTS(SELECT 1 FROM time_entries
                 WHERE org_id=$1 AND task_id=$2 AND is_running) AS "running!""#,
@@ -1214,7 +1015,7 @@ async fn set_task_active_record(
     let transition = task.as_ref().and_then(|updated| {
         crate::plugin::event::active_transition(Some(before.active), updated.active)
     });
-    if permissions.is_some() && !active {
+    if !active {
         sqlx::query!(
             "UPDATE project_tasks pt SET active=false FROM projects p
              WHERE pt.project_id=p.id AND p.org_id=$1 AND pt.task_id=$2 AND pt.active",
@@ -1246,10 +1047,7 @@ async fn set_task_active_record(
             }
         }
     });
-    if permissions
-        .as_ref()
-        .is_some_and(|p| !p.grants.contains(Permission::BillableRateReadAll))
-    {
+    if !actor.has(Permission::BillableRateReadAll) {
         task.default_rate_cents = None;
     }
     tx.commit().await.map_err(server_err)?;
@@ -1290,18 +1088,14 @@ async fn team_member_ids(
          FROM assignments a JOIN projects p ON p.id = a.project_id
          JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id
          JOIN users member ON member.id = a.user_id AND member.org_id = p.org_id
-         LEFT JOIN project_read_access legacy ON legacy.project_id = p.id
-           AND legacy.org_id = p.org_id AND legacy.user_id = $3
          LEFT JOIN project_management_assignments management ON management.org_id = p.org_id
            AND management.project_id = p.id AND management.manager_id = $3
          WHERE a.project_id = $1 AND p.org_id = $2
-           AND CASE WHEN $4 THEN COALESCE(legacy.can_view_team, false)
-             ELSE $5 OR ($6 AND management.id IS NOT NULL) OR a.user_id = $3 END
+           AND ($4 OR ($5 AND management.id IS NOT NULL) OR a.user_id = $3)
          ORDER BY a.created_at, a.id"#,
         project_id,
         viewer.org_id,
         viewer.id,
-        access.legacy(),
         access.has(Permission::ProjectReadAll),
         access.has(Permission::ProjectReadManaged),
     )
@@ -1310,30 +1104,13 @@ async fn team_member_ids(
     .map_err(server_err)
 }
 
-#[server]
-pub async fn create_assignment(
-    project_id: String,
-    user_id: String,
-    role: String,
-) -> Result<Assignment, ServerFnError> {
-    let admin = require_admin().await?;
-    let state = crate::state::global_state().await;
-    let project_id = parse_uuid(&project_id, "project_id")?;
-    let user_id = parse_uuid(&user_id, "user_id")?;
-    let pr: ProjectRole = parse_enum(&role, "role")?;
-    let assignment = insert_assignment(&state.db, &admin, project_id, user_id, pr).await?;
+#[cfg(all(test, feature = "server"))]
+use crate::models::Assignment;
 
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::UserAssignedToProject {
-            occurred_at: chrono::Utc::now(),
-            org_id: admin.org_id,
-            assignment: assignment_payload(&assignment),
-        });
-    Ok(assignment)
-}
-
-#[cfg(feature = "server")]
+/// Adds a project member the way a team change does (organization gate, then
+/// the project revision), for tests of what a membership change waits for.
+/// Production membership changes go through the project editor.
+#[cfg(all(test, feature = "server"))]
 pub(super) async fn insert_assignment(
     db: &sqlx::PgPool,
     admin: &User,
@@ -1375,26 +1152,8 @@ pub(super) async fn insert_assignment(
     Ok(assignment)
 }
 
-#[server]
-pub async fn delete_assignment(assignment_id: String) -> Result<(), ServerFnError> {
-    let admin = require_admin().await?;
-    let state = crate::state::global_state().await;
-    let id = parse_uuid(&assignment_id, "assignment_id")?;
-    let removed = remove_assignment(&state.db, &admin, id).await?;
-
-    if let Some(a) = removed {
-        state
-            .plugins
-            .dispatch(crate::plugin::AppEvent::AssignmentRemoved {
-                occurred_at: chrono::Utc::now(),
-                org_id: admin.org_id,
-                assignment: assignment_payload(&a),
-            });
-    }
-    Ok(())
-}
-
-#[cfg(feature = "server")]
+/// Removes a project member like [`insert_assignment`] adds one.
+#[cfg(all(test, feature = "server"))]
 pub(super) async fn remove_assignment(
     db: &sqlx::PgPool,
     admin: &User,
@@ -1439,7 +1198,7 @@ pub(super) async fn remove_assignment(
     Ok(removed)
 }
 
-#[cfg(feature = "server")]
+#[cfg(all(test, feature = "server"))]
 async fn begin_assignment_change<'a>(
     db: &'a sqlx::PgPool,
     admin: &User,
@@ -1448,23 +1207,10 @@ async fn begin_assignment_change<'a>(
     lock_organization(&mut tx, admin.org_id, OrganizationLock::AccessChange)
         .await
         .map_err(server_err)?;
-    // Session admission can predate a demotion. Hold the current actor row
-    // until commit so a completed revocation cannot leave a stale writer.
-    sqlx::query_scalar!(
-        "SELECT id FROM users WHERE id = $1 AND org_id = $2
-           AND active AND org_role = $3 FOR SHARE",
-        admin.id,
-        admin.org_id,
-        OrgRole::Admin as OrgRole,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| forbidden("Active administrator access required"))?;
     Ok(tx)
 }
 
-#[cfg(feature = "server")]
+#[cfg(all(test, feature = "server"))]
 async fn lock_project_revision(
     db: &mut sqlx::PgConnection,
     org_id: uuid::Uuid,

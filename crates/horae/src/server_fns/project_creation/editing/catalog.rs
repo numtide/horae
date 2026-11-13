@@ -17,7 +17,7 @@ pub(in crate::server_fns::project_creation) async fn read(
     crate::server_fns::permissions::configure_administration(&mut tx)
         .await
         .map_err(storage_error)?;
-    let (_, permissions) = lock_editor_actor(
+    let permissions = lock_editor_actor(
         &mut tx,
         actor_id,
         org_id,
@@ -25,8 +25,6 @@ pub(in crate::server_fns::project_creation) async fn read(
         OrganizationLock::Shared,
     )
     .await?;
-    let permissions =
-        permissions.ok_or_else(|| forbidden("Current project editing authority is required"))?;
     let requester = PermissionRequester {
         org_id,
         user_id: actor_id,

@@ -59,7 +59,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
           budget_amount_cents: 10000, currency: 'EUR' };
         return route.fulfill({ response, json: {
           ...overview, can_create: role !== 'member', can_import: role === 'admin',
-          can_change_legacy_status: role !== 'member',
+          can_change_status: role !== 'member',
           projects: empty ? [] : [{ project: fixtureProject, client: fixtureClient, can_edit: role !== 'member' }],
         } });
       }

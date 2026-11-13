@@ -89,13 +89,10 @@ async fn overview_budget_progress_is_current_period_scoped_and_authorized(pool: 
             .unwrap()
             .is_empty()
     );
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    // Project readers follow the stored grants: a Member's floor.
+    crate::ops::testing::set_grants(&mut pool.acquire().await.unwrap(), &ids, &[])
+        .await
+        .unwrap();
     assert!(
         visible_scopes(&pool, ids.org_id, ids.user_id, date)
             .await
