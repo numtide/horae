@@ -240,13 +240,7 @@ async fn committing_a_preview_needs_an_administrator_of_its_organization(pool: P
         NOT_FOUND,
         "not found",
     );
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    assign_profile(&pool, ids.org_id, ids.user_id, BuiltInProfile::Member).await;
     assert!(matches!(
         commit(&pool, &ids, preview).await,
         Err(ServerFnError::ServerError {
@@ -378,13 +372,7 @@ async fn a_summary_groups_archived_and_inline_errors_for_administrators(pool: Pg
             ..
         })
     ));
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    assign_profile(&pool, ids.org_id, ids.user_id, BuiltInProfile::Member).await;
     assert!(matches!(
         error_summary(&pool, ids.org_id, ids.user_id, job).await,
         Err(ServerFnError::ServerError {

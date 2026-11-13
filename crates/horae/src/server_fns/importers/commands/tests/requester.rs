@@ -60,12 +60,7 @@ async fn new_import_jobs_record_the_authorized_original_requester(pool: PgPool) 
 }
 
 async fn another_admin(pool: &PgPool, org: Uuid) -> Uuid {
-    let id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $2, $3, 'Other Admin', 'admin')",
-        id, org, format!("{id}@test.com"),
-    ).execute(pool).await.unwrap();
-    id
+    crate::ops::testing::add_person(pool, org, BuiltInProfile::Administrator).await
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -167,13 +162,10 @@ async fn duplicates_and_job_lifecycle_never_replace_or_invent_the_original_reque
             let repeated = submit(&pool, ids.org_id, other, operation, "original").await;
             assert_eq!(repeated.id, id);
             assert_eq!(requester(&pool, id).await, expected);
-            sqlx::query!(
-                "UPDATE users SET active = false, org_role = 'member' WHERE id = $1",
-                ids.user_id
-            )
-            .execute(&pool)
-            .await
-            .unwrap();
+            sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+                .execute(&pool)
+                .await
+                .unwrap();
             assert_eq!(
                 cancel(&pool, ids.org_id, other, id).await.unwrap().status,
                 "cancelled"
@@ -230,7 +222,17 @@ async fn original_requester_foreign_key_preserves_tenant_and_known_identity(pool
         );
         assert_eq!(requester(&pool, job).await, None);
     }
-    let original = another_admin(&pool, ids.org_id).await;
+    // No stored permission state, so only the job's reference keeps the row.
+    let original = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, 'Original requester')",
+        original,
+        ids.org_id,
+        format!("{original}@test.com"),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     sqlx::query!(
         "UPDATE horae_jobs SET original_requester_id = $1 WHERE id = $2",
         original,

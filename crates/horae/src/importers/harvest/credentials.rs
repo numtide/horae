@@ -11,7 +11,6 @@ use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use chrono::{DateTime, Utc};
 use horae_core::importers::harvest::types::EntityType;
-use horae_core::types::OrgRole;
 use sqlx::Acquire;
 use uuid::Uuid;
 
@@ -274,25 +273,14 @@ pub(super) async fn authorize_change(
     sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
         .execute(&mut **tx)
         .await?;
-    crate::db::lock_organization(tx, org_id, crate::db::OrganizationLock::Shared)
-        .await
-        .map_err(|error| -> anyhow::Error {
-            match error {
-                sqlx::Error::RowNotFound => ConnectionError::Unauthorized.into(),
-                other => other.into(),
-            }
-        })?;
-    sqlx::query_scalar!(
-        "SELECT id FROM users WHERE id = $1 AND org_id = $2
-           AND active AND org_role = $3 FOR SHARE",
-        actor_id,
-        org_id,
-        OrgRole::Admin as OrgRole,
-    )
-    .fetch_optional(&mut **tx)
-    .await?
-    .ok_or(ConnectionError::Unauthorized)?;
-    Ok(())
+    use crate::ops::{Caller, OpError};
+    match crate::ops::require_administrator(tx, Caller::session(org_id, actor_id)).await {
+        Ok(_) => Ok(()),
+        Err(OpError::Forbidden(_) | OpError::NotFound(_)) => {
+            Err(ConnectionError::Unauthorized.into())
+        }
+        Err(error) => Err(error.into()),
+    }
 }
 
 /// Persist refreshed access/refresh tokens after a transparent token refresh
@@ -381,6 +369,20 @@ mod tests {
     use super::*;
 
     async fn organization(pool: &sqlx::PgPool) -> Uuid {
+        let org = bare_organization(pool).await;
+        crate::ops::testing::assign_profile(
+            pool,
+            org,
+            org,
+            horae_core::permissions::catalog::BuiltInProfile::Administrator,
+        )
+        .await;
+        org
+    }
+
+    /// The organization and its person, without a permission state, for
+    /// schemas older than the state table.
+    async fn bare_organization(pool: &sqlx::PgPool) -> Uuid {
         let org = Uuid::now_v7();
         sqlx::query!(
             "INSERT INTO organizations (id, name) VALUES ($1, 'Account binding test')",
@@ -390,9 +392,13 @@ mod tests {
         .await
         .unwrap();
         sqlx::query!(
-            "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $1, $2, 'Connection admin', 'admin')",
-            org, format!("{org}@test.com"),
-        ).execute(pool).await.unwrap();
+            "INSERT INTO users (id, org_id, email, name) VALUES ($1, $1, $2, 'Connection admin')",
+            org,
+            format!("{org}@test.com"),
+        )
+        .execute(pool)
+        .await
+        .unwrap();
         org
     }
 
@@ -615,7 +621,7 @@ mod tests {
             .collect::<Vec<_>>()
             .into();
         before.run(&pool).await.unwrap();
-        let org = organization(&pool).await;
+        let org = bare_organization(&pool).await;
         let access = encrypt(KEY, "legacy-access").unwrap();
         let refresh = encrypt(KEY, "legacy-refresh").unwrap();
         sqlx::query!(
@@ -633,6 +639,13 @@ mod tests {
             ("legacy-access", "legacy-refresh")
         );
         assert_eq!(stored.watermark_for(EntityType::TimeEntry), Some(mark));
+        crate::ops::testing::assign_profile(
+            &pool,
+            org,
+            org,
+            horae_core::permissions::catalog::BuiltInProfile::Administrator,
+        )
+        .await;
         assert!(connect(&pool, org, "different").await.is_err());
         disconnect(&pool, org, org).await.unwrap();
         assert!(connect(&pool, org, "different").await.is_err());

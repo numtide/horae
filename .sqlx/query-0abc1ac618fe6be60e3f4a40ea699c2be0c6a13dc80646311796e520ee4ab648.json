@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id FROM users WHERE org_id = $1 AND active AND org_role = 'admin' ORDER BY id LIMIT 1",
+  "query": "SELECT org_id FROM users WHERE id = $1",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "id",
+        "name": "org_id",
         "type_info": "Uuid"
       }
     ],
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "ab2a1ac63170fb8fc1bd2067299f921cb072a7567a14b785363eb99aee5dde25"
+  "hash": "0abc1ac618fe6be60e3f4a40ea699c2be0c6a13dc80646311796e520ee4ab648"
 }
