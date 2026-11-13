@@ -1,11 +1,50 @@
 use super::*;
 use crate::server_fns::test_seed::{SeedIds, seed};
-use horae_core::permissions::catalog::BuiltInProfile;
+use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 pub(super) async fn single_fee(pool: &PgPool) -> SeedIds {
     fee_project(pool, seed(pool, BuiltInProfile::ExecutiveManager).await).await
+}
+
+/// Adds an active person holding `profile` to the organization.
+pub(super) async fn add_person(pool: &PgPool, org_id: Uuid, profile: BuiltInProfile) -> Uuid {
+    let id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, 'Person')",
+        id,
+        org_id,
+        format!("{id}@test.com"),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    crate::server_fns::provisioning::provision(
+        &mut pool.acquire().await.unwrap(),
+        org_id,
+        id,
+        profile,
+    )
+    .await
+    .unwrap();
+    id
+}
+
+/// Leaves the seeded person with the Member floor only, without the
+/// organization lock the permission editor takes: the change can commit while
+/// an invoice writer waits on another lock, and the writer must read its
+/// authority after that wait.
+pub(super) async fn revoke_unlocked(pool: &PgPool, ids: &SeedIds) {
+    crate::ops::testing::provision(pool, ids, &[], false).await;
+}
+
+/// Leaves the seeded person with the Member floor only, as the permission
+/// editor does: the organization row changes in the same transaction.
+pub(super) async fn revoke(connection: &mut sqlx::PgConnection, ids: &SeedIds) {
+    crate::ops::testing::set_grants(connection, ids, &[])
+        .await
+        .unwrap();
 }
 
 /// Make the seeded project a single fixed fee.
@@ -147,26 +186,18 @@ async fn project_fee_context_matches_invoice_balances_and_current_authority(pool
     .execute(&pool)
     .await
     .unwrap();
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    revoke(&mut pool.acquire().await.unwrap(), &ids).await;
     assert!(
         fee_balances(&pool, (ids.org_id, ids.user_id), &ids, period)
             .await
             .is_err(),
-        "even a project lead cannot read billing amounts after demotion"
+        "even a project lead cannot read billing amounts without the invoice grant"
     );
-    sqlx::query!(
-        "UPDATE users SET org_role = 'admin', active = false WHERE id = $1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    crate::ops::testing::provision(&pool, &ids, Permission::ALL, true).await;
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
     assert!(
         fee_balances(&pool, (ids.org_id, ids.user_id), &ids, period)
             .await
@@ -265,13 +296,7 @@ async fn invoice_status_rechecks_authority_after_waiting_for_the_invoice_lock(po
                 .await
                 .unwrap();
         } else {
-            sqlx::query!(
-                "UPDATE users SET org_role = 'member' WHERE id = $1",
-                ids.user_id
-            )
-            .execute(&pool)
-            .await
-            .unwrap();
+            revoke_unlocked(&pool, &ids).await;
         }
         blocker.commit().await.unwrap();
         let error = transition
@@ -315,11 +340,7 @@ async fn invoice_status_rechecks_authority_after_waiting_for_the_invoice_lock(po
             "{denied}"
         );
         // Verify retained balances without restoring the revoked actor's access.
-        let reviewer = Uuid::now_v7();
-        sqlx::query!(
-            "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1,$2,$3,'Reviewer','admin')",
-            reviewer, ids.org_id, format!("{reviewer}@test.com")
-        ).execute(&pool).await.unwrap();
+        let reviewer = add_person(&pool, ids.org_id, BuiltInProfile::Administrator).await;
         let preview = preview::prepare(
             &pool,
             (ids.org_id, reviewer),
@@ -628,13 +649,7 @@ async fn reviewed_generation_requires_exact_excess_and_current_authority(pool: P
         invoice.invoice.subtotal_cents - invoice.invoice.discount_cents,
         12600
     );
-    sqlx::query!(
-        "UPDATE users SET org_role='member' WHERE id=$1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    revoke(&mut pool.acquire().await.unwrap(), &ids).await;
     assert!(
         generate_invoice_with_request(
             &pool,
@@ -1455,13 +1470,7 @@ async fn draft_fee_edit_rejects_invalid_lines_and_current_unauthorized_actors(po
             .await
             .is_err()
     );
-    sqlx::query!(
-        "UPDATE users SET org_role='member' WHERE id=$1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    revoke(&mut pool.acquire().await.unwrap(), &ids).await;
     assert!(
         editing::load(&pool, ids.org_id, ids.user_id, id)
             .await

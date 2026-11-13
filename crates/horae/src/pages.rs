@@ -16,12 +16,6 @@ pub mod settings;
 pub mod tasks;
 pub mod timesheet;
 
-/// Whether the session user (from a `get_me` resource) is a manager or admin.
-/// `false` while the resource is loading or errored.
-pub(crate) fn is_manager(me: &Resource<Result<CurrentUser, ServerFnError>>) -> bool {
-    matches!(&*me.read(), Some(Ok(u)) if u.is_manager_or_above())
-}
-
 /// Whether the session user (from a `get_me` resource) is an admin.
 /// `false` while the resource is loading or errored.
 pub(crate) fn is_admin(me: &Resource<Result<CurrentUser, ServerFnError>>) -> bool {

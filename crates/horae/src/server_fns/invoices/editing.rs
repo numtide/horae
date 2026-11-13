@@ -3,19 +3,18 @@ use crate::models::invoice::{InvoiceExcessConfirmation, InvoiceFeeEdit, InvoiceF
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
+/// Holds the writer's authority for the rest of the transaction: the actor
+/// loads with the organization (already held by `begin_invoice_write`) and
+/// then the person locked `FOR SHARE`, and must hold the whole-invoice write
+/// grant. Returns the actor for writes that need more.
 pub(super) async fn lock_actor(
     tx: &mut Transaction<'_, Postgres>,
     org_id: Uuid,
     actor_id: Uuid,
-) -> Result<(), ServerFnError> {
-    let role = sqlx::query_scalar!(
-        r#"SELECT org_role as "role: OrgRole" FROM users WHERE id=$1 AND org_id=$2 AND active FOR SHARE"#,
-        actor_id, org_id,
-    ).fetch_optional(&mut **tx).await.map_err(server_err)?;
-    if !role.is_some_and(|role| role.is_manager_or_above()) {
-        return Err(forbidden("Active manager access required"));
-    }
-    Ok(())
+) -> Result<crate::ops::Actor, ServerFnError> {
+    let actor = crate::ops::Actor::load(tx, crate::ops::Caller::session(org_id, actor_id)).await?;
+    crate::ops::invoices::authorize_write(&actor)?;
+    Ok(actor)
 }
 
 async fn snapshot(
@@ -57,7 +56,7 @@ pub(super) async fn load(
     actor_id: Uuid,
     id: Uuid,
 ) -> Result<InvoiceEditor, ServerFnError> {
-    let mut tx = crate::server_fns::snapshot::manager(pool, org_id, actor_id).await?;
+    let mut tx = begin_invoice_preparation_read(pool, org_id, actor_id).await?;
     let (invoice, revision, mut rows) = snapshot(&mut tx, org_id, id).await?;
     let edit = InvoiceDraftEdit {
         revision,
@@ -95,7 +94,7 @@ pub(super) async fn review(
     id: Uuid,
     edit: &InvoiceDraftEdit,
 ) -> Result<InvoiceEditReview, ServerFnError> {
-    let mut tx = crate::server_fns::snapshot::manager(pool, org_id, actor_id).await?;
+    let mut tx = begin_invoice_preparation_read(pool, org_id, actor_id).await?;
     let (_, revision, mut rows) = snapshot(&mut tx, org_id, id).await?;
     if revision != edit.revision {
         return Err(conflict(
@@ -207,7 +206,10 @@ pub(super) async fn save(
     canonical.confirmed_excess.sort_by_key(|fee| fee.line_id);
     let payload = serde_json::to_value(&canonical).map_err(server_err)?;
     let mut tx = begin_invoice_write(pool, org_id).await?;
-    lock_actor(&mut tx, org_id, actor_id).await?;
+    // The saved edit reprices fee lines against the same balances the editor
+    // showed, as its review did.
+    let actor = lock_actor(&mut tx, org_id, actor_id).await?;
+    crate::ops::invoices::authorize_prepare(&actor)?;
     let size = sqlx::query_scalar!(
         r#"SELECT octet_length($1::jsonb::text) AS "size!""#,
         payload

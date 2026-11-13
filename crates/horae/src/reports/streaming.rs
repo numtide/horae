@@ -250,7 +250,7 @@ pub(super) async fn invoice(
             let authority = Authority {
                 org_id,
                 actor_id,
-                purpose: Purpose::Manager,
+                purpose: Purpose::Invoice,
             };
             authority.begin(&mut tx).await?;
             cursor::declare_invoice(&mut tx, org_id, invoice_id).await?;

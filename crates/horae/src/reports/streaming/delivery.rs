@@ -1,13 +1,11 @@
 use crate::models::permission_editor::PermissionRequester;
 use crate::reports::limits::time::{authorize_current, authorize_rows};
 use horae_core::permissions::catalog::PermissionSelection;
-use horae_core::types::OrgRole;
 
 use super::*;
 
 pub(super) enum Purpose {
-    /// Invoice downloads, still on the legacy manager role.
-    Manager,
+    Invoice,
     Projects,
     Time,
 }
@@ -86,22 +84,19 @@ impl Authority {
             .await?;
             return release_authority(connection).await;
         }
-        sqlx::query_scalar!(
-            "SELECT id FROM organizations WHERE id=$1 FOR SHARE",
-            self.org_id
+        // Purpose::Invoice: the actor locks the organization, then the person,
+        // and must still hold the whole-invoice read grant.
+        let actor = crate::ops::Actor::load(
+            connection,
+            crate::ops::Caller::session(self.org_id, self.actor_id),
         )
-        .fetch_optional(&mut *connection)
         .await
-        .map_err(database_error)?
-        .ok_or(StatusCode::FORBIDDEN)?;
-        let role = sqlx::query_scalar!(
-            r#"SELECT org_role AS "role: OrgRole" FROM users WHERE id=$1 AND org_id=$2 AND active FOR SHARE"#,
-            self.actor_id, self.org_id,
-        ).fetch_optional(&mut *connection).await.map_err(database_error)?
-            .ok_or(StatusCode::FORBIDDEN)?;
-        if matches!(self.purpose, Purpose::Manager)
-            && !matches!(role, OrgRole::Manager | OrgRole::Admin)
-        {
+        .map_err(|error| match error {
+            crate::ops::OpError::Forbidden(_) => StatusCode::FORBIDDEN,
+            crate::ops::OpError::Conflict(_) => StatusCode::CONFLICT,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        })?;
+        if !crate::ops::invoices::holds(&actor, crate::ops::invoices::READ) {
             return Err(StatusCode::FORBIDDEN);
         }
         release_authority(connection).await

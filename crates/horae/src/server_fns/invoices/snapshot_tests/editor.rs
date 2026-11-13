@@ -140,7 +140,7 @@ async fn editor_snapshots_preserve_rows_and_override_inherited_read_only(pool: P
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn editor_snapshots_deny_winning_legacy_revocation(pool: PgPool) {
+async fn editor_snapshots_deny_winning_revocation(pool: PgPool) {
     for reader in [EditorRead::Load, EditorRead::Review] {
         for gated in [false, true] {
             for deactivate in [false, true] {
@@ -176,13 +176,7 @@ async fn editor_snapshots_deny_winning_legacy_revocation(pool: PgPool) {
                     .await
                     .unwrap();
                 } else {
-                    sqlx::query!(
-                        "UPDATE users SET org_role='member' WHERE id=$1",
-                        case.ids.user_id
-                    )
-                    .execute(&mut *writer)
-                    .await
-                    .unwrap();
+                    fee_tests::revoke(&mut writer, &case.ids).await;
                 }
                 let pending = {
                     let pool = pool.clone();
@@ -194,6 +188,19 @@ async fn editor_snapshots_deny_winning_legacy_revocation(pool: PgPool) {
                 };
                 wait_for_blocked(&pool, pid).await;
                 writer.commit().await.unwrap();
+                // A grant change moves the organization row itself; the reader
+                // must still leave it as the writer did.
+                let organization_version = if deactivate {
+                    organization_version
+                } else {
+                    sqlx::query_scalar!(
+                        "SELECT xmin::text AS \"version!\" FROM organizations WHERE id=$1",
+                        case.ids.org_id
+                    )
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap()
+                };
                 assert_status(
                     tokio::time::timeout(Duration::from_secs(5), pending)
                         .await

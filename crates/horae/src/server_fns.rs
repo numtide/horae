@@ -152,15 +152,6 @@ pub(crate) async fn require_user() -> Result<crate::models::User, ServerFnError>
     .ok_or_else(|| unauthorized("Account is not active"))
 }
 
-#[cfg(feature = "server")]
-pub(crate) async fn require_manager() -> Result<crate::models::User, ServerFnError> {
-    let user = require_user().await?;
-    if !user.is_manager_or_above() {
-        return Err(forbidden("Manager access required"));
-    }
-    Ok(user)
-}
-
 // ── Plugin event dispatch helpers ────────────────────────────────────────────
 // Fire-and-forget: spawn dispatch so the core action is never blocked (FR-021).
 
@@ -255,29 +246,6 @@ pub(crate) fn submission_payload(
         status: a.state.to_string(),
         total_minutes,
     }
-}
-
-/// Sum of tracked minutes for a user across a period, for submission events.
-#[cfg(feature = "server")]
-pub(crate) async fn week_total_minutes(
-    db: impl sqlx::PgExecutor<'_>,
-    user_id: uuid::Uuid,
-    org_id: uuid::Uuid,
-    start: chrono::NaiveDate,
-    end: chrono::NaiveDate,
-) -> Result<i32, ServerFnError> {
-    sqlx::query_scalar!(
-        r#"SELECT COALESCE(SUM(minutes), 0)::int as "total!"
-           FROM time_entries
-           WHERE user_id = $1 AND org_id = $4 AND spent_date BETWEEN $2 AND $3"#,
-        user_id,
-        start as chrono::NaiveDate,
-        end as chrono::NaiveDate,
-        org_id,
-    )
-    .fetch_one(db)
-    .await
-    .map_err(server_err)
 }
 
 #[cfg(feature = "server")]

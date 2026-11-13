@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE approvals\n             SET state = $2, approved_by = $3, approved_at = now()\n           WHERE id = ANY($1) AND state = $4 AND org_id = $5\n        RETURNING id, org_id, user_id,\n                  period_start as \"period_start: chrono::NaiveDate\",\n                  period_end as \"period_end: chrono::NaiveDate\",\n                  state as \"state: EntryState\",\n                  submitted_at as \"submitted_at: chrono::DateTime<chrono::Utc>\",\n                  approved_by,\n                  approved_at as \"approved_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "INSERT INTO approvals (id, org_id, user_id, period_start, period_end, state)\n         VALUES ($1, $2, $3, $4, $5, $6)\n         ON CONFLICT (user_id, period_start) DO UPDATE\n           SET state = $6, submitted_at = now()\n           WHERE approvals.state <> $7\n         RETURNING id, org_id, user_id,\n                   period_start as \"period_start: NaiveDate\",\n                   period_end as \"period_end: NaiveDate\",\n                   state as \"state: EntryState\",\n                   submitted_at as \"submitted_at: chrono::DateTime<chrono::Utc>\",\n                   approved_by,\n                   approved_at as \"approved_at: chrono::DateTime<chrono::Utc>\"",
   "describe": {
     "columns": [
       {
@@ -20,12 +20,12 @@
       },
       {
         "ordinal": 3,
-        "name": "period_start: chrono::NaiveDate",
+        "name": "period_start: NaiveDate",
         "type_info": "Date"
       },
       {
         "ordinal": 4,
-        "name": "period_end: chrono::NaiveDate",
+        "name": "period_end: NaiveDate",
         "type_info": "Date"
       },
       {
@@ -63,21 +63,11 @@
     ],
     "parameters": {
       "Left": [
-        "UuidArray",
-        {
-          "Custom": {
-            "name": "entry_state",
-            "kind": {
-              "Enum": [
-                "open",
-                "submitted",
-                "approved",
-                "invoiced"
-              ]
-            }
-          }
-        },
         "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Date",
         {
           "Custom": {
             "name": "entry_state",
@@ -91,7 +81,19 @@
             }
           }
         },
-        "Uuid"
+        {
+          "Custom": {
+            "name": "entry_state",
+            "kind": {
+              "Enum": [
+                "open",
+                "submitted",
+                "approved",
+                "invoiced"
+              ]
+            }
+          }
+        }
       ]
     },
     "nullable": [
@@ -106,5 +108,5 @@
       true
     ]
   },
-  "hash": "7196a1f824685976ccd37cb6bc23c3b29ba6da20a0d7121f7d3218455c6ec415"
+  "hash": "7c1b4103c12663fc951a6ea88f167ea348016cf408021b593eefa2f4dccf89c0"
 }
