@@ -226,7 +226,6 @@ mod tests {
     use crate::reports::xlsx_cells::{assert_cell, assert_text_cell, xlsx_part};
     use crate::server_fns::test_seed::{SeedIds, seed};
     use horae_core::permissions::catalog::BuiltInProfile;
-    use horae_core::types::OrgRole;
 
     mod authorization;
     mod project_authorization;
