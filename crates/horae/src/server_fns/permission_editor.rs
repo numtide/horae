@@ -109,9 +109,13 @@ pub async fn save_person_permissions(
 ) -> Result<ProfileOutcome, ServerFnError> {
     let user = expected_editor_user(expected_requester).await?;
     let state = crate::state::global_state().await;
-    permissions::profiles::execute(&state.db, user.org_id, user.id, &command)
+    let (outcome, event) = permissions::profiles::save(&state.db, user.org_id, user.id, &command)
         .await
-        .map_err(profile_error)
+        .map_err(profile_error)?;
+    if let Some(event) = event {
+        state.plugins.dispatch(event);
+    }
+    Ok(outcome)
 }
 
 /// Show the current affected people; deletion preserves their grants and identity.

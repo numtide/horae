@@ -150,7 +150,7 @@ pub(super) fn RecoveryGate(children: Element) -> Element {
                 let own = server_fns::get_my_permissions()
                     .await
                     .map_err(|error| error.to_string())?;
-                if !own.is_some_and(|own| reads_invoices(&own)) {
+                if !reads_invoices(&own) {
                     return Err("Invoices require access to all invoices.".to_owned());
                 }
                 storage_key.set(format!(

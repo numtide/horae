@@ -63,10 +63,6 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
           projects: empty ? [] : [{ project: fixtureProject, client: fixtureClient, can_edit: role !== 'member' }],
         } });
       }
-      if (path.startsWith('/api/get_me')) {
-        const response = await route.fetch();
-        return route.fulfill({ response, json: { ...await response.json(), org_role: role } });
-      }
       return route.continue();
     });
     async function visit() {

@@ -23,7 +23,6 @@ const array = values => `ARRAY[${values.map(value => `'${value}'`).join(',')}]`;
 const authorize = extra => sql(`BEGIN;
   UPDATE organizations SET access_revision=access_revision+1 WHERE id='${actor.org_id}';
   UPDATE person_permission_states SET grants=${array([...floor, ...extra])}, revision=revision+1 WHERE id='${state}'; COMMIT;`);
-assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
 let restoreSeededStates = () => {};
 
 (async () => {
@@ -41,8 +40,7 @@ let restoreSeededStates = () => {};
       INSERT INTO tasks (id,org_id,name,billable_default,default_rate_cents,default_rate_currency)
         VALUES ('${task}','${actor.org_id}','Catalog browser task',true,8000,'USD');
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-        VALUES ('${state}','${actor.org_id}','${actor.id}',1,${array([...floor, ...grants])},false,'individual');
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'; COMMIT;`);
+        VALUES ('${state}','${actor.org_id}','${actor.id}',1,${array([...floor, ...grants])},false,'individual'); COMMIT;`);
     await page.goto(`${base}/`);
     await page.goto(`${base}/tasks`);
     const row = page.getByRole('row').filter({ hasText: 'Catalog browser task' });
@@ -183,7 +181,7 @@ let restoreSeededStates = () => {};
       assert.match(id, /^[0-9a-f-]{36}$/);
       sql(`DELETE FROM tasks WHERE org_id='${actor.org_id}' AND id='${id}'`);
     }
-    sql(`BEGIN; UPDATE organizations SET permission_policy_version=0 WHERE id='${actor.org_id}';
+    sql(`BEGIN;
       DELETE FROM person_permission_states WHERE id='${state}'; DELETE FROM tasks WHERE id='${task}'; COMMIT;`);
     restoreSeededStates();
   }

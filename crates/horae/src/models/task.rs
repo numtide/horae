@@ -1,15 +1,7 @@
-use horae_core::types::OrgRole;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::permission_editor::PermissionRequester;
-
-/// Whether the navigation offers the task catalog. `policy_zero_role` is the
-/// person's legacy role when detailed permissions are off. The catalog itself
-/// answers only from `TaskReadAll`.
-pub fn opens_task_catalog(policy_zero_role: Option<OrgRole>, has_task_read_all: bool) -> bool {
-    policy_zero_role.map_or(has_task_read_all, OrgRole::is_manager_or_above)
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

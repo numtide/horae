@@ -12,9 +12,9 @@ payloads are defined in [contracts/plugin-events-addendum.md](./contracts/plugin
 
 ## Scenario 1 — Direct event delivery (US1/US2)
 
-1. Point a test plugin's `plugin.toml` at the new hooks, e.g. `hooks = ["invoice_paid", "timesheet_submitted", "user_role_changed"]`.
-1. Trigger each action through its server function: mark an invoice paid, submit a week, change a user's role.
-1. **Expected**: the plugin receives exactly one event per action; `user_role_changed` includes `previous_role`; no other events arrive.
+1. Point a test plugin's `plugin.toml` at the new hooks, e.g. `hooks = ["invoice_paid", "timesheet_submitted", "user_permissions_changed"]`.
+1. Trigger each action through its server function: mark an invoice paid, submit a week, save a change to a person's permissions in the permission editor.
+1. **Expected**: the plugin receives exactly one event per action; `user_permissions_changed` carries the person's new `profile` and `is_administrator`; no other events arrive.
 
 Automated equivalent: `#[sqlx::test]` cases assert that each mutation dispatches its event once
 (and that the payload matches the contract).

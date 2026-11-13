@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
+use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
-use crate::models::user::CurrentUser;
+use crate::models::own_permissions::OwnPermissions;
 
 pub mod admin;
 pub mod approvals;
@@ -16,10 +17,14 @@ pub mod settings;
 pub mod tasks;
 pub mod timesheet;
 
-/// Whether the session user (from a `get_me` resource) is an admin.
-/// `false` while the resource is loading or errored.
-pub(crate) fn is_admin(me: &Resource<Result<CurrentUser, ServerFnError>>) -> bool {
-    matches!(&*me.read(), Some(Ok(u)) if u.is_admin())
+/// Whether the session's stored permissions carry the Administrator identity.
+/// `false` while they are loading, failed, or on a catalog this bundle does
+/// not know.
+pub(crate) fn is_administrator(own: &Resource<Result<OwnPermissions, ServerFnError>>) -> bool {
+    matches!(
+        &*own.read(),
+        Some(Ok(own)) if own.catalog_version == PERMISSION_CATALOG_VERSION && own.is_administrator
+    )
 }
 
 /// Render a resource's loaded value, with the standard loading placeholder and

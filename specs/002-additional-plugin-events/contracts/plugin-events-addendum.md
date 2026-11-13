@@ -38,7 +38,7 @@ Each fires immediately after the named server mutation commits. No event fires o
 | `task_created` / `task_updated` | `create_task` / `update_task` | `task` |
 | `task_deactivated` / `task_reactivated` | `set_task_active` (on flip) | `task` |
 | `user_created` | `create_user` | `user` |
-| `user_role_changed` | `set_user_role` | `user` + `previous_role` |
+| `user_permissions_changed` | `save_person_permissions` (the permission editor), when the save changed the person's permissions | `user` (after the save) |
 | `user_deactivated` | `set_user_active` → inactive | `user` |
 | `user_logged_out` | Axum `POST /auth/logout` (the never-rendered `logout` server fn was removed as dead code) | `user` |
 | `user_assigned_to_project` | `create_assignment` | `assignment` |
@@ -50,11 +50,10 @@ the base catalog):
 
 ```json
 {
-  "event": "user_role_changed",
+  "event": "user_permissions_changed",
   "occurred_at": "2026-07-13T10:00:00Z",
   "org_id": "0195...-0001",
-  "previous_role": "member",
-  "user": { "id": "0195...-0002", "email": "sam@acme.test", "name": "Sam", "org_role": "manager", "active": true }
+  "user": { "id": "0195...-0002", "email": "sam@acme.test", "name": "Sam", "is_administrator": false, "profile": "Project Manager" }
 }
 ```
 

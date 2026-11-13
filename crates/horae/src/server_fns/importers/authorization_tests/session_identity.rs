@@ -21,15 +21,12 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         api.call("get_me", json!({}), None, false).await.status(),
         StatusCode::UNAUTHORIZED
     );
-    for (actor, role) in [
-        (ids.user_id, OrgRole::Admin),
-        (manager, OrgRole::Manager),
-        (member, OrgRole::Member),
-    ] {
+    // The identity carries no role: authority comes from `get_my_permissions`.
+    for actor in [ids.user_id, manager, member] {
         let cookie = api.cookie(actor).await;
         let expected = json!({
             "id":actor,"org_id":ids.org_id,"name":"Test User",
-            "email":format!("{actor}@test.com"),"org_role":role,
+            "email":format!("{actor}@test.com"),
             "timezone":null,"workspace_timezone":"UTC","utc_offset_seconds":0
         });
         for request in [
@@ -41,17 +38,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     }
 
     let cookie = api.cookie(ids.user_id).await;
-    sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
-        ids.user_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-    assert_eq!(
-        api.json("get_me", json!({}), &cookie).await["org_role"],
-        json!(OrgRole::Member)
-    );
     sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
         .execute(pool)
         .await

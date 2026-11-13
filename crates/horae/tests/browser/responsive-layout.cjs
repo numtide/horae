@@ -67,7 +67,7 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
     for (const [path, resource] of [
       ['/clients', 'client_overview'], ['/projects', 'get_project_overview'],
       ['/invoices', 'list_invoices'], ['/reports', 'report_time'],
-      ['/approvals', 'list_approvals'],
+      ['/admin/workspace', 'get_profile_options'], ['/approvals', 'list_approvals'],
       ['/settings', 'get_me'], ['/admin/importers', 'get_me'],
       [`/timesheet/week/${week}`, 'load_timesheet_page'],
       [`/timesheet/day/${week}`, 'load_timesheet_page'],
@@ -146,9 +146,10 @@ const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 
     });
     await check('admin subnavigation and its content remain reachable on mobile', async () => {
       await page.setViewportSize({ width: 320, height: 1000 });
-      // On policy 0 the demo administrator's only admin section is Importers.
-      await visit('/admin/importers', 'get_me');
-      await expect(page.locator('.adm-nav').getByRole('link', { name: 'Importers', exact: true })).toBeVisible();
+      await visit('/admin/workspace', 'get_profile_options');
+      await expect(page.locator('.adm-main .page-title')).toHaveText('Workspace settings');
+      await page.locator('.adm-nav').getByRole('link', { name: 'Importers', exact: true }).click();
+      await expect(page).toHaveURL(`${base}/admin/importers`);
       await expect(page.locator('.adm-main .page-title')).toHaveText('Importers');
       const panel = await page.locator('.adm-main').boundingBox();
       assert.ok(panel.width >= 288 && panel.x >= 0 && panel.x + panel.width <= 320);

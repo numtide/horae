@@ -151,7 +151,7 @@ pub(super) mod tests {
         let name = reader.name.clone();
         // The documented column grant on users is accepted.
         sqlx::raw_sql(&format!(
-            "GRANT SELECT (id, org_id, email, name, org_role, active) ON public.users TO {name}"
+            "GRANT SELECT (id, org_id, email, name, active) ON public.users TO {name}"
         ))
         .execute(&pool)
         .await
@@ -262,8 +262,6 @@ pub(super) mod tests {
             "project_fee_milestones",
             "project_fee_occurrences",
             "project_budget_notifications",
-            "project_read_access",
-            "task_read_access",
         ] {
             let readable = sqlx::query_scalar!(
                 r#"SELECT has_table_privilege(current_user, $1, 'SELECT') AS "readable!""#,

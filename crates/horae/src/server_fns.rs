@@ -271,6 +271,43 @@ pub(crate) fn task_payload(t: &crate::models::Task) -> crate::plugin::event::Tas
     }
 }
 
+/// The plugin payload for a person, with their stored Administrator identity
+/// and the profile their permissions come from. A person without stored
+/// permissions, or with a state this build cannot read, is reported as a
+/// non-administrator without a profile.
+#[cfg(feature = "server")]
+pub(crate) async fn user_payload(
+    connection: &mut sqlx::PgConnection,
+    org_id: uuid::Uuid,
+    id: uuid::Uuid,
+    email: &str,
+    name: &str,
+) -> Result<crate::plugin::event::UserPayload, sqlx::Error> {
+    let state = match load_person_permissions(&mut *connection, org_id, id).await {
+        Ok(state) => state,
+        Err(PermissionStorageError::Database(error)) => return Err(error),
+        Err(error) => {
+            tracing::error!(%error, "Invalid stored permission state");
+            None
+        }
+    };
+    let (is_administrator, profile) = match state {
+        Some(state) => (
+            state.is_administrator,
+            permissions::own::profile_name(connection, org_id, state.source).await?,
+        ),
+        None => (false, None),
+    };
+    Ok(crate::plugin::event::UserPayload {
+        id,
+        email: email.to_owned(),
+        name: name.to_owned(),
+        is_administrator,
+        profile,
+        method: None,
+    })
+}
+
 /// Compare-and-swap the last announced legacy plugin band.
 #[cfg(feature = "server")]
 async fn claim_budget_band(

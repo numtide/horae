@@ -1,19 +1,19 @@
 #[cfg(feature = "server")]
 use chrono::{DateTime, Utc};
+#[cfg(feature = "server")]
 use horae_core::types::OrgRole;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Session identity for account display and requester-bound form recovery.
-/// Financial data and identity-provider metadata are not part of this response.
-/// The legacy role supports existing presentation, not canonical authorization.
+/// Financial data and identity-provider metadata are not part of this response,
+/// and neither is authority: the session's `OwnPermissions` explains that.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CurrentUser {
     pub id: Uuid,
     pub org_id: Uuid,
     pub email: String,
     pub name: String,
-    pub org_role: OrgRole,
     /// The person's own IANA zone; `None` follows `workspace_timezone`.
     pub timezone: Option<String>,
     pub workspace_timezone: String,
@@ -35,16 +35,6 @@ pub struct ProfileOptions {
 /// Whether a trimmed profile name is one the server stores.
 pub fn profile_name_is_valid(name: &str) -> bool {
     (1..=200).contains(&name.chars().count()) && !name.contains('\0')
-}
-
-impl CurrentUser {
-    pub fn is_admin(&self) -> bool {
-        self.org_role == OrgRole::Admin
-    }
-
-    pub fn is_manager_or_above(&self) -> bool {
-        self.org_role.is_manager_or_above()
-    }
 }
 
 /// Identity fields used by the current user lists. These consumers need

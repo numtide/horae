@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
-use horae_core::types::OrgRole;
 
 use crate::components::admin_shell::first_admin_route;
 use crate::components::avatar::Avatar;
@@ -10,7 +9,6 @@ use crate::components::session::{Session, use_session};
 use crate::components::timer_widget::TimerWidget;
 use crate::components::version_info::VersionInfo;
 use crate::models::own_permissions::OwnPermissions;
-use crate::models::task::opens_task_catalog;
 use crate::pages::timesheet::{Anchor, CalSpan, ViewMode};
 use crate::route::Route;
 
@@ -21,13 +19,8 @@ use crate::route::Route;
 pub fn Sidebar(collapsed: Signal<bool>, on_navigate: EventHandler<()>) -> Element {
     // A refresh keeps the last answer, so the rail does not flicker while it runs.
     let session = use_session();
-    let role = match &*session.me.read() {
-        Some(Ok(me)) => Some(me.org_role),
-        _ => None,
-    };
-    let is_admin = role == Some(OrgRole::Admin);
-    let sections = nav_sections(nav_access(session.permissions.read().as_ref(), role));
-    let version_block = show_version(session.permissions.read().as_ref(), is_admin);
+    let sections = nav_sections(nav_access(session.permissions.read().as_ref()));
+    let version_block = show_version(session.permissions.read().as_ref());
     rsx! {
         aside { id: "app-navigation", class: "app-sidebar", aria_label: "Navigation",
             div { class: "sidebar-brand",
@@ -87,7 +80,7 @@ fn SideLink(to: Route, icon: String, label: String, on_navigate: EventHandler<()
     }
 }
 
-/// The signed-in user: an avatar + name + role row that opens an account popover
+/// The signed-in user: an avatar + name + profile row that opens an account popover
 /// (settings, Administration when an admin section is open to them, and sign out). Falls back to a
 /// placeholder until `get_me` resolves (or when not authenticated).
 #[component]
@@ -101,29 +94,13 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
     let mut open = use_signal(|| false);
 
     let user = me.read();
-    let (name, email, legacy_role, marks, is_admin) = match &*user {
-        Some(Ok(u)) => (
-            u.name.clone(),
-            u.email.clone(),
-            capitalize(&u.org_role.to_string()),
-            initials(&u.name),
-            u.is_admin(),
-        ),
-        _ => (
-            "Not signed in".to_string(),
-            String::new(),
-            String::new(),
-            "·".to_string(),
-            false,
-        ),
+    let (name, email, marks) = match &*user {
+        Some(Ok(u)) => (u.name.clone(), u.email.clone(), initials(&u.name)),
+        _ => ("Not signed in".to_string(), String::new(), "·".to_string()),
     };
-    let administrator = administrator(own.read().as_ref(), is_admin);
-    let role = match &*own.read() {
-        Some(Ok(None)) => legacy_role,
-        _ if administrator => "Administrator".into(),
-        _ => String::new(),
-    };
-    let admin_route = first_admin_route(own.read().as_ref(), me.read().as_ref());
+    let administrator = administrator(own.read().as_ref());
+    let role = profile(own.read().as_ref());
+    let admin_route = first_admin_route(own.read().as_ref());
     let role_class = if administrator {
         "badge badge-info badge-sm"
     } else {
@@ -190,32 +167,39 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
     }
 }
 
-/// Administrator authority for display: the canonical flag under policy one, the
-/// legacy admin role under policy zero, and nothing while unknown or failed.
-fn administrator(
-    own: Option<&Result<Option<OwnPermissions>, ServerFnError>>,
-    is_admin: bool,
-) -> bool {
+/// The stored permissions when they loaded under the catalog this bundle knows.
+fn current(own: Option<&Result<OwnPermissions, ServerFnError>>) -> Option<&OwnPermissions> {
     match own {
-        Some(Ok(None)) => is_admin,
-        Some(Ok(Some(access))) => {
-            access.catalog_version == PERMISSION_CATALOG_VERSION && access.is_administrator
-        }
-        _ => false,
+        Some(Ok(access)) if access.catalog_version == PERMISSION_CATALOG_VERSION => Some(access),
+        _ => None,
     }
+}
+
+/// Administrator authority for display: the stored identity, and nothing while
+/// unknown or failed.
+fn administrator(own: Option<&Result<OwnPermissions, ServerFnError>>) -> bool {
+    current(own).is_some_and(|access| access.is_administrator)
+}
+
+/// The name the account menu gives the person's access: their profile or
+/// template, and nothing while unknown or failed.
+fn profile(own: Option<&Result<OwnPermissions, ServerFnError>>) -> String {
+    current(own).map_or_else(String::new, |access| {
+        access
+            .profile
+            .clone()
+            .unwrap_or_else(|| "Individual configuration".into())
+    })
 }
 
 /// Whether to show the version block: to administrators, and also under a
 /// catalog version this bundle does not know, since that means the bundle is
 /// older than the server and the block is what says so. The server still
 /// refuses the version to anyone else.
-fn show_version(
-    own: Option<&Result<Option<OwnPermissions>, ServerFnError>>,
-    is_admin: bool,
-) -> bool {
+fn show_version(own: Option<&Result<OwnPermissions, ServerFnError>>) -> bool {
     match own {
-        Some(Ok(Some(access))) if access.catalog_version != PERMISSION_CATALOG_VERSION => true,
-        own => administrator(own, is_admin),
+        Some(Ok(access)) if access.catalog_version != PERMISSION_CATALOG_VERSION => true,
+        own => administrator(own),
     }
 }
 
@@ -228,29 +212,15 @@ struct NavAccess {
     tasks: bool,
 }
 
-/// Policy zero keeps Clients for everyone, Team for legacy admins and Tasks for
-/// legacy admins and managers; `role` is `None` until the identity loads. Failed
-/// or unknown permission state hides every gated row.
-fn nav_access(
-    own: Option<&Result<Option<OwnPermissions>, ServerFnError>>,
-    role: Option<OrgRole>,
-) -> NavAccess {
-    match own {
-        Some(Ok(None)) => NavAccess {
-            people: role == Some(OrgRole::Admin),
-            clients: true,
-            tasks: role.is_some_and(|role| opens_task_catalog(Some(role), false)),
-        },
-        Some(Ok(Some(access))) if access.catalog_version == PERMISSION_CATALOG_VERSION => {
-            NavAccess {
-                people: access.grants.contains(&Permission::PeopleReadAll)
-                    || access.grants.contains(&Permission::PeopleReadManaged),
-                clients: access.grants.contains(&Permission::ClientReadAll),
-                tasks: opens_task_catalog(None, access.grants.contains(&Permission::TaskReadAll)),
-            }
-        }
-        _ => NavAccess::default(),
-    }
+/// Each gated row follows its read grant. Failed or unknown permission state
+/// hides every gated row.
+fn nav_access(own: Option<&Result<OwnPermissions, ServerFnError>>) -> NavAccess {
+    current(own).map_or_else(NavAccess::default, |access| NavAccess {
+        people: access.grants.contains(&Permission::PeopleReadAll)
+            || access.grants.contains(&Permission::PeopleReadManaged),
+        clients: access.grants.contains(&Permission::ClientReadAll),
+        tasks: access.grants.contains(&Permission::TaskReadAll),
+    })
 }
 
 struct NavRow {
@@ -313,15 +283,6 @@ fn nav_sections(access: NavAccess) -> Vec<(&'static str, Vec<NavRow>)> {
     .collect()
 }
 
-/// Capitalize the first character (roles are stored lower-case: "admin" → "Admin").
-fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-        None => String::new(),
-    }
-}
-
 /// Up to two leading initials from a display name, uppercased.
 fn initials(name: &str) -> String {
     name.split_whitespace()
@@ -340,6 +301,7 @@ mod tests {
             catalog_version,
             grants,
             is_administrator: false,
+            profile: None,
             access_revision: 1,
             person_revision: 1,
             managed_person_ids: Vec::new(),
@@ -347,15 +309,8 @@ mod tests {
         }
     }
 
-    fn access(own: Result<Option<OwnPermissions>, ServerFnError>, role: OrgRole) -> NavAccess {
-        nav_access(Some(&own), Some(role))
-    }
-
     fn granted(grants: Vec<Permission>) -> NavAccess {
-        access(
-            Ok(Some(canonical(grants, PERMISSION_CATALOG_VERSION))),
-            OrgRole::Member,
-        )
+        nav_access(Some(&Ok(canonical(grants, PERMISSION_CATALOG_VERSION))))
     }
 
     fn labels(access: NavAccess) -> Vec<(&'static str, Vec<&'static str>)> {
@@ -397,38 +352,7 @@ mod tests {
     }
 
     #[test]
-    fn policy_zero_offers_clients_to_everyone_team_to_admins_and_tasks_to_managers() {
-        let only = |people, tasks| NavAccess {
-            people,
-            clients: true,
-            tasks,
-        };
-        assert_eq!(access(Ok(None), OrgRole::Admin), only(true, true));
-        assert_eq!(access(Ok(None), OrgRole::Manager), only(false, true));
-        assert_eq!(access(Ok(None), OrgRole::Member), only(false, false));
-    }
-
-    #[test]
-    fn policy_zero_without_an_identity_hides_team_and_tasks() {
-        assert_eq!(
-            nav_access(Some(&Ok(None)), None),
-            NavAccess {
-                people: false,
-                clients: true,
-                tasks: false,
-            }
-        );
-    }
-
-    #[test]
-    fn canonical_tasks_row_follows_task_read_all_not_the_legacy_role() {
-        let own = |grants| Ok(Some(canonical(grants, PERMISSION_CATALOG_VERSION)));
-        assert!(access(own(vec![Permission::TaskReadAll]), OrgRole::Member).tasks);
-        assert!(!access(own(Vec::new()), OrgRole::Admin).tasks);
-    }
-
-    #[test]
-    fn canonical_grants_open_their_own_rows() {
+    fn grants_open_their_own_rows() {
         let only = |people, clients, tasks| NavAccess {
             people,
             clients,
@@ -460,26 +384,31 @@ mod tests {
     }
 
     #[test]
+    fn the_administrator_identity_opens_no_row_by_itself() {
+        let admin = OwnPermissions {
+            is_administrator: true,
+            ..canonical(Vec::new(), PERMISSION_CATALOG_VERSION)
+        };
+        assert_eq!(nav_access(Some(&Ok(admin))), NavAccess::default());
+    }
+
+    #[test]
     fn unknown_permission_state_hides_every_gated_row() {
         let everything = vec![
             Permission::PeopleReadAll,
             Permission::ClientReadAll,
             Permission::TaskReadAll,
         ];
+        assert_eq!(nav_access(None), NavAccess::default(), "loading");
         assert_eq!(
-            nav_access(None, Some(OrgRole::Admin)),
-            NavAccess::default(),
-            "loading"
-        );
-        assert_eq!(
-            access(Err(ServerFnError::new("unavailable")), OrgRole::Admin),
+            nav_access(Some(&Err(ServerFnError::new("unavailable")))),
             NavAccess::default()
         );
         assert_eq!(
-            access(
-                Ok(Some(canonical(everything, PERMISSION_CATALOG_VERSION + 1))),
-                OrgRole::Admin
-            ),
+            nav_access(Some(&Ok(canonical(
+                everything,
+                PERMISSION_CATALOG_VERSION + 1
+            )))),
             NavAccess::default(),
             "newer catalog"
         );
@@ -487,7 +416,7 @@ mod tests {
 
     /// The previous, next and largest catalog versions never show more rows
     /// than no grants at all, for every subset of the gating grants and
-    /// whether or not the person is an administrator or legacy admin.
+    /// whether or not the person is an administrator.
     #[test]
     fn other_catalog_versions_never_open_a_gated_row() {
         let gated = [
@@ -512,41 +441,37 @@ mod tests {
                         is_administrator,
                         ..canonical(grants.clone(), version)
                     };
-                    for role in [OrgRole::Member, OrgRole::Manager, OrgRole::Admin] {
-                        assert_eq!(
-                            access(Ok(Some(own.clone())), role),
-                            NavAccess::default(),
-                            "version {version}, grants {mask:#06b}"
-                        );
-                    }
+                    assert_eq!(
+                        nav_access(Some(&Ok(own))),
+                        NavAccess::default(),
+                        "version {version}, grants {mask:#06b}"
+                    );
                 }
             }
         }
     }
 
     #[test]
-    fn administrator_follows_the_legacy_role_or_the_canonical_flag() {
+    fn administrator_follows_the_stored_identity() {
         let admin = OwnPermissions {
             is_administrator: true,
             ..canonical(Vec::new(), PERMISSION_CATALOG_VERSION)
         };
-        assert!(administrator(Some(&Ok(None)), true));
-        assert!(!administrator(Some(&Ok(None)), false));
-        assert!(administrator(Some(&Ok(Some(admin.clone()))), false));
-        assert!(!administrator(
-            Some(&Ok(Some(canonical(Vec::new(), PERMISSION_CATALOG_VERSION)))),
-            true
-        ));
+        assert!(administrator(Some(&Ok(admin.clone()))));
+        // Every grant without the identity is not an administrator.
+        assert!(!administrator(Some(&Ok(canonical(
+            Permission::ALL.to_vec(),
+            PERMISSION_CATALOG_VERSION
+        )))));
         let future = OwnPermissions {
             catalog_version: PERMISSION_CATALOG_VERSION + 1,
             ..admin
         };
-        assert!(!administrator(Some(&Ok(Some(future))), true));
-        assert!(!administrator(None, true));
-        assert!(!administrator(
-            Some(&Err(ServerFnError::new("unavailable"))),
-            true
-        ));
+        assert!(!administrator(Some(&Ok(future))));
+        assert!(!administrator(None));
+        assert!(!administrator(Some(&Err(ServerFnError::new(
+            "unavailable"
+        )))));
     }
 
     #[test]
@@ -555,14 +480,13 @@ mod tests {
             is_administrator: true,
             ..canonical(Vec::new(), PERMISSION_CATALOG_VERSION)
         };
-        assert!(show_version(Some(&Ok(None)), true));
-        assert!(!show_version(Some(&Ok(None)), false));
-        assert!(show_version(Some(&Ok(Some(admin))), false));
-        assert!(!show_version(
-            Some(&Ok(Some(canonical(Vec::new(), PERMISSION_CATALOG_VERSION)))),
-            false
-        ));
-        assert!(!show_version(None, true));
+        assert!(show_version(Some(&Ok(admin))));
+        assert!(!show_version(Some(&Ok(canonical(
+            Vec::new(),
+            PERMISSION_CATALOG_VERSION
+        )))));
+        assert!(!show_version(None));
+        assert!(!show_version(Some(&Err(ServerFnError::new("unavailable")))));
     }
 
     /// A deploy that changes the catalog leaves open tabs on the old one, and
@@ -575,7 +499,31 @@ mod tests {
                 is_administrator,
                 ..canonical(Vec::new(), PERMISSION_CATALOG_VERSION + 1)
             };
-            assert!(show_version(Some(&Ok(Some(own))), false));
+            assert!(show_version(Some(&Ok(own))));
         }
+    }
+
+    #[test]
+    fn the_account_menu_names_the_profile_or_template() {
+        let named = |profile: Option<&str>| OwnPermissions {
+            profile: profile.map(str::to_owned),
+            ..canonical(Vec::new(), PERMISSION_CATALOG_VERSION)
+        };
+        assert_eq!(
+            profile(Some(&Ok(named(Some("Project Manager"))))),
+            "Project Manager"
+        );
+        assert_eq!(
+            profile(Some(&Ok(named(Some("Night shift"))))),
+            "Night shift"
+        );
+        assert_eq!(profile(Some(&Ok(named(None)))), "Individual configuration");
+        assert_eq!(profile(None), "");
+        assert_eq!(profile(Some(&Err(ServerFnError::new("unavailable")))), "");
+        let future = OwnPermissions {
+            catalog_version: PERMISSION_CATALOG_VERSION + 1,
+            ..named(Some("Administrator"))
+        };
+        assert_eq!(profile(Some(&Ok(future))), "");
     }
 }

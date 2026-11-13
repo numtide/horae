@@ -20,7 +20,6 @@ const state = '019f4400-0000-7000-8000-000000000002';
 const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
 const array = values => `ARRAY[${values.map(value => `'${value}'`).join(',')}]`;
 const stored = () => sql(`SELECT concat_ws('/', coalesce(billable_rate_cents::text,'-'), coalesce(cost_rate_cents::text,'-')) FROM users WHERE id='${person}'`);
-assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
 let restoreSeededStates = () => {};
 
 (async () => {
@@ -38,8 +37,7 @@ let restoreSeededStates = () => {};
     // The People page reads its own access only once the organization is on
     // the stored permissions; the seeded Administrator state stays.
     sql(`BEGIN; INSERT INTO users (id,org_id,email,name,billable_rate_cents)
-      VALUES ('${person}','${actor.org_id}','rates-person@example.com','Rates Person',9000);
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${actor.org_id}'; COMMIT;`);
+      VALUES ('${person}','${actor.org_id}','rates-person@example.com','Rates Person',9000); COMMIT;`);
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
@@ -102,7 +100,7 @@ let restoreSeededStates = () => {};
     console.log('PASS: person rates dialog edits, validates and clears exact rates, and withholds what a grant does not cover');
   } finally {
     await browser.close();
-    sql(`BEGIN; UPDATE organizations SET permission_policy_version=0 WHERE id='${actor.org_id}';
+    sql(`BEGIN;
       DELETE FROM person_permission_states WHERE id='${state}'; DELETE FROM users WHERE id='${person}'; COMMIT;`);
     restoreSeededStates();
   }

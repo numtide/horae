@@ -33,7 +33,6 @@ pub(super) async fn current_user(
         org_id: user.org_id,
         email: user.email,
         name: user.name,
-        org_role: user.org_role,
         utc_offset_seconds: crate::timezone::utc_offset_seconds(effective, chrono::Utc::now()),
         timezone: zones.timezone,
         workspace_timezone: zones.workspace,
@@ -104,11 +103,11 @@ pub async fn list_permission_audit(
     })
 }
 
-/// Explain the session person's scoped permissions, or None before activation.
-/// This display snapshot cannot authorize later requests or select another user.
+/// Explain the session person's stored permissions. This display snapshot
+/// cannot authorize later requests or select another user.
 #[server]
 pub async fn get_my_permissions()
--> Result<Option<crate::models::own_permissions::OwnPermissions>, ServerFnError> {
+-> Result<crate::models::own_permissions::OwnPermissions, ServerFnError> {
     let user = require_user().await.map_err(|error| match error {
         error @ ServerFnError::ServerError {
             code: UNAUTHORIZED, ..
@@ -146,18 +145,17 @@ pub(crate) async fn server_version(
     pool: &sqlx::PgPool,
     user: &crate::models::User,
 ) -> Result<String, ServerFnError> {
-    let administrator =
-        super::permissions::own::is_administrator(pool, user.org_id, user.id, user.org_role)
-            .await
-            .map_err(|error| match error {
-                super::permissions::own::OwnPermissionsError::Forbidden => {
-                    forbidden("Current active identity is required")
-                }
-                error => {
-                    tracing::error!(%error, "Unable to check administrator authority");
-                    server_err("Version is unavailable")
-                }
-            })?;
+    let administrator = super::permissions::own::is_administrator(pool, user.org_id, user.id)
+        .await
+        .map_err(|error| match error {
+            super::permissions::own::OwnPermissionsError::Forbidden => {
+                forbidden("Current active identity is required")
+            }
+            error => {
+                tracing::error!(%error, "Unable to check administrator authority");
+                server_err("Version is unavailable")
+            }
+        })?;
     if !administrator {
         return Err(forbidden("Administrator authority is required"));
     }

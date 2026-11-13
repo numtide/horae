@@ -85,7 +85,7 @@ mod tests {
             "task_deactivated",
             "task_reactivated",
             "user_created",
-            "user_role_changed",
+            "user_permissions_changed",
             "user_deactivated",
             "user_logged_out",
             "user_assigned_to_project",

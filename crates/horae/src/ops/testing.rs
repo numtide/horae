@@ -7,7 +7,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{AppEvent, EventSink};
-use crate::server_fns::test_seed::{SeedIds, clear_state, seed};
+use crate::server_fns::test_seed::{SeedIds, clear_state, seed, use_policy_one};
 
 /// Keeps dispatched events so a test can inspect them.
 #[derive(Default)]
@@ -28,13 +28,7 @@ impl EventSink for Recorder {
 /// Seeds an organization on policy one whose person holds a built-in profile.
 pub(crate) async fn seed_profile(pool: &PgPool, profile: BuiltInProfile) -> SeedIds {
     let ids = seed(pool, profile).await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
+    use_policy_one(pool, ids.org_id).await;
     ids
 }
 
@@ -84,13 +78,7 @@ pub(crate) async fn policy_one(
     administrator: bool,
 ) {
     provision(pool, ids, grants, administrator).await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
+    use_policy_one(pool, ids.org_id).await;
 }
 
 /// Gives a person exactly a built-in profile's grants and administrator
@@ -175,6 +163,7 @@ pub(crate) async fn provision(
     grants: &[Permission],
     administrator: bool,
 ) {
+    clear_state(pool, ids.user_id).await;
     let grants: Vec<String> =
         serde_json::from_value(serde_json::json!(PermissionSelection::new(grants))).unwrap();
     sqlx::query!(

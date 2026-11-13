@@ -21,10 +21,10 @@ const setGrants = grants => sql(`UPDATE person_permission_states SET grants=${gr
 const branding = column => sql(`SELECT coalesce(${column}, '<null>') FROM organizations WHERE id='${org}'`);
 const columns = ['provider_name', 'provider_address', 'provider_tax_id', 'provider_email', 'provider_phone',
   'bank_name', 'bank_iban', 'bank_bic', 'bank_routing', 'bank_account', 'invoice_notes', 'invoice_payment_terms'];
-const before = JSON.parse(sql(`SELECT row_to_json(o) FROM (SELECT ${columns.join(',')}, permission_policy_version FROM organizations WHERE id='${org}') o`));
+const before = JSON.parse(sql(`SELECT row_to_json(o) FROM (SELECT ${columns.join(',')} FROM organizations WHERE id='${org}') o`));
 let restoreSeededStates = () => {};
 const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll("'", "''")}'`;
-// The seeded states are set aside and put back; the policy and role are restored to their observed values.
+// The seeded states are set aside and put back; the role is restored to its observed value.
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -47,11 +47,8 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
     restoreSeededStates = setAsideSeededStates(org);
-    // The page shows grants only once the organization answers from stored state.
-    sql(`BEGIN;
-      INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-        VALUES ('${state}','${org}','${actor.id}',1,${grantsSql(writer)},false,'individual');
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
+    sql(`INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
+        VALUES ('${state}','${org}','${actor.id}',1,${grantsSql(writer)},false,'individual')`);
 
     await invoices();
     await settingsLink.click();
@@ -150,7 +147,7 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
   } finally {
     sql(`BEGIN; UPDATE users SET org_role=${literal(actor.org_role)} WHERE id='${actor.id}';
       DELETE FROM person_permission_states WHERE id='${state}';
-      UPDATE organizations SET permission_policy_version=${before.permission_policy_version},
+      UPDATE organizations SET
         ${columns.map(column => `${column}=${literal(before[column])}`).join(', ')}
         WHERE id='${org}'; COMMIT;`);
     restoreSeededStates();

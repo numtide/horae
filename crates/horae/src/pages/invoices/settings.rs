@@ -391,6 +391,7 @@ mod tests {
             catalog_version,
             grants: grants.to_vec(),
             is_administrator,
+            profile: None,
             access_revision: 1,
             person_revision: 1,
             managed_person_ids: Vec::new(),

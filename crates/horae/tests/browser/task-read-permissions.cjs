@@ -15,7 +15,6 @@ const id = n => `019f4200-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const project = id(1), client = id(2), historical = id(3), enabled = id(4), unlinked = id(5), timer = id(6);
 const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
 const array = values => `ARRAY[${values.map(value => `'${value}'`).join(',')}]`;
-assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
 assert.equal(sql(`SELECT count(*) FROM time_entries WHERE user_id='${actor.id}' AND is_running`), '0');
 let restoreSeededStates = () => {};
 
@@ -61,8 +60,7 @@ let restoreSeededStates = () => {};
       INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable,is_running,started_at)
         VALUES ('${timer}','${org}','${actor.id}','${project}','${historical}',CURRENT_DATE,0,true,true,now());
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-        VALUES ('${id(9)}','${org}','${actor.id}',1,${array(floor)},false,'individual');
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
+        VALUES ('${id(9)}','${org}','${actor.id}',1,${array(floor)},false,'individual'); COMMIT;`);
     const response = identities();
     await page.goto(`${base}/`);
     const rows = await (await response).json();
@@ -121,7 +119,7 @@ let restoreSeededStates = () => {};
     throw error;
   } finally {
     await browser.close();
-    sql(`BEGIN; UPDATE organizations SET permission_policy_version=0 WHERE id='${org}';
+    sql(`BEGIN;
       DELETE FROM person_permission_states WHERE id='${id(9)}';
       DELETE FROM time_entries WHERE project_id='${project}';
       DELETE FROM assignments WHERE project_id='${project}';

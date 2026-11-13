@@ -16,7 +16,6 @@ use dioxus::router::components::HistoryProvider;
 use dioxus_html::SerializedHtmlEventConverter;
 use futures_util::FutureExt;
 use horae_core::permissions::catalog::Permission;
-use horae_core::types::OrgRole;
 use tokio::sync::oneshot;
 
 #[path = "../src/components/admin_shell.rs"]
@@ -34,13 +33,20 @@ mod models {
     pub use super::{own_permissions_model as own_permissions, user_model as user};
 }
 
-type AuthResponse = Result<User, ServerFnError>;
+type AuthResponse = Result<Access, ServerFnError>;
 
-struct User(OrgRole);
+/// The stored permissions a controlled `get_my_permissions` answers with.
+struct Access {
+    administrator: bool,
+    grants: Vec<Permission>,
+}
 
-impl User {
-    fn is_admin(&self) -> bool {
-        self.0 == OrgRole::Admin
+impl Access {
+    fn new(administrator: bool, grants: &[Permission]) -> Self {
+        Self {
+            administrator,
+            grants: grants.to_vec(),
+        }
     }
 }
 
@@ -55,6 +61,7 @@ struct Probe {
     future_catalog: bool,
     canonical_requests: Rc<Cell<usize>>,
     me_requests: Rc<Cell<usize>>,
+    /// Answer `get_my_permissions` at once instead of waiting for a response.
     canonical: Option<(bool, Vec<Permission>)>,
     /// The People panel's router and scope, and the shared session it sees.
     panel: Rc<Cell<Option<(Navigator, ScopeId, session::Session)>>>,
@@ -158,13 +165,18 @@ async fn failed_user_does_not_mount_admin_content() {
 }
 
 #[tokio::test]
-async fn members_and_managers_never_mount_admin_content() {
-    for role in [OrgRole::Member, OrgRole::Manager] {
+async fn people_without_a_people_grant_never_mount_admin_content() {
+    for access in [
+        Access::new(false, &[]),
+        Access::new(false, &[Permission::TaskReadAll]),
+        // The Administrator identity is not a People grant.
+        Access::new(true, &[]),
+    ] {
         let probe = Probe::default();
         let response = probe.request();
         let mut dom = start(&probe);
         response
-            .send(Ok(User(role)))
+            .send(Ok(access))
             .unwrap_or_else(|_| panic!("auth request was dropped"));
         settle(&mut dom);
         assert_panel_hidden(&dom, &probe);
@@ -178,13 +190,13 @@ async fn members_and_managers_never_mount_admin_content() {
 }
 
 #[tokio::test]
-async fn resolved_admin_mounts_the_workspace_and_outlet() {
+async fn resolved_people_reader_mounts_the_workspace_and_outlet() {
     let probe = Probe::default();
     let response = probe.request();
     let mut dom = start(&probe);
     assert_panel_hidden(&dom, &probe);
     response
-        .send(Ok(User(OrgRole::Admin)))
+        .send(Ok(Access::new(false, &[Permission::PeopleReadAll])))
         .unwrap_or_else(|_| panic!("auth request was dropped"));
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
@@ -239,7 +251,7 @@ async fn retry_waits_for_fresh_authorization_then_recovers() {
     );
 
     response
-        .send(Ok(User(OrgRole::Admin)))
+        .send(Ok(Access::new(false, &[Permission::PeopleReadAll])))
         .unwrap_or_else(|_| panic!("retry request was dropped"));
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
@@ -263,6 +275,7 @@ mod server_fns {
             catalog_version,
             grants,
             is_administrator,
+            profile: None,
             access_revision: 1,
             person_revision: 1,
             managed_person_ids: Vec::new(),
@@ -270,24 +283,11 @@ mod server_fns {
         }
     }
 
-    fn current(User(org_role): User) -> CurrentUser {
-        CurrentUser {
-            id: uuid::Uuid::nil(),
-            org_id: uuid::Uuid::nil(),
-            email: "admin@example.test".into(),
-            name: "Admin".into(),
-            org_role,
-            timezone: None,
-            workspace_timezone: "UTC".into(),
-            utc_offset_seconds: 0,
-        }
-    }
-
     pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
         Ok(chrono::Weekday::Mon)
     }
 
-    pub async fn get_my_permissions() -> Result<Option<OwnPermissions>, ServerFnError> {
+    pub async fn get_my_permissions() -> Result<OwnPermissions, ServerFnError> {
         let probe = consume_context::<Probe>();
         probe
             .canonical_requests
@@ -295,49 +295,35 @@ mod server_fns {
         if probe.own_error {
             return Err(ServerFnError::new("private projection error"));
         }
+        let version = horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION
+            + u32::from(probe.future_catalog);
         if let Some((is_administrator, grants)) = probe.canonical.clone() {
-            return Ok(Some(own(
-                horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION
-                    + u32::from(probe.future_catalog),
-                is_administrator,
-                grants,
-            )));
-        }
-        if !probe.audit {
-            return Ok(None);
+            return Ok(own(version, is_administrator, grants));
         }
         let reply = probe
             .responses
             .borrow_mut()
             .pop_front()
-            .expect("unexpected canonical read");
+            .expect("unexpected permission read");
         reply
             .await
-            .expect("resolve canonical authorization")
-            .map(|user| {
-                Some(own(
-                    horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION,
-                    user.is_admin(),
-                    vec![],
-                ))
-            })
+            .expect("test must resolve the permission read")
+            .map(|access| own(version, access.administrator, access.grants))
     }
 
+    /// The shell decides from the permissions alone; the identity answers at once.
     pub async fn get_me() -> Result<CurrentUser, ServerFnError> {
         let probe = consume_context::<Probe>();
         probe.me_requests.set(probe.me_requests.get() + 1);
-        if probe.audit {
-            return Ok(current(User(OrgRole::Member)));
-        }
-        let response = probe
-            .responses
-            .borrow_mut()
-            .pop_front()
-            .expect("unexpected auth request");
-        response
-            .await
-            .expect("test must resolve the auth request")
-            .map(current)
+        Ok(CurrentUser {
+            id: uuid::Uuid::nil(),
+            org_id: uuid::Uuid::nil(),
+            email: "admin@example.test".into(),
+            name: "Admin".into(),
+            timezone: None,
+            workspace_timezone: "UTC".into(),
+            utc_offset_seconds: 0,
+        })
     }
 
     pub async fn get_org_name() -> Result<String, ServerFnError> {
@@ -454,7 +440,7 @@ mod route {
 }
 
 #[tokio::test]
-async fn audit_route_uses_canonical_authority_without_replacing_legacy_page_checks() {
+async fn audit_route_follows_the_administrator_identity() {
     for allowed in [true, false] {
         let probe = Probe {
             audit: true,
@@ -464,11 +450,7 @@ async fn audit_route_uses_canonical_authority_without_replacing_legacy_page_chec
         let mut dom = start(&probe);
         assert_panel_hidden(&dom, &probe);
         response
-            .send(Ok(User(if allowed {
-                OrgRole::Admin
-            } else {
-                OrgRole::Member
-            })))
+            .send(Ok(Access::new(allowed, &[])))
             .unwrap_or_else(|_| panic!("audit request dropped"));
         settle(&mut dom);
         assert_eq!(probe.canonical_requests.get(), 1);
@@ -477,15 +459,6 @@ async fn audit_route_uses_canonical_authority_without_replacing_legacy_page_chec
             allowed
         );
     }
-    let probe = Probe::default();
-    let response = probe.request();
-    let mut dom = start(&probe);
-    response
-        .send(Ok(User(OrgRole::Member)))
-        .unwrap_or_else(|_| panic!("legacy request dropped"));
-    settle(&mut dom);
-    assert_panel_hidden(&dom, &probe);
-    assert_eq!(probe.canonical_requests.get(), 1);
 }
 
 #[tokio::test]
@@ -507,7 +480,7 @@ async fn audit_gate_hides_internal_authentication_failures() {
 }
 
 #[tokio::test]
-async fn canonical_people_does_not_require_a_legacy_admin_role() {
+async fn people_opens_with_either_people_read_grant() {
     for (administrator, grant) in [
         (true, Permission::PeopleReadAll),
         (false, Permission::PeopleReadManaged),
@@ -516,56 +489,44 @@ async fn canonical_people_does_not_require_a_legacy_admin_role() {
             canonical: Some((administrator, vec![grant])),
             ..Probe::default()
         };
-        let reply = probe.request();
-        let mut dom = start(&probe);
-        reply
-            .send(Ok(User(OrgRole::Member)))
-            .unwrap_or_else(|_| panic!("identity request dropped"));
-        settle(&mut dom);
+        let dom = start(&probe);
         assert!(dioxus::ssr::render(&dom).contains("Administrative panel"));
         assert_eq!(probe.panel_mounts.get(), 1);
     }
 }
 
 #[tokio::test]
-async fn legacy_admin_cannot_bypass_canonical_people_scope() {
-    let probe = Probe {
-        canonical: Some((false, vec![])),
-        ..Probe::default()
-    };
-    let reply = probe.request();
-    let mut dom = start(&probe);
-    reply
-        .send(Ok(User(OrgRole::Admin)))
-        .unwrap_or_else(|_| panic!("identity request dropped"));
-    settle(&mut dom);
-    assert_panel_hidden(&dom, &probe);
-}
-
-#[tokio::test]
-async fn importers_preserves_legacy_authority_when_canonical_projection_fails() {
+async fn importers_follow_the_administrator_identity() {
     for allowed in [false, true] {
         let probe = Probe {
             importers: true,
-            own_error: true,
             ..Probe::default()
         };
         let reply = probe.request();
         let mut dom = start(&probe);
+        // Every grant short of the identity is not enough.
+        let grants = if allowed { &[][..] } else { Permission::ALL };
         reply
-            .send(Ok(User(if allowed {
-                OrgRole::Admin
-            } else {
-                OrgRole::Member
-            })))
-            .unwrap_or_else(|_| panic!("identity read dropped"));
+            .send(Ok(Access::new(allowed, grants)))
+            .unwrap_or_else(|_| panic!("permission read dropped"));
         settle(&mut dom);
         let html = dioxus::ssr::render(&dom);
-        assert_eq!(html.contains("Importer panel"), allowed);
-        assert!(!html.contains("/admin/users"));
-        assert!(!html.contains("/admin/audit"));
-        assert!(!html.contains("private projection error"));
+        assert_eq!(html.contains("Importer panel"), allowed, "{html}");
     }
+}
+
+#[tokio::test]
+async fn importers_close_when_the_permissions_cannot_be_read() {
+    let probe = Probe {
+        importers: true,
+        own_error: true,
+        ..Probe::default()
+    };
+    let dom = start(&probe);
+    let html = dioxus::ssr::render(&dom);
+    assert!(!html.contains("Importer panel"), "{html}");
+    assert!(html.contains("Could not verify workspace access"), "{html}");
+    assert!(!html.contains("private projection error"));
 }
 
 #[tokio::test]
@@ -577,12 +538,7 @@ async fn failed_or_future_people_projection_keeps_only_recovery() {
             canonical: Some((true, vec![Permission::PeopleReadAll])),
             ..Probe::default()
         };
-        let reply = probe.request();
-        let mut dom = start(&probe);
-        reply
-            .send(Ok(User(OrgRole::Admin)))
-            .unwrap_or_else(|_| panic!("identity read dropped"));
-        settle(&mut dom);
+        let dom = start(&probe);
         assert_panel_hidden(&dom, &probe);
         let html = dioxus::ssr::render(&dom);
         assert!(html.contains("Could not verify workspace access"));
@@ -592,18 +548,15 @@ async fn failed_or_future_people_projection_keeps_only_recovery() {
 }
 
 fn people_and_tasks_admin() -> (Probe, VirtualDom) {
-    let probe = Probe {
-        canonical: Some((
-            true,
-            vec![Permission::PeopleReadAll, Permission::TaskReadAll],
-        )),
-        ..Probe::default()
-    };
+    let probe = Probe::default();
     let reply = probe.request();
     let mut dom = start(&probe);
     reply
-        .send(Ok(User(OrgRole::Admin)))
-        .unwrap_or_else(|_| panic!("identity request dropped"));
+        .send(Ok(Access::new(
+            true,
+            &[Permission::PeopleReadAll, Permission::TaskReadAll],
+        )))
+        .unwrap_or_else(|_| panic!("permission read dropped"));
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("Administrative panel"), "{html}");
@@ -647,7 +600,10 @@ async fn a_session_refresh_keeps_the_open_panel_until_the_answer_arrives() {
     assert!(html.contains("Administrative panel"), "{html}");
     assert!(html.contains("Test workspace"), "{html}");
     reply
-        .send(Ok(User(OrgRole::Admin)))
+        .send(Ok(Access::new(
+            true,
+            &[Permission::PeopleReadAll, Permission::TaskReadAll],
+        )))
         .unwrap_or_else(|_| panic!("refresh request dropped"));
     settle(&mut dom);
     let html = dioxus::ssr::render(&dom);

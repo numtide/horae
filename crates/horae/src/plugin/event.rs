@@ -177,14 +177,13 @@ app_events! {
         org_id: Uuid,
         user: UserPayload,
     },
-    // Nothing emits this since roles gave way to permission profiles; it stays
-    // so manifests that subscribe to the hook still load.
-    #[serde(rename = "user_role_changed")]
-    UserRoleChanged {
+    // An Administrator saved a change to the person's permissions in the
+    // permission editor; `user` carries the state after the save.
+    #[serde(rename = "user_permissions_changed")]
+    UserPermissionsChanged {
         occurred_at: DateTime<Utc>,
         org_id: Uuid,
         user: UserPayload,
-        previous_role: String,
     },
     #[serde(rename = "user_deactivated")]
     UserDeactivated {
@@ -275,7 +274,12 @@ pub struct UserPayload {
     pub id: Uuid,
     pub email: String,
     pub name: String,
-    pub org_role: String,
+    /// The stored Administrator identity, which no grant confers.
+    pub is_administrator: bool,
+    /// The built-in profile's label or the template's name the person's
+    /// permissions come from; `None` for individually chosen grants or a
+    /// person without stored permissions.
+    pub profile: Option<String>,
     /// How the user authenticated — set on login events, and on the account
     /// creation a first OIDC sign-in performs; omitted otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -491,24 +495,40 @@ mod tests {
     }
 
     #[test]
-    fn role_change_event_carries_previous_role() {
-        let event = AppEvent::UserRoleChanged {
+    fn permissions_change_event_carries_the_profile_and_identity() {
+        let event = AppEvent::UserPermissionsChanged {
             occurred_at: DateTime::from_timestamp(0, 0).unwrap(),
             org_id: Uuid::nil(),
             user: UserPayload {
                 id: Uuid::nil(),
                 email: "sam@acme.test".into(),
                 name: "Sam".into(),
-                org_role: "manager".into(),
+                is_administrator: false,
+                profile: Some("Project Manager".into()),
                 method: None,
             },
-            previous_role: "member".into(),
         };
         let json = event.to_json();
-        assert_eq!(event.hook_name(), "user_role_changed");
-        assert!(json.contains("\"previous_role\":\"member\""));
+        assert_eq!(event.hook_name(), "user_permissions_changed");
+        assert!(json.contains("\"profile\":\"Project Manager\""));
+        assert!(json.contains("\"is_administrator\":false"));
+        assert!(!json.contains("org_role"));
         // The login-only `method` field is omitted for admin user events.
         assert!(!json.contains("\"method\""));
+    }
+
+    #[test]
+    fn individual_permissions_have_no_profile() {
+        let user = UserPayload {
+            id: Uuid::nil(),
+            email: "sam@acme.test".into(),
+            name: "Sam".into(),
+            is_administrator: true,
+            profile: None,
+            method: None,
+        };
+        let json = serde_json::to_string(&user).unwrap();
+        assert!(json.contains("\"profile\":null"), "{json}");
     }
 
     #[test]

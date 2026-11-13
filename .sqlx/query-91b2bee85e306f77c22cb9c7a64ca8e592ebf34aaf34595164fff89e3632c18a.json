@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE person_permission_states\n            SET source = 'template', built_in_profile = NULL, template_id = $2,\n                applied_template_revision = 0\n          WHERE user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "91b2bee85e306f77c22cb9c7a64ca8e592ebf34aaf34595164fff89e3632c18a"
+}

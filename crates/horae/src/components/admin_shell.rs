@@ -3,7 +3,6 @@ use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 
 use crate::components::session::use_session;
 use crate::models::own_permissions::OwnPermissions;
-use crate::models::user::CurrentUser;
 use crate::pages::timesheet::{Anchor, CalSpan, ViewMode};
 use crate::route::Route;
 use crate::server_fns;
@@ -36,61 +35,31 @@ impl WorkspaceAccess {
     }
 }
 
-/// Which workspace sections to offer, from the shared session; `None` until both
-/// halves have loaded and `Err` when access cannot be determined. These are
-/// navigation hints; every reader/command authorizes afresh.
+/// Which workspace sections to offer, from the session's stored permissions;
+/// `None` until they have loaded and `Err` when access cannot be determined.
+/// These are navigation hints; every reader/command authorizes afresh.
 fn workspace_access(
-    section: Section,
-    own: Option<&Result<Option<OwnPermissions>, ServerFnError>>,
-    me: Option<&Result<CurrentUser, ServerFnError>>,
+    own: Option<&Result<OwnPermissions, ServerFnError>>,
 ) -> Option<Result<WorkspaceAccess, ()>> {
-    let (own, me) = (own?, me?);
-    let Ok(me) = me else {
-        return Some(Err(()));
-    };
-    let legacy_admin = me.is_admin();
-    let own = match own {
-        Ok(Some(own)) if own.catalog_version != PERMISSION_CATALOG_VERSION => Err(()),
-        Ok(own) => Ok(own.as_ref()),
-        Err(_) => Err(()),
-    };
-    // Importers stay reachable for legacy admins when permission state is
-    // unavailable.
-    if section == Section::Importers && own.is_err() {
-        return Some(Ok(WorkspaceAccess {
-            people: false,
-            settings: false,
-            audit: false,
-            importers: legacy_admin,
-        }));
-    }
-    Some(own.map(|own| match own {
-        Some(own) => WorkspaceAccess {
+    Some(match own? {
+        Ok(own) if own.catalog_version == PERMISSION_CATALOG_VERSION => Ok(WorkspaceAccess {
             people: own.grants.contains(&Permission::PeopleReadAll)
                 || own.grants.contains(&Permission::PeopleReadManaged),
             settings: own.grants.contains(&Permission::CompanyWrite),
             audit: own.is_administrator,
-            importers: legacy_admin,
-        },
-        None => WorkspaceAccess {
-            people: legacy_admin,
-            settings: false,
-            audit: false,
-            importers: legacy_admin,
-        },
-    }))
+            importers: own.is_administrator,
+        }),
+        _ => Err(()),
+    })
 }
 
 /// The first section the person may open, in sub-navigation order, so an entry
 /// into the admin area never lands on "Access unavailable". `None` while loading
 /// or when no section is open.
 pub(crate) fn first_admin_route(
-    own: Option<&Result<Option<OwnPermissions>, ServerFnError>>,
-    me: Option<&Result<CurrentUser, ServerFnError>>,
+    own: Option<&Result<OwnPermissions, ServerFnError>>,
 ) -> Option<Route> {
-    // Asking as Importers keeps the shell's fallback for legacy admins whose
-    // permission state is unavailable.
-    let access = workspace_access(Section::Importers, own, me)?.ok()?;
+    let access = workspace_access(own)?.ok()?;
     [
         (access.people, Route::AdminUsers {}),
         (access.settings, Route::WorkspaceSettings {}),
@@ -124,14 +93,9 @@ pub fn AdminShell() -> Element {
     // or re-reading permissions never unmounts the open panel; server functions
     // still independently enforce access to every operation. A retry after a
     // failure shows as pending rather than repeating the old error.
-    let refreshing = session.me.state()() != UseResourceState::Ready
-        || session.permissions.state()() != UseResourceState::Ready;
-    let access = workspace_access(
-        section,
-        session.permissions.read().as_ref(),
-        session.me.read().as_ref(),
-    )
-    .filter(|access| access.is_ok() || !refreshing);
+    let refreshing = session.permissions.state()() != UseResourceState::Ready;
+    let access = workspace_access(session.permissions.read().as_ref())
+        .filter(|access| access.is_ok() || !refreshing);
     match access {
         Some(Ok(access)) if access.allows(section) => {
             rsx! { AdminWorkspace { access } }
@@ -237,38 +201,23 @@ fn AdmLink(to: Route, label: String) -> Element {
 
 #[cfg(test)]
 mod tests {
-    use horae_core::types::OrgRole;
-    use uuid::Uuid;
-
     use super::*;
-
-    fn user(org_role: OrgRole) -> Result<CurrentUser, ServerFnError> {
-        Ok(CurrentUser {
-            id: Uuid::nil(),
-            org_id: Uuid::nil(),
-            email: "a@example.com".into(),
-            name: "A".into(),
-            org_role,
-            timezone: None,
-            workspace_timezone: "UTC".into(),
-            utc_offset_seconds: 0,
-        })
-    }
 
     fn canonical(
         grants: Vec<Permission>,
         is_administrator: bool,
         catalog_version: u32,
-    ) -> Result<Option<OwnPermissions>, ServerFnError> {
-        Ok(Some(OwnPermissions {
+    ) -> Result<OwnPermissions, ServerFnError> {
+        Ok(OwnPermissions {
             catalog_version,
             grants,
             is_administrator,
+            profile: None,
             access_revision: 1,
             person_revision: 1,
             managed_person_ids: Vec::new(),
             managed_project_ids: Vec::new(),
-        }))
+        })
     }
 
     /// Access without workspace settings, which only `CompanyWrite` opens.
@@ -282,45 +231,44 @@ mod tests {
     }
 
     #[test]
-    fn waits_for_both_halves_of_the_session() {
-        let admin = user(OrgRole::Admin);
-        let own = Ok(None);
-        assert_eq!(workspace_access(Section::People, None, Some(&admin)), None);
-        assert_eq!(workspace_access(Section::People, Some(&own), None), None);
+    fn waits_for_the_permissions_to_load() {
+        assert_eq!(workspace_access(None), None);
     }
 
     #[test]
-    fn policy_zero_follows_the_legacy_role() {
-        let own = Ok(None);
-        let admin = user(OrgRole::Admin);
-        let manager = user(OrgRole::Manager);
-        assert_eq!(
-            workspace_access(Section::People, Some(&own), Some(&admin)),
-            Some(Ok(access(true, false, true)))
-        );
-        assert_eq!(
-            workspace_access(Section::People, Some(&own), Some(&manager)),
-            Some(Ok(access(false, false, false)))
-        );
-    }
-
-    #[test]
-    fn canonical_grants_choose_the_sections() {
-        let member = user(OrgRole::Member);
-        let own = canonical(
+    fn grants_and_the_administrator_identity_choose_the_sections() {
+        let administrator = canonical(
             vec![Permission::PeopleReadManaged, Permission::TaskReadAll],
             true,
             PERMISSION_CATALOG_VERSION,
         );
         assert_eq!(
-            workspace_access(Section::People, Some(&own), Some(&member)),
-            Some(Ok(access(true, true, false)))
+            workspace_access(Some(&administrator)),
+            Some(Ok(access(true, true, true)))
+        );
+        let people = canonical(
+            vec![Permission::PeopleReadAll],
+            false,
+            PERMISSION_CATALOG_VERSION,
+        );
+        assert_eq!(
+            workspace_access(Some(&people)),
+            Some(Ok(access(true, false, false)))
         );
     }
 
+    /// Importers and the audit log follow the stored identity, not the grants
+    /// an administrator usually holds.
     #[test]
-    fn unknown_or_failed_state_fails_closed_except_importers_for_admins() {
-        let admin = user(OrgRole::Admin);
+    fn importers_need_the_administrator_identity() {
+        let everything = canonical(Permission::ALL.to_vec(), false, PERMISSION_CATALOG_VERSION);
+        let access = workspace_access(Some(&everything)).unwrap().unwrap();
+        assert!(!access.allows(Section::Importers));
+        assert!(!access.allows(Section::Audit));
+    }
+
+    #[test]
+    fn unknown_or_failed_state_fails_closed() {
         let newer = canonical(
             vec![Permission::PeopleReadAll],
             true,
@@ -328,35 +276,20 @@ mod tests {
         );
         let failed = Err(ServerFnError::new("unavailable"));
         for own in [&newer, &failed] {
-            assert_eq!(
-                workspace_access(Section::People, Some(own), Some(&admin)),
-                Some(Err(()))
-            );
-            assert_eq!(
-                workspace_access(Section::Importers, Some(own), Some(&admin)),
-                Some(Ok(access(false, false, true)))
-            );
+            assert_eq!(workspace_access(Some(own)), Some(Err(())));
         }
-        let no_identity = Err(ServerFnError::new("unauthorized"));
-        assert_eq!(
-            workspace_access(Section::Importers, Some(&Ok(None)), Some(&no_identity)),
-            Some(Err(()))
-        );
     }
 
     #[test]
     fn workspace_settings_need_company_write() {
         let version = PERMISSION_CATALOG_VERSION;
-        let allowed = |own: &Result<Option<OwnPermissions>, ServerFnError>| {
-            // The legacy role must not matter.
-            [user(OrgRole::Admin), user(OrgRole::Member)].map(|me| {
-                workspace_access(Section::Settings, Some(own), Some(&me))
-                    .and_then(Result::ok)
-                    .is_some_and(|access| access.allows(Section::Settings))
-            })
+        let allowed = |own: &Result<OwnPermissions, ServerFnError>| {
+            workspace_access(Some(own))
+                .and_then(Result::ok)
+                .is_some_and(|access| access.allows(Section::Settings))
         };
         let company = canonical(vec![Permission::CompanyWrite], false, version);
-        assert_eq!(allowed(&company), [true, true]);
+        assert!(allowed(&company));
         for own in [
             // An administrator without the grant, and every other grant.
             canonical(Vec::new(), true, version),
@@ -366,38 +299,33 @@ mod tests {
                 version,
             ),
             canonical(vec![Permission::CompanyWrite], false, version + 1),
-            Ok(None),
             Err(ServerFnError::new("unavailable")),
         ] {
-            assert_eq!(allowed(&own), [false, false], "{own:?}");
+            assert!(!allowed(&own), "{own:?}");
         }
     }
 
     #[test]
     fn first_admin_route_follows_sub_navigation_order() {
-        let admin = user(OrgRole::Admin);
-        let member = user(OrgRole::Member);
         let version = PERMISSION_CATALOG_VERSION;
         // `Route` has no `Debug`, so compare the paths it renders to.
-        let first = |own: &Result<Option<OwnPermissions>, ServerFnError>, me| {
-            first_admin_route(Some(own), Some(me)).map(|route| route.to_string())
+        let first = |own: &Result<OwnPermissions, ServerFnError>| {
+            first_admin_route(Some(own)).map(|route| route.to_string())
         };
         let path = |p: &str| Some(p.to_string());
-        assert_eq!(first(&Ok(None), &admin), path("/admin/users"));
-        assert_eq!(first(&Ok(None), &member), None);
+        let people = canonical(vec![Permission::PeopleReadAll], true, version);
+        assert_eq!(first(&people), path("/admin/users"));
         // Tasks is in the main rail, so the task grant alone opens no admin section.
         let tasks = canonical(vec![Permission::TaskReadAll], false, version);
-        assert_eq!(first(&tasks, &member), None);
+        assert_eq!(first(&tasks), None);
         let floor = canonical(Vec::new(), false, version);
-        assert_eq!(first(&floor, &admin), path("/admin/importers"));
-        assert_eq!(first(&floor, &member), None);
+        assert_eq!(first(&floor), None);
         let company = canonical(vec![Permission::CompanyWrite], false, version);
-        assert_eq!(first(&company, &member), path("/admin/workspace"));
+        assert_eq!(first(&company), path("/admin/workspace"));
         let administrator = canonical(Vec::new(), true, version);
-        assert_eq!(first(&administrator, &member), path("/admin/audit"));
+        assert_eq!(first(&administrator), path("/admin/importers"));
         let failed = Err(ServerFnError::new("unavailable"));
-        assert_eq!(first(&failed, &admin), path("/admin/importers"));
-        assert_eq!(first(&failed, &member), None);
-        assert!(first_admin_route(None, Some(&admin)).is_none(), "loading");
+        assert_eq!(first(&failed), None);
+        assert!(first_admin_route(None).is_none(), "loading");
     }
 }

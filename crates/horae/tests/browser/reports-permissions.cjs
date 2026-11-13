@@ -17,8 +17,6 @@ const actor = JSON.parse(sql(`SELECT row_to_json(u) FROM (SELECT u.id,u.org_id F
   JOIN person_permission_states s ON s.org_id=u.org_id AND s.user_id=u.id
   WHERE u.email='admin@example.com' AND u.active AND s.is_administrator) u`));
 const org = actor.org_id;
-// Leave the organization on whatever policy the seed gave it.
-const seededPolicy = sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`);
 const id = n => `019f3000-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const person = id(1), client = id(2), project = id(3), task = id(4), state = id(5);
 const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expense_write_own']";
@@ -59,9 +57,7 @@ let restoreSeededStates = () => {};
       INSERT INTO time_entries (id,org_id,user_id,project_id,task_id,spent_date,minutes,billable,notes)
         VALUES ('${id(6)}','${org}','${person}','${project}','${task}','${date}',120,false,'Private report note');
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-        VALUES ('${state}','${org}','${actor.id}',1,${floor},false,'individual');
-      -- The scoped entry reader belongs to the time domain and still reads the policy.
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
+        VALUES ('${state}','${org}','${actor.id}',1,${floor},false,'individual'); COMMIT;`);
     requests.length = 0;
     await page.goto(`${base}/reports`);
     await expect(page.locator('#report-refresh')).toBeEnabled();
@@ -538,7 +534,6 @@ let restoreSeededStates = () => {};
     await browser.close();
     sql(`BEGIN;
       UPDATE users SET active=true WHERE id='${actor.id}';
-      UPDATE organizations SET permission_policy_version=${Number(seededPolicy)} WHERE id='${org}';
       DELETE FROM person_permission_states WHERE id='${state}';
       DELETE FROM time_entries WHERE project_id IN ('${project}','${id(9)}');
       DELETE FROM project_tag_links WHERE id='${id(8)}';

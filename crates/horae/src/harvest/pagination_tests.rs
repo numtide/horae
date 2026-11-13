@@ -360,6 +360,7 @@ async fn harvest_pagination_empty_and_out_of_range_pages_keep_the_contract(pool:
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn harvest_pagination_router_preserves_session_and_tenant_guards(pool: PgPool) {
+    use horae_core::permissions::catalog::Permission;
     let ids = seed(&pool, BuiltInProfile::Member).await;
     // Own time only, plus the catalogs, so every collection has an own row.
     provision(
@@ -578,7 +579,7 @@ async fn harvest_project_progress_permissions_cover_counts_pages_and_details(poo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn harvest_task_access_filters_counts_and_preserves_rate_free_history(pool: PgPool) {
+async fn harvest_task_access_follows_the_task_catalog_grant(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
     let other = seed(&pool, BuiltInProfile::Administrator).await;
     let hidden = Uuid::now_v7();

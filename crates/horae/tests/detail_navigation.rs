@@ -11,7 +11,7 @@ use dioxus::prelude::*;
 use dioxus::router::Navigator;
 use dioxus::router::components::HistoryProvider;
 use futures_util::FutureExt;
-use horae_core::types::{InvoiceStatus, OrgRole, ProjectRole};
+use horae_core::types::{InvoiceStatus, ProjectRole};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
@@ -842,8 +842,10 @@ async fn pending_or_failed_project_assignments_never_show_previous_assignments()
 
 // Dependency doubles for page helpers and endpoints. The component, data
 // models, form/table components, router and resource implementation are real.
-fn is_admin(me: &Resource<Result<user::CurrentUser, ServerFnError>>) -> bool {
-    matches!(&*me.read(), Some(Ok(user)) if user.is_admin())
+fn is_administrator(
+    own: &Resource<Result<own_permissions::OwnPermissions, ServerFnError>>,
+) -> bool {
+    matches!(&*own.read(), Some(Ok(own)) if own.is_administrator)
 }
 
 fn loaded<T>(
@@ -898,22 +900,32 @@ mod server_fns {
         pub spent_cents: Option<i64>,
     }
 
-    fn user(id: u128, role: OrgRole) -> CurrentUser {
+    fn user(id: u128) -> CurrentUser {
         CurrentUser {
             id: Uuid::from_u128(id),
             org_id: Uuid::nil(),
             email: format!("user-{id}@example.test"),
             name: format!("User-{id}"),
-            org_role: role,
             timezone: None,
             workspace_timezone: "UTC".into(),
             utc_offset_seconds: 0,
         }
     }
 
+    /// No grants: the pages here decide from their own readers. Only the
+    /// Administrator identity, which offers the Harvest importer, varies.
     pub async fn get_my_permissions()
-    -> Result<Option<super::own_permissions::OwnPermissions>, ServerFnError> {
-        Ok(None)
+    -> Result<super::own_permissions::OwnPermissions, ServerFnError> {
+        Ok(super::own_permissions::OwnPermissions {
+            catalog_version: horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION,
+            grants: Vec::new(),
+            is_administrator: !consume_context::<Probe>().member,
+            profile: None,
+            access_revision: 1,
+            person_revision: 1,
+            managed_person_ids: Vec::new(),
+            managed_project_ids: Vec::new(),
+        })
     }
 
     pub async fn get_org_branding() -> Result<OrgBranding, ServerFnError> {
@@ -932,14 +944,7 @@ mod server_fns {
     }
 
     pub async fn get_me() -> Result<CurrentUser, ServerFnError> {
-        Ok(user(
-            300,
-            if consume_context::<Probe>().member {
-                OrgRole::Member
-            } else {
-                OrgRole::Admin
-            },
-        ))
+        Ok(user(300))
     }
 
     pub async fn get_client_details(id: String) -> ClientDetailsResponse {

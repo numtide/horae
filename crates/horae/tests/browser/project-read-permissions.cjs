@@ -18,7 +18,6 @@ const read = [...floor, 'project_read_managed'];
 const edit = [...read, 'project_write_managed'];
 const grantsSql = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
 const setGrants = grants => sql(`UPDATE person_permission_states SET grants=${grantsSql(grants)} WHERE user_id='${actor.id}'`);
-assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
 let restoreSeededStates = () => {};
 
 (async () => {
@@ -61,8 +60,7 @@ let restoreSeededStates = () => {};
       INSERT INTO project_tasks (project_id,task_id,billable) VALUES ('${project}','${task}',true);
       INSERT INTO project_management_assignments (id,org_id,project_id,manager_id) VALUES ('${id(7)}','${org}','${project}','${actor.id}');
       INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
-        VALUES ('${id(8)}','${org}','${actor.id}',1,${grantsSql(edit)},false,'individual');
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
+        VALUES ('${id(8)}','${org}','${actor.id}',1,${grantsSql(edit)},false,'individual'); COMMIT;`);
 
     const overviewResponse = page.waitForResponse(r => r.url().includes('/api/get_project_overview'));
     await page.goto(`${base}/projects`);
@@ -136,7 +134,6 @@ let restoreSeededStates = () => {};
   } finally {
     await browser.close();
     sql(`BEGIN;
-      UPDATE organizations SET permission_policy_version=0 WHERE id='${org}';
       UPDATE users SET active=true WHERE id='${actor.id}';
       DELETE FROM person_permission_states WHERE id='${id(8)}';
       DELETE FROM project_management_assignments WHERE project_id='${project}';

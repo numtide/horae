@@ -177,8 +177,7 @@ pub(crate) async fn add(
         let user = sqlx::query!(
             r#"INSERT INTO users (id, org_id, email, name, org_role, active)
              VALUES ($1, $2, $3, $4, $5, $6)
-             RETURNING id, email, name, active,
-                       org_role as "org_role: horae_core::types::OrgRole""#,
+             RETURNING id, email, name, active"#,
             Uuid::now_v7(),
             org_id,
             person.email,
@@ -199,7 +198,7 @@ pub(crate) async fn add(
         })?;
         provisioning::provision(tx, org_id, user.id, profile).await?;
         let (person, payload) =
-            identity(user.id, user.email, user.name, user.active, user.org_role);
+            identity(tx, org_id, user.id, user.email, user.name, user.active).await?;
         events.push(AppEvent::UserCreated {
             occurred_at: now,
             org_id,
@@ -277,15 +276,15 @@ pub(crate) async fn set_active(
     let user = sqlx::query!(
         r#"UPDATE users SET active = $3
          WHERE id = $1 AND org_id = $2
-         RETURNING id, email, name, active,
-                   org_role as "org_role: horae_core::types::OrgRole""#,
+         RETURNING id, email, name, active"#,
         user_id,
         org_id,
         active,
     )
     .fetch_one(&mut **tx)
     .await?;
-    let (person, payload) = identity(user.id, user.email, user.name, user.active, user.org_role);
+    let (person, payload) =
+        identity(tx, org_id, user.id, user.email, user.name, user.active).await?;
     let done = Done::new(person);
     // Plugins hear only about archiving; there is no restore event.
     if active_transition(Some(target.active), active) == Some(ActiveTransition::Deactivated) {
@@ -299,23 +298,18 @@ pub(crate) async fn set_active(
     Ok(done)
 }
 
-/// The answer for the caller and the plugin payload for one person. Plugins
-/// still receive `org_role` because the event ABI carries it.
-fn identity(
+/// The answer for the caller and the plugin payload for one person, whose
+/// profile and Administrator identity come from their stored state.
+async fn identity(
+    tx: &mut Tx,
+    org_id: Uuid,
     id: Uuid,
     email: String,
     name: String,
     active: bool,
-    org_role: horae_core::types::OrgRole,
-) -> (UserListItem, UserPayload) {
-    let payload = UserPayload {
-        id,
-        email: email.clone(),
-        name: name.clone(),
-        org_role: org_role.to_string(),
-        method: None,
-    };
-    (
+) -> Result<(UserListItem, UserPayload), OpError> {
+    let payload = crate::server_fns::user_payload(tx, org_id, id, &email, &name).await?;
+    Ok((
         UserListItem {
             id,
             email,
@@ -323,7 +317,7 @@ fn identity(
             active,
         },
         payload,
-    )
+    ))
 }
 
 /// Whether another active administrator remains. Their accounts are locked

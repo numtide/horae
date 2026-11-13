@@ -33,7 +33,7 @@ pub(super) fn OwnPermissionSection() -> Element {
 
 fn permission_content(
     pending: bool,
-    response: &Option<Result<Option<OwnPermissions>, ServerFnError>>,
+    response: &Option<Result<OwnPermissions, ServerFnError>>,
 ) -> Element {
     if pending || response.is_none() {
         return rsx! { p { class: "text-sm text-secondary", role: "status", "Loading your permissions…" } };
@@ -41,14 +41,7 @@ fn permission_content(
     const UNAUTHORIZED: u16 = 401;
     const FORBIDDEN: u16 = 403;
     let own = match response {
-        Some(Ok(Some(own))) if own.catalog_version == PERMISSION_CATALOG_VERSION => own,
-        Some(Ok(None)) => {
-            return rsx! {
-                p { class: "text-sm text-secondary",
-                    "Detailed permissions are not enabled for this workspace. Your existing access is unchanged."
-                }
-            };
-        }
+        Some(Ok(own)) if own.catalog_version == PERMISSION_CATALOG_VERSION => own,
         other => {
             let message = match other {
                 Some(Err(ServerFnError::ServerError {
