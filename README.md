@@ -22,7 +22,8 @@ core crate and is unit-tested in isolation.
 
 - **Timesheets** — Day, Week, and Calendar views with weekly totals and a running timer.
 - **Clients & projects** — manage clients, projects, per-project assignments, tasks, and budgets.
-- **Approvals** — submit, approve, and reject time entries (manager and admin roles; only an admin may approve or reject their own).
+- **Approvals** — submit, approve, and reject time entries (people with approval permissions; only an Administrator may approve or reject their own).
+- **Permissions** — built-in profiles, templates, or individual grants scoped to own, managed, or all, plus an explicit Administrator identity.
 - **Reports** — grouped time reports with CSV and XLSX export.
 - **Invoices** — draft invoices with CSV, XLSX, and PDF export.
 - **Harvest-style API** — a read-only `/harvest/v2/*` subset with session authentication.
@@ -35,11 +36,11 @@ The authenticated SPA is organized by route:
 | `/timesheet/:view` | Day / Week / Calendar timesheet with weekly totals (`/` redirects here) |
 | `/clients`, `/clients/:id` | Client list and detail |
 | `/projects`, `/projects/:id` | Project list and detail with assignments |
-| `/projects/new` | Create a project with a private resumable draft (manager and admin) |
-| `/approvals` | Submit / approve / reject time (manager and admin) |
+| `/projects/new` | Create a project with a private resumable draft (with project creation permission) |
+| `/approvals` | Submit / approve / reject time (with approval permission) |
 | `/reports` | Grouped time reports with CSV / XLSX export |
 | `/invoices`, `/invoices/:id` | Invoice list and detail with CSV / XLSX / PDF export |
-| `/admin/users` | User and task management (admin) |
+| `/admin/users` | People and their permissions (with people permissions) |
 | `/settings` | Organization and application settings |
 
 ## Quick start
@@ -304,7 +305,7 @@ shape.
 
 The command only binds an active account with no binding, or records the issuer on that
 account's existing binding with the same subject. Running it again is safe. It never
-replaces a binding, creates accounts or sessions, or changes roles. Horae cannot undo a
+replaces a binding, creates accounts or sessions, or changes permissions. Horae cannot undo a
 wrong link; that needs direct database administration.
 
 **Upgrading**: accounts linked before this release have a subject but no recorded issuer
