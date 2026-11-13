@@ -1,5 +1,36 @@
 <!--
 Sync Impact Report
+- Version change: 5.0.0 → 6.0.0
+- Bump rationale: MAJOR. The authorization model in Technology & Data Constraints is redefined:
+  the three organization roles (administrator / manager / member) are replaced by stored, scoped
+  permission state (built-in profiles, templates, individual grants and an explicit Administrator
+  identity). The role column, the role type and the policy switch are dropped from the schema
+  (migration 0065), so no role-based authorization remains (spec 015, T008).
+- Modified principles:
+  - IV. Mutations Through Server Functions: title unchanged. Operations check stored permissions
+    instead of "role and permissions"; the operator binding may not change permissions (was
+    roles); sign-in provisioning creates the built-in Member profile with no Administrator
+    identity (was the member role) and may give no other profile or grant (was no other role).
+    The scope of both exceptions is otherwise unchanged.
+- Modified sections:
+  - Technology & Data Constraints: the role-based authorization bullet becomes a bullet on stored
+    permission state; the development bypass rule is unchanged.
+- Added sections: none
+- Removed sections: none
+- Templates checked:
+  - .specify/templates/plan-template.md: Constitution Check takes its gates from this file ✅ (no change)
+  - .specify/templates/spec-template.md: no mandatory-section change ✅
+  - .specify/templates/tasks-template.md: no new principle-driven task type ✅
+  - AGENTS.md: no longer mentions `users.org_role` or the permission policy ✅ (updated)
+  - README.md: links the constitution only ✅ (no change)
+- Follow-up:
+  - specs/001-time-tracking-invoicing/data-model.md and its contracts still describe `org_role`;
+    they are historical feature records and are not rewritten here.
+  - The multi-tenant amendment (spec/multi-tenant-subdomains) was to become 6.0.0; it rebases onto
+    this version and becomes 7.0.0.
+-->
+<!--
+Sync Impact Report (5.0.0)
 - Version change: 4.0.0 → 5.0.0
 - Bump rationale: MAJOR. Principle IV's opening rule is redefined from "through Dioxus `#[server]`
   functions" to "through the shared mutation operations those functions call", and the
@@ -186,7 +217,7 @@ index-friendly identifiers; retaining `org_id` preserves an obvious future path.
 
 All data mutations MUST go through Horae's shared mutation operations: the authorized,
 validated domain operations that Dioxus `#[server]` functions call. Each operation takes the
-acting person and organization, checks their role and permissions, and applies every rule for
+acting person and organization, checks their stored permissions, and applies every rule for
 that change. The two narrow exceptions below are the only writes outside them. The UI MUST NOT
 issue ad-hoc client-side fetches for data reads or writes; it calls server functions.
 
@@ -212,8 +243,8 @@ directly, with the operator's database credentials as its authority.
   or record the issuer on that account's own issuer-less binding when the subject is identical.
   Repeating the exact existing binding is a no-op. It MUST reject a binding held by another
   account and MUST NOT replace a different subject or issuer, or remove a binding.
-- It MUST NOT create accounts, sessions or identity-provider users, change roles or any other user
-  field, or be reachable over HTTP, from the UI or from plugins.
+- It MUST NOT create accounts, sessions or identity-provider users, change permissions or any other
+  user field, or be reachable over HTTP, from the UI or from plugins.
 - The exception does not extend to any other command, field or mutation, and it is not a precedent
   for one.
 
@@ -224,11 +255,12 @@ signature, issuer, audience, nonce and expiry) and before any session exists, in
 - Bind: record the token's issuer and subject on an existing, active account that has no binding,
   only when the token asserts that the account's email is verified.
 - Provision: when the operator has listed the email's domain for automatic provisioning, create
-  one active account with the member role, no rates, and the token's issuer and subject as its
+  one active account with the built-in Member profile, no Administrator identity, no rates, and
+  the token's issuer and subject as its
   binding. The provider MUST assert the email verified, or, only where the operator has
   explicitly opted in, assert nothing about it; an email the provider marks unverified MUST NOT be
   provisioned. No account may already hold the email, in any state.
-- It MUST NOT create any other role, set rates, reactivate an account, replace or remove a
+- It MUST NOT give any other profile or grant, set rates, reactivate an account, replace or remove a
   binding, change any other user field, or create identity-provider users. It MUST NOT be
   reachable from the UI, from plugins or from any other route or command.
 - The exception does not extend to any other handler, field or mutation, and it is not a precedent
@@ -259,8 +291,13 @@ trustworthy; a formatting gate keeps diffs about substance.
 
 - Language: Rust (edition 2024); the web UI compiles to WASM via Dioxus fullstack.
 - Persistence: PostgreSQL 15+ via `sqlx`; schema changes ship as ordered migrations under `migrations/`.
-- Authentication is credential/identity-provider based with role-based authorization
-  (administrator / manager / member); a local development bypass is permitted but MUST be off by default.
+- Authentication is credential/identity-provider based; a local development bypass is permitted but
+  MUST be off by default.
+- Authorization reads each person's stored permission state: scoped grants (own, managed or all)
+  from a built-in profile, an organization template or an individual selection, plus an explicit
+  Administrator identity that no set of grants implies. Every person has exactly one state, written
+  in the same transaction that creates them. There are no organization-wide roles and no second
+  authorization model alongside this one.
 - Plugins (when present) run sandboxed and MUST NOT bypass these principles — in particular, they have
   no direct datastore write access (they use granted host capabilities only).
 
@@ -281,4 +318,4 @@ added principles or materially expanded guidance, PATCH for clarifications. Ever
 Check gate MUST verify compliance before Phase 0, and again after design. Unjustified violations block
 merge. Runtime working guidance for agents lives in `AGENTS.md`.
 
-**Version**: 5.0.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-11-09
+**Version**: 6.0.0 | **Ratified**: 2026-07-10 | **Last Amended**: 2026-11-13
