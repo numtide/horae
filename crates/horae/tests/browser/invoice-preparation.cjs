@@ -15,7 +15,7 @@ sql(`BEGIN;
     WHERE code IN ('ACME-01', 'TECH-01');
   INSERT INTO project_settings (id, org_id, project_id, creator_id, rate_mode,
     fee_mode, fee_amount_cents, terms_days, tax1_bps, po_number)
-    SELECT id, org_id, id, (SELECT id FROM users WHERE org_role = 'admin' ORDER BY id LIMIT 1),
+    SELECT id, org_id, id, (SELECT id FROM users WHERE email = 'admin@example.com'),
       'person', 'single', CASE code WHEN 'ACME-01' THEN 12500 ELSE 90000 END,
       CASE code WHEN 'ACME-01' THEN 14 ELSE 90 END,
       CASE code WHEN 'ACME-01' THEN 2100 ELSE 0 END, code
@@ -24,6 +24,11 @@ sql(`BEGIN;
 const project = JSON.parse(sql(`SELECT row_to_json(p) FROM (SELECT id, name FROM projects WHERE code = 'ACME-01') p`));
 const invoicesBefore = Number(sql('SELECT count(*) FROM invoices'));
 const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
+// The invoice pages read the session's own permissions, which an organization
+// still on the legacy policy does not report. Restored when the suite ends.
+const org = sql(`SELECT org_id FROM projects WHERE id='${project.id}'`);
+const policy = sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`);
+sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'`);
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
@@ -514,8 +519,16 @@ const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
     await expect(balances).toContainText('Remaining: EUR -2.00');
     assert.ok(preparationRequest);
     const actor = sql("SELECT id FROM users WHERE email = 'admin@example.com'");
+    // Take the invoice grants away as the permission editor does (organization
+    // row first) and put the seeded state back afterwards.
+    const saved = sql(`SELECT grants::text FROM person_permission_states WHERE user_id='${actor}'`);
     try {
-      sql(`UPDATE users SET org_role='member' WHERE id='${actor}'`);
+      sql(`BEGIN;
+        UPDATE organizations SET access_revision = access_revision + 1
+          WHERE id = (SELECT org_id FROM users WHERE id='${actor}');
+        UPDATE person_permission_states SET grants = array_remove(array_remove(grants,
+          'invoice_write_all'), 'invoice_read_all') WHERE user_id='${actor}';
+        COMMIT;`);
       const response = await context.request.post(preparationRequest.url(), {
         headers: { 'content-type': preparationRequest.headers()['content-type'] }, data: preparationRequest.postData(),
       });
@@ -528,7 +541,7 @@ const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
       await readsFinished();
       await expect(page.getByRole('region', { name: 'Project fee balances', exact: true })).toHaveCount(0);
     } finally {
-      sql(`UPDATE users SET org_role='admin' WHERE id='${actor}'`);
+      sql(`UPDATE person_permission_states SET grants='${saved}' WHERE user_id='${actor}'`);
     }
     const monthlyProject = JSON.parse(sql("SELECT row_to_json(p) FROM (SELECT id, name FROM projects WHERE code='TECH-01') p"));
     sql(`UPDATE project_settings SET fee_mode='monthly', monthly_day='last' WHERE project_id='${monthlyProject.id}'`);
@@ -547,5 +560,6 @@ const feesBefore = Number(sql('SELECT count(*) FROM project_fee_occurrences'));
     throw error;
   } finally {
     await browser.close();
+    sql(`UPDATE organizations SET permission_policy_version=${policy} WHERE id='${org}'`);
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

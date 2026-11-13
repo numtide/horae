@@ -245,22 +245,28 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         };
         wait_for_blocked(pool, pid).await;
         // Everyone reads their own time, so a report download is revoked by
-        // deactivation; an invoice download still by the role.
-        sqlx::query!(
-            "UPDATE users SET org_role='member', active=NOT $2 WHERE id=$1",
-            ids.user_id,
-            report
-        )
-        .execute(&mut *writer)
-        .await
-        .unwrap();
+        // deactivation; an invoice download by its grants.
+        if report {
+            sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+                .execute(&mut *writer)
+                .await
+                .unwrap();
+        } else {
+            crate::ops::testing::set_grants(&mut writer, &ids, &[])
+                .await
+                .unwrap();
+        }
         writer.commit().await.unwrap();
         denied(pending.await.unwrap(), StatusCode::FORBIDDEN).await;
-        sqlx::query!(
-            "UPDATE users SET org_role='manager', active=true WHERE id=$1",
-            ids.user_id
+        sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        crate::ops::testing::set_grants(
+            &mut pool.acquire().await.unwrap(),
+            &ids,
+            BuiltInProfile::ExecutiveManager.direct_permissions(),
         )
-        .execute(pool)
         .await
         .unwrap();
     }

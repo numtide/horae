@@ -161,15 +161,6 @@ pub(crate) async fn require_admin() -> Result<crate::models::User, ServerFnError
     Ok(user)
 }
 
-#[cfg(feature = "server")]
-pub(crate) async fn require_manager() -> Result<crate::models::User, ServerFnError> {
-    let user = require_user().await?;
-    if !user.is_manager_or_above() {
-        return Err(forbidden("Manager access required"));
-    }
-    Ok(user)
-}
-
 // ── Plugin event dispatch helpers ────────────────────────────────────────────
 // Fire-and-forget: spawn dispatch so the core action is never blocked (FR-021).
 

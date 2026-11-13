@@ -1,11 +1,14 @@
-//! Current manager authority for materialized, snapshot-consistent reads.
+//! Current permission-state authority for materialized, snapshot-consistent reads.
 
+use horae_core::permissions::catalog::Permission;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::{OrgRole, ServerFnError, conflict, forbidden, server_err};
+use super::{ServerFnError, conflict, forbidden, server_err};
+use crate::ops::{Actor, Caller, OpError};
 
 const MAX_ATTEMPTS: usize = 3;
+const ACCESS_REQUIRED: &str = "Current access is required";
 
 #[cfg(test)]
 mod reader_tests;
@@ -15,39 +18,30 @@ fn database_error(error: sqlx::Error) -> ServerFnError {
     server_err("Unable to prepare a consistent snapshot")
 }
 
+/// Whether the actor's stored state grants every `required` permission. The
+/// actor loads with the organization, then the person, locked `FOR SHARE`.
 async fn authorize(
     tx: &mut Transaction<'_, Postgres>,
     org_id: Uuid,
     actor_id: Uuid,
-) -> Result<bool, sqlx::Error> {
-    match sqlx::query!(
-        "SELECT id FROM organizations WHERE id = $1 FOR SHARE",
-        org_id
-    )
-    .fetch_one(&mut **tx)
-    .await
-    {
-        Ok(_) => {}
-        Err(sqlx::Error::RowNotFound) => return Ok(false),
-        Err(error) => return Err(error),
-    }
-    let role = sqlx::query_scalar!(
-        r#"SELECT org_role as "role: OrgRole" FROM users WHERE id=$1 AND org_id=$2 AND active FOR SHARE"#,
-        actor_id, org_id,
-    ).fetch_optional(&mut **tx).await?;
-    Ok(role.is_some_and(|role| role.is_manager_or_above()))
+    required: &[Permission],
+) -> Result<bool, OpError> {
+    let actor = Actor::load(tx, Caller::session(org_id, actor_id)).await?;
+    Ok(required.iter().all(|&permission| actor.has(permission)))
 }
 
 /// Use session-derived IDs. Materialize and commit before external/client waits.
-/// This preserves the legacy manager boundary, not canonical grant enforcement.
+/// The transaction holds every `required` grant from the actor's stored
+/// permission state until it ends.
 ///
 /// No INSERT/UPDATE/DELETE/nextval on the returned transaction: it commits
 /// asynchronously. Writes belong in their own transaction.
-pub(crate) async fn manager(
-    pool: &PgPool,
+pub(crate) async fn authorized<'p>(
+    pool: &'p PgPool,
     org_id: Uuid,
     actor_id: Uuid,
-) -> Result<Transaction<'_, Postgres>, ServerFnError> {
+    required: &[Permission],
+) -> Result<Transaction<'p, Postgres>, ServerFnError> {
     for _ in 0..MAX_ATTEMPTS {
         let mut tx = pool
             .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ WRITE")
@@ -76,7 +70,7 @@ pub(crate) async fn manager(
         .fetch_one(&mut *tx)
         .await
         .map_err(database_error)?;
-        match authorize(&mut tx, org_id, actor_id).await {
+        match authorize(&mut tx, org_id, actor_id, required).await {
             Ok(true) => {
                 sqlx::query!(
                     "SELECT set_config('lock_timeout', $1, true)",
@@ -89,18 +83,21 @@ pub(crate) async fn manager(
             }
             Ok(false) => {
                 tx.rollback().await.map_err(database_error)?;
-                return Err(forbidden("Active manager access required"));
+                return Err(forbidden(ACCESS_REQUIRED));
+            }
+            // `Actor::load` reports a serialization failure as a conflict: an
+            // access change committed after this snapshot began. Start a new
+            // snapshot; retrying just its query would remain stale.
+            Err(OpError::Conflict(_)) => {
+                tx.rollback().await.map_err(database_error)?;
+            }
+            Err(OpError::Internal(_)) => {
+                tx.rollback().await.map_err(database_error)?;
+                return Err(server_err("Unable to prepare a consistent snapshot"));
             }
             Err(error) => {
                 tx.rollback().await.map_err(database_error)?;
-                if error
-                    .as_database_error()
-                    .is_none_or(|error| error.code().as_deref() != Some("40001"))
-                {
-                    return Err(database_error(error));
-                }
-                // A legacy actor update need not advance the organization row.
-                // Start a new snapshot; retrying just its query remains stale.
+                return Err(error.into());
             }
         }
     }
