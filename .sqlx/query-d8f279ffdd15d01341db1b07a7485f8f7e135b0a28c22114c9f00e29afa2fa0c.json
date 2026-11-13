@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)\n         VALUES ($1,$2,$3,1,$4,$5,'individual')\n         ON CONFLICT (org_id,user_id) DO UPDATE\n         SET grants = EXCLUDED.grants, is_administrator = EXCLUDED.is_administrator,\n             source = 'individual', built_in_profile = NULL, template_id = NULL,\n             applied_template_revision = NULL,\n             revision = person_permission_states.revision + 1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "TextArray",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d8f279ffdd15d01341db1b07a7485f8f7e135b0a28c22114c9f00e29afa2fa0c"
+}
