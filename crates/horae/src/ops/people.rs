@@ -175,14 +175,13 @@ pub(crate) async fn add(
             }
         }
         let user = sqlx::query!(
-            r#"INSERT INTO users (id, org_id, email, name, org_role, active)
-             VALUES ($1, $2, $3, $4, $5, $6)
+            r#"INSERT INTO users (id, org_id, email, name, active)
+             VALUES ($1, $2, $3, $4, $5)
              RETURNING id, email, name, active"#,
             Uuid::now_v7(),
             org_id,
             person.email,
             person.name,
-            provisioning::placeholder_role(profile) as horae_core::types::OrgRole,
             activation == Activation::Active,
         )
         .fetch_one(&mut **tx)

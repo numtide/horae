@@ -5,7 +5,6 @@
 //! `horae seed`, which is for trying the app out, not for standing one up.
 
 use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -51,12 +50,11 @@ pub async fn run(
 
     let user_id = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, $4)",
         user_id,
         org_id,
         admin_email,
         admin_name,
-        provisioning::placeholder_role(BuiltInProfile::Administrator) as OrgRole,
     )
     .execute(&mut *tx)
     .await?;
@@ -72,6 +70,7 @@ pub async fn run(
 #[cfg(test)]
 mod tests {
     use super::run;
+    use horae_core::permissions::catalog::BuiltInProfile;
     use sqlx::PgPool;
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -88,8 +87,7 @@ mod tests {
         assert_eq!(org[0].name, "Contoso");
 
         let users = sqlx::query!(
-            r#"SELECT org_id, email, name, org_role as "role: horae_core::types::OrgRole", active
-               FROM users"#
+            "SELECT id, org_id, email, name, active FROM users"
         )
         .fetch_all(&pool)
         .await
@@ -98,7 +96,10 @@ mod tests {
         assert_eq!(users[0].org_id, org[0].id);
         assert_eq!(users[0].email, "ops@contoso.example");
         assert_eq!(users[0].name, "Ops");
-        assert_eq!(users[0].role, horae_core::types::OrgRole::Admin);
+        assert_eq!(
+            crate::server_fns::test_seed::built_in_profile(&pool, org[0].id, users[0].id).await,
+            Some((BuiltInProfile::Administrator, true))
+        );
         assert!(users[0].active);
 
         // No demo content came along for the ride.

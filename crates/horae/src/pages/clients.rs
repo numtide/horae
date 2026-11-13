@@ -25,15 +25,15 @@ mod form;
 #[path = "clients/status.rs"]
 mod status;
 
-/// The account and permission policy a Clients page first loaded under.
-type Binding = (PermissionRequester, bool);
+/// The account a Clients page first loaded under.
+type Binding = PermissionRequester;
 
-/// Rejects a response for another account, organization or policy than the
-/// page is bound to, so a refresh never shows the previous identity's data.
+/// Rejects a response for another account or organization than the page is
+/// bound to, so a refresh never shows the previous identity's data.
 fn bind(mut binding: Signal<Option<Binding>>, current: Binding) -> Result<(), ServerFnError> {
     if binding.peek().is_some_and(|expected| expected != current) {
         return Err(ServerFnError::new(
-            "Your session or client policy changed. Reload this page to continue.",
+            "Your session changed. Reload this page to continue.",
         ));
     }
     binding.set(Some(current));
@@ -87,12 +87,8 @@ pub fn ClientList() -> Element {
         if archive_pending.peek().is_none() {
             archiving.set(None);
         }
-        let expected = binding.peek().as_ref().map(|(requester, _)| *requester);
-        let overview = server_fns::client_overview(expected).await?;
-        bind(
-            binding,
-            (overview.requester, overview.canonical_permissions),
-        )?;
+        let overview = server_fns::client_overview(*binding.peek()).await?;
+        bind(binding, overview.requester)?;
         Ok::<_, ServerFnError>(overview)
     });
     let own = use_session().permissions;

@@ -887,8 +887,8 @@ async fn create_person(
     // nothing; the next attempt leaves the number to the trigger.
     let api_id = loop {
         let inserted = sqlx::query_scalar!(
-        "INSERT INTO users (id, org_id, email, name, org_role, active, harvest_id)
-         VALUES ($1, $2, $3, $4, 'member', false, $5) ON CONFLICT (org_id, harvest_id) DO NOTHING RETURNING harvest_id",
+        "INSERT INTO users (id, org_id, email, name, active, harvest_id)
+         VALUES ($1, $2, $3, $4, false, $5) ON CONFLICT (org_id, harvest_id) DO NOTHING RETURNING harvest_id",
         id,
         org_id,
         email,

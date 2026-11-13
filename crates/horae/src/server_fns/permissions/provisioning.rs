@@ -4,26 +4,9 @@
 //! same transaction, so nobody exists without one.
 
 use horae_core::permissions::catalog::{BuiltInProfile, PERMISSION_CATALOG_VERSION};
-use horae_core::types::OrgRole;
 use serde::Serialize;
 use sqlx::PgConnection;
 use uuid::Uuid;
-
-/// The `org_role` stored beside a new person's state.
-///
-/// The role decides nothing about permission state. It is filled only because
-/// the domains not yet moved to permission state still read it; the schema
-/// change that drops the column drops this too.
-pub(crate) const fn placeholder_role(profile: BuiltInProfile) -> OrgRole {
-    match profile {
-        BuiltInProfile::Administrator => OrgRole::Admin,
-        BuiltInProfile::ExecutiveManager => OrgRole::Manager,
-        BuiltInProfile::Member
-        | BuiltInProfile::ProjectManager
-        | BuiltInProfile::PeopleAdmin
-        | BuiltInProfile::Accounting => OrgRole::Member,
-    }
-}
 
 /// The built-in profile stored under `id` (`administrator`, `member`, …).
 pub(crate) fn parse_profile(id: &str) -> Option<BuiltInProfile> {
