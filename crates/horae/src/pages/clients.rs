@@ -182,12 +182,27 @@ pub fn ClientList() -> Element {
                         Link { to: Route::ImporterIndex {}, class: "btn btn-secondary", "Import" }
                     }
                     input {
+                        id: "clients-search",
                         class: "form-input client-search w-form-select max-w-full",
                         r#type: "search",
                         aria_label: "Search clients by name",
                         placeholder: "Search clients by name",
                         value: "{query}",
                         oninput: move |event| query.set(event.value()),
+                        // Text typed into the server-rendered field before hydration
+                        // never reaches `query`, and every render rewrites `value`
+                        // from `query`. Read the field now, before the next render.
+                        onmounted: move |_| {
+                            let typed = document::eval("return document.getElementById('clients-search')?.value ?? '';");
+                            async move {
+                                if let Ok(typed) = typed.join::<String>().await
+                                    && !typed.is_empty()
+                                    && query.peek().is_empty()
+                                {
+                                    query.set(typed);
+                                }
+                            }
+                        },
                     }
                 }
             }
