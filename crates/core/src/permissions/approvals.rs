@@ -10,7 +10,6 @@ use super::{
     AccessScope, Actor, ManagementAssignments, ScopedResource,
     catalog::{Permission, PermissionSelection},
 };
-use crate::types::OrgRole;
 use uuid::Uuid;
 
 const MANAGED: AccessScope = AccessScope::MANAGED_PEOPLE.union(AccessScope::MANAGED_PROJECTS);
@@ -19,11 +18,12 @@ const MANAGED: AccessScope = AccessScope::MANAGED_PEOPLE.union(AccessScope::MANA
 /// submission owned by `owner`.
 ///
 /// Only an Administrator may decide their own submission. This settles
-/// self-approval alone; the caller still checks role, scope and state.
+/// self-approval alone; the caller still checks approval access, scope and
+/// state.
 #[must_use]
-pub fn may_decide_submission(requester: Uuid, role: OrgRole, owner: Uuid) -> bool {
+pub fn may_decide_submission(requester: Uuid, is_administrator: bool, owner: Uuid) -> bool {
     // The org's "Manager self-approval" setting (off by default) plugs in here.
-    role == OrgRole::Admin || requester != owner
+    is_administrator || requester != owner
 }
 
 /// Whether every supplied record has both approval and domain-read coverage.

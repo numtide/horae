@@ -21,6 +21,7 @@ use uuid::Uuid;
 use crate::plugin::{AppEvent, PluginRegistry};
 
 mod actor;
+pub(crate) mod approvals;
 pub(crate) mod clients;
 mod error;
 pub(crate) mod organization;

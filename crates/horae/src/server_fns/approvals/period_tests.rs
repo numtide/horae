@@ -1,27 +1,17 @@
 //! One approval week: exact `period_start` membership, week validation, and
 //! approve/reopen leaving adjacent weeks untouched.
 
-use super::tests::insert_entry;
+use super::tests::{approve_periods, caller, insert_entry, reopen_period, submit_user_week};
 use super::*;
+use crate::ops::Caller;
 use crate::server_fns::test_seed::{SeedIds, seed};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-/// An administrator, the one role that may approve the weeks they submitted.
-fn approver(ids: &SeedIds) -> User {
-    User {
-        id: ids.user_id,
-        org_id: ids.org_id,
-        email: format!("{}@test.com", ids.user_id),
-        name: "Test admin".into(),
-        oidc_subject: None,
-        org_role: OrgRole::Admin,
-        cost_rate_cents: None,
-        billable_rate_cents: None,
-        active: true,
-        created_at: chrono::Utc::now(),
-    }
+/// An administrator, the one profile that may approve the weeks they submitted.
+fn approver(ids: &SeedIds) -> Caller {
+    caller(ids)
 }
 
 fn date(s: &str) -> chrono::NaiveDate {
@@ -83,7 +73,7 @@ async fn a_week_lists_only_its_own_organizations_approvals_starting_that_day(poo
     submitted(&pool, &foreign, "2026-09-07").await;
     let actor = approver(&local);
 
-    let rows = list_week(&pool, &actor, None, "2026-09-07").await.unwrap();
+    let rows = list_week(&pool, actor, None, "2026-09-07").await.unwrap();
     assert_eq!(ids_of(&rows), vec![week.id]);
     assert!(
         rows.iter()
@@ -101,12 +91,12 @@ async fn the_status_filter_applies_within_the_week(pool: PgPool) {
     let local = seed(&pool, BuiltInProfile::Administrator).await;
     let (week, _) = submitted(&pool, &local, "2026-09-07").await;
     let actor = approver(&local);
-    approve_periods(&pool, &actor, &[week.id]).await.unwrap();
+    approve_periods(&pool, actor, &[week.id]).await.unwrap();
 
-    let approved = list_week(&pool, &actor, Some("approved".into()), "2026-09-07")
+    let approved = list_week(&pool, actor, Some("approved".into()), "2026-09-07")
         .await
         .unwrap();
-    let pending = list_week(&pool, &actor, Some("submitted".into()), "2026-09-07")
+    let pending = list_week(&pool, actor, Some("submitted".into()), "2026-09-07")
         .await
         .unwrap();
     assert_eq!(ids_of(&approved), vec![week.id]);
@@ -130,7 +120,7 @@ async fn an_unusable_week_start_is_a_bad_request(pool: PgPool) {
         ("2026-09-08", "first weekday"),
         (last_monday.as_str(), "out of range"),
     ] {
-        let result = list_week(&pool, &actor, None, week_start).await;
+        let result = list_week(&pool, actor, None, week_start).await;
         assert!(is_bad_request(&result), "{week_start}: {result:?}");
         assert!(
             matches!(&result, Err(ServerFnError::ServerError { message, .. }) if message.contains(reason)),
@@ -147,7 +137,7 @@ async fn approving_a_week_leaves_the_previous_week_pending(pool: PgPool) {
     let (week, week_entry) = submitted(&pool, &local, "2026-09-07").await;
     let actor = approver(&local);
 
-    let approved = approve_periods(&pool, &actor, &[week.id]).await.unwrap();
+    let approved = approve_periods(&pool, actor, &[week.id]).await.unwrap();
     assert_eq!(approved.len(), 1);
     assert_eq!(entry_state(&pool, week_entry).await, EntryState::Approved);
     assert_eq!(
@@ -167,11 +157,11 @@ async fn reopening_a_week_leaves_the_next_week_approved(pool: PgPool) {
     let (week, week_entry) = submitted(&pool, &local, "2026-09-07").await;
     let (after, after_entry) = submitted(&pool, &local, "2026-09-14").await;
     let actor = approver(&local);
-    approve_periods(&pool, &actor, &[week.id, after.id])
+    approve_periods(&pool, actor, &[week.id, after.id])
         .await
         .unwrap();
 
-    reopen_period(&pool, &actor, week.id).await.unwrap();
+    reopen_period(&pool, actor, week.id).await.unwrap();
     assert_eq!(entry_state(&pool, week_entry).await, EntryState::Open);
     assert_eq!(approval_state(&pool, after.id).await, EntryState::Approved);
     assert_eq!(entry_state(&pool, after_entry).await, EntryState::Approved);

@@ -1,26 +1,21 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT permission_policy_version, week_start, round_minutes,\n                  round_dir as \"round_dir: horae_core::types::RoundDir\"\n           FROM organizations WHERE id = $1 FOR SHARE",
+  "query": "SELECT week_start, round_minutes, round_dir as \"round_dir: RoundDir\"\n           FROM organizations WHERE id = $1",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "permission_policy_version",
-        "type_info": "Int4"
-      },
-      {
-        "ordinal": 1,
         "name": "week_start",
         "type_info": "Int2"
       },
       {
-        "ordinal": 2,
+        "ordinal": 1,
         "name": "round_minutes",
         "type_info": "Int2"
       },
       {
-        "ordinal": 3,
-        "name": "round_dir: horae_core::types::RoundDir",
+        "ordinal": 2,
+        "name": "round_dir: RoundDir",
         "type_info": {
           "Custom": {
             "name": "round_dir",
@@ -43,9 +38,8 @@
     "nullable": [
       false,
       false,
-      false,
       false
     ]
   },
-  "hash": "e68d550efcfd1441208ccdb6f8c37a59ae0eefa20519378f7760bdbdd0dbdc14"
+  "hash": "e447f9a76eb76d96f2bc1e1b5c9e3aac8270437e41d169563df016785eefac5e"
 }

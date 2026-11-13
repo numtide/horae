@@ -2,18 +2,30 @@ use chrono::{Datelike, Days, NaiveDate, Weekday};
 use dioxus::prelude::*;
 use horae_core::duration::format_hhmm;
 use horae_core::permissions::approvals::may_decide_submission;
+use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use horae_core::types::EntryState;
 use horae_core::week::week_bounds;
 
-use super::{is_manager, loaded};
+use super::loaded;
 use crate::components::avatar::{Avatar, first_initial};
 use crate::components::badge::Badge;
 use crate::components::controls::Segmented;
 use crate::components::session::{use_session, use_week_start};
 use crate::components::table::DataTable;
 use crate::components::today::today;
+use crate::models::own_permissions::OwnPermissions;
 use crate::route::Route;
 use crate::server_fns;
+
+/// Whether the signed-in person's grants include approval access of either
+/// scope, from a catalog this build understands. The server still decides
+/// whether that access covers the week.
+fn reviews_approvals(own: &OwnPermissions) -> bool {
+    own.catalog_version == PERMISSION_CATALOG_VERSION
+        && [Permission::TimeApproveAll, Permission::TimeApproveManaged]
+            .iter()
+            .any(|grant| own.grants.contains(grant))
+}
 
 /// The `list_approvals` status argument for a Segmented label.
 fn status_arg(label: &str) -> Option<String> {
@@ -92,9 +104,22 @@ fn spawn_action(
     });
 }
 
+/// Whether to ask for the list: `None` until the own-permissions read
+/// answers, `false` when the stored grants hold no approval access. Without
+/// stored grants to show (the read failed or had none), the server decides.
+fn review_access(own: &Option<Result<Option<OwnPermissions>, ServerFnError>>) -> Option<bool> {
+    match own {
+        None => None,
+        Some(Ok(Some(own))) => Some(reviews_approvals(own)),
+        Some(_) => Some(true),
+    }
+}
+
 #[component]
 pub fn Approvals(week: String) -> Element {
-    let me = use_session().me;
+    let session = use_session();
+    let me = session.me;
+    let own = session.permissions;
     let first_day = use_week_start();
     let mut status_label = use_signal(|| "Pending".to_string());
     let refresh = use_signal(|| 0u32);
@@ -116,7 +141,7 @@ pub fn Approvals(week: String) -> Element {
         let f = status_arg(&status_label.read());
         let _tick = *refresh.read();
         let start = selected()
-            .filter(|_| is_manager(&me))
+            .filter(|_| me.read().is_some() && review_access(&own.read()) == Some(true))
             .map(|(start, _)| start);
         async move {
             let start = start?;
@@ -127,14 +152,15 @@ pub fn Approvals(week: String) -> Element {
         }
     });
 
-    let is_manager = is_manager(&me);
+    let access = review_access(&own.read());
     // Hide decisions the server would refuse; it re-checks every one.
+    let is_administrator = matches!(&*own.read(), Some(Ok(Some(own))) if own.is_administrator);
     let viewer = match &*me.read() {
-        Some(Ok(u)) => Some((u.id, u.org_role)),
+        Some(Ok(u)) => Some(u.id),
         _ => None,
     };
     let may_decide =
-        move |owner| viewer.is_some_and(|(id, role)| may_decide_submission(id, role, owner));
+        move |owner| viewer.is_some_and(|id| may_decide_submission(id, is_administrator, owner));
     let this_week = match &*first_day.read() {
         Some(Ok(first)) => week_bounds(today(), *first).map(|(start, _)| start),
         _ => None,
@@ -146,12 +172,12 @@ pub fn Approvals(week: String) -> Element {
                 h1 { class: "page-title", "Approvals" }
             }
 
-            // Until the session user resolves, nobody is known to lack access.
-            if me.read().is_none() {
+            // Until the session resolves, nobody is known to lack access.
+            if me.read().is_none() || access.is_none() {
                 div { class: "text-muted text-sm", role: "status", "Loading…" }
-            } else if !is_manager {
+            } else if access == Some(false) {
                 div { class: "card p-8 text-center",
-                    p { class: "text-muted", "Manager or admin access is required to review approvals." }
+                    p { class: "text-muted", "Approval access is required to review timesheets." }
                 }
             } else {
                 match (&*first_day.read(), selected()) {

@@ -339,12 +339,10 @@ fn missing_dimensions_and_input_duplicates_do_not_infer_scope() {
 #[test]
 fn only_an_administrator_may_decide_their_own_submission() {
     use super::may_decide_submission;
-    use crate::types::OrgRole::{Admin, Manager, Member};
 
-    assert!(!may_decide_submission(ACTOR, Manager, ACTOR));
-    assert!(!may_decide_submission(ACTOR, Member, ACTOR));
-    assert!(may_decide_submission(ACTOR, Admin, ACTOR));
-    for role in [Manager, Admin] {
-        assert!(may_decide_submission(ACTOR, role, PERSON));
+    assert!(!may_decide_submission(ACTOR, false, ACTOR));
+    assert!(may_decide_submission(ACTOR, true, ACTOR));
+    for is_administrator in [false, true] {
+        assert!(may_decide_submission(ACTOR, is_administrator, PERSON));
     }
 }

@@ -1,6 +1,7 @@
 //! Approval labels come from the authorized records, never a people directory.
 
 use super::*;
+use crate::ops::approvals::tests::add_person;
 use chrono::NaiveDate;
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
@@ -32,10 +33,11 @@ async fn approval(
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::ExecutiveManager).await;
     let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
-    let admin = user(pool, ids.org_id, OrgRole::Admin).await;
-    let member = user(pool, ids.org_id, OrgRole::Member).await;
-    let archived = user(pool, ids.org_id, OrgRole::Member).await;
-    let unused = user(pool, ids.org_id, OrgRole::Member).await;
+    let person = |profile| add_person(pool, &ids, profile);
+    let admin = person(BuiltInProfile::Administrator).await.user_id;
+    let member = person(BuiltInProfile::Member).await.user_id;
+    let archived = person(BuiltInProfile::Member).await.user_id;
+    let unused = person(BuiltInProfile::Member).await.user_id;
     let start = NaiveDate::from_ymd_opt(2026, 9, 21).unwrap();
     let name = "Álvaro <script>alert('name')</script> & 王";
     sqlx::query!(
@@ -184,13 +186,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         )
         .await;
     assert_eq!(renamed[0]["user_name"], "Renamed archived teammate");
-    sqlx::query!(
-        "UPDATE users SET org_role='member' WHERE id=$1",
-        ids.user_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
+    // Losing approval access in the permission editor ends the session's access.
+    crate::ops::testing::provision(pool, &ids, &[], false).await;
     assert_eq!(
         api.call(
             "list_approvals",
