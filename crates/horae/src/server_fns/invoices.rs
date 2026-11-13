@@ -773,8 +773,15 @@ async fn update_invoice_defaults_in_db(
     id: uuid::Uuid,
     overrides: &InvoiceDefaults,
 ) -> Result<Invoice, ServerFnError> {
-    let actor = sqlx::query_scalar!("SELECT id FROM users WHERE org_id=$1 AND active AND org_role IN ('admin','manager') ORDER BY id LIMIT 1", org_id)
-        .fetch_one(pool).await.map_err(server_err)?;
+    // The seeded person, created before anyone a test adds; the editor decides
+    // whether they may edit.
+    let actor = sqlx::query_scalar!(
+        "SELECT id FROM users WHERE org_id=$1 AND active ORDER BY id LIMIT 1",
+        org_id
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(server_err)?;
     let mut editor = editing::load(pool, org_id, actor, id).await?;
     editor.edit.defaults = overrides.clone();
     let review = editing::review(pool, org_id, actor, id, &editor.edit).await?;

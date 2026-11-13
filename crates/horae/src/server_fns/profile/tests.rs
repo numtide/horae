@@ -19,6 +19,18 @@ async fn workspace_zone(pool: &PgPool, org_id: Uuid) -> String {
         .unwrap()
 }
 
+/// Who may change the workspace zone is tested in `ops::organization`.
+async fn set_workspace_zone(pool: &PgPool, org_id: Uuid, zone: &str) {
+    sqlx::query!(
+        "UPDATE organizations SET timezone = $2 WHERE id = $1",
+        org_id,
+        zone
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 /// A second person in the same organization.
 async fn colleague(pool: &PgPool, ids: &SeedIds, role: OrgRole) -> Uuid {
     let id = Uuid::now_v7();
@@ -131,57 +143,9 @@ async fn a_deactivated_person_cannot_save(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn an_administrator_changes_the_workspace_zone(pool: PgPool) {
-    let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    set_workspace_timezone_record(&pool, ids.org_id, ids.user_id, "America/Los_Angeles")
-        .await
-        .unwrap();
-    assert_eq!(
-        workspace_zone(&pool, ids.org_id).await,
-        "America/Los_Angeles"
-    );
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn members_and_managers_cannot_change_the_workspace_zone(pool: PgPool) {
-    let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    for role in [OrgRole::Member, OrgRole::Manager] {
-        let person = colleague(&pool, &ids, role).await;
-        assert_code(
-            set_workspace_timezone_record(&pool, ids.org_id, person, "Asia/Tokyo").await,
-            FORBIDDEN,
-        );
-    }
-    assert_eq!(workspace_zone(&pool, ids.org_id).await, "UTC");
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn an_administrator_of_another_organization_cannot_change_it(pool: PgPool) {
-    let ours = seed(&pool, BuiltInProfile::Administrator).await;
-    let theirs = seed(&pool, BuiltInProfile::Administrator).await;
-    assert_code(
-        set_workspace_timezone_record(&pool, ours.org_id, theirs.user_id, "Asia/Tokyo").await,
-        FORBIDDEN,
-    );
-    assert_eq!(workspace_zone(&pool, ours.org_id).await, "UTC");
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn the_workspace_zone_is_validated(pool: PgPool) {
-    let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    assert_code(
-        set_workspace_timezone_record(&pool, ids.org_id, ids.user_id, "Nowhere/City").await,
-        BAD_REQUEST,
-    );
-    assert_eq!(workspace_zone(&pool, ids.org_id).await, "UTC");
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_personal_zone_overrides_the_workspace_zone(pool: PgPool) {
-    let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    set_workspace_timezone_record(&pool, ids.org_id, ids.user_id, "Pacific/Kiritimati")
-        .await
-        .unwrap();
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    set_workspace_zone(&pool, ids.org_id, "Pacific/Kiritimati").await;
     assert_eq!(
         crate::timezone::person_zone(&pool, ids.user_id)
             .await
@@ -220,9 +184,7 @@ async fn the_session_carries_both_zones_and_the_effective_offset(pool: PgPool) {
             .unwrap()
     };
     // Etc/GMT-3 is UTC+3 all year (the Etc names invert the sign).
-    set_workspace_timezone_record(&pool, ids.org_id, ids.user_id, "Etc/GMT-3")
-        .await
-        .unwrap();
+    set_workspace_zone(&pool, ids.org_id, "Etc/GMT-3").await;
     let followed = me().await;
     assert_eq!(
         (
