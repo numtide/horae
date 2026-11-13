@@ -21,9 +21,10 @@ assert.match(day, /^\d{4}-\d{2}-\d{2}$/);
 const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
 const grants = writable => [...floor, 'time_read_managed', ...(writable ? ['time_write_managed'] : [])];
 const array = values => `ARRAY[${values.map(value => `'${value}'`).join(',')}]`;
-assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
 let restoreSeededStates = () => {};
-assert.equal(sql("SELECT count(*) FROM users WHERE active AND org_role='admin'"), '1');
+// The development login picks the one active Administrator: the demo admin.
+assert.equal(sql(`SELECT count(*) FROM person_permission_states s JOIN users u ON u.id=s.user_id
+  WHERE u.active AND s.is_administrator AND s.org_id='${org}'`), '1');
 const originalRevision = sql(`SELECT access_revision FROM organizations WHERE id='${org}'`);
 assert.match(originalRevision, /^\d+$/);
 function setWrite(writable) {
@@ -58,14 +59,13 @@ function assignPerson() {
   page.on('requestfailed', request => pending.delete(request));
   const settled = () => expect.poll(() => pending.size).toBe(0);
   const sheetResponse = () => page.waitForResponse(r => r.url().includes('/api/load_timesheet_page') && r.status() === 200);
-  const expectedContext = user_id => ({ expected_requester: { org_id: org, user_id }, subject_id: person, expected_policy: 'scoped' });
+  const expectedContext = user_id => ({ expected_requester: { org_id: org, user_id }, subject_id: person });
   const visit = async (mode, subject = person, anchor = day) => {
     await settled();
     const ready = sheetResponse();
     await page.goto(`${base}/timesheet/${mode}/${anchor}?span=week${subject ? `&user=${subject}` : ''}`);
     const data = await (await ready).json();
     await settled();
-    assert.equal(data.policy, 'scoped');
     assert.equal(data.subject.id, subject || actor);
     assert.equal(data.next_after, null);
     return data;
@@ -114,8 +114,7 @@ function assignPerson() {
         ('${entry}','${org}','${person}','${project}','${task}','${day}',60,'Delegated seed',true,540),
         ('${hiddenEntry}','${org}','${person}','${hiddenProject}','${task}','${day}',1200,'Unmanaged secret notes',true,NULL),
         ('${ownTimer}','${org}','${actor}','${project}','${task}','${day}',0,'Requester timer',true,NULL);
-      UPDATE time_entries SET is_running=true,started_at=now() WHERE id='${ownTimer}';
-      UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'; COMMIT;`);
+      UPDATE time_entries SET is_running=true,started_at=now() WHERE id='${ownTimer}'; COMMIT;`);
     created = true;
     await page.goto(`${base}/`);
     await visit('day', null);
@@ -381,8 +380,7 @@ function assignPerson() {
   } finally {
     await browser.close();
     if (created) sql(`BEGIN;
-      UPDATE organizations SET permission_policy_version=0,access_revision=${originalRevision} WHERE id='${org}';
-      UPDATE users SET org_role='admin' WHERE id='${actor}';
+      UPDATE organizations SET access_revision=${originalRevision} WHERE id='${org}';
       DELETE FROM time_entries WHERE project_id IN ('${project}','${hiddenProject}');
       DELETE FROM project_management_assignments WHERE id='${managerEdge}';
       DELETE FROM assignments WHERE project_id IN ('${project}','${hiddenProject}');

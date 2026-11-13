@@ -5,16 +5,14 @@ use horae_core::types::EntryState;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::{
-    PermissionStorageError, ReadIsolation, begin_lock_only_read_async_commit,
-    load_person_permissions,
-};
+use super::{PermissionStorageError, ReadIsolation, begin_lock_only_read_async_commit};
 use crate::models::people::PeopleCursor;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::scoped_time::{
     TimeEntryCursor, TimeEntryPage, TimeEntryQuery, TimesheetPage, TimesheetPeoplePage,
-    TimesheetPeopleQuery, TimesheetPerson, TimesheetPolicy, TimesheetQuery, VisibleTimeEntry,
+    TimesheetPeopleQuery, TimesheetPerson, TimesheetQuery, VisibleTimeEntry,
 };
+use crate::ops::{Actor, Caller, OpError};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum TimeReadError {
@@ -28,73 +26,48 @@ pub(crate) enum TimeReadError {
     Storage(#[from] PermissionStorageError),
     #[error(transparent)]
     Database(#[from] sqlx::Error),
+    /// A deadlock or serialization failure while loading the actor; a retry may succeed.
+    #[error("{0}")]
+    Conflict(String),
+    #[error(transparent)]
+    Op(OpError),
 }
 
-/// Keep policy, actor activity and grants stable until rows are materialized.
+impl From<OpError> for TimeReadError {
+    fn from(error: OpError) -> Self {
+        match error {
+            // Only missing or invalid stored state is refused while loading.
+            OpError::Forbidden(_) => TimeReadError::Unavailable,
+            OpError::Conflict(message) => TimeReadError::Conflict(message),
+            error => TimeReadError::Op(error),
+        }
+    }
+}
+
+const TIME_READS: [Permission; 3] = [
+    Permission::TimeReadOwn,
+    Permission::TimeReadManaged,
+    Permission::TimeReadAll,
+];
+
+/// Keep the organization, actor activity and grants stable until rows are
+/// materialized. Authority comes from [`Actor::load`]; the returned selection
+/// holds only the actor's time-read grants.
 pub(super) async fn begin_read(
     pool: &PgPool,
     org_id: Uuid,
     actor_id: Uuid,
-) -> Result<(Transaction<'_, Postgres>, PermissionSelection), TimeReadError> {
-    let (tx, grants, policy) = begin_sheet_read(pool, org_id, actor_id).await?;
-    if policy != TimesheetPolicy::Scoped {
-        return Err(TimeReadError::Forbidden);
-    }
-    Ok((tx, grants))
-}
-
-async fn begin_sheet_read(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
-) -> Result<
-    (
-        Transaction<'_, Postgres>,
-        PermissionSelection,
-        TimesheetPolicy,
-    ),
-    TimeReadError,
-> {
+) -> Result<(Transaction<'static, Postgres>, PermissionSelection), TimeReadError> {
     let mut tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
-    let policy = sqlx::query_scalar!(
-        "SELECT permission_policy_version FROM organizations WHERE id=$1 FOR SHARE",
-        org_id
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
-    let policy = match policy {
-        Some(1) => TimesheetPolicy::Scoped,
-        Some(0) => TimesheetPolicy::LegacyOwn,
-        None => return Err(TimeReadError::Forbidden),
-        Some(_) => return Err(TimeReadError::Unavailable),
-    };
-    let actor = sqlx::query_scalar!(
-        "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
-        org_id,
-        actor_id
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
-    if actor.is_none() {
+    let actor = Actor::load(&mut tx, Caller::session(org_id, actor_id)).await?;
+    let held: Vec<Permission> = TIME_READS
+        .into_iter()
+        .filter(|permission| actor.has(*permission))
+        .collect();
+    if held.is_empty() {
         return Err(TimeReadError::Forbidden);
     }
-    if policy == TimesheetPolicy::LegacyOwn {
-        return Ok((
-            tx,
-            PermissionSelection::new(&[Permission::TimeReadOwn]),
-            policy,
-        ));
-    }
-    let state = load_person_permissions(&mut tx, org_id, actor_id)
-        .await?
-        .ok_or(TimeReadError::Unavailable)?;
-    let own = state.grants.contains(Permission::TimeReadOwn);
-    let managed = state.grants.contains(Permission::TimeReadManaged);
-    let all = state.grants.contains(Permission::TimeReadAll);
-    if !own && !managed && !all {
-        return Err(TimeReadError::Forbidden);
-    }
-    Ok((tx, state.grants, policy))
+    Ok((tx, PermissionSelection::new(&held)))
 }
 
 /// Resolve selection and entries together; selecting a person never widens row scope.
@@ -114,17 +87,8 @@ pub(crate) async fn sheet(
     {
         return Err(TimeReadError::Forbidden);
     }
-    let (mut tx, grants, policy) = begin_sheet_read(pool, org_id, actor_id).await?;
-    if query
-        .expected_policy
-        .is_some_and(|expected| expected != policy)
-    {
-        return Err(TimeReadError::Forbidden);
-    }
+    let (mut tx, grants) = begin_read(pool, org_id, actor_id).await?;
     let subject_id = query.subject_id.unwrap_or(actor_id);
-    if policy == TimesheetPolicy::LegacyOwn && subject_id != actor_id {
-        return Err(TimeReadError::Forbidden);
-    }
     // A teammate can be archived independently of the requester. Hold its
     // activity stable across discovery and the subsequent entry query too.
     sqlx::query_scalar!(
@@ -167,7 +131,6 @@ pub(crate) async fn sheet(
         requester,
         subject,
         subject_utc_offset_seconds: crate::timezone::utc_offset_seconds(&zone, chrono::Utc::now()),
-        policy,
         entries: page.entries,
         next_after: page.next_after,
     })
@@ -344,4 +307,27 @@ async fn fetch_entries(
         entries,
         next_after,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{OpError, TimeReadError};
+
+    /// A lost race while loading the actor stays retryable (409 in the
+    /// adapters); missing stored state stays "unavailable".
+    #[test]
+    fn actor_load_errors_keep_their_meaning() {
+        assert!(matches!(
+            TimeReadError::from(OpError::conflict("retry")),
+            TimeReadError::Conflict(message) if message == "retry"
+        ));
+        assert!(matches!(
+            TimeReadError::from(OpError::forbidden("no state")),
+            TimeReadError::Unavailable
+        ));
+        assert!(matches!(
+            TimeReadError::from(OpError::Internal("boom".into())),
+            TimeReadError::Op(OpError::Internal(_))
+        ));
+    }
 }

@@ -89,11 +89,13 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .status(),
         StatusCode::UNAUTHORIZED
     );
+    // The time-read fence answers from stored grants alone: the seeded
+    // person's own-time grant admits the read whatever the policy says.
     assert_eq!(
         api.call(ENDPOINT, request.clone(), Some(&cookie), false)
             .await
             .status(),
-        StatusCode::FORBIDDEN
+        StatusCode::OK
     );
     // The scoped entry reader is the time domain's and still reads the policy.
     sqlx::query!(

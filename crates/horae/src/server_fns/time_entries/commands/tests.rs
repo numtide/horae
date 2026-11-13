@@ -1,6 +1,6 @@
 use super::*;
 use crate::models::permission_editor::PermissionRequester;
-use crate::models::scoped_time::{TimesheetEntryInput, TimesheetPolicy};
+use crate::models::scoped_time::TimesheetEntryInput;
 use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
@@ -140,20 +140,12 @@ async fn fixture(pool: &PgPool) -> Fixture {
     crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source) VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants)
         .execute(pool).await.unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     let context = TimesheetWriteContext {
         expected_requester: PermissionRequester {
             org_id: ids.org_id,
             user_id: ids.user_id,
         },
         subject_id: target,
-        expected_policy: TimesheetPolicy::Scoped,
     };
     Fixture { ids, context }
 }

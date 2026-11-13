@@ -39,7 +39,7 @@ async fn attempt(
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn every_time_mutation_denies_inactive_and_missing_owners_without_changes(pool: PgPool) {
-    for role in [OrgRole::Member, OrgRole::Manager, OrgRole::Admin] {
+    for administrator in [false, true] {
         for operation in [Operation::Create, Operation::Start, Operation::Stop] {
             let entry = editable_entry(&pool, true).await;
             sqlx::query!(
@@ -52,13 +52,17 @@ async fn every_time_mutation_denies_inactive_and_missing_owners_without_changes(
             .await
             .unwrap();
             sqlx::query!(
-                "UPDATE users SET active=false,org_role=$2 WHERE id=$1",
+                "UPDATE person_permission_states SET is_administrator=$2 WHERE user_id=$1",
                 entry.user_id,
-                role as OrgRole
+                administrator
             )
             .execute(&pool)
             .await
             .unwrap();
+            sqlx::query!("UPDATE users SET active=false WHERE id=$1", entry.user_id)
+                .execute(&pool)
+                .await
+                .unwrap();
             let before = sqlx::query_scalar!(
                 "SELECT jsonb_agg(to_jsonb(e) ORDER BY e.id) FROM time_entries e WHERE user_id=$1",
                 entry.user_id
@@ -76,7 +80,7 @@ async fn every_time_mutation_denies_inactive_and_missing_owners_without_changes(
                             ..
                         })
                     ),
-                    "{role:?} {operation:?}: {result:?}"
+                    "administrator={administrator} {operation:?}: {result:?}"
                 );
                 let after = sqlx::query_scalar!("SELECT jsonb_agg(to_jsonb(e) ORDER BY e.id) FROM time_entries e WHERE user_id=$1", entry.user_id)
                     .fetch_one(&pool).await.unwrap();
