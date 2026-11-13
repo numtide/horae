@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT org_id, id FROM users WHERE org_role = 'admin'",
+  "query": "SELECT org_id, id FROM users WHERE email = 'admin@example.com'",
   "describe": {
     "columns": [
       {
@@ -22,5 +22,5 @@
       false
     ]
   },
-  "hash": "48067cbcc9a7ff74fc5ffb986f61d79a962e9ce140674fe26f81eddf8f3a6fc8"
+  "hash": "f1cbabcc36aa031aa5bfcc20f5ba807de392c17cad9ad0daf88dc22490ec5007"
 }

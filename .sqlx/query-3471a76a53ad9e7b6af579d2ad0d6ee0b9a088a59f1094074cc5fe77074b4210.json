@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, org_id, email, name, oidc_subject, org_role AS \"org_role: OrgRole\",\n        cost_rate_cents, billable_rate_cents, active, created_at AS \"created_at: chrono::DateTime<chrono::Utc>\"\n        FROM users WHERE id=$1",
+  "query": "SELECT id, org_id, email, name, oidc_subject,\n                  cost_rate_cents, billable_rate_cents, active,\n                  created_at as \"created_at: chrono::DateTime<chrono::Utc>\"\n           FROM users WHERE email = $1 AND oidc_subject IS NULL",
   "describe": {
     "columns": [
       {
@@ -30,44 +30,28 @@
       },
       {
         "ordinal": 5,
-        "name": "org_role: OrgRole",
-        "type_info": {
-          "Custom": {
-            "name": "org_role",
-            "kind": {
-              "Enum": [
-                "admin",
-                "manager",
-                "member"
-              ]
-            }
-          }
-        }
-      },
-      {
-        "ordinal": 6,
         "name": "cost_rate_cents",
         "type_info": "Int8"
       },
       {
-        "ordinal": 7,
+        "ordinal": 6,
         "name": "billable_rate_cents",
         "type_info": "Int8"
       },
       {
-        "ordinal": 8,
+        "ordinal": 7,
         "name": "active",
         "type_info": "Bool"
       },
       {
-        "ordinal": 9,
+        "ordinal": 8,
         "name": "created_at: chrono::DateTime<chrono::Utc>",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Text"
       ]
     },
     "nullable": [
@@ -76,12 +60,11 @@
       false,
       false,
       true,
-      false,
       true,
       true,
       false,
       false
     ]
   },
-  "hash": "b3373d6fb021585e2bec38ca750c2f312b8ea3294d744af3de5937ea077e41c4"
+  "hash": "3471a76a53ad9e7b6af579d2ad0d6ee0b9a088a59f1094074cc5fe77074b4210"
 }
