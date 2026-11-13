@@ -14,13 +14,6 @@ async fn canonical(pool: &PgPool, role: BuiltInProfile, permissions: &[Permissio
         Uuid::now_v7(), ids.org_id, ids.user_id, &grants,
     ).execute(pool).await.unwrap();
     sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-    sqlx::query!(
         "UPDATE projects SET budget_kind='amount', budget_amount_cents=86753 WHERE id=$1",
         ids.project_id
     )

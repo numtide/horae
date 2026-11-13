@@ -14,13 +14,6 @@ async fn canonical(pool: &PgPool, role: BuiltInProfile, permissions: &[Permissio
         Uuid::now_v7(), ids.org_id, ids.user_id, &grants,
     ).execute(pool).await.unwrap();
     sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-    sqlx::query!(
         "UPDATE projects SET budget_kind='amount', budget_amount_cents=86753 WHERE id=$1",
         ids.project_id
     )
@@ -32,7 +25,7 @@ async fn canonical(pool: &PgPool, role: BuiltInProfile, permissions: &[Permissio
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_project_export_accepts_project_reader_with_legacy_member_role(pool: PgPool) {
+async fn canonical_project_export_accepts_project_reader_with_member_profile(pool: PgPool) {
     let ids = canonical(&pool, BuiltInProfile::Member, &[Permission::ProjectReadAll]).await;
     let rows = projects(&pool, ids.org_id, ids.user_id, "active")
         .await
@@ -45,14 +38,14 @@ async fn canonical_project_export_accepts_project_reader_with_legacy_member_role
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_project_export_does_not_inherit_legacy_administrator_scope(pool: PgPool) {
+async fn canonical_project_export_follows_grants_not_the_seeded_profile(pool: PgPool) {
     let ids = canonical(&pool, BuiltInProfile::Administrator, &[]).await;
     let rows = projects(&pool, ids.org_id, ids.user_id, "active")
         .await
         .unwrap();
     assert!(
         rows.is_empty(),
-        "legacy administrator exposed {} projects",
+        "member grants exposed {} projects",
         rows.len()
     );
 }

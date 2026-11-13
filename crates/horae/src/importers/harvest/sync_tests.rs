@@ -637,9 +637,19 @@ async fn setup(pool: &PgPool) -> Uuid {
     .await
     .unwrap();
     sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $1, 'known@example.com', 'Sync User', 'admin')",
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $1, 'known@example.com', 'Sync User')",
         org,
-    ).execute(pool).await.unwrap();
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    crate::ops::testing::assign_profile(
+        pool,
+        org,
+        org,
+        horae_core::permissions::catalog::BuiltInProfile::Administrator,
+    )
+    .await;
     credentials::store(
         pool,
         org,

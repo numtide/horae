@@ -21,6 +21,7 @@ pub mod time_report;
 pub mod user;
 
 pub use approval::{Approval, ApprovalSummary};
+#[cfg(test)]
 pub use assignment::Assignment;
 pub use client::Client;
 #[cfg(feature = "server")]
@@ -62,8 +63,10 @@ pub struct ReportRow {
     pub rounded_minutes: i64,
     pub billable_minutes: i64,
     /// Billing is partitioned by currency; cost has its own organization currency.
-    pub billable_cents: i64,
-    /// Absent if any entry in the group has an administrator-only cost override.
+    /// Absent if the viewer may not read the rate of every entry in the group.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub billable_cents: Option<i64>,
+    /// Absent unless the viewer may read every cost rate.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cost_cents: Option<i64>,
     pub currency: String,

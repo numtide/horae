@@ -361,9 +361,7 @@ async fn detailed_report_keyset_exhausts_ties_without_repeating_rows(pool: PgPoo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn detailed_report_rejects_invalid_queries_requesters_and_policy_without_fallback(
-    pool: PgPool,
-) {
+async fn detailed_report_rejects_invalid_queries_and_requesters(pool: PgPool) {
     let ids = fixture(&pool).await;
     let mut filter = query();
     filter.date_to = "2026-08-31".parse().unwrap();
@@ -397,21 +395,6 @@ async fn detailed_report_rejects_invalid_queries_requesters_and_policy_without_f
         read(&pool, ids.org_id, ids.user_id, &filter).await,
         Err(TimeReadError::Forbidden)
     ));
-    for policy in [0, 2] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
-            ids.org_id,
-            policy
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        let result = read(&pool, ids.org_id, ids.user_id, &query()).await;
-        assert!(matches!(
-            result,
-            Err(TimeReadError::Forbidden | TimeReadError::Unavailable)
-        ));
-    }
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

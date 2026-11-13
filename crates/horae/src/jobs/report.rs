@@ -162,19 +162,17 @@ pub(crate) async fn download(
         .await
         .ok_or(StatusCode::UNAUTHORIZED)?;
     let state = crate::state::global_state().await;
-    let user = sqlx::query!(
-        r#"SELECT org_id, org_role as "org_role: horae_core::types::OrgRole"
-           FROM users WHERE id = $1 AND active = true"#,
+    let org_id = sqlx::query_scalar!(
+        "SELECT org_id FROM users WHERE id = $1 AND active = true",
         user_id,
     )
     .fetch_optional(&state.db)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::UNAUTHORIZED)?;
-    if user.org_role != horae_core::types::OrgRole::Admin {
-        return Err(StatusCode::FORBIDDEN);
-    }
-    download_response(&state.db, user.org_id, user_id, job_id).await
+    // Authority is decided once, by `download_access`, under the locks that
+    // hold it until the snapshot is read.
+    download_response(&state.db, org_id, user_id, job_id).await
 }
 
 async fn download_response(
@@ -223,12 +221,14 @@ async fn download_access(
     pool: &sqlx::PgPool,
     org_id: Uuid,
     actor_id: Uuid,
-) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, axum::http::StatusCode> {
+) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, axum::http::StatusCode> {
+    use crate::ops::OpError;
     super::access::begin_admin_access(pool, org_id, actor_id)
         .await
         .map_err(|error| match error {
-            super::access::AccessError::Forbidden => axum::http::StatusCode::FORBIDDEN,
-            super::access::AccessError::Database(_) => {
+            OpError::Forbidden(_) | OpError::NotFound(_) => axum::http::StatusCode::FORBIDDEN,
+            OpError::Conflict(_) => axum::http::StatusCode::CONFLICT,
+            OpError::Invalid { .. } | OpError::Internal(_) => {
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR
             }
         })

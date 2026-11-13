@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE assignments SET role = 'lead' WHERE project_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "40363b603d9c4cb05e7c97553efc435c3efa40c0c1b7ac220a1d2b473a3e0beb"
+}

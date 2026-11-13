@@ -296,15 +296,15 @@ async fn assignment_cascade_allows_an_inflight_entry_project_fk_to_finish(pool: 
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn task_grants_allow_tracking_for_every_role(pool: PgPool) {
-    for role in [OrgRole::Member, OrgRole::Manager, OrgRole::Admin] {
+async fn task_grants_allow_tracking_with_or_without_administrator_state(pool: PgPool) {
+    for administrator in [false, true] {
         let entry = editable_entry(&pool, true).await;
         restrict_task(&pool, &entry).await;
         grant_task(&pool, &entry).await;
         sqlx::query!(
-            "UPDATE users SET org_role = $2 WHERE id = $1",
+            "UPDATE person_permission_states SET is_administrator = $2 WHERE user_id = $1",
             entry.user_id,
-            role as OrgRole
+            administrator
         )
         .execute(&pool)
         .await

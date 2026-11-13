@@ -72,9 +72,9 @@ fn FilterSelect(
 
 #[component]
 pub fn Reports() -> Element {
-    use crate::models::time_report::{TimeReportAccess, TimeReportPolicy};
+    use crate::models::time_report::TimeReportAccess;
 
-    // Retain identity and mode when refreshing access unmounts the result view.
+    // Retain identity and view when refreshing access unmounts the result view.
     let mut binding = use_signal(|| None::<TimeReportAccess>);
     let mut access = use_resource(move || async move {
         let expected = *binding.peek();
@@ -82,7 +82,7 @@ pub fn Reports() -> Element {
             .await
             .map_err(|_| "Report access is unavailable. Sign in again or retry.")?;
         if expected.is_some_and(|expected| expected != result) {
-            return Err("Your session or report policy changed. Reload this page to continue.");
+            return Err("Your session or report access changed. Reload this page to continue.");
         }
         binding.set(Some(result));
         Ok(result)
@@ -91,7 +91,7 @@ pub fn Reports() -> Element {
         return rsx! { p { role: "status", "Loading report access…" } };
     }
     match &*access.read() {
-        Some(Ok(access)) if access.policy == TimeReportPolicy::Legacy => rsx! { LegacyReports {} },
+        Some(Ok(access)) if access.financial => rsx! { FinancialReports {} },
         Some(Ok(allowed)) => rsx! {
             scoped::ScopedReports {
                 requester: allowed.requester,
@@ -116,7 +116,7 @@ pub fn Reports() -> Element {
 }
 
 #[component]
-fn LegacyReports() -> Element {
+fn FinancialReports() -> Element {
     let today = crate::components::today::today();
     let month_start = today.with_day(1).unwrap_or(today);
 
@@ -144,7 +144,7 @@ fn LegacyReports() -> Element {
         async move { server_fns::list_projects(c, false).await }
     });
 
-    let filters = LegacyFilters {
+    let filters = FinancialFilters {
         from: from_date,
         to: to_date,
         client: client_filter,
@@ -330,17 +330,17 @@ fn LegacyReports() -> Element {
 
             // Only the visible tab is mounted, so a filter change loads one report.
             if tab == "time" {
-                LegacyTimeReport { filters, group_by }
+                FinancialTimeReport { filters, group_by }
             } else {
-                LegacyDetailedReport { filters }
+                FinancialDetailedReport { filters }
             }
         }
     }
 }
 
-/// The legacy filters both report tabs share; "" means all.
+/// The filters both financial report tabs share; "" means all.
 #[derive(Clone, Copy, PartialEq)]
-struct LegacyFilters {
+struct FinancialFilters {
     from: ReadSignal<String>,
     to: ReadSignal<String>,
     client: Signal<String>,
@@ -351,7 +351,7 @@ struct LegacyFilters {
     dates_settled: Memo<bool>,
 }
 
-impl LegacyFilters {
+impl FinancialFilters {
     /// (from, to, client, project, user, tag), read so a change re-loads.
     #[allow(clippy::type_complexity)]
     fn read(
@@ -376,7 +376,7 @@ impl LegacyFilters {
 }
 
 #[component]
-fn LegacyTimeReport(filters: LegacyFilters, group_by: Signal<String>) -> Element {
+fn FinancialTimeReport(filters: FinancialFilters, group_by: Signal<String>) -> Element {
     let mut summary = use_resource(move || {
         let (f, t, cl, pr, us, tag) = filters.read();
         let g = group_by.read().clone();
@@ -401,7 +401,7 @@ fn LegacyTimeReport(filters: LegacyFilters, group_by: Signal<String>) -> Element
                 let grand_total: i64 = rows.iter().map(|r| r.total_minutes).sum();
                 let grand_rounded: i64 = rows.iter().map(|r| r.rounded_minutes).sum();
                 let grand_billable: i64 = rows.iter().map(|r| r.billable_minutes).sum();
-                let grand_bill_amount = money_totals(rows, |r| Some(r.billable_cents), |r| &r.currency);
+                let grand_bill_amount = money_totals(rows, |r| r.billable_cents, |r| &r.currency);
                 let grand_cost_amount = money_totals(rows, |r| r.cost_cents, |r| &r.cost_currency);
                 rsx! {
                     DataTable {
@@ -423,7 +423,9 @@ fn LegacyTimeReport(filters: LegacyFilters, group_by: Signal<String>) -> Element
                                         td { class: "text-mono text-right", "{hours(row.total_minutes)}" }
                                         td { class: "text-mono text-right", "{hours(row.rounded_minutes)}" }
                                         td { class: "text-mono text-right", "{hours(row.billable_minutes)}" }
-                                        td { class: "text-mono text-right", "{money(row.billable_cents, &row.currency)}" }
+                                        td { class: "text-mono text-right",
+                                            {row.billable_cents.map(|cents| money(cents, &row.currency)).unwrap_or_else(|| "Restricted".into())}
+                                        }
                                         td { class: "text-mono text-right",
                                             {row.cost_cents.map(|cents| money(cents, &row.cost_currency)).unwrap_or_else(|| "Restricted".into())}
                                         }
@@ -451,7 +453,7 @@ fn LegacyTimeReport(filters: LegacyFilters, group_by: Signal<String>) -> Element
 }
 
 #[component]
-fn LegacyDetailedReport(filters: LegacyFilters) -> Element {
+fn FinancialDetailedReport(filters: FinancialFilters) -> Element {
     let mut detailed = use_resource(move || {
         let (f, t, cl, pr, us, tag) = filters.read();
         async move { server_fns::report_detailed(f, t, cl, pr, us, tag).await }
@@ -531,7 +533,7 @@ mod tests {
             total_minutes: 60,
             rounded_minutes: 60,
             billable_minutes: 60,
-            billable_cents: cents,
+            billable_cents: Some(cents),
             cost_cents: Some(0),
             currency: currency.into(),
             cost_currency: "EUR".into(),
@@ -539,7 +541,7 @@ mod tests {
     }
 
     fn billable(rows: &[ReportRow]) -> Vec<String> {
-        money_totals(rows, |r| Some(r.billable_cents), |r| &r.currency)
+        money_totals(rows, |r| r.billable_cents, |r| &r.currency)
     }
 
     fn cost(rows: &[ReportRow]) -> Vec<String> {
@@ -621,19 +623,19 @@ mod tests {
         thread_local! {
             static TAB_RENDERS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
         }
-        // Takes the props LegacyTimeReport takes, without its server calls.
+        // Takes the props FinancialTimeReport takes, without its server calls.
         #[component]
-        fn Tab(filters: LegacyFilters, group_by: Signal<String>) -> Element {
+        fn Tab(filters: FinancialFilters, group_by: Signal<String>) -> Element {
             TAB_RENDERS.with(|renders| renders.set(renders.get() + 1));
             rsx! {}
         }
-        // The filter wiring of LegacyReports.
+        // The filter wiring of FinancialReports.
         fn page() -> Element {
             let from_input = use_signal(|| "2026-09-01".to_string());
             let to_input = use_signal(|| "2026-09-30".to_string());
             let from_date = use_debounced(from_input, SEARCH_DEBOUNCE);
             let to_date = use_debounced(to_input, SEARCH_DEBOUNCE);
-            let filters = LegacyFilters {
+            let filters = FinancialFilters {
                 from: from_date,
                 to: to_date,
                 client: use_signal(String::new),

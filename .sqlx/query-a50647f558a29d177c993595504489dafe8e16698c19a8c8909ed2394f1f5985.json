@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO horae_outbox (id,org_id,event_kind,payload)\n                 VALUES ($1,$2,'budget_email',jsonb_build_object('notification_id',$3::uuid))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a50647f558a29d177c993595504489dafe8e16698c19a8c8909ed2394f1f5985"
+}

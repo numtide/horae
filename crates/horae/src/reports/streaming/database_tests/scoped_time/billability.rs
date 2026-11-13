@@ -112,7 +112,7 @@ async fn billability_matches_effective_rows_totals_and_all_download_sources(pool
             ..params()
         };
         let query = options().time_query().unwrap();
-        let workbook = time::entries(&pool, ids.org_id, ids.user_id, &query, None)
+        let workbook = time::entries(&pool, ids.org_id, ids.user_id, &query)
             .await
             .unwrap();
         assert_eq!(workbook.rows.len(), count);
@@ -227,7 +227,7 @@ async fn billability_csv_uses_the_captured_source_after_entry_changes(pool: PgPo
         .time_query()
         .unwrap();
         let mut tx = pool.begin().await.unwrap();
-        let (_, policy) = Authority::time(&mut tx, ids.org_id, ids.user_id)
+        Authority::time(&mut tx, ids.org_id, ids.user_id)
             .await
             .unwrap();
         if grouped {
@@ -269,14 +269,14 @@ async fn billability_csv_uses_the_captured_source_after_entry_changes(pool: PgPo
                 .await
                 .unwrap()
                 .into_iter()
-                .filter_map(|row| row.into_entry(policy).unwrap())
+                .filter_map(|row| row.into_entry().unwrap())
                 .collect::<Vec<_>>();
             assert_eq!(rows.len(), 3);
             assert!(rows.iter().all(|row| row.row.billable));
         }
         tx.rollback().await.unwrap();
         assert!(
-            time::entries(&pool, ids.org_id, ids.user_id, &query, None)
+            time::entries(&pool, ids.org_id, ids.user_id, &query)
                 .await
                 .unwrap()
                 .rows
@@ -306,7 +306,7 @@ async fn billability_empty_exports_still_require_active_authority(pool: PgPool) 
         user_id: ids.user_id,
     };
     assert!(
-        time::entries(&pool, ids.org_id, ids.user_id, &query, None)
+        time::entries(&pool, ids.org_id, ids.user_id, &query)
             .await
             .unwrap()
             .rows
@@ -346,7 +346,7 @@ async fn billability_empty_exports_still_require_active_authority(pool: PgPool) 
         .await
         .unwrap();
     assert_eq!(
-        time::entries(&pool, ids.org_id, ids.user_id, &query, None)
+        time::entries(&pool, ids.org_id, ids.user_id, &query)
             .await
             .err(),
         Some(StatusCode::FORBIDDEN)

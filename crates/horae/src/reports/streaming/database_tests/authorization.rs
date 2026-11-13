@@ -87,6 +87,8 @@ async fn streamed_exports_require_current_tenant_bound_actors_even_when_empty(po
         .await;
         assert!(!bytes.is_empty());
     }
+    // Invoice downloads still decide by role; time and project downloads
+    // answer from the stored state, here narrowed to the Member floor.
     sqlx::query!(
         "UPDATE users SET org_role='member' WHERE id=$1",
         ids.user_id
@@ -94,15 +96,25 @@ async fn streamed_exports_require_current_tenant_bound_actors_even_when_empty(po
     .execute(&pool)
     .await
     .unwrap();
-    for surface in [Surface::Entries, Surface::Invoice] {
-        assert_eq!(
-            surface
-                .export(&pool, ids.org_id, ids.user_id, invoice_id)
-                .await
-                .unwrap_err(),
-            StatusCode::FORBIDDEN
-        );
-    }
+    crate::ops::testing::provision(&pool, &ids, &[], false).await;
+    assert_eq!(
+        Surface::Invoice
+            .export(&pool, ids.org_id, ids.user_id, invoice_id)
+            .await
+            .unwrap_err(),
+        StatusCode::FORBIDDEN
+    );
+    let bytes = body(
+        Surface::Entries
+            .export(&pool, ids.org_id, ids.user_id, invoice_id)
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(
+        csv::Reader::from_reader(bytes.as_slice()).records().count(),
+        0
+    );
     let bytes = body(
         Surface::Projects
             .export(&pool, ids.org_id, ids.user_id, invoice_id)
@@ -227,13 +239,11 @@ async fn streamed_timesheet_rechecks_after_backpressure_without_retaining_locks(
     )
     .await
     .unwrap();
-    sqlx::query!(
-        "UPDATE users SET org_role='member' WHERE id=$1",
-        ids.user_id
-    )
-    .execute(&mut *writer)
-    .await
-    .unwrap();
+    // Every person reads their own time, so revoke by deactivating.
+    sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+        .execute(&mut *writer)
+        .await
+        .unwrap();
     writer.commit().await.unwrap();
     let mut stream = result.into_body().into_data_stream();
     let mut bytes = Vec::new();

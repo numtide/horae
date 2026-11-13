@@ -13,6 +13,14 @@ assert.equal(database.pathname, '/horae');
 assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
 const stateId = '01960000-0000-7000-8000-000000000901';
+// Removes an organization's rows from `tables` and returns a function that puts them back.
+const setAside = (org, tables) => {
+  const saved = tables.map(table => [table, sql(`WITH removed AS (DELETE FROM ${table} WHERE org_id='${org}' RETURNING *)
+    SELECT coalesce(json_agg(removed), '[]') FROM removed`)]);
+  return () => {
+    for (const [table, rows] of saved) sql(`INSERT INTO ${table} SELECT * FROM json_populate_recordset(NULL::${table}, $saved$${rows}$saved$::json)`);
+  };
+};
 // Dioxus 0.7.9 appends a build-specific decimal hash to implicit endpoints.
 // Read the actual server's registered string; never hard-code a build's hash.
 const serverStrings = readFileSync(process.env.HORAE_TEST_SERVER).toString('latin1');
@@ -28,7 +36,7 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
   page.setDefaultNavigationTimeout(30_000);
   const errors = [];
   let releaseRead;
-  let actor, project, initialRevision, fixtureStarted = false, restoreSeededStates;
+  let actor, project, initialRevision, fixtureStarted = false, restoreSeededStates, restoreEarlierDelegation;
   page.on('pageerror', error => errors.push(error.stack || error.message));
   const history = page.getByRole('table', { name: 'Permission change history', exact: true });
   const receiptIds = () => history.locator('details p').filter({ hasText: /^Receipt: / }).allTextContents();
@@ -47,6 +55,9 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
     assert.match(project, /^[0-9a-f-]{36}$/);
     assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${actor.org_id}'`), '0');
     restoreSeededStates = setAsideSeededStates(actor.org_id);
+    // Earlier suites designate managers when they create projects, which
+    // leaves receipts; history starts empty here and gets them back after.
+    restoreEarlierDelegation = setAside(actor.org_id, ['permission_change_receipts', 'project_management_assignments']);
     for (const table of ['person_permission_states', 'permission_change_receipts', 'project_management_assignments']) {
       assert.equal(sql(`SELECT count(*) FROM ${table} WHERE org_id='${actor.org_id}'`), '0');
     }
@@ -166,5 +177,6 @@ assert.equal(identityEndpoints.length, 1, 'expected one compiled session-identit
       DELETE FROM person_permission_states WHERE id='${stateId}' AND org_id='${actor.org_id}';
       UPDATE organizations SET permission_policy_version=0, access_revision=${initialRevision} WHERE id='${actor.org_id}'; COMMIT;`);
     restoreSeededStates?.();
+    restoreEarlierDelegation?.();
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

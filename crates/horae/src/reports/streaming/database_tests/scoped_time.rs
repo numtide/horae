@@ -6,13 +6,6 @@ mod grouped;
 
 async fn scoped(pool: &PgPool, role: BuiltInProfile, selection: &[Permission]) -> SeedIds {
     let ids = seed(pool, role).await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     let grants: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(selection)).unwrap())
             .unwrap();
@@ -40,7 +33,7 @@ async fn scoped_csv_member_downloads_own_rows_without_financial_grants(pool: PgP
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn scoped_csv_legacy_manager_does_not_expand_own_scope(pool: PgPool) {
+async fn scoped_csv_profile_name_does_not_expand_own_scope(pool: PgPool) {
     let ids = scoped(
         &pool,
         BuiltInProfile::ExecutiveManager,
@@ -134,7 +127,7 @@ async fn scoped_csv_source_uses_declare_authority_not_initial_or_fetch_authority
         )
         .await;
         let mut tx = pool.begin().await.unwrap();
-        let (_, policy) = Authority::time(&mut tx, ids.org_id, ids.user_id)
+        Authority::time(&mut tx, ids.org_id, ids.user_id)
             .await
             .unwrap();
         grants(&pool, ids.user_id, &[captured]).await;
@@ -150,7 +143,7 @@ async fn scoped_csv_source_uses_declare_authority_not_initial_or_fetch_authority
         let rows = cursor::entries(&mut tx, 128).await.unwrap();
         let count = rows
             .into_iter()
-            .filter_map(|row| row.into_entry(policy).unwrap())
+            .filter_map(|row| row.into_entry().unwrap())
             .count();
         assert_eq!(count, if gain { 2 } else { 1 });
         tx.rollback().await.unwrap();
@@ -189,7 +182,7 @@ async fn scoped_csv_source_uses_management_edges_at_declare(pool: PgPool) {
             .unwrap();
         }
         let mut tx = pool.begin().await.unwrap();
-        let (_, policy) = Authority::time(&mut tx, ids.org_id, ids.user_id)
+        Authority::time(&mut tx, ids.org_id, ids.user_id)
             .await
             .unwrap();
         if gain {
@@ -225,7 +218,7 @@ async fn scoped_csv_source_uses_management_edges_at_declare(pool: PgPool) {
         let rows = cursor::entries(&mut tx, 128).await.unwrap();
         assert_eq!(
             rows.into_iter()
-                .filter_map(|row| row.into_entry(policy).unwrap())
+                .filter_map(|row| row.into_entry().unwrap())
                 .count(),
             usize::from(gain)
         );
@@ -246,9 +239,9 @@ async fn scoped_csv_invalid_captured_state_cannot_be_repaired_before_fetch(pool:
         if populated {
             add_entries(&pool, &ids, 1).await;
         }
-        for invalid in ["catalog", "grants", "missing", "inactive", "policy"] {
+        for invalid in ["catalog", "grants", "missing", "inactive"] {
             let mut tx = pool.begin().await.unwrap();
-            let (_, policy) = Authority::time(&mut tx, ids.org_id, ids.user_id)
+            Authority::time(&mut tx, ids.org_id, ids.user_id)
                 .await
                 .unwrap();
             match invalid {
@@ -279,15 +272,6 @@ async fn scoped_csv_invalid_captured_state_cannot_be_repaired_before_fetch(pool:
                         .await
                         .unwrap();
                 }
-                "policy" => {
-                    sqlx::query!(
-                        "UPDATE organizations SET permission_policy_version=0 WHERE id=$1",
-                        ids.org_id
-                    )
-                    .execute(&pool)
-                    .await
-                    .unwrap();
-                }
                 _ => unreachable!(),
             }
             cursor::declare_entries(
@@ -303,13 +287,6 @@ async fn scoped_csv_invalid_captured_state_cannot_be_repaired_before_fetch(pool:
                 .await
                 .unwrap();
             sqlx::query!(
-                "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-                ids.org_id
-            )
-            .execute(&pool)
-            .await
-            .unwrap();
-            sqlx::query!(
                 "DELETE FROM person_permission_states WHERE user_id=$1",
                 ids.user_id
             )
@@ -323,13 +300,13 @@ async fn scoped_csv_invalid_captured_state_cannot_be_repaired_before_fetch(pool:
             sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source) VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &restored).execute(&pool).await.unwrap();
             let rows = cursor::entries(&mut tx, 128).await.unwrap();
             assert_eq!(rows.len(), 1, "{invalid}, populated={populated}");
-            let expected = if matches!(invalid, "inactive" | "policy") {
+            let expected = if invalid == "inactive" {
                 StatusCode::FORBIDDEN
             } else {
                 StatusCode::INTERNAL_SERVER_ERROR
             };
             assert_eq!(
-                rows.into_iter().next().unwrap().into_entry(policy).err(),
+                rows.into_iter().next().unwrap().into_entry().err(),
                 Some(expected),
                 "{invalid}, populated={populated}"
             );
@@ -355,32 +332,25 @@ async fn scoped_csv_missing_identity_has_invalid_sentinel_and_metadata_is_bounde
         let rows = cursor::entries(&mut tx, 128).await.unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(
-            rows.into_iter().next().unwrap().into_entry(1).err(),
+            rows.into_iter().next().unwrap().into_entry().err(),
             Some(StatusCode::FORBIDDEN)
         );
         tx.rollback().await.unwrap();
     }
     add_entries(&pool, &ids, 3).await;
-    // Legacy policy ignores canonical state, but the native batch still accounts
-    // for any captured authority metadata before transferring it to Rust.
+    // The native batch accounts for captured authority metadata before
+    // transferring it to Rust, even metadata Rust then rejects.
+    let mut tx = pool.begin().await.unwrap();
+    Authority::time(&mut tx, ids.org_id, ids.user_id)
+        .await
+        .unwrap();
     sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=0 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query!(
-        "UPDATE person_permission_states SET grants=ARRAY[repeat('x',65536)] WHERE user_id=$1",
+        "UPDATE person_permission_states SET grants=ARRAY['time_read_own',repeat('x',65536)] WHERE user_id=$1",
         ids.user_id
     )
     .execute(&pool)
     .await
     .unwrap();
-    let mut tx = pool.begin().await.unwrap();
-    let (_, policy) = Authority::time(&mut tx, ids.org_id, ids.user_id)
-        .await
-        .unwrap();
     cursor::declare_entries(
         &mut tx,
         ids.org_id,
@@ -392,7 +362,10 @@ async fn scoped_csv_missing_identity_has_invalid_sentinel_and_metadata_is_bounde
     for _ in 0..3 {
         let mut rows = cursor::entries(&mut tx, 128).await.unwrap();
         assert_eq!(rows.len(), 1);
-        assert!(rows.pop().unwrap().into_entry(policy).unwrap().is_some());
+        assert_eq!(
+            rows.pop().unwrap().into_entry().err(),
+            Some(StatusCode::INTERNAL_SERVER_ERROR)
+        );
     }
     assert!(cursor::entries(&mut tx, 128).await.unwrap().is_empty());
     tx.rollback().await.unwrap();
@@ -478,7 +451,7 @@ async fn scoped_csv_rechecks_every_pending_context_but_not_previous_blocks(pool:
             let mut connection = worker_pool.acquire().await.unwrap();
             connection.close_on_drop();
             let mut tx = connection.begin().await.unwrap();
-            let (authority, _) = Authority::time(&mut tx, ids.org_id, ids.user_id)
+            let authority = Authority::time(&mut tx, ids.org_id, ids.user_id)
                 .await
                 .unwrap();
             let mut output = CsvBuffer::new(&["Owner"])?;
@@ -527,8 +500,8 @@ async fn scoped_csv_rechecks_every_pending_context_but_not_previous_blocks(pool:
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn scoped_csv_empty_header_rechecks_policy_and_state_after_capacity(pool: PgPool) {
-    for change_policy in [false, true] {
+async fn scoped_csv_empty_header_rechecks_activity_and_state_after_capacity(pool: PgPool) {
+    for deactivate in [false, true] {
         let ids = scoped(
             &pool,
             BuiltInProfile::ExecutiveManager,
@@ -543,7 +516,7 @@ async fn scoped_csv_empty_header_rechecks_policy_and_state_after_capacity(pool: 
             let mut connection = worker_pool.acquire().await.unwrap();
             connection.close_on_drop();
             let mut tx = connection.begin().await.unwrap();
-            let (authority, _) = Authority::time(&mut tx, ids.org_id, ids.user_id)
+            let authority = Authority::time(&mut tx, ids.org_id, ids.user_id)
                 .await
                 .unwrap();
             let mut output = CsvBuffer::new(&["Date"])?;
@@ -551,14 +524,11 @@ async fn scoped_csv_empty_header_rechecks_policy_and_state_after_capacity(pool: 
             output.flush(&sender, &mut tx, &authority).await
         });
         waiting.await.unwrap();
-        if change_policy {
-            sqlx::query!(
-                "UPDATE organizations SET permission_policy_version=0 WHERE id=$1",
-                ids.org_id
-            )
-            .execute(&pool)
-            .await
-            .unwrap();
+        if deactivate {
+            sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+                .execute(&pool)
+                .await
+                .unwrap();
         } else {
             sqlx::query!(
                 "UPDATE person_permission_states SET catalog_version=99 WHERE user_id=$1",
@@ -569,14 +539,7 @@ async fn scoped_csv_empty_header_rechecks_policy_and_state_after_capacity(pool: 
             .unwrap();
         }
         assert_eq!(receiver.recv().await.unwrap(), b"queued");
-        assert_eq!(
-            pending.await.unwrap().unwrap_err(),
-            if change_policy {
-                StatusCode::FORBIDDEN
-            } else {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
-        );
+        assert_eq!(pending.await.unwrap().unwrap_err(), StatusCode::FORBIDDEN);
         assert!(receiver.recv().await.is_none());
     }
 }

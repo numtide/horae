@@ -79,10 +79,6 @@ async fn time_reads_distinguish_project_management_from_membership_and_people_sc
         ]),
     )
     .await;
-    sqlx::query!("UPDATE users SET org_role='admin' WHERE id=$1", ids.user_id)
-        .execute(&pool)
-        .await
-        .unwrap();
     let page = read(&pool, ids.org_id, ids.user_id, &query())
         .await
         .unwrap();
@@ -438,36 +434,13 @@ async fn time_reads_recheck_grants_relationships_and_activity_after_wait(pool: P
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn time_reads_fail_closed_for_policy_identity_and_invalid_state(pool: PgPool) {
+async fn time_reads_fail_closed_for_identity_and_invalid_state(pool: PgPool) {
     let ids = fixture(&pool).await;
     let foreign = fixture(&pool).await;
     assert!(matches!(
         read(&pool, ids.org_id, foreign.user_id, &query()).await,
         Err(TimeReadError::Forbidden)
     ));
-    for version in [0, 2] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
-            ids.org_id,
-            version
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        let result = read(&pool, ids.org_id, ids.user_id, &query()).await;
-        assert!(if version == 0 {
-            matches!(result, Err(TimeReadError::Forbidden))
-        } else {
-            matches!(result, Err(TimeReadError::Unavailable))
-        });
-    }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
     sqlx::query!(
         "UPDATE person_permission_states SET grants=ARRAY['invalid_grant'] WHERE user_id=$1",
         ids.user_id
@@ -477,7 +450,7 @@ async fn time_reads_fail_closed_for_policy_identity_and_invalid_state(pool: PgPo
     .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, &query()).await,
-        Err(TimeReadError::Storage(_))
+        Err(TimeReadError::Unavailable)
     ));
     sqlx::query!(
         "DELETE FROM person_permission_states WHERE user_id=$1",

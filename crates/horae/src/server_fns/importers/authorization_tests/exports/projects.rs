@@ -4,6 +4,32 @@ use horae_core::permissions::catalog::BuiltInProfile;
 
 const PATH: &str = "/api/projects/export/xlsx";
 
+/// A save of the loaded editor with only `report_visibility` changed, bound
+/// to the session that loaded it and keeping every protected field.
+fn visibility_save(editor: serde_json::Value, visibility: &str) -> serde_json::Value {
+    use crate::models::project_creation::{
+        EditableProject, ProjectEditRequest, ProtectedProjectField::*,
+    };
+    let mut editor: EditableProject = serde_json::from_value(editor).unwrap();
+    editor.form.report_visibility = serde_json::from_value(json!(visibility)).unwrap();
+    let mut unchanged = vec![ProjectRate, Budget, Fees, InvoiceDefaults, PrivateNotes];
+    unchanged.extend(editor.form.tasks.iter().map(|task| TaskRate(task.id)));
+    for member in &editor.form.team {
+        unchanged.extend([PersonRate(member.user_id), CostRate(member.user_id)]);
+    }
+    let access = editor.access.as_ref();
+    json!({"request": ProjectEditRequest {
+        task_activity: Vec::new(),
+        id: Uuid::now_v7(),
+        project_id: editor.id,
+        expected_revision: editor.revision,
+        expected_requester: access.map(|access| access.requester),
+        managers: access.map(|access| (&access.managers).into()),
+        form: editor.form,
+        unchanged,
+    }})
+}
+
 async fn strings(response: reqwest::Response) -> String {
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
@@ -76,6 +102,14 @@ async fn export_after_writer(
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
     let member = user(pool, ids.org_id, OrgRole::Member).await;
+    crate::server_fns::provisioning::provision(
+        &mut pool.acquire().await.unwrap(),
+        ids.org_id,
+        member,
+        BuiltInProfile::Member,
+    )
+    .await
+    .unwrap();
     let manager_cookie = api.cookie(ids.user_id).await;
     let member_cookie = api.cookie(member).await;
     denied(download(api, PATH, None).await, StatusCode::UNAUTHORIZED).await;
@@ -93,7 +127,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         team: vec![ProjectMemberInput {
             user_id: member,
             manager: false,
-            billable_rate: "100.00".to_owned(),
+            // An Executive Manager has no `BillableRateWriteAll`.
+            billable_rate: String::new(),
             cost_rate: String::new(),
             budget: String::new(),
         }],
@@ -139,20 +174,16 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         revision
     );
 
-    let mut editor = api
+    let editor = api
         .json(
             "load_project_editor",
             json!({"project_id":project_id}),
             &manager_cookie,
         )
         .await;
-    editor["form"]["report_visibility"] = json!("managers");
     api.json(
         "save_project_editor",
-        json!({"request":{
-            "id":Uuid::now_v7(),"project_id":project_id,
-            "expected_revision":editor["revision"],"form":editor["form"]
-        }}),
+        visibility_save(editor, "managers"),
         &manager_cookie,
     )
     .await;
@@ -162,24 +193,20 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .contains(&form.name)
     );
 
-    let mut editor = api
+    let editor = api
         .json(
             "load_project_editor",
             json!({"project_id":project_id}),
             &manager_cookie,
         )
         .await;
-    editor["form"]["report_visibility"] = json!("project_members");
     let (_, exported) = export_after_writer(
         pool,
         api,
         ids.client_id,
         (&manager_cookie, &member_cookie),
         "save_project_editor",
-        json!({"request":{
-            "id":Uuid::now_v7(),"project_id":project_id,
-            "expected_revision":editor["revision"],"form":editor["form"]
-        }}),
+        visibility_save(editor, "project_members"),
     )
     .await;
     assert!(exported.contains(&form.name));

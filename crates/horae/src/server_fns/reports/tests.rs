@@ -1,6 +1,7 @@
 use super::*;
+use crate::ops::testing::provision;
 use crate::server_fns::test_seed::{SeedIds, seed};
-use horae_core::permissions::catalog::BuiltInProfile;
+use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use serial_test::serial;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -65,11 +66,12 @@ async fn entries(pool: &PgPool, ids: &SeedIds, rows: &[(i32, Option<i32>, bool)]
     }
 }
 
-async fn report(pool: &PgPool, viewer_id: Uuid, dimension: &str) -> Vec<ReportRow> {
+async fn report(pool: &PgPool, viewer: &SeedIds, dimension: &str) -> Vec<ReportRow> {
     let day = "2026-09-07".parse().unwrap();
     fetch_report(
         pool,
-        viewer_id,
+        viewer.org_id,
+        viewer.user_id,
         (day, day),
         dimension,
         crate::reports::ReportFilters::default(),
@@ -125,10 +127,21 @@ async fn tag_filters_keep_report_dimensions_and_details_in_sync(pool: PgPool) {
         tag_id: Some(tag),
         ..Default::default()
     };
+    let grouped = |viewer: &SeedIds, dimension, filters| {
+        fetch_report(
+            &pool,
+            viewer.org_id,
+            viewer.user_id,
+            (day, day),
+            dimension,
+            filters,
+        )
+    };
+    let detailed = |viewer: &SeedIds, filters| {
+        fetch_detailed(&pool, viewer.org_id, viewer.user_id, (day, day), filters)
+    };
     for dimension in ["project", "client", "task", "person"] {
-        let rows = fetch_report(&pool, first.user_id, (day, day), dimension, selected)
-            .await
-            .unwrap();
+        let rows = grouped(&first, dimension, selected).await.unwrap();
         assert_eq!(rows.len(), 1, "{dimension}");
         assert_eq!(
             (
@@ -136,13 +149,11 @@ async fn tag_filters_keep_report_dimensions_and_details_in_sync(pool: PgPool) {
                 rows[0].billable_minutes,
                 rows[0].billable_cents
             ),
-            (90, 60, 9000),
+            (90, 60, Some(9000)),
             "{dimension}"
         );
     }
-    let details = crate::reports::fetch_entries(&pool, first.org_id, (day, day), selected)
-        .await
-        .unwrap();
+    let details = detailed(&first, selected).await.unwrap();
     assert_eq!(details.len(), 2);
     assert_eq!(details.iter().map(|row| row.minutes).sum::<i32>(), 90);
     for filters in [
@@ -164,32 +175,22 @@ async fn tag_filters_keep_report_dimensions_and_details_in_sync(pool: PgPool) {
         },
     ] {
         assert!(
-            fetch_report(&pool, first.user_id, (day, day), "project", filters)
+            grouped(&first, "project", filters)
                 .await
                 .unwrap()
                 .is_empty()
         );
-        assert!(
-            crate::reports::fetch_entries(&pool, first.org_id, (day, day), filters)
-                .await
-                .unwrap()
-                .is_empty()
-        );
+        assert!(detailed(&first, filters).await.unwrap().is_empty());
     }
     assert!(
-        fetch_report(&pool, foreign.user_id, (day, day), "project", selected)
+        grouped(&foreign, "project", selected)
             .await
             .unwrap()
             .is_empty()
     );
-    assert!(
-        crate::reports::fetch_entries(&pool, foreign.org_id, (day, day), selected)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert!(detailed(&foreign, selected).await.unwrap().is_empty());
     assert_eq!(
-        report(&pool, first.user_id, "project")
+        report(&pool, &first, "project")
             .await
             .iter()
             .map(|row| row.total_minutes)
@@ -200,7 +201,7 @@ async fn tag_filters_keep_report_dimensions_and_details_in_sync(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
-async fn manager_report_omits_groups_containing_private_project_costs(pool: PgPool) {
+async fn project_member_costs_follow_the_cost_grant_like_any_cost(pool: PgPool) {
     let (first, second) = fixtures(&pool, "EUR").await;
     entries(&pool, &first, &[(60, None, true)]).await;
     entries(&pool, &second, &[(60, None, true)]).await;
@@ -217,25 +218,22 @@ async fn manager_report_omits_groups_containing_private_project_costs(pool: PgPo
         "INSERT INTO project_member_costs (id,org_id,project_id,user_id,cost_rate_cents) VALUES ($1,$2,$3,$4,7777)",
         Uuid::now_v7(), first.org_id, first.project_id, first.user_id,
     ).execute(&pool).await.unwrap();
-    let rows = report(&pool, first.user_id, "project").await;
-    let private = rows
+    let rows = report(&pool, &first, "project").await;
+    let member_cost = rows
         .iter()
         .find(|row| row.group_id == first.project_id)
         .unwrap();
-    let public = rows
+    let default_cost = rows
         .iter()
         .find(|row| row.group_id == second.project_id)
         .unwrap();
-    let payload = serde_json::to_value(private).unwrap();
-    assert!(
-        payload.get("cost_cents").is_none(),
-        "private aggregate leaked: {payload}"
+    assert_eq!(
+        (member_cost.billable_cents, member_cost.cost_cents),
+        (Some(9000), Some(7777))
     );
-    assert_eq!(payload["billable_cents"], 9000);
-    assert_eq!(payload["total_minutes"], 60);
-    assert_eq!(serde_json::to_value(public).unwrap()["cost_cents"], 6030);
+    assert_eq!(default_cost.cost_cents, Some(6030));
 
-    // Combine a private and a legacy cost in one person group.
+    // One person group combining a project member cost and a default cost.
     sqlx::query!(
         "UPDATE time_entries SET user_id = $1 WHERE project_id = $2",
         first.user_id,
@@ -244,35 +242,16 @@ async fn manager_report_omits_groups_containing_private_project_costs(pool: PgPo
     .execute(&pool)
     .await
     .unwrap();
-    for (dimension, private_id) in [
-        ("project", first.project_id),
-        ("client", first.client_id),
-        ("task", first.task_id),
-        ("person", first.user_id),
-    ] {
-        let rows = report(&pool, first.user_id, dimension).await;
-        let private = rows.iter().find(|row| row.group_id == private_id).unwrap();
-        assert_eq!(
-            private.cost_cents, None,
-            "{dimension} leaked a private or partial cost"
-        );
-    }
-    let rows = report(&pool, first.user_id, "person").await;
+    let rows = report(&pool, &first, "person").await;
     assert_eq!(rows.len(), 1);
     assert_eq!(
-        (rows[0].total_minutes, rows[0].billable_cents),
-        (120, 21000)
+        (
+            rows[0].total_minutes,
+            rows[0].billable_cents,
+            rows[0].cost_cents
+        ),
+        (120, Some(21000), Some(13807))
     );
-
-    sqlx::query!(
-        "UPDATE users SET org_role = 'admin' WHERE id = $1",
-        first.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let rows = report(&pool, first.user_id, "person").await;
-    assert_eq!(rows[0].cost_cents, Some(13807));
     sqlx::query!(
         "UPDATE project_member_costs SET cost_rate_cents = 0 WHERE project_id = $1",
         first.project_id
@@ -280,7 +259,7 @@ async fn manager_report_omits_groups_containing_private_project_costs(pool: PgPo
     .execute(&pool)
     .await
     .unwrap();
-    let rows = report(&pool, first.user_id, "project").await;
+    let rows = report(&pool, &first, "project").await;
     assert_eq!(
         rows.iter()
             .find(|row| row.group_id == first.project_id)
@@ -289,28 +268,24 @@ async fn manager_report_omits_groups_containing_private_project_costs(pool: PgPo
         Some(0)
     );
 
-    sqlx::query!(
-        "UPDATE users SET org_role = 'manager' WHERE id = $1",
-        first.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    assert_eq!(
-        report(&pool, first.user_id, "person").await[0].cost_cents,
-        None
-    );
-    sqlx::query!(
-        "DELETE FROM project_member_costs WHERE project_id = $1",
-        first.project_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    assert_eq!(
-        report(&pool, first.user_id, "person").await[0].cost_cents,
-        Some(12060)
-    );
+    // Without the cost grant no group carries a cost, not even a default one.
+    let without_costs: Vec<_> = BuiltInProfile::ExecutiveManager
+        .direct_permissions()
+        .iter()
+        .copied()
+        .filter(|permission| *permission != Permission::CostRateReadAll)
+        .collect();
+    provision(&pool, &first, &without_costs, false).await;
+    for dimension in ["project", "client", "task", "person"] {
+        for row in report(&pool, &first, dimension).await {
+            let payload = serde_json::to_value(&row).unwrap();
+            assert!(
+                payload.get("cost_cents").is_none(),
+                "{dimension}: {payload}"
+            );
+            assert!(row.billable_cents.is_some(), "{dimension}: {payload}");
+        }
+    }
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -321,9 +296,9 @@ async fn report_uses_current_active_actor_and_tenant_for_every_filter(pool: PgPo
     entries(&pool, &first, &[(60, None, true)]).await;
     entries(&pool, &foreign, &[(120, None, true)]).await;
     let day = "2026-09-07".parse().unwrap();
-    assert_eq!(report(&pool, first.user_id, "project").await.len(), 1);
+    assert_eq!(report(&pool, &first, "project").await.len(), 1);
     assert_eq!(
-        report(&pool, foreign.user_id, "project").await[0].total_minutes,
+        report(&pool, &foreign, "project").await[0].total_minutes,
         120
     );
     for (client, project, user) in [
@@ -334,6 +309,7 @@ async fn report_uses_current_active_actor_and_tenant_for_every_filter(pool: PgPo
         assert!(
             fetch_report(
                 &pool,
+                first.org_id,
                 first.user_id,
                 (day, day),
                 "project",
@@ -349,23 +325,43 @@ async fn report_uses_current_active_actor_and_tenant_for_every_filter(pool: PgPo
             .is_empty()
         );
     }
-    assert!(report(&pool, Uuid::now_v7(), "project").await.is_empty());
+    let pool = &pool;
+    let refused = |org_id, user_id| async move {
+        let error = fetch_report(
+            pool,
+            org_id,
+            user_id,
+            (day, day),
+            "project",
+            crate::reports::ReportFilters::default(),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(
+                error,
+                ServerFnError::ServerError {
+                    code: FORBIDDEN,
+                    ..
+                }
+            ),
+            "{error:?}"
+        );
+    };
+    refused(first.org_id, Uuid::now_v7()).await;
+    refused(foreign.org_id, first.user_id).await;
+    // Own time alone is not a management report.
+    provision(pool, &first, &[Permission::TimeReadOwn], false).await;
+    refused(first.org_id, first.user_id).await;
+    provision(pool, &first, &[Permission::TimeReadAll], true).await;
     sqlx::query!(
-        "UPDATE users SET org_role = 'member' WHERE id = $1",
+        "UPDATE users SET active = false WHERE id = $1",
         first.user_id
     )
-    .execute(&pool)
+    .execute(pool)
     .await
     .unwrap();
-    assert!(report(&pool, first.user_id, "project").await.is_empty());
-    sqlx::query!(
-        "UPDATE users SET org_role = 'admin', active = false WHERE id = $1",
-        first.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    assert!(report(&pool, first.user_id, "project").await.is_empty());
+    refused(first.org_id, first.user_id).await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -385,7 +381,7 @@ async fn same_names_keep_separate_groups_for_every_dimension(pool: PgPool) {
     )
     .await;
     for dimension in ["project", "task", "client", "person", "unknown"] {
-        let rows = report(&pool, first.user_id, dimension).await;
+        let rows = report(&pool, &first, dimension).await;
         assert_eq!(rows.len(), 2, "{dimension}: {rows:?}");
         assert_eq!(rows[0].label, rows[1].label);
         let mut expected_ids = match dimension {
@@ -413,8 +409,8 @@ async fn same_names_keep_separate_groups_for_every_dimension(pool: PgPool) {
         assert_eq!(
             totals,
             [
-                (26, 31, 31, 6200, Some(2614)),
-                (132, 130, 105, 15750, Some(13267))
+                (26, 31, 31, Some(6200), Some(2614)),
+                (132, 130, 105, Some(15750), Some(13267))
             ]
         );
     }
@@ -432,7 +428,7 @@ async fn shared_person_and_task_are_partitioned_by_currency(pool: PgPool) {
     };
     entries(&pool, &cross, &[(60, None, true)]).await;
     for dimension in ["person", "task"] {
-        let rows = report(&pool, first.user_id, dimension).await;
+        let rows = report(&pool, &first, dimension).await;
         assert_eq!(rows.len(), 2, "{dimension}: {rows:?}");
         assert_eq!(rows[0].group_id, rows[1].group_id);
         assert_eq!((&*rows[0].currency, &*rows[1].currency), ("EUR", "USD"));
@@ -440,7 +436,7 @@ async fn shared_person_and_task_are_partitioned_by_currency(pool: PgPool) {
         assert_eq!(rows[1].total_minutes, 60);
         assert_eq!(
             (rows[0].billable_cents, rows[1].billable_cents),
-            (9000, 12000)
+            (Some(9000), Some(12000))
         );
     }
 }
@@ -466,6 +462,7 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
     ] {
         let rows = fetch_report(
             &pool,
+            first.org_id,
             first.user_id,
             (day, day),
             "project",
@@ -485,7 +482,7 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
                 rows[0].total_minutes,
                 rows[0].billable_cents
             ),
-            (second.project_id, 30, 6000)
+            (second.project_id, 30, Some(6000))
         );
     }
     sqlx::query!(
@@ -504,7 +501,7 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let rows = report(&pool, first.user_id, "project").await;
+    let rows = report(&pool, &first, "project").await;
     assert_eq!(rows.len(), 2);
     assert_eq!(
         (&*rows[0].label, rows[0].group_id, rows[0].total_minutes),
@@ -518,6 +515,7 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
     assert!(
         fetch_report(
             &pool,
+            first.org_id,
             first.user_id,
             (outside, outside),
             "project",
@@ -599,13 +597,13 @@ async fn every_grouping_reconciles_with_the_entries(pool: PgPool) {
             expected.4 += line_amount_cents(6030, minutes).unwrap();
         }
         for dimension in ["project", "task", "client", "person"] {
-            let groups = report(&pool, first.user_id, dimension).await;
+            let groups = report(&pool, &first, dimension).await;
             let totals = groups.iter().fold((0, 0, 0, 0, 0), |sum, group| {
                 (
                     sum.0 + group.total_minutes,
                     sum.1 + group.rounded_minutes,
                     sum.2 + group.billable_minutes,
-                    sum.3 + group.billable_cents,
+                    sum.3 + group.billable_cents.unwrap(),
                     sum.4 + group.cost_cents.unwrap(),
                 )
             });

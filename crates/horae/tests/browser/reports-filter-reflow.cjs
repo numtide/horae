@@ -1,4 +1,4 @@
-// Legacy Time report filters: label association, reflow on narrow and enlarged
+// Financial Time report filters: label association, reflow on narrow and enlarged
 // displays, and unchanged filter behaviour. Runs only against the runner's
 // disposable database. Its fixture (one long-named client and one project tag
 // linked to a seeded project) is created and removed here, so suite order does
@@ -14,8 +14,10 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const orgId = sql("SELECT org_id FROM users WHERE email='admin@example.com' AND active");
-assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${orgId}'`), '0', 'legacy report policy');
+// The seeded Administrator reads everyone's time, so Reports opens the financial view.
+const orgId = sql(`SELECT u.org_id FROM users u
+  JOIN person_permission_states s ON s.org_id=u.org_id AND s.user_id=u.id
+  WHERE u.email='admin@example.com' AND u.active AND s.is_administrator`);
 const [from, to] = sql(`SELECT min(spent_date)||'|'||max(spent_date) FROM time_entries WHERE org_id='${orgId}'`).split('|');
 assert.match(from, /^\d{4}-\d{2}-\d{2}$/);
 const shots = process.env.HORAE_BROWSER_ARTIFACTS;
@@ -303,7 +305,7 @@ const sizes = [[320, 900], [390, 900], [768, 900], [1440, 900], [320, 568], [144
     await expect(page.getByText('No entries in this range.', { exact: true })).toBeVisible();
 
     assert.deepEqual(errors, []);
-    console.log(`PASS: legacy report filter labels (with Project tag), tab order, reflow at ${sizes.map(s => s.join('x')).join('/')} in both themes (bare panel below 640px), base and 32px text, both tabs; keyboard date entry, retry, groupings, client reset, exports, empty states and long chosen names; Chromium ${browser.version()}`);
+    console.log(`PASS: financial report filter labels (with Project tag), tab order, reflow at ${sizes.map(s => s.join('x')).join('/')} in both themes (bare panel below 640px), base and 32px text, both tabs; keyboard date entry, retry, groupings, client reset, exports, empty states and long chosen names; Chromium ${browser.version()}`);
   } finally {
     try {
       await page.unrouteAll({ behavior: 'wait' });

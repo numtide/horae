@@ -97,10 +97,13 @@ async fn materialized_exports_deny_revoked_managers(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    assert!(matches!(
-        entries(&pool, ids.org_id, ids.user_id, &params()).await,
-        Err(StatusCode::FORBIDDEN)
-    ));
+    // Time exports answer from the stored state, which the role does not
+    // change; invoice exports still decide by role.
+    assert!(
+        entries(&pool, ids.org_id, ids.user_id, &params())
+            .await
+            .is_ok()
+    );
     assert!(matches!(
         invoice(&pool, ids.org_id, ids.user_id, id).await,
         Err(StatusCode::FORBIDDEN)
@@ -168,8 +171,14 @@ async fn materialized_exports_require_same_tenant_active_actor(pool: PgPool) {
 #[serial_test::serial]
 async fn materialized_exports_deny_winning_legacy_revocations(pool: PgPool) {
     for reader in READERS {
+        // Only invoice exports still answer from the role; every person keeps
+        // reading their own time, so time exports are revoked by deactivation.
+        let revocations: &[bool] = match reader {
+            Reader::Entries => &[true],
+            Reader::Invoice | Reader::Pdf => &[false, true],
+        };
         for gated in [false, true] {
-            for deactivate in [false, true] {
+            for &deactivate in revocations {
                 let case = Arc::new(Case::new(&pool).await);
                 let before = case.stored(&pool).await;
                 let mut writer = pool.begin().await.unwrap();
