@@ -1,3 +1,4 @@
+use super::super::tests::become_profile;
 use super::*;
 use crate::models::project_creation::{
     InvoiceDefaultsInput, ProjectMemberInput, ProjectTaskInput, ReportVisibility, SecondTaxInput,
@@ -16,7 +17,7 @@ mod task_activity;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn editor_load_uses_current_role_across_all_billing_configurations(pool: PgPool) {
+async fn editor_load_uses_current_grants_across_all_billing_configurations(pool: PgPool) {
     for project_type in [
         ProjectType::TimeAndMaterials,
         ProjectType::FixedFee,
@@ -50,18 +51,15 @@ async fn editor_load_uses_current_role_across_all_billing_configurations(pool: P
                     Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id, mode, scope,
                 ).execute(&pool).await.unwrap();
             }
-            for role in [OrgRole::Admin, OrgRole::Manager, OrgRole::Member] {
-                sqlx::query!(
-                    "UPDATE users SET org_role = $2 WHERE id = $1",
-                    ids.user_id,
-                    role as OrgRole
-                )
-                .execute(&pool)
-                .await
-                .unwrap();
+            for profile in [
+                BuiltInProfile::Administrator,
+                BuiltInProfile::ExecutiveManager,
+                BuiltInProfile::Member,
+            ] {
+                become_profile(&pool, &ids, profile).await;
                 let editor =
                     load_editable_project(&pool, ids.user_id, ids.org_id, ids.project_id).await;
-                if role == OrgRole::Member {
+                if profile == BuiltInProfile::Member {
                     assert!(editor.is_err());
                     continue;
                 }
@@ -80,13 +78,11 @@ async fn editor_load_uses_current_role_across_all_billing_configurations(pool: P
                     }
                 );
             }
-            sqlx::query!(
-                "UPDATE users SET org_role = 'admin', active = false WHERE id = $1",
-                ids.user_id
-            )
-            .execute(&pool)
-            .await
-            .unwrap();
+            become_profile(&pool, &ids, BuiltInProfile::Administrator).await;
+            sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+                .execute(&pool)
+                .await
+                .unwrap();
             assert!(
                 load_editable_project(&pool, ids.user_id, ids.org_id, ids.project_id)
                     .await
@@ -146,7 +142,7 @@ async fn configured_fixture(
         }],
         team: vec![ProjectMemberInput {
             user_id: owner.user_id,
-            manager: true,
+            manager: false,
             billable_rate: String::new(),
             cost_rate: "10.00".into(),
             budget: String::new(),
@@ -168,84 +164,41 @@ async fn configured_fixture(
     )
     .await
     .unwrap();
+    // The editor tests start from a lead role without a designation, as
+    // projects created before creation designated managers have, and
+    // designate explicitly where they need one.
+    sqlx::query!(
+        "UPDATE assignments SET role = 'lead' WHERE project_id = $1",
+        id
+    )
+    .execute(pool)
+    .await
+    .unwrap();
     let project = load_editable_project(pool, owner.user_id, owner.org_id, id)
         .await
         .unwrap();
     (owner, project)
 }
 
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn manager_edit_preserves_private_settings_and_cannot_remove_them_indirectly(pool: PgPool) {
-    let (owner, original) = configured_fixture(&pool).await;
+/// Designates `manager` on `project`, as the editor or creation would. The
+/// assignment's `lead` role alone is not a designation.
+pub(super) async fn designate(
+    pool: &PgPool,
+    ids: &crate::server_fns::test_seed::SeedIds,
+    project: Uuid,
+    manager: Uuid,
+) {
     sqlx::query!(
-        "UPDATE assignments SET role='admin' WHERE project_id=$1 AND user_id=$2",
-        original.id,
-        owner.user_id
+        "INSERT INTO project_management_assignments (id, org_id, project_id, manager_id)
+         VALUES ($1, $2, $3, $4)",
+        Uuid::now_v7(),
+        ids.org_id,
+        project,
+        manager
     )
-    .execute(&pool)
+    .execute(pool)
     .await
     .unwrap();
-    let assignment = sqlx::query!("SELECT id, role as \"role: ProjectRole\" FROM assignments WHERE project_id=$1 AND user_id=$2", original.id, owner.user_id)
-        .fetch_one(&pool).await.unwrap();
-    sqlx::query!(
-        "UPDATE users SET org_role='manager' WHERE id=$1",
-        owner.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let mut request = edit_request(
-        load_editable_project(&pool, owner.user_id, owner.org_id, original.id)
-            .await
-            .unwrap(),
-    );
-    request.form.name = "Manager rename".into();
-    request.form.tasks[0].rate = "30.00".into();
-    save_editable_project(&pool, owner.user_id, owner.org_id, &request, false)
-        .await
-        .unwrap();
-    let preserved = sqlx::query!("SELECT id, role as \"role: ProjectRole\" FROM assignments WHERE project_id=$1 AND user_id=$2", original.id, owner.user_id)
-        .fetch_one(&pool).await.unwrap();
-    assert_eq!(
-        (preserved.id, preserved.role),
-        (assignment.id, assignment.role)
-    );
-    let saved = load_editable_project(&pool, owner.user_id, owner.org_id, original.id)
-        .await
-        .unwrap();
-    let mut removal = edit_request(saved.clone());
-    removal.form.name = "Must roll back".into();
-    removal.form.team.clear();
-    assert!(matches!(
-        save_editable_project(&pool, owner.user_id, owner.org_id, &removal, false)
-            .await
-            .unwrap_err(),
-        ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        }
-    ));
-    assert_eq!(
-        load_editable_project(&pool, owner.user_id, owner.org_id, original.id)
-            .await
-            .unwrap(),
-        saved
-    );
-    sqlx::query!(
-        "UPDATE users SET org_role='admin' WHERE id=$1",
-        owner.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let admin = load_editable_project(&pool, owner.user_id, owner.org_id, original.id)
-        .await
-        .unwrap();
-    assert_eq!(admin.form.admin_notes, original.form.admin_notes);
-    assert_eq!(
-        admin.form.team[0].cost_rate,
-        original.form.team[0].cost_rate
-    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -409,11 +362,14 @@ async fn saves_recheck_current_authority_and_do_not_repeat_noops(pool: PgPool) {
             .unwrap_err(),
         ServerFnError::ServerError { code: CONFLICT, .. }
     ));
-    for (role, active) in [(OrgRole::Member, true), (OrgRole::Admin, false)] {
+    for (profile, active) in [
+        (BuiltInProfile::Member, true),
+        (BuiltInProfile::Administrator, false),
+    ] {
+        become_profile(&pool, &owner, profile).await;
         sqlx::query!(
-            "UPDATE users SET org_role=$2, active=$3 WHERE id=$1",
+            "UPDATE users SET active=$2 WHERE id=$1",
             owner.user_id,
-            role as OrgRole,
             active
         )
         .execute(&pool)
@@ -610,10 +566,23 @@ async fn foreign_actor_cannot_save_or_retry_another_organizations_edit(pool: PgP
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let mut request = edit_request(original.clone());
     request.form.name = "Not authorized".into();
+    // Bound to the foreign session, so the project lookup decides.
+    let mut foreign_request = request.clone();
+    foreign_request.expected_requester =
+        Some(crate::models::permission_editor::PermissionRequester {
+            org_id: foreign.org_id,
+            user_id: foreign.user_id,
+        });
     assert!(matches!(
-        save_editable_project(&pool, foreign.user_id, foreign.org_id, &request, false)
-            .await
-            .unwrap_err(),
+        save_editable_project(
+            &pool,
+            foreign.user_id,
+            foreign.org_id,
+            &foreign_request,
+            false
+        )
+        .await
+        .unwrap_err(),
         ServerFnError::ServerError {
             code: NOT_FOUND,
             ..
@@ -629,9 +598,15 @@ async fn foreign_actor_cannot_save_or_retry_another_organizations_edit(pool: PgP
         .await
         .unwrap();
     assert!(matches!(
-        save_editable_project(&pool, foreign.user_id, foreign.org_id, &request, false)
-            .await
-            .unwrap_err(),
+        save_editable_project(
+            &pool,
+            foreign.user_id,
+            foreign.org_id,
+            &foreign_request,
+            false
+        )
+        .await
+        .unwrap_err(),
         ServerFnError::ServerError {
             code: NOT_FOUND,
             ..
@@ -860,7 +835,7 @@ async fn editor_loads_legacy_values_without_fabricating_a_billing_mode_or_draft(
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn editor_recovers_full_configuration_and_redacts_private_values_after_role_change(
+async fn editor_recovers_full_configuration_and_redacts_private_values_after_grants_change(
     pool: PgPool,
 ) {
     let owner = seed(&pool, BuiltInProfile::Administrator).await;
@@ -924,9 +899,22 @@ async fn editor_recovers_full_configuration_and_redacts_private_values_after_rol
     )
     .await
     .unwrap();
+    // The creation's manager toggle designated the owner.
     let project = load_editable_project(&pool, owner.user_id, owner.org_id, id)
         .await
         .unwrap();
+    assert_eq!(
+        project
+            .access
+            .as_ref()
+            .unwrap()
+            .managers
+            .managers
+            .iter()
+            .map(|manager| manager.id)
+            .collect::<Vec<_>>(),
+        [owner.user_id]
+    );
     assert!(project.configured && project.active);
     assert_eq!(project.form.name, form.name);
     assert_eq!(project.form.code, form.code);
@@ -956,13 +944,9 @@ async fn editor_recovers_full_configuration_and_redacts_private_values_after_rol
     );
     assert_eq!(project.form.invoice_defaults.discount, "2.50");
 
-    sqlx::query!(
-        "UPDATE users SET org_role = 'manager' WHERE id = $1",
-        owner.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    // A Project Manager designated on the project edits it without any
+    // private or financial grant.
+    become_profile(&pool, &owner, BuiltInProfile::ProjectManager).await;
     let manager = load_editable_project(&pool, owner.user_id, owner.org_id, id)
         .await
         .unwrap();
@@ -971,11 +955,11 @@ async fn editor_recovers_full_configuration_and_redacts_private_values_after_rol
     assert!(manager.selection.people[0].cost_rate_cents.is_none());
     let serialized = serde_json::to_string(&manager).unwrap();
     assert!(!serialized.contains("Private editor notes") && !serialized.contains("62.25"));
-    assert_eq!(manager.form.tasks[0].rate, "0.00");
+    assert!(manager.form.tasks[0].rate.is_empty());
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn editor_rechecks_tenant_role_and_active_status(pool: PgPool) {
+async fn editor_rechecks_tenant_grants_and_active_status(pool: PgPool) {
     let owner = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for id in [foreign.project_id, Uuid::now_v7()] {
@@ -990,11 +974,14 @@ async fn editor_rechecks_tenant_role_and_active_status(pool: PgPool) {
             }
         ));
     }
-    for (role, active) in [(OrgRole::Member, true), (OrgRole::Admin, false)] {
+    for (profile, active) in [
+        (BuiltInProfile::Member, true),
+        (BuiltInProfile::Administrator, false),
+    ] {
+        become_profile(&pool, &owner, profile).await;
         sqlx::query!(
-            "UPDATE users SET org_role = $2, active = $3 WHERE id = $1",
+            "UPDATE users SET active = $2 WHERE id = $1",
             owner.user_id,
-            role as OrgRole,
             active
         )
         .execute(&pool)
@@ -1048,6 +1035,8 @@ async fn editor_keeps_archived_selected_identities_and_nullable_overrides(pool: 
     .execute(&pool)
     .await
     .unwrap();
+    // The archived person stays a designated manager.
+    designate(&pool, &owner, owner.project_id, user_id).await;
 
     let project = load_editable_project(&pool, owner.user_id, owner.org_id, owner.project_id)
         .await
@@ -1345,5 +1334,83 @@ async fn added_task_links_inherit_default_rates_only_for_task_billing(pool: PgPo
             ),
             "{project_type:?} {rate_mode:?}"
         );
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn team_changes_report_assignment_events_for_plugins(pool: PgPool) {
+    use crate::plugin::AppEvent;
+    let (owner, original) = configured_fixture(&pool).await;
+    let added = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO users (id,org_id,email,name) VALUES ($1,$2,$3,'Added teammate')",
+        added,
+        owner.org_id,
+        format!("{added}@test.com"),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut request = edit_request(original.clone());
+    request.form.team.push(ProjectMemberInput {
+        user_id: added,
+        manager: false,
+        billable_rate: String::new(),
+        cost_rate: String::new(),
+        budget: String::new(),
+    });
+    let saved = save_project_edit(&pool, owner.user_id, owner.org_id, &request, false)
+        .await
+        .unwrap();
+    let assignment = sqlx::query_scalar!(
+        "SELECT id FROM assignments WHERE project_id = $1 AND user_id = $2",
+        original.id,
+        added
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    match saved.team_events.as_slice() {
+        [
+            AppEvent::UserAssignedToProject {
+                org_id,
+                assignment: payload,
+                ..
+            },
+        ] => assert_eq!(
+            (*org_id, payload.id, payload.project_id, payload.user_id),
+            (owner.org_id, assignment, original.id, added)
+        ),
+        events => panic!("{events:?}"),
+    }
+    // Saving a team that kept its people reports nobody.
+    let project = load_editable_project(&pool, owner.user_id, owner.org_id, original.id)
+        .await
+        .unwrap();
+    let mut request = edit_request(project);
+    request.form.name = "Renamed with the same team".into();
+    let saved = save_project_edit(&pool, owner.user_id, owner.org_id, &request, false)
+        .await
+        .unwrap();
+    assert!(saved.changed && saved.team_events.is_empty());
+    let project = load_editable_project(&pool, owner.user_id, owner.org_id, original.id)
+        .await
+        .unwrap();
+    let mut request = edit_request(project);
+    request.form.team.retain(|member| member.user_id != added);
+    let saved = save_project_edit(&pool, owner.user_id, owner.org_id, &request, false)
+        .await
+        .unwrap();
+    match saved.team_events.as_slice() {
+        [
+            AppEvent::AssignmentRemoved {
+                assignment: payload,
+                ..
+            },
+        ] => assert_eq!(
+            (payload.id, payload.project_id, payload.user_id),
+            (assignment, original.id, added)
+        ),
+        events => panic!("{events:?}"),
     }
 }

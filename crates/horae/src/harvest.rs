@@ -22,7 +22,6 @@ use axum::{
     routing::{MethodRouter, get},
 };
 use chrono::{DateTime, NaiveDate, Utc};
-use horae_core::types::OrgRole;
 use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -1290,7 +1289,8 @@ mod tests {
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-    async fn a_manager_lists_billable_rates_and_only_an_admin_cost_rates(pool: PgPool) {
+    async fn user_rates_follow_the_stored_rate_grants(pool: PgPool) {
+        use horae_core::permissions::catalog::Permission;
         let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
         let other = colleague(&pool, &ids).await;
         sqlx::query!(
@@ -1301,9 +1301,21 @@ mod tests {
         .await
         .unwrap();
 
-        let Json(page) = users_page(&pool, &caller(&ids, OrgRole::Manager), no_user_filters())
+        let Json(page) = users_page(&pool, &caller(&ids, OrgRole::Member), no_user_filters())
             .await
-            .expect("a manager was refused the user list");
+            .unwrap();
+        assert!(
+            page.data["users"]
+                .iter()
+                .any(|u| u.cost_rate == Some(eur(12345)))
+        );
+
+        // Billable rates without cost rates.
+        let grants = [Permission::PeopleReadAll, Permission::BillableRateReadAll];
+        crate::ops::testing::provision(&pool, &ids, &grants, false).await;
+        let Json(page) = users_page(&pool, &caller(&ids, OrgRole::Member), no_user_filters())
+            .await
+            .expect("a people reader was refused the user list");
         let users = &page.data["users"];
         assert_eq!(users.len(), 2);
         assert!(users.iter().all(|u| u.cost_rate.is_none()));
@@ -1311,15 +1323,6 @@ mod tests {
             users
                 .iter()
                 .any(|u| u.default_hourly_rate == Some(eur(9000)))
-        );
-
-        let Json(page) = users_page(&pool, &caller(&ids, OrgRole::Admin), no_user_filters())
-            .await
-            .unwrap();
-        assert!(
-            page.data["users"]
-                .iter()
-                .any(|u| u.cost_rate == Some(eur(12345)))
         );
     }
 

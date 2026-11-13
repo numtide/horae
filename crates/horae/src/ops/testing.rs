@@ -7,7 +7,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{AppEvent, EventSink};
-use crate::server_fns::test_seed::{SeedIds, seed};
+use crate::server_fns::test_seed::{SeedIds, clear_state, seed};
 
 /// Keeps dispatched events so a test can inspect them.
 #[derive(Default)]
@@ -36,6 +36,16 @@ pub(crate) async fn seed_profile(pool: &PgPool, profile: BuiltInProfile) -> Seed
     .await
     .unwrap();
     ids
+}
+
+/// Replaces the seeded person's permission state with `profile`'s built-in
+/// state, as if the permission editor had assigned it.
+pub(crate) async fn become_profile(pool: &PgPool, ids: &SeedIds, profile: BuiltInProfile) {
+    clear_state(pool, ids.user_id).await;
+    let mut connection = pool.acquire().await.unwrap();
+    crate::server_fns::provisioning::provision(&mut connection, ids.org_id, ids.user_id, profile)
+        .await
+        .unwrap();
 }
 
 /// Gives the seeded person exactly `permissions` (plus prerequisites and the

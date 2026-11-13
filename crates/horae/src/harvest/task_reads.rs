@@ -25,29 +25,24 @@ pub(super) async fn read(
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
              SELECT t.id,t.harvest_id,t.name,t.active,t.billable_default,
-                    CASE WHEN (CASE WHEN $7 THEN legacy.can_view_rates ELSE $9 END)
-                      THEN t.default_rate_cents END default_rate_cents,
+                    CASE WHEN $7 THEN t.default_rate_cents END default_rate_cents,
                     t.default_rate_currency
              FROM tasks t
-             LEFT JOIN task_read_access legacy ON legacy.org_id=t.org_id
-               AND legacy.task_id=t.id AND legacy.user_id=$2
-             WHERE t.org_id=$1 AND (CASE WHEN $7 THEN legacy.user_id IS NOT NULL ELSE $8 END)
-               AND ($3::boolean IS NULL OR t.active=$3)
-               AND ($4::uuid IS NULL OR t.id=$4)
+             WHERE t.org_id=$1 AND $6
+               AND ($2::boolean IS NULL OR t.active=$2)
+               AND ($3::uuid IS NULL OR t.id=$3)
            ), totals AS (SELECT COUNT(*) total FROM visible), page AS (
-             SELECT * FROM visible ORDER BY name,id LIMIT $5 OFFSET $6
+             SELECT * FROM visible ORDER BY name,id LIMIT $4 OFFSET $5
            )
            SELECT totals.total AS "total!",t.harvest_id AS "id?",t.name AS "name?",
                   t.active AS "active?",t.billable_default AS "billable_default?",t.default_rate_cents,
                   t.default_rate_currency
            FROM totals LEFT JOIN page t ON true ORDER BY t.name,t.id"#,
         caller.org_id,
-        caller.user_id,
         filters.is_active,
         task_id,
         limit,
         offset,
-        access.legacy(),
         access.has(Permission::TaskReadAll),
         access.has(Permission::BillableRateReadAll),
     )

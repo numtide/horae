@@ -102,6 +102,8 @@ pub(super) fn Billing(
                     label { class: if project_type == kind { "np-type relative border rounded-xl p-4 bg-choice-selected cursor-pointer" } else { "np-type relative border rounded-xl p-4 bg-secondary cursor-pointer" },
                         span { class: "flex items-center gap-3 text-sm font-semibold text-strong",
                             input { class: "absolute inset-0 w-full h-full opacity-0 m-0 cursor-pointer", r#type: "radio", name: "np-project-type", value: kind.to_string(), checked: project_type == kind,
+                                // A fixed fee project needs its fee.
+                                disabled: kind == ProjectType::FixedFee && !options.read().can_edit_billable_settings,
                                 id: if kind == ProjectType::TimeAndMaterials { "np-project-type" },
                                 aria_invalid: if kind == ProjectType::TimeAndMaterials { error_id(ProjectFormField::ProjectType).map(|_| "true") },
                                 aria_describedby: if kind == ProjectType::TimeAndMaterials { error_id(ProjectFormField::ProjectType) },
@@ -148,6 +150,8 @@ pub(super) fn Billing(
                                 div { class: "np-option flex flex-wrap items-center gap-3 p-3 bg-base border border-input rounded-btn",
                                     label { class: "flex flex-1 basis-form-select min-w-0 items-center gap-3 cursor-pointer",
                                         input { class: "choice-box radio size-4 m-0", r#type: "radio", name: "np-rate-mode", checked: form.read().rate_mode == mode,
+                                            // The project rate is required in this mode.
+                                            disabled: mode == RateMode::Project && !options.read().can_edit_billable_settings,
                                             id: if mode == RateMode::Person { "np-rate-mode" },
                                             aria_invalid: if mode == RateMode::Person { error_id(ProjectFormField::RateMode).map(|_| "true") },
                                             aria_describedby: if mode == RateMode::Person { error_id(ProjectFormField::RateMode) },
@@ -157,7 +161,7 @@ pub(super) fn Billing(
                                     if mode == RateMode::Project && form.read().rate_mode == mode {
                                         div { class: "flex flex-wrap items-center gap-2 min-w-0 max-w-full",
                                             span { class: "font-mono text-sm text-subtle", "{currency_label}" }
-                                            Input { id: "np-project-rate", error_id: error_id(ProjectFormField::ProjectRate), label: "Hourly rate ({currency_label})", class: "w-30 max-w-full font-mono text-right", value: form.read().project_rate.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::ProjectRate); form.write().project_rate = event.value(); } }
+                                            Input { id: "np-project-rate", error_id: error_id(ProjectFormField::ProjectRate), label: "Hourly rate ({currency_label})", disabled: !options.read().can_edit_billable_settings, class: "w-30 max-w-full font-mono text-right", value: form.read().project_rate.clone(), oninput: move |event: FormEvent| { on_edit.call(ProtectedProjectField::ProjectRate); form.write().project_rate = event.value(); } }
                                             span { class: "text-xs text-subtle whitespace-nowrap", "/ h" }
                                         }
                                     }
@@ -178,7 +182,7 @@ pub(super) fn Billing(
                 } else {
                     p { class: "form-hint m-0", "Financial settings are restricted. Saving other changes keeps their current values." }
                 }
-                Budget { form, billable_access, on_edit, currency: currency_label, email_available: options.read().email_available, legacy, invalid_field, error_message: error_message.clone() }
+                Budget { form, billable_access: if options.read().can_edit_billable_settings { billable_access } else { ProjectFieldAccess::ReadOnly }, on_edit, currency: currency_label, email_available: options.read().email_available, legacy, invalid_field, error_message: error_message.clone() }
                 if project_type == ProjectType::NonBillable {
                     p { class: "text-xs text-subtle m-0", "Internal work, R&D, sales. This project's time is non-billable and cannot be invoiced." }
                 }

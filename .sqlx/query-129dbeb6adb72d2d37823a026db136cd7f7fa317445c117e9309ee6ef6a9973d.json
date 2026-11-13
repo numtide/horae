@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.user_id\n         FROM assignments a JOIN projects p ON p.id = a.project_id\n         JOIN clients c ON c.id = p.client_id AND c.org_id = p.org_id\n         JOIN users member ON member.id = a.user_id AND member.org_id = p.org_id\n         LEFT JOIN project_management_assignments management ON management.org_id = p.org_id\n           AND management.project_id = p.id AND management.manager_id = $3\n         WHERE a.project_id = $1 AND p.org_id = $2\n           AND ($4 OR ($5 AND management.id IS NOT NULL) OR a.user_id = $3)\n         ORDER BY a.created_at, a.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "129dbeb6adb72d2d37823a026db136cd7f7fa317445c117e9309ee6ef6a9973d"
+}

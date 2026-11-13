@@ -34,13 +34,11 @@ pub(super) async fn fetch(
         .await?
         .ok_or_else(|| not_found("Project not found"))?;
     let context = sqlx::query!(
-        r#"SELECT u.org_role as "org_role: OrgRole",
-            p.client_id, p.project_type as "project_type: ProjectType", p.active,
+        r#"SELECT p.client_id, p.project_type as "project_type: ProjectType", p.active,
             EXISTS(SELECT 1 FROM project_management_assignments management
-                WHERE management.org_id=u.org_id AND management.project_id=$3
-                    AND management.manager_id=u.id) AS "managed!"
-        FROM users u JOIN projects p ON p.org_id=u.org_id AND p.id=$3
-        WHERE u.org_id=$1 AND u.id=$2 AND u.active"#,
+                WHERE management.org_id=p.org_id AND management.project_id=p.id
+                    AND management.manager_id=$2) AS "managed!"
+        FROM projects p WHERE p.org_id=$1 AND p.id=$3"#,
         viewer.org_id,
         viewer.id,
         project_id,
@@ -48,12 +46,9 @@ pub(super) async fn fetch(
     .fetch_one(&mut *access.tx)
     .await
     .map_err(server_err)?;
-    let can_edit = if access.legacy() {
-        matches!(context.org_role, OrgRole::Admin | OrgRole::Manager)
-    } else {
-        access.has(Permission::ProjectWriteAll)
-            || (access.has(Permission::ProjectWriteManaged) && context.managed)
-    };
+    // The same rule as `ops::projects::set_active`.
+    let can_edit = access.has(Permission::ProjectWriteAll)
+        || (access.has(Permission::ProjectWriteManaged) && context.managed);
     let member_ids = team_member_ids(&mut access, viewer, project_id).await?;
     let team = sqlx::query_as!(
         ProjectDetailIdentity,
@@ -76,10 +71,8 @@ pub(super) async fn fetch(
     .fetch_all(&mut *access.tx)
     .await
     .map_err(server_err)?;
-    let canonical_permissions = !access.legacy();
     // The Clients page's `ClientReadScope::can_read`, applied to this reader.
-    let can_open_client = access.legacy() || access.has(Permission::ClientReadAll);
-    let can_change_status = access.legacy() && context.org_role.is_manager_or_above();
+    let can_open_client = access.has(Permission::ClientReadAll);
     let budget = crate::server_fns::budgets::project_budget(
         &mut access,
         viewer.org_id,
@@ -91,14 +84,13 @@ pub(super) async fn fetch(
     access.tx.commit().await.map_err(server_err)?;
     Ok(ProjectDetailView {
         requester,
-        canonical_permissions,
         project,
         client_id: context.client_id,
         project_type: context.project_type,
         active: context.active,
         can_edit,
         can_open_client,
-        can_change_status,
+        can_change_status: can_edit,
         team,
         tasks,
         budget,

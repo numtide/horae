@@ -156,9 +156,8 @@ async fn a_project_restores_once_its_client_is_restored(pool: PgPool) {
 }
 
 /// Archive commits while a restoration waits for the client lock. The restore
-/// must fail at READ COMMITTED (it reads the archived client) and at REPEATABLE
-/// READ (its share lock on a row changed after its snapshot is a serialization
-/// failure), and write nothing either way.
+/// runs at READ COMMITTED even from a session defaulting to REPEATABLE READ,
+/// reads the archived client, refuses and writes nothing.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_restore_waiting_for_a_client_archive_writes_nothing(pool: PgPool) {
     let rr = repeatable_read_pool(&pool).await;
@@ -214,21 +213,14 @@ async fn a_restore_waiting_for_a_client_archive_writes_nothing(pool: PgPool) {
                 .await
                 .unwrap()
                 .unwrap();
+            // The write selects READ COMMITTED whatever the session default,
+            // so it reads the committed archive and refuses.
             let (code, message) = code_and_message(result.unwrap_err());
-            if isolation == "default" {
-                // It reads the committed archive and refuses.
-                assert_eq!(
-                    (code, message.as_str()),
-                    (CONFLICT, RESTORE_CLIENT_FIRST),
-                    "bulk={bulk}"
-                );
-            } else {
-                // Its share lock meets a client changed after its snapshot: a
-                // database failure, never the archived-client refusal or success.
-                // The status code, not PostgreSQL's wording, is the contract.
-                assert_eq!(code, INTERNAL_ERROR, "bulk={bulk}: {message}");
-                assert_ne!(message, RESTORE_CLIENT_FIRST, "bulk={bulk}");
-            }
+            assert_eq!(
+                (code, message.as_str()),
+                (CONFLICT, RESTORE_CLIENT_FIRST),
+                "bulk={bulk} at {isolation}"
+            );
             let active =
                 sqlx::query_scalar!("SELECT active FROM projects WHERE id = $1", project_id)
                     .fetch_one(&pool)
