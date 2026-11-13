@@ -6,12 +6,16 @@ use crate::models::MissingPerson;
 use crate::models::user::{Activation, AddedPeople, NewPerson};
 use crate::server_fns;
 
+/// The outcome for an email the server refused without saying why.
+pub(super) const UNAVAILABLE: &str = "Email can't be used";
+
 /// One person a run could not import. When adding them to Horae would let the
 /// next run match them, a small prefilled form does it in place.
 #[component]
 pub(super) fn MissingPersonRow(
     person: MissingPerson,
-    /// "Added" or "Already in Horae" once this page added the person's email.
+    /// "Added", "Already in Horae" or `UNAVAILABLE` once this page tried to
+    /// add the person's email.
     outcome: Option<&'static str>,
     busy: Signal<bool>,
     on_added: EventHandler<AddedPeople>,
@@ -51,6 +55,12 @@ pub(super) fn MissingPersonRow(
         busy.set(true);
         error.set(None);
         match server_fns::add_harvest_people(vec![new.clone()], activation).await {
+            Ok(result) if !result.unavailable.is_empty() => {
+                error.set(Some(format!(
+                    "The email {} can't be used for a new person. Use another address.",
+                    new.email
+                )));
+            }
             Ok(result) => {
                 done.set(Some(if result.added.is_empty() {
                     "Already in Horae"
@@ -74,7 +84,10 @@ pub(super) fn MissingPersonRow(
                 // The action stays in the first column, so it is on screen
                 // even when a narrow viewport scrolls the table.
                 if let Some(state) = outcome.or(done()) {
-                    span { class: "badge badge-success badge-sm", "{state}" }
+                    span {
+                        class: if state == UNAVAILABLE { "badge badge-warning badge-sm" } else { "badge badge-success badge-sm" },
+                        "{state}"
+                    }
                 } else if addable && !open() {
                     button {
                         r#type: "button",

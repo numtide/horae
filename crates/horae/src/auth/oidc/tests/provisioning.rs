@@ -417,10 +417,9 @@ async fn concurrent_sign_ins_with_case_variant_emails_create_one_account(pool: P
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn admin_creation_and_provisioning_of_case_variant_emails_create_one_account(pool: PgPool) {
     let ids = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
-    // Hold the email lock. The sign-in takes its share of the organization row
-    // and queues on the email; the administrator's exclusive organization lock
-    // then queues behind the sign-in, so the sign-in commits first and the
-    // administrator must see its lowercase twin.
+    // Hold the email lock. The sign-in queues on the email first and the
+    // administrator's request queues behind it, so the sign-in commits first
+    // and the administrator must see its lowercase twin.
     let mut blocker = pool.begin().await.unwrap();
     crate::db::lock_new_user_email(&mut blocker, EMAIL)
         .await
@@ -441,8 +440,8 @@ async fn admin_creation_and_provisioning_of_case_variant_emails_create_one_accou
     let admin = tokio::spawn(async move {
         crate::server_fns::insert_user(
             &db,
-            ids.org_id,
-            ids.user_id,
+            &crate::ops::testing::Recorder::default(),
+            crate::ops::Caller::session(ids.org_id, ids.user_id),
             "Ada@example.com",
             "Ada",
             BuiltInProfile::Member,

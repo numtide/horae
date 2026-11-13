@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE person_permission_states\n            SET grants = $2, source = 'individual', built_in_profile = NULL\n          WHERE user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e403903786445843027facba30610eff48108b93a60595e1e6cebae939d9586b"
+}

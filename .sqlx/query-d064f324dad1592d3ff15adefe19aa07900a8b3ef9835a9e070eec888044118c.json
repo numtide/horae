@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $2, $3, 'Target', 'member')",
+  "query": "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, 'Target')",
   "describe": {
     "columns": [],
     "parameters": {
@@ -12,5 +12,5 @@
     },
     "nullable": []
   },
-  "hash": "dfe8f696b4fcf0c6f5405c8ca137d67cbe74587fa68c29659edb184d7dd5afc8"
+  "hash": "d064f324dad1592d3ff15adefe19aa07900a8b3ef9835a9e070eec888044118c"
 }

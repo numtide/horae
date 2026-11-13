@@ -1886,33 +1886,6 @@ async fn admin_creates_user_and_duplicate_rejected(pool: PgPool) {
     );
 }
 
-/// Admin can change a user's role (set_user_role) — FR-002.
-#[sqlx::test(migrations = "./migrations")]
-#[serial]
-async fn admin_changes_user_role(pool: PgPool) {
-    let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
-
-    // Promote member to manager.
-    sqlx::query!(
-        "UPDATE users SET org_role = $2 WHERE id = $1",
-        user_id,
-        OrgRole::Manager as OrgRole,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
-    let role: String = sqlx::query_scalar!(
-        r#"SELECT org_role::text as "role!: String" FROM users WHERE id = $1"#,
-        user_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(role, "manager");
-}
-
 /// Deactivating a user blocks them from the active-user queries used by
 /// auth helpers (require_admin, require_manager, get_me all filter
 /// `active = true`), while their historical time entries remain intact (FR-002).
@@ -2243,51 +2216,6 @@ async fn rate_resolution_cascade(pool: PgPool) {
         Some(10000),
         "user default rate should be the fallback"
     );
-}
-
-/// The org must keep at least one active admin: the query behind
-/// `set_user_active`/`set_user_role`'s guard reports no *other* active admin
-/// when the last one would be removed, and only counts admins who are still
-/// active (FR-002 — prevents a lone admin self-lockout that forces a re-seed).
-#[sqlx::test(migrations = "./migrations")]
-#[serial]
-async fn last_active_admin_cannot_be_removed(pool: PgPool) {
-    // Mirrors `ensure_other_active_admin`: active admins in the org other than
-    // `exclude`. Zero means removing `exclude` (deactivate/demote) is refused.
-    async fn other_active_admins(pool: &PgPool, org_id: Uuid, exclude: Uuid) -> i64 {
-        sqlx::query_scalar!(
-            r#"SELECT COUNT(*) as "count!: i64"
-                 FROM users
-                WHERE org_id = $1 AND id <> $2 AND active = true AND org_role = $3"#,
-            org_id,
-            exclude,
-            OrgRole::Admin as OrgRole,
-        )
-        .fetch_one(pool)
-        .await
-        .unwrap()
-    }
-
-    let org_id = seed_org(&pool).await;
-    let admin = seed_user(&pool, org_id, OrgRole::Admin).await;
-
-    // Sole admin: nothing else would remain, so the guard rejects.
-    assert_eq!(other_active_admins(&pool, org_id, admin).await, 0);
-
-    // A member never blocks the admin's removal check (still an admin left).
-    let member = seed_user(&pool, org_id, OrgRole::Member).await;
-    assert_eq!(other_active_admins(&pool, org_id, member).await, 1);
-
-    // A second admin makes removing the first safe.
-    let admin2 = seed_user(&pool, org_id, OrgRole::Admin).await;
-    assert_eq!(other_active_admins(&pool, org_id, admin).await, 1);
-
-    // An inactive admin does not count as a remaining admin.
-    sqlx::query!("UPDATE users SET active = false WHERE id = $1", admin2)
-        .execute(&pool)
-        .await
-        .unwrap();
-    assert_eq!(other_active_admins(&pool, org_id, admin).await, 0);
 }
 
 // ---------------------------------------------------------------------------

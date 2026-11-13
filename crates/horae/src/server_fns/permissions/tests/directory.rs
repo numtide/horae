@@ -346,7 +346,7 @@ async fn directory_scopes_before_activity_pagination_and_only_returns_basic_iden
             .map(String::as_str)
             .collect();
         keys.sort();
-        assert_eq!(keys, ["active", "email", "id", "name"]);
+        assert_eq!(keys, ["active", "can_change_active", "email", "id", "name"]);
         assert_ne!(row.id, foreign.user_id);
     }
     let archived = read(
@@ -458,7 +458,7 @@ async fn directory_does_not_use_project_management_and_rechecks_relationship_rem
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn directory_denies_legacy_foreign_inactive_and_invalid_authority_even_for_empty_pages(
+async fn directory_denies_foreign_inactive_and_invalid_authority_even_for_empty_pages(
     pool: PgPool,
 ) {
     let ids = fixture(&pool).await;
@@ -477,34 +477,6 @@ async fn directory_denies_legacy_foreign_inactive_and_invalid_authority_even_for
             Err(DirectoryError::Forbidden)
         ));
     }
-    for version in [0, 2] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
-            ids.org_id,
-            version
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        assert!(
-            read(
-                &pool,
-                ids.org_id,
-                ids.user_id,
-                PeopleActivity::All,
-                Some(&cursor)
-            )
-            .await
-            .is_err()
-        );
-    }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
         .execute(&pool)
         .await
@@ -520,13 +492,10 @@ async fn directory_denies_legacy_foreign_inactive_and_invalid_authority_even_for
         .await,
         Err(DirectoryError::Forbidden)
     ));
-    sqlx::query!(
-        "UPDATE users SET active=true, org_role='admin' WHERE id=$1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
     grants(&pool, ids.user_id, BuiltInProfile::Member.selection()).await;
     assert!(matches!(
         read(

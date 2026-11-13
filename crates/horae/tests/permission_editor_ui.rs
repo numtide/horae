@@ -42,6 +42,8 @@ mod models {
     pub use super::permission_editor_model as permission_editor;
     pub use super::user_model as user;
 }
+#[path = "../src/pages/admin/add_person.rs"]
+mod add_person;
 #[path = "../src/pages/admin/people.rs"]
 mod people;
 #[path = "../src/pages/admin/permission_editor.rs"]
@@ -66,6 +68,7 @@ type PeopleQuery = (
 #[derive(Clone)]
 struct Probe {
     directory: Option<bool>,
+    manage_people: bool,
     people_replies: Rc<RefCell<VecDeque<PeopleReply>>>,
     people_queries: Rc<RefCell<Vec<PeopleQuery>>>,
     open_person: bool,
@@ -95,6 +98,7 @@ impl Probe {
     fn new() -> Self {
         Self {
             directory: None,
+            manage_people: false,
             people_replies: Default::default(),
             people_queries: Default::default(),
             open_person: true,
@@ -212,7 +216,7 @@ fn app(probe: Probe) -> Element {
             .then_some((probe.editor.user_id, probe.editor.requester))
     });
     if let Some(can_edit_permissions) = probe.directory {
-        return rsx! { people::CanonicalPeople { can_edit_permissions, can_view_rates: false, on_saved: move |changed| probe.saved.borrow_mut().push(changed) } };
+        return rsx! { people::CanonicalPeople { can_edit_permissions, can_manage_people: probe.manage_people, can_view_rates: false, on_saved: move |changed| probe.saved.borrow_mut().push(changed) } };
     }
     rsx! { permission_editor::PermissionEditorDialog {
         person, on_saved: move |changed| probe.saved.borrow_mut().push(changed),
@@ -714,6 +718,7 @@ fn directory_page(probe: &Probe, next: bool) -> people_model::PeoplePage {
             name: "Directory person".into(),
             email: "person@example.test".into(),
             active: true,
+            can_change_active: probe.manage_people,
         }],
         next_after: next.then(|| people_model::PeopleCursor {
             name: "Directory person".into(),
@@ -774,6 +779,46 @@ async fn directory_paging_filtering_and_errors_hide_stale_rows() {
         ]
     );
     assert!(probe.saves.borrow().is_empty());
+}
+
+/// Adding and archiving people show only with permission to manage people;
+/// the profile choice shows only to administrators, and never offers
+/// Administrator.
+#[tokio::test]
+async fn directory_offers_people_management_by_grant() {
+    for (administrator, manage_people) in [(false, false), (false, true), (true, true)] {
+        let mut probe = Probe::new();
+        probe.directory = Some(administrator);
+        probe.manage_people = manage_people;
+        let reply = directory_reply(&probe);
+        let mut ui = Ui::new(probe.clone());
+        reply.send(Ok(directory_page(&probe, false))).unwrap();
+        ui.settle();
+        let html = ui.html();
+        assert_eq!(html.contains("Archive Directory person"), manage_people);
+        assert_eq!(html.contains("id=\"people-add\""), manage_people);
+        if manage_people {
+            ui.click("people-add");
+            let html = ui.html();
+            assert!(html.contains("people-add-email"));
+            assert_eq!(html.contains("people-add-profile"), administrator);
+            assert!(!html.contains("value=\"administrator\""));
+        }
+    }
+    // A row the server says cannot be archived (an administrator, or someone
+    // not managed) offers no Archive button even to someone who adds people.
+    let mut probe = Probe::new();
+    probe.directory = Some(false);
+    probe.manage_people = true;
+    let reply = directory_reply(&probe);
+    let mut ui = Ui::new(probe.clone());
+    let mut page = directory_page(&probe, false);
+    page.people[0].can_change_active = false;
+    reply.send(Ok(page)).unwrap();
+    ui.settle();
+    let html = ui.html();
+    assert!(html.contains("id=\"people-add\""));
+    assert!(!html.contains("Archive Directory person"));
 }
 
 #[tokio::test]
@@ -1885,6 +1930,21 @@ mod server_fns {
         _cost: horae_core::permissions::rates::RateEdit,
     ) -> Result<models::user::PersonRates, ServerFnError> {
         unreachable!("the directory tests never open the rates dialog")
+    }
+
+    pub async fn create_user(
+        _email: String,
+        _name: String,
+        _profile: String,
+    ) -> Result<models::user::UserListItem, ServerFnError> {
+        unreachable!("the directory tests never add people")
+    }
+
+    pub async fn set_user_active(
+        _user_id: String,
+        _active: bool,
+    ) -> Result<models::user::UserListItem, ServerFnError> {
+        unreachable!("the directory tests never archive people")
     }
 
     pub async fn list_people(

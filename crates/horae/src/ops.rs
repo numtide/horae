@@ -26,6 +26,7 @@ pub(crate) mod clients;
 mod error;
 pub(crate) mod invoices;
 pub(crate) mod organization;
+pub(crate) mod people;
 pub(crate) mod projects;
 pub(crate) mod reports;
 

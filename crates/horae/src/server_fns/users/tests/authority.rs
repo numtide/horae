@@ -1,5 +1,7 @@
 use super::*;
-use crate::server_fns::test_seed::{seed, wait_for_blocked};
+use crate::ops::testing::{Recorder, set_grants};
+use crate::server_fns::test_seed::{SeedIds, built_in_profile, seed, wait_for_blocked};
+use horae_core::permissions::catalog::Permission;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -13,16 +15,9 @@ async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
 
     for editor_first in [true, false] {
         let ids = seed(&pool, BuiltInProfile::Administrator).await;
-        let manager = insert_user(
-            &pool,
-            ids.org_id,
-            ids.user_id,
-            &format!("{}@test.com", Uuid::now_v7()),
-            "Manager",
-            BuiltInProfile::ExecutiveManager,
-        )
-        .await
-        .unwrap();
+        let manager = create(&pool, &ids, BuiltInProfile::ExecutiveManager)
+            .await
+            .unwrap();
         let original = load_editable_project(&pool, manager.id, ids.org_id, ids.project_id)
             .await
             .unwrap();
@@ -77,9 +72,7 @@ async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
                         .await
                         .map(|_| ())
                 } else {
-                    change_user_role(&db, ids.org_id, ids.user_id, manager.id, OrgRole::Member)
-                        .await
-                        .map(|_| ())
+                    attempt(&db, ids.org_id, ids.user_id, manager.id, Change::Archive).await
                 };
                 (edit, result)
             });
@@ -103,7 +96,10 @@ async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
                 assert!(
                     matches!(
                         result,
-                        Err(ServerFnError::ServerError { code: CONFLICT, .. })
+                        Err(ServerFnError::ServerError {
+                            code: FORBIDDEN,
+                            ..
+                        }) | Err(ServerFnError::ServerError { code: CONFLICT, .. })
                     ),
                     "{result:?}"
                 );
@@ -144,8 +140,23 @@ async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
 #[derive(Clone, Copy, Debug)]
 enum Change {
     Create,
-    Role,
-    Active,
+    Archive,
+}
+
+async fn create(
+    pool: &PgPool,
+    ids: &SeedIds,
+    profile: BuiltInProfile,
+) -> Result<UserListItem, ServerFnError> {
+    insert_user(
+        pool,
+        &Recorder::default(),
+        Caller::session(ids.org_id, ids.user_id),
+        &format!("{}@test.com", Uuid::now_v7()),
+        "Person",
+        profile,
+    )
+    .await
 }
 
 async fn attempt(
@@ -155,30 +166,40 @@ async fn attempt(
     target: Uuid,
     change: Change,
 ) -> Result<(), ServerFnError> {
+    let caller = Caller::session(org, actor);
     match change {
         Change::Create => insert_user(
             pool,
-            org,
-            actor,
+            &Recorder::default(),
+            caller,
             &format!("{}@test.com", Uuid::now_v7()),
             "New member",
             BuiltInProfile::Member,
         )
         .await
         .map(|_| ()),
-        Change::Role => change_user_role(pool, org, actor, target, OrgRole::Manager)
-            .await
-            .map(|_| ()),
-        Change::Active => change_user_active(pool, org, actor, target, false)
+        Change::Archive => change_user_active(pool, &Recorder::default(), caller, target, false)
             .await
             .map(|_| ()),
     }
 }
 
+/// An active Member of `org`.
 async fn target(pool: &PgPool, org: Uuid) -> Uuid {
     let id = Uuid::now_v7();
-    sqlx::query!("INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $2, $3, 'Target', 'member')", id, org, format!("{id}@test.com"))
-        .execute(pool).await.unwrap();
+    sqlx::query!(
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, 'Target')",
+        id,
+        org,
+        format!("{id}@test.com")
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let mut connection = pool.acquire().await.unwrap();
+    provisioning::provision(&mut connection, org, id, BuiltInProfile::Member)
+        .await
+        .unwrap();
     id
 }
 
@@ -191,47 +212,76 @@ async fn assert_unchanged(pool: &PgPool, org: Uuid, target: Uuid) {
     .await
     .unwrap();
     assert_eq!(count, 2, "unauthorized request created a user");
-    let state = user_active_role(&mut pool.acquire().await.unwrap(), target, org)
+    let active = sqlx::query_scalar!("SELECT active FROM users WHERE id = $1", target)
+        .fetch_one(pool)
         .await
         .unwrap();
-    assert_eq!(
-        state,
-        Some((true, OrgRole::Member)),
-        "unauthorized request modified the target"
+    assert!(active, "unauthorized request archived the target");
+}
+
+fn assert_forbidden(result: Result<(), ServerFnError>, context: impl std::fmt::Debug) {
+    assert!(
+        matches!(
+            result,
+            Err(ServerFnError::ServerError {
+                code: FORBIDDEN,
+                ..
+            })
+        ),
+        "{context:?}: {result:?}"
     );
+}
+
+/// People Admin and Executive Manager manage people like an Administrator;
+/// the other profiles cannot.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn managing_people_follows_the_people_write_grant(pool: PgPool) {
+    for &profile in BuiltInProfile::ALL {
+        let ids = seed(&pool, profile).await;
+        let manages = matches!(
+            profile,
+            BuiltInProfile::Administrator
+                | BuiltInProfile::ExecutiveManager
+                | BuiltInProfile::PeopleAdmin
+        );
+        let target = target(&pool, ids.org_id).await;
+        for change in [Change::Create, Change::Archive] {
+            let result = attempt(&pool, ids.org_id, ids.user_id, target, change).await;
+            if manages {
+                result.unwrap();
+            } else {
+                assert_forbidden(result, (profile, change));
+                assert_unchanged(&pool, ids.org_id, target).await;
+            }
+        }
+    }
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn revoked_administrator_cannot_create_change_roles_or_deactivate(pool: PgPool) {
-    let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    let target = target(&pool, ids.org_id).await;
-    for (role, active) in [
-        (OrgRole::Member, true),
-        (OrgRole::Manager, true),
-        (OrgRole::Admin, false),
-    ] {
-        sqlx::query!(
-            "UPDATE users SET org_role = $2, active = $3 WHERE id = $1",
-            ids.user_id,
-            role as OrgRole,
-            active
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        for change in [Change::Create, Change::Role, Change::Active] {
+async fn revoked_or_archived_managers_cannot_add_or_archive(pool: PgPool) {
+    for revocation in ["grant", "archived"] {
+        let ids = seed(&pool, BuiltInProfile::Administrator).await;
+        let target = target(&pool, ids.org_id).await;
+        match revocation {
+            "grant" => set_grants(
+                &mut pool.acquire().await.unwrap(),
+                &ids,
+                &[Permission::PeopleReadAll],
+            )
+            .await
+            .unwrap(),
+            _ => {
+                sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+                    .execute(&pool)
+                    .await
+                    .unwrap();
+            }
+        }
+        for change in [Change::Create, Change::Archive] {
             let result = attempt(&pool, ids.org_id, ids.user_id, target, change).await;
-            assert!(
-                matches!(
-                    result,
-                    Err(ServerFnError::ServerError {
-                        code: FORBIDDEN,
-                        ..
-                    })
-                ),
-                "{role:?}/{active}/{change:?}: {result:?}"
-            );
+            assert_forbidden(result, (revocation, change));
             assert_unchanged(&pool, ids.org_id, target).await;
         }
     }
@@ -244,18 +294,9 @@ async fn foreign_and_unknown_actors_cannot_change_local_user_access(pool: PgPool
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let target = target(&pool, ids.org_id).await;
     for actor in [foreign.user_id, Uuid::now_v7()] {
-        for change in [Change::Create, Change::Role, Change::Active] {
+        for change in [Change::Create, Change::Archive] {
             let result = attempt(&pool, ids.org_id, actor, target, change).await;
-            assert!(
-                matches!(
-                    result,
-                    Err(ServerFnError::ServerError {
-                        code: FORBIDDEN,
-                        ..
-                    })
-                ),
-                "{change:?}: {result:?}"
-            );
+            assert_forbidden(result, change);
             assert_unchanged(&pool, ids.org_id, target).await;
         }
     }
@@ -264,7 +305,7 @@ async fn foreign_and_unknown_actors_cannot_change_local_user_access(pool: PgPool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn user_mutations_wait_for_actor_revocation_and_recheck_after_commit(pool: PgPool) {
-    for change in [Change::Create, Change::Role, Change::Active] {
+    for change in [Change::Create, Change::Archive] {
         let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let target = target(&pool, ids.org_id).await;
         let mut revocation = pool.begin().await.unwrap();
@@ -272,13 +313,7 @@ async fn user_mutations_wait_for_actor_revocation_and_recheck_after_commit(pool:
             .fetch_one(&mut *revocation)
             .await
             .unwrap();
-        sqlx::query!(
-            "UPDATE users SET org_role = 'member' WHERE id = $1",
-            ids.user_id
-        )
-        .execute(&mut *revocation)
-        .await
-        .unwrap();
+        set_grants(&mut revocation, &ids, &[]).await.unwrap();
         let db = pool.clone();
         let mut request =
             tokio::spawn(
@@ -294,16 +329,7 @@ async fn user_mutations_wait_for_actor_revocation_and_recheck_after_commit(pool:
                 tokio::time::timeout(std::time::Duration::from_secs(10), request).await.unwrap().unwrap()
             },
         };
-        assert!(
-            matches!(
-                result,
-                Err(ServerFnError::ServerError {
-                    code: FORBIDDEN,
-                    ..
-                })
-            ),
-            "{change:?}: {result:?}"
-        );
+        assert_forbidden(result, change);
         assert_unchanged(&pool, ids.org_id, target).await;
     }
 }
@@ -311,7 +337,7 @@ async fn user_mutations_wait_for_actor_revocation_and_recheck_after_commit(pool:
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn user_mutations_recheck_revocation_after_waiting_for_organization_lock(pool: PgPool) {
-    for change in [Change::Create, Change::Role, Change::Active] {
+    for change in [Change::Create, Change::Archive] {
         let ids = seed(&pool, BuiltInProfile::Administrator).await;
         let target = target(&pool, ids.org_id).await;
         let mut revocation = pool.begin().await.unwrap();
@@ -347,47 +373,44 @@ async fn user_mutations_recheck_revocation_after_waiting_for_organization_lock(p
                 .unwrap()
                 .unwrap(),
         };
-        assert!(
-            matches!(
-                result,
-                Err(ServerFnError::ServerError {
-                    code: FORBIDDEN,
-                    ..
-                })
-            ),
-            "{change:?}: {result:?}"
-        );
+        assert_forbidden(result, change);
         assert_unchanged(&pool, ids.org_id, target).await;
     }
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn active_administrator_can_create_change_roles_and_deactivate(pool: PgPool) {
+async fn active_administrator_can_create_and_archive(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let events = Recorder::default();
+    let caller = Caller::session(ids.org_id, ids.user_id);
     let created = insert_user(
         &pool,
-        ids.org_id,
-        ids.user_id,
+        &events,
+        caller,
         "new@test.com",
         "New",
         BuiltInProfile::Member,
     )
     .await
     .unwrap();
-    assert_eq!(created.org_id, ids.org_id);
-    assert_eq!(created.org_role, OrgRole::Member);
-    let (updated, previous) =
-        change_user_role(&pool, ids.org_id, ids.user_id, created.id, OrgRole::Manager)
-            .await
-            .unwrap();
-    assert_eq!(previous, Some(OrgRole::Member));
-    assert_eq!(updated.org_role, OrgRole::Manager);
-    let (updated, previous) = change_user_active(&pool, ids.org_id, ids.user_id, created.id, false)
+    assert!(matches!(
+        events.take().as_slice(),
+        [crate::plugin::AppEvent::UserCreated { user, .. }] if user.id == created.id
+    ));
+    let updated = change_user_active(&pool, &events, caller, created.id, false)
         .await
         .unwrap();
-    assert_eq!(previous, Some(true));
     assert!(!updated.active);
+    assert!(matches!(
+        events.take().as_slice(),
+        [crate::plugin::AppEvent::UserDeactivated { user, .. }] if user.id == created.id
+    ));
+    // Archiving again changes nothing and announces nothing.
+    change_user_active(&pool, &events, caller, created.id, false)
+        .await
+        .unwrap();
+    assert!(events.take().is_empty());
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -395,13 +418,14 @@ async fn active_administrator_can_create_change_roles_and_deactivate(pool: PgPoo
 async fn duplicate_creation_rolls_back_and_leaves_access_changes_usable(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let target = target(&pool, ids.org_id).await;
+    let events = Recorder::default();
     let result = insert_user(
         &pool,
-        ids.org_id,
-        ids.user_id,
+        &events,
+        Caller::session(ids.org_id, ids.user_id),
         &format!("{target}@test.com"),
         "Duplicate",
-        BuiltInProfile::Administrator,
+        BuiltInProfile::Member,
     )
     .await;
     assert!(
@@ -411,53 +435,315 @@ async fn duplicate_creation_rolls_back_and_leaves_access_changes_usable(pool: Pg
         ),
         "{result:?}"
     );
+    assert!(events.take().is_empty());
     assert_unchanged(&pool, ids.org_id, target).await;
-    let (updated, _) = tokio::time::timeout(
+    let archived = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        change_user_role(&pool, ids.org_id, ids.user_id, target, OrgRole::Manager),
+        attempt(&pool, ids.org_id, ids.user_id, target, Change::Archive),
     )
     .await
-    .unwrap()
     .unwrap();
-    assert_eq!(updated.org_role, OrgRole::Manager);
+    archived.unwrap();
 }
 
+/// Only an administrator chooses a profile above Member, and nobody becomes
+/// an administrator by being added.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn access_transaction_holds_actor_authority_until_commit(pool: PgPool) {
-    let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    let mut access = begin_user_access_change(&pool, ids.org_id, ids.user_id)
-        .await
-        .unwrap();
-    let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
-        .fetch_one(&mut *access)
-        .await
-        .unwrap();
-    let db = pool.clone();
-    let mut revoke = tokio::spawn(async move {
-        sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
-            .execute(&db)
-            .await
-            .unwrap();
-    });
-    tokio::select! {
-        result = &mut revoke => panic!("revocation completed before access transaction committed: {result:?}"),
-        () = wait_for_blocked(&pool, blocker) => {},
+async fn profiles_above_member_need_an_administrator(pool: PgPool) {
+    let admin = seed(&pool, BuiltInProfile::Administrator).await;
+    let people_admin = seed(&pool, BuiltInProfile::PeopleAdmin).await;
+    for &profile in BuiltInProfile::ALL {
+        for ids in [&admin, &people_admin] {
+            let result = create(&pool, ids, profile).await;
+            let code = match &result {
+                Ok(user) => {
+                    assert_eq!(
+                        built_in_profile(&pool, ids.org_id, user.id).await,
+                        Some((profile, false)),
+                    );
+                    continue;
+                }
+                Err(ServerFnError::ServerError { code, .. }) => *code,
+                Err(error) => panic!("{error}"),
+            };
+            let expected = if profile == BuiltInProfile::Administrator {
+                BAD_REQUEST
+            } else {
+                FORBIDDEN
+            };
+            assert_eq!(code, expected, "{profile:?}");
+            assert!(
+                profile == BuiltInProfile::Administrator || ids.user_id == people_admin.user_id,
+                "{profile:?}"
+            );
+        }
     }
-    access.commit().await.unwrap();
-    tokio::time::timeout(std::time::Duration::from_secs(10), revoke)
+}
+
+/// An administrator's account is archived or restored only by another
+/// administrator.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn only_an_administrator_archives_or_restores_an_administrator(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let people_admin = create(&pool, &ids, BuiltInProfile::PeopleAdmin)
         .await
         .unwrap()
-        .unwrap();
-    let result = begin_user_access_change(&pool, ids.org_id, ids.user_id).await;
-    assert!(
-        matches!(
-            result,
-            Err(ServerFnError::ServerError {
-                code: FORBIDDEN,
-                ..
-            })
-        ),
-        "{result:?}"
+        .id;
+    let second = target(&pool, ids.org_id).await;
+    sqlx::query!(
+        "UPDATE person_permission_states SET is_administrator = true WHERE user_id = $1",
+        second
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let change = |actor, user, active| {
+        let pool = pool.clone();
+        async move {
+            change_user_active(
+                &pool,
+                &Recorder::default(),
+                Caller::session(ids.org_id, actor),
+                user,
+                active,
+            )
+            .await
+            .map(|_| ())
+        }
+    };
+    assert_forbidden(change(people_admin, second, false).await, "archive");
+    change(ids.user_id, second, false).await.unwrap();
+    assert_forbidden(change(people_admin, second, true).await, "restore");
+    change(ids.user_id, second, true).await.unwrap();
+    // Other people stay within the People Admin's reach.
+    let member = target(&pool, ids.org_id).await;
+    change(people_admin, member, false).await.unwrap();
+}
+
+/// Managing people opens identity only: a People Admin holds no rate grant,
+/// so archiving, restoring or adding someone must not answer with their rates
+/// or sign-in binding.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn people_answers_carry_no_rates_or_sign_in_details(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let people_admin = create(&pool, &ids, BuiltInProfile::PeopleAdmin)
+        .await
+        .unwrap()
+        .id;
+    let member = target(&pool, ids.org_id).await;
+    sqlx::query!(
+        "UPDATE users SET cost_rate_cents = 4321, billable_rate_cents = 8765,
+                oidc_subject = 'subject-of-target' WHERE id = $1",
+        member
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let caller = Caller::session(ids.org_id, people_admin);
+    let mut answers = Vec::new();
+    for active in [false, true, true] {
+        let answer = change_user_active(&pool, &Recorder::default(), caller, member, active)
+            .await
+            .unwrap();
+        assert_eq!((answer.id, answer.active), (member, active));
+        answers.push(serde_json::to_string(&answer).unwrap());
+    }
+    let added = insert_user(
+        &pool,
+        &Recorder::default(),
+        caller,
+        "added@test.com",
+        "Added",
+        BuiltInProfile::Member,
+    )
+    .await
+    .unwrap();
+    answers.push(serde_json::to_string(&added).unwrap());
+    for answer in answers {
+        for leak in [
+            "rate",
+            "4321",
+            "8765",
+            "oidc",
+            "subject-of-target",
+            "org_role",
+        ] {
+            assert!(!answer.contains(leak), "{leak} in {answer}");
+        }
+    }
+    // The People Admin still cannot read those rates directly.
+    assert!(matches!(
+        crate::server_fns::users::rates::read_person_rates(&pool, ids.org_id, people_admin, member)
+            .await,
+        Err(ServerFnError::ServerError {
+            code: FORBIDDEN,
+            ..
+        })
+    ));
+}
+
+/// Gives `user` exactly `permissions` (with prerequisites and the Member
+/// floor) as an individual state.
+async fn grant(pool: &PgPool, user: Uuid, permissions: &[Permission]) {
+    let grants: Vec<String> = serde_json::from_value(serde_json::json!(
+        horae_core::permissions::catalog::PermissionSelection::new(permissions)
+    ))
+    .unwrap();
+    sqlx::query!(
+        "UPDATE person_permission_states
+            SET grants = $2, source = 'individual', built_in_profile = NULL
+          WHERE user_id = $1",
+        user,
+        &grants
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn assign(pool: &PgPool, org: Uuid, manager: Uuid, managed: Uuid) {
+    sqlx::query!(
+        "INSERT INTO person_management_assignments (id, org_id, manager_id, managed_user_id)
+         VALUES ($1, $2, $3, $4)",
+        Uuid::now_v7(),
+        org,
+        manager,
+        managed
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn is_active(pool: &PgPool, user: Uuid) -> bool {
+    sqlx::query_scalar!("SELECT active FROM users WHERE id = $1", user)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+/// `PeopleWriteManaged` archives and restores the people one manages, but
+/// not an administrator, nobody else, and it adds nobody.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn managed_people_writers_archive_only_the_people_they_manage(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let manager = target(&pool, ids.org_id).await;
+    let managed = target(&pool, ids.org_id).await;
+    let unmanaged = target(&pool, ids.org_id).await;
+    let managed_admin = target(&pool, ids.org_id).await;
+    sqlx::query!(
+        "UPDATE person_permission_states SET is_administrator = true WHERE user_id = $1",
+        managed_admin
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for person in [managed, managed_admin] {
+        assign(&pool, ids.org_id, manager, person).await;
+    }
+    let change = |user, active| {
+        let pool = pool.clone();
+        async move {
+            change_user_active(
+                &pool,
+                &Recorder::default(),
+                Caller::session(ids.org_id, manager),
+                user,
+                active,
+            )
+            .await
+            .map(|_| ())
+        }
+    };
+
+    // Reading managed people alone allows no change.
+    grant(&pool, manager, &[Permission::PeopleReadManaged]).await;
+    assert_forbidden(change(managed, false).await, "read only");
+    assert!(is_active(&pool, managed).await);
+
+    grant(&pool, manager, &[Permission::PeopleWriteManaged]).await;
+    change(managed, false).await.unwrap();
+    assert!(!is_active(&pool, managed).await);
+    change(managed, true).await.unwrap();
+    assert!(is_active(&pool, managed).await);
+
+    // Someone they do not manage, and someone who does not exist, look alike.
+    let refusal = |result: Result<(), ServerFnError>| match result {
+        Err(ServerFnError::ServerError {
+            code: FORBIDDEN,
+            message,
+            ..
+        }) => message,
+        other => panic!("{other:?}"),
+    };
+    let unmanaged_refusal = refusal(change(unmanaged, false).await);
+    assert_eq!(
+        refusal(change(Uuid::now_v7(), false).await),
+        unmanaged_refusal
     );
+    assert!(is_active(&pool, unmanaged).await);
+    assert_forbidden(change(managed_admin, false).await, "administrator");
+    assert!(is_active(&pool, managed_admin).await);
+    assert_forbidden(
+        attempt(&pool, ids.org_id, manager, managed, Change::Create).await,
+        "create",
+    );
+}
+
+/// The People page offers archiving exactly where the operation allows it.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn the_directory_offers_archiving_where_the_operation_allows_it(pool: PgPool) {
+    use crate::models::people::PeopleActivity;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let people_admin = create(&pool, &ids, BuiltInProfile::PeopleAdmin)
+        .await
+        .unwrap()
+        .id;
+    let manager = target(&pool, ids.org_id).await;
+    let managed = target(&pool, ids.org_id).await;
+    let managed_admin = target(&pool, ids.org_id).await;
+    sqlx::query!(
+        "UPDATE person_permission_states SET is_administrator = true WHERE user_id = $1",
+        managed_admin
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for person in [managed, managed_admin] {
+        assign(&pool, ids.org_id, manager, person).await;
+    }
+    grant(&pool, manager, &[Permission::PeopleWriteManaged]).await;
+    for actor in [ids.user_id, people_admin, manager] {
+        let page = crate::server_fns::permissions::directory::read(
+            &pool,
+            ids.org_id,
+            actor,
+            PeopleActivity::All,
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(!page.people.is_empty());
+        for person in page.people {
+            let allowed = change_user_active(
+                &pool,
+                &Recorder::default(),
+                Caller::session(ids.org_id, actor),
+                person.id,
+                person.active,
+            )
+            .await
+            .is_ok();
+            assert_eq!(
+                person.can_change_active, allowed,
+                "{actor} on {}",
+                person.id
+            );
+        }
+    }
 }

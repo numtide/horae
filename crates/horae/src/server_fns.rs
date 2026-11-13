@@ -4,12 +4,12 @@ pub(crate) use horae_core::types::{
     BudgetKind, EntryState, InvoiceStatus, OrgRole, ProjectRole, ProjectType,
 };
 
-#[cfg(feature = "server")]
-pub(crate) use crate::models::InvoiceLine;
 pub(crate) use crate::models::{
     Approval, ApprovalSummary, Client, DetailedReportRow, Invoice, InvoiceWithLines, OrgBranding,
-    Project, ProjectSpend, ReportRow, Task, TimeEntry, User,
+    Project, ProjectSpend, ReportRow, Task, TimeEntry,
 };
+#[cfg(feature = "server")]
+pub(crate) use crate::models::{InvoiceLine, User};
 
 // HTTP status codes for `ServerFnError::ServerError { code, .. }` — named so
 // error paths read at a glance (see AGENTS.md conventions). Server-only: on the
@@ -152,15 +152,6 @@ pub(crate) async fn require_user() -> Result<crate::models::User, ServerFnError>
     .ok_or_else(|| unauthorized("Account is not active"))
 }
 
-#[cfg(feature = "server")]
-pub(crate) async fn require_admin() -> Result<crate::models::User, ServerFnError> {
-    let user = require_user().await?;
-    if !user.is_admin() {
-        return Err(forbidden("Admin access required"));
-    }
-    Ok(user)
-}
-
 // ── Plugin event dispatch helpers ────────────────────────────────────────────
 // Fire-and-forget: spawn dispatch so the core action is never blocked (FR-021).
 
@@ -277,17 +268,6 @@ pub(crate) fn task_payload(t: &crate::models::Task) -> crate::plugin::event::Tas
         billable_default: t.billable_default,
         default_rate_cents: t.default_rate_cents,
         active: t.active,
-    }
-}
-
-#[cfg(feature = "server")]
-pub(crate) fn user_payload(u: &crate::models::User) -> crate::plugin::event::UserPayload {
-    crate::plugin::event::UserPayload {
-        id: u.id,
-        email: u.email.clone(),
-        name: u.name.clone(),
-        org_role: u.org_role.to_string(),
-        method: None,
     }
 }
 

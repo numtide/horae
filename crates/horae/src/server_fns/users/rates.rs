@@ -64,10 +64,8 @@ struct RateAccess {
     write_cost: bool,
 }
 
-/// Lock the actor and decide its access under the active policy. Without
-/// detailed permissions an administrator holds both rates and a manager the
-/// billable one, as for task and project rates; with them only the
-/// BillableRate and CostRate grants count, plus read access to the person.
+/// Lock the actor and decide its access from its stored permission state:
+/// the BillableRate and CostRate grants, plus read access to the person.
 #[cfg(feature = "server")]
 async fn authorize(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -90,10 +88,8 @@ async fn authorize(
     crate::db::lock_organization(tx, org_id, crate::db::OrganizationLock::Shared)
         .await
         .map_err(server_err)?;
-    let actor = sqlx::query!(
-        r#"SELECT u.org_role AS "role: OrgRole", o.permission_policy_version
-           FROM users u JOIN organizations o ON o.id = u.org_id
-           WHERE u.org_id = $1 AND u.id = $2 AND u.active FOR SHARE OF u"#,
+    sqlx::query_scalar!(
+        "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
         org_id,
         actor_id,
     )
@@ -101,87 +97,71 @@ async fn authorize(
     .await
     .map_err(server_err)?
     .ok_or_else(|| forbidden("Current rate access is required"))?;
-    match actor.permission_policy_version {
-        0 => {
-            let admin = actor.role == OrgRole::Admin;
-            let billable = actor.role.is_manager_or_above();
-            Ok(RateAccess {
-                read_billable: billable,
-                write_billable: billable,
-                read_cost: admin,
-                write_cost: admin,
-            })
-        }
-        1 => {
-            let permissions =
-                crate::server_fns::permissions::load_person_permissions(tx, org_id, actor_id)
-                    .await
-                    .map_err(|error| {
-                        tracing::error!(%error, "Unable to load rate permissions");
-                        server_err("Rate permission state is unavailable")
-                    })?
-                    .ok_or_else(|| forbidden("Current rate access is required"))?;
-            let managed = sqlx::query_scalar!(
-                "SELECT managed_user_id FROM person_management_assignments
-                 WHERE org_id = $1 AND manager_id = $2 AND managed_user_id = $3",
-                org_id,
-                actor_id,
-                person_id,
-            )
-            .fetch_all(&mut **tx)
-            .await
-            .map_err(server_err)?;
-            let actor = Actor {
-                id: actor_id,
-                org_id,
-                active: true,
-            };
-            let assignments = ManagementAssignments {
-                actor_id,
-                org_id,
-                people: &managed,
-                projects: &[],
-            };
-            let grants = &permissions.grants;
-            let people_scope = if grants.contains(Permission::PeopleReadAll) {
-                AccessScope::ORGANIZATION
-            } else if grants.contains(Permission::PeopleReadManaged) {
-                AccessScope::MANAGED_PEOPLE
-            } else {
-                AccessScope::NONE
-            };
-            let sees_person = people_scope.covers(
+    let permissions = crate::server_fns::permissions::load_person_permissions(tx, org_id, actor_id)
+        .await
+        .map_err(|error| {
+            tracing::error!(%error, "Unable to load rate permissions");
+            server_err("Rate permission state is unavailable")
+        })?
+        .ok_or_else(|| forbidden("Current rate access is required"))?;
+    let managed = sqlx::query_scalar!(
+        "SELECT managed_user_id FROM person_management_assignments
+         WHERE org_id = $1 AND manager_id = $2 AND managed_user_id = $3",
+        org_id,
+        actor_id,
+        person_id,
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(server_err)?;
+    let actor = Actor {
+        id: actor_id,
+        org_id,
+        active: true,
+    };
+    let assignments = ManagementAssignments {
+        actor_id,
+        org_id,
+        people: &managed,
+        projects: &[],
+    };
+    let grants = &permissions.grants;
+    let people_scope = if grants.contains(Permission::PeopleReadAll) {
+        AccessScope::ORGANIZATION
+    } else if grants.contains(Permission::PeopleReadManaged) {
+        AccessScope::MANAGED_PEOPLE
+    } else {
+        AccessScope::NONE
+    };
+    let sees_person = people_scope.covers(
+        &actor,
+        &ScopedResource {
+            org_id,
+            person_id: Some(person_id),
+            project_id: None,
+        },
+        &assignments,
+    );
+    let billable = |action| {
+        sees_person
+            && billable_rate_access(
+                grants,
+                action,
                 &actor,
-                &ScopedResource {
+                &BillableRateResource {
                     org_id,
-                    person_id: Some(person_id),
-                    project_id: None,
+                    owner: BillableRateOwner::Person(person_id),
                 },
                 &assignments,
-            );
-            let billable = |action| {
-                sees_person
-                    && billable_rate_access(
-                        grants,
-                        action,
-                        &actor,
-                        &BillableRateResource {
-                            org_id,
-                            owner: BillableRateOwner::Person(person_id),
-                        },
-                        &assignments,
-                    )
-            };
-            let cost = |action| sees_person && cost_rate_access(grants, action, &actor, org_id);
-            Ok(RateAccess {
-                read_billable: billable(RateAction::Read),
-                write_billable: billable(RateAction::Write),
-                read_cost: cost(RateAction::Read),
-                write_cost: cost(RateAction::Write),
-            })
-        }
-        _ => Err(server_err("Rate permission state is unavailable")),
-    }
+            )
+    };
+    let cost = |action| sees_person && cost_rate_access(grants, action, &actor, org_id);
+    Ok(RateAccess {
+        read_billable: billable(RateAction::Read),
+        write_billable: billable(RateAction::Write),
+        read_cost: cost(RateAction::Read),
+        write_cost: cost(RateAction::Write),
+    })
 }
 
 /// Load the rates the actor may read, refusing when it may read neither.

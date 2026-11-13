@@ -214,7 +214,9 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toBeVisible();
     sql(`UPDATE organizations SET permission_policy_version=0 WHERE id='${actor.org_id}'`);
     await page.reload();
-    await expect(page.getByRole('button', { name: 'Invite User', exact: true })).toBeVisible();
+    // People has no role-based fallback: without stored own access it says so.
+    await expect(page.getByRole('alert').filter({ hasText: 'People access is unavailable' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Invite User', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Edit permissions for/ })).toHaveCount(0);
     await expect(railTeam).toBeVisible();
     await expectUserMenu('/admin/users');

@@ -30,6 +30,8 @@ pub struct PersonSummary {
     pub name: String,
     pub email: String,
     pub active: bool,
+    /// Whether the requester may archive or restore this person now.
+    pub can_change_active: bool,
 }
 
 /// Every page independently authorizes its current requester and records.

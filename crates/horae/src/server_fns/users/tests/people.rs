@@ -1,7 +1,8 @@
 //! Adding the people a Harvest run could not match (spec 019 FR-018).
 
 use super::*;
-use crate::server_fns::test_seed::seed;
+use crate::ops::testing::Recorder;
+use crate::server_fns::test_seed::{built_in_profile, seed};
 use sqlx::PgPool;
 
 fn person(email: &str) -> NewPerson {
@@ -18,10 +19,10 @@ async fn add(
     people: &[NewPerson],
     activation: Activation,
 ) -> Result<AddedPeople, ServerFnError> {
-    insert_users(
+    add_people(
         pool,
-        org,
-        actor,
+        &Recorder::default(),
+        Caller::session(org, actor),
         people,
         BuiltInProfile::Member,
         activation,
@@ -33,7 +34,9 @@ async fn add(
 /// Members and whether they are active, in Rust's byte order.
 async fn emails(pool: &PgPool, org: uuid::Uuid) -> Vec<(String, bool)> {
     let mut rows: Vec<_> = sqlx::query!(
-        "SELECT email, active FROM users WHERE org_id = $1 AND org_role = 'member'",
+        "SELECT u.email, u.active FROM users u
+           JOIN person_permission_states p ON p.user_id = u.id
+          WHERE u.org_id = $1 AND p.built_in_profile = 'member'",
         org
     )
     .fetch_all(pool)
@@ -80,11 +83,13 @@ async fn people_are_added_deactivated_or_active_as_chosen(pool: PgPool) {
     .unwrap()
     .added;
     assert_eq!(added.len(), 2);
-    assert!(
-        added
-            .iter()
-            .all(|user| !user.active && user.org_role == OrgRole::Member)
-    );
+    for user in &added {
+        assert!(!user.active);
+        assert_eq!(
+            built_in_profile(&pool, ids.org_id, user.id).await,
+            Some((BuiltInProfile::Member, false))
+        );
+    }
     add(
         &pool,
         ids.org_id,
@@ -142,8 +147,8 @@ async fn an_email_already_in_use_is_reported_present_and_the_rest_are_added(pool
     // Adding one person from People still refuses an email in use.
     let created = insert_user(
         &pool,
-        ids.org_id,
-        ids.user_id,
+        &Recorder::default(),
+        Caller::session(ids.org_id, ids.user_id),
         "DANA@x.com",
         "Dana",
         BuiltInProfile::Member,
@@ -191,15 +196,9 @@ async fn an_email_listed_twice_in_any_case_refuses_the_batch(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn only_an_active_administrator_adds_people(pool: PgPool) {
-    let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    sqlx::query!(
-        "UPDATE users SET org_role = 'manager' WHERE id = $1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+async fn adding_people_needs_permission_to_manage_people(pool: PgPool) {
+    // Project Managers manage projects, not people.
+    let ids = seed(&pool, BuiltInProfile::ProjectManager).await;
     let result = add(
         &pool,
         ids.org_id,
@@ -218,4 +217,73 @@ async fn only_an_active_administrator_adds_people(pool: PgPool) {
         ),
         "{result:?}"
     );
+}
+
+/// Emails are unique across organizations. An email another organization
+/// uses gets a refusal that says neither that it exists nor where.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn an_email_used_elsewhere_is_refused_without_saying_why(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let other = seed(&pool, BuiltInProfile::Administrator).await;
+    let elsewhere = sqlx::query_scalar!("SELECT email FROM users WHERE id = $1", other.user_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let before = emails(&pool, ids.org_id).await;
+
+    // The importer adds the rest and lists the email apart from "present".
+    let result = add(
+        &pool,
+        ids.org_id,
+        ids.user_id,
+        &[person(&elsewhere.to_uppercase()), person("fresh@x.com")],
+        Activation::Deactivated,
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.unavailable, [elsewhere.to_uppercase()]);
+    assert!(result.present.is_empty());
+    assert_eq!(result.added.len(), 1);
+
+    // Adding one person refuses it with the generic message.
+    let message = |result: Result<UserListItem, ServerFnError>| match result {
+        Err(ServerFnError::ServerError {
+            code: CONFLICT,
+            message,
+            ..
+        }) => message,
+        other => panic!("{other:?}"),
+    };
+    let refused = message(
+        insert_user(
+            &pool,
+            &Recorder::default(),
+            Caller::session(ids.org_id, ids.user_id),
+            &elsewhere,
+            "Elsewhere",
+            BuiltInProfile::Member,
+        )
+        .await,
+    );
+    assert!(!refused.contains("exists"), "{refused}");
+    assert!(refused.contains("can't be used"), "{refused}");
+
+    // An email in the actor's own organization is still named as present.
+    let again = message(
+        insert_user(
+            &pool,
+            &Recorder::default(),
+            Caller::session(ids.org_id, ids.user_id),
+            "fresh@x.com",
+            "Fresh",
+            BuiltInProfile::Member,
+        )
+        .await,
+    );
+    assert!(again.contains("already exists"), "{again}");
+    let mut expected = before;
+    expected.push(("fresh@x.com".to_owned(), false));
+    expected.sort();
+    assert_eq!(emails(&pool, ids.org_id).await, expected);
 }
