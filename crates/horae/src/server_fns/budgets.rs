@@ -10,8 +10,20 @@ use super::{ServerFnError, server_err};
 use crate::models::permissions::PersonPermissions;
 use crate::models::{ProjectBudgetOverview, ProjectBudgetProgress};
 
+/// The stored catalog version the raw-SQL recipient checks accept.
+pub(crate) const CATALOG_VERSION: i32 =
+    horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION as i32;
+
 /// Atomically record each reached scope/period/threshold/recipient and its
 /// pending outbox delivery. No private rates or addresses enter the payload.
+///
+/// This is a system check with no acting person, so it stays outside `ops/`.
+/// Recipients are chosen from their stored permission state: everyone who can
+/// read every project, and the project's designated managers who can read the
+/// projects they manage. An amount budget's progress is valued at billable
+/// rates, so its alerts also need the billable-rate read the budget readers
+/// ask for. The mail worker repeats the check under its locks before sending,
+/// so a revocation racing this choice still withholds mail.
 pub(crate) async fn enqueue_alerts(
     pool: &sqlx::PgPool,
     org_id: Uuid,
@@ -20,7 +32,7 @@ pub(crate) async fn enqueue_alerts(
 ) -> anyhow::Result<usize> {
     let mut tx = pool.begin().await?;
     let Some(settings) = sqlx::query!(
-        "SELECT ps.creator_id, ps.alert_threshold FROM project_settings ps
+        "SELECT ps.alert_threshold FROM project_settings ps
          JOIN projects p ON p.id = ps.project_id AND p.org_id = ps.org_id
          WHERE ps.org_id = $1 AND ps.project_id = $2 AND ps.alert_enabled AND p.active
          FOR SHARE OF ps, p",
@@ -46,15 +58,27 @@ pub(crate) async fn enqueue_alerts(
     if reached.is_empty() {
         return Ok(0);
     }
+    // Keep in step with the eligibility check in `notifications::preparation`;
+    // a test in `notifications::tests` runs one matrix through both. State from
+    // another catalog version reads as no grants, as it does for the readers.
     let recipients = sqlx::query_scalar!(
-        "SELECT u.id FROM users u WHERE u.org_id = $1 AND u.active
-         AND (u.org_role IN ('admin', 'manager') OR EXISTS (
-           SELECT 1 FROM assignments a WHERE a.project_id = $2 AND a.user_id = u.id
-           AND (a.role IN ('lead', 'admin') OR u.id = $3)))
+        "SELECT u.id FROM users u
+         JOIN person_permission_states s ON s.org_id = u.org_id AND s.user_id = u.id
+         JOIN projects p ON p.org_id = u.org_id AND p.id = $2
+         WHERE u.org_id = $1 AND u.active AND s.catalog_version = $3
+           AND ('project_read_all' = ANY(s.grants)
+             OR ('project_read_managed' = ANY(s.grants) AND EXISTS (
+               SELECT 1 FROM project_management_assignments m
+               WHERE m.org_id = u.org_id AND m.project_id = p.id AND m.manager_id = u.id)))
+           AND (p.budget_kind <> 'amount'
+             OR 'billable_rate_read_all' = ANY(s.grants)
+             OR ('billable_rate_read_managed' = ANY(s.grants) AND EXISTS (
+               SELECT 1 FROM project_management_assignments m
+               WHERE m.org_id = u.org_id AND m.project_id = p.id AND m.manager_id = u.id)))
          ORDER BY u.id LIMIT 1001 FOR SHARE OF u",
         org_id,
         project_id,
-        settings.creator_id,
+        CATALOG_VERSION,
     )
     .fetch_all(&mut *tx)
     .await?;
@@ -270,11 +294,7 @@ pub(super) async fn project_budget(
             p.budget_minutes, p.budget_amount_cents,
             ps.project_id IS NOT NULL AS "configured!",
             COALESCE(ps.monthly_reset, false) AS "monthly!",
-            CASE WHEN ps.project_id IS NOT NULL
-              THEN $3 OR $4 OR ($5 AND management.id IS NOT NULL)
-              ELSE CASE WHEN $3 THEN COALESCE(legacy.can_view_progress, false)
-                ELSE $4 OR ($5 AND management.id IS NOT NULL) END
-            END AS "can_view_money!",
+            $3 OR ($4 AND management.id IS NOT NULL) AS "can_view_money!",
             CASE
               WHEN ps.project_id IS NULL OR ps.budget_scope = 'project'
                 THEN CASE WHEN p.budget_kind = 'hours' THEN p.budget_minutes
@@ -296,13 +316,10 @@ pub(super) async fn project_budget(
         FROM projects p
         LEFT JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id = p.org_id
         LEFT JOIN project_management_assignments management ON management.org_id = p.org_id
-          AND management.project_id = p.id AND management.manager_id = $6
-        LEFT JOIN project_read_access legacy ON legacy.org_id = p.org_id
-          AND legacy.project_id = p.id AND legacy.user_id = $6
+          AND management.project_id = p.id AND management.manager_id = $5
         WHERE p.org_id = $1 AND p.id = $2"#,
         org_id,
         project_id,
-        permissions.is_none(),
         has(Permission::BillableRateReadAll),
         has(Permission::BillableRateReadManaged),
         viewer_id,
@@ -373,12 +390,21 @@ pub(super) async fn project_budget(
             })
         })
     };
+    // `None` means the budget readers withheld this project from the viewer.
+    // The detail reader can still admit them while it answers for a
+    // policy-zero organization, so the figures stay hidden but the page loads.
     let headline = match consumption {
         Ok(Some(headline)) => {
             savepoint.commit().await.map_err(server_err)?;
             headline
         }
-        Ok(None) => return Err(server_err("Readable project budget has no consumption")),
+        Ok(None) => {
+            // On policy one the detail and budget readers should agree, so
+            // log a divergence instead of hiding it.
+            tracing::warn!(%project_id, "Budget readers withheld a readable project");
+            savepoint.commit().await.map_err(server_err)?;
+            BudgetHeadline::Unavailable
+        }
         Err(error) if numeric_overflow(&error) => {
             savepoint.rollback().await.map_err(server_err)?;
             BudgetHeadline::Unavailable
@@ -388,6 +414,11 @@ pub(super) async fn project_budget(
     Ok(Some(budget(headline)))
 }
 
+/// The viewer's stored permission state, read inside the caller's
+/// transaction after `ReadAccess` has locked the organization and the person.
+/// Budgets answer from it whatever the organization's policy, so they do not
+/// take `ReadAccess::permissions`, which is left out on policy zero. Missing
+/// or invalid state reads as no grants.
 fn numeric_overflow(error: &sqlx::Error) -> bool {
     error
         .as_database_error()
@@ -428,20 +459,16 @@ async fn fetch_progress(
              SELECT p.id, p.budget_kind, p.budget_minutes, p.budget_amount_cents,
                     p.project_type, p.currency, p.rate_cents, p.client_id,
                     ps.budget_scope, ps.monthly_reset, ps.include_nonbillable, ps.rate_mode,
-                    ($4::uuid IS NULL OR $5 OR $6 OR ($7 AND management.id IS NOT NULL)) AS can_read_details,
-                    ($4::uuid IS NULL OR $5 OR $8 OR ($9 AND management.id IS NOT NULL)) AS can_view_money
+                    ($4::uuid IS NULL OR $5 OR ($6 AND management.id IS NOT NULL)) AS can_read_details,
+                    ($4::uuid IS NULL OR $7 OR ($8 AND management.id IS NOT NULL)) AS can_view_money
              FROM projects p JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id = p.org_id
              JOIN clients parent ON parent.id=p.client_id AND parent.org_id=p.org_id
              LEFT JOIN project_management_assignments management ON management.org_id=p.org_id
                AND management.project_id=p.id AND management.manager_id=$4
              LEFT JOIN assignments member ON member.project_id=p.id AND member.user_id=$4
              WHERE p.org_id = $1 AND ($2::uuid IS NULL OR p.id = $2)
-               AND ($4::uuid IS NULL OR CASE WHEN $5 THEN EXISTS (
-                 SELECT 1 FROM project_read_access access
-                 WHERE access.org_id = p.org_id AND access.project_id = p.id
-                   AND access.user_id = $4 AND access.can_view_progress)
-                 ELSE $6 OR ($7 AND management.id IS NOT NULL)
-                   OR (member.id IS NOT NULL AND ps.report_visibility='project_members') END)
+               AND ($4::uuid IS NULL OR $5 OR ($6 AND management.id IS NOT NULL)
+                 OR (member.id IS NOT NULL AND ps.report_visibility='project_members'))
            ), scopes AS (
              SELECT c.id AS project_id, NULL::uuid AS task_id, NULL::uuid AS user_id,
                     NULL::text AS label,
@@ -462,7 +489,7 @@ async fn fetch_progress(
              WHERE c.budget_scope = 'person' AND c.budget_kind = 'hours'
            ), entries AS (
              SELECT c.id AS project_id, te.task_id, te.user_id,
-                    CASE WHEN $10 AND NOT EXISTS (
+                    CASE WHEN $9 AND NOT EXISTS (
                         SELECT 1 FROM scopes allocated
                         WHERE allocated.project_id = c.id AND allocated.budget IS NOT NULL
                           AND (allocated.task_id IS NULL OR allocated.task_id = te.task_id)
@@ -511,7 +538,6 @@ async fn fetch_progress(
         project_id,
         date as NaiveDate,
         viewer_id,
-        permissions.is_none(),
         has(Permission::ProjectReadAll),
         has(Permission::ProjectReadManaged),
         has(Permission::BillableRateReadAll),
