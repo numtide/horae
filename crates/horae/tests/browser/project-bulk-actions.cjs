@@ -53,7 +53,7 @@ if (!selectionOnly && !fixturesOnly) {
         }
         return route.fulfill({ json: {
           ...overview, can_create: role !== 'member', can_import: role === 'admin',
-          can_change_legacy_status: role !== 'member',
+          can_change_status: role !== 'member',
           projects: fixtures.map(project => ({ ...overview.projects[0], project, can_edit: role !== 'member' })),
         } });
       }
@@ -233,7 +233,10 @@ if (!selectionOnly && !fixturesOnly) {
     const originalHistory = history();
     let request;
     page.on('request', r => { if (r.url().includes('/api/set_projects_active')) request = r; });
+    // Dev login can select another administrator created by a preceding suite.
+    const me = page.waitForResponse(r => r.url().includes('/api/get_me') && r.status() === 200);
     await page.goto(`${base}/projects`);
+    const adminId = (await (await me).json()).id;
     await expect(page.locator('.proj-row')).toHaveCount(2);
     await all.click();
     await trigger.click();
@@ -247,21 +250,28 @@ if (!selectionOnly && !fixturesOnly) {
     const payload = request.postDataJSON();
     const url = request.url();
     const headers = { 'content-type': request.headers()['content-type'] };
-    const adminId = sql("SELECT id FROM users WHERE org_role = 'admin' ORDER BY created_at LIMIT 1");
     assert.match(adminId, /^[0-9a-f-]{36}$/);
+    const state = JSON.parse(sql(`SELECT row_to_json(s) FROM person_permission_states s WHERE user_id = '${adminId}'`));
+    const setGrants = (grants, administrator = false) => sql(`UPDATE person_permission_states
+      SET grants = ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]::text[], is_administrator = ${administrator}, source = 'individual', built_in_profile = NULL
+      WHERE id = '${state.id}'`);
+    const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
     const post = (context, body) => context.post(url, { headers, data: JSON.stringify(body) });
     try {
       const anonymous = await browser.newContext();
       assert.equal((await post(anonymous.request, payload)).status(), 401);
       await anonymous.close();
-      for (const denied of ["org_role = 'member'", "org_role = 'admin', active = false"]) {
-        sql(`UPDATE users SET ${denied} WHERE id = '${adminId}'`);
+      for (const denied of ['member', 'reader', 'inactive']) {
+        setGrants(denied === 'reader' ? [...floor, 'project_read_managed', 'project_read_all'] : floor);
+        if (denied === 'inactive') sql(`UPDATE users SET active = false WHERE id = '${adminId}'`);
         const response = await post(page.request, { ...payload, active: true });
-        assert.ok([401, 403].includes(response.status()), `Denied user got ${response.status()}`);
+        assert.ok([401, 403].includes(response.status()), `Denied ${denied} got ${response.status()}`);
         assert.equal(sql('SELECT count(*) FROM projects WHERE active'), '0');
+        sql(`UPDATE users SET active = true WHERE id = '${adminId}'`);
       }
-      for (const allowed of ['manager', 'admin']) {
-        sql(`UPDATE users SET org_role = '${allowed}', active = true WHERE id = '${adminId}'`);
+      const writer = [...floor, 'project_read_managed', 'project_read_all', 'project_write_managed', 'project_write_all'];
+      for (const allowed of [[writer], [state.grants, state.is_administrator]]) {
+        setGrants(...allowed);
         assert.equal((await post(page.request, { ...payload, active: true })).status(), 200);
         assert.equal(sql('SELECT count(*) FROM projects WHERE active'), '2');
         assert.equal((await post(page.request, payload)).status(), 200);
@@ -282,9 +292,11 @@ if (!selectionOnly && !fixturesOnly) {
       await page.reload();
       await expect(page.locator('.proj-row')).toHaveCount(2);
     } finally {
-      sql(`UPDATE users SET org_role = 'admin', active = true WHERE id = '${adminId}'`);
+      sql(`UPDATE users SET active = true WHERE id = '${adminId}';
+        DELETE FROM person_permission_states WHERE id = '${state.id}';
+        INSERT INTO person_permission_states SELECT * FROM json_populate_record(NULL::person_permission_states, $state$${JSON.stringify(state)}$state$::json)`);
     }
     assert.deepEqual(errors, []);
-    console.log('PASS: real atomic archive/reactivate, anonymous/member/inactive denial, manager/admin and safe retries');
+    console.log('PASS: real atomic archive/reactivate, anonymous/member/reader/inactive denial, project writer/administrator and safe retries');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

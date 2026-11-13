@@ -22,7 +22,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         "week_start":"2026-09-07",
         "context": {
             "expected_requester":{"org_id":ids.org_id,"user_id":ids.user_id},
-            "subject_id":ids.user_id,"expected_policy":"legacy_own"
+            "subject_id":ids.user_id
         }
     });
     assert_eq!(

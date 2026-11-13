@@ -3,8 +3,9 @@
 //! permission state.
 
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
+use sqlx::PgConnection;
 
-use super::{Caller, OpError, Tx};
+use super::{Caller, OpError};
 use crate::models::permissions::PersonPermissions;
 use crate::server_fns::PermissionStorageError;
 
@@ -24,6 +25,13 @@ pub(crate) struct Actor {
 }
 
 const STATE_UNAVAILABLE: &str = "Permission state is unavailable";
+pub(crate) const ADMINISTRATOR_REQUIRED: &str = "Active administrator access required";
+
+#[derive(Clone, Copy)]
+enum Lock {
+    Share,
+    None,
+}
 
 impl Actor {
     /// Locks the organization, then the person (`FOR SHARE`, in that order, as
@@ -35,7 +43,25 @@ impl Actor {
     /// with no authority, so each operation chooses whether that reads as not
     /// found or forbidden. Missing or invalid permission state fails closed
     /// with `Forbidden`; a storage error maps like any other.
-    pub async fn load(tx: &mut Tx, caller: Caller) -> Result<Self, OpError> {
+    pub async fn load(connection: &mut PgConnection, caller: Caller) -> Result<Self, OpError> {
+        Self::load_with(connection, caller, Lock::Share).await
+    }
+
+    /// [`Actor::load`] without the locks: for refusing early, before the
+    /// operation's own transaction checks again, or for a read that must not
+    /// queue behind an access change. The answer holds only when it was read.
+    pub async fn load_unlocked(
+        connection: &mut PgConnection,
+        caller: Caller,
+    ) -> Result<Self, OpError> {
+        Self::load_with(connection, caller, Lock::None).await
+    }
+
+    async fn load_with(
+        connection: &mut PgConnection,
+        caller: Caller,
+        lock: Lock,
+    ) -> Result<Self, OpError> {
         let mut actor = Self {
             identity: horae_core::permissions::Actor {
                 id: caller.user_id,
@@ -45,36 +71,59 @@ impl Actor {
             channel: caller.channel,
             permissions: None,
         };
-        let organization = sqlx::query_scalar!(
-            "SELECT id FROM organizations WHERE id = $1 FOR SHARE",
-            caller.org_id,
-        )
-        .fetch_optional(&mut **tx)
-        .await?;
+        let organization = match lock {
+            Lock::Share => {
+                sqlx::query_scalar!(
+                    "SELECT id FROM organizations WHERE id = $1 FOR SHARE",
+                    caller.org_id,
+                )
+                .fetch_optional(&mut *connection)
+                .await?
+            }
+            Lock::None => {
+                sqlx::query_scalar!("SELECT id FROM organizations WHERE id = $1", caller.org_id)
+                    .fetch_optional(&mut *connection)
+                    .await?
+            }
+        };
         if organization.is_none() {
             return Ok(actor);
         }
-        let person = sqlx::query_scalar!(
-            "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
-            caller.org_id,
-            caller.user_id,
-        )
-        .fetch_optional(&mut **tx)
-        .await?;
+        let person = match lock {
+            Lock::Share => {
+                sqlx::query_scalar!(
+                    "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
+                    caller.org_id,
+                    caller.user_id,
+                )
+                .fetch_optional(&mut *connection)
+                .await?
+            }
+            Lock::None => {
+                sqlx::query_scalar!(
+                    "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active",
+                    caller.org_id,
+                    caller.user_id,
+                )
+                .fetch_optional(&mut *connection)
+                .await?
+            }
+        };
         if person.is_none() {
             return Ok(actor);
         }
-        let state = crate::server_fns::load_person_permissions(tx, caller.org_id, caller.user_id)
-            .await
-            .map_err(|error| match error {
-                // A lost race or a storage fault, not missing authority.
-                PermissionStorageError::Database(error) => OpError::from(error),
-                error => {
-                    tracing::error!(%error, "Invalid stored permission state");
-                    OpError::forbidden(STATE_UNAVAILABLE)
-                }
-            })?
-            .ok_or_else(|| OpError::forbidden(STATE_UNAVAILABLE))?;
+        let state =
+            crate::server_fns::load_person_permissions(connection, caller.org_id, caller.user_id)
+                .await
+                .map_err(|error| match error {
+                    // A lost race or a storage fault, not missing authority.
+                    PermissionStorageError::Database(error) => OpError::from(error),
+                    error => {
+                        tracing::error!(%error, "Invalid stored permission state");
+                        OpError::forbidden(STATE_UNAVAILABLE)
+                    }
+                })?
+                .ok_or_else(|| OpError::forbidden(STATE_UNAVAILABLE))?;
         actor.identity.active = true;
         actor.permissions = Some(state);
         Ok(actor)
@@ -125,6 +174,16 @@ impl Actor {
         self.permissions
             .as_ref()
             .is_some_and(|state| state.is_administrator)
+    }
+
+    /// Refuses anyone but an active administrator: the guard for actions no
+    /// grant covers, such as the Harvest importer and its jobs.
+    pub fn require_administrator(&self) -> Result<(), OpError> {
+        if self.administrator() {
+            Ok(())
+        } else {
+            Err(OpError::forbidden(ADMINISTRATOR_REQUIRED))
+        }
     }
 }
 

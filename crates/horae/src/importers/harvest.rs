@@ -643,22 +643,24 @@ async fn complete_connect(
     let user_id = crate::auth::session::get_session_user_id(session)
         .await
         .ok_or_else(|| anyhow::anyhow!("no authenticated session"))?;
-    let user = sqlx::query!(
-        r#"SELECT org_id, org_role::text as "role!" FROM users WHERE id = $1 AND active = true"#,
-        user_id,
+    let org_id = attempt.org_id;
+    // A refusal before the token exchange; storing the tokens checks again
+    // under the locks. Someone outside the attempt's organization loads with
+    // no authority.
+    let actor = crate::ops::Actor::load_unlocked(
+        &mut *state.db.acquire().await?,
+        crate::ops::Caller::session(org_id, user_id),
     )
-    .fetch_optional(&state.db)
-    .await?
-    .ok_or_else(|| anyhow::anyhow!("user not found"))?;
-    if user.role != "admin" || user_id != attempt.user_id || user.org_id != attempt.org_id {
+    .await?;
+    if user_id != attempt.user_id || !actor.administrator() {
         anyhow::bail!("admin access required to connect Harvest");
     }
     // A client change after the attempt started bumps the connection revision,
     // which is checked below and again when the tokens are stored.
-    let cfg = client_settings::resolve(&state.db, &state.harvest, user.org_id)
+    let cfg = client_settings::resolve(&state.db, &state.harvest, org_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("Harvest importer is not configured"))?;
-    let current = account_switch::status(&state.db, user.org_id, true).await?;
+    let current = account_switch::status(&state.db, org_id, true).await?;
     anyhow::ensure!(
         attempt.version
             == account_switch::Version {
@@ -679,7 +681,7 @@ async fn complete_connect(
 
     credentials::store_for_attempt(
         &state.db,
-        user.org_id,
+        org_id,
         attempt.user_id,
         &cfg.encryption_key_hex,
         &account_id,

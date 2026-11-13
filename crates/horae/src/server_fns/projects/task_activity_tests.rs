@@ -204,13 +204,7 @@ async fn activity_separates_session_rates_from_events_and_preserves_noops(pool: 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn activity_rejects_unavailable_authority_even_for_noops(pool: PgPool) {
-    for case in [
-        "missing",
-        "malformed",
-        "unknown_policy",
-        "inactive",
-        "no_grant",
-    ] {
+    for case in ["missing", "malformed", "inactive", "no_grant"] {
         let (ids, _) = fixture(
             &pool,
             BuiltInProfile::Administrator,
@@ -230,15 +224,6 @@ async fn activity_rejects_unavailable_authority_even_for_noops(pool: PgPool) {
             "malformed" => {
                 sqlx::query!("UPDATE person_permission_states SET grants=ARRAY['unknown.permission'] WHERE user_id=$1", ids.user_id)
                     .execute(&pool).await.unwrap();
-            }
-            "unknown_policy" => {
-                sqlx::query!(
-                    "UPDATE organizations SET permission_policy_version=2 WHERE id=$1",
-                    ids.org_id
-                )
-                .execute(&pool)
-                .await
-                .unwrap();
             }
             "inactive" => {
                 sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)

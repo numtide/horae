@@ -7,8 +7,8 @@ pub(crate) use horae_core::types::{
 #[cfg(feature = "server")]
 pub(crate) use crate::models::InvoiceLine;
 pub(crate) use crate::models::{
-    Approval, ApprovalSummary, Assignment, Client, DetailedReportRow, Invoice, InvoiceWithLines,
-    OrgBranding, Project, ProjectSpend, ReportRow, Task, TimeEntry, User,
+    Approval, ApprovalSummary, Client, DetailedReportRow, Invoice, InvoiceWithLines, OrgBranding,
+    Project, ProjectSpend, ReportRow, Task, TimeEntry, User,
 };
 
 // HTTP status codes for `ServerFnError::ServerError { code, .. }` — named so
@@ -290,18 +290,6 @@ pub(crate) fn task_payload(t: &crate::models::Task) -> crate::plugin::event::Tas
 }
 
 #[cfg(feature = "server")]
-pub(crate) fn assignment_payload(
-    a: &crate::models::Assignment,
-) -> crate::plugin::event::AssignmentPayload {
-    crate::plugin::event::AssignmentPayload {
-        id: a.id,
-        project_id: a.project_id,
-        user_id: a.user_id,
-        role: a.role.to_string(),
-    }
-}
-
-#[cfg(feature = "server")]
 pub(crate) fn user_payload(u: &crate::models::User) -> crate::plugin::event::UserPayload {
     crate::plugin::event::UserPayload {
         id: u.id,
@@ -493,8 +481,6 @@ mod profile;
 mod project_creation;
 mod project_managers;
 mod projects;
-#[cfg(feature = "server")]
-pub(crate) use projects::read_access::ReadAccess as ProjectReadAccess;
 mod reports;
 #[cfg(feature = "server")]
 pub(crate) mod snapshot;

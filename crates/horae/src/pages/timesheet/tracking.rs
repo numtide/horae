@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use uuid::Uuid;
 
 use crate::components::select_field::SelectField;
-use crate::models::scoped_time::{TimesheetPolicy, TimesheetTrackingOption, VisibleTimeEntry};
+use crate::models::scoped_time::{TimesheetTrackingOption, VisibleTimeEntry};
 
 pub(super) fn eligible(options: &[TimesheetTrackingOption], project: Uuid, task: Uuid) -> bool {
     options
@@ -10,16 +10,16 @@ pub(super) fn eligible(options: &[TimesheetTrackingOption], project: Uuid, task:
         .any(|option| option.project_id == project && option.task_id == task)
 }
 
-/// Advisory controls only. The server rechecks scope, tracking and locks atomically.
+/// Advisory controls only. The server rechecks scope, tracking and locks
+/// atomically. `loaded` is whether the sheet's write context has arrived.
 pub(super) fn editable(
-    policy: Option<TimesheetPolicy>,
+    loaded: bool,
     options: &[TimesheetTrackingOption],
     entry: &VisibleTimeEntry,
 ) -> bool {
-    policy.is_some()
+    loaded
         && entry.state == horae_core::types::EntryState::Open
-        && (policy == Some(TimesheetPolicy::LegacyOwn)
-            || eligible(options, entry.project_id, entry.task_id))
+        && eligible(options, entry.project_id, entry.task_id)
 }
 
 pub(super) fn stoppable(

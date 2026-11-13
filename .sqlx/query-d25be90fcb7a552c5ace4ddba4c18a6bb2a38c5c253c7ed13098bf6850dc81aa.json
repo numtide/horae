@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organizations SET access_revision = access_revision + 1 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d25be90fcb7a552c5ace4ddba4c18a6bb2a38c5c253c7ed13098bf6850dc81aa"
+}

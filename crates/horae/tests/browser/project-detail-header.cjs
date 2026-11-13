@@ -9,12 +9,20 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id FROM users WHERE email='admin@example.com' AND active AND org_role='admin') u"));
+const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id FROM users WHERE email='admin@example.com' AND active) u"));
 const org = actor.org_id;
+// The seeded Administrator state, replaced while a test revokes status authority.
+const seededState = sql(`SELECT row_to_json(s) FROM person_permission_states s WHERE user_id='${actor.id}'`);
+assert.equal(JSON.parse(seededState).is_administrator, true);
+const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
+const revokeStatus = () => sql(`UPDATE person_permission_states
+  SET grants=ARRAY[${[...floor, 'client_read_all'].map(grant => `'${grant}'`).join(',')}]::text[], is_administrator=false, source='individual', built_in_profile=NULL
+  WHERE user_id='${actor.id}'`);
+const restoreState = () => sql(`BEGIN; DELETE FROM person_permission_states WHERE user_id='${actor.id}';
+  INSERT INTO person_permission_states SELECT * FROM json_populate_record(NULL::person_permission_states, $state$${seededState}$state$::json); COMMIT;`);
 const id = n => `019f4200-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const project = id(1), uncoded = id(2), client = id(3), tag = id(4);
 const active = () => sql(`SELECT active FROM projects WHERE id='${project}'`);
-assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='${org}'`), '0');
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -447,19 +455,8 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     assert.equal(active(), 'f', 'A request bound to another account changes nothing');
     await retry();
 
-    sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'`);
-    try {
-      // The dialog was opened under policy zero; the write rechecks the policy.
-      await open('Reactivate');
-      await confirmDenied('Reactivate project');
-      assert.equal(active(), 'f', 'A policy change while the dialog is open changes nothing');
-    } finally {
-      sql(`UPDATE organizations SET permission_policy_version=0 WHERE id='${org}'`);
-    }
-    await retry();
-
     await open('Reactivate');
-    sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`);
+    revokeStatus();
     try {
       await confirmDenied('Reactivate project');
       assert.equal(active(), 'f', 'Revoked status authority changes nothing');
@@ -469,7 +466,7 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
       await expect(page.getByRole('link', { name: 'Edit project', exact: true })).toHaveCount(0);
       await expect(header.getByRole('link', { name: 'Header client', exact: true })).toBeVisible();
     } finally {
-      sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'`);
+      restoreState();
       sql(`DELETE FROM assignments WHERE id='${id(7)}'`);
     }
     await page.locator('#project-detail-refresh').click();
@@ -536,7 +533,7 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
     await page.setViewportSize({ width: 1440, height: 900 });
-    console.log('PASS: changed requester, policy and role fail closed and hide the project; Retry recovers the bound view; reactivation persists');
+    console.log('PASS: a changed requester or revoked grants fail closed and hide the project; Retry recovers the bound view; reactivation persists');
 
     // Undo reactivates directly under current authority and changes nothing but the status.
     const persisted = () => sql(`SELECT row_to_json(p) FROM (SELECT client_id,code,name,project_type,currency,rate_cents,
@@ -735,10 +732,7 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     let cookies;
     for (const [change, revoke, restore, status] of [
       ['account', () => page.route('**/api/set_project_active*', rebind, { times: 1 }), () => {}, 403],
-      ['policy', () => sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'`),
-        () => sql(`UPDATE organizations SET permission_policy_version=0 WHERE id='${org}'`), 403],
-      ['role', () => sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`),
-        () => sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'`), 403],
+      ['grants', revokeStatus, restoreState, 403],
       ['session', async () => { cookies = await page.context().cookies(); await page.context().clearCookies(); },
         () => page.context().addCookies(cookies), 401],
     ]) {
@@ -774,7 +768,7 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
       await reactivate();
     }
     assert.equal(persisted(), content);
-    console.log('PASS: a changed account, policy, role or expired session denies Undo, writes nothing, hides its diagnostic and removes the stale notice');
+    console.log('PASS: a changed account, revoked grants or expired session denies Undo, writes nothing, hides its diagnostic and removes the stale notice');
 
     // Leaving while Undo is pending carries neither its action nor its feedback to another project.
     await archive();
@@ -812,9 +806,8 @@ assert.equal(sql(`SELECT permission_policy_version FROM organizations WHERE id='
     throw error;
   } finally {
     await browser.close();
+    restoreState();
     sql(`BEGIN;
-      UPDATE organizations SET permission_policy_version=0 WHERE id='${org}';
-      UPDATE users SET org_role='admin' WHERE id='${actor.id}';
       DELETE FROM assignments WHERE project_id IN ('${project}','${uncoded}');
       DELETE FROM project_tag_links WHERE project_id='${project}';
       DELETE FROM project_tags WHERE id='${tag}';

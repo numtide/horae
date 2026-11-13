@@ -40,15 +40,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .unwrap();
     crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source) VALUES ($1,$2,$3,1,$4,false,'individual')",Uuid::now_v7(),ids.org_id,ids.user_id,&grants).execute(pool).await.unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     let cookie = api.cookie(ids.user_id).await;
-    let context = json!({"expected_requester":{"org_id":ids.org_id,"user_id":ids.user_id},"subject_id":target,"expected_policy":"scoped"});
+    let context = json!({"expected_requester":{"org_id":ids.org_id,"user_id":ids.user_id},"subject_id":target});
     let tracking = json!({"context":context});
     let create = json!({"context":context,"command":{"operation":"create","entry":{
         "project_id":ids.project_id,"task_id":ids.task_id,"spent_date":"2026-09-07",

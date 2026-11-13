@@ -129,6 +129,7 @@ async fn legacy_readers_reject_revoked_session_identity(pool: PgPool) {
             .execute(&pool)
             .await
             .unwrap();
+            crate::ops::testing::provision(&pool, &fixture.ids, &[], false).await;
             let result = fixture
                 .read(&pool, fixture.ids.org_id, fixture.ids.user_id, reader)
                 .await;
@@ -227,6 +228,8 @@ async fn legacy_readers_deny_writer_first_revocation(pool: PgPool) {
                     .await
                     .unwrap();
                 } else {
+                    // Invoices still decide by role; the detailed report by
+                    // the stored grants.
                     sqlx::query!(
                         "UPDATE users SET org_role='member' WHERE id=$1",
                         fixture.ids.user_id
@@ -234,6 +237,9 @@ async fn legacy_readers_deny_writer_first_revocation(pool: PgPool) {
                     .execute(&mut *writer)
                     .await
                     .unwrap();
+                    crate::ops::testing::set_grants(&mut writer, &fixture.ids, &[])
+                        .await
+                        .unwrap();
                 }
                 let blocker = pid(&mut writer).await;
                 let pending = fixture.spawn(&pool, reader);

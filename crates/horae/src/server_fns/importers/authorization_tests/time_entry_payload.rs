@@ -33,28 +33,17 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .await
     .unwrap();
     sqlx::query!("UPDATE users SET oidc_subject=id::text, cost_rate_cents=6000, billable_rate_cents=10000 WHERE org_id=$1", ids.org_id).execute(pool).await.unwrap();
-    for role in [OrgRole::Member, OrgRole::Manager, OrgRole::Admin] {
-        sqlx::query!(
-            "UPDATE users SET org_role = $2 WHERE id = $1",
-            target,
-            role as OrgRole
-        )
-        .execute(pool)
+    let cookie = api.cookie(target).await;
+    let response = api.json("get_current_timer", json!({}), &cookie).await;
+    assert!(
+        response.get("invoice_id").is_none(),
+        "time read disclosed invoice identity: {response}"
+    );
+    assert_eq!(response["user_id"], json!(target));
+    assert_eq!(response["id"], json!(entry));
+    let stored = sqlx::query_scalar!("SELECT invoice_id FROM time_entries WHERE id = $1", entry)
+        .fetch_one(pool)
         .await
         .unwrap();
-        let cookie = api.cookie(target).await;
-        let response = api.json("get_current_timer", json!({}), &cookie).await;
-        assert!(
-            response.get("invoice_id").is_none(),
-            "time read disclosed invoice identity: {response}"
-        );
-        assert_eq!(response["user_id"], json!(target));
-        assert_eq!(response["id"], json!(entry));
-        let stored =
-            sqlx::query_scalar!("SELECT invoice_id FROM time_entries WHERE id = $1", entry)
-                .fetch_one(pool)
-                .await
-                .unwrap();
-        assert_eq!(stored, Some(invoice));
-    }
+    assert_eq!(stored, Some(invoice));
 }

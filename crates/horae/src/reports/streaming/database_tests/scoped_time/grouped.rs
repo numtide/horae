@@ -74,7 +74,7 @@ async fn grouped_csv_checks_last_context_before_emitting_any_group_bytes(pool: P
         .await
         .unwrap();
         let mut tx = pool.begin().await.unwrap();
-        let (authority, _) = Authority::time(&mut tx, ids.org_id, ids.user_id)
+        let authority = Authority::time(&mut tx, ids.org_id, ids.user_id)
             .await
             .unwrap();
         cursor::groups::declare(
@@ -489,13 +489,10 @@ async fn grouped_csv_empty_source_still_requires_canonical_authority(pool: PgPoo
         body(response).await,
         b"Client,Hours,Billable Hours,Non-billable Hours\n"
     );
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=0 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
     assert_eq!(
         groups::download(
             pool,

@@ -23,10 +23,7 @@ pub(in crate::reports) async fn read(
     if query.date_from > query.date_to || query.after.is_some() {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let (mut tx, policy, grants) = begin(pool, requester).await?;
-    if policy != 1 {
-        return Err(StatusCode::FORBIDDEN);
-    }
+    let (mut tx, grants) = begin(pool, requester).await?;
     let dimension = match dimension {
         TimeReportGrouping::Client => "client",
         TimeReportGrouping::Project => "project",
@@ -137,7 +134,6 @@ pub(in crate::reports) async fn read(
         rows,
         scope: TimeExportScope {
             requester,
-            policy,
             contexts,
         },
     })

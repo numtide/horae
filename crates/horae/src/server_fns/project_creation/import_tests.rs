@@ -393,6 +393,7 @@ async fn imports_preserve_finalized_project_configuration_and_restricted_access(
             let day = "2026-09-07".parse().unwrap();
             let report = crate::server_fns::reports::fetch_report(
                 &pool,
+                ids.org_id,
                 ids.user_id,
                 (day, day),
                 "project",
@@ -403,7 +404,7 @@ async fn imports_preserve_finalized_project_configuration_and_restricted_access(
             assert_eq!(report.len(), 1);
             assert_eq!(
                 (report[0].billable_cents, report[0].cost_cents),
-                (expected_billing, Some(2813))
+                (Some(expected_billing), Some(2813))
             );
             assert_eq!(
                 (

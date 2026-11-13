@@ -45,7 +45,7 @@ async fn active_projects_only_matches_detailed_and_grouped_downloads(pool: PgPoo
             ..params()
         };
         let query = options().time_query().unwrap();
-        let workbook = time::entries(&pool, ids.org_id, ids.user_id, &query, None)
+        let workbook = time::entries(&pool, ids.org_id, ids.user_id, &query)
             .await
             .unwrap();
         assert_eq!(workbook.rows.len(), count);
@@ -126,7 +126,7 @@ async fn active_projects_only_empty_downloads_still_require_current_authority(po
     };
     let query = options().time_query().unwrap();
     assert!(
-        time::entries(&pool, ids.org_id, ids.user_id, &query, None)
+        time::entries(&pool, ids.org_id, ids.user_id, &query)
             .await
             .unwrap()
             .rows
@@ -174,7 +174,7 @@ async fn active_projects_only_empty_downloads_still_require_current_authority(po
         .await
         .unwrap();
     assert_eq!(
-        time::entries(&pool, ids.org_id, ids.user_id, &query, None)
+        time::entries(&pool, ids.org_id, ids.user_id, &query)
             .await
             .err(),
         Some(StatusCode::FORBIDDEN)
@@ -225,7 +225,7 @@ async fn active_projects_only_csv_captures_activity_at_source_snapshot(pool: PgP
         .await
         .unwrap();
         let mut tx = pool.begin().await.unwrap();
-        let (_, policy) = Authority::time(&mut tx, ids.org_id, ids.user_id)
+        Authority::time(&mut tx, ids.org_id, ids.user_id)
             .await
             .unwrap();
         if grouped {
@@ -265,7 +265,7 @@ async fn active_projects_only_csv_captures_activity_at_source_snapshot(pool: PgP
                 .await
                 .unwrap()
                 .into_iter()
-                .filter_map(|row| row.into_entry(policy).unwrap())
+                .filter_map(|row| row.into_entry().unwrap())
                 .collect::<Vec<_>>();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].context, (ids.user_id, ids.project_id));
@@ -284,7 +284,7 @@ async fn active_projects_only_workbooks_retain_source_after_archiving(pool: PgPo
     }
     .time_query()
     .unwrap();
-    let detailed = time::entries(&pool, ids.org_id, ids.user_id, &query, None)
+    let detailed = time::entries(&pool, ids.org_id, ids.user_id, &query)
         .await
         .unwrap();
     let grouped = time::groups::read(
@@ -338,7 +338,7 @@ async fn active_projects_only_workbooks_retain_source_after_archiving(pool: PgPo
             .starts_with(b"PK")
     );
     assert!(
-        time::entries(&pool, ids.org_id, ids.user_id, &query, None)
+        time::entries(&pool, ids.org_id, ids.user_id, &query)
             .await
             .unwrap()
             .rows

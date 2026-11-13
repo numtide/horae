@@ -108,7 +108,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .json("get_project_overview", bound.clone(), &cookie)
         .await;
     assert_eq!(overview["requester"], requester);
-    assert_eq!(overview["canonical_permissions"], json!(true));
+    assert_eq!(overview["can_change_status"], json!(false));
     assert_eq!(overview["projects"].as_array().unwrap().len(), 1);
     assert_eq!(overview["projects"][0]["project"], projects[0]);
     assert_eq!(overview["projects"][0]["can_edit"], json!(false));
@@ -165,7 +165,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .json("get_project_detail_view", bound_detail.clone(), &cookie)
         .await;
     assert_eq!(detail_view["requester"], requester);
-    assert_eq!(detail_view["canonical_permissions"], json!(true));
+    assert_eq!(detail_view["can_change_status"], json!(false));
     assert_eq!(detail_view["can_edit"], json!(false));
     assert_eq!(detail_view["project"]["id"], json!(ids.project_id));
     assert!(detail_view["project"].get("admin_notes").is_none());
