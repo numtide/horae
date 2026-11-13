@@ -179,13 +179,11 @@ fn main() -> anyhow::Result<()> {
 
                         let id = uuid::Uuid::now_v7();
                         sqlx::query!(
-                            "INSERT INTO users (id, org_id, email, name, org_role) \
-                             VALUES ($1, $2, $3, $4, $5)",
+                            "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, $4)",
                             id,
                             org_id,
                             email,
                             name,
-                            provisioning::placeholder_role(built_in) as horae_core::types::OrgRole,
                         )
                         .execute(&mut *tx)
                         .await?;
