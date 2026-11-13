@@ -58,6 +58,7 @@ async fn imported_legacy_project_keeps_exact_rates_and_totals_on_retry(pool: PgP
     let day = "2026-09-07".parse().unwrap();
     let report = crate::server_fns::reports::fetch_report(
         &pool,
+        ids.org_id,
         ids.user_id,
         (day, day),
         "project",
@@ -67,7 +68,7 @@ async fn imported_legacy_project_keeps_exact_rates_and_totals_on_retry(pool: PgP
     .unwrap();
     assert_eq!(
         (report[0].billable_cents, report[0].cost_cents),
-        (13000, Some(3300))
+        (Some(13000), Some(3300))
     );
     let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
         .await

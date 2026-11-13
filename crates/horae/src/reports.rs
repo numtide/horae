@@ -108,7 +108,6 @@ pub struct ExportParams {
     pub tag_ids: Option<String>,
     pub expected_org_id: Option<uuid::Uuid>,
     pub expected_user_id: Option<uuid::Uuid>,
-    pub expected_policy: Option<crate::models::time_report::TimeReportPolicy>,
     pub after: Option<String>,
 }
 
@@ -179,25 +178,37 @@ impl ExportParams {
     }
 }
 
-/// Shared rows for materialized exports and the manager-only detailed report.
-/// The streaming cursor preserves this projection, filtering and ordering.
+/// Whose time a viewer reads, from their `TimeRead*` grants: their own, the
+/// people and projects they manage, or everyone's.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct TimeScope {
+    pub viewer_id: uuid::Uuid,
+    pub own: bool,
+    pub managed: bool,
+    pub all: bool,
+}
+
+#[cfg(test)]
+impl TimeScope {
+    pub(crate) fn everyone(viewer_id: uuid::Uuid) -> Self {
+        Self {
+            viewer_id,
+            own: true,
+            managed: true,
+            all: true,
+        }
+    }
+}
+
+/// The detailed report's rows within `scope`. The streaming cursor preserves
+/// this projection, filtering and ordering.
 pub(crate) async fn fetch_entries<'e>(
     executor: impl sqlx::PgExecutor<'e> + 'e,
     org_id: uuid::Uuid,
+    scope: TimeScope,
     period: (chrono::NaiveDate, chrono::NaiveDate),
     filters: ReportFilters,
 ) -> Result<Vec<crate::models::DetailedReportRow>, sqlx::Error> {
-    stream_entries(executor, org_id, period, filters)
-        .try_collect()
-        .await
-}
-
-fn stream_entries<'e>(
-    executor: impl sqlx::PgExecutor<'e> + 'e,
-    org_id: uuid::Uuid,
-    period: (chrono::NaiveDate, chrono::NaiveDate),
-    filters: ReportFilters,
-) -> impl Stream<Item = Result<crate::models::DetailedReportRow, sqlx::Error>> + 'e {
     sqlx::query_as!(
         crate::models::DetailedReportRow,
         r#"SELECT te.spent_date as "spent_date: chrono::NaiveDate",
@@ -212,6 +223,11 @@ fn stream_entries<'e>(
          JOIN users u ON te.user_id = u.id
          JOIN organizations o ON o.id = te.org_id
          WHERE te.org_id = $6
+           AND ($11 OR ($9 AND te.user_id = $8) OR ($10 AND (
+             EXISTS (SELECT 1 FROM person_management_assignments m
+               WHERE m.org_id = te.org_id AND m.manager_id = $8 AND m.managed_user_id = te.user_id)
+             OR EXISTS (SELECT 1 FROM project_management_assignments m
+               WHERE m.org_id = te.org_id AND m.manager_id = $8 AND m.project_id = te.project_id))))
            AND te.spent_date BETWEEN $1 AND $2
            AND ($3::uuid IS NULL OR p.client_id = $3)
            AND ($4::uuid IS NULL OR te.project_id = $4)
@@ -228,8 +244,13 @@ fn stream_entries<'e>(
         filters.user_id,
         org_id,
         filters.tag_id,
+        scope.viewer_id,
+        scope.own,
+        scope.managed,
+        scope.all,
     )
-    .fetch(executor)
+    .fetch_all(executor)
+    .await
 }
 
 pub async fn export_csv(
@@ -293,14 +314,7 @@ pub async fn export_xlsx(
     let permit = bounded::ExportPermit::acquire()?;
 
     let state = crate::state::global_state().await;
-    let export = limits::time::entries(
-        &state.db,
-        org_id,
-        actor_id,
-        &params.time_query()?,
-        params.expected_policy,
-    )
-    .await?;
+    let export = limits::time::entries(&state.db, org_id, actor_id, &params.time_query()?).await?;
     let data = export
         .scope
         .render(permit, &state.db, move || entries_xlsx(&export.rows))
@@ -428,46 +442,6 @@ fn budget_cell(r: &ProjectExportRow) -> String {
         r.budget_minutes,
         &r.currency,
     )
-}
-
-#[cfg(test)]
-async fn fetch_projects_export<'e>(
-    executor: impl sqlx::PgExecutor<'e> + 'e,
-    org_id: uuid::Uuid,
-    viewer_id: uuid::Uuid,
-    scope: &'e str,
-) -> Result<Vec<ProjectExportRow>, sqlx::Error> {
-    stream_projects_export(executor, org_id, viewer_id, scope)
-        .try_collect()
-        .await
-}
-
-#[cfg(test)]
-fn stream_projects_export<'e>(
-    executor: impl sqlx::PgExecutor<'e> + 'e,
-    org_id: uuid::Uuid,
-    viewer_id: uuid::Uuid,
-    scope: &'e str,
-) -> impl Stream<Item = Result<ProjectExportRow, sqlx::Error>> + 'e {
-    sqlx::query_as!(
-        ProjectExportRow,
-        r#"SELECT p.id, c.name as client_name, p.code, p.name,
-                  p.project_type as "project_type: horae_core::types::ProjectType",
-                  p.currency,
-                  p.budget_kind as "budget_kind: horae_core::types::BudgetKind",
-                  p.budget_amount_cents, p.budget_minutes, p.active
-           FROM projects p
-           JOIN clients c ON c.id = p.client_id
-           JOIN project_read_access access ON access.project_id = p.id AND access.org_id = p.org_id
-           WHERE p.org_id = $1 AND access.user_id = $3 AND access.can_view_progress AND CASE $2
-             WHEN 'budgeted' THEN p.active AND p.budget_kind <> 'none'
-             WHEN 'archived' THEN NOT p.active ELSE p.active END
-           ORDER BY c.name, p.name, p.id"#,
-        org_id,
-        scope,
-        viewer_id,
-    )
-    .fetch(executor)
 }
 
 const PROJECT_EXPORT_HEADERS: [&str; 7] = [

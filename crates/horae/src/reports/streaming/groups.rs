@@ -1,6 +1,6 @@
 use super::*;
 use crate::models::permission_editor::PermissionRequester;
-use crate::models::time_report::{TimeReportGrouping, TimeReportPolicy};
+use crate::models::time_report::TimeReportGrouping;
 use crate::reports::limits::time::authorize_rows;
 use cursor::groups::{Fragment, GroupRow};
 
@@ -16,10 +16,9 @@ pub(in crate::reports) async fn download(
         org_id,
         user_id: actor_id,
     };
-    if params.expected_policy == Some(TimeReportPolicy::Legacy)
-        || query
-            .expected_requester
-            .is_some_and(|expected| expected != requester)
+    if query
+        .expected_requester
+        .is_some_and(|expected| expected != requester)
     {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -30,10 +29,7 @@ pub(in crate::reports) async fn download(
             let mut connection = pool.acquire().await.map_err(database_error)?;
             connection.close_on_drop();
             let mut tx = connection.begin().await.map_err(database_error)?;
-            let (authority, policy) = Authority::time(&mut tx, org_id, actor_id).await?;
-            if policy != 1 {
-                return Err(StatusCode::FORBIDDEN);
-            }
+            let authority = Authority::time(&mut tx, org_id, actor_id).await?;
             cursor::groups::declare(&mut tx, org_id, actor_id, &query, dimension).await?;
             let _ = filename.send("time-report.csv".to_owned());
             deliver(&mut tx, &sender, &authority, dimension).await?;
