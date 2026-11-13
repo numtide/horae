@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, name, CASE WHEN $5 THEN billable_rate_cents END as billable_rate_cents,\n                CASE WHEN $4 THEN cost_rate_cents END as cost_rate_cents FROM users\n         WHERE org_id = $1 AND active AND strpos(lower(name), lower($2)) > 0\n         ORDER BY lower(name), id LIMIT 51 OFFSET $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "billable_rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "cost_rate_cents",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "2504cfc8e486d57abb0d1e2c2f2dfe9e2b5005d6bed3b6d2d5ea352b3f3a687f"
+}

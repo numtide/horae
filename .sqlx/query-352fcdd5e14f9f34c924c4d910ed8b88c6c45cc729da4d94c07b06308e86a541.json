@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) FROM time_entries te\n         CROSS JOIN LATERAL (SELECT\n           EXISTS (SELECT 1 FROM person_management_assignments m WHERE m.org_id = te.org_id\n             AND m.manager_id = $8 AND m.managed_user_id = te.user_id) AS person,\n           EXISTS (SELECT 1 FROM project_management_assignments m WHERE m.org_id = te.org_id\n             AND m.manager_id = $8 AND m.project_id = te.project_id) AS project) managed\n         WHERE te.org_id = $1\n           AND ($11 OR ($9 AND te.user_id = $8) OR ($10 AND (managed.person OR managed.project)))\n           AND ($2::uuid IS NULL OR te.user_id = $2)\n           AND ($3::uuid IS NULL OR te.project_id = $3)\n           AND ($4::date IS NULL OR te.spent_date >= $4::date)\n           AND ($5::date IS NULL OR te.spent_date <= $5::date)\n           AND ($6::bool IS NULL OR te.is_running = $6)\n           AND ($7::timestamptz IS NULL OR te.updated_at >= $7::timestamptz)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Date",
+        "Bool",
+        "Timestamptz",
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "352fcdd5e14f9f34c924c4d910ed8b88c6c45cc729da4d94c07b06308e86a541"
+}

@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH visible AS MATERIALIZED (\n             SELECT t.id,t.harvest_id,t.name,t.active,t.billable_default,\n                    CASE WHEN $7 THEN t.default_rate_cents END default_rate_cents,\n                    t.default_rate_currency\n             FROM tasks t\n             WHERE t.org_id=$1 AND $6\n               AND ($2::boolean IS NULL OR t.active=$2)\n               AND ($3::uuid IS NULL OR t.id=$3)\n           ), totals AS (SELECT COUNT(*) total FROM visible), page AS (\n             SELECT * FROM visible ORDER BY name,id LIMIT $4 OFFSET $5\n           )\n           SELECT totals.total AS \"total!\",t.harvest_id AS \"id?\",t.name AS \"name?\",\n                  t.active AS \"active?\",t.billable_default AS \"billable_default?\",t.default_rate_cents,\n                  t.default_rate_currency\n           FROM totals LEFT JOIN page t ON true ORDER BY t.name,t.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "id?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "active?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "billable_default?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "default_rate_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "default_rate_currency",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      false,
+      false,
+      null,
+      true
+    ]
+  },
+  "hash": "07f104156825e4761cd6592faf324ccb6a8bc988fc0ef5495cc2638fcda3e1d2"
+}

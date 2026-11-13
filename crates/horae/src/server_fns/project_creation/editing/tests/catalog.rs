@@ -178,30 +178,6 @@ async fn editor_catalog_rejects_switched_requesters_and_out_of_scope_projects(po
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn editor_catalog_has_no_implicit_legacy_policy_fallback(pool: PgPool) {
-    let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    assert!(matches!(
-        read(&pool, &ids, context(&ids)).await,
-        Err(ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        })
-    ));
-    assert!(
-        load_creation_options(
-            &pool,
-            ids.user_id,
-            ids.org_id,
-            &CreationSearch::default(),
-            false
-        )
-        .await
-        .is_ok()
-    );
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-#[serial_test::serial]
 async fn editor_catalog_managed_scope_needs_designation_but_never_opens_global_rates(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;

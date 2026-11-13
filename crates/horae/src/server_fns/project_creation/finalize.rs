@@ -15,7 +15,7 @@ pub(super) async fn finalize_draft_record(
     email_available: bool,
 ) -> Result<Uuid, ServerFnError> {
     let mut tx = pool.begin().await.map_err(storage_error)?;
-    let role =
+    let actor =
         lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::AccessChange).await?;
     let draft = sqlx::query!(
         "SELECT revision, completed_project_id, discarded_at FROM project_drafts
@@ -37,7 +37,8 @@ pub(super) async fn finalize_draft_record(
             "Draft changed or was discarded. Reload before creating the project.",
         ));
     }
-    let payload = validate_draft_form(form, role == OrgRole::Admin)?;
+    let private = PrivateFields::of(&actor);
+    let payload = validate_draft_form(form, private)?;
     let client_id = form.client_id.ok_or_else(|| {
         with_field(
             err(BAD_REQUEST, "Client is required"),
@@ -55,6 +56,18 @@ pub(super) async fn finalize_draft_record(
     .fetch_one(&mut *tx)
     .await
     .map_err(storage_error)?;
+    // Person and task rates inherit only in the organization's currency, so
+    // any other currency needs explicit rates. Refusing on the currency alone
+    // keeps the answer the same whether or not anyone has a rate.
+    if !private.write_billable
+        && form.project_type == ProjectType::TimeAndMaterials
+        && matches!(form.rate_mode, RateMode::Person | RateMode::Task)
+        && !currency.trim().eq_ignore_ascii_case(&org_currency)
+    {
+        return Err(forbidden(
+            "Creating an hourly project in a currency other than the organization's requires permission to edit billable rates",
+        ));
+    }
     let settings = validate_project_form(form, currency, email_available)?;
     let project_id = Uuid::now_v7();
     let code = (!form.code.trim().is_empty()).then(|| form.code.trim());
@@ -139,6 +152,30 @@ pub(super) async fn finalize_draft_record(
         .map_err(storage_error)?;
     }
     save_members(&mut tx, org_id, project_id, form, currency == org_currency).await?;
+    let mut manager_ids: Vec<Uuid> = form
+        .team
+        .iter()
+        .filter(|member| member.manager)
+        .map(|member| member.user_id)
+        .collect();
+    // Without `ProjectWriteAll` the creator edits only managed projects, so
+    // creating one designates them too, whether or not they are on the team.
+    if !actor.has(horae_core::permissions::catalog::Permission::ProjectWriteAll)
+        && !manager_ids.contains(&actor_id)
+    {
+        manager_ids.push(actor_id);
+    }
+    if !manager_ids.is_empty() {
+        crate::server_fns::permissions::project_management::designate_created(
+            &mut tx,
+            org_id,
+            actor_id,
+            project_id,
+            manager_ids,
+        )
+        .await
+        .map_err(managers_error)?;
+    }
     save_tasks(&mut tx, org_id, project_id, form, currency).await?;
 
     let event = crate::plugin::AppEvent::ProjectCreated {

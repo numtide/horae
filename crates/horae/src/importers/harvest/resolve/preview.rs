@@ -75,7 +75,7 @@ impl ParentSnapshot {
             // Matched accounts are captured too; restoring them is a no-op.
             users: sqlx::query_scalar!(
                 r#"SELECT COALESCE(jsonb_agg(to_jsonb(r)), '[]'::jsonb) AS "rows!"
-                   FROM (SELECT id, org_id, harvest_id, email, name, org_role, active FROM users
+                   FROM (SELECT id, org_id, harvest_id, email, name, active FROM users
                          WHERE org_id = $1 AND id = ANY($2)) r"#,
                 org_id, &users,
             ).fetch_one(&mut *conn).await?,
@@ -104,8 +104,8 @@ impl ParentSnapshot {
         // the simulated person is then reported as lost instead of failing
         // later entries.
         sqlx::query!(
-            "INSERT INTO users (id, org_id, harvest_id, email, name, org_role, active)
-             SELECT r.id, r.org_id, r.harvest_id, r.email, r.name, r.org_role, r.active
+            "INSERT INTO users (id, org_id, harvest_id, email, name, active)
+             SELECT r.id, r.org_id, r.harvest_id, r.email, r.name, r.active
              FROM jsonb_populate_recordset(NULL::users, $1) r
              WHERE r.org_id = $2
                AND NOT EXISTS (
@@ -160,15 +160,13 @@ impl ParentSnapshot {
         )
         .execute(&mut *conn)
         .await?;
-        // Checkpoints predating link activity use the same policy-dependent
-        // initialization as a new imported link; explicit archived state survives.
+        // Checkpoints predating link activity start the link as a new imported
+        // link does, active with its task; explicit archived state survives.
         sqlx::query!(
             "INSERT INTO project_tasks (project_id, task_id, billable, rate_cents, active)
              SELECT r.project_id, r.task_id, r.billable, r.rate_cents,
                COALESCE(r.active, (
-                 SELECT o.permission_policy_version=0 OR (o.permission_policy_version=1 AND t.active)
-                 FROM tasks t JOIN organizations o ON o.id=t.org_id
-                 WHERE t.id=r.task_id AND o.id=$2
+                 SELECT t.active FROM tasks t WHERE t.id=r.task_id AND t.org_id=$2
                ))
              FROM jsonb_populate_recordset(NULL::project_tasks, $1) r
              WHERE (SELECT org_id FROM projects WHERE id = r.project_id) = $2
@@ -230,49 +228,39 @@ mod tests {
             horae_core::permissions::catalog::BuiltInProfile::Administrator,
         )
         .await;
-        for policy in [0, 1] {
+        for global_active in [false, true] {
             sqlx::query!(
-                "UPDATE organizations SET permission_policy_version=$2 WHERE id=$1",
-                ids.org_id,
-                policy
+                "UPDATE tasks SET active=$2 WHERE id=$1",
+                ids.task_id,
+                global_active
             )
             .execute(&pool)
             .await
             .unwrap();
-            for global_active in [false, true] {
-                sqlx::query!(
-                    "UPDATE tasks SET active=$2 WHERE id=$1",
-                    ids.task_id,
-                    global_active
-                )
-                .execute(&pool)
+            let mut tx = pool.begin().await.unwrap();
+            sqlx::query!("INSERT INTO project_tasks (project_id,task_id,billable,rate_cents,active) VALUES ($1,$2,true,2500,false)", ids.project_id, ids.task_id)
+                .execute(&mut *tx).await.unwrap();
+            let mut cache = RunCache::default();
+            cache.project_tasks.insert((ids.project_id, ids.task_id));
+            let mut snapshot = ParentSnapshot::capture(&mut tx, ids.org_id, &cache)
                 .await
                 .unwrap();
-                let mut tx = pool.begin().await.unwrap();
-                sqlx::query!("INSERT INTO project_tasks (project_id,task_id,billable,rate_cents,active) VALUES ($1,$2,true,2500,false)", ids.project_id, ids.task_id)
-                    .execute(&mut *tx).await.unwrap();
-                let mut cache = RunCache::default();
-                cache.project_tasks.insert((ids.project_id, ids.task_id));
-                let mut snapshot = ParentSnapshot::capture(&mut tx, ids.org_id, &cache)
-                    .await
-                    .unwrap();
-                tx.rollback().await.unwrap();
-                for has_activity in [true, false] {
-                    if !has_activity {
-                        snapshot.project_tasks[0]
-                            .as_object_mut()
-                            .unwrap()
-                            .remove("active");
-                    }
-                    let mut tx = pool.begin().await.unwrap();
-                    snapshot.restore(&mut tx, ids.org_id).await.unwrap();
-                    let link = sqlx::query!("SELECT active, billable, rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2", ids.project_id, ids.task_id)
-                        .fetch_one(&mut *tx).await.unwrap();
-                    assert_eq!(link.active, !has_activity && (policy == 0 || global_active));
-                    assert!(link.billable);
-                    assert_eq!(link.rate_cents, Some(2500));
-                    tx.rollback().await.unwrap();
+            tx.rollback().await.unwrap();
+            for has_activity in [true, false] {
+                if !has_activity {
+                    snapshot.project_tasks[0]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("active");
                 }
+                let mut tx = pool.begin().await.unwrap();
+                snapshot.restore(&mut tx, ids.org_id).await.unwrap();
+                let link = sqlx::query!("SELECT active, billable, rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2", ids.project_id, ids.task_id)
+                    .fetch_one(&mut *tx).await.unwrap();
+                assert_eq!(link.active, !has_activity && global_active);
+                assert!(link.billable);
+                assert_eq!(link.rate_cents, Some(2500));
+                tx.rollback().await.unwrap();
             }
         }
     }
@@ -358,8 +346,8 @@ mod tests {
             let simulated = Uuid::now_v7();
             let mut tx = pool.begin().await.unwrap();
             sqlx::query!(
-                "INSERT INTO users (id, org_id, email, name, org_role, active)
-                 VALUES ($1, $2, $3, 'Lost', 'member', false)",
+                "INSERT INTO users (id, org_id, email, name, active)
+                 VALUES ($1, $2, $3, 'Lost', false)",
                 simulated,
                 ids.org_id,
                 simulated_email,

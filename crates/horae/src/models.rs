@@ -21,6 +21,7 @@ pub mod time_report;
 pub mod user;
 
 pub use approval::{Approval, ApprovalSummary};
+#[cfg(test)]
 pub use assignment::Assignment;
 pub use client::Client;
 #[cfg(feature = "server")]

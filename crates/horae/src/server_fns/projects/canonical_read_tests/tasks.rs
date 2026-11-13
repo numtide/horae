@@ -192,29 +192,6 @@ async fn task_catalog_all_rate_grant_is_independent_of_legacy_role(pool: PgPool)
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn task_reader_rejects_unknown_policy_even_with_legacy_admin(pool: PgPool) {
-    let (ids, viewer) = fixture(
-        &pool,
-        BuiltInProfile::Administrator,
-        PermissionSelection::new(&[Permission::TaskReadAll]),
-    )
-    .await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 99 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    assert!(
-        tasks_for_viewer(&pool, &viewer, None, TaskRead::Catalog)
-            .await
-            .is_err()
-    );
-}
-
-#[sqlx::test(migrator = "crate::db::MIGRATOR")]
-#[serial_test::serial]
 async fn tracking_history_is_not_task_catalog_authority(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
