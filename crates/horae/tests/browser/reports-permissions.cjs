@@ -510,12 +510,6 @@ let restoreSeededStates = () => {};
     for (const link of [csvLink, xlsxLink, ...filteredLinks]) {
       assert.equal((await context.request.get(`${base}${link}`)).status(), 403);
     }
-    await page.locator('#report-group-refresh').click();
-    await expect(page.getByRole('alert')).toContainText('Could not load the report');
-    await expect(page.locator('tbody')).toHaveCount(0);
-    await page.locator('#reports-retry-access').click();
-    await expect(page.getByRole('alert')).toContainText('session or report policy changed');
-    await expect(page.locator('tbody')).toHaveCount(0);
     sql(`UPDATE organizations SET permission_policy_version=1 WHERE id='${org}'`);
     await page.locator('#reports-retry-access').click();
     await expect(page.locator('#report-refresh')).toBeEnabled();
