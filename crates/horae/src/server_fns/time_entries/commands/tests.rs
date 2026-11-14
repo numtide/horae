@@ -114,6 +114,15 @@ async fn fixture(pool: &PgPool) -> Fixture {
     .execute(pool)
     .await
     .unwrap();
+    // The target stops their own timer too, which loads their stored state.
+    crate::server_fns::provisioning::provision(
+        &mut pool.acquire().await.unwrap(),
+        ids.org_id,
+        target,
+        BuiltInProfile::Member,
+    )
+    .await
+    .unwrap();
     sqlx::query!(
         "INSERT INTO assignments (id,user_id,project_id) VALUES ($1,$2,$3)",
         Uuid::now_v7(),

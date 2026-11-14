@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE person_permission_states\n                     SET grants = array_remove(grants, 'time_write_own') WHERE user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "34629042138b364fb484673694f314e18b1e8074ba226123e945734e6e8abcf1"
+}
