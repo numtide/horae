@@ -5,9 +5,9 @@
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use sqlx::PgConnection;
 
+use super::permissions::{PermissionStorageError, load_person_permissions};
 use super::{Caller, OpError};
 use crate::models::permissions::PersonPermissions;
-use super::permissions::{PermissionStorageError, load_person_permissions};
 
 /// The entry point a request came through. Tokens and the CLI join later.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -5,13 +5,13 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::profiles::{self, ProfileCommandError};
-use crate::ops::permissions::{load_permission_template, load_person_permissions, restore_grants};
 use crate::models::permission_editor::{
     PermissionEditor, PermissionRequester, PermissionSnapshot, PermissionSubject,
     PermissionSubjectPage, ProfileDraft, ProfilePreview, ProfileSource, RelationshipRemoval,
     TemplateAssignee, TemplateChoice, TemplateDeletionPreview,
 };
 use crate::models::permissions::{PermissionSource, PersonPermissions};
+use crate::ops::permissions::{load_permission_template, load_person_permissions, restore_grants};
 
 impl From<PersonPermissions> for PermissionSnapshot {
     fn from(state: PersonPermissions) -> Self {

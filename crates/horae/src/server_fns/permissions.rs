@@ -5,11 +5,11 @@ use sqlx::PgConnection;
 
 // The tests below reach the storage functions through `use super::*`.
 #[cfg(test)]
+use crate::models::permissions::{PermissionSource, PersonPermissions};
+#[cfg(test)]
 use crate::ops::permissions::{
     PermissionStorageError, load_permission_template, load_person_permissions,
 };
-#[cfg(test)]
-use crate::models::permissions::{PermissionSource, PersonPermissions};
 #[cfg(test)]
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 #[cfg(test)]

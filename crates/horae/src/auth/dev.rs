@@ -55,10 +55,15 @@ pub async fn dev_login_post(
         .acquire()
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "DB query failed"))?;
-    let user =
-        crate::plugin::event::user_payload(&mut connection, row.org_id, row.id, &row.email, &row.name)
-            .await
-            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "DB query failed"))?;
+    let user = crate::plugin::event::user_payload(
+        &mut connection,
+        row.org_id,
+        row.id,
+        &row.email,
+        &row.name,
+    )
+    .await
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "DB query failed"))?;
     state
         .plugins
         .dispatch(crate::plugin::AppEvent::UserLoggedIn {

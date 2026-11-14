@@ -11,10 +11,10 @@ use serde::Serialize;
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
+use crate::models::permissions::{PermissionSource, PersonPermissions};
 use crate::ops::permissions::{
     PermissionStorageError, load_permission_template, load_person_permissions,
 };
-use crate::models::permissions::{PermissionSource, PersonPermissions};
 use crate::plugin::AppEvent;
 
 use crate::models::permission_audit::RemovedRelationship as RelationshipRemoval;

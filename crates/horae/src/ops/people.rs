@@ -13,11 +13,11 @@
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use uuid::Uuid;
 
+use super::permissions::provisioning;
 use super::{Actor, Done, OpError, Tx};
 use crate::models::user::{Activation, AddedPeople, NewPerson, UserListItem};
 use crate::plugin::AppEvent;
 use crate::plugin::event::{ActiveTransition, UserPayload, active_transition};
-use super::permissions::provisioning;
 
 const NOT_FOUND: &str = "Person not found";
 const WRITE_REQUIRED: &str = "Permission to manage people is required";
