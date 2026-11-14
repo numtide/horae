@@ -30,9 +30,19 @@ fn untimed_start_is_left_untouched() {
 }
 
 #[test]
-fn rejects_out_of_range_start() {
-    assert!(normalize_start(60, Some(-1)).is_err());
-    assert!(normalize_start(60, Some(1440)).is_err());
+fn rejects_out_of_range_start_as_invalid_input() {
+    for start in [-1, 1440] {
+        assert!(
+            matches!(
+                normalize_start(60, Some(start)),
+                Err(OpError::Invalid {
+                    field: Some("start_minute"),
+                    ..
+                })
+            ),
+            "{start}"
+        );
+    }
 }
 
 async fn trackable(pool: &PgPool, profile: BuiltInProfile) -> SeedIds {

@@ -229,6 +229,38 @@ async fn an_actor_without_stored_state_is_forbidden(pool: PgPool) {
     }
 }
 
+/// A start outside the day is bad input (400), and nothing is written.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_start_outside_the_day_is_rejected_as_invalid(pool: PgPool) {
+    let f = fixture(&pool).await;
+    let entry = TimesheetEntryInput {
+        start_minute: Some(1440),
+        ..f.input()
+    };
+
+    let result = f.execute(&pool, TimesheetCommand::Create { entry }).await;
+
+    assert!(
+        matches!(
+            &result,
+            Err(ServerFnError::ServerError {
+                code: crate::server_fns::BAD_REQUEST,
+                message,
+                ..
+            }) if message == "start time must be within the day (0..=1439)"
+        ),
+        "{result:?}"
+    );
+    let entries = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM time_entries WHERE org_id=$1"#,
+        f.ids.org_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(entries, 0);
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn tracking_is_subject_eligible_and_actor_writable_without_financial_fields(pool: PgPool) {
     let f = fixture(&pool).await;

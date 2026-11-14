@@ -539,8 +539,10 @@ fn normalize_start(minutes: i32, start_minute: Option<i32>) -> Result<(i32, Opti
                 horae_core::time_of_day::clamp_to_day(snapped as u16, minutes.max(0) as u32) as i32;
             Ok((clamped, Some(snapped)))
         }
-        // The Timesheet has always answered this as an outage, not a 400.
-        Some(_) => Err(OpError::Internal(TIMESHEET_UNAVAILABLE.into())),
+        Some(_) => Err(OpError::invalid(
+            "start_minute",
+            "start time must be within the day (0..=1439)",
+        )),
     }
 }
 
