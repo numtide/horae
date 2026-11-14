@@ -7,7 +7,7 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     check_initial_rate(pool, api).await;
     let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
-    let restricted = user(pool, ids.org_id, OrgRole::Admin).await;
+    let restricted = user(pool, ids.org_id).await;
     let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     for (actor, permissions) in [
         (
@@ -23,13 +23,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             VALUES ($1,$2,$3,1,$4,false,'individual')",
             Uuid::now_v7(), ids.org_id, actor, &grants).execute(pool).await.unwrap();
     }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     let cookie = api.cookie(ids.user_id).await;
     let restricted_cookie = api.cookie(restricted).await;
     let requester = json!({"org_id":ids.org_id,"user_id":ids.user_id});
@@ -135,7 +128,7 @@ async fn check_initial_rate(pool: &PgPool, api: &Api) {
         VALUES ($1,$2,$3,1,$4,false,'individual')",
         Uuid::now_v7(), ids.org_id, ids.user_id, &grants).execute(pool).await.unwrap();
     sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1,default_currency='EUR' WHERE id=$1",
+        "UPDATE organizations SET default_currency='EUR' WHERE id=$1",
         ids.org_id
     )
     .execute(pool)

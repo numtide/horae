@@ -37,6 +37,11 @@ pending ones — so the first run and every later one are both covered. To apply
 restarting the stack, run `horae-migrate`: it migrates and then rebuilds the app, which a new
 migration requires because the query macros are checked at compile time.
 
+The original 65 migrations were squashed into `0001_baseline.sql`, a `pg_dump` of their result.
+A local database migrated before the squash fails to start (sqlx reports migration 2 as
+applied but missing); `rm -rf .data` resets it. New schema changes go in `0002_*.sql` onwards; never edit
+the baseline.
+
 Connection details live in the `environment` block of `process-compose.yaml` and nowhere
 else — change the port or user there and every process follows.
 
@@ -135,7 +140,7 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 - Dioxus `#[server]` functions in `server_fns.rs` — session-authenticated; the SPA uses these for all mutations.
 - Plain Axum routes — health, exports, auth, and the read-only Harvest v2 API.
 
-**Server operations (`ops/`)**: new or changed server behaviour goes in `crates/horae/src/ops/`, one function per action with the shape `fn(tx: &mut Tx, actor: &Actor, input) -> Result<Output, OpError>`. The operation authorizes, validates, runs its SQL and returns its plugin events in `Done<T>`; it never commits and never builds a `ServerFnError`. Adapters (server functions now, Axum and Harvest handlers later) only translate: they open `ops::begin` (or `ops::begin_read`), which loads the `Actor` inside the transaction, call the operation, and finish with `WriteTx::commit` (events are dispatched after the commit) or `ReadTx::finish`; `OpError` maps to named status codes. Authorize only through `Actor` (`has(permission)`, `administrator()`), which answers from the person's stored permission state; never read `users.org_role` or branch on the organization's permission policy. `clients` is the reference domain.
+**Server operations (`ops/`)**: new or changed server behaviour goes in `crates/horae/src/ops/`, one function per action with the shape `fn(tx: &mut Tx, actor: &Actor, input) -> Result<Output, OpError>`. The operation authorizes, validates, runs its SQL and returns its plugin events in `Done<T>`; it never commits and never builds a `ServerFnError`. Adapters (server functions now, Axum and Harvest handlers later) only translate: they open `ops::begin` (or `ops::begin_read`), which loads the `Actor` inside the transaction, call the operation, and finish with `WriteTx::commit` (events are dispatched after the commit) or `ReadTx::finish`; `OpError` maps to named status codes. Authorize only through `Actor` (`has(permission)`, `administrator()`), which answers from the person's stored permission state. `clients` is the reference domain.
 
 **Shared state**: `state.rs` holds a global `AppState` in a `OnceCell`, initialized once at startup with the `PgPool`; server fns and auth read from it. The pool is created and migrations applied eagerly on `serve`.
 

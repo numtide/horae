@@ -19,17 +19,13 @@ const billing = [...catalog, 'client_write_all', 'billable_rate_read_managed', '
   'billable_rate_write_managed', 'billable_rate_write_all', 'invoice_read_managed', 'invoice_read_all',
   'project_read_managed', 'project_read_all'];
 const grantsSql = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
-// Clients authorize from stored grants. During the cut other domains (project
-// lists, the project and invoice forms) still read the role, so each scenario
-// fills it from its profile, as the test seed does.
-const setAccess = (actorId, role, grants) => sql(`UPDATE users SET org_role = '${role}' WHERE id = '${actorId}';
-  UPDATE person_permission_states SET grants = ${grantsSql(grants)} WHERE id = '${state}'`);
+const setAccess = grants => sql(`UPDATE person_permission_states SET grants = ${grantsSql(grants)} WHERE id = '${state}'`);
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true });
   const context = await browser.newContext();
   const page = await context.newPage();
-  let actor, actorRole, restoreSeededStates;
+  let actor, restoreSeededStates;
   const endpoints = new Map(), pending = new Set(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => {
@@ -64,8 +60,6 @@ const setAccess = (actorId, role, grants) => sql(`UPDATE users SET org_role = '$
     assert.match(actor.org_id, /^[0-9a-f-]{36}$/);
     assert.deepEqual(Object.keys(actor).sort(), ['email', 'id', 'name', 'org_id', 'timezone', 'utc_offset_seconds', 'workspace_timezone']);
     assert.equal(sql(`SELECT active FROM users WHERE id='${actor.id}' AND org_id='${actor.org_id}'`), 't');
-    // The stored role is dead data the scenarios overwrite; it goes back at the end.
-    actorRole = sql(`SELECT org_role FROM users WHERE id='${actor.id}'`);
     restoreSeededStates = setAsideSeededStates(actor.org_id);
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE user_id='${actor.id}'`), '0');
     sql(`INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
@@ -107,18 +101,18 @@ const setAccess = (actorId, role, grants) => sql(`UPDATE users SET org_role = '$
     }
     const reads = [['get_client_details', { client_id: client }], ['client_overview', null], ['client_detail_view', null], ['list_client_invoices', { client_id: client }]];
     for (const scenario of [
-      { profile: 'billing manager', role: 'manager', grants: billing, count: 2, billing: true },
-      { profile: 'catalog member', role: 'member', grants: catalog, count: 1, billing: false },
+      { profile: 'billing manager', grants: billing, count: 2, billing: true },
+      { profile: 'catalog member', grants: catalog, count: 1, billing: false },
     ]) {
       await settled();
-      setAccess(actor.id, scenario.role, scenario.grants);
+      setAccess(scenario.grants);
       await visit('/clients');
       await page.getByRole('searchbox', { name: 'Search clients by name' }).fill(name);
       const row = page.getByRole('row').filter({ has: page.getByRole('link', { name, exact: true }) });
       await expect(row.getByLabel(`${scenario.count} active of ${scenario.count} visible projects`)).toBeVisible();
       await expect(page.getByRole('button', { name: 'New client', exact: true })).toHaveCount(scenario.billing ? 1 : 0);
       const overview = await json('client_overview', null);
-      assert.deepEqual([overview.canonical_permissions, overview.can_read, overview.can_manage], [true, true, scenario.billing]);
+      assert.deepEqual([overview.can_read, overview.can_manage], [true, scenario.billing]);
       assert.deepEqual(overview.requester, { org_id: actor.org_id, user_id: actor.id });
       const summaries = overview.clients;
       assert.equal(summaries.some(item => item.client.id === foreignClient), false);
@@ -134,7 +128,7 @@ const setAccess = (actorId, role, grants) => sql(`UPDATE users SET org_role = '$
       await expect(page.getByRole('button', { name: 'Edit client', exact: true })).toHaveCount(scenario.billing ? 1 : 0);
       await expect(page.getByRole('link', { name: 'New invoice', exact: true })).toHaveCount(scenario.billing ? 1 : 0);
       const view = await json('client_detail_view', null);
-      assert.deepEqual([view.canonical_permissions, view.can_manage, view.details.client.id], [true, scenario.billing, client]);
+      assert.deepEqual([view.can_manage, view.details.client.id], [scenario.billing, client]);
       assert.equal(Object.hasOwn(view.details, 'billing'), scenario.billing);
       const detail = await json('get_client_details', { client_id: client });
       assert.equal(Object.hasOwn(detail, 'billing'), scenario.billing);
@@ -176,7 +170,7 @@ const setAccess = (actorId, role, grants) => sql(`UPDATE users SET org_role = '$
       assert.ok([401, 403].includes((await post(method, data)).status()), `inactive ${method}`);
     }
     sql(`UPDATE users SET active = true WHERE id = '${actor.id}'`);
-    setAccess(actor.id, 'admin', billing);
+    setAccess(billing);
     const foreignEdit = { ...editPayload, client_id: foreignClient };
     assert.equal((await post('update_client_profile', foreignEdit)).status(), 404);
     const anonymous = await browser.newContext();
@@ -190,7 +184,7 @@ const setAccess = (actorId, role, grants) => sql(`UPDATE users SET org_role = '$
     console.log('PASS: clients inactive/anonymous access, foreign mutation and direct validation boundaries');
   } finally {
     await browser.close();
-    if (actor) sql(`UPDATE users SET org_role = '${actorRole ?? 'admin'}', active = true WHERE id = '${actor.id}';
+    if (actor) sql(`UPDATE users SET active = true WHERE id = '${actor.id}';
       DELETE FROM person_permission_states WHERE id = '${state}'`);
     restoreSeededStates?.();
   }

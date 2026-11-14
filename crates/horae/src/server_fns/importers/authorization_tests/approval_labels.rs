@@ -123,7 +123,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                 }
                 for field in [
                     "email",
-                    "org_role",
                     "oidc_subject",
                     "cost_rate_cents",
                     "billable_rate_cents",

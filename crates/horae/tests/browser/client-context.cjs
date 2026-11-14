@@ -26,7 +26,7 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     SELECT '${techProject}', org_id, id, 'Context TechStart project', currency FROM clients WHERE id = '${tech}'`);
   const projects = sql("SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY id), '[]') FROM projects p");
   const invoices = sql("SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY id), '[]') FROM invoices i");
-  const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id, org_id FROM users WHERE active AND org_role = 'admin') u"));
+  const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id, org_id FROM users WHERE active AND email = 'admin@example.com') u"));
   const draft = () => sql(`SELECT row_to_json(d) FROM project_drafts d WHERE org_id = '${actor.org_id}' AND creator_id = '${actor.id}' AND discarded_at IS NULL AND completed_project_id IS NULL`);
   const editor = page.locator('.np-page');
   const saved = () => expect(editor.locator('header').getByRole('status')).toContainText('Draft saved at');
@@ -100,62 +100,47 @@ const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v',
     await saved();
     assert.equal(draft(), emptyClientDraft, 'an empty draft client is not overwritten');
     await discard();
-    // The invoice pages read the session's own permissions, which an
-    // organization still on the legacy policy does not report. Every step
-    // below loads the page afresh; the observed policy comes back afterwards.
-    const policy = sql(`SELECT permission_policy_version FROM organizations WHERE id = '${actor.org_id}'`);
-    const restorePolicy = () => sql(`UPDATE organizations SET permission_policy_version = ${policy} WHERE id = '${actor.org_id}'`);
-    sql(`UPDATE organizations SET permission_policy_version = 1 WHERE id = '${actor.org_id}'`);
-    try {
-      for (const client of ['not-a-client', '01950000-0000-7000-8000-ffffffffffff']) {
-        await page.goto(`${base}/projects/new/client/${client}`);
-        await expect(page.getByRole('alert')).toContainText(/Invalid client|unavailable/);
-        await expect(editor).toHaveCount(0);
-        assert.equal(draft(), '');
-        await page.goto(`${base}/invoices/new/client/${client}`);
-        await expect(page.getByRole('alert')).toContainText(/Invalid client|unavailable/);
-        await expect(page.locator('#inv-client')).toHaveCount(0);
-      }
-      await page.goto(`${base}/clients/${tech}`);
-      await page.getByRole('link', { name: 'New invoice', exact: true }).click();
-      await expect(page.locator('#inv-client')).toHaveValue(tech);
-      await page.locator('#inv-client').selectOption(acme);
-      await page.locator('#inv-from').fill('2026-09-01');
-      await expect(page.locator('#inv-client')).toHaveValue(acme);
-    } finally {
-      restorePolicy();
+    for (const client of ['not-a-client', '01950000-0000-7000-8000-ffffffffffff']) {
+      await page.goto(`${base}/projects/new/client/${client}`);
+      await expect(page.getByRole('alert')).toContainText(/Invalid client|unavailable/);
+      await expect(editor).toHaveCount(0);
+      assert.equal(draft(), '');
+      await page.goto(`${base}/invoices/new/client/${client}`);
+      await expect(page.getByRole('alert')).toContainText(/Invalid client|unavailable/);
+      await expect(page.locator('#inv-client')).toHaveCount(0);
     }
+    await page.goto(`${base}/clients/${tech}`);
+    await page.getByRole('link', { name: 'New invoice', exact: true }).click();
+    await expect(page.locator('#inv-client')).toHaveValue(tech);
+    await page.locator('#inv-client').selectOption(acme);
+    await page.locator('#inv-from').fill('2026-09-01');
+    await expect(page.locator('#inv-client')).toHaveValue(acme);
     assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY id), '[]') FROM projects p"), projects);
     assert.equal(sql("SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY id), '[]') FROM invoices i"), invoices);
-    // Legacy managers and members follow a client band to that client's record.
-    // Its assignment fixture advances the project's edit revision, so the record
-    // snapshots above come first.
+    // A client band leads to that client's record. Its assignment fixture
+    // advances the project's edit revision, so the record snapshots above come first.
     const assignment = '01970000-0000-7000-8000-000000000433';
     sql(`INSERT INTO assignments (id, project_id, user_id) VALUES ('${assignment}', '${acmeProject}', '${actor.id}')`);
     try {
-      for (const role of ['manager', 'member']) {
-        sql(`UPDATE users SET org_role = '${role}' WHERE id = '${actor.id}'`);
-        await page.goto(`${base}/projects`);
-        const band = page.locator(`.proj-group a[href="/clients/${acme}"]`);
-        await expect(band).toHaveText('Acme Corp');
-        // The actual Tab order from the list's scroller reaches the band.
-        await page.getByRole('region', { name: 'Projects by client', exact: true }).focus();
-        let reached = false;
-        for (let step = 0; step < 200 && !reached; step++) {
-          await page.keyboard.press('Tab');
-          reached = await band.evaluate(link => link === document.activeElement);
-        }
-        assert.ok(reached, `${role}: Tab never reached the client band`);
-        await expect(band).toBeFocused();
-        await page.keyboard.press('Enter');
-        await expect(page).toHaveURL(`${base}/clients/${acme}`);
-        await expect(page.getByRole('heading', { name: 'Acme Corp', exact: true })).toBeVisible();
-        await page.goBack();
-        await expect(page).toHaveURL(`${base}/projects`);
+      await page.goto(`${base}/projects`);
+      const band = page.locator(`.proj-group a[href="/clients/${acme}"]`);
+      await expect(band).toHaveText('Acme Corp');
+      // The actual Tab order from the list's scroller reaches the band.
+      await page.getByRole('region', { name: 'Projects by client', exact: true }).focus();
+      let reached = false;
+      for (let step = 0; step < 200 && !reached; step++) {
+        await page.keyboard.press('Tab');
+        reached = await band.evaluate(link => link === document.activeElement);
       }
+      assert.ok(reached, 'Tab never reached the client band');
+      await expect(band).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(`${base}/clients/${acme}`);
+      await expect(page.getByRole('heading', { name: 'Acme Corp', exact: true })).toBeVisible();
+      await page.goBack();
+      await expect(page).toHaveURL(`${base}/projects`);
     } finally {
-      sql(`UPDATE users SET org_role = 'admin' WHERE id = '${actor.id}';
-        DELETE FROM assignments WHERE id = '${assignment}'`);
+      sql(`DELETE FROM assignments WHERE id = '${assignment}'`);
     }
     assert.deepEqual(errors, []);
     console.log('PASS: client links filter real projects, project client bands open their client, prefill once, preserve every draft and never create business records');

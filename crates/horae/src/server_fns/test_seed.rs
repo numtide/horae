@@ -4,7 +4,6 @@
 //! modules.
 
 use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -69,10 +68,9 @@ pub async fn repeatable_read_pool(pool: &PgPool) -> PgPool {
 }
 
 /// Seed the minimal tenant, giving the user `profile`'s permission state, and
-/// return its ids. The user's `org_role` is the placeholder new people get,
-/// for the domains that still read it.
+/// return its ids.
 pub async fn seed(pool: &PgPool, profile: BuiltInProfile) -> SeedIds {
-    let ids = seed_before_permission_state(pool, provisioning::placeholder_role(profile)).await;
+    let ids = seed_tenant(pool).await;
     let mut connection = pool.acquire().await.unwrap();
     provisioning::provision(&mut connection, ids.org_id, ids.user_id, profile)
         .await
@@ -80,9 +78,10 @@ pub async fn seed(pool: &PgPool, profile: BuiltInProfile) -> SeedIds {
     ids
 }
 
-/// Seed the minimal tenant with no permission state, for tests that migrate
-/// from a schema older than `person_permission_states`.
-pub async fn seed_before_permission_state(pool: &PgPool, role: OrgRole) -> SeedIds {
+/// Seed the minimal tenant with no permission state. The inserts name only
+/// columns every schema version has, so tests that migrate from an older
+/// schema can use it too.
+pub async fn seed_tenant(pool: &PgPool) -> SeedIds {
     let org_id = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO organizations (id, name) VALUES ($1, 'Test Org')",
@@ -94,12 +93,10 @@ pub async fn seed_before_permission_state(pool: &PgPool, role: OrgRole) -> SeedI
 
     let user_id = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role) \
-         VALUES ($1, $2, $3, 'Test User', $4)",
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, 'Test User')",
         user_id,
         org_id,
         format!("{user_id}@test.com"),
-        role as OrgRole,
     )
     .execute(pool)
     .await
@@ -236,17 +233,6 @@ pub async fn clear_state(pool: &PgPool, user_id: Uuid) {
     sqlx::query!(
         "DELETE FROM person_permission_states WHERE user_id = $1",
         user_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-}
-
-/// Switch an organization to the scoped permission policy.
-pub async fn use_policy_one(pool: &PgPool, org_id: Uuid) {
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        org_id
     )
     .execute(pool)
     .await

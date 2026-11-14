@@ -363,7 +363,6 @@ pub(crate) async fn detail_view(
     let details = details(tx, actor, client_id).await?;
     Ok(ClientDetailView {
         requester,
-        canonical_permissions: true,
         can_manage: actor.has(Permission::ClientWriteAll),
         can_read_invoices: actor.has(Permission::InvoiceReadAll),
         details,
@@ -385,7 +384,6 @@ pub(crate) async fn overview(
     let clients = summaries(&mut **tx, actor.org_id(), actor.id(), scope).await?;
     Ok(ClientOverview {
         requester,
-        canonical_permissions: true,
         can_read: scope.catalog,
         can_manage: actor.has(Permission::ClientWriteAll),
         clients,

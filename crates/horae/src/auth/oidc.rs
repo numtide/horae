@@ -28,7 +28,6 @@ use uuid::Uuid;
 use crate::auth::session::set_session_user_id;
 use crate::config::{AutoProvision, OidcConfig};
 use crate::models::User;
-use horae_core::types::OrgRole;
 
 /// Session key holding the in-flight authorization request's CSRF, PKCE, and
 /// nonce secrets between `/auth/login` and `/auth/callback`.
@@ -393,7 +392,6 @@ async fn resolve_user(
             r#"UPDATE users SET oidc_subject = $1, oidc_issuer = $3
                WHERE id = $2 AND oidc_subject IS NULL AND active
                RETURNING id, org_id, email, name, oidc_subject,
-                         org_role as "org_role: OrgRole",
                          cost_rate_cents, billable_rate_cents, active,
                          created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
             identity.subject,
@@ -454,17 +452,15 @@ async fn provision(
     }
     let user = sqlx::query_as!(
         User,
-        r#"INSERT INTO users (id, org_id, email, name, org_role, oidc_subject, oidc_issuer)
-           VALUES ($1, $7, $2, $3, $4, $5, $6)
+        r#"INSERT INTO users (id, org_id, email, name, oidc_subject, oidc_issuer)
+           VALUES ($1, $6, $2, $3, $4, $5)
            ON CONFLICT DO NOTHING
            RETURNING id, org_id, email, name, oidc_subject,
-                     org_role as "org_role: OrgRole",
                      cost_rate_cents, billable_rate_cents, active,
                      created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
         Uuid::now_v7(),
         email,
         account_name(identity.name.as_deref(), email),
-        OrgRole::Member as OrgRole,
         identity.subject,
         identity.issuer,
         org_id,
@@ -568,7 +564,6 @@ async fn fetch_by_identity(db: &sqlx::PgPool, identity: &Identity) -> anyhow::Re
     let user = sqlx::query_as!(
         User,
         r#"SELECT id, org_id, email, name, oidc_subject,
-                  org_role as "org_role: OrgRole",
                   cost_rate_cents, billable_rate_cents, active,
                   created_at as "created_at: chrono::DateTime<chrono::Utc>"
            FROM users WHERE oidc_issuer = $1 AND oidc_subject = $2"#,
@@ -586,7 +581,6 @@ async fn fetch_unlinked_by_email(db: &sqlx::PgPool, email: &str) -> anyhow::Resu
     let user = sqlx::query_as!(
         User,
         r#"SELECT id, org_id, email, name, oidc_subject,
-                  org_role as "org_role: OrgRole",
                   cost_rate_cents, billable_rate_cents, active,
                   created_at as "created_at: chrono::DateTime<chrono::Utc>"
            FROM users WHERE email = $1 AND oidc_subject IS NULL"#,

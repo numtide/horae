@@ -7,15 +7,15 @@ use sqlx::PgPool;
 
 use super::*;
 use crate::ops::Caller;
-use crate::ops::testing::{Recorder, policy_one, seed_profile};
+use crate::ops::testing::{Recorder, provision};
 use crate::server_fns::test_seed::{SeedIds, seed};
 
 /// Which authority a fixture gives the seeded person.
 #[derive(Debug, Clone, Copy)]
 enum Who {
     Profile(BuiltInProfile),
-    /// Exactly these grants. The dead legacy role is Admin on purpose: it
-    /// must not matter.
+    /// Exactly these grants, replacing an Administrator's state: the
+    /// profile someone was created with must not matter.
     Grants(&'static [Permission]),
 }
 
@@ -30,10 +30,10 @@ const NOTHING: &[Permission] = &[];
 /// tax ID, and whose project is archived (so the client may be archived).
 async fn fixture(pool: &PgPool, who: Who) -> SeedIds {
     let ids = match who {
-        Who::Profile(profile) => seed_profile(pool, profile).await,
+        Who::Profile(profile) => seed(pool, profile).await,
         Who::Grants(grants) => {
             let ids = seed(pool, BuiltInProfile::Administrator).await;
-            policy_one(pool, &ids, grants, false).await;
+            provision(pool, &ids, grants, false).await;
             ids
         }
     };
@@ -327,8 +327,7 @@ async fn set_active_with(
     (result, events.take())
 }
 
-/// The class b row of the study (015 T238): policy one used to refuse every
-/// status change.
+/// The class b row of the study (015 T238).
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn archive_and_restore_need_client_write(pool: PgPool) {
     for active in [false, true] {

@@ -21,7 +21,7 @@ async fn assignment_gate_allows_inflight_invoice_organization_fks_to_finish(pool
     .await
     .unwrap();
     let actor = sqlx::query_as!(User,
-        r#"SELECT id, org_id, email, name, oidc_subject, org_role AS "org_role: OrgRole",
+        r#"SELECT id, org_id, email, name, oidc_subject,
         cost_rate_cents, billable_rate_cents, active, created_at AS "created_at: chrono::DateTime<chrono::Utc>"
         FROM users WHERE id=$1"#, ids.user_id,
     ).fetch_one(&pool).await.unwrap();
@@ -729,20 +729,10 @@ async fn invoice_defaults_edit_rechecks_status_after_waiting_for_a_concurrent_se
     assert_eq!(stored.po_number, "");
 }
 
-#[sqlx::test(migrations = false)]
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn invoice_defaults_legacy_insert_preserves_dates_and_exact_total(pool: PgPool) {
-    let mut previous = sqlx::migrate!("./migrations");
-    previous.migrations = std::borrow::Cow::Owned(
-        previous
-            .iter()
-            .filter(|migration| migration.version < 37)
-            .cloned()
-            .collect(),
-    );
-    previous.run(&pool).await.unwrap();
-    let ids =
-        crate::server_fns::test_seed::seed_before_permission_state(&pool, OrgRole::Manager).await;
+async fn invoice_defaults_overflow_leaves_dates_and_exact_total(pool: PgPool) {
+    let ids = crate::server_fns::test_seed::seed_tenant(&pool).await;
     let id = uuid::Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents)
@@ -754,9 +744,7 @@ async fn invoice_defaults_legacy_insert_preserves_dates_and_exact_total(pool: Pg
     .execute(&pool)
     .await
     .unwrap();
-    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
-    // The person predates permission state; give them one so the edit below
-    // is refused for its values, not for missing authority.
+    // The edit below must be refused for its values, not for missing authority.
     crate::server_fns::provisioning::provision(
         &mut pool.acquire().await.unwrap(),
         ids.org_id,
@@ -1729,91 +1717,6 @@ async fn effective_minutes_sql_matches_domain_rounding(pool: PgPool) {
             row.dir
         );
     }
-}
-
-#[sqlx::test(migrations = false)]
-async fn effective_minutes_migration_preserves_historical_invoice_quantities(pool: PgPool) {
-    let mut previous = sqlx::migrate!("./migrations");
-    previous.migrations = std::borrow::Cow::Owned(
-        previous
-            .iter()
-            .filter(|migration| migration.version < 17)
-            .cloned()
-            .collect(),
-    );
-    previous.run(&pool).await.unwrap();
-    let ids =
-        crate::server_fns::test_seed::seed_before_permission_state(&pool, OrgRole::Manager).await;
-    let legacy = time_entry(&pool, &ids, EntryState::Open).await;
-    let frozen = time_entry(&pool, &ids, EntryState::Open).await;
-    let open = time_entry(&pool, &ids, EntryState::Open).await;
-    let invoice_id = uuid::Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO invoices (id, org_id, client_id, number, status, issued_on, due_on, currency, total_cents)
-         VALUES ($1, $2, $3, 'HISTORICAL', 'sent', '2026-09-07', '2026-10-07', 'EUR', 1600)",
-        invoice_id, ids.org_id, ids.client_id,
-    ).execute(&pool).await.unwrap();
-    for entry in [legacy, frozen] {
-        sqlx::query!(
-            "INSERT INTO invoice_line_items (id, invoice_id, time_entry_id, description, minutes, rate_cents, amount_cents)
-             VALUES ($1, $2, $3, 'Historical time', 8, 6000, 800)",
-            uuid::Uuid::now_v7(), invoice_id, entry,
-        ).execute(&pool).await.unwrap();
-        sqlx::query!(
-            "UPDATE time_entries SET invoice_id = $2, state = 'invoiced' WHERE id = $1",
-            entry,
-            invoice_id,
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-    }
-    sqlx::query!(
-        "UPDATE time_entries SET rounded_minutes = 10 WHERE id = $1",
-        frozen
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET round_minutes = 15 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-
-    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
-
-    let rows = sqlx::query!(
-        "SELECT id, minutes, rounded_minutes FROM time_entries WHERE org_id = $1 ORDER BY id",
-        ids.org_id,
-    )
-    .fetch_all(&pool)
-    .await
-    .unwrap();
-    assert_eq!(
-        rows.iter()
-            .map(|row| (row.id, row.minutes, row.rounded_minutes))
-            .collect::<Vec<_>>(),
-        vec![
-            (legacy, 60, Some(8)),
-            (frozen, 60, Some(10)),
-            (open, 60, None)
-        ]
-    );
-    let lines = sqlx::query!(
-        "SELECT minutes, amount_cents FROM invoice_line_items WHERE invoice_id = $1",
-        invoice_id,
-    )
-    .fetch_all(&pool)
-    .await
-    .unwrap();
-    assert!(
-        lines
-            .iter()
-            .all(|line| line.minutes == Some(8) && line.amount_cents == 800)
-    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

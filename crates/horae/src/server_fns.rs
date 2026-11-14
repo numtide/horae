@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
 pub(crate) use horae_core::types::{
-    BudgetKind, EntryState, InvoiceStatus, OrgRole, ProjectRole, ProjectType,
+    BudgetKind, EntryState, InvoiceStatus, ProjectRole, ProjectType,
 };
 
 pub(crate) use crate::models::{
@@ -140,7 +140,6 @@ pub(crate) async fn require_user() -> Result<crate::models::User, ServerFnError>
     sqlx::query_as!(
         crate::models::User,
         r#"SELECT id, org_id, email, name, oidc_subject,
-                org_role as "org_role: OrgRole",
                 cost_rate_cents, billable_rate_cents, active,
                 created_at as "created_at: chrono::DateTime<chrono::Utc>"
          FROM users WHERE id = $1 AND active = true"#,

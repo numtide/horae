@@ -23,10 +23,10 @@ async fn set_grants(pool: &PgPool, user_id: Uuid, permissions: &[Permission]) {
     .unwrap();
 }
 
-/// A disposable organization on policy one, with a client carrying every
-/// protected field so payload checks can look for leaks.
-async fn policy_one(pool: &PgPool, role: BuiltInProfile, permissions: &[Permission]) -> SeedIds {
-    let ids = seed(pool, role).await;
+/// A disposable organization whose person holds exactly `permissions`, with a
+/// client carrying every protected field so payload checks can look for leaks.
+async fn fixture(pool: &PgPool, profile: BuiltInProfile, permissions: &[Permission]) -> SeedIds {
+    let ids = seed(pool, profile).await;
     sqlx::query!(
         "UPDATE clients SET address=$2, tax_id=$3, default_rate_cents=12345 WHERE id=$1",
         ids.client_id,
@@ -46,13 +46,6 @@ async fn policy_one(pool: &PgPool, role: BuiltInProfile, permissions: &[Permissi
     .await
     .unwrap();
     set_grants(pool, ids.user_id, permissions).await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     ids
 }
 
@@ -73,9 +66,9 @@ fn assert_code(error: ServerFnError, expected: u16) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn read_only_client_grant_shows_catalog_without_writes_rates_or_projects(pool: PgPool) {
-    let ids = policy_one(&pool, BuiltInProfile::Member, &[Permission::ClientReadAll]).await;
+    let ids = fixture(&pool, BuiltInProfile::Member, &[Permission::ClientReadAll]).await;
     let page = overview(&pool, &ids).await.unwrap();
-    assert!(page.canonical_permissions && page.can_read && !page.can_manage);
+    assert!(page.can_read && !page.can_manage);
     assert_eq!(page.clients.len(), 1);
     let summary = &page.clients[0];
     assert_eq!(summary.client.id, ids.client_id);
@@ -84,15 +77,15 @@ async fn read_only_client_grant_shows_catalog_without_writes_rates_or_projects(p
     assert!(summary.project_currencies.is_empty());
 
     let view = detail(&pool, &ids).await.unwrap();
-    assert!(view.canonical_permissions && !view.can_manage);
+    assert!(!view.can_manage);
     assert_eq!(view.details.client.tax_id.as_deref(), Some(TAX_ID));
     assert!(view.details.billing.is_none());
     assert!(!serde_json::to_string(&view).unwrap().contains("12345"));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn unrelated_grants_and_legacy_roles_do_not_open_the_catalog(pool: PgPool) {
-    for (role, permissions) in [
+async fn unrelated_grants_and_profiles_do_not_open_the_catalog(pool: PgPool) {
+    for (profile, permissions) in [
         (BuiltInProfile::Administrator, vec![]),
         (
             BuiltInProfile::ExecutiveManager,
@@ -108,12 +101,9 @@ async fn unrelated_grants_and_legacy_roles_do_not_open_the_catalog(pool: PgPool)
             vec![Permission::ReportProfitabilityRead],
         ),
     ] {
-        let ids = policy_one(&pool, role, &permissions).await;
+        let ids = fixture(&pool, profile, &permissions).await;
         let page = overview(&pool, &ids).await.unwrap();
-        assert!(
-            page.canonical_permissions && !page.can_read && !page.can_manage,
-            "{permissions:?}"
-        );
+        assert!(!page.can_read && !page.can_manage, "{permissions:?}");
         let payload = serde_json::to_string(&page).unwrap();
         for hidden in ["Acme", ADDRESS, TAX_ID, "12345"] {
             assert!(!payload.contains(hidden), "{hidden} in {payload}");
@@ -128,7 +118,7 @@ async fn default_rate_requires_the_global_billable_rate_grant(pool: PgPool) {
         (Permission::BillableRateReadAll, true),
         (Permission::BillableRateReadManaged, false),
     ] {
-        let ids = policy_one(
+        let ids = fixture(
             &pool,
             BuiltInProfile::ExecutiveManager,
             &[Permission::ClientReadAll, rate_grant],
@@ -144,8 +134,8 @@ async fn default_rate_requires_the_global_billable_rate_grant(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn project_counts_follow_the_policy_one_project_reader(pool: PgPool) {
-    let ids = policy_one(
+async fn project_counts_follow_the_project_reader(pool: PgPool) {
+    let ids = fixture(
         &pool,
         BuiltInProfile::Member,
         &[Permission::ClientReadAll, Permission::ProjectReadAll],
@@ -182,7 +172,7 @@ async fn project_counts_follow_the_policy_one_project_reader(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn managed_project_counts_require_an_actual_management_link(pool: PgPool) {
-    let ids = policy_one(
+    let ids = fixture(
         &pool,
         BuiltInProfile::Member,
         &[Permission::ClientReadAll, Permission::ProjectReadManaged],
@@ -199,7 +189,7 @@ async fn managed_project_counts_require_an_actual_management_link(pool: PgPool) 
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn visible_default_rate_distinguishes_unset_from_zero(pool: PgPool) {
-    let ids = policy_one(
+    let ids = fixture(
         &pool,
         BuiltInProfile::Member,
         &[Permission::ClientReadAll, Permission::BillableRateReadAll],
@@ -224,7 +214,7 @@ async fn visible_default_rate_distinguishes_unset_from_zero(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn foreign_missing_and_rebound_requests_fail_closed(pool: PgPool) {
-    let ids = policy_one(&pool, BuiltInProfile::Member, &[Permission::ClientReadAll]).await;
+    let ids = fixture(&pool, BuiltInProfile::Member, &[Permission::ClientReadAll]).await;
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for client_id in [foreign.client_id, Uuid::now_v7()] {
         let error = client_detail_view_for(&pool, ids.org_id, ids.user_id, client_id, None)
@@ -269,7 +259,7 @@ async fn foreign_missing_and_rebound_requests_fail_closed(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn unavailable_permission_state_and_inactive_actors_fail_closed(pool: PgPool) {
     for state in ["missing", "malformed", "inactive"] {
-        let ids = policy_one(
+        let ids = fixture(
             &pool,
             BuiltInProfile::Administrator,
             &[Permission::ClientReadAll],
@@ -309,7 +299,7 @@ async fn unavailable_permission_state_and_inactive_actors_fail_closed(pool: PgPo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn readers_observe_revocation_after_waiting_for_current_authority(pool: PgPool) {
     for read_detail in [false, true] {
-        let ids = policy_one(
+        let ids = fixture(
             &pool,
             BuiltInProfile::Administrator,
             &[Permission::ClientReadAll],
@@ -361,11 +351,11 @@ async fn readers_observe_revocation_after_waiting_for_current_authority(pool: Pg
     }
 }
 
-/// The shared detail reader follows the same grants as the page: a dead
-/// legacy Manager role without them sees nothing.
+/// The shared detail reader follows the same grants as the page: the Manager
+/// profile without them sees nothing.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn workflow_reader_follows_grants_under_policy_one(pool: PgPool) {
-    let ids = policy_one(&pool, BuiltInProfile::ExecutiveManager, &[]).await;
+async fn workflow_reader_follows_grants(pool: PgPool) {
+    let ids = fixture(&pool, BuiltInProfile::ExecutiveManager, &[]).await;
     let error = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
         .await
         .unwrap_err();

@@ -1,15 +1,15 @@
 use super::*;
 use crate::models::client::ClientBillingSnapshot;
-use crate::ops::testing::{seed_profile, set_grants};
+use crate::ops::testing::set_grants;
 use crate::plugin::event::ActiveTransition;
-use crate::server_fns::test_seed::{SeedIds, wait_for_blocked};
+use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile::{Administrator, Member, ProjectManager};
 use horae_core::permissions::catalog::Permission;
 use sqlx::PgPool;
 use std::time::Duration;
 
 async fn seed_grants(pool: &PgPool, permissions: &[Permission]) -> SeedIds {
-    let ids = seed_profile(pool, Member).await;
+    let ids = seed(pool, Member).await;
     set_grants(&mut pool.acquire().await.unwrap(), &ids, permissions)
         .await
         .unwrap();
@@ -43,7 +43,7 @@ fn profile_edit(detail: &ClientDetails, rate_change: ClientRateChange) -> Client
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn profile_create_persists_normalized_identity_and_exact_optional_rate(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
     for (input, expected) in [("", None), ("0", Some(0)), ("123.45", Some(12345))] {
         let created =
             create_client_profile_record(&pool, ids.org_id, ids.user_id, &profile(), input)
@@ -63,7 +63,7 @@ async fn profile_create_persists_normalized_identity_and_exact_optional_rate(poo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn profile_update_requires_explicit_rate_intent_for_currency_changes(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
     for input in ["0", "120.50"] {
         let before =
             create_client_profile_record(&pool, ids.org_id, ids.user_id, &profile(), input)
@@ -106,7 +106,7 @@ async fn profile_update_requires_explicit_rate_intent_for_currency_changes(pool:
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn profile_noop_preserves_row_and_returns_no_update_event_signal(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
     let before = create_client_profile_record(&pool, ids.org_id, ids.user_id, &profile(), "0")
         .await
         .unwrap();
@@ -132,7 +132,7 @@ async fn profile_noop_preserves_row_and_returns_no_update_event_signal(pool: PgP
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn profile_saves_reject_invalid_input_without_partial_writes(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
     let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
         .await
         .unwrap();
@@ -203,9 +203,9 @@ async fn profile_saves_reject_invalid_input_without_partial_writes(pool: PgPool)
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn profile_saves_recheck_manager_org_and_active_actor(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
-    let foreign = seed_profile(&pool, Administrator).await;
-    let member = seed_profile(&pool, Member).await;
+    let ids = seed(&pool, Administrator).await;
+    let foreign = seed(&pool, Administrator).await;
+    let member = seed(&pool, Member).await;
     let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
         .await
         .unwrap();
@@ -275,7 +275,7 @@ async fn profile_saves_recheck_manager_org_and_active_actor(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn profile_update_preserves_historical_rows_and_inactive_status(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
     sqlx::query!(
         "UPDATE clients SET active = false WHERE id = $1",
         ids.client_id
@@ -336,7 +336,7 @@ async fn profile_update_preserves_historical_rows_and_inactive_status(pool: PgPo
 async fn profile_update_rejects_stale_rate_even_when_the_target_currency_is_unchanged(
     pool: PgPool,
 ) {
-    let ids = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
     let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
         .await
         .unwrap();
@@ -371,7 +371,7 @@ async fn profile_update_rejects_stale_rate_even_when_the_target_currency_is_unch
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn profile_currency_change_without_a_rate_keeps_it_unset(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
     let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
         .await
         .unwrap();
@@ -388,7 +388,7 @@ async fn profile_currency_change_without_a_rate_keeps_it_unset(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn profile_update_rejects_stale_currency_even_when_the_rate_is_still_unset(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
     let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
         .await
         .unwrap();
@@ -420,7 +420,7 @@ async fn profile_update_rejects_stale_currency_even_when_the_rate_is_still_unset
 async fn profile_update_rechecks_financial_snapshot_after_waiting_for_a_concurrent_edit(
     pool: PgPool,
 ) {
-    let ids = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
     let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
         .await
         .unwrap();
@@ -464,7 +464,7 @@ async fn profile_update_rechecks_financial_snapshot_after_waiting_for_a_concurre
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn profile_update_rechecks_authority_after_waiting_for_a_concurrent_demotion(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
     let before = client_details_for_viewer(&pool, ids.org_id, ids.user_id, ids.client_id)
         .await
         .unwrap();
@@ -501,7 +501,7 @@ async fn profile_update_rechecks_authority_after_waiting_for_a_concurrent_demoti
 }
 
 async fn client(pool: &PgPool) -> Client {
-    let ids = seed_profile(pool, Administrator).await;
+    let ids = seed(pool, Administrator).await;
     sqlx::query_as!(
         Client,
         r#"SELECT id, org_id, name, currency, address, tax_id, active,
@@ -545,7 +545,7 @@ async fn row_version(pool: &PgPool, id: uuid::Uuid) -> Option<String> {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_details_keep_catalog_identity_but_omit_billing_without_rate_read(pool: PgPool) {
-    let ids = seed_profile(&pool, ProjectManager).await;
+    let ids = seed(&pool, ProjectManager).await;
     sqlx::query!(
         "UPDATE clients SET address = 'Test address', tax_id = 'TEST-VAT',
          default_rate_cents = 12345, active = false WHERE id = $1",
@@ -574,7 +574,7 @@ async fn client_details_keep_catalog_identity_but_omit_billing_without_rate_read
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_details_distinguish_unset_zero_and_positive_rates(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
     for rate in [None, Some(0), Some(12345)] {
         sqlx::query!(
             "UPDATE clients SET default_rate_cents = $2 WHERE id = $1",
@@ -593,8 +593,8 @@ async fn client_details_distinguish_unset_zero_and_positive_rates(pool: PgPool) 
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_details_hide_foreign_missing_and_inactive_actor_records(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
-    let foreign = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
+    let foreign = seed(&pool, Administrator).await;
     for (org, actor, client) in [
         (ids.org_id, ids.user_id, foreign.client_id),
         (ids.org_id, ids.user_id, uuid::Uuid::now_v7()),
@@ -670,7 +670,7 @@ async fn client_invoices_require_invoice_read_even_without_invoices(pool: PgPool
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_invoices_reject_a_winning_concurrent_revocation(pool: PgPool) {
     for deactivate in [false, true] {
-        let ids = seed_profile(&pool, Administrator).await;
+        let ids = seed(&pool, Administrator).await;
         sqlx::query!(
             "INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents)
              VALUES ($1,$2,$3,'REVOCATION','2026-09-01','2026-09-15','EUR',12345)",
@@ -724,7 +724,7 @@ async fn client_invoices_reject_a_winning_concurrent_revocation(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_invoices_hold_authority_until_the_read_finishes(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
     let mut invoice_blocker = pool.begin().await.unwrap();
     let blocker = sqlx::query_scalar!("SELECT pg_backend_pid()")
         .fetch_one(&mut *invoice_blocker)
@@ -775,8 +775,8 @@ async fn client_invoices_hold_authority_until_the_read_finishes(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_invoices_keep_exact_client_scope_statuses_and_currencies(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
-    let foreign = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
+    let foreign = seed(&pool, Administrator).await;
     let other_client = uuid::Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO clients (id, org_id, name, currency) VALUES ($1,$2,'Other','EUR')",
@@ -877,7 +877,7 @@ async fn client_invoices_keep_exact_client_scope_statuses_and_currencies(pool: P
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_summaries_exclude_foreign_clients_and_unreadable_project_currencies(pool: PgPool) {
     let ids = seed_grants(&pool, &[Permission::ClientReadAll]).await;
-    let foreign = seed_profile(&pool, Administrator).await;
+    let foreign = seed(&pool, Administrator).await;
     sqlx::query!(
         "UPDATE projects SET currency = 'GBP' WHERE id = $1",
         ids.project_id
@@ -975,7 +975,7 @@ async fn client_summaries_follow_project_report_visibility_and_refuse_inactive_u
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_summaries_keep_catalog_without_projects_and_count_archived_projects(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
     let empty_id = uuid::Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO clients (id, org_id, name, currency, active) VALUES ($1,$2,'Empty','USD',false)",
@@ -1004,8 +1004,8 @@ async fn client_summaries_keep_catalog_without_projects_and_count_archived_proje
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn client_summaries_reject_a_foreign_actor_even_when_client_org_is_known(pool: PgPool) {
-    let ids = seed_profile(&pool, Administrator).await;
-    let other = seed_profile(&pool, Administrator).await;
+    let ids = seed(&pool, Administrator).await;
+    let other = seed(&pool, Administrator).await;
     assert!(matches!(
         client_summaries_for_viewer(&pool, ids.org_id, other.user_id).await,
         Err(ServerFnError::ServerError {
@@ -1099,7 +1099,7 @@ async fn both_activation_transitions_change_once_and_preserve_details(pool: PgPo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn missing_and_foreign_clients_are_not_noops(pool: PgPool) {
     let client = client(&pool).await;
-    let other = seed_profile(&pool, Administrator).await;
+    let other = seed(&pool, Administrator).await;
     let before = row_version(&pool, client.id).await;
     for (org_id, client_id) in [
         (client.org_id, uuid::Uuid::now_v7()),

@@ -1791,58 +1791,6 @@ async fn zero_fee_is_invoiced_once_until_voided(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrations = false)]
-#[serial_test::serial]
-async fn fee_balance_migration_allocates_discount_without_rewriting_invoice_snapshots(
-    pool: PgPool,
-) {
-    let mut previous = sqlx::migrate!("./migrations");
-    previous.migrations = std::borrow::Cow::Owned(
-        previous
-            .iter()
-            .filter(|m| m.version < 40)
-            .cloned()
-            .collect(),
-    );
-    previous.run(&pool).await.unwrap();
-    let ids = fee_project(
-        &pool,
-        crate::server_fns::test_seed::seed_before_permission_state(&pool, OrgRole::Manager).await,
-    )
-    .await;
-    let invoice = Uuid::now_v7();
-    sqlx::query!("INSERT INTO invoices (id,org_id,client_id,number,status,issued_on,due_on,currency,total_cents,discount_bps,discount_cents) VALUES ($1,$2,$3,'BEFORE-BALANCES','draft','2026-09-01','2026-10-01','EUR',1,5000,2)", invoice, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
-    let line_ids = [Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
-    for (key, line) in ["a", "b", "c"].into_iter().zip(line_ids.iter().rev()) {
-        let fee = Uuid::now_v7();
-        sqlx::query!("INSERT INTO project_fee_occurrences (id,org_id,project_id,period_key,due_on,description,amount_cents,currency) VALUES ($1,$2,$3,$4,'2026-09-01','Fee',1,'EUR')", fee, ids.org_id, ids.project_id, key).execute(&pool).await.unwrap();
-        sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,fee_occurrence_id,description,amount_cents) VALUES ($1,$2,$3,'Fee',1)", line, invoice, fee).execute(&pool).await.unwrap();
-    }
-    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
-    let net = sqlx::query_scalar!(
-        "SELECT l.net_before_tax_cents FROM invoice_line_items l JOIN project_fee_occurrences f ON f.id=l.fee_occurrence_id WHERE l.id = ANY($1) ORDER BY f.period_key COLLATE \"C\"",
-        &line_ids
-    )
-    .fetch_all(&pool)
-    .await
-    .unwrap();
-    assert_eq!(net, vec![Some(0), Some(0), Some(1)]);
-    let header = crate::reports::fetch_invoice_metadata(&pool, invoice, ids.org_id)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(
-        (
-            header.subtotal_cents,
-            header.discount_cents,
-            header.total_cents
-        ),
-        (3, 2, 1)
-    );
-    assert_eq!(sqlx::query_scalar!("SELECT count(*) FROM invoice_line_items WHERE invoice_id=$1 AND amount_cents=1 AND description='Fee'", invoice).fetch_one(&pool).await.unwrap(), Some(3));
-    assert_eq!(sqlx::query_scalar!("SELECT count(*) FROM information_schema.role_table_grants WHERE table_name='invoice_generation_requests' AND grantee='PUBLIC'").fetch_one(&pool).await.unwrap(), Some(0));
-}
-
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_preview_does_not_materialize_fees_and_preserves_released_snapshots(pool: PgPool) {

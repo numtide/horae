@@ -33,13 +33,10 @@ pub struct ClientDetails {
     pub billing: Option<ClientBilling>,
 }
 
-/// Clients page rows bound to one authenticated requester and policy mode.
+/// Clients page rows bound to one authenticated requester.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClientOverview {
     pub requester: PermissionRequester,
-    /// Always true now that clients read only stored permissions; the page
-    /// still binds to it until the UI drops it.
-    pub canonical_permissions: bool,
     /// False means the catalog is withheld, distinct from an empty catalog.
     pub can_read: bool,
     /// Display affordance for client writes; every write rechecks.
@@ -50,7 +47,6 @@ pub struct ClientOverview {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClientDetailView {
     pub requester: PermissionRequester,
-    pub canonical_permissions: bool,
     /// Display affordance for client writes; every write rechecks.
     pub can_manage: bool,
     /// Display affordance for the client's invoices; the read rechecks.

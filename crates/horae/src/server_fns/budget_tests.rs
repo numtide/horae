@@ -1,6 +1,6 @@
 use super::claim_budget_band;
 use crate::ops::testing::set_grants;
-use crate::server_fns::test_seed::{seed, use_policy_one};
+use crate::server_fns::test_seed::seed;
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use sqlx::PgPool;
 
@@ -27,9 +27,6 @@ async fn visible_scopes(
 
 async fn configured(pool: &PgPool) -> SeedIds {
     let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
-    // Budget readers answer from the stored state whatever the policy; these
-    // tests run on policy one, where every reader is headed.
-    use_policy_one(pool, ids.org_id).await;
     sqlx::query!(
         "UPDATE projects SET budget_kind = 'hours', budget_minutes = 100, rate_cents = 6000 WHERE id = $1",
         ids.project_id

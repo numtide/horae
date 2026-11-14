@@ -99,9 +99,9 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
         _ => ("Not signed in".to_string(), String::new(), "·".to_string()),
     };
     let administrator = administrator(own.read().as_ref());
-    let role = profile(own.read().as_ref());
+    let profile_name = profile(own.read().as_ref());
     let admin_route = first_admin_route(own.read().as_ref());
-    let role_class = if administrator {
+    let profile_class = if administrator {
         "badge badge-info badge-sm"
     } else {
         "badge badge-neutral badge-sm"
@@ -119,8 +119,8 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                                 div { class: "sidebar-user-email truncate", "{email}" }
                             }
                         }
-                        if !role.is_empty() {
-                            span { class: "{role_class}", "{role}" }
+                        if !profile_name.is_empty() {
+                            span { class: "{profile_class}", "{profile_name}" }
                         }
                     }
                     div { class: "sidebar-menu-list",
@@ -157,8 +157,8 @@ fn SidebarUser(on_navigate: EventHandler<()>) -> Element {
                 // shows both); the caret flips to signal the open state.
                 div { class: "sidebar-user",
                     div { class: "sidebar-user-name truncate", "{name}" }
-                    if !role.is_empty() {
-                        div { class: "sidebar-user-sub", "{role}" }
+                    if !profile_name.is_empty() {
+                        div { class: "sidebar-user-sub", "{profile_name}" }
                     }
                 }
                 span { class: "sidebar-user-caret", if open() { "⌃" } else { "⌄" } }

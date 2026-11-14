@@ -8,13 +8,6 @@ use std::time::Duration;
 async fn administrator(pool: &PgPool) -> SeedIds {
     // Explicit identity, not the old role or equality with Administrator grants.
     let ids = seed(pool, BuiltInProfile::Member).await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     let grants: Vec<String> = serde_json::from_value(
         serde_json::to_value(
             BuiltInProfile::Member
@@ -269,13 +262,6 @@ async fn missing_foreign_and_non_admin_authority_deny(pool: PgPool) {
             Err(TemplateCommandError::Forbidden)
         ));
     }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
     let grants: Vec<String> = serde_json::from_value(
         serde_json::to_value(
             BuiltInProfile::Administrator

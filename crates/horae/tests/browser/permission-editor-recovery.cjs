@@ -12,10 +12,11 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id, org_id, name FROM users WHERE email='admin@example.com' AND active AND org_role='admin') u"));
+const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id, org_id, name FROM users WHERE email='admin@example.com' AND active) u"));
 assert.match(actor.id, /^[0-9a-f-]{36}$/);
 assert.match(actor.org_id, /^[0-9a-f-]{36}$/);
-assert.equal(sql("SELECT count(*) FROM users WHERE active AND org_role='admin'"), '1', 'The development login must have exactly one candidate before testing canonical permissions');
+// With the seeded states set aside, the states this suite writes decide whom
+// the development login picks.
 const restoreSeededStates = setAsideSeededStates(actor.org_id);
 assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
 assert.equal(sql(`SELECT count(*) FROM permission_change_receipts WHERE org_id='${actor.org_id}'`), '0');
@@ -139,8 +140,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     }))).toEqual({ hasTheme: true, utility: 'flex' });
     await expect(page.locator('#audit-older')).toBeDisabled();
     await expect(page.locator('#audit-newest')).toBeDisabled();
-    // Directory reads are independent from legacy roles and explicit Administrator identity.
-    sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`);
+    // Directory reads are independent from explicit Administrator identity.
     let readStart = requests.length;
     await page.goto(`${base}/admin/users`);
     await expect(page.getByRole('button', { name: `Edit permissions for ${personName}`, exact: true })).toBeVisible();
@@ -170,7 +170,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     };
     await expect(railTeam).toBeVisible();
     await expect(page.locator('.adm-nav').getByRole('link', { name: 'Team', exact: true })).toBeVisible();
-    // A legacy member who is a canonical Administrator.
+    // An Administrator.
     await expectUserMenu('/admin/users');
     sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
     await page.reload();
@@ -188,32 +188,29 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await expect(page.getByText('No people match this filter', { exact: false })).toBeVisible();
     await page.locator('#people-activity').selectOption('all');
     await expect(page.locator('tbody tr')).toHaveCount(1);
-    sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}';
-      UPDATE person_permission_states SET grants=${array(floor)} WHERE id='${actorState}'`);
+    sql(`UPDATE person_permission_states SET grants=${array(floor)} WHERE id='${actorState}'`);
     readStart = requests.length;
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toBeVisible();
     await readsFinished();
     assert.ok(!requests.slice(readStart).some(path => /^\/api\/(list_people|list_users|list_tasks|load_permission_editor|list_permission_subjects)/.test(path)));
-    // A stored `admin` role grants no directory read and opens no admin
-    // section: with floor grants there is no Administration entry.
+    // Floor grants give no directory read and open no admin section: there
+    // is no Administration entry.
     await expect(railTeam).toHaveCount(0);
     // The server render only says "Loading…", so this waits for hydration too.
     await expect(page.locator('.adm-nav')).toHaveCount(0);
     await expectUserMenu(null);
     // The Administrator identity alone opens Importers, so Administration
     // leads there. Workspace settings need the company grant.
-    sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}';
-      UPDATE person_permission_states SET is_administrator=true WHERE id='${actorState}'`);
+    sql(`UPDATE person_permission_states SET is_administrator=true WHERE id='${actorState}'`);
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Access unavailable', exact: true })).toBeVisible();
     await expectUserMenu('/admin/importers');
     await expect(page.locator('.adm-main .page-title')).toHaveText('Importers');
     await expect(railTeam).toHaveCount(0);
-    sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}';
-      UPDATE person_permission_states SET grants=${array(administrator)}, is_administrator=true WHERE id='${actorState}';
+    sql(`UPDATE person_permission_states SET grants=${array(administrator)}, is_administrator=true WHERE id='${actorState}';
       DELETE FROM person_management_assignments WHERE id='01960000-0000-7000-8000-000000000708'`);
-    console.log('PASS: canonical People separates read scope, Administrator editing and legacy roles without legacy reads');
+    console.log('PASS: canonical People separates read scope from Administrator editing');
     sql(`INSERT INTO users(id, org_id, email, name)
       SELECT ('01960000-0000-7000-8001-' || lpad(i::text,12,'0'))::uuid, '${actor.org_id}',
       'directory-' || i || '@example.test', 'Z Directory ' || lpad(i::text,3,'0') FROM generate_series(1,51) i`);
@@ -254,8 +251,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
       await loginTab.waitForURL(`${base}/`);
     };
     try {
-      sql(`UPDATE users SET org_role='manager' WHERE id='${actor.id}'; UPDATE users SET org_role='admin' WHERE id='${otherActor}';
-      UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
+      sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
       await login();
       for (const action of [
         () => page.getByRole('button', { name: 'Edit permissions for Other permission administrator', exact: true }).click(),
@@ -282,8 +278,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
       assert.equal(receipts(), 0);
       assert.equal(await record(), null);
     } finally {
-      sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'; UPDATE users SET org_role='member' WHERE id='${otherActor}';
-      UPDATE person_permission_states SET is_administrator=true WHERE id='${actorState}'`);
+      sql(`UPDATE person_permission_states SET is_administrator=true WHERE id='${actorState}'`);
       await login();
       await loginTab.close();
     }
@@ -383,8 +378,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     const callsBeforeSwitch = saves.length;
     await readsFinished();
     // Change only disposable login candidates; never offer another user's retained request.
-    sql(`UPDATE users SET org_role='manager' WHERE id='${actor.id}'; UPDATE users SET org_role='admin' WHERE id='${otherActor}';
-      UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
+    sql(`UPDATE person_permission_states SET is_administrator=false WHERE id='${actorState}'`);
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
@@ -395,8 +389,7 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await expect(recovery).not.toBeVisible();
     assert.equal(await record(), templateRecord);
     assert.equal(saves.length, callsBeforeSwitch);
-    sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'; UPDATE users SET org_role='member' WHERE id='${otherActor}';
-      UPDATE person_permission_states SET is_administrator=true WHERE id='${actorState}'`);
+    sql(`UPDATE person_permission_states SET is_administrator=true WHERE id='${actorState}'`);
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin', exact: true }).click();
     await page.waitForURL(`${base}/`);
@@ -535,13 +528,10 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
     await expect(history.locator('tbody tr')).toHaveCount(25);
     assert.deepEqual(await receiptIds(), historyIds.slice(0, 25).map(id => `Receipt: ${id}`));
 
-    // Canonical Administrator access must not depend on the retained legacy role.
-    sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`);
     await page.goto(`${base}/settings`);
     await page.getByRole('link', { name: 'View permission audit log', exact: true }).click();
     await page.waitForURL(`${base}/admin/audit`);
     await expect(history.locator('tbody tr')).toHaveCount(25);
-    sql(`UPDATE users SET org_role='admin' WHERE id='${actor.id}'`);
     await page.goto(`${base}/admin/users`);
     console.log('PASS: real permission history supports empty state, keyboard details, stable paging, deleted profiles, refresh/revocation and canonical access');
 
@@ -601,7 +591,6 @@ const array = grants => `ARRAY[${grants.map(grant => `'${grant}'`).join(',')}]`;
       DELETE FROM person_management_assignments WHERE id='01960000-0000-7000-8000-000000000708';
       DELETE FROM users WHERE id='${person}' AND email='permission-browser@example.test';
       DELETE FROM users WHERE id='${otherActor}' AND email='permission-other-browser@example.test';
-      UPDATE users SET org_role='admin' WHERE id='${actor.id}';
       UPDATE organizations SET access_revision=${originalRevision} WHERE id='${actor.org_id}'; COMMIT;`);
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
     assert.equal(sql(`SELECT count(*) FROM permission_change_receipts WHERE org_id='${actor.org_id}'`), '0');

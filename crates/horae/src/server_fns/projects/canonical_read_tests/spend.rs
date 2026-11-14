@@ -112,8 +112,8 @@ async fn spend_rechecks_financial_only_revocation_after_organization_wait(pool: 
     assert_eq!((rows[0].spent_minutes, rows[0].spent_cents), (60, None));
 }
 
-async fn tracked(pool: &PgPool, role: BuiltInProfile, permissions: &[Permission]) -> SeedIds {
-    let (ids, _) = fixture(pool, role, PermissionSelection::new(permissions)).await;
+async fn tracked(pool: &PgPool, profile: BuiltInProfile, permissions: &[Permission]) -> SeedIds {
+    let (ids, _) = fixture(pool, profile, PermissionSelection::new(permissions)).await;
     sqlx::query!(
         "UPDATE projects SET rate_cents=12345 WHERE id=$1",
         ids.project_id
@@ -127,7 +127,7 @@ async fn tracked(pool: &PgPool, role: BuiltInProfile, permissions: &[Permission]
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_spend_reads_do_not_require_a_legacy_manager_role(pool: PgPool) {
+async fn canonical_spend_reads_need_only_the_read_grant(pool: PgPool) {
     let ids = tracked(&pool, BuiltInProfile::Member, &[Permission::ProjectReadAll]).await;
     let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id)
         .await

@@ -16,7 +16,7 @@ async fn grants(pool: &PgPool, org: Uuid, person: Uuid, selection: &[Permission]
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
     let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
-    let target = user(pool, ids.org_id, OrgRole::Member).await;
+    let target = user(pool, ids.org_id).await;
     let cookie = api.cookie(ids.user_id).await;
     let requester = json!({"org_id":ids.org_id,"user_id":ids.user_id});
     let lookup = json!({"project_id":ids.project_id,"expected_requester":requester});
@@ -47,13 +47,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     )
     .await;
     grants(pool, ids.org_id, target, &[Permission::ProjectReadManaged]).await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     assert_eq!(
         api.json("load_project_managers", lookup.clone(), &cookie)
             .await,

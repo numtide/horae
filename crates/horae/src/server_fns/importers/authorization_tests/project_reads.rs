@@ -7,8 +7,8 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
     let outsider = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
-    let restricted = user(pool, ids.org_id, OrgRole::Admin).await;
-    let teammate = user(pool, ids.org_id, OrgRole::Member).await;
+    let restricted = user(pool, ids.org_id).await;
+    let teammate = user(pool, ids.org_id).await;
     sqlx::query!(
         "INSERT INTO assignments (id,project_id,user_id,rate_cents) VALUES ($1,$2,$3,76543)",
         Uuid::now_v7(),
@@ -34,13 +34,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             Uuid::now_v7(), ids.org_id, actor, &grants,
         ).execute(pool).await.unwrap();
     }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     sqlx::query!(
         "UPDATE projects SET rate_cents=12345,budget_kind='amount',budget_amount_cents=86753 WHERE id=$1",
         ids.project_id,
@@ -257,12 +250,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             json!([])
         );
     }
-    // The same authenticated session must lose financial fields immediately,
-    // even if its old role is promoted independently of canonical grants.
-    sqlx::query!("UPDATE users SET org_role='admin' WHERE id=$1", ids.user_id)
-        .execute(pool)
-        .await
-        .unwrap();
+    // The same authenticated session must lose financial fields immediately.
     for permissions in [vec![Permission::ProjectReadAll], vec![]] {
         let can_read = !permissions.is_empty();
         let grants: Vec<String> =

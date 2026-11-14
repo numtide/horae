@@ -6,8 +6,9 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::*;
-use crate::ops::testing::{Recorder, seed_profile};
+use crate::ops::testing::Recorder;
 use crate::ops::{self, Caller};
+use crate::server_fns::test_seed::seed;
 use crate::server_fns::test_seed::{SeedIds, time_entry};
 
 /// Adds an active person with `profile`'s stored state to `ids`' organization,
@@ -134,7 +135,7 @@ async fn fixture(pool: &PgPool, who: Who) -> (SeedIds, SeedIds, Approval) {
         Who::Profile(profile) => profile,
         Who::ProjectManager { .. } => BuiltInProfile::ProjectManager,
     };
-    let approver = seed_profile(pool, profile).await;
+    let approver = seed(pool, profile).await;
     let teammate = add_person(pool, &approver, BuiltInProfile::Member).await;
     if let Who::ProjectManager { manages: true } = who {
         manage(pool, &approver, &teammate).await;
@@ -212,7 +213,7 @@ async fn rejecting_and_reopening_a_teammates_week_follows_the_profile(pool: PgPo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn every_profile_submits_its_own_week(pool: PgPool) {
     for &profile in BuiltInProfile::ALL {
-        let ids = seed_profile(&pool, profile).await;
+        let ids = seed(&pool, profile).await;
         let approval = submitted(&pool, &ids).await;
         assert_eq!(
             (approval.user_id, approval.state),
@@ -227,14 +228,14 @@ async fn every_profile_submits_its_own_week(pool: PgPool) {
 /// stored state without it is refused before anything is written.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn submitting_requires_writing_ones_own_time(pool: PgPool) {
-    let floor_only = seed_profile(&pool, BuiltInProfile::Member).await;
+    let floor_only = seed(&pool, BuiltInProfile::Member).await;
     crate::ops::testing::provision(&pool, &floor_only, &[], false).await;
     assert_eq!(
         submitted(&pool, &floor_only).await.state,
         EntryState::Submitted
     );
 
-    let without = seed_profile(&pool, BuiltInProfile::Member).await;
+    let without = seed(&pool, BuiltInProfile::Member).await;
     let write_own: String =
         serde_json::from_value(serde_json::json!(Permission::TimeWriteOwn)).unwrap();
     sqlx::query!(
@@ -272,7 +273,7 @@ async fn inactive_or_foreign_approvers_decide_nothing(pool: PgPool) {
             continue;
         }
         let (approver, _, approval) = fixture(&pool, who).await;
-        let foreign = seed_profile(&pool, BuiltInProfile::Member).await;
+        let foreign = seed(&pool, BuiltInProfile::Member).await;
         sqlx::query!(
             "UPDATE users SET active = false WHERE id = $1",
             approver.user_id
@@ -353,7 +354,7 @@ async fn an_invoiced_week_reveals_its_state_only_to_its_deciders(pool: PgPool) {
             OpError::forbidden(OWN_SUBMISSION_FORBIDDEN),
         ),
     ] {
-        let ids = seed_profile(&pool, profile).await;
+        let ids = seed(&pool, profile).await;
         let own = submitted(&pool, &ids).await;
         invoice(&pool, own.id).await;
         assert_eq!(
@@ -396,7 +397,7 @@ async fn only_an_administrator_decides_their_own_week(pool: PgPool) {
         (BuiltInProfile::ExecutiveManager, false),
         (BuiltInProfile::ProjectManager, false),
     ] {
-        let ids = seed_profile(&pool, profile).await;
+        let ids = seed(&pool, profile).await;
         let own = submitted(&pool, &ids).await;
         let approved = approve_as(&pool, &ids, &[own.id]).await;
         let reopened = reopen_as(&pool, &ids, own.id).await;
@@ -411,7 +412,7 @@ async fn only_an_administrator_decides_their_own_week(pool: PgPool) {
         }
     }
 
-    let ids = seed_profile(&pool, BuiltInProfile::Administrator).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let own = submitted(&pool, &ids).await;
     crate::ops::testing::provision(
         &pool,

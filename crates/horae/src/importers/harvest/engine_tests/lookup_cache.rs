@@ -295,20 +295,11 @@ async fn project_task_cache_distinguishes_both_sides_of_the_link(pool: PgPool) {
     assert_eq!(count(&pool, "project_tasks").await, 3);
 }
 
-#[sqlx::test(migrations = false)]
-async fn lookup_index_migration_preserves_existing_ambiguous_identities(pool: PgPool) {
-    let mut before = sqlx::migrate!("./migrations");
-    before.migrations = before
-        .iter()
-        .filter(|m| m.version < 22)
-        .cloned()
-        .collect::<Vec<_>>()
-        .into();
-    before.run(&pool).await.unwrap();
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn lookup_indexes_allow_ambiguous_identities(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@example.com").await;
     seed_user(&pool, org, "DEV@EXAMPLE.COM").await;
-    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
     let indexes = sqlx::query!(
         "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'users' AND indexname IN ('users_import_email_idx', 'users_import_name_idx') ORDER BY indexname"
     ).fetch_all(&pool).await.unwrap();

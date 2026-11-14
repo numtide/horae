@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE organizations SET default_currency='EUR' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "44d43c00d2b88374761497eda2acaabc5d35f69f5d6c463942db1f782faacc9f"
+}

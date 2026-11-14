@@ -12,7 +12,7 @@
 //! normalized value boundary the same way (see [`compose`]).
 
 /// The exact whitespace set trimmed on both the Rust and SQL sides. It MUST match
-/// the `btrim` character set in migration 0009's `harvest_norm`, or a re-import
+/// the `btrim` character set in the SQL function `harvest_norm`, or a re-import
 /// could fail to match a record and create a duplicate. (Rust's default `trim`
 /// strips the full Unicode White_Space set; SQL `btrim` strips only the listed
 /// characters — so we trim an explicit, shared set on both sides.)
@@ -25,7 +25,7 @@ pub fn trim_ws(value: &str) -> &str {
 
 /// Canonical natural-key normalization: trim the shared whitespace set, then fold
 /// ASCII `A`–`Z` to lowercase — byte-for-byte identical to the SQL `harvest_norm`
-/// function (migration 0009) so Rust-side keys and DB lookups always agree.
+/// function so Rust-side keys and DB lookups always agree.
 pub fn normalize(value: &str) -> String {
     trim_ws(value).to_ascii_lowercase()
 }

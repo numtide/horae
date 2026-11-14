@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use super::*;
 use crate::ops::Tx;
-use crate::ops::testing::policy_one;
+use crate::ops::testing::provision;
 use crate::server_fns::test_seed::{clear_state, seed};
 
 async fn load(pool: &PgPool, org_id: Uuid, user_id: Uuid) -> Result<Actor, OpError> {
@@ -15,11 +15,12 @@ async fn load(pool: &PgPool, org_id: Uuid, user_id: Uuid) -> Result<Actor, OpErr
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn answers_from_the_stored_state_not_the_role(pool: PgPool) {
-    // A legacy Admin role with a member's grants and a legacy Member who is an
-    // administrator: the stored state decides, never the role.
+async fn answers_from_the_stored_grants_and_identity(pool: PgPool) {
+    // Grants and administrator identity are independent: a person seeded as
+    // Administrator who now holds a member's grants, and a Member made
+    // administrator with no grants.
     let admin = seed(&pool, BuiltInProfile::Administrator).await;
-    policy_one(&pool, &admin, &[Permission::ClientReadAll], false).await;
+    provision(&pool, &admin, &[Permission::ClientReadAll], false).await;
     let actor = load(&pool, admin.org_id, admin.user_id).await.unwrap();
     assert!(actor.is_active());
     assert_eq!(actor.channel(), Channel::Session);
@@ -35,7 +36,7 @@ async fn answers_from_the_stored_state_not_the_role(pool: PgPool) {
     assert!(!state.is_administrator);
 
     let member = seed(&pool, BuiltInProfile::Member).await;
-    policy_one(&pool, &member, &[], true).await;
+    provision(&pool, &member, &[], true).await;
     let actor = load(&pool, member.org_id, member.user_id).await.unwrap();
     assert!(actor.administrator());
     assert!(!actor.has(Permission::ClientReadAll));
@@ -46,7 +47,7 @@ async fn foreign_missing_and_inactive_people_have_no_authority(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     for seeded in [&ids, &foreign] {
-        policy_one(&pool, seeded, Permission::ALL, true).await;
+        provision(&pool, seeded, Permission::ALL, true).await;
     }
     sqlx::query!(
         "UPDATE users SET active = false WHERE id = $1",
@@ -81,7 +82,7 @@ async fn missing_or_invalid_state_fails_closed(pool: PgPool) {
 
     for state in ["missing", "malformed"] {
         let ids = seed(&pool, BuiltInProfile::Administrator).await;
-        policy_one(&pool, &ids, &[Permission::ClientReadAll], true).await;
+        provision(&pool, &ids, &[Permission::ClientReadAll], true).await;
         match state {
             "missing" => sqlx::query!(
                 "DELETE FROM person_permission_states WHERE user_id = $1",
@@ -103,7 +104,7 @@ async fn missing_or_invalid_state_fails_closed(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn storage_failures_loading_state_are_not_a_refusal(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    policy_one(&pool, &ids, &[Permission::ClientReadAll], true).await;
+    provision(&pool, &ids, &[Permission::ClientReadAll], true).await;
     let mut holder = pool.begin().await.unwrap();
     sqlx::query!("LOCK TABLE person_permission_states IN ACCESS EXCLUSIVE MODE")
         .execute(&mut *holder)
@@ -148,7 +149,7 @@ async fn only_the_stored_administrator_identity_passes_the_administrator_guard(p
     }
     // Every grant without the identity is still refused.
     let everything = seed(&pool, BuiltInProfile::Member).await;
-    policy_one(&pool, &everything, Permission::ALL, false).await;
+    provision(&pool, &everything, Permission::ALL, false).await;
     let actor = load(&pool, everything.org_id, everything.user_id)
         .await
         .unwrap();

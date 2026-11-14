@@ -13,10 +13,16 @@ use uuid::Uuid;
 async fn member(pool: &PgPool, org: Uuid, active: bool) -> Uuid {
     let id = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role, active, billable_rate_cents, cost_rate_cents)
-         VALUES ($1, $2, $3, 'Teammate', 'member', $4, 7000, 5000)",
-        id, org, format!("{id}@test.com"), active,
-    ).execute(pool).await.unwrap();
+        "INSERT INTO users (id, org_id, email, name, active, billable_rate_cents, cost_rate_cents)
+         VALUES ($1, $2, $3, 'Teammate', $4, 7000, 5000)",
+        id,
+        org,
+        format!("{id}@test.com"),
+        active,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
     // Eligible for the manager designation that `member_input` asks for.
     let mut connection = pool.acquire().await.unwrap();
     crate::server_fns::provisioning::provision(

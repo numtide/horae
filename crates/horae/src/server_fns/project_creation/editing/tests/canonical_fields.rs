@@ -19,9 +19,6 @@ pub(super) async fn canonical_actor(pool: &PgPool, owner: &SeedIds, grants: &Per
     .execute(pool)
     .await
     .unwrap();
-    // The editor ignores the policy; project managers and people still read
-    // it until their own cut-over.
-    crate::server_fns::test_seed::use_policy_one(pool, owner.org_id).await;
 }
 
 pub(super) fn keep_protected(form: &ProjectForm) -> Vec<ProtectedProjectField> {
@@ -388,7 +385,7 @@ async fn canonical_blank_task_removal_preserves_stale_fee_total_without_financia
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_editor_uses_designations_instead_of_legacy_team_roles(pool: PgPool) {
+async fn canonical_editor_uses_designations_instead_of_assignment_roles(pool: PgPool) {
     use crate::models::project_managers::{ProjectManagersCommand, ProjectManagersCommandKind};
     use crate::server_fns::permissions::project_management;
 
@@ -445,7 +442,7 @@ async fn canonical_editor_uses_designations_instead_of_legacy_team_roles(pool: P
         .unwrap();
     assert!(
         !editor.form.team[0].manager,
-        "legacy role must not claim a canonical designation"
+        "the stored lead role must not claim a canonical designation"
     );
     assert_eq!(
         editor.form.team.len(),
@@ -1412,7 +1409,7 @@ async fn canonical_financial_grants_do_not_replace_project_editing_authority(poo
                 ..
             })
         ),
-        "rate grants and a legacy Admin role must not open the project editor: {result:?}"
+        "rate grants and the Administrator profile must not open the project editor: {result:?}"
     );
 }
 

@@ -9,7 +9,7 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port ==
 assert.equal(database.pathname, '/horae');
 assert.match(database.searchParams.get('host') || '', /^\/tmp\/horae-browser\.[A-Za-z0-9]+$/);
 const sql = query => execFileSync('psql', [process.env.DATABASE_URL, '-X', '-v', 'ON_ERROR_STOP=1', '-qAt', '-c', query], { encoding: 'utf8' }).trim();
-const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id,org_role FROM users WHERE email='admin@example.com' AND active) u"));
+const actor = JSON.parse(sql("SELECT row_to_json(u) FROM (SELECT id,org_id FROM users WHERE email='admin@example.com' AND active) u"));
 const org = actor.org_id;
 const state = '019f4300-0000-7000-8000-000000000001';
 const floor = ['time_read_own', 'time_write_own', 'expense_read_own', 'expense_write_own'];
@@ -24,7 +24,7 @@ const columns = ['provider_name', 'provider_address', 'provider_tax_id', 'provid
 const before = JSON.parse(sql(`SELECT row_to_json(o) FROM (SELECT ${columns.join(',')} FROM organizations WHERE id='${org}') o`));
 let restoreSeededStates = () => {};
 const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll("'", "''")}'`;
-// The seeded states are set aside and put back; the role is restored to its observed value.
+// The seeded states are set aside and put back.
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -125,13 +125,11 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
     await expect(main).not.toContainText('Acme Studio');
     console.log('PASS: invoice readers are not offered invoice settings and a direct link shows no values');
 
-    // The dead legacy role decides nothing: a member with the grant opens the settings.
-    sql(`UPDATE users SET org_role='member' WHERE id='${actor.id}'`);
     setGrants(writer);
     await invoices();
     await settingsLink.click();
     await expect(page.getByLabel('Company name', { exact: true })).toHaveValue('Acme Studio S.L.');
-    console.log('PASS: the invoice write grant opens invoice settings whatever the legacy role');
+    console.log('PASS: the invoice write grant opens invoice settings');
 
     // 390px: the cards and preview stack without horizontal scrolling.
     await page.setViewportSize({ width: 390, height: 844 });
@@ -145,8 +143,7 @@ const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll(
     console.error({ url: page.url(), errors, page: await page.locator('body').ariaSnapshot({ timeout: 3000 }).catch(failure => failure.message) });
     throw error;
   } finally {
-    sql(`BEGIN; UPDATE users SET org_role=${literal(actor.org_role)} WHERE id='${actor.id}';
-      DELETE FROM person_permission_states WHERE id='${state}';
+    sql(`BEGIN; DELETE FROM person_permission_states WHERE id='${state}';
       UPDATE organizations SET
         ${columns.map(column => `${column}=${literal(before[column])}`).join(', ')}
         WHERE id='${org}'; COMMIT;`);

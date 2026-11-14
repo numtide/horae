@@ -69,7 +69,7 @@ async fn editor_catalog_withholds_defaults_without_their_financial_authority(poo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn editor_catalog_requires_operation_authority_not_legacy_role_or_rate_grant(pool: PgPool) {
+async fn editor_catalog_requires_project_write_not_the_rate_grant_alone(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
     canonical_actor(
         &pool,

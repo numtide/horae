@@ -125,7 +125,7 @@ async fn canonical_form_manager_only_change_and_historical_replay_do_not_need_te
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_form_retains_archived_manager_with_different_legacy_role(pool: PgPool) {
+async fn canonical_form_retains_archived_manager_with_a_freelancer_assignment(pool: PgPool) {
     let (owner, editor) = fixture(&pool).await;
     let retained = target(&pool, &owner).await;
     sqlx::query!(
@@ -284,7 +284,7 @@ async fn canonical_form_self_removal_commits_but_cannot_replay_without_authority
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_form_saves_managers_without_changing_legacy_membership_roles(pool: PgPool) {
+async fn canonical_form_saves_managers_without_changing_assignment_roles(pool: PgPool) {
     let (owner, editor) = fixture(&pool).await;
     let mut request = request(editor);
     request.form.name = "Delegation and project edit".into();

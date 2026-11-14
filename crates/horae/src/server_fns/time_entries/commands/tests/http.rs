@@ -6,7 +6,7 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::ExecutiveManager).await;
-    let target = user(pool, ids.org_id, OrgRole::Member).await;
+    let target = user(pool, ids.org_id).await;
     sqlx::query!(
         "UPDATE users SET oidc_subject=id::text WHERE id=$1",
         ids.user_id

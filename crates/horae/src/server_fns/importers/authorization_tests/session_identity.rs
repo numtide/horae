@@ -6,8 +6,8 @@ use horae_core::permissions::catalog::BuiltInProfile;
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
-    let manager = user(pool, ids.org_id, OrgRole::Manager).await;
-    let member = user(pool, ids.org_id, OrgRole::Member).await;
+    let manager = user(pool, ids.org_id).await;
+    let member = user(pool, ids.org_id).await;
     sqlx::query!(
         "UPDATE users SET oidc_subject = id::text, cost_rate_cents = 6000,
             billable_rate_cents = 10000 WHERE org_id = $1",

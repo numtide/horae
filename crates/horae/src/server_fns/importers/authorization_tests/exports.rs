@@ -54,7 +54,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     sqlx::query!("INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents) VALUES ($1,$2,$3,'EXPORT-PRIVATE','2026-09-07','2026-10-07','EUR',1234)", invoice_id, ids.org_id, ids.client_id).execute(pool).await.unwrap();
     sqlx::query!("INSERT INTO invoice_line_items (id,invoice_id,time_entry_id,description,minutes,rate_cents,amount_cents) VALUES ($1,$2,$3,'Private export note',60,1234,1234)", Uuid::now_v7(), invoice_id, own_entry).execute(pool).await.unwrap();
     let cookie = api.cookie(ids.user_id).await;
-    let member_id = user(pool, ids.org_id, OrgRole::Member).await;
+    let member_id = user(pool, ids.org_id).await;
     crate::server_fns::provisioning::provision(
         &mut pool.acquire().await.unwrap(),
         ids.org_id,
@@ -110,66 +110,56 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             StatusCode::UNAUTHORIZED,
         )
         .await;
-        for role in [OrgRole::Manager, OrgRole::Admin] {
-            sqlx::query!(
-                "UPDATE users SET org_role=$2 WHERE id=$1",
-                ids.user_id,
-                role as OrgRole
-            )
-            .execute(pool)
-            .await
-            .unwrap();
-            let separator = if path.contains('?') { '&' } else { '?' };
-            let forged = format!(
-                "{path}{separator}org_id={}&actor_id={}&org_role=member",
-                foreign.org_id, foreign.user_id
-            );
-            let response = download(api, &forged, Some(&cookie)).await;
-            assert_eq!(response.status(), StatusCode::OK);
-            let pdf = path.ends_with("/pdf");
-            let csv = path.contains("/csv");
-            assert_eq!(
-                response.headers()["content-type"],
-                if csv {
-                    "text/csv"
-                } else if pdf {
-                    "application/pdf"
-                } else {
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                }
-            );
-            assert!(
-                response.headers()["content-disposition"]
-                    .to_str()
-                    .unwrap()
-                    .contains(if path.contains("/reports/") {
-                        if csv {
-                            "timesheet.csv"
-                        } else {
-                            "timesheet.xlsx"
-                        }
-                    } else {
-                        "EXPORT-PRIVATE"
-                    })
-            );
-            let bytes = response.bytes().await.unwrap();
+        let separator = if path.contains('?') { '&' } else { '?' };
+        let forged = format!(
+            "{path}{separator}org_id={}&actor_id={}&is_administrator=false",
+            foreign.org_id, foreign.user_id
+        );
+        let response = download(api, &forged, Some(&cookie)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let pdf = path.ends_with("/pdf");
+        let csv = path.contains("/csv");
+        assert_eq!(
+            response.headers()["content-type"],
             if csv {
-                let text = std::str::from_utf8(&bytes).unwrap();
-                assert!(text.contains("Private export note"));
-                assert!(!text.contains("Other tenant secret"));
+                "text/csv"
             } else if pdf {
-                assert!(bytes.starts_with(b"%PDF-"));
+                "application/pdf"
             } else {
-                let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
-                let mut strings = String::new();
-                archive
-                    .by_name("xl/sharedStrings.xml")
-                    .unwrap()
-                    .read_to_string(&mut strings)
-                    .unwrap();
-                assert!(strings.contains("Private export note"));
-                assert!(!strings.contains("Other tenant secret"));
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             }
+        );
+        assert!(
+            response.headers()["content-disposition"]
+                .to_str()
+                .unwrap()
+                .contains(if path.contains("/reports/") {
+                    if csv {
+                        "timesheet.csv"
+                    } else {
+                        "timesheet.xlsx"
+                    }
+                } else {
+                    "EXPORT-PRIVATE"
+                })
+        );
+        let bytes = response.bytes().await.unwrap();
+        if csv {
+            let text = std::str::from_utf8(&bytes).unwrap();
+            assert!(text.contains("Private export note"));
+            assert!(!text.contains("Other tenant secret"));
+        } else if pdf {
+            assert!(bytes.starts_with(b"%PDF-"));
+        } else {
+            let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+            let mut strings = String::new();
+            archive
+                .by_name("xl/sharedStrings.xml")
+                .unwrap()
+                .read_to_string(&mut strings)
+                .unwrap();
+            assert!(strings.contains("Private export note"));
+            assert!(!strings.contains("Other tenant secret"));
         }
         if path.contains("/invoices/") {
             denied(

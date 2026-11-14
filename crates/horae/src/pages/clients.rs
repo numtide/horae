@@ -25,15 +25,15 @@ mod form;
 #[path = "clients/status.rs"]
 mod status;
 
-/// The account and permission policy a Clients page first loaded under.
-type Binding = (PermissionRequester, bool);
+/// The account a Clients page first loaded under.
+type Binding = PermissionRequester;
 
-/// Rejects a response for another account, organization or policy than the
-/// page is bound to, so a refresh never shows the previous identity's data.
+/// Rejects a response for another account or organization than the page is
+/// bound to, so a refresh never shows the previous identity's data.
 fn bind(mut binding: Signal<Option<Binding>>, current: Binding) -> Result<(), ServerFnError> {
     if binding.peek().is_some_and(|expected| expected != current) {
         return Err(ServerFnError::new(
-            "Your session or client policy changed. Reload this page to continue.",
+            "Your session changed. Reload this page to continue.",
         ));
     }
     binding.set(Some(current));
@@ -87,12 +87,8 @@ pub fn ClientList() -> Element {
         if archive_pending.peek().is_none() {
             archiving.set(None);
         }
-        let expected = binding.peek().as_ref().map(|(requester, _)| *requester);
-        let overview = server_fns::client_overview(expected).await?;
-        bind(
-            binding,
-            (overview.requester, overview.canonical_permissions),
-        )?;
+        let overview = server_fns::client_overview(*binding.peek()).await?;
+        bind(binding, overview.requester)?;
         Ok::<_, ServerFnError>(overview)
     });
     let own = use_session().permissions;
@@ -122,9 +118,9 @@ pub fn ClientList() -> Element {
         .then(|| data.as_ref().and_then(|result| result.as_ref().ok()))
         .flatten();
     // `can_manage` reflects `ClientWriteAll`; every write rechecks it.
-    let is_manager = overview.is_some_and(|overview| overview.can_manage);
+    let can_manage = overview.is_some_and(|overview| overview.can_manage);
     // The Harvest importer is for administrators; it rechecks that itself.
-    let can_import = is_manager && super::is_administrator(&own);
+    let can_import = can_manage && super::is_administrator(&own);
     let denied = overview.is_some_and(|overview| !overview.can_read);
     let list = overview
         .filter(|overview| overview.can_read)
@@ -170,7 +166,7 @@ pub fn ClientList() -> Element {
             div { class: "page-header mb-5",
                 h1 { id: "clients-heading", tabindex: "-1", class: "page-title text-4xl font-semibold text-strong tracking-tight", "Clients" }
                 div { class: "page-actions items-center gap-4",
-                    if is_manager {
+                    if can_manage {
                         button {
                             id: "clients-new",
                             class: "btn btn-primary",
@@ -231,7 +227,7 @@ pub fn ClientList() -> Element {
                 }
             }
 
-            form::ClientEditor { open: show_form() && is_manager, client_id: editing_id(), focus_fallback: "clients-heading",
+            form::ClientEditor { open: show_form() && can_manage, client_id: editing_id(), focus_fallback: "clients-heading",
                 on_dismiss: move |_| reset_form(),
                 on_saved: move |_| {
                     refocus.set(Some(match *editing_id.peek() {
@@ -253,7 +249,7 @@ pub fn ClientList() -> Element {
             }
             ToastContainer {
                 // Only beside the settled, bound list it describes.
-                if let (true, Some(message)) = (is_manager, saved()) {
+                if let (true, Some(message)) = (can_manage, saved()) {
                     Toast { message, variant: "success", dismissible: true, ondismiss: move |_| saved.set(None) }
                 }
             }
@@ -284,7 +280,7 @@ pub fn ClientList() -> Element {
                             h2 { class: "empty-state-title text-xl m-0", "No clients yet" }
                             p { class: "empty-state-text m-0", "Clients group your projects and billing information." }
                             div { class: "flex flex-wrap justify-center gap-3",
-                                if is_manager {
+                                if can_manage {
                                     button { class: "btn btn-primary", onclick: move |_| { reset_form(); show_form.set(true); }, "New client" }
                                 }
                                 if can_import {
@@ -308,7 +304,7 @@ pub fn ClientList() -> Element {
                                     th { scope: "col", class: "text-right text-secondary", "Currency" }
                                     th { scope: "col", class: "text-right text-secondary", "Projects" }
                                     th { scope: "col", class: "text-secondary", "Status" }
-                                    if is_manager { th { scope: "col", class: "text-secondary", "Actions" } }
+                                    if can_manage { th { scope: "col", class: "text-secondary", "Actions" } }
                                 }
                             }
                             tbody {
@@ -334,7 +330,7 @@ pub fn ClientList() -> Element {
                                                         Badge { variant: "neutral", "Archived" }
                                                     }
                                                 }
-                                                if is_manager {
+                                                if can_manage {
                                                     td {
                                                         div { class: "flex items-center gap-2",
                                                         button {
