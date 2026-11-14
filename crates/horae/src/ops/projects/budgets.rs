@@ -196,9 +196,9 @@ pub(super) async fn headline(
             })
         })
     };
-    // `None` means the budget readers withheld this project from the viewer.
-    // The detail reader can still admit them while it answers for a
-    // policy-zero organization, so the figures stay hidden but the page loads.
+    // `None` means the budget readers withheld a project the detail reader
+    // admitted. They should not disagree, so it is logged and the figures show
+    // as unavailable while the page still loads.
     let headline = match consumption {
         Ok(Some(headline)) => {
             savepoint.commit().await?;
