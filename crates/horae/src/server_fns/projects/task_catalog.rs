@@ -1,6 +1,4 @@
 use super::*;
-#[cfg(feature = "server")]
-use crate::models::task::TaskCatalogEntry;
 use crate::models::task::{TaskActivity, TaskCatalogPage, TaskCursor};
 
 #[server]
@@ -22,72 +20,10 @@ pub(super) async fn fetch_task_catalog(
     activity: TaskActivity,
     after: Option<&TaskCursor>,
 ) -> Result<TaskCatalogPage, ServerFnError> {
-    let mut access = read_access::ReadAccess::begin(pool, requester.org_id, requester.user_id)
-        .await?
-        .ok_or_else(|| forbidden("Task catalog access is unavailable"))?;
-    if !access.has(Permission::TaskReadAll) {
-        return Err(forbidden("Task catalog access is unavailable"));
-    }
-    if after.is_some_and(|cursor| cursor.name.contains('\0')) {
-        return Err(err(BAD_REQUEST, "Invalid task catalog cursor"));
-    }
-    let can_edit = access.has(Permission::TaskWriteAll);
-    let can_read_rates = access.has(Permission::BillableRateReadAll);
-    let can_edit_rates = can_edit && access.has(Permission::BillableRateWriteAll);
-    let rate_currency = if can_edit_rates {
-        Some(sqlx::query_scalar!(
-            "SELECT upper(btrim(default_currency)) AS \"currency!\" FROM organizations WHERE id=$1",
-            requester.org_id,
-        ).fetch_one(&mut *access.tx).await.map_err(server_err)?)
-    } else {
-        None
-    };
-    let (active_only, archived_only) = (
-        activity == TaskActivity::Active,
-        activity == TaskActivity::Archived,
-    );
-    // Common tasks first, so the page splits into its two groups in order.
-    let mut tasks = sqlx::query_as!(
-        TaskCatalogEntry,
-        "SELECT id,name,billable_default,is_default,active,
-                CASE WHEN $2 THEN default_rate_cents END AS default_rate_cents,
-                CASE WHEN $2 AND default_rate_cents IS NOT NULL
-                     THEN default_rate_currency END AS default_rate_currency
-         FROM tasks
-         WHERE org_id=$1 AND (NOT $3 OR active) AND (NOT $4 OR NOT active)
-           AND ($5::text IS NULL OR (NOT is_default,name,id) > (NOT $7::boolean,$5,$6::uuid))
-         ORDER BY NOT is_default,name,id LIMIT 101",
-        requester.org_id,
-        can_read_rates,
-        active_only,
-        archived_only,
-        after.map(|cursor| cursor.name.as_str()),
-        after.map(|cursor| cursor.id),
-        after.map(|cursor| cursor.is_default),
-    )
-    .fetch_all(&mut *access.tx)
-    .await
-    .map_err(server_err)?;
-    let next_after = if tasks.len() > 100 {
-        tasks.truncate(100);
-        tasks.last().map(|task| TaskCursor {
-            is_default: task.is_default,
-            name: task.name.clone(),
-            id: task.id,
-        })
-    } else {
-        None
-    };
-    access.tx.commit().await.map_err(server_err)?;
-    Ok(TaskCatalogPage {
-        requester,
-        can_edit,
-        can_read_rates,
-        can_edit_rates,
-        rate_currency,
-        tasks,
-        next_after,
-    })
+    let mut read =
+        ops::begin_read(pool, Caller::session(requester.org_id, requester.user_id)).await?;
+    let result = ops::projects::task_catalog(&mut read.tx, &read.actor, activity, after).await;
+    Ok(read.finish(result).await?)
 }
 
 #[cfg(all(test, feature = "server"))]

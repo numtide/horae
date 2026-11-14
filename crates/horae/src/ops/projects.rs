@@ -1,4 +1,5 @@
-//! Project operations: archiving and restoring (FR-011).
+//! Project operations: the project and task reads, and archiving and
+//! restoring (FR-011).
 //!
 //! Every decision goes through [`Actor::has`], on the actor's stored grants.
 
@@ -8,12 +9,38 @@ use uuid::Uuid;
 
 use super::{Actor, Done, OpError, Tx};
 use crate::models::Project;
+use crate::models::permission_editor::PermissionRequester;
 use crate::plugin::AppEvent;
 use crate::plugin::event::{ActiveTransition, active_transition};
+
+mod budgets;
+mod detail;
+mod reads;
+mod task_catalog;
+
+pub(crate) use budgets::progress as budget_progress;
+pub(crate) use detail::view as detail_view;
+pub(crate) use reads::{ProjectRead, TaskRead, list, overview, spend, tags, tasks};
+pub(crate) use task_catalog::page as task_catalog;
 
 const NOT_FOUND: &str = "Project not found";
 const WRITE_REQUIRED: &str = "Project editing access required";
 const RESTORE_CLIENT_FIRST: &str = "Restore the client before restoring this project.";
+
+/// The page's requester, refused when it is not the one the page loaded for.
+fn requester(
+    actor: &Actor,
+    expected: Option<PermissionRequester>,
+) -> Result<PermissionRequester, OpError> {
+    let requester = PermissionRequester {
+        org_id: actor.org_id(),
+        user_id: actor.id(),
+    };
+    if expected.is_some_and(|expected| expected != requester) {
+        return Err(OpError::forbidden("Project requester has changed"));
+    }
+    Ok(requester)
+}
 
 /// Whether the actor may write projects at all: everyone's, or the ones they
 /// manage. Offered as the status affordance before a project is chosen.

@@ -1534,7 +1534,7 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
     );
     assert!(
         matches!(spend_error, ServerFnError::ServerError { code: INTERNAL_ERROR, ref message, .. }
-        if message.contains("bigint out of range")),
+        if message == "Could not complete the request. Please retry."),
         "{spend_error:?}"
     );
 }
