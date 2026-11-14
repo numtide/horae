@@ -6,6 +6,9 @@
 
 **Status**: Draft — Harvest parity confirmed; detailed parity matrix and verification pending
 
+**Policy 0**: retired in #373. Every organization now decides access from stored
+permission state; references to policy 0 in this spec and its contracts are historical.
+
 **Extraction context**: This specification is preserved from PR #212 at
 `db3935db364f2a8aa193f0e938ce40ecc01a2f92`. It describes the permission target,
 including the two approved client decisions preserved in its unpublished snapshot
