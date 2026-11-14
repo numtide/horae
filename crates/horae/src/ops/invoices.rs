@@ -30,7 +30,7 @@ use super::{Actor, Done, OpError, Tx};
 use crate::models::invoice::{InvoiceDetailView, InvoiceListItem};
 use crate::models::{Invoice, InvoiceWithLines};
 use crate::plugin::AppEvent;
-use crate::server_fns::invoice_payload;
+use crate::plugin::event::invoice_payload;
 
 pub(crate) mod balances;
 pub(crate) mod defaults;

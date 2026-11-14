@@ -307,7 +307,7 @@ async fn identity(
     name: String,
     active: bool,
 ) -> Result<(UserListItem, UserPayload), OpError> {
-    let payload = crate::server_fns::user_payload(tx, org_id, id, &email, &name).await?;
+    let payload = crate::plugin::event::user_payload(tx, org_id, id, &email, &name).await?;
     Ok((
         UserListItem {
             id,

@@ -56,7 +56,7 @@ pub async fn dev_login_post(
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "DB query failed"))?;
     let user =
-        crate::server_fns::user_payload(&mut connection, row.org_id, row.id, &row.email, &row.name)
+        crate::plugin::event::user_payload(&mut connection, row.org_id, row.id, &row.email, &row.name)
             .await
             .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "DB query failed"))?;
     state
@@ -86,7 +86,7 @@ pub async fn logout_post(session: Session) -> impl IntoResponse {
             )
             .fetch_one(&mut *connection)
             .await?;
-            let payload = crate::server_fns::user_payload(
+            let payload = crate::plugin::event::user_payload(
                 &mut connection,
                 user.org_id,
                 user.id,

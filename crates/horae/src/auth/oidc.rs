@@ -519,7 +519,7 @@ async fn resolve_and_login(
     let mut connection = state.db.acquire().await?;
     let payload = crate::plugin::event::UserPayload {
         method: Some("oidc".into()),
-        ..crate::server_fns::user_payload(
+        ..crate::plugin::event::user_payload(
             &mut connection,
             user.org_id,
             user.id,

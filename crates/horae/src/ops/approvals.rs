@@ -19,7 +19,7 @@ use uuid::Uuid;
 use super::{Actor, Done, OpError, Tx};
 use crate::models::{Approval, ApprovalSummary};
 use crate::plugin::AppEvent;
-use crate::server_fns::submission_payload;
+use crate::plugin::event::submission_payload;
 
 const ACTIVE_REQUIRED: &str = "Active same-organization account required";
 const APPROVAL_REQUIRED: &str = "Approval access is required to review timesheets";

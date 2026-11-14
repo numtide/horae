@@ -5,6 +5,8 @@ use super::*;
 use crate::db::OrganizationLock;
 #[cfg(all(test, feature = "server"))]
 use crate::db::lock_organization;
+#[cfg(feature = "server")]
+use crate::plugin::event::task_payload;
 use crate::models::ProjectTagLink;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::ProjectOverview;
