@@ -4,18 +4,34 @@ use super::*;
 use crate::server_fns::permissions::templates::{self, TemplateAction, TemplateCommand};
 use horae_core::permissions::catalog::BuiltInProfile;
 
+const NAME: &str = "list_permission_audit";
+
+fn first_page() -> Value {
+    json!({"after":null,"expected_requester":null})
+}
+
+/// The wire entry for `receipt` on the first history page.
+async fn entry(api: &Api, cookie: &str, receipt: Uuid) -> Value {
+    let page = api.json(NAME, first_page(), cookie).await;
+    page["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["id"] == json!(receipt))
+        .cloned()
+        .unwrap_or_else(|| panic!("receipt {receipt} is not on the first page"))
+}
+
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
     let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
     let cookie = api.cookie(ids.user_id).await;
-    let name = "get_permission_audit";
-    let missing = json!({"receipt_id": Uuid::now_v7()});
     assert_eq!(
-        api.call(name, missing.clone(), None, false).await.status(),
+        api.call(NAME, first_page(), None, false).await.status(),
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(
-        api.call(name, missing.clone(), Some(&cookie), false)
+        api.call(NAME, first_page(), Some(&cookie), false)
             .await
             .status(),
         StatusCode::FORBIDDEN
@@ -46,9 +62,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .fetch_one(pool)
     .await
     .unwrap();
-    let body = json!({"receipt_id": stored.id});
-    let historical = api.json(name, body.clone(), &cookie).await;
-    assert_eq!(historical["id"], json!(stored.id));
+    let historical = entry(api, &cookie, stored.id).await;
     assert_eq!(
         historical["actor"],
         json!({"kind":"user", "user_id":ids.user_id})
@@ -63,48 +77,16 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     }
     check_historical_shapes(pool, api, &ids, &cookie).await;
     check_browsing(pool, api, &ids, &foreign, &cookie).await;
-    check_auth_lookup_error(pool, api, stored.id, &cookie).await;
-    assert_eq!(api.json(name, missing, &cookie).await, Value::Null);
+    check_auth_lookup_error(pool, api, &cookie).await;
     let foreign_cookie = api.cookie(foreign.user_id).await;
-    assert_eq!(
-        api.json(name, body.clone(), &foreign_cookie).await,
-        Value::Null
-    );
-    assert_eq!(api.json(name, json!({"receipt_id":stored.id,"org_id":ids.org_id,"user_id":ids.user_id,"is_administrator":true}), &foreign_cookie).await, Value::Null);
     sqlx::query!(
-        "UPDATE person_permission_states SET is_administrator=false WHERE user_id=$1",
-        ids.user_id
+        "UPDATE permission_change_receipts SET audit='{}'::jsonb WHERE org_id=$1",
+        ids.org_id
     )
     .execute(pool)
     .await
     .unwrap();
-    // All ordinary grants and claimed identity cannot replace explicit Administrator status.
-    let denied = api.call(name, json!({"receipt_id":stored.id,"org_id":foreign.org_id,"user_id":foreign.user_id,"is_administrator":true}), Some(&cookie), false).await;
-    assert_eq!(denied.status(), StatusCode::FORBIDDEN);
-    assert!(!denied.text().await.unwrap().contains("History readers"));
-    sqlx::query!(
-        "UPDATE person_permission_states SET is_administrator=true WHERE user_id=$1",
-        ids.user_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-    sqlx::query!(
-        "UPDATE permission_change_receipts SET format_version=99 WHERE id=$1",
-        stored.id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-    assert_unavailable(api.call(name, body.clone(), Some(&cookie), false).await).await;
-    sqlx::query!(
-        "UPDATE permission_change_receipts SET format_version=1, audit='{}'::jsonb WHERE id=$1",
-        stored.id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-    assert_unavailable(api.call(name, body.clone(), Some(&cookie), false).await).await;
+    assert_unavailable(api.call(NAME, first_page(), Some(&cookie), false).await).await;
     sqlx::query!(
         "UPDATE person_permission_states SET grants=ARRAY['secret_invalid_grant'] WHERE user_id=$1",
         ids.user_id
@@ -112,34 +94,15 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .execute(pool)
     .await
     .unwrap();
-    assert_unavailable(api.call(name, body.clone(), Some(&cookie), false).await).await;
-    assert_unavailable(
-        api.call(
-            "list_permission_audit",
-            json!({"after":null,"expected_requester":null}),
-            Some(&cookie),
-            false,
-        )
-        .await,
-    )
-    .await;
+    assert_unavailable(api.call(NAME, first_page(), Some(&cookie), false).await).await;
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
         .execute(pool)
         .await
         .unwrap();
     assert_eq!(
-        api.call(name, body, Some(&cookie), false).await.status(),
-        StatusCode::UNAUTHORIZED
-    );
-    assert_eq!(
-        api.call(
-            "list_permission_audit",
-            json!({"after":null,"expected_requester":null}),
-            Some(&cookie),
-            false
-        )
-        .await
-        .status(),
+        api.call(NAME, first_page(), Some(&cookie), false)
+            .await
+            .status(),
         StatusCode::UNAUTHORIZED
     );
     api.client
@@ -149,25 +112,9 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .await
         .unwrap();
     assert_eq!(
-        api.call(
-            name,
-            json!({"receipt_id":stored.id}),
-            Some(&foreign_cookie),
-            false
-        )
-        .await
-        .status(),
-        StatusCode::UNAUTHORIZED
-    );
-    assert_eq!(
-        api.call(
-            "list_permission_audit",
-            json!({"after":null,"expected_requester":null}),
-            Some(&foreign_cookie),
-            false
-        )
-        .await
-        .status(),
+        api.call(NAME, first_page(), Some(&foreign_cookie), false)
+            .await
+            .status(),
         StatusCode::UNAUTHORIZED
     );
 }
@@ -211,9 +158,7 @@ async fn check_historical_shapes(
     .unwrap();
     assert_eq!(rows.len(), 3);
     for row in rows {
-        let value = api
-            .json("get_permission_audit", json!({"receipt_id":row.id}), cookie)
-            .await;
+        let value = entry(api, cookie, row.id).await;
         assert_eq!(value["audit"]["details"], row.audit);
         let typed: crate::models::permission_audit::AuditEntry =
             serde_json::from_value(value.clone()).unwrap();
@@ -224,13 +169,7 @@ async fn check_historical_shapes(
         SELECT $1, org_id, 'operator-invocation', 'permission.change', $2, format_version,
         '{\"private_input\":\"sentinel\"}'::jsonb, '{\"private_result\":\"sentinel\"}'::jsonb, audit
         FROM permission_change_receipts WHERE org_id=$3 AND request_id=$4", operator_id, Uuid::now_v7(), ids.org_id, profile.request_id).execute(pool).await.unwrap();
-    let value = api
-        .json(
-            "get_permission_audit",
-            json!({"receipt_id":operator_id}),
-            cookie,
-        )
-        .await;
+    let value = entry(api, cookie, operator_id).await;
     assert_eq!(
         value["actor"],
         json!({"kind":"operator", "invocation_id":"operator-invocation", "command":"permission.change"})
@@ -304,15 +243,6 @@ async fn check_browsing(
     );
     for entry in first.entries.iter().chain(&second.entries) {
         let wire = serde_json::to_value(entry).unwrap();
-        assert_eq!(
-            api.json(
-                "get_permission_audit",
-                json!({"receipt_id":entry.id}),
-                cookie
-            )
-            .await,
-            wire
-        );
         for secret in [
             "private_input",
             "private_result",
@@ -385,18 +315,9 @@ async fn assert_unavailable(response: reqwest::Response) {
     }
 }
 
-async fn check_auth_lookup_error(pool: &PgPool, api: &Api, receipt: Uuid, cookie: &str) {
+async fn check_auth_lookup_error(pool: &PgPool, api: &Api, cookie: &str) {
     for (name, body, expected) in [
-        (
-            "get_permission_audit",
-            json!({"receipt_id":receipt}),
-            "Permission history is unavailable",
-        ),
-        (
-            "list_permission_audit",
-            json!({"after":null,"expected_requester":null}),
-            "Permission history is unavailable",
-        ),
+        (NAME, first_page(), "Permission history is unavailable"),
         (
             "get_my_permissions",
             json!({}),
@@ -427,13 +348,11 @@ async fn check_auth_lookup_error(pool: &PgPool, api: &Api, receipt: Uuid, cookie
             assert!(!text.contains(private), "{name}: {text}");
         }
     }
+    // The cancelled reads released their locks: history loads again.
     assert_eq!(
-        api.json(
-            "get_permission_audit",
-            json!({"receipt_id":receipt}),
-            cookie
-        )
-        .await["id"],
-        json!(receipt)
+        api.call(NAME, first_page(), Some(cookie), false)
+            .await
+            .status(),
+        StatusCode::OK
     );
 }

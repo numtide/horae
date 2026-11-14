@@ -134,15 +134,9 @@ pub struct TimeEntryCursor {
 }
 
 /// Inclusive dates and optional narrowing filters, applied after scope checks.
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Timesheet integration waits for reviewed policy cutover."
-    )
-)]
 pub struct TimeEntryQuery {
     pub date_from: NaiveDate,
     pub date_to: NaiveDate,
@@ -178,15 +172,9 @@ pub struct VisibleTimeEntry {
 }
 
 /// Reauthorized on every page. Exhaust pages before presenting period totals.
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    not(feature = "server"),
-    expect(
-        dead_code,
-        reason = "Timesheet integration waits for reviewed policy cutover."
-    )
-)]
 pub struct TimeEntryPage {
     pub requester: PermissionRequester,
     pub entries: Vec<VisibleTimeEntry>,

@@ -26,7 +26,6 @@ const SHEET_FORBIDDEN: &str = "Timesheet access or identity has changed; refresh
 const SHEET_INVALID: &str = "Invalid Timesheet date range or cursor";
 const TIME_READ_REQUIRED: &str = "Current time-read authority is required";
 const PEOPLE_INVALID: &str = "Invalid timesheet people query";
-const ENTRIES_INVALID: &str = "Invalid time-entry date range or cursor";
 
 /// The actor's time-read grants, `None` when it holds none. A selection
 /// always carries the Member floor, so an empty one cannot mean "none".
@@ -206,6 +205,8 @@ async fn fetch_people(
 }
 
 /// A page of the time entries the actor may read; identity comes from the session only.
+/// No adapter serves it: the scope tests read the shared entry reader through it.
+#[cfg(test)]
 pub(crate) async fn entries(
     tx: &mut Tx,
     actor: &Actor,
@@ -213,7 +214,7 @@ pub(crate) async fn entries(
 ) -> Result<TimeEntryPage, OpError> {
     let grants = require_time_reads(actor, TIME_READ_REQUIRED)?;
     if !entry_query_is_valid(query) {
-        return Err(invalid(ENTRIES_INVALID));
+        return Err(invalid("Invalid time-entry date range or cursor"));
     }
     fetch_entries(tx, requester(actor), &grants, query).await
 }
