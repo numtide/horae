@@ -155,3 +155,129 @@ async fn writes_run_at_read_committed_whatever_the_session_default(pool: PgPool)
             .unwrap();
     assert_eq!(isolation, "read committed");
 }
+
+/// The backend pid of `tx`, for waiting until another session queues behind it.
+async fn backend_pid(tx: &mut Tx) -> i32 {
+    sqlx::query_scalar!(r#"SELECT pg_backend_pid() AS "pid!""#)
+        .fetch_one(&mut **tx)
+        .await
+        .unwrap()
+}
+
+/// A setting as the transaction sees it.
+async fn setting(tx: &mut Tx, name: &str) -> String {
+    sqlx::query_scalar!(r#"SELECT current_setting($1) AS "value!""#, name)
+        .fetch_one(&mut **tx)
+        .await
+        .unwrap()
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_snapshot_read_retries_when_access_changes_after_its_snapshot(pool: PgPool) {
+    use horae_core::permissions::catalog::Permission;
+
+    use super::testing::{policy_one, set_grants};
+    use crate::server_fns::test_seed::wait_for_blocked;
+
+    for limits in [SnapshotLimits::Short, SnapshotLimits::LockWait] {
+        let ids = seed_profile(&pool, BuiltInProfile::Member).await;
+        policy_one(&pool, &ids, &[], false).await;
+        let mut change: Tx = pool.begin().await.unwrap();
+        let blocker = backend_pid(&mut change).await;
+        set_grants(&mut change, &ids, &[Permission::ClientReadAll])
+            .await
+            .unwrap();
+        // The read takes its snapshot, then queues on the organization lock.
+        let read = tokio::spawn({
+            let pool = pool.clone();
+            async move {
+                begin_read_snapshot(&pool, Caller::session(ids.org_id, ids.user_id), limits).await
+            }
+        });
+        wait_for_blocked(&pool, blocker).await;
+        change.commit().await.unwrap();
+        // Its first attempt fails with 40001; the retry sees the change.
+        let mut read = read.await.unwrap().unwrap();
+        assert!(read.actor.has(Permission::ClientReadAll));
+        assert_eq!(
+            setting(&mut read.tx, "transaction_isolation").await,
+            "repeatable read"
+        );
+        assert_eq!(setting(&mut read.tx, "synchronous_commit").await, "off");
+        let (statement_timeout, lock_timeout) = match limits {
+            SnapshotLimits::Short => ("5s", "0"),
+            // The bounded lock wait is lifted again once authorized.
+            SnapshotLimits::LockWait => ("0", "0"),
+        };
+        assert_eq!(
+            setting(&mut read.tx, "statement_timeout").await,
+            statement_timeout
+        );
+        assert_eq!(setting(&mut read.tx, "lock_timeout").await, lock_timeout);
+        read.finish(Ok(())).await.unwrap();
+    }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_gated_write_chooses_its_isolation_and_holds_the_gate(pool: PgPool) {
+    use crate::server_fns::test_seed::wait_for_blocked;
+
+    let ids = seed_profile(&pool, BuiltInProfile::Administrator).await;
+    let caller = Caller::session(ids.org_id, ids.user_id);
+    let rr = repeatable_read_pool(&pool).await;
+    for (isolation, expected) in [
+        (WriteIsolation::ReadCommitted, "read committed"),
+        (WriteIsolation::Serializable, "serializable"),
+    ] {
+        let mut write = begin_gated(&rr, caller, OrganizationLock::AccessChange, isolation)
+            .await
+            .unwrap();
+        assert!(write.actor.administrator());
+        assert_eq!(
+            setting(&mut write.tx, "transaction_isolation").await,
+            expected
+        );
+        // An access-change gate excludes readers' `FOR SHARE` until it ends.
+        let blocker = backend_pid(&mut write.tx).await;
+        let read = tokio::spawn({
+            let pool = pool.clone();
+            async move {
+                begin_read(&pool, caller)
+                    .await
+                    .map(|read| read.actor.is_active())
+            }
+        });
+        wait_for_blocked(&pool, blocker).await;
+        write.tx.rollback().await.unwrap();
+        assert!(read.await.unwrap().unwrap());
+    }
+}
+
+/// The actor loads after the gate wait, so it sees an access change that held
+/// the organization while the write queued.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_gated_write_loads_the_actor_after_waiting_for_the_gate(pool: PgPool) {
+    use super::testing::revoke;
+    use crate::server_fns::test_seed::wait_for_blocked;
+
+    let ids = seed_profile(&pool, BuiltInProfile::Administrator).await;
+    let mut change: Tx = pool.begin().await.unwrap();
+    let blocker = backend_pid(&mut change).await;
+    revoke(&mut change, ids.org_id, ids.user_id, false).await;
+    let write = tokio::spawn({
+        let pool = pool.clone();
+        async move {
+            begin_gated(
+                &pool,
+                Caller::session(ids.org_id, ids.user_id),
+                OrganizationLock::Shared,
+                WriteIsolation::ReadCommitted,
+            )
+            .await
+            .map(|write| write.actor.administrator())
+        }
+    });
+    wait_for_blocked(&pool, blocker).await;
+    change.commit().await.unwrap();
+    assert!(!write.await.unwrap().unwrap());
+}

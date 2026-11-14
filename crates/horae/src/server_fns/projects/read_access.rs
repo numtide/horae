@@ -4,14 +4,9 @@ use horae_core::permissions::catalog::Permission;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::{ServerFnError, conflict, forbidden, server_err};
+use super::{ServerFnError, forbidden};
 use crate::models::permissions::PersonPermissions;
-use crate::server_fns::permissions::{
-    ReadIsolation, begin_lock_only_read_async_commit, load_person_permissions,
-};
-
-const SNAPSHOT_ATTEMPTS: usize = 3;
-const ACCESS_CHANGED: &str = "Access changed while reading. Please try again.";
+use crate::ops::{Caller, OpError, ReadTx, SnapshotLimits};
 
 pub(crate) struct ReadAccess<'a> {
     /// No INSERT/UPDATE/DELETE/nextval: commits asynchronously (see
@@ -21,99 +16,44 @@ pub(crate) struct ReadAccess<'a> {
     pub permissions: PersonPermissions,
 }
 
-/// A begin that saw its authority rows change after its snapshot started.
-enum Begin<'a> {
-    Stale(Transaction<'a, Postgres>),
-    Failed(ServerFnError),
-}
-
-impl From<ServerFnError> for Begin<'_> {
-    fn from(error: ServerFnError) -> Self {
-        Self::Failed(error)
-    }
-}
-
-impl<'a> ReadAccess<'a> {
+impl ReadAccess<'_> {
     /// Absence preserves the existing empty/not-found result for unavailable actors.
     pub async fn begin(
-        pool: &'a PgPool,
+        pool: &PgPool,
         org_id: Uuid,
         actor_id: Uuid,
     ) -> Result<Option<Self>, ServerFnError> {
-        let tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted)
-            .await
-            .map_err(server_err)?;
-        match Self::authorize(tx, org_id, actor_id).await {
-            Ok(access) => Ok(access),
-            // READ COMMITTED re-reads a changed row rather than failing.
-            Err(Begin::Stale(_)) => Err(conflict(ACCESS_CHANGED)),
-            Err(Begin::Failed(error)) => Err(error),
-        }
+        Self::from_read(crate::ops::begin_read(pool, Caller::session(org_id, actor_id)).await)
     }
 
     /// Like `begin`, but every later statement reads the same REPEATABLE READ
-    /// snapshot. READ WRITE only permits the authority locks; nothing is
-    /// written. Callers must issue only plain reads afterwards: the locks are
-    /// the sole statements that can fail with 40001, so retrying the begin in
-    /// a fresh transaction is enough.
+    /// snapshot (see `ops::begin_read_snapshot`). Callers must issue only plain
+    /// reads afterwards.
     pub async fn begin_snapshot(
-        pool: &'a PgPool,
+        pool: &PgPool,
         org_id: Uuid,
         actor_id: Uuid,
     ) -> Result<Option<Self>, ServerFnError> {
-        for _ in 0..SNAPSHOT_ATTEMPTS {
-            let tx = begin_lock_only_read_async_commit(pool, ReadIsolation::RepeatableRead)
-                .await
-                .map_err(server_err)?;
-            match Self::authorize(tx, org_id, actor_id).await {
-                Ok(access) => return Ok(access),
-                Err(Begin::Stale(tx)) => tx.rollback().await.map_err(server_err)?,
-                Err(Begin::Failed(error)) => return Err(error),
-            }
-        }
-        Err(conflict(ACCESS_CHANGED))
+        Self::from_read(
+            crate::ops::begin_read_snapshot(
+                pool,
+                Caller::session(org_id, actor_id),
+                SnapshotLimits::Short,
+            )
+            .await,
+        )
     }
 
-    async fn authorize(
-        mut tx: Transaction<'a, Postgres>,
-        org_id: Uuid,
-        actor_id: Uuid,
-    ) -> Result<Option<Self>, Begin<'a>> {
-        let organization = match sqlx::query_scalar!(
-            "SELECT id FROM organizations WHERE id=$1 FOR SHARE",
-            org_id,
-        )
-        .fetch_optional(&mut *tx)
-        .await
-        {
-            Err(error) if serialization_failure(&error) => return Err(Begin::Stale(tx)),
-            result => result.map_err(server_err)?,
-        };
-        if organization.is_none() {
-            return Ok(None);
-        }
-        let active = match sqlx::query_scalar!(
-            "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
-            org_id,
-            actor_id,
-        )
-        .fetch_optional(&mut *tx)
-        .await
-        {
-            Err(error) if serialization_failure(&error) => return Err(Begin::Stale(tx)),
-            result => result.map_err(server_err)?,
-        };
-        if active.is_none() {
-            return Ok(None);
-        }
-        let permissions = load_person_permissions(&mut tx, org_id, actor_id)
-            .await
-            .map_err(|error| {
-                tracing::error!(%error, "Unable to load project-read permissions");
-                forbidden("Project permission state is unavailable")
-            })?
-            .ok_or_else(|| forbidden("Project permission state is unavailable"))?;
-        Ok(Some(Self { tx, permissions }))
+    fn from_read(read: Result<ReadTx, OpError>) -> Result<Option<Self>, ServerFnError> {
+        let read = read.map_err(|error| match error {
+            // `Actor::load` refuses only for missing or invalid stored state.
+            OpError::Forbidden(_) => forbidden("Project permission state is unavailable"),
+            error => error.into(),
+        })?;
+        Ok(read.actor.permissions().cloned().map(|permissions| Self {
+            tx: read.tx,
+            permissions,
+        }))
     }
 
     pub fn has(&self, permission: Permission) -> bool {
@@ -123,10 +63,4 @@ impl<'a> ReadAccess<'a> {
     pub fn administrator(&self) -> bool {
         self.permissions.is_administrator
     }
-}
-
-fn serialization_failure(error: &sqlx::Error) -> bool {
-    error
-        .as_database_error()
-        .is_some_and(|error| error.code().as_deref() == Some("40001"))
 }

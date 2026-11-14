@@ -30,6 +30,9 @@ async fn answers_from_the_stored_state_not_the_role(pool: PgPool) {
     assert!(actor.has(Permission::ClientReadAll));
     assert!(!actor.has(Permission::ClientWriteAll));
     assert!(!actor.administrator());
+    let state = actor.permissions().unwrap();
+    assert_eq!(Some(&state.grants), actor.grants());
+    assert!(!state.is_administrator);
 
     let member = seed(&pool, BuiltInProfile::Member).await;
     policy_one(&pool, &member, &[], true).await;
@@ -60,6 +63,7 @@ async fn foreign_missing_and_inactive_people_have_no_authority(pool: PgPool) {
     ] {
         let actor = load(&pool, org_id, user_id).await.unwrap();
         assert!(!actor.is_active());
+        assert!(actor.permissions().is_none());
         assert!(!actor.administrator());
         assert!(Permission::ALL.iter().all(|p| !actor.has(*p)));
     }

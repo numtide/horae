@@ -2,7 +2,9 @@
 
 use super::*;
 #[cfg(feature = "server")]
-use crate::db::{OrganizationLock, lock_organization};
+use crate::db::OrganizationLock;
+#[cfg(all(test, feature = "server"))]
+use crate::db::lock_organization;
 #[cfg(feature = "server")]
 use crate::models::ProjectDetails;
 use crate::models::ProjectTagLink;
@@ -725,27 +727,26 @@ pub async fn create_task(
     Ok(task)
 }
 
-/// Takes the organization `gate`, then loads the actor (whose own locks must
-/// come after the gate: a gate is never upgraded) and requires `TaskWriteAll`.
-/// The gate is why task writes authorize here rather than through `ops::begin`.
+/// Begins a task write holding the organization `gate` and requires
+/// `TaskWriteAll`.
 #[cfg(feature = "server")]
-async fn authorize_task_write(
-    tx: &mut crate::ops::Tx,
+async fn begin_task_write(
+    db: &sqlx::PgPool,
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
     gate: OrganizationLock,
-) -> Result<crate::ops::Actor, ServerFnError> {
-    use crate::server_fns::permissions::configure_administration;
-
-    configure_administration(tx).await.map_err(server_err)?;
-    lock_organization(tx, org_id, gate)
-        .await
-        .map_err(server_err)?;
-    let actor = crate::ops::Actor::load(tx, crate::ops::Caller::session(org_id, actor_id)).await?;
+) -> Result<(crate::ops::Tx, crate::ops::Actor), ServerFnError> {
+    let crate::ops::WriteTx { tx, actor } = crate::ops::begin_gated(
+        db,
+        crate::ops::Caller::session(org_id, actor_id),
+        gate,
+        crate::ops::WriteIsolation::ReadCommitted,
+    )
+    .await?;
     if !actor.has(Permission::TaskWriteAll) {
         return Err(forbidden("Current task editing authority is required"));
     }
-    Ok(actor)
+    Ok((tx, actor))
 }
 
 /// Adds a task to the organization catalog. Projects link tasks through the
@@ -764,8 +765,7 @@ async fn create_catalog_task(
     if name.is_empty() {
         return Err(conflict("Task name cannot be empty"));
     }
-    let mut tx = db.begin().await.map_err(server_err)?;
-    let actor = authorize_task_write(&mut tx, org_id, actor_id, OrganizationLock::Shared).await?;
+    let (mut tx, actor) = begin_task_write(db, org_id, actor_id, OrganizationLock::Shared).await?;
     let (amount, currency) = authorize_task_rate(&mut tx, org_id, &actor, rate).await?;
     let id = uuid::Uuid::now_v7();
     let mut task = sqlx::query_as!(
@@ -845,8 +845,7 @@ async fn update_task_record(
     if name.is_empty() {
         return Err(conflict("Task name cannot be empty"));
     }
-    let mut tx = db.begin().await.map_err(server_err)?;
-    let actor = authorize_task_write(&mut tx, org_id, actor_id, OrganizationLock::Shared).await?;
+    let (mut tx, actor) = begin_task_write(db, org_id, actor_id, OrganizationLock::Shared).await?;
     let (amount, currency) = authorize_task_rate(&mut tx, org_id, &actor, rate).await?;
     let preserve = matches!(rate, TaskRateEdit::Preserve {});
     let before = lock_task(&mut tx, org_id, task_id).await?;
@@ -962,10 +961,9 @@ async fn set_task_active_record(
     task_id: uuid::Uuid,
     active: bool,
 ) -> Result<(Task, Option<crate::plugin::AppEvent>), ServerFnError> {
-    let mut tx = db.begin().await.map_err(server_err)?;
     // Tracking writers hold the shared gate through entry insertion.
-    let actor =
-        authorize_task_write(&mut tx, org_id, actor_id, OrganizationLock::AccessChange).await?;
+    let (mut tx, actor) =
+        begin_task_write(db, org_id, actor_id, OrganizationLock::AccessChange).await?;
     if !active {
         // Link updates invalidate editors through their parent project trigger.
         // Take every parent before the task/link locks, in stable order.
