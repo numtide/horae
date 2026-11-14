@@ -49,10 +49,6 @@ fn encode_payload(payload: &JobPayload) -> anyhow::Result<serde_json::Value> {
 }
 
 fn decode_payload(value: serde_json::Value) -> anyhow::Result<JobPayload> {
-    // Jobs queued before payload versioning use the original tagged enum.
-    if value.get("version").is_none() {
-        return serde_json::from_value(value).context("invalid legacy durable job payload");
-    }
     anyhow::ensure!(
         value.get("version").and_then(serde_json::Value::as_u64) == Some(1),
         "unsupported durable job payload version"
@@ -1220,6 +1216,10 @@ mod tests {
                 "harvest_csv_import",
                 serde_json::json!({"kind": "HarvestCsv"}),
             ),
+            (
+                "harvest_csv_import",
+                serde_json::to_value(&payload).unwrap(),
+            ),
             ("future_import", encode_payload(&payload).unwrap()),
             ("harvest_api_import", encode_payload(&payload).unwrap()),
         ] {
@@ -1232,7 +1232,7 @@ mod tests {
             retry_availability(
                 "harvest_csv_import",
                 "failed",
-                serde_json::to_value(&payload).unwrap(),
+                encode_payload(&payload).unwrap(),
                 0,
                 9,
                 true
@@ -1684,19 +1684,14 @@ mod tests {
     }
 
     #[test]
-    fn payload_versions_preserve_legacy_jobs_and_reject_unknown_versions() {
+    fn payload_versions_reject_unversioned_and_unknown_versions() {
         let payload = JobPayload::HarvestCsv {
             mode: ImportMode::DryRun,
         };
         let versioned = encode_payload(&payload).unwrap();
         assert_eq!(versioned["version"], 1);
         assert_eq!(decode_payload(versioned).unwrap().kind(), payload.kind());
-        assert_eq!(
-            decode_payload(serde_json::to_value(&payload).unwrap())
-                .unwrap()
-                .kind(),
-            payload.kind()
-        );
+        assert!(decode_payload(serde_json::to_value(&payload).unwrap()).is_err());
         assert!(decode_payload(serde_json::json!({"version": 2, "payload": payload})).is_err());
     }
 
