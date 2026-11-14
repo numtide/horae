@@ -1,26 +1,34 @@
 //! Time-entry server functions.
 
 use super::*;
-#[cfg(all(test, feature = "server"))]
-use crate::ops::time::NewTimeEntry;
-#[cfg(feature = "server")]
-use crate::ops::time::{clamp_stopped_minutes, day_totals, ensure_daily_limit, lock_task_access};
 #[cfg(feature = "server")]
 use crate::ops::{self, Caller};
 
+/// The Timesheet's session check: a signed-out person gets 401, anything else
+/// reads as the sheet being unavailable.
 #[cfg(feature = "server")]
-mod commands;
+async fn timesheet_user() -> Result<crate::models::User, ServerFnError> {
+    require_user().await.map_err(|error| match error {
+        error @ ServerFnError::ServerError {
+            code: UNAUTHORIZED, ..
+        } => error,
+        error => {
+            tracing::error!(%error, "Timesheet operation failed");
+            server_err("Timesheet is unavailable")
+        }
+    })
+}
 
 /// Eligible, writable tracking choices for one explicitly selected person.
 #[server]
 pub async fn load_timesheet_tracking(
     context: crate::models::scoped_time::TimesheetWriteContext,
 ) -> Result<Vec<crate::models::scoped_time::TimesheetTrackingOption>, ServerFnError> {
-    let actor = require_user().await.map_err(commands::public_error)?;
+    let user = timesheet_user().await?;
     let state = crate::state::global_state().await;
-    commands::tracking(&state.db, actor.org_id, actor.id, &context)
-        .await
-        .map_err(commands::public_error)
+    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::time::tracking(&mut read.tx, &read.actor, &context).await;
+    Ok(read.finish(result).await?)
 }
 
 /// Apply one person-bound operation; client expectations never grant authority.
@@ -31,18 +39,15 @@ pub async fn apply_timesheet_command(
     context: crate::models::scoped_time::TimesheetWriteContext,
     command: crate::models::scoped_time::TimesheetCommand,
 ) -> Result<Option<String>, ServerFnError> {
-    let actor = require_user().await.map_err(commands::public_error)?;
+    let user = timesheet_user().await?;
     let state = crate::state::global_state().await;
-    let effects = commands::apply(&state.db, actor.org_id, actor.id, &context, command)
-        .await
-        .map_err(commands::public_error)?;
-    for (entry, event) in effects.entries {
-        dispatch_time_entry_event(&entry, event).await;
-    }
-    for project in effects.projects {
+    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::time::apply(&mut write.tx, &write.actor, &context, command).await;
+    let change = write.commit(result, &*state.plugins).await?;
+    for project in change.projects {
         tokio::spawn(check_project_budget(state, project));
     }
-    Ok(effects.notice)
+    Ok(change.notice)
 }
 
 /// Resolve a Timesheet subject and its rows without a separate identity bootstrap.
@@ -141,33 +146,6 @@ pub async fn list_visible_time_entries(
         })
 }
 
-/// Validate an optional start time (minutes since midnight, 0..=1439) and clamp
-/// the duration so the entry never crosses midnight (Constitution: exactness).
-/// Returns the possibly-clamped minutes and the validated start.
-#[cfg(feature = "server")]
-fn normalize_start(
-    minutes: i32,
-    start_minute: Option<i32>,
-) -> Result<(i32, Option<i32>), ServerFnError> {
-    // One entry past the day's limit can never fit; refuse it before the
-    // database trigger turns it into an opaque error.
-    horae_core::duration::check_daily_total(minutes.into()).map_err(conflict)?;
-    match start_minute {
-        None => Ok((minutes, None)),
-        Some(sm) if (0..=1439).contains(&sm) => {
-            // Snap the start to the grid so every write path (drag-move/resize,
-            // typed times) lands on a tidy boundary (FR-008); snap first, then
-            // clamp the duration against the snapped start.
-            let snapped = horae_core::time_of_day::snap(sm, horae_core::time_of_day::SNAP_STEP)
-                .clamp(0, 1439);
-            let clamped =
-                horae_core::time_of_day::clamp_to_day(snapped as u16, minutes.max(0) as u32) as i32;
-            Ok((clamped, Some(snapped)))
-        }
-        Some(_) => Err(server_err("start time must be within the day (0..=1439)")),
-    }
-}
-
 /// Only the session user's active, assigned project/task combinations; no rates.
 #[server]
 pub async fn list_time_entry_contexts()
@@ -242,19 +220,77 @@ async fn session_write(pool: &sqlx::PgPool, user_id: uuid::Uuid) -> ops::WriteTx
         .unwrap()
 }
 
+/// New own time for tests: a running entry starts the timer (which files it on
+/// today, with no minutes, start or billability request); any other is created
+/// on the person's own Timesheet.
+#[cfg(all(test, feature = "server"))]
+struct NewTimeEntry<'a> {
+    project_id: uuid::Uuid,
+    task_id: uuid::Uuid,
+    spent_date: chrono::NaiveDate,
+    minutes: i32,
+    notes: Option<&'a str>,
+    billable: bool,
+    start_minute: Option<i32>,
+    is_running: bool,
+}
+
 #[cfg(all(test, feature = "server"))]
 async fn insert_time_entry(
     pool: &sqlx::PgPool,
     user_id: uuid::Uuid,
     input: NewTimeEntry<'_>,
 ) -> Result<TimeEntry, ServerFnError> {
+    use crate::models::permission_editor::PermissionRequester;
+    use crate::models::scoped_time::{
+        TimesheetCommand, TimesheetEntryInput, TimesheetWriteContext,
+    };
+    use crate::plugin::AppEvent;
+
+    if input.is_running {
+        return start_timer_record(pool, user_id, input.project_id, input.task_id, input.notes)
+            .await;
+    }
     let mut write = session_write(pool, user_id).await;
-    let result = ops::time::insert(&mut write.tx, &write.actor, input)
-        .await
-        .map(ops::Done::new);
-    Ok(write
-        .commit(result, &crate::ops::testing::Recorder::default())
-        .await?)
+    let context = TimesheetWriteContext {
+        expected_requester: PermissionRequester {
+            org_id: write.actor.org_id(),
+            user_id,
+        },
+        subject_id: user_id,
+    };
+    let command = TimesheetCommand::Create {
+        entry: TimesheetEntryInput {
+            project_id: input.project_id,
+            task_id: input.task_id,
+            spent_date: input.spent_date,
+            minutes: input.minutes,
+            notes: input.notes.map(str::to_owned),
+            billable: input.billable,
+            start_minute: input.start_minute,
+        },
+    };
+    let result = ops::time::apply(&mut write.tx, &write.actor, &context, command).await;
+    let events = crate::ops::testing::Recorder::default();
+    write.commit(result, &events).await?;
+    let [AppEvent::TimeEntryCreated { time_entry, .. }] = &events.take()[..] else {
+        panic!("a created entry announces itself once");
+    };
+    Ok(sqlx::query_as!(
+        TimeEntry,
+        r#"SELECT id, org_id, user_id, project_id, task_id,
+                spent_date as "spent_date: chrono::NaiveDate",
+                minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,
+                started_at as "started_at: chrono::DateTime<chrono::Utc>",
+                state as "state: EntryState", invoice_id,
+                created_at as "created_at: chrono::DateTime<chrono::Utc>",
+                updated_at as "updated_at: chrono::DateTime<chrono::Utc>"
+           FROM time_entries WHERE id = $1"#,
+        time_entry.id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap())
 }
 
 #[cfg(all(test, feature = "server"))]
@@ -309,8 +345,7 @@ mod activity_tests;
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::{
-        CONFLICT, NewTimeEntry, fetch_time_entry_contexts, insert_time_entry, normalize_start,
-        start_timer_record,
+        CONFLICT, NewTimeEntry, fetch_time_entry_contexts, insert_time_entry, start_timer_record,
     };
     use crate::server_fns::test_seed::seed;
     use dioxus::prelude::ServerFnError;
@@ -379,9 +414,14 @@ mod tests {
                     },
                     subject_id: ids.user_id,
                 };
-                let choices = super::commands::tracking(&pool, ids.org_id, ids.user_id, &own)
-                    .await
-                    .unwrap();
+                let mut read = crate::ops::begin_read(
+                    &pool,
+                    crate::ops::Caller::session(ids.org_id, ids.user_id),
+                )
+                .await
+                .unwrap();
+                let choices = crate::ops::time::tracking(&mut read.tx, &read.actor, &own).await;
+                let choices = read.finish(choices).await.unwrap();
                 assert_eq!(choices.len(), expected, "{profile:?} assigned={assigned}");
                 let started = insert_time_entry(&pool, ids.user_id, manual_entry(&ids)).await;
                 assert_eq!(started.is_ok(), expected == 1, "{profile:?} {started:?}");
@@ -589,9 +629,10 @@ mod tests {
                         )
                         .await
                         .unwrap();
+                        // A timer always asks for billable time.
                         assert_eq!(
                             entry.billable,
-                            requested_billable && project_billable && task_billable
+                            (requested_billable || is_running) && project_billable && task_billable
                         );
                         assert_eq!(entry.is_running, is_running);
                         assert_eq!(entry.started_at.is_some(), is_running);
@@ -647,37 +688,6 @@ mod tests {
                 .await
                 .is_err()
         );
-    }
-
-    #[test]
-    fn snaps_unaligned_start_to_the_grid() {
-        // A drag-move can hand in a sub-grid start (e.g. 4:04); every write path
-        // must snap it (FR-008). 244 → 240 (4:00), duration unchanged.
-        let (minutes, start) = normalize_start(210, Some(244)).unwrap();
-        assert_eq!(start, Some(240));
-        assert_eq!(minutes, 210);
-    }
-
-    #[test]
-    fn clamps_duration_against_the_snapped_start() {
-        // Snap first (1430 → 1425), then clamp so start + minutes never crosses
-        // midnight (FR-012): 1425 + 60 would exceed the day, clamped to 15.
-        let (minutes, start) = normalize_start(60, Some(1430)).unwrap();
-        assert_eq!(start, Some(1425));
-        assert_eq!(minutes, 15);
-    }
-
-    #[test]
-    fn untimed_start_is_left_untouched() {
-        let (minutes, start) = normalize_start(90, None).unwrap();
-        assert_eq!(start, None);
-        assert_eq!(minutes, 90);
-    }
-
-    #[test]
-    fn rejects_out_of_range_start() {
-        assert!(normalize_start(60, Some(-1)).is_err());
-        assert!(normalize_start(60, Some(1440)).is_err());
     }
 
     // New time is checked through the actual insert and the shared selector view.

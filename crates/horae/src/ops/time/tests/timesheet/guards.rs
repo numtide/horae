@@ -466,8 +466,8 @@ async fn no_op_emits_no_effects_and_changed_payload_uses_normalized_effective_va
     )
     .await
     .unwrap();
-    assert!(effects.entries.is_empty());
-    assert!(effects.projects.is_empty());
+    assert!(effects.events.is_empty());
+    assert!(effects.value.projects.is_empty());
     input.start_minute = Some(1438);
     input.minutes = 120;
     sqlx::query!(
@@ -489,12 +489,16 @@ async fn no_op_emits_no_effects_and_changed_payload_uses_normalized_effective_va
     )
     .await
     .unwrap();
-    assert_eq!(effects.entries.len(), 1);
-    let (entry, event) = &effects.entries[0];
-    assert!(matches!(event, TimeEntryEvent::Updated));
+    let [
+        AppEvent::TimeEntryUpdated {
+            time_entry: entry, ..
+        },
+    ] = &effects.events[..]
+    else {
+        panic!("one update expected: {:?}", effects.events);
+    };
     assert!(!entry.billable);
     assert_eq!(entry.user_id, f.context.subject_id);
-    assert_eq!(entry.minutes + entry.start_minute.unwrap(), 1440);
     let stored = sqlx::query!(
         "SELECT minutes,start_minute,billable FROM time_entries WHERE id=$1",
         id
@@ -502,9 +506,10 @@ async fn no_op_emits_no_effects_and_changed_payload_uses_normalized_effective_va
     .fetch_one(&pool)
     .await
     .unwrap();
+    assert_eq!(stored.minutes + stored.start_minute.unwrap(), 1440);
     assert_eq!(
-        (stored.minutes, stored.start_minute, stored.billable),
-        (entry.minutes, entry.start_minute, entry.billable)
+        (stored.minutes, stored.billable),
+        (entry.minutes, entry.billable)
     );
 }
 

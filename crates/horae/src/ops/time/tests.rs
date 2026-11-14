@@ -8,6 +8,33 @@ use crate::ops::testing::Recorder;
 use crate::ops::{self, Caller};
 use crate::server_fns::test_seed::{SeedIds, seed};
 
+mod timesheet;
+
+#[test]
+fn snaps_unaligned_start_to_the_grid() {
+    // A drag-move can hand in a sub-grid start (e.g. 4:04); every write path
+    // must snap it (FR-008). 244 → 240 (4:00), duration unchanged.
+    assert_eq!(normalize_start(210, Some(244)), Ok((210, Some(240))));
+}
+
+#[test]
+fn clamps_duration_against_the_snapped_start() {
+    // Snap first (1430 → 1425), then clamp so start + minutes never crosses
+    // midnight (FR-012): 1425 + 60 would exceed the day, clamped to 15.
+    assert_eq!(normalize_start(60, Some(1430)), Ok((15, Some(1425))));
+}
+
+#[test]
+fn untimed_start_is_left_untouched() {
+    assert_eq!(normalize_start(90, None), Ok((90, None)));
+}
+
+#[test]
+fn rejects_out_of_range_start() {
+    assert!(normalize_start(60, Some(-1)).is_err());
+    assert!(normalize_start(60, Some(1440)).is_err());
+}
+
 async fn trackable(pool: &PgPool, profile: BuiltInProfile) -> SeedIds {
     let ids = seed(pool, profile).await;
     sqlx::query!(

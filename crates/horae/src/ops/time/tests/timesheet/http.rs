@@ -126,9 +126,10 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         ("apply_timesheet_command", create.clone()),
     ] {
         let response = api.call(name, body, Some(&cookie), false).await;
-        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        // Invalid stored state fails closed, as everywhere in `ops`.
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
         let body = response.text().await.unwrap();
-        assert!(body.contains("Timesheet is unavailable"), "{body}");
+        assert!(body.contains("Permission state is unavailable"), "{body}");
         for secret in [
             "private_invalid_grant",
             "person_permission_states",
