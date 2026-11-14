@@ -58,13 +58,6 @@ async fn save_state(
 
 async fn fixture(pool: &PgPool) -> SeedIds {
     let ids = seed(pool, BuiltInProfile::Member).await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     save_state(
         pool,
         ids.org_id,
@@ -999,13 +992,6 @@ async fn canonical_actor_tenant_and_target_checks_precede_mutation(pool: PgPool)
             Err(ProfileCommandError::Forbidden)
         ));
     }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
     for user in [foreign.user_id, Uuid::now_v7()] {
         assert!(matches!(
             execute(

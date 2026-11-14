@@ -1,6 +1,6 @@
 //! Integer ids on the Harvest wire (FR-015–FR-018). Each numbered table has a
 //! `harvest_id` column: the id in the Harvest-compatible API, filled on insert
-//! by a trigger when the insert gives none (migration 0060). Horae's identity
+//! by a trigger when the insert gives none. Horae's identity
 //! is still `id` (UUID v7).
 
 use horae_core::importers::harvest::types::EntityType;

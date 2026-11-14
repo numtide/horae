@@ -7,7 +7,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
 
     let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
     let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
-    let target = user(pool, ids.org_id, OrgRole::Member).await;
+    let target = user(pool, ids.org_id).await;
     let cookie = api.cookie(ids.user_id).await;
     let request = json!({"activity":"all","after":null});
     assert_eq!(

@@ -2,7 +2,7 @@ use super::*;
 use overview_tests::click;
 
 const NOT_FOUND: u16 = 404;
-/// Markers for the legacy client mutation controls on the list.
+/// Markers for the client mutation controls on the list.
 const LIST_ACTIONS: [&str; 3] = [
     "id=\"clients-new\"",
     "id=\"client-edit-",
@@ -30,13 +30,12 @@ pub(super) fn client_record(id: Uuid) -> client::Client {
     }
 }
 
-/// The backend's legacy-only management rule: policy one never manages yet.
+/// Members and readers see the catalog without managing it.
 pub(super) fn overview(probe: &Probe) -> client::ClientOverview {
     client::ClientOverview {
         requester: requester(),
-        canonical_permissions: probe.canonical,
         can_read: true,
-        can_manage: !probe.member && !probe.canonical,
+        can_manage: !probe.member && !probe.reader,
         clients: vec![client::ClientSummary {
             client: client_record(Uuid::from_u128(1)),
             active_projects: 1,
@@ -78,7 +77,7 @@ fn has_list_actions(html: &str) -> bool {
 }
 
 #[tokio::test]
-async fn legacy_manager_list_keeps_rows_and_management_actions() {
+async fn manager_list_keeps_rows_and_management_actions() {
     let dom = mount(&list(Probe::default()));
     let html = dioxus::ssr::render(&dom);
     assert!(html.contains("Client-1"), "{html}");
@@ -89,15 +88,14 @@ async fn legacy_manager_list_keeps_rows_and_management_actions() {
 }
 
 #[tokio::test]
-async fn legacy_member_and_policy_one_readers_get_rows_without_legacy_writes() {
+async fn members_and_readers_get_rows_without_writes() {
     for probe in [
         Probe {
             member: true,
             ..Probe::default()
         },
-        // `get_me` still reports a legacy Admin role here; it must not grant writes.
         Probe {
-            canonical: true,
+            reader: true,
             ..Probe::default()
         },
     ] {
@@ -114,7 +112,7 @@ async fn legacy_member_and_policy_one_readers_get_rows_without_legacy_writes() {
 #[tokio::test]
 async fn denied_list_is_neither_empty_nor_populated() {
     let probe = list(Probe {
-        canonical: true,
+        reader: true,
         ..Probe::default()
     });
     let mut denied = overview(&probe);
@@ -133,7 +131,7 @@ async fn denied_list_is_neither_empty_nor_populated() {
 #[tokio::test]
 async fn readable_empty_list_is_a_genuine_empty_state() {
     let probe = list(Probe {
-        canonical: true,
+        reader: true,
         ..Probe::default()
     });
     let mut empty = overview(&probe);
@@ -214,8 +212,8 @@ async fn pending_refresh_withholds_previous_manager_controls_and_editor() {
 }
 
 #[tokio::test]
-async fn list_refresh_rejects_changed_account_organization_or_policy() {
-    for change in ["user", "organization", "policy"] {
+async fn list_refresh_rejects_changed_account_or_organization() {
+    for change in ["user", "organization"] {
         let probe = list(Probe {
             allow_client_activity: true,
             ..Probe::default()
@@ -229,11 +227,7 @@ async fn list_refresh_rejects_changed_account_organization_or_policy() {
         let mut changed = overview(&probe);
         match change {
             "user" => changed.requester.user_id = Uuid::now_v7(),
-            "organization" => changed.requester.org_id = Uuid::now_v7(),
-            _ => {
-                changed.canonical_permissions = true;
-                changed.can_manage = false;
-            }
+            _ => changed.requester.org_id = Uuid::now_v7(),
         }
         changed.clients[0].client.name = "Other account client".into();
         send.send(Ok(changed)).unwrap();
@@ -247,9 +241,9 @@ async fn list_refresh_rejects_changed_account_organization_or_policy() {
     }
 }
 #[tokio::test]
-async fn policy_one_rate_reader_sees_rate_without_management_or_invoices() {
+async fn rate_reader_sees_rate_without_management_or_invoices() {
     let probe = detail(Probe {
-        canonical: true,
+        reader: true,
         ..Probe::default()
     });
     let dom = mount(&probe);
@@ -270,7 +264,7 @@ async fn policy_one_rate_reader_sees_rate_without_management_or_invoices() {
 }
 
 #[tokio::test]
-async fn policy_one_detail_distinguishes_restricted_from_unset_rate() {
+async fn detail_distinguishes_restricted_from_unset_rate() {
     for (billing, rate_shown, unset_shown) in [
         (None, false, false),
         (
@@ -282,7 +276,7 @@ async fn policy_one_detail_distinguishes_restricted_from_unset_rate() {
         ),
     ] {
         let probe = detail(Probe {
-            canonical: true,
+            reader: true,
             ..Probe::default()
         });
         let id = Uuid::from_u128(1);
@@ -290,7 +284,6 @@ async fn policy_one_detail_distinguishes_restricted_from_unset_rate() {
             &probe.client_view_response,
             Ok(client::ClientDetailView {
                 requester: requester(),
-                canonical_permissions: true,
                 can_manage: false,
                 can_read_invoices: false,
                 details: client::ClientDetails {
@@ -313,7 +306,7 @@ async fn policy_one_detail_distinguishes_restricted_from_unset_rate() {
 #[tokio::test]
 async fn hidden_or_missing_client_detail_reveals_no_identity() {
     let probe = detail(Probe {
-        canonical: true,
+        reader: true,
         ..Probe::default()
     });
     respond(
@@ -337,7 +330,7 @@ async fn hidden_or_missing_client_detail_reveals_no_identity() {
 async fn client_project_context_keeps_its_existing_reader() {
     let id = Uuid::from_u128(1);
     let probe = Probe {
-        canonical: true,
+        reader: true,
         initial_path: Some(format!("/projects/client/{id}")),
         ..Probe::default()
     };

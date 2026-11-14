@@ -512,7 +512,6 @@ mod tests {
         assert_eq!(event.hook_name(), "user_permissions_changed");
         assert!(json.contains("\"profile\":\"Project Manager\""));
         assert!(json.contains("\"is_administrator\":false"));
-        assert!(!json.contains("org_role"));
         // The login-only `method` field is omitted for admin user events.
         assert!(!json.contains("\"method\""));
     }

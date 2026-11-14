@@ -91,7 +91,6 @@ async fn project_with_assignment(
         email: format!("{}@test.com", ids.user_id),
         name: "Viewer".into(),
         oidc_subject: None,
-        org_role: OrgRole::Member,
         cost_rate_cents: None,
         billable_rate_cents: None,
         active: true,
@@ -127,16 +126,16 @@ async fn members_see_only_themselves_in_the_project_team(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn project_readers_see_the_project_team(pool: PgPool) {
     let (viewer, project, ids) = project_with_assignment(&pool).await;
-    for role in [
+    for profile in [
         BuiltInProfile::ExecutiveManager,
         BuiltInProfile::Administrator,
     ] {
-        crate::ops::testing::become_profile(&pool, &ids, role).await;
+        crate::ops::testing::become_profile(&pool, &ids, profile).await;
         let team = project_team(&pool, &viewer, project)
             .await
             .unwrap()
             .expect("managers open every project");
-        assert_eq!(team.len(), 1, "{role:?}");
+        assert_eq!(team.len(), 1, "{profile:?}");
     }
 }
 

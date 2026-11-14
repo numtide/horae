@@ -1,12 +1,9 @@
 //! Branding and the workspace time zone, allowed and refused by stored grants.
-//! Fixtures keep the organization on its default policy and give the person a
-//! dead legacy role of Admin, whatever their profile: neither may matter.
 
 use std::time::Duration;
 
 use horae_core::permissions::catalog::BuiltInProfile::{self, *};
 use horae_core::permissions::catalog::Permission::{self, *};
-use horae_core::types::OrgRole;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -22,23 +19,14 @@ enum Who {
 }
 
 async fn fixture(pool: &PgPool, who: Who) -> SeedIds {
-    let ids = match who {
+    match who {
         Who::Profile(profile) => seed(pool, profile).await,
         Who::Grants(grants) => {
             let ids = seed(pool, Member).await;
             provision(pool, &ids, grants, false).await;
             ids
         }
-    };
-    sqlx::query!(
-        "UPDATE users SET org_role = $2 WHERE id = $1",
-        ids.user_id,
-        OrgRole::Admin as OrgRole,
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-    ids
+    }
 }
 
 /// Someone who may edit the branding and the time zone.

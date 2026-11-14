@@ -174,7 +174,7 @@ async fn overview_denies_unavailable_actor_instead_of_binding_an_empty_success(p
 #[serial_test::serial]
 async fn overview_uses_the_stored_state_not_the_captured_session(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
-    let viewer = super::detail::legacy_viewer(&ids, BuiltInProfile::ExecutiveManager);
+    let viewer = super::detail::session_user(&ids);
     let before = fetch_project_overview(&pool, &viewer, None).await.unwrap();
     assert!(before.can_create && before.can_change_status && before.can_open_clients);
     assert!(!before.can_import);

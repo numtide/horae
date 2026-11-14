@@ -420,8 +420,11 @@ pkgs.testers.nixosTest {
     status = api_status_after_sign_in("/tmp/jar7.txt")
     assert status == "200", f"a listed domain must create the account, got {status}"
     row = sql(
-        "SELECT org_role, active, cost_rate_cents IS NULL AND billable_rate_cents IS NULL, "
-        "oidc_issuer, oidc_subject FROM users WHERE email = 'kilgore@kilgore.trout'"
+        "SELECT p.built_in_profile, u.active, "
+        "u.cost_rate_cents IS NULL AND u.billable_rate_cents IS NULL, "
+        "u.oidc_issuer, u.oidc_subject FROM users u "
+        "JOIN person_permission_states p ON p.user_id = u.id "
+        "WHERE u.email = 'kilgore@kilgore.trout'"
     )
     assert row == f"member|t|t|{verified['iss']}|{verified['sub']}", row
 
@@ -443,8 +446,9 @@ pkgs.testers.nixosTest {
     status = api_status_after_sign_in("/tmp/jar10.txt")
     assert status == "200", f"a trusted absent claim must create the account, got {status}"
     assert sql(
-        "SELECT count(*) FROM users WHERE email = 'kilgore@kilgore.trout' "
-        "AND active AND org_role = 'member'"
+        "SELECT count(*) FROM users u JOIN person_permission_states p ON p.user_id = u.id "
+        "WHERE u.email = 'kilgore@kilgore.trout' AND u.active "
+        "AND p.built_in_profile = 'member' AND NOT p.is_administrator"
     ) == "1"
 
     # A malformed list stops the server instead of guessing.

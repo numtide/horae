@@ -55,13 +55,6 @@ pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
 pub async fn run_migrations(pool: &PgPool) -> anyhow::Result<()> {
     MIGRATOR.run(pool).await?;
-    crate::jobs::report::upgrade_legacy_reports(pool).await?;
-    sqlx::query!(
-        "ALTER TABLE horae_jobs VALIDATE CONSTRAINT horae_jobs_report_budget, \
-         VALIDATE CONSTRAINT horae_jobs_checkpoint_report_budget"
-    )
-    .execute(pool)
-    .await?;
     Ok(())
 }
 
@@ -211,7 +204,7 @@ pub async fn reset(pool: &PgPool) -> anyhow::Result<()> {
 /// The org's rounding config, `(round_minutes, round_dir)`, ready for
 /// `horae_core::rounding::round`. The executor generic lets callers pass the
 /// pool or an open transaction. `round_minutes` is cast here: the column is
-/// CHECK-constrained non-negative (migration 0010), so `as u32` cannot lose a
+/// CHECK-constrained non-negative, so `as u32` cannot lose a
 /// sign.
 pub async fn org_rounding(
     ex: impl sqlx::PgExecutor<'_>,

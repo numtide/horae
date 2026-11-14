@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO users (id,org_id,email,name) VALUES ($1,$2,$3,'Gate admin')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "51ddbd7afb9e9b644681459853dec3dcb1983ecbf4db3ad830a8c348a8da6c43"
+}

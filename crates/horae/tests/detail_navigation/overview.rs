@@ -174,7 +174,7 @@ async fn client_bands_link_each_client_by_identifier() {
 }
 
 #[tokio::test]
-async fn policy_one_client_bands_stay_plain_labels() {
+async fn client_bands_without_client_access_stay_plain_labels() {
     let probe = Probe {
         initial_path: Some("/projects".into()),
         ..Probe::default()

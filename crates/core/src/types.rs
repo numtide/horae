@@ -2,21 +2,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum OrgRole {
-    Admin,
-    Manager,
-    Member,
-}
-
-impl OrgRole {
-    /// Whether this role may see org-wide billing and approvals.
-    pub fn is_manager_or_above(self) -> bool {
-        matches!(self, Self::Admin | Self::Manager)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
 pub enum ProjectRole {
     Lead,
     Freelancer,
@@ -94,12 +79,6 @@ macro_rules! impl_display {
     };
 }
 
-impl_display!(OrgRole,
-    OrgRole::Admin   => "admin",
-    OrgRole::Manager => "manager",
-    OrgRole::Member  => "member",
-);
-
 impl_display!(ProjectRole,
     ProjectRole::Lead       => "lead",
     ProjectRole::Freelancer => "freelancer",
@@ -154,12 +133,6 @@ macro_rules! from_str {
         }
     };
 }
-
-from_str!(OrgRole,
-    "admin"   => OrgRole::Admin,
-    "manager" => OrgRole::Manager,
-    "member"  => OrgRole::Member,
-);
 
 from_str!(ProjectRole,
     "lead"       => ProjectRole::Lead,
@@ -253,12 +226,6 @@ mod sqlx_impls {
             }
         };
     }
-
-    pg_enum!(OrgRole, "org_role",
-        OrgRole::Admin   => "admin",
-        OrgRole::Manager => "manager",
-        OrgRole::Member  => "member",
-    );
 
     pg_enum!(EntryState, "entry_state",
         EntryState::Open      => "open",

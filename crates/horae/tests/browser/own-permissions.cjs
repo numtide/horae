@@ -1,4 +1,4 @@
-// Only the browser runner's disposable PostgreSQL fixture may enable policy 1.
+// Only the browser runner's disposable PostgreSQL fixture may rewrite permission states.
 const { chromium, expect } = require(process.env.PLAYWRIGHT_MODULE || 'playwright/test');
 const { execFileSync } = require('node:child_process');
 const { readFileSync, mkdirSync } = require('node:fs');
@@ -37,12 +37,11 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
     assert.equal(identity.status(), 200, await identity.text());
     actor = await identity.json();
     for (const id of [actor.id, actor.org_id]) assert.match(id, /^[0-9a-f-]{36}$/);
-    assert.ok(!Object.hasOwn(actor, 'org_role'), 'the session identity carries no role');
     assert.equal(sql(`SELECT active FROM users WHERE id='${actor.id}' AND org_id='${actor.org_id}'`), 't');
     restoreSeededStates = setAsideSeededStates(actor.org_id);
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
     await page.goto(`${base}/settings`);
-    // Without a stored state there is nothing to explain, whatever the policy.
+    // Without a stored state there is nothing to explain.
     await expect(section.getByRole('alert')).toContainText('Could not load your permissions');
     await expect(page.getByRole('heading', { name: 'Profile', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Appearance', exact: true })).toBeVisible();

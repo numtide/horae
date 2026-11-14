@@ -493,7 +493,7 @@ async fn detail_view_observes_membership_removed_behind_the_lock_only_access_gat
     .unwrap();
     let admin_id = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO users (id,org_id,email,name,org_role) VALUES ($1,$2,$3,'Gate admin','admin')",
+        "INSERT INTO users (id,org_id,email,name) VALUES ($1,$2,$3,'Gate admin')",
         admin_id,
         ids.org_id,
         format!("{admin_id}@test.com"),
@@ -503,7 +503,7 @@ async fn detail_view_observes_membership_removed_behind_the_lock_only_access_gat
     .unwrap();
     let admin = User {
         id: admin_id,
-        ..super::detail::legacy_viewer(&ids, BuiltInProfile::Administrator)
+        ..super::detail::session_user(&ids)
     };
     detail_view::fetch(&pool, &viewer, ids.project_id, None, today())
         .await
@@ -577,7 +577,7 @@ async fn detail_view_observes_report_visibility_revoked_by_the_project_editor(po
     .unwrap();
     let member_id = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO users (id,org_id,email,name,org_role) VALUES ($1,$2,$3,'Shared member','member')",
+        "INSERT INTO users (id,org_id,email,name) VALUES ($1,$2,$3,'Shared member')",
         member_id,
         ids.org_id,
         format!("{member_id}@test.com"),
@@ -612,7 +612,7 @@ async fn detail_view_observes_report_visibility_revoked_by_the_project_editor(po
     .unwrap();
     let member = User {
         id: member_id,
-        ..super::detail::legacy_viewer(&ids, BuiltInProfile::Member)
+        ..super::detail::session_user(&ids)
     };
     detail_view::fetch(&pool, &member, ids.project_id, None, today())
         .await
@@ -699,7 +699,7 @@ async fn membership_removal_waits_for_a_reader_that_already_holds_authority(pool
     .unwrap();
     let admin_id = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO users (id,org_id,email,name,org_role) VALUES ($1,$2,$3,'Gate admin','admin')",
+        "INSERT INTO users (id,org_id,email,name) VALUES ($1,$2,$3,'Gate admin')",
         admin_id,
         ids.org_id,
         format!("{admin_id}@test.com"),
@@ -709,7 +709,7 @@ async fn membership_removal_waits_for_a_reader_that_already_holds_authority(pool
     .unwrap();
     let admin = User {
         id: admin_id,
-        ..super::detail::legacy_viewer(&ids, BuiltInProfile::Administrator)
+        ..super::detail::session_user(&ids)
     };
     // The reader takes its authority locks, then waits on a later table.
     let mut hold = pool.begin().await.unwrap();

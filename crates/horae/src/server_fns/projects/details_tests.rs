@@ -40,17 +40,17 @@ async fn project_details_only_offer_task_rate_currency_to_current_managers(pool:
             }
             // Task rates need project and billable-rate writes: only the
             // Administrator profile holds both for every project.
-            for role in [
+            for profile in [
                 BuiltInProfile::Administrator,
                 BuiltInProfile::ExecutiveManager,
             ] {
-                become_profile(&pool, &ids, role).await;
+                become_profile(&pool, &ids, profile).await;
                 let details = project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
                     .await
                     .unwrap()
                     .unwrap();
                 let json = serde_json::to_value(details).unwrap();
-                let expected = if role == BuiltInProfile::Administrator
+                let expected = if profile == BuiltInProfile::Administrator
                     && project_type != ProjectType::NonBillable
                     && (mode.is_none()
                         || (project_type == ProjectType::TimeAndMaterials && mode == Some("task")))
@@ -63,7 +63,7 @@ async fn project_details_only_offer_task_rate_currency_to_current_managers(pool:
                     json.get("task_rate_currency")
                         .and_then(serde_json::Value::as_str),
                     expected,
-                    "{role:?}, {project_type:?}, {mode:?}"
+                    "{profile:?}, {project_type:?}, {mode:?}"
                 );
                 if expected.is_none() {
                     assert!(json.get("task_rate_currency").is_none());

@@ -27,7 +27,7 @@ fn search(query: &str) -> Query {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn project_people_authorizes_the_operation_not_the_directory_or_legacy_role(pool: PgPool) {
+async fn project_people_authorizes_the_operation_not_the_directory(pool: PgPool) {
     let ids = fixture(&pool).await;
     let foreign = fixture(&pool).await;
     let target = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
@@ -35,10 +35,6 @@ async fn project_people_authorizes_the_operation_not_the_directory_or_legacy_rol
     let edit = Context::Edit {
         project_id: ids.project_id,
     };
-    sqlx::query!("UPDATE users SET org_role='admin' WHERE id=$1", ids.user_id)
-        .execute(&pool)
-        .await
-        .unwrap();
     for permission in [
         Permission::ProjectReadAll,
         Permission::PeopleWriteAll,
@@ -64,13 +60,6 @@ async fn project_people_authorizes_the_operation_not_the_directory_or_legacy_rol
         read(&pool, ids.org_id, ids.user_id, edit, &search("")).await,
         Err(ProjectPeopleError::Forbidden)
     ));
-    sqlx::query!(
-        "UPDATE users SET org_role='member' WHERE id=$1",
-        ids.user_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
     grants(&pool, ids.user_id, &[Permission::ProjectWriteManaged]).await;
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, edit, &search("")).await,
@@ -407,13 +396,6 @@ async fn project_people_denies_invalid_authority_even_for_empty_resolution(pool:
             Err(ProjectPeopleError::Forbidden)
         ));
     }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
         .execute(&pool)
         .await

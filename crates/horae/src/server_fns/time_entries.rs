@@ -320,9 +320,9 @@ mod tests {
 
     async fn linked_seed(
         pool: &PgPool,
-        role: BuiltInProfile,
+        profile: BuiltInProfile,
     ) -> crate::server_fns::test_seed::SeedIds {
-        let ids = seed(pool, role).await;
+        let ids = seed(pool, profile).await;
         sqlx::query!(
             "INSERT INTO project_tasks (project_id, task_id, billable) VALUES ($1, $2, true)",
             ids.project_id,
@@ -332,21 +332,6 @@ mod tests {
         .await
         .unwrap();
         ids
-    }
-
-    /// Give the person the dead role that contradicts their stored profile:
-    /// `admin` for anyone but an Administrator, `member` for an Administrator.
-    /// Eligibility follows the stored state, so a view that still read
-    /// `org_role` fails the tests that use this.
-    async fn contradict_role(pool: &PgPool, user_id: Uuid, profile: BuiltInProfile) {
-        sqlx::query!(
-            "UPDATE users SET org_role = CASE WHEN $2 THEN 'member'::org_role ELSE 'admin'::org_role END WHERE id = $1",
-            user_id,
-            profile == BuiltInProfile::Administrator
-        )
-        .execute(pool)
-        .await
-        .unwrap();
     }
 
     fn manual_entry(ids: &crate::server_fns::test_seed::SeedIds) -> NewTimeEntry<'static> {
@@ -373,7 +358,6 @@ mod tests {
         for profile in BuiltInProfile::ALL.iter().copied() {
             for assigned in [false, true] {
                 let ids = linked_seed(&pool, profile).await;
-                contradict_role(&pool, ids.user_id, profile).await;
                 if assigned {
                     sqlx::query!(
                         "INSERT INTO assignments (id, project_id, user_id) VALUES ($1, $2, $3)",
@@ -406,8 +390,7 @@ mod tests {
     }
 
     /// A disabled project-task link closes the shared view for every profile,
-    /// Administrator included. Seeded organizations start on policy zero,
-    /// where the previous view still offered the link.
+    /// Administrator included.
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn disabled_project_task_link_closes_the_view_for_every_profile(pool: PgPool) {
         for profile in BuiltInProfile::ALL.iter().copied() {
@@ -702,7 +685,6 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn unassigned_member_is_forbidden(pool: PgPool) {
         let ids = linked_seed(&pool, BuiltInProfile::Member).await;
-        contradict_role(&pool, ids.user_id, BuiltInProfile::Member).await;
 
         let err = insert_time_entry(&pool, ids.user_id, manual_entry(&ids))
             .await
@@ -736,7 +718,6 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn admin_may_log_time_without_assignment(pool: PgPool) {
         let ids = linked_seed(&pool, BuiltInProfile::Administrator).await;
-        contradict_role(&pool, ids.user_id, BuiltInProfile::Administrator).await;
 
         assert!(
             insert_time_entry(&pool, ids.user_id, manual_entry(&ids))

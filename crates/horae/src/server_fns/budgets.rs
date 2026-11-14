@@ -399,8 +399,8 @@ pub(super) async fn project_budget(
             headline
         }
         Ok(None) => {
-            // On policy one the detail and budget readers should agree, so
-            // log a divergence instead of hiding it.
+            // The detail and budget readers should agree, so log a
+            // divergence instead of hiding it.
             tracing::warn!(%project_id, "Budget readers withheld a readable project");
             savepoint.commit().await.map_err(server_err)?;
             BudgetHeadline::Unavailable
@@ -414,11 +414,7 @@ pub(super) async fn project_budget(
     Ok(Some(budget(headline)))
 }
 
-/// The viewer's stored permission state, read inside the caller's
-/// transaction after `ReadAccess` has locked the organization and the person.
-/// Budgets answer from it whatever the organization's policy, so they do not
-/// take `ReadAccess::permissions`, which is left out on policy zero. Missing
-/// or invalid state reads as no grants.
+/// Whether PostgreSQL refused a value as out of range for its numeric type.
 fn numeric_overflow(error: &sqlx::Error) -> bool {
     error
         .as_database_error()

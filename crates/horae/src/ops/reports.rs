@@ -54,7 +54,7 @@ pub(crate) async fn time(
     // read as the sums they are; Postgres inlines a CTE referenced once.
     // `resolve_project_rate` is the SQL twin of the pure core rate selection,
     // and `line_amount_cents` is the SQL twin of the Rust function invoicing
-    // uses (migration 0016). The rounding term inside it is per row, so these
+    // uses. The rounding term inside it is per row, so these
     // sums cannot be taken over pre-aggregated minutes.
     let rows = sqlx::query_as!(
         ReportRow,

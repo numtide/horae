@@ -31,7 +31,7 @@ async fn manage(pool: &PgPool, org: Uuid, actor: Uuid, target: Uuid) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn directory_uses_each_profiles_people_grants_not_legacy_role_or_other_scope(pool: PgPool) {
+async fn directory_uses_each_profiles_people_grants_not_other_scope(pool: PgPool) {
     let ids = fixture(&pool).await;
     let target = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
     manage(&pool, ids.org_id, ids.user_id, target).await;

@@ -5,7 +5,7 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let mut failures = Vec::new();
-    for (case, role, grants, rate, expected_status, expected_rate) in [
+    for (case, profile, grants, rate, expected_status, expected_rate) in [
         (
             "member_preserves",
             BuiltInProfile::Member,
@@ -15,7 +15,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             Some(8000),
         ),
         (
-            "legacy_admin_has_no_authority",
+            "administrator_profile_without_grants",
             BuiltInProfile::Administrator,
             vec![],
             json!({"action":"preserve"}),
@@ -82,7 +82,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             Some(8000),
         ),
     ] {
-        let ids = crate::server_fns::test_seed::seed(pool, role).await;
+        let ids = crate::server_fns::test_seed::seed(pool, profile).await;
         let grants = PermissionSelection::new(&grants);
         let may_read_rate = grants.contains(Permission::BillableRateReadAll);
         let stored: Vec<String> = serde_json::from_value(json!(grants)).unwrap();
@@ -90,13 +90,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
             VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &stored)
             .execute(pool).await.unwrap();
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-            ids.org_id
-        )
-        .execute(pool)
-        .await
-        .unwrap();
         sqlx::query!(
             "UPDATE tasks SET default_rate_cents=8000,default_rate_currency='EUR' WHERE id=$1",
             ids.task_id

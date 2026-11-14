@@ -99,7 +99,7 @@ const missingPerson = '01960000-0000-7000-8000-000000000202';
     const personId = '01960000-0000-7000-8000-000000000205';
     sql(`INSERT INTO clients (id, org_id, name, currency) VALUES ('${clientId}', '${actor.org_id}', 'Reference recovery client', 'EUR');
       INSERT INTO tasks (id, org_id, name) VALUES ('${taskId}', '${actor.org_id}', 'Reference recovery task');
-      INSERT INTO users (id, org_id, email, name, org_role) VALUES ('${personId}', '${actor.org_id}', 'reference-recovery@example.test', 'Reference recovery person', 'member')`);
+      INSERT INTO users (id, org_id, email, name) VALUES ('${personId}', '${actor.org_id}', 'reference-recovery@example.test', 'Reference recovery person')`);
     const references = [
       { kind: 'client', table: 'clients', id: clientId, control: 'np-client', error: 'np-basic-field-error' },
       { kind: 'task', table: 'tasks', id: taskId, control: `np-task-remove-${rowId}`, error: `np-task-error-${rowId}` },

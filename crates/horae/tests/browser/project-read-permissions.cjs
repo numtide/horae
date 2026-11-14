@@ -116,7 +116,7 @@ let restoreSeededStates = () => {};
     sql(`INSERT INTO project_management_assignments (id,org_id,project_id,manager_id) VALUES ('${id(7)}','${org}','${project}','${actor.id}')`);
     await page.locator('#project-detail-retry').click();
     await expect(page.getByRole('region', { name: 'Project team', exact: true })).toBeVisible();
-    console.log('PASS: edit and managed-project revocation remove current UI authority without legacy Administrator fallback');
+    console.log('PASS: edit and managed-project revocation remove current UI authority without falling back to the Administrator profile');
 
     sql(`UPDATE users SET active=false WHERE id='${actor.id}'`);
     await page.locator('#project-detail-refresh').click();

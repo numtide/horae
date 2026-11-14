@@ -29,13 +29,6 @@ async fn permissions(pool: &PgPool, org: Uuid, user: Uuid, grants: &[Permission]
 
 async fn fixture(pool: &PgPool) -> SeedIds {
     let ids = seed(pool, BuiltInProfile::Member).await;
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     permissions(
         pool,
         ids.org_id,
@@ -968,7 +961,7 @@ async fn historical_replay_does_not_reapply_removed_or_now_ineligible_designatio
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn managed_scope_never_uses_another_project_or_legacy_membership(pool: PgPool) {
+async fn managed_scope_never_uses_another_project_or_tracking_membership(pool: PgPool) {
     let ids = fixture(&pool).await;
     let editor = person(&pool, ids.org_id, &[Permission::ProjectWriteManaged]).await;
     sqlx::query!(

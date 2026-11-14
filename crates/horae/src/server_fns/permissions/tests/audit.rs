@@ -16,13 +16,6 @@ async fn fixture(pool: &PgPool, administrator: bool) -> SeedIds {
         serde_json::to_value(BuiltInProfile::Administrator.selection()).unwrap(),
     )
     .unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
         VALUES ($1, $2, $3, 1, $4, $5, 'individual')",
@@ -369,7 +362,7 @@ async fn administrator_reads_historical_template_without_intent_or_replay_result
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn legacy_admin_and_all_grants_without_explicit_identity_cannot_read_audit(pool: PgPool) {
+async fn administrator_profile_without_explicit_identity_cannot_read_audit(pool: PgPool) {
     let ids = fixture(&pool, false).await;
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, Uuid::now_v7()).await,
@@ -558,13 +551,6 @@ async fn tenant_and_activity_checks_precede_receipt_existence_and_decode(pool: P
         .execute(&pool)
         .await
         .unwrap();
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version = 1 WHERE id = $1",
-        ids.org_id
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, receipt).await,
         Err(AuditReadError::UnsupportedFormat)

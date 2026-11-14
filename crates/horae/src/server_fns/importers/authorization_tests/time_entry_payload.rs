@@ -6,7 +6,7 @@ use horae_core::types::EntryState;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
-    let target = user(pool, ids.org_id, OrgRole::Member).await;
+    let target = user(pool, ids.org_id).await;
     // The timer read loads the person's stored state, as every person has.
     crate::server_fns::provisioning::provision(
         &mut pool.acquire().await.unwrap(),

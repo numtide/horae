@@ -1,5 +1,5 @@
 #![cfg(feature = "server")]
-//! The SQL `effective_minutes` (migration 0017) and
+//! The SQL `effective_minutes` and
 //! `horae_core::rounding::effective_minutes` must agree on every stored input:
 //! reports, budgets and approvals bill through the SQL twin, the Harvest API
 //! through the Rust one, so a disagreement bills the same time differently.

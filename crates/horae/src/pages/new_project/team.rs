@@ -449,10 +449,10 @@ mod tests {
     }
 
     #[test]
-    fn legacy_manager_checkbox_needs_no_canonical_selection() {
+    fn manager_checkbox_toggles_without_a_manager_selection() {
         let person = CreationPerson {
             id: Uuid::now_v7(),
-            name: "Legacy teammate".into(),
+            name: "Teammate".into(),
             billable_rate_cents: None,
             cost_rate_cents: None,
         };

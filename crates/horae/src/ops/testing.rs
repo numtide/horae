@@ -1,4 +1,4 @@
-//! Test support for operations: an event recorder and policy-one fixtures.
+//! Test support for operations: an event recorder and permission-state fixtures.
 
 use std::sync::Mutex;
 
@@ -7,7 +7,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{AppEvent, EventSink};
-use crate::server_fns::test_seed::{SeedIds, clear_state, seed, use_policy_one};
+use crate::server_fns::test_seed::{SeedIds, clear_state};
 
 /// Keeps dispatched events so a test can inspect them.
 #[derive(Default)]
@@ -23,13 +23,6 @@ impl EventSink for Recorder {
     fn dispatch(&self, event: AppEvent) {
         self.0.lock().unwrap().push(event);
     }
-}
-
-/// Seeds an organization on policy one whose person holds a built-in profile.
-pub(crate) async fn seed_profile(pool: &PgPool, profile: BuiltInProfile) -> SeedIds {
-    let ids = seed(pool, profile).await;
-    use_policy_one(pool, ids.org_id).await;
-    ids
 }
 
 /// Replaces the seeded person's permission state with `profile`'s built-in
@@ -69,21 +62,8 @@ pub(crate) async fn set_grants(
     Ok(())
 }
 
-/// Moves the seeded organization to policy one and gives the seeded person
-/// exactly `grants` (with their prerequisites and the Member floor).
-pub(crate) async fn policy_one(
-    pool: &PgPool,
-    ids: &SeedIds,
-    grants: &[Permission],
-    administrator: bool,
-) {
-    provision(pool, ids, grants, administrator).await;
-    use_policy_one(pool, ids.org_id).await;
-}
-
 /// Gives a person exactly a built-in profile's grants and administrator
-/// identity, replacing any state they had. The organization's policy is left
-/// alone: operations that answer only from stored state do not read it.
+/// identity, replacing any state they had.
 pub(crate) async fn assign_profile<'e>(
     executor: impl sqlx::PgExecutor<'e>,
     org_id: Uuid,
@@ -155,8 +135,8 @@ pub(crate) async fn add_person(pool: &PgPool, org_id: Uuid, profile: BuiltInProf
     id
 }
 
-/// Replaces the seeded person's permission state with exactly `grants`,
-/// without touching the organization's policy.
+/// Replaces the seeded person's permission state with exactly `grants` (with
+/// their prerequisites and the Member floor).
 pub(crate) async fn provision(
     pool: &PgPool,
     ids: &SeedIds,
