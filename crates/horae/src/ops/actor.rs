@@ -149,7 +149,10 @@ impl Actor {
 
     #[cfg_attr(
         not(test),
-        expect(dead_code, reason = "foundation for the next ops/ domains")
+        expect(
+            dead_code,
+            reason = "read once the CLI acts through an operator channel"
+        )
     )]
     pub fn channel(&self) -> Channel {
         self.channel

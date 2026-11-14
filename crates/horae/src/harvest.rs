@@ -770,7 +770,10 @@ pub struct TaskFilters {
     pub is_active: Option<bool>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "Harvest v2 ignores updated_since for tasks and users"
+    )]
     pub updated_since: Option<String>,
 }
 
@@ -836,7 +839,10 @@ pub struct UserFilters {
     pub is_active: Option<bool>,
     pub page: Option<i64>,
     pub per_page: Option<i64>,
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "Harvest v2 ignores updated_since for tasks and users"
+    )]
     pub updated_since: Option<String>,
 }
 
