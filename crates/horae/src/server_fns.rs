@@ -191,7 +191,12 @@ pub(crate) async fn check_project_budget(
     match settings_org {
         Ok(Some(org_id)) => {
             let enqueued = match crate::timezone::today_for_org(&state.db, org_id).await {
-                Ok(today) => budgets::enqueue_alerts(&state.db, org_id, project_id, today).await,
+                Ok(today) => {
+                    crate::notifications::budgets::enqueue_alerts(
+                        &state.db, org_id, project_id, today,
+                    )
+                    .await
+                }
                 Err(error) => Err(error.into()),
             };
             if enqueued.is_err() {

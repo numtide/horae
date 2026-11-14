@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::config::{MailConfig, valid_mailbox};
 
+pub(crate) mod budgets;
 mod preparation;
 
 const SEND_TIMEOUT: Duration = Duration::from_secs(20);

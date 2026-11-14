@@ -13,7 +13,7 @@ use crate::models::permission_editor::PermissionRequester;
 use crate::plugin::AppEvent;
 use crate::plugin::event::{ActiveTransition, active_transition};
 
-mod budgets;
+pub(crate) mod budgets;
 mod detail;
 mod reads;
 mod task_catalog;
