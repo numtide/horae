@@ -29,6 +29,7 @@ pub(crate) mod organization;
 pub(crate) mod people;
 pub(crate) mod projects;
 pub(crate) mod reports;
+pub(crate) mod time;
 
 pub(crate) use actor::{Actor, Channel};
 pub(crate) use error::OpError;

@@ -1,6 +1,12 @@
 //! Time-entry server functions.
 
 use super::*;
+#[cfg(all(test, feature = "server"))]
+use crate::ops::time::NewTimeEntry;
+#[cfg(feature = "server")]
+use crate::ops::time::{clamp_stopped_minutes, day_totals, ensure_daily_limit, lock_task_access};
+#[cfg(feature = "server")]
+use crate::ops::{self, Caller};
 
 #[cfg(feature = "server")]
 mod commands;
@@ -168,214 +174,13 @@ pub async fn list_time_entry_contexts()
 -> Result<Vec<crate::models::time_entry::TimeEntryContext>, ServerFnError> {
     let user = require_user().await?;
     let state = crate::state::global_state().await;
-    fetch_time_entry_contexts(&state.db, user.id)
-        .await
-        .map_err(server_err)
+    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::time::contexts(&mut read.tx, &read.actor).await;
+    Ok(read.finish(result).await?)
 }
 
-#[cfg(feature = "server")]
-async fn fetch_time_entry_contexts(
-    db: &sqlx::PgPool,
-    user_id: uuid::Uuid,
-) -> Result<Vec<crate::models::time_entry::TimeEntryContext>, sqlx::Error> {
-    sqlx::query_as!(
-        crate::models::time_entry::TimeEntryContext,
-        r#"SELECT project_id as "project_id!", task_id as "task_id!", billable as "billable!"
-           FROM time_entry_contexts WHERE user_id = $1 ORDER BY project_id, task_id"#,
-        user_id,
-    )
-    .fetch_all(db)
-    .await
-}
-
-#[cfg(feature = "server")]
-struct NewTimeEntry<'a> {
-    project_id: uuid::Uuid,
-    task_id: uuid::Uuid,
-    spent_date: chrono::NaiveDate,
-    minutes: i32,
-    notes: Option<&'a str>,
-    billable: bool,
-    start_minute: Option<i32>,
-    is_running: bool,
-}
-
-/// Keep current account activity stable through the interactive mutation.
-#[cfg(feature = "server")]
-async fn begin_active_time_write(
-    pool: &sqlx::PgPool,
-    user_id: uuid::Uuid,
-) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, ServerFnError> {
-    let mut tx = pool.begin().await.map_err(server_err)?;
-    // Bound the activity check independently of pooled connection defaults.
-    super::permissions::configure_administration(&mut tx)
-        .await
-        .map_err(server_err)?;
-    // Routing only: recheck the same tenant and activity after the organization gate.
-    let org_id = sqlx::query_scalar!("SELECT org_id FROM users WHERE id=$1", user_id)
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(server_err)?
-        .ok_or_else(|| forbidden("Active account required"))?;
-    crate::db::lock_organization(&mut tx, org_id, crate::db::OrganizationLock::Shared)
-        .await
-        .map_err(server_err)?;
-    sqlx::query_scalar!(
-        "SELECT id FROM users WHERE id=$1 AND org_id=$2 AND active FOR SHARE",
-        user_id,
-        org_id,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| forbidden("Active account required"))?;
-    crate::db::lock_time_entry_write(&mut tx, user_id)
-        .await
-        .map_err(server_err)?;
-    Ok(tx)
-}
-
-/// A person's total minutes per day, read and locked ahead of a write so
-/// [`ensure_daily_limit`] can tell whether the write grew them.
-#[cfg(feature = "server")]
-async fn day_totals(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    user_id: uuid::Uuid,
-    dates: &[chrono::NaiveDate],
-) -> Result<Vec<(chrono::NaiveDate, i64)>, ServerFnError> {
-    crate::db::daily_minutes_totals(tx, user_id, dates)
-        .await
-        .map_err(server_err)
-}
-
-/// Refuse a write that grows the person's day past 240 hours, as Harvest does
-/// (409 "Daily hours cannot exceed 240."). `before` is [`day_totals`] from
-/// ahead of the write; a day already over the limit may still be lowered.
-#[cfg(feature = "server")]
-async fn ensure_daily_limit(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    user_id: uuid::Uuid,
-    before: &[(chrono::NaiveDate, i64)],
-) -> Result<(), ServerFnError> {
-    let dates: Vec<_> = before.iter().map(|(day, _)| *day).collect();
-    let after = day_totals(tx, user_id, &dates).await?;
-    for ((_, before), (_, after)) in before.iter().zip(&after) {
-        horae_core::duration::check_daily_change(*before, *after).map_err(conflict)?;
-    }
-    Ok(())
-}
-
-/// The minutes a stopping timer keeps: what is left of its day, so a stop never
-/// fails and the timer is never trapped running. The notice says what was cut.
-#[cfg(feature = "server")]
-async fn clamp_stopped_minutes(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    user_id: uuid::Uuid,
-    spent_date: chrono::NaiveDate,
-    current_minutes: i32,
-    elapsed: u32,
-) -> Result<(i32, Option<String>), ServerFnError> {
-    use horae_core::duration::{clamp_to_daily_allowance, format_hhmm};
-    let [(_, total)] = day_totals(tx, user_id, &[spent_date]).await?[..] else {
-        return Err(server_err("Day total unavailable"));
-    };
-    let kept = clamp_to_daily_allowance(elapsed, total - i64::from(current_minutes));
-    let notice = (kept < elapsed).then(|| {
-        format!(
-            "Daily hours cannot exceed 240. The timer was stopped at {}; {} over the limit was not recorded.",
-            format_hhmm(kept.into()),
-            format_hhmm((elapsed - kept).into()),
-        )
-    });
-    // At most MAX_DAILY_MINUTES, so it fits.
-    Ok((kept as i32, notice))
-}
-
-/// Preserve archived history while enforcing current task grants. Lock both
-/// the restriction and a matching grant so revocation cannot race the write.
-#[cfg(feature = "server")]
-async fn lock_task_access(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    user_id: uuid::Uuid,
-    project_id: uuid::Uuid,
-    task_id: uuid::Uuid,
-) -> Result<(), ServerFnError> {
-    let restricted = sqlx::query_scalar!(
-        "SELECT s.restricted FROM project_task_settings s
-         JOIN users u ON u.org_id = s.org_id AND u.id = $3
-         WHERE s.project_id = $1 AND s.task_id = $2 FOR SHARE OF s",
-        project_id,
-        task_id,
-        user_id,
-    )
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(server_err)?
-    .unwrap_or(false);
-    if restricted {
-        let grant = sqlx::query_scalar!(
-            "SELECT id FROM project_task_members
-             WHERE project_id = $1 AND task_id = $2 AND user_id = $3 FOR SHARE",
-            project_id,
-            task_id,
-            user_id,
-        )
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(server_err)?;
-        if grant.is_none() {
-            return Err(conflict(
-                "Task access is restricted. Refresh the timesheet and try again.",
-            ));
-        }
-    }
-    Ok(())
-}
-
-/// Eligibility and effective billability are resolved in the insert's snapshot,
-/// not in a pre-check separated from the write. The timer uniqueness index
-/// arbitrates competing starts without a racy existence check.
-#[cfg(feature = "server")]
-async fn insert_time_entry(
-    db: &sqlx::PgPool,
-    user_id: uuid::Uuid,
-    input: NewTimeEntry<'_>,
-) -> Result<TimeEntry, ServerFnError> {
-    let mut tx = begin_active_time_write(db, user_id).await?;
-    lock_task_access(&mut tx, user_id, input.project_id, input.task_id).await?;
-    let day = day_totals(&mut tx, user_id, &[input.spent_date]).await?;
-    let entry = sqlx::query_as!(
-        TimeEntry,
-        r#"INSERT INTO time_entries
-           (id, org_id, user_id, project_id, task_id, spent_date, minutes, notes,
-            billable, is_running, started_at, state, start_minute)
-           SELECT $1, org_id, user_id, project_id, task_id, $5, $6, $7,
-                  billable AND $8, $9, CASE WHEN $9 THEN now() END, 'open', $10
-           FROM time_entry_contexts
-           WHERE user_id = $2 AND project_id = $3 AND task_id = $4
-           ON CONFLICT (user_id) WHERE is_running DO NOTHING
-           RETURNING id, org_id, user_id, project_id, task_id,
-                     spent_date as "spent_date: chrono::NaiveDate",
-                     minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,
-                     started_at as "started_at: chrono::DateTime<chrono::Utc>",
-                     state as "state: EntryState", invoice_id,
-                     created_at as "created_at: chrono::DateTime<chrono::Utc>",
-                     updated_at as "updated_at: chrono::DateTime<chrono::Utc>""#,
-        uuid::Uuid::now_v7(), user_id, input.project_id, input.task_id,
-        input.spent_date as chrono::NaiveDate, input.minutes, input.notes, input.billable,
-        input.is_running, input.start_minute,
-    ).fetch_optional(&mut *tx).await.map_err(server_err)?
-    .ok_or_else(|| conflict("Project/task is unavailable or not assigned, or a timer is already running."))?;
-    ensure_daily_limit(&mut tx, user_id, &day).await?;
-    tx.commit().await.map_err(server_err)?;
-    Ok(entry)
-}
-
-// ── Time Entries ─────────────────────────────────────────────────────────────
-
-/// Start a timer for the given project and task. Only one timer may run at a
-/// time per user, enforced by the `one_running_timer_per_user` partial unique
-/// index; a second start is reported as a conflict.
+/// Start a timer for the given project and task; a second running timer is a
+/// conflict.
 #[server]
 pub async fn start_timer(
     project_id: String,
@@ -386,166 +191,113 @@ pub async fn start_timer(
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
-    let entry =
-        start_timer_record(&state.db, user.id, project_id, task_id, notes.as_deref()).await?;
-    dispatch_time_entry_event(&entry, TimeEntryEvent::Created).await;
-    Ok(entry)
-}
-
-/// A running entry on the person's today, in their own zone.
-#[cfg(feature = "server")]
-async fn start_timer_record(
-    db: &sqlx::PgPool,
-    user_id: uuid::Uuid,
-    project_id: uuid::Uuid,
-    task_id: uuid::Uuid,
-    notes: Option<&str>,
-) -> Result<TimeEntry, ServerFnError> {
-    insert_time_entry(
-        db,
-        user_id,
-        NewTimeEntry {
-            project_id,
-            task_id,
-            spent_date: crate::timezone::today_for_person(db, user_id)
-                .await
-                .map_err(server_err)?,
-            minutes: 0,
-            notes,
-            billable: true,
-            start_minute: None,
-            is_running: true,
-        },
+    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::time::start_timer(
+        &mut write.tx,
+        &write.actor,
+        project_id,
+        task_id,
+        notes.as_deref(),
     )
-    .await
+    .await;
+    Ok(write.commit(result, &*state.plugins).await?)
 }
 
 /// Stop a running timer and record elapsed minutes, clamped to what is left of
 /// the day; the notice, when present, says how much the daily limit cut.
 #[server]
 pub async fn stop_timer(entry_id: String) -> Result<(TimeEntry, Option<String>), ServerFnError> {
-    let user_id = require_user().await?.id;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
-    let (entry, notice) = stop_entry_timer(&state.db, user_id, entry_id).await?;
-    dispatch_time_entry_event(&entry, TimeEntryEvent::Stopped).await;
+    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::time::stop_timer(&mut write.tx, &write.actor, entry_id).await;
+    let (entry, notice) = write.commit(result, &*state.plugins).await?;
     tokio::spawn(check_project_budget(state, entry.project_id));
-    Ok((entry, notice))
-}
-
-#[cfg(feature = "server")]
-async fn stop_entry_timer(
-    db: &sqlx::PgPool,
-    user_id: uuid::Uuid,
-    entry_id: uuid::Uuid,
-) -> Result<(TimeEntry, Option<String>), ServerFnError> {
-    // Stopping an own running timer remains possible after task access is revoked.
-    let mut tx = begin_active_time_write(db, user_id).await?;
-
-    // Read the running entry's start time, then compute the exact elapsed
-    // minutes in `horae-core` (floored to the minute, no artificial 1-minute
-    // minimum) so tracked totals stay exact (FR-003/FR-023). The row is locked
-    // before the day, as on every other write path, so racing stops queue
-    // instead of deadlocking and the clamp reads current minutes.
-    let row = sqlx::query!(
-        r#"SELECT started_at as "started_at: chrono::DateTime<chrono::Utc>",
-                  state as "state: EntryState",
-                  spent_date as "spent_date: chrono::NaiveDate", minutes
-               FROM time_entries
-               WHERE id = $1 AND user_id = $2 AND is_running = true FOR UPDATE"#,
-        entry_id,
-        user_id,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("No running timer found for this entry"))?;
-
-    // A locked (submitted/approved/invoiced) entry must not receive minutes:
-    // its rounded_minutes were persisted at lock time, so a write here would
-    // put time on the books that billing never sees.
-    if row.state != EntryState::Open {
-        return Err(conflict(
-            "This entry was locked while its timer ran and can no longer be stopped. \
-             Ask a manager to reject the submission first.",
-        ));
-    }
-
-    let started_at = row
-        .started_at
-        .ok_or_else(|| not_found("No running timer found for this entry"))?;
-
-    let elapsed = horae_core::duration::minutes_between(started_at, chrono::Utc::now());
-    let (minutes, notice) =
-        clamp_stopped_minutes(&mut tx, user_id, row.spent_date, row.minutes, elapsed).await?;
-
-    // Record the clock time the timer started as the entry's start time (D9), so
-    // it lands on the calendar at the right hour. `started_at` is UTC, matching
-    // how `spent_date` is derived. A timer that ran across midnight would exceed
-    // the day, so it stays untimed in that case.
-    use chrono::Timelike;
-    let raw_start = started_at.hour() as i32 * 60 + started_at.minute() as i32;
-    let snapped = horae_core::time_of_day::snap(raw_start, horae_core::time_of_day::SNAP_STEP)
-        .min(i32::from(horae_core::time_of_day::DAY_MINUTES) - 1);
-    let start_minute =
-        (snapped + minutes <= i32::from(horae_core::time_of_day::DAY_MINUTES)).then_some(snapped);
-
-    let entry = sqlx::query_as!(
-        TimeEntry,
-        r#"UPDATE time_entries
-         SET is_running = false,
-             minutes = $3,
-             start_minute = $4,
-             started_at = NULL,
-             notified_long_running_at = NULL
-         WHERE id = $1 AND user_id = $2 AND is_running = true AND state = $5
-         RETURNING id, org_id, user_id, project_id, task_id,
-                   spent_date as "spent_date: chrono::NaiveDate",
-                   minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,
-                   started_at as "started_at: chrono::DateTime<chrono::Utc>",
-                   state as "state: EntryState", invoice_id,
-                   created_at as "created_at: chrono::DateTime<chrono::Utc>",
-                   updated_at as "updated_at: chrono::DateTime<chrono::Utc>""#,
-        entry_id,
-        user_id,
-        minutes,
-        start_minute,
-        EntryState::Open as EntryState,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("No running timer found for this entry"))?;
-
-    tx.commit().await.map_err(server_err)?;
     Ok((entry, notice))
 }
 
 /// Return the currently running timer for the authenticated user, if any.
 #[server]
 pub async fn get_current_timer() -> Result<Option<TimeEntry>, ServerFnError> {
-    let user_id = require_user().await?.id;
+    let user = require_user().await?;
     let state = crate::state::global_state().await;
+    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::time::current_timer(&mut read.tx, &read.actor).await;
+    Ok(read.finish(result).await?)
+}
 
-    let entry = sqlx::query_as!(
-        TimeEntry,
-        r#"SELECT id, org_id, user_id, project_id, task_id,
-                spent_date as "spent_date: chrono::NaiveDate",
-                minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,
-                started_at as "started_at: chrono::DateTime<chrono::Utc>",
-                state as "state: EntryState", invoice_id,
-                created_at as "created_at: chrono::DateTime<chrono::Utc>",
-                updated_at as "updated_at: chrono::DateTime<chrono::Utc>"
-         FROM time_entries
-         WHERE user_id = $1 AND is_running = true
-         LIMIT 1"#,
-        user_id,
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(server_err)?;
+/// The timer operations run as the session adapters run them, for tests that
+/// name only the person. An unknown person gets an organization of their own,
+/// so the actor carries no authority.
+#[cfg(all(test, feature = "server"))]
+async fn session_write(pool: &sqlx::PgPool, user_id: uuid::Uuid) -> ops::WriteTx {
+    let org_id = sqlx::query_scalar!("SELECT org_id FROM users WHERE id=$1", user_id)
+        .fetch_optional(pool)
+        .await
+        .unwrap()
+        .unwrap_or_else(uuid::Uuid::now_v7);
+    ops::begin(pool, Caller::session(org_id, user_id))
+        .await
+        .unwrap()
+}
 
-    Ok(entry)
+#[cfg(all(test, feature = "server"))]
+async fn insert_time_entry(
+    pool: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    input: NewTimeEntry<'_>,
+) -> Result<TimeEntry, ServerFnError> {
+    let mut write = session_write(pool, user_id).await;
+    let result = ops::time::insert(&mut write.tx, &write.actor, input)
+        .await
+        .map(ops::Done::new);
+    Ok(write
+        .commit(result, &crate::ops::testing::Recorder::default())
+        .await?)
+}
+
+#[cfg(all(test, feature = "server"))]
+async fn start_timer_record(
+    pool: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    project_id: uuid::Uuid,
+    task_id: uuid::Uuid,
+    notes: Option<&str>,
+) -> Result<TimeEntry, ServerFnError> {
+    let mut write = session_write(pool, user_id).await;
+    let result =
+        ops::time::start_timer(&mut write.tx, &write.actor, project_id, task_id, notes).await;
+    Ok(write
+        .commit(result, &crate::ops::testing::Recorder::default())
+        .await?)
+}
+
+#[cfg(all(test, feature = "server"))]
+async fn stop_entry_timer(
+    pool: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    entry_id: uuid::Uuid,
+) -> Result<(TimeEntry, Option<String>), ServerFnError> {
+    let mut write = session_write(pool, user_id).await;
+    let result = ops::time::stop_timer(&mut write.tx, &write.actor, entry_id).await;
+    Ok(write
+        .commit(result, &crate::ops::testing::Recorder::default())
+        .await?)
+}
+
+#[cfg(all(test, feature = "server"))]
+async fn fetch_time_entry_contexts(
+    pool: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+) -> Result<Vec<crate::models::time_entry::TimeEntryContext>, ServerFnError> {
+    let mut write = session_write(pool, user_id).await;
+    let result = ops::time::contexts(&mut write.tx, &write.actor)
+        .await
+        .map(ops::Done::new);
+    Ok(write
+        .commit(result, &crate::ops::testing::Recorder::default())
+        .await?)
 }
 
 #[cfg(all(test, feature = "server"))]
@@ -776,12 +528,11 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
+            // An inactive person is refused outright; otherwise the view is empty.
+            let offered = fetch_time_entry_contexts(&pool, ids.user_id).await;
             assert!(
-                fetch_time_entry_contexts(&pool, ids.user_id)
-                    .await
-                    .unwrap()
-                    .is_empty(),
-                "{inactive}"
+                offered.as_ref().map_or(inactive == "user", Vec::is_empty),
+                "{inactive}: {offered:?}"
             );
             for is_running in [false, true] {
                 assert!(

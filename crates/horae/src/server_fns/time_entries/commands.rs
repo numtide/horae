@@ -1,5 +1,5 @@
-//! Person-bound Timesheet operations; the timer endpoints in `time_entries.rs`
-//! remain independent.
+//! Person-bound Timesheet operations. The timer lives in `ops::time`, whose
+//! locking and daily-limit helpers these commands share.
 
 use chrono::{NaiveDate, Timelike, Utc};
 use horae_core::permissions::catalog::Permission;
@@ -40,9 +40,7 @@ impl Authority {
 }
 
 /// Authorizes from the actor's stored permission state, loaded by
-/// [`Actor::load`](crate::ops::Actor::load) inside this transaction. The
-/// command machinery stays here rather than in `ops/`: it shares its locking
-/// and daily-limit helpers with the timer endpoints in `time_entries.rs`.
+/// [`Actor::load`](crate::ops::Actor::load) inside this transaction.
 async fn begin(
     pool: &PgPool,
     org: Uuid,
