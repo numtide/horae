@@ -4,6 +4,7 @@
 //! in `server_fns/time_entries/commands.rs` until those move here too.
 
 use chrono::{NaiveDate, Timelike};
+use horae_core::permissions::catalog::Permission;
 use horae_core::types::EntryState;
 use uuid::Uuid;
 
@@ -15,6 +16,7 @@ use crate::server_fns::time_entry_payload;
 
 const ACTIVE_ACCOUNT_REQUIRED: &str = "Active account required";
 const NO_RUNNING_TIMER: &str = "No running timer found for this entry";
+const TIME_WRITE_REQUIRED: &str = "Current time-write scope required";
 
 fn require_active(actor: &Actor) -> Result<(), OpError> {
     if actor.is_active() {
@@ -173,6 +175,10 @@ pub(crate) async fn insert(
     input: NewTimeEntry<'_>,
 ) -> Result<TimeEntry, OpError> {
     begin_own_time_write(tx, actor).await?;
+    // As on the Timesheet: own time needs the own or the everyone time-write grant.
+    if !(actor.has(Permission::TimeWriteOwn) || actor.has(Permission::TimeWriteAll)) {
+        return Err(OpError::forbidden(TIME_WRITE_REQUIRED));
+    }
     let user_id = actor.id();
     lock_task_access(tx, user_id, input.project_id, input.task_id).await?;
     let day = day_totals(tx, user_id, &[input.spent_date]).await?;

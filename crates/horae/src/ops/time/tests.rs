@@ -94,6 +94,47 @@ async fn a_refused_start_announces_nothing(pool: PgPool) {
     assert!(events.take().is_empty());
 }
 
+/// Starting a timer writes own time, so it needs the time-write grant like the
+/// Timesheet does; being active and assigned is not enough. `TimeWriteOwn` is
+/// part of the Member floor, so a stored state without it is invalid and the
+/// actor fails closed before the grant check runs.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_start_without_time_write_is_refused(pool: PgPool) {
+    for missing in ["state", "grant"] {
+        let ids = trackable(&pool, BuiltInProfile::Member).await;
+        match missing {
+            "state" => crate::server_fns::test_seed::clear_state(&pool, ids.user_id).await,
+            _ => {
+                sqlx::query!(
+                    "UPDATE person_permission_states
+                     SET grants = array_remove(grants, 'time_write_own') WHERE user_id = $1",
+                    ids.user_id
+                )
+                .execute(&pool)
+                .await
+                .unwrap();
+            }
+        }
+        let events = Recorder::default();
+
+        let refused = start(&pool, &ids, &events).await;
+
+        assert!(
+            matches!(refused, Err(OpError::Forbidden(_))),
+            "{missing}: {refused:?}"
+        );
+        let entries = sqlx::query_scalar!(
+            r#"SELECT count(*) as "count!" FROM time_entries WHERE user_id = $1"#,
+            ids.user_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(entries, 0, "{missing}");
+        assert!(events.take().is_empty(), "{missing}");
+    }
+}
+
 /// Revoking task access must not trap a running timer: the stop skips the
 /// task check on purpose.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
