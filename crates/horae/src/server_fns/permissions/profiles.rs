@@ -11,8 +11,10 @@ use serde::Serialize;
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
-use super::{PermissionStorageError, load_permission_template, load_person_permissions};
 use crate::models::permissions::{PermissionSource, PersonPermissions};
+use crate::ops::permissions::{
+    PermissionStorageError, load_permission_template, load_person_permissions,
+};
 use crate::plugin::AppEvent;
 
 use crate::models::permission_audit::RemovedRelationship as RelationshipRemoval;
@@ -245,7 +247,7 @@ pub(crate) async fn save(
         )
         .fetch_one(&mut *tx)
         .await?;
-        let user = crate::server_fns::user_payload(
+        let user = crate::plugin::event::user_payload(
             &mut tx,
             org_id,
             intent.user_id,

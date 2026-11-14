@@ -11,7 +11,7 @@ use crate::models::invoice::{InvoiceDefaults, InvoiceGenerationRequest, InvoiceS
 use crate::models::{Invoice, InvoiceLine, InvoiceWithLines};
 use crate::ops::{Actor, Done, OpError, Tx};
 use crate::plugin::AppEvent;
-use crate::server_fns::invoice_payload;
+use crate::plugin::event::invoice_payload;
 
 pub(crate) struct Generation<'a> {
     pub client_id: Uuid,

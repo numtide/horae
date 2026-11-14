@@ -4,7 +4,7 @@ use crate::server_fns::test_seed::seed;
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use sqlx::PgPool;
 
-use super::budgets::configured_progress;
+use crate::notifications::budgets::{BudgetProgress, configured_progress, enqueue_alerts, sweep};
 use crate::server_fns::test_seed::{SeedIds, time_entry};
 use horae_core::types::EntryState;
 use uuid::Uuid;
@@ -38,7 +38,7 @@ async fn configured(pool: &PgPool) -> SeedIds {
     ids
 }
 
-async fn progress(pool: &PgPool, ids: &SeedIds, date: &str) -> Vec<super::budgets::BudgetProgress> {
+async fn progress(pool: &PgPool, ids: &SeedIds, date: &str) -> Vec<BudgetProgress> {
     configured_progress(
         &mut pool.acquire().await.unwrap(),
         ids.org_id,
@@ -559,8 +559,8 @@ async fn configured_alerts_deduplicate_concurrent_checks_and_recrossing(pool: Pg
     sqlx::query!("UPDATE project_settings SET alert_enabled = true, monthly_reset = true WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
     let date = "2026-09-30".parse().unwrap();
     let (first, second) = tokio::join!(
-        super::budgets::enqueue_alerts(&pool, ids.org_id, ids.project_id, date),
-        super::budgets::enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
+        enqueue_alerts(&pool, ids.org_id, ids.project_id, date),
+        enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
     );
     assert_eq!(first.unwrap() + second.unwrap(), 1);
     sqlx::query!("UPDATE time_entries SET minutes = 0 WHERE id = $1", entry)
@@ -568,7 +568,7 @@ async fn configured_alerts_deduplicate_concurrent_checks_and_recrossing(pool: Pg
         .await
         .unwrap();
     assert_eq!(
-        super::budgets::enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
+        enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
             .await
             .unwrap(),
         0
@@ -578,7 +578,7 @@ async fn configured_alerts_deduplicate_concurrent_checks_and_recrossing(pool: Pg
         .await
         .unwrap();
     assert_eq!(
-        super::budgets::enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
+        enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
             .await
             .unwrap(),
         0
@@ -609,7 +609,7 @@ async fn configured_alerts_deduplicate_concurrent_checks_and_recrossing(pool: Pg
     .await
     .unwrap();
     assert_eq!(
-        super::budgets::enqueue_alerts(
+        enqueue_alerts(
             &pool,
             ids.org_id,
             ids.project_id,
@@ -627,7 +627,7 @@ async fn configured_alerts_require_enabled_active_project_and_authorized_recipie
     time_entry(&pool, &ids, EntryState::Open).await;
     let date = "2026-09-01".parse().unwrap();
     assert_eq!(
-        super::budgets::enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
+        enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
             .await
             .unwrap(),
         0
@@ -642,7 +642,7 @@ async fn configured_alerts_require_enabled_active_project_and_authorized_recipie
     .await
     .unwrap();
     assert_eq!(
-        super::budgets::enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
+        enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
             .await
             .unwrap(),
         0
@@ -665,7 +665,7 @@ async fn configured_alerts_require_enabled_active_project_and_authorized_recipie
     .await
     .unwrap();
     assert_eq!(
-        super::budgets::enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
+        enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
             .await
             .unwrap(),
         0
@@ -682,7 +682,7 @@ async fn configured_alerts_require_enabled_active_project_and_authorized_recipie
         .await
         .unwrap();
     assert_eq!(
-        super::budgets::enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
+        enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
             .await
             .unwrap(),
         0
@@ -692,7 +692,7 @@ async fn configured_alerts_require_enabled_active_project_and_authorized_recipie
         .await
         .unwrap();
     assert_eq!(
-        super::budgets::enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
+        enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
             .await
             .unwrap(),
         1
@@ -760,7 +760,7 @@ async fn configured_task_fee_budget_respects_billability_and_alert_scope(pool: P
         (Some(ids.task_id), 12000, 10000)
     );
     assert_eq!(
-        super::budgets::enqueue_alerts(
+        enqueue_alerts(
             &pool,
             ids.org_id,
             ids.project_id,
@@ -816,7 +816,7 @@ async fn configured_person_budget_excludes_other_people_and_has_its_own_alert(po
     sqlx::query!("UPDATE project_settings SET budget_scope = 'person', alert_enabled = true WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
     assert_eq!(progress(&pool, &ids, "2026-09-01").await[0].consumed, 60);
     assert_eq!(
-        super::budgets::enqueue_alerts(
+        enqueue_alerts(
             &pool,
             ids.org_id,
             ids.project_id,
@@ -842,7 +842,7 @@ async fn configured_alert_and_outbox_roll_back_together(pool: PgPool) {
     sqlx::query!("UPDATE project_settings SET alert_enabled = true, alert_threshold = 0 WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
     sqlx::query!("ALTER TABLE horae_outbox ADD CONSTRAINT reject_test_budget_email CHECK (event_kind <> 'budget_email')").execute(&pool).await.unwrap();
     assert!(
-        super::budgets::enqueue_alerts(
+        enqueue_alerts(
             &pool,
             ids.org_id,
             ids.project_id,
@@ -865,8 +865,8 @@ async fn configured_budget_sweep_recovers_missed_checks_without_duplicates(pool:
     let ids = configured(&pool).await;
     sqlx::query!("UPDATE project_settings SET alert_enabled = true, alert_threshold = 0 WHERE project_id = $1", ids.project_id).execute(&pool).await.unwrap();
     let now = "2026-09-01T12:00:00Z".parse().unwrap();
-    super::budgets::sweep(&pool, now).await.unwrap();
-    super::budgets::sweep(&pool, now).await.unwrap();
+    sweep(&pool, now).await.unwrap();
+    sweep(&pool, now).await.unwrap();
     assert_eq!(
         sqlx::query_scalar!("SELECT count(*) FROM project_budget_notifications")
             .fetch_one(&pool)
@@ -888,7 +888,7 @@ async fn configured_budget_sweep_dates_the_period_in_the_workspace_zone(pool: Pg
     .await
     .unwrap();
     // 22:30 UTC on 31 August is already 00:30 on 1 September in Madrid.
-    super::budgets::sweep(&pool, "2026-08-31T22:30:00Z".parse().unwrap())
+    sweep(&pool, "2026-08-31T22:30:00Z".parse().unwrap())
         .await
         .unwrap();
     assert_eq!(

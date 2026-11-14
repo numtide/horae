@@ -5,11 +5,11 @@ use super::*;
 use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage};
 use crate::models::user::{Activation, AddedPeople, NewPerson, UserListItem};
 #[cfg(feature = "server")]
+use crate::ops::permissions::provisioning;
+#[cfg(feature = "server")]
 use crate::ops::{self, Caller, people::Existing};
 #[cfg(feature = "server")]
 use horae_core::permissions::catalog::BuiltInProfile;
-#[cfg(feature = "server")]
-use permissions::provisioning;
 
 mod rates;
 pub use rates::{load_person_rates, update_person_rates};

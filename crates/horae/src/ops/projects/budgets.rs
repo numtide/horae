@@ -1,15 +1,17 @@
 //! Budget progress as project readers see it: the Projects page's batch and
 //! the detail page's headline. The progress query itself is shared with the
-//! alert check in `server_fns::budgets`.
+//! alert check in `notifications::budgets`.
 
 use chrono::NaiveDate;
+use horae_core::permissions::catalog::Permission;
 use horae_core::types::BudgetKind;
+use sqlx::PgConnection;
 use uuid::Uuid;
 
 use super::super::{Actor, OpError, Tx};
+use crate::models::permissions::PersonPermissions;
 use crate::models::project::ProjectDetailBudget;
 use crate::models::{ProjectBudgetOverview, ProjectBudgetProgress};
-use crate::server_fns::budgets::{fetch_progress, numeric_overflow};
 
 /// Every readable configured project's progress in the period of `date`.
 /// Scope details are kept only for those who may read them, and money only
@@ -218,4 +220,139 @@ pub(super) async fn headline(
         Err(error) => return Err(error.into()),
     };
     Ok(Some(budget(headline)))
+}
+
+/// Whether PostgreSQL refused a value as out of range for its numeric type.
+pub(crate) fn numeric_overflow(error: &sqlx::Error) -> bool {
+    error
+        .as_database_error()
+        .is_some_and(|error| error.code().as_deref() == Some("22003"))
+}
+
+pub(crate) struct BudgetRow {
+    pub project_id: Uuid,
+    pub task_id: Option<Uuid>,
+    pub user_id: Option<Uuid>,
+    pub label: Option<String>,
+    pub scope: String,
+    pub kind: BudgetKind,
+    pub currency: String,
+    pub period_key: String,
+    pub budget: Option<i64>,
+    pub consumed: i64,
+    pub can_view_money: bool,
+    pub can_read_details: bool,
+}
+
+/// Configured progress, project by project and scope by scope. With a
+/// `viewer_id`, only the projects the viewer's `permissions` may read, and
+/// money only where they may see it; without one (the alert check), every
+/// configured project of the organization.
+///
+/// `allocated_only` skips valuing entries no non-blank scope can count, so an
+/// excluded entry's value cannot overflow the allocated total.
+pub(crate) async fn fetch_progress(
+    connection: &mut PgConnection,
+    org_id: Uuid,
+    project_id: Option<Uuid>,
+    viewer_id: Option<Uuid>,
+    date: NaiveDate,
+    permissions: Option<&PersonPermissions>,
+    allocated_only: bool,
+) -> Result<Vec<BudgetRow>, sqlx::Error> {
+    let has = |permission| permissions.is_some_and(|state| state.grants.contains(permission));
+
+    sqlx::query_as!(
+        BudgetRow,
+        r#"WITH config AS (
+             SELECT p.id, p.budget_kind, p.budget_minutes, p.budget_amount_cents,
+                    p.project_type, p.currency, p.rate_cents, p.client_id,
+                    ps.budget_scope, ps.monthly_reset, ps.include_nonbillable, ps.rate_mode,
+                    ($4::uuid IS NULL OR $5 OR ($6 AND management.id IS NOT NULL)) AS can_read_details,
+                    ($4::uuid IS NULL OR $7 OR ($8 AND management.id IS NOT NULL)) AS can_view_money
+             FROM projects p JOIN project_settings ps ON ps.project_id = p.id AND ps.org_id = p.org_id
+             JOIN clients parent ON parent.id=p.client_id AND parent.org_id=p.org_id
+             LEFT JOIN project_management_assignments management ON management.org_id=p.org_id
+               AND management.project_id=p.id AND management.manager_id=$4
+             LEFT JOIN assignments member ON member.project_id=p.id AND member.user_id=$4
+             WHERE p.org_id = $1 AND ($2::uuid IS NULL OR p.id = $2)
+               AND ($4::uuid IS NULL OR $5 OR ($6 AND management.id IS NOT NULL)
+                 OR (member.id IS NOT NULL AND ps.report_visibility='project_members'))
+           ), scopes AS (
+             SELECT c.id AS project_id, NULL::uuid AS task_id, NULL::uuid AS user_id,
+                    NULL::text AS label,
+                    CASE WHEN c.budget_kind = 'hours' THEN c.budget_minutes ELSE c.budget_amount_cents END AS budget
+             FROM config c WHERE c.budget_scope = 'project'
+             UNION ALL
+             SELECT c.id, pt.task_id, NULL::uuid, t.name,
+                    CASE WHEN c.budget_kind = 'hours' THEN s.budget_minutes ELSE s.budget_cents END
+             FROM config c JOIN project_tasks pt ON pt.project_id = c.id
+             JOIN tasks t ON t.id = pt.task_id AND t.org_id = $1
+             LEFT JOIN project_task_settings s ON s.project_id = c.id AND s.org_id = $1 AND s.task_id = pt.task_id
+             WHERE c.budget_scope = 'task'
+             UNION ALL
+             SELECT c.id, NULL::uuid, a.user_id, u.name, s.budget_minutes
+             FROM config c JOIN assignments a ON a.project_id = c.id
+             JOIN users u ON u.id = a.user_id AND u.org_id = $1
+             LEFT JOIN project_member_budgets s ON s.project_id = c.id AND s.org_id = $1 AND s.user_id = a.user_id
+             WHERE c.budget_scope = 'person' AND c.budget_kind = 'hours'
+           ), entries AS (
+             SELECT c.id AS project_id, te.task_id, te.user_id,
+                    CASE WHEN $9 AND NOT EXISTS (
+                        SELECT 1 FROM scopes allocated
+                        WHERE allocated.project_id = c.id AND allocated.budget IS NOT NULL
+                          AND (allocated.task_id IS NULL OR allocated.task_id = te.task_id)
+                          AND (allocated.user_id IS NULL OR allocated.user_id = te.user_id))
+                      THEN 0
+                      WHEN c.budget_kind = 'hours'
+                      THEN effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)::bigint
+                      WHEN c.can_view_money THEN COALESCE(line.amount_cents, line_amount_cents(
+                        COALESCE(resolve_project_rate(c.rate_mode, pt.rate_cents, a.rate_cents, c.rate_cents,
+                          CASE WHEN c.currency = o.default_currency THEN u.billable_rate_cents END,
+                          CASE WHEN c.currency = cl.currency THEN cl.default_rate_cents END), 0),
+                        effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir)))
+                      ELSE 0
+                    END AS consumed
+             FROM config c JOIN time_entries te ON te.project_id = c.id AND te.org_id = $1
+             JOIN organizations o ON o.id = te.org_id
+             JOIN users u ON u.id = te.user_id AND u.org_id = te.org_id
+             JOIN clients cl ON cl.id = c.client_id AND cl.org_id = te.org_id
+             JOIN tasks t ON t.id = te.task_id AND t.org_id = te.org_id
+             LEFT JOIN project_tasks pt ON pt.project_id = c.id AND pt.task_id = te.task_id
+             LEFT JOIN assignments a ON a.project_id = c.id AND a.user_id = te.user_id
+             LEFT JOIN invoices invoice ON invoice.id=te.invoice_id AND invoice.org_id=te.org_id
+             LEFT JOIN invoice_line_items line ON line.invoice_id = invoice.id AND line.time_entry_id = te.id
+             WHERE c.budget_kind <> 'none' AND (NOT c.monthly_reset OR (
+                      te.spent_date >= date_trunc('month', $3::date)::date
+                      AND te.spent_date < (date_trunc('month', $3::date) + interval '1 month')::date))
+               AND (te.invoice_id IS NULL OR invoice.id IS NOT NULL)
+               AND (c.include_nonbillable OR c.project_type = 'non_billable'
+                    OR (te.billable AND (te.invoice_id IS NOT NULL OR COALESCE(pt.billable, t.billable_default))))
+           )
+           SELECT c.id AS "project_id!", s.task_id AS "task_id?", s.user_id AS "user_id?",
+                  s.label AS "label?", c.budget_scope AS "scope!", c.currency AS "currency!",
+                  c.budget_kind AS "kind!: BudgetKind",
+                  CASE WHEN c.budget_kind <> 'amount' OR c.can_view_money THEN s.budget END AS "budget?",
+                  c.can_view_money AS "can_view_money!", c.can_read_details AS "can_read_details!",
+                  CASE WHEN c.monthly_reset THEN to_char($3::date, 'YYYY-MM') ELSE 'lifetime' END AS "period_key!",
+                  COALESCE(SUM(e.consumed), 0)::bigint AS "consumed!"
+           FROM config c LEFT JOIN scopes s ON s.project_id = c.id
+           LEFT JOIN entries e ON e.project_id = c.id
+                             AND (s.task_id IS NULL OR e.task_id = s.task_id)
+                             AND (s.user_id IS NULL OR e.user_id = s.user_id)
+           GROUP BY c.id, c.budget_kind, c.budget_scope, c.currency, c.monthly_reset,
+                    s.task_id, s.user_id, s.label, s.budget, c.can_view_money, c.can_read_details
+           ORDER BY c.id, s.label, s.task_id, s.user_id"#,
+        org_id,
+        project_id,
+        date as NaiveDate,
+        viewer_id,
+        has(Permission::ProjectReadAll),
+        has(Permission::ProjectReadManaged),
+        has(Permission::BillableRateReadAll),
+        has(Permission::BillableRateReadManaged),
+        allocated_only,
+    )
+    .fetch_all(connection)
+    .await
 }

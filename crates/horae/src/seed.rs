@@ -9,7 +9,7 @@ use horae_core::week::iso_week_monday;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::server_fns::provisioning;
+use crate::ops::permissions::provisioning;
 
 #[cfg(test)]
 mod tests;

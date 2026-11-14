@@ -13,6 +13,8 @@ use crate::models::project_creation::{
 use crate::models::project_people::{
     ProjectPeopleContext, ProjectPeopleQuery, ProjectPeopleResult,
 };
+#[cfg(feature = "server")]
+use crate::plugin::event::project_payload;
 
 #[cfg(feature = "server")]
 mod validation;

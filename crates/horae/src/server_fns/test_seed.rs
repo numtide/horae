@@ -7,7 +7,7 @@ use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::server_fns::provisioning;
+use crate::ops::permissions::provisioning;
 
 pub struct SeedIds {
     pub org_id: Uuid,
@@ -215,7 +215,7 @@ pub async fn built_in_profile(
     user_id: Uuid,
 ) -> Option<(BuiltInProfile, bool)> {
     let mut connection = pool.acquire().await.unwrap();
-    let state = crate::server_fns::load_person_permissions(&mut connection, org_id, user_id)
+    let state = crate::ops::permissions::load_person_permissions(&mut connection, org_id, user_id)
         .await
         .unwrap()?;
     match state.source {

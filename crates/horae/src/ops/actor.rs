@@ -5,9 +5,9 @@
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use sqlx::PgConnection;
 
+use super::permissions::{PermissionStorageError, load_person_permissions};
 use super::{Caller, OpError};
 use crate::models::permissions::PersonPermissions;
-use crate::server_fns::PermissionStorageError;
 
 /// The entry point a request came through. Tokens and the CLI join later.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,18 +112,17 @@ impl Actor {
         if person.is_none() {
             return Ok(actor);
         }
-        let state =
-            crate::server_fns::load_person_permissions(connection, caller.org_id, caller.user_id)
-                .await
-                .map_err(|error| match error {
-                    // A lost race or a storage fault, not missing authority.
-                    PermissionStorageError::Database(error) => OpError::from(error),
-                    error => {
-                        tracing::error!(%error, "Invalid stored permission state");
-                        OpError::forbidden(STATE_UNAVAILABLE)
-                    }
-                })?
-                .ok_or_else(|| OpError::forbidden(STATE_UNAVAILABLE))?;
+        let state = load_person_permissions(connection, caller.org_id, caller.user_id)
+            .await
+            .map_err(|error| match error {
+                // A lost race or a storage fault, not missing authority.
+                PermissionStorageError::Database(error) => OpError::from(error),
+                error => {
+                    tracing::error!(%error, "Invalid stored permission state");
+                    OpError::forbidden(STATE_UNAVAILABLE)
+                }
+            })?
+            .ok_or_else(|| OpError::forbidden(STATE_UNAVAILABLE))?;
         actor.identity.active = true;
         actor.permissions = Some(state);
         Ok(actor)

@@ -468,7 +468,7 @@ async fn provision(
     .fetch_optional(&mut *tx)
     .await?;
     if let Some(user) = &user {
-        crate::server_fns::provisioning::provision(
+        crate::ops::permissions::provisioning::provision(
             &mut tx,
             org_id,
             user.id,
@@ -519,7 +519,7 @@ async fn resolve_and_login(
     let mut connection = state.db.acquire().await?;
     let payload = crate::plugin::event::UserPayload {
         method: Some("oidc".into()),
-        ..crate::server_fns::user_payload(
+        ..crate::plugin::event::user_payload(
             &mut connection,
             user.org_id,
             user.id,
