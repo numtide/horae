@@ -14,7 +14,7 @@ pub(crate) enum PermissionSource {
 }
 
 /// Canonical saved grants and independently recorded administrative identity.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct PersonPermissions {
     pub grants: PermissionSelection,
     pub is_administrator: bool,

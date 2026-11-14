@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT current_setting($1) AS \"value!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "value!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4afe8eccdf61f21875557ceb619fc1b2d6ba599978ef7cea3c4ccd6ae4ad82c1"
+}

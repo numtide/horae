@@ -168,6 +168,12 @@ impl Actor {
         self.permissions.as_ref().map(|state| &state.grants)
     }
 
+    /// The whole stored state (grants, administrator identity, source and
+    /// revision); `None` for an actor with no authority.
+    pub fn permissions(&self) -> Option<&PersonPermissions> {
+        self.permissions.as_ref()
+    }
+
     /// The stored administrator identity. Holding every grant does not make
     /// someone an administrator.
     pub fn administrator(&self) -> bool {

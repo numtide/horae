@@ -18,6 +18,7 @@
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
+use crate::db::{OrganizationLock, lock_organization};
 use crate::plugin::{AppEvent, PluginRegistry};
 
 mod actor;
@@ -143,6 +144,108 @@ pub(crate) async fn begin_read(pool: &PgPool, caller: Caller) -> Result<ReadTx, 
     let mut tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
     let actor = Actor::load(&mut tx, caller).await?;
     Ok(ReadTx { tx, actor })
+}
+
+/// What a snapshot read bounds besides its authority locks.
+#[derive(Clone, Copy)]
+pub(crate) enum SnapshotLimits {
+    /// The statement and idle limits of [`begin_read`], for short reads.
+    Short,
+    /// Only the wait for the authority locks (at most 5 s); the inherited
+    /// limits then apply again, for reads that materialize large payloads
+    /// such as invoices.
+    LockWait,
+}
+
+const SNAPSHOT_ATTEMPTS: usize = 3;
+
+/// [`begin_read`] at REPEATABLE READ: every statement of the read sees the
+/// snapshot the authority locks were taken in. An access change committed
+/// after the snapshot began makes those locks fail with 40001 (a conflict);
+/// a fresh transaction retries, up to three attempts, since retrying only the
+/// query would stay stale. Like [`ReadTx`], it must not write.
+pub(crate) async fn begin_read_snapshot(
+    pool: &PgPool,
+    caller: Caller,
+    limits: SnapshotLimits,
+) -> Result<ReadTx, OpError> {
+    use crate::server_fns::{ReadIsolation, begin_lock_only_read_async_commit};
+    for _ in 0..SNAPSHOT_ATTEMPTS {
+        let (mut tx, inherited_lock_timeout) = match limits {
+            SnapshotLimits::Short => (
+                begin_lock_only_read_async_commit(pool, ReadIsolation::RepeatableRead).await?,
+                None,
+            ),
+            SnapshotLimits::LockWait => {
+                let mut tx = pool
+                    .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ WRITE")
+                    .await?;
+                // The materialized CTE reads the inherited lock_timeout before
+                // bounding it, so it can be restored once authorized. The
+                // commit need not wait for a WAL flush: see
+                // `begin_lock_only_read_async_commit`.
+                let previous = sqlx::query_scalar!(
+                    r#"WITH previous AS MATERIALIZED (
+                         SELECT current_setting('lock_timeout') AS setting,
+                           (extract(epoch FROM current_setting('lock_timeout')::interval) * 1000)::bigint
+                             AS milliseconds
+                       )
+                       SELECT setting AS "setting!"
+                       FROM previous,
+                         LATERAL set_config('lock_timeout',
+                           (CASE WHEN milliseconds = 0 THEN 5000 ELSE LEAST(milliseconds, 5000) END)::text,
+                           true) bounded,
+                         LATERAL set_config('synchronous_commit', 'off', true) asynchronous"#
+                )
+                .fetch_one(&mut *tx)
+                .await?;
+                (tx, Some(previous))
+            }
+        };
+        match Actor::load(&mut tx, caller).await {
+            Ok(actor) => {
+                if let Some(previous) = inherited_lock_timeout {
+                    sqlx::query!("SELECT set_config('lock_timeout', $1, true)", previous)
+                        .fetch_one(&mut *tx)
+                        .await?;
+                }
+                return Ok(ReadTx { tx, actor });
+            }
+            Err(OpError::Conflict(_)) => tx.rollback().await?,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(OpError::conflict(
+        "Access changed while reading. Please try again.",
+    ))
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum WriteIsolation {
+    ReadCommitted,
+    #[cfg_attr(not(test), expect(dead_code, reason = "for the project editor's save"))]
+    Serializable,
+}
+
+/// [`begin`] for writes that hold the organization `gate` (see
+/// [`OrganizationLock`]): it is taken before the actor's own `FOR SHARE`
+/// locks, because a gate is never upgraded. `Serializable` is for the project
+/// editor's save.
+pub(crate) async fn begin_gated(
+    pool: &PgPool,
+    caller: Caller,
+    gate: OrganizationLock,
+    isolation: WriteIsolation,
+) -> Result<WriteTx, OpError> {
+    let begin = match isolation {
+        WriteIsolation::ReadCommitted => "BEGIN ISOLATION LEVEL READ COMMITTED, READ WRITE",
+        WriteIsolation::Serializable => "BEGIN ISOLATION LEVEL SERIALIZABLE, READ WRITE",
+    };
+    let mut tx = pool.begin_with(begin).await?;
+    crate::server_fns::configure_transaction_limits(&mut tx).await?;
+    lock_organization(&mut tx, caller.org_id, gate).await?;
+    let actor = Actor::load(&mut tx, caller).await?;
+    Ok(WriteTx { tx, actor })
 }
 
 /// Loads the [`Actor`] inside an open transaction, with [`Actor::load`]'s
