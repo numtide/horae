@@ -80,6 +80,10 @@ Migrations run on every `process-compose up`, and only the pending ones are exec
 a new one without restarting the stack, run `horae-migrate` — it migrates and rebuilds the app,
 which is needed because sqlx checks its queries at compile time.
 
+The 65 original migrations were squashed into one baseline, `0001_baseline.sql`. A database
+migrated before that refuses to start (sqlx reports migration 1 as modified): locally, run
+`rm -rf .data`; on a deployment, run `horae migrate reset --confirm` and then `horae init`.
+
 [pgweb](https://github.com/sosedoff/pgweb) runs alongside the app at http://localhost:8081 for
 browsing and querying the database. To start only part of the stack, name the processes you
 want — `process-compose up postgres migrate` gives you a database on its own, which is what the
@@ -110,8 +114,7 @@ cd crates/horae && DEV_LOGIN=1 dx serve               # dev server on :8080, hot
 PostgreSQL 15 or newer with ICU support is required. The bundled Nix PostgreSQL
 includes ICU; externally managed databases must provide it too. Permission-profile
 names use a fixed Unicode collation so case-insensitive uniqueness does not change
-with the database locale. Migration 0047 stops without modifying profiles if existing
-names collide under that comparison; resolve those names explicitly before retrying.
+with the database locale.
 
 Horae is configured through environment variables. [.env.example](.env.example) lists
 the supported settings for local development; the binary does not load `.env` files

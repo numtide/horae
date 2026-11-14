@@ -2849,7 +2849,7 @@ async fn the_long_timer_sweep_claims_each_timer_once(pool: PgPool) {
 // ---------------------------------------------------------------------------
 
 /// `line_amount_cents` exists twice: in `horae_core::invoice`, which writes the
-/// per-line amounts on an invoice, and as a SQL function (migration 0016), which
+/// per-line amounts on an invoice, and as a SQL function, which
 /// lets the grouped reports sum without shipping a row per time entry. Drive
 /// both from one table of inputs and require exact equality.
 #[sqlx::test(migrations = "./migrations")]
@@ -2898,7 +2898,7 @@ async fn line_amount_cents_sql_matches_rust(pool: PgPool) {
             "signed lower boundary retains truncation semantics",
         ),
         (i64::from(i32::MAX), i32::MAX, "large rate and duration"),
-        // Migration 0010 forbids storing these, but truncation toward zero is
+        // The schema's CHECKs forbid storing these, but truncation toward zero is
         // exactly where the two could have drifted — a floor division would
         // answer -167 for the first — so pin the sign convention anyway.
         (-10_000, 1, "a negative rate"),

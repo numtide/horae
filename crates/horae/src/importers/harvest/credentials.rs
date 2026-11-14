@@ -369,20 +369,6 @@ mod tests {
     use super::*;
 
     async fn organization(pool: &sqlx::PgPool) -> Uuid {
-        let org = bare_organization(pool).await;
-        crate::ops::testing::assign_profile(
-            pool,
-            org,
-            org,
-            horae_core::permissions::catalog::BuiltInProfile::Administrator,
-        )
-        .await;
-        org
-    }
-
-    /// The organization and its person, without a permission state, for
-    /// schemas older than the state table.
-    async fn bare_organization(pool: &sqlx::PgPool) -> Uuid {
         let org = Uuid::now_v7();
         sqlx::query!(
             "INSERT INTO organizations (id, name) VALUES ($1, 'Account binding test')",
@@ -399,6 +385,13 @@ mod tests {
         .execute(pool)
         .await
         .unwrap();
+        crate::ops::testing::assign_profile(
+            pool,
+            org,
+            org,
+            horae_core::permissions::catalog::BuiltInProfile::Administrator,
+        )
+        .await;
         org
     }
 
@@ -607,49 +600,6 @@ mod tests {
         .await
         .unwrap();
         single.close().await;
-    }
-
-    #[sqlx::test(migrations = false)]
-    async fn migration_binds_existing_connections_without_changing_secrets_or_markers(
-        pool: sqlx::PgPool,
-    ) {
-        let mut before = sqlx::migrate!("./migrations");
-        before.migrations = before
-            .iter()
-            .filter(|m| m.version < 21)
-            .cloned()
-            .collect::<Vec<_>>()
-            .into();
-        before.run(&pool).await.unwrap();
-        let org = bare_organization(&pool).await;
-        let access = encrypt(KEY, "legacy-access").unwrap();
-        let refresh = encrypt(KEY, "legacy-refresh").unwrap();
-        sqlx::query!(
-            "INSERT INTO harvest_credentials (id, org_id, harvest_account_id, access_token_enc, refresh_token_enc) VALUES ($1, $2, 'legacy', $3, $4)",
-            Uuid::now_v7(), org, access, refresh,
-        ).execute(&pool).await.unwrap();
-        let mark = Utc::now();
-        advance_watermark(&pool, org, &[(EntityType::TimeEntry, mark)])
-            .await
-            .unwrap();
-        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
-        let stored = load(&pool, org, KEY).await.unwrap().unwrap();
-        assert_eq!(
-            (stored.access_token.as_str(), stored.refresh_token.as_str()),
-            ("legacy-access", "legacy-refresh")
-        );
-        assert_eq!(stored.watermark_for(EntityType::TimeEntry), Some(mark));
-        crate::ops::testing::assign_profile(
-            &pool,
-            org,
-            org,
-            horae_core::permissions::catalog::BuiltInProfile::Administrator,
-        )
-        .await;
-        assert!(connect(&pool, org, "different").await.is_err());
-        disconnect(&pool, org, org).await.unwrap();
-        assert!(connect(&pool, org, "different").await.is_err());
-        connect(&pool, org, "legacy").await.unwrap();
     }
 
     // A deterministic 32-byte key for round-trip tests.
