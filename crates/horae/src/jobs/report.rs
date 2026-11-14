@@ -10,8 +10,6 @@ use super::{JobLease, lease::Interrupted};
 pub(crate) const REPORT_BYTES: usize = 16 * 1024;
 const CHUNK_BYTES: usize = 64 * 1024;
 
-mod legacy;
-pub(crate) use legacy::upgrade_legacy_reports;
 mod summary;
 pub(crate) use summary::summarize;
 

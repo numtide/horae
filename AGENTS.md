@@ -37,6 +37,11 @@ pending ones — so the first run and every later one are both covered. To apply
 restarting the stack, run `horae-migrate`: it migrates and then rebuilds the app, which a new
 migration requires because the query macros are checked at compile time.
 
+The original 65 migrations were squashed into `0001_baseline.sql`, a `pg_dump` of their result.
+A local database migrated before the squash fails to start (sqlx reports migration 2 as
+applied but missing); `rm -rf .data` resets it. New schema changes go in `0002_*.sql` onwards; never edit
+the baseline.
+
 Connection details live in the `environment` block of `process-compose.yaml` and nowhere
 else — change the port or user there and every process follows.
 

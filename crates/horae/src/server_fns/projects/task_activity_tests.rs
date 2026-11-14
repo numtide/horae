@@ -5,67 +5,6 @@ use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::PermissionSelection;
 use sqlx::PgPool;
 
-#[sqlx::test(migrations = false)]
-#[serial_test::serial]
-async fn project_task_activity_migration_preserves_existing_links(pool: PgPool) {
-    let mut previous = sqlx::migrate!("./migrations");
-    previous.migrations = std::borrow::Cow::Owned(
-        previous
-            .iter()
-            .filter(|migration| migration.version < 48)
-            .cloned()
-            .collect(),
-    );
-    previous.run(&pool).await.unwrap();
-    let legacy = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
-    sqlx::query!("UPDATE tasks SET active=false WHERE id=$1", legacy.task_id)
-        .execute(&pool)
-        .await
-        .unwrap();
-    sqlx::query!("INSERT INTO project_tasks (project_id,task_id,billable,rate_cents) VALUES ($1,$2,true,1200)", legacy.project_id, legacy.task_id).execute(&pool).await.unwrap();
-    time_entry(&pool, &legacy, EntryState::Open).await;
-    let legacy_revision = sqlx::query_scalar!(
-        "SELECT edit_revision FROM projects WHERE id=$1",
-        legacy.project_id
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
-    let row = sqlx::query!(
-        "SELECT active,billable,rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2",
-        legacy.project_id,
-        legacy.task_id
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(
-        (row.active, row.billable, row.rate_cents),
-        (true, true, Some(1200))
-    );
-    assert_eq!(
-        sqlx::query_scalar!(
-            "SELECT sum(minutes)::bigint FROM time_entries WHERE org_id=$1",
-            legacy.org_id
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap(),
-        Some(60)
-    );
-    assert_eq!(
-        sqlx::query_scalar!(
-            "SELECT edit_revision FROM projects WHERE id=$1",
-            legacy.project_id
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap(),
-        legacy_revision
-    );
-}
-
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn global_restore_does_not_restore_project_tracking_and_archive_invalidates_editor(
