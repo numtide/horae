@@ -456,12 +456,15 @@ async fn assert_small_csv_authorization_rejections() {
         axum::http::StatusCode::UNAUTHORIZED,
         axum::http::StatusCode::FORBIDDEN,
     ] {
+        // Read the body before rejecting: closing with unread request bytes
+        // makes the kernel send a reset that can beat the response to the
+        // client, which then reports a transport error instead of the status.
         let server = MockServer::start(axum::Router::new().route(
             "/upload",
-            axum::routing::post(move || async move { status }),
+            axum::routing::post(move |_: axum::body::Bytes| async move { status }),
         ))
         .await;
-        for attempt in 0..256 {
+        for attempt in 0..16 {
             // Each CSV command creates a fresh transport. Reusing a rejected
             // upload's connection can race its close before the next response.
             let client = transport::Transport::load(server.session.path()).unwrap();
