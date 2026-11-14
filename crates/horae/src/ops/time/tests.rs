@@ -4,12 +4,12 @@ use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 
 use super::*;
-use crate::ops::testing::{Recorder, seed_profile};
+use crate::ops::testing::Recorder;
 use crate::ops::{self, Caller};
-use crate::server_fns::test_seed::SeedIds;
+use crate::server_fns::test_seed::{SeedIds, seed};
 
 async fn trackable(pool: &PgPool, profile: BuiltInProfile) -> SeedIds {
-    let ids = seed_profile(pool, profile).await;
+    let ids = seed(pool, profile).await;
     sqlx::query!(
         "INSERT INTO project_tasks (project_id, task_id, billable) VALUES ($1, $2, true)",
         ids.project_id,
