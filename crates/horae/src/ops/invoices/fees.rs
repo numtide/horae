@@ -1,5 +1,6 @@
-use super::*;
+use super::{SourceRead, bad_request};
 use crate::models::invoice::{InvoiceFeeBalance, InvoicePreviewLine, InvoiceSource};
+use crate::ops::OpError;
 use chrono::{Datelike, Months, NaiveDate};
 use horae_core::project::{MonthlyFeeDay, monthly_fee_date};
 use uuid::Uuid;
@@ -28,14 +29,14 @@ struct Occurrence {
     currency: String,
 }
 
-pub(in crate::server_fns) async fn preview_fees(
+pub(super) async fn preview_fees(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
     client_id: Uuid,
     from: NaiveDate,
     to: NaiveDate,
     selected: Option<&[Uuid]>,
-) -> Result<Vec<InvoicePreviewLine>, ServerFnError> {
+) -> Result<Vec<InvoicePreviewLine>, OpError> {
     let mut planned = scheduled_fees(
         tx,
         org_id,
@@ -60,8 +61,7 @@ pub(in crate::server_fns) async fn preview_fees(
         &keys as &[&str],
     )
     .fetch_all(&mut **tx)
-    .await
-    .map_err(server_err)?;
+    .await?;
     let existing: std::collections::BTreeSet<_> = existing
         .into_iter()
         .map(|row| (row.project_id, row.period_key))
@@ -100,7 +100,7 @@ pub(in crate::server_fns) async fn preview_fees(
         ));
     }
     if fees.len() > MAX_FEE_OCCURRENCES {
-        return Err(conflict(
+        return Err(OpError::conflict(
             "Too many fees for one invoice; select a shorter period.",
         ));
     }
@@ -123,10 +123,9 @@ pub(in crate::server_fns) async fn preview_fees(
                 amount_cents: remaining.max(0),
                 fee_balance: Some(InvoiceFeeBalance {
                     agreed_cents: fee.amount_cents,
-                    invoiced_cents: fee
-                        .amount_cents
-                        .checked_sub(remaining)
-                        .ok_or_else(|| conflict("Fee balance exceeds the supported range"))?,
+                    invoiced_cents: fee.amount_cents.checked_sub(remaining).ok_or_else(|| {
+                        OpError::conflict("Fee balance exceeds the supported range")
+                    })?,
                     remaining_cents: remaining,
                 }),
                 net_before_tax_cents: None,
@@ -146,7 +145,7 @@ pub(super) async fn prepare_fees(
     to: NaiveDate,
     selected: Option<&[Uuid]>,
     fee_selection: Option<&[crate::models::invoice::InvoiceFeeSelection]>,
-) -> Result<Vec<FeeLine>, ServerFnError> {
+) -> Result<Vec<FeeLine>, OpError> {
     let mut occurrences = scheduled_fees(
         tx,
         org_id,
@@ -195,7 +194,7 @@ pub(super) async fn prepare_fees(
          ON CONFLICT (project_id,period_key) DO NOTHING",
         &ids, org_id, &project_ids, &milestone_ids as &[Option<Uuid>], &keys as &[&str],
         &dates as &[NaiveDate], &descriptions as &[&str], &amounts, &currencies as &[&str],
-    ).execute(&mut **tx).await.map_err(server_err)?;
+    ).execute(&mut **tx).await?;
 
     stored_fees(
         tx,
@@ -235,9 +234,9 @@ async fn scheduled_fees(
     to: NaiveDate,
     selected: Option<&[Uuid]>,
     mode: SourceRead,
-) -> Result<Vec<Occurrence>, ServerFnError> {
+) -> Result<Vec<Occurrence>, OpError> {
     if from > to {
-        return Err(err(BAD_REQUEST, "Invoice period ends before it starts"));
+        return Err(bad_request("Invoice period ends before it starts"));
     }
     macro_rules! projects_query {
         ($suffix:literal) => {
@@ -253,7 +252,7 @@ async fn scheduled_fees(
              AND ($3::uuid[] IS NULL OR p.id = ANY($3))
            ORDER BY p.id LIMIT 1001 "# + $suffix,
                 org_id, client_id, selected,
-            ).fetch_all(&mut **tx).await.map_err(server_err)?
+            ).fetch_all(&mut **tx).await?
         };
     }
     let projects = match mode {
@@ -261,7 +260,7 @@ async fn scheduled_fees(
         SourceRead::Generate => projects_query!("FOR SHARE OF p, s"),
     };
     if projects.len() > 1000 {
-        return Err(conflict(
+        return Err(OpError::conflict(
             "Too many fee projects for one invoice; select fewer projects.",
         ));
     }
@@ -277,7 +276,7 @@ async fn scheduled_fees(
                     description: format!("{} — Fixed fee", project.name),
                     amount_cents: project
                         .fee_amount_cents
-                        .ok_or_else(|| conflict("Project fee amount is missing"))?,
+                        .ok_or_else(|| OpError::conflict("Project fee amount is missing"))?,
                     currency: project.currency.clone(),
                 });
             }
@@ -290,7 +289,7 @@ async fn scheduled_fees(
                        FROM project_fee_milestones WHERE project_id = $1 AND org_id = $2 AND due_on <= $3
                        ORDER BY position "# + $suffix,
                             project.id, org_id, to as NaiveDate,
-                        ).fetch_all(&mut **tx).await.map_err(server_err)?
+                        ).fetch_all(&mut **tx).await?
                     };
                 }
                 let milestones = match mode {
@@ -319,26 +318,23 @@ async fn scheduled_fees(
                     - start.month() as i32
                     + 1;
                 if months > 1200 {
-                    return Err(err(
-                        BAD_REQUEST,
-                        "Monthly fee periods must not exceed 100 years",
-                    ));
+                    return Err(bad_request("Monthly fee periods must not exceed 100 years"));
                 }
                 let day = match project.monthly_day.as_deref() {
                     Some("first") => MonthlyFeeDay::First,
                     Some("fifteenth") => MonthlyFeeDay::Fifteenth,
                     Some("last") => MonthlyFeeDay::Last,
-                    _ => return Err(conflict("Project monthly fee day is missing")),
+                    _ => return Err(OpError::conflict("Project monthly fee day is missing")),
                 };
                 let amount = project
                     .fee_amount_cents
-                    .ok_or_else(|| conflict("Project fee amount is missing"))?;
+                    .ok_or_else(|| OpError::conflict("Project fee amount is missing"))?;
                 let mut month = start
                     .with_day(1)
-                    .ok_or_else(|| err(BAD_REQUEST, "Invalid invoice period"))?;
+                    .ok_or_else(|| bad_request("Invalid invoice period"))?;
                 for _ in 0..months {
                     let due = monthly_fee_date(month.year(), month.month(), day)
-                        .map_err(|error| err(BAD_REQUEST, error.to_string()))?;
+                        .map_err(|error| bad_request(error.to_string()))?;
                     if due >= start && due <= end {
                         occurrences.push(Occurrence {
                             project_id: project.id,
@@ -355,14 +351,14 @@ async fn scheduled_fees(
                         });
                     }
                     month = month.checked_add_months(Months::new(1)).ok_or_else(|| {
-                        err(BAD_REQUEST, "Invoice period exceeds the supported calendar")
+                        bad_request("Invoice period exceeds the supported calendar")
                     })?;
                 }
             }
             _ => {}
         }
         if occurrences.len() > MAX_FEE_OCCURRENCES {
-            return Err(conflict(
+            return Err(OpError::conflict(
                 "Too many fees for one invoice; select a shorter period.",
             ));
         }
@@ -378,7 +374,7 @@ async fn stored_fees(
     to: NaiveDate,
     selected: Option<&[Uuid]>,
     mode: SourceRead,
-) -> Result<Vec<FeeLine>, ServerFnError> {
+) -> Result<Vec<FeeLine>, OpError> {
     macro_rules! query {
         ($suffix:literal) => {
             sqlx::query_as!(
@@ -405,8 +401,7 @@ async fn stored_fees(
                 selected,
             )
             .fetch_all(&mut **tx)
-            .await
-            .map_err(server_err)?
+            .await?
         };
     }
     let fees = match mode {
@@ -414,7 +409,7 @@ async fn stored_fees(
         SourceRead::Generate => query!("FOR UPDATE OF f"),
     };
     if fees.len() > MAX_FEE_OCCURRENCES {
-        return Err(conflict(
+        return Err(OpError::conflict(
             "Too many fees for one invoice; select a shorter period.",
         ));
     }

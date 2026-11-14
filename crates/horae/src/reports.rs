@@ -53,24 +53,43 @@ async fn require_session(session: &Session) -> Result<(uuid::Uuid, uuid::Uuid), 
 /// before the export takes a rendering slot. The export's own transaction
 /// checks again; this only refuses early. Returns `(user_id, org_id)`.
 async fn require_invoice_reader(session: &Session) -> Result<(uuid::Uuid, uuid::Uuid), StatusCode> {
-    use crate::ops::OpError;
-    let status = |error: OpError| match error {
-        OpError::Forbidden(_) | OpError::NotFound(_) => StatusCode::FORBIDDEN,
-        OpError::Conflict(_) => StatusCode::CONFLICT,
-        OpError::Invalid { .. } | OpError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-    };
     let (user_id, org_id) = require_session(session).await?;
     let state = crate::state::global_state().await;
     let read = crate::ops::begin_read(&state.db, crate::ops::Caller::session(org_id, user_id))
         .await
-        .map_err(status)?;
-    let allowed = crate::ops::invoices::holds(&read.actor, crate::ops::invoices::READ);
-    read.finish(Ok(())).await.map_err(status)?;
-    if allowed {
-        Ok((user_id, org_id))
-    } else {
-        Err(StatusCode::FORBIDDEN)
+        .map_err(invoice_export_status)?;
+    let allowed = crate::ops::invoices::authorize_read(&read.actor, crate::ops::invoices::READ);
+    read.finish(allowed).await.map_err(invoice_export_status)?;
+    Ok((user_id, org_id))
+}
+
+fn invoice_export_status(error: crate::ops::OpError) -> StatusCode {
+    use crate::ops::OpError;
+    match error {
+        OpError::Forbidden(_) | OpError::NotFound(_) => StatusCode::FORBIDDEN,
+        OpError::Conflict(_) => StatusCode::CONFLICT,
+        OpError::Invalid { .. } | OpError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
+}
+
+/// A snapshot read holding the actor's whole-invoice read grant, bounded by
+/// the export deadlines.
+async fn begin_invoice_export(
+    pool: &sqlx::PgPool,
+    org_id: uuid::Uuid,
+    actor_id: uuid::Uuid,
+) -> Result<crate::ops::ReadTx, StatusCode> {
+    let mut read = crate::ops::begin_read_snapshot(
+        pool,
+        crate::ops::Caller::session(org_id, actor_id),
+        crate::ops::SnapshotLimits::LockWait,
+    )
+    .await
+    .map_err(invoice_export_status)?;
+    crate::ops::invoices::authorize_read(&read.actor, crate::ops::invoices::READ)
+        .map_err(invoice_export_status)?;
+    limits::configure_deadlines(&mut read.tx).await?;
+    Ok(read)
 }
 
 async fn render_invoice_export(
@@ -82,11 +101,11 @@ async fn render_invoice_export(
 ) -> Result<axum::body::Body, StatusCode> {
     let body = permit.render(render).await?;
     // Rendering holds no authority locks. Recheck before releasing its result.
-    limits::begin_invoice_read(pool, org_id, actor_id)
+    begin_invoice_export(pool, org_id, actor_id)
         .await?
-        .commit()
+        .finish(Ok(()))
         .await
-        .map_err(limits::database_error)?;
+        .map_err(invoice_export_status)?;
     Ok(body)
 }
 

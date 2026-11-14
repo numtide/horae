@@ -1,18 +1,21 @@
-use super::*;
 use horae_core::project::Percentage;
 use uuid::Uuid;
 
-pub(super) async fn lock_invoices(
+use super::bad_request;
+use crate::ops::OpError;
+
+/// Serializes the organization's invoice writes: numbering, billing time and
+/// fee balances.
+pub(crate) async fn lock_invoices(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
-) -> Result<(), ServerFnError> {
+) -> Result<(), OpError> {
     sqlx::query_scalar!(
         r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0)) as "lock!: ()""#,
         org_id.to_string(),
     )
     .fetch_one(&mut **tx)
-    .await
-    .map_err(server_err)?;
+    .await?;
     Ok(())
 }
 
@@ -31,7 +34,7 @@ pub(super) async fn read_lines(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
     invoice_id: Uuid,
-) -> Result<Vec<BalanceLine>, ServerFnError> {
+) -> Result<Vec<BalanceLine>, OpError> {
     sqlx::query_as!(
         BalanceLine,
         r#"SELECT l.id, l.description, l.amount_cents, f.id AS "fee_id?",
@@ -52,17 +55,17 @@ pub(super) async fn read_lines(
     )
     .fetch_all(&mut **tx)
     .await
-    .map_err(server_err)
+    .map_err(OpError::from)
 }
 
-pub(super) fn allocate(gross: &[i64], discount_bps: i16) -> Result<Vec<i64>, ServerFnError> {
+pub(super) fn allocate(gross: &[i64], discount_bps: i16) -> Result<Vec<i64>, OpError> {
     if gross.len() > 20000 {
-        return Err(conflict("Too many lines for one invoice"));
+        return Err(OpError::conflict("Too many lines for one invoice"));
     }
     let discount = u16::try_from(discount_bps)
         .ok()
         .and_then(|bps| Percentage::try_from(bps).ok())
-        .ok_or_else(|| err(BAD_REQUEST, "Discount must be between 0 and 100"))?;
+        .ok_or_else(|| bad_request("Discount must be between 0 and 100"))?;
     horae_core::invoice::allocate_invoice_discount(gross, discount)
-        .map_err(|error| conflict(error.to_string()))
+        .map_err(|error| OpError::conflict(error.to_string()))
 }

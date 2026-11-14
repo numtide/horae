@@ -1,44 +1,27 @@
-use super::*;
+use super::{PREPARE, SourceRead, authorize_read, bad_request, balances, defaults, entries, fees};
 use crate::models::invoice::{
-    InvoiceFeeSelection, InvoicePreviewLine, InvoiceProjectDefaults, InvoiceSourceExcess,
+    InvoiceDefaults, InvoiceFeeSelection, InvoicePreparation, InvoicePreviewLine,
+    InvoiceProjectDefaults, InvoiceSourceExcess,
 };
+use crate::ops::{Actor, OpError, Tx};
 use std::collections::BTreeSet;
 
-#[cfg(test)]
-pub(super) async fn prepare(
-    pool: &sqlx::PgPool,
-    identity: (uuid::Uuid, uuid::Uuid),
-    client_id: uuid::Uuid,
-    (from, to): (chrono::NaiveDate, chrono::NaiveDate),
-    selected: Option<&[uuid::Uuid]>,
-    overrides: Option<&InvoiceDefaults>,
-) -> Result<InvoicePreparation, ServerFnError> {
-    prepare_with_edits(
-        pool,
-        identity,
-        client_id,
-        (from, to),
-        selected,
-        overrides,
-        None,
-    )
-    .await
-}
-
-pub(super) async fn prepare_with_edits(
-    pool: &sqlx::PgPool,
-    (org_id, actor_id): (uuid::Uuid, uuid::Uuid),
+/// Previews the invoice a client's uninvoiced time and fees would produce,
+/// with any fee edits applied. It writes nothing.
+pub(crate) async fn prepare(
+    tx: &mut Tx,
+    actor: &Actor,
     client_id: uuid::Uuid,
     (from, to): (chrono::NaiveDate, chrono::NaiveDate),
     selected: Option<&[uuid::Uuid]>,
     overrides: Option<&InvoiceDefaults>,
     edits: Option<&[InvoiceFeeSelection]>,
-) -> Result<InvoicePreparation, ServerFnError> {
+) -> Result<InvoicePreparation, OpError> {
     if from > to {
-        return Err(err(BAD_REQUEST, "Invoice period ends before it starts"));
+        return Err(bad_request("Invoice period ends before it starts"));
     }
     if selected.is_some_and(|ids| ids.is_empty() || ids.len() > 1000) {
-        return Err(err(BAD_REQUEST, "Select between 1 and 1000 projects"));
+        return Err(bad_request("Select between 1 and 1000 projects"));
     }
     if let Some(overrides) = overrides {
         defaults::amounts(overrides, 0)?;
@@ -50,19 +33,19 @@ pub(super) async fn prepare_with_edits(
             .into_iter()
             .collect::<Vec<_>>()
     });
-    let mut tx = begin_invoice_preparation_read(pool, org_id, actor_id).await?;
+    authorize_read(actor, PREPARE)?;
+    let org_id = actor.org_id();
     sqlx::query_scalar!(
         "SELECT id FROM clients WHERE id = $1 AND org_id = $2",
         client_id,
         org_id
     )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Client not found"))?;
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| OpError::not_found("Client not found"))?;
 
     let entries = entries::read(
-        &mut tx,
+        tx,
         org_id,
         client_id,
         (from, to),
@@ -74,9 +57,7 @@ pub(super) async fn prepare_with_edits(
     for entry in entries {
         lines.push(entry.preview()?);
     }
-    lines.extend(
-        fees::preview_fees(&mut tx, org_id, client_id, from, to, selected.as_deref()).await?,
-    );
+    lines.extend(fees::preview_fees(tx, org_id, client_id, from, to, selected.as_deref()).await?);
     if let Some(edits) = edits {
         apply_fee_selection(&mut lines, edits)?;
     }
@@ -89,7 +70,7 @@ pub(super) async fn prepare_with_edits(
         .collect();
     let project_ids = selected.as_deref().unwrap_or(&contributing);
     if project_ids.len() > 1000 {
-        return Err(conflict(
+        return Err(OpError::conflict(
             "Too many projects for one preview; select fewer projects.",
         ));
     }
@@ -104,11 +85,10 @@ pub(super) async fn prepare_with_edits(
         client_id,
         project_ids,
     )
-    .fetch_all(&mut *tx)
-    .await
-    .map_err(server_err)?;
+    .fetch_all(&mut **tx)
+    .await?;
     if rows.len() != project_ids.len() {
-        return Err(not_found(
+        return Err(OpError::not_found(
             "Some selected projects are unavailable for this client",
         ));
     }
@@ -154,10 +134,9 @@ pub(super) async fn prepare_with_edits(
         .as_ref()
         .map(|defaults| {
             horae_core::project::payment_due_date(issued_on, defaults.terms_days as u16)
-                .map_err(|error| err(BAD_REQUEST, error.to_string()))
+                .map_err(bad_request)
         })
         .transpose()?;
-    tx.commit().await.map_err(server_err)?;
     Ok(InvoicePreparation {
         issued_on,
         due_on,
@@ -171,19 +150,21 @@ pub(super) async fn prepare_with_edits(
     })
 }
 
-pub(super) fn currency(lines: &[InvoicePreviewLine]) -> Result<String, ServerFnError> {
+pub(super) fn currency(lines: &[InvoicePreviewLine]) -> Result<String, OpError> {
     let currency = lines
         .iter()
         .find(|line| line.selected)
         .or_else(|| lines.first())
         .map(|line| line.currency.trim().to_owned())
-        .ok_or_else(|| not_found("No billable time or fees found for this client and period."))?;
+        .ok_or_else(|| {
+            OpError::not_found("No billable time or fees found for this client and period.")
+        })?;
     if lines
         .iter()
         .filter(|line| line.selected)
         .any(|line| line.currency.trim() != currency)
     {
-        return Err(conflict(
+        return Err(OpError::conflict(
             "Projects with different billing currencies cannot share an invoice.",
         ));
     }
@@ -193,7 +174,7 @@ pub(super) fn currency(lines: &[InvoicePreviewLine]) -> Result<String, ServerFnE
 pub(super) fn apply_fee_selection(
     lines: &mut [InvoicePreviewLine],
     edits: &[InvoiceFeeSelection],
-) -> Result<(), ServerFnError> {
+) -> Result<(), OpError> {
     let by_source: std::collections::BTreeMap<_, _> =
         edits.iter().map(|edit| (&edit.source, edit)).collect();
     if edits.len() > 10000
@@ -204,21 +185,17 @@ pub(super) fn apply_fee_selection(
                 .filter(|line| line.fee_balance.is_some())
                 .count()
     {
-        return Err(err(
-            BAD_REQUEST,
-            "Supply each available fee source exactly once",
-        ));
+        return Err(bad_request("Supply each available fee source exactly once"));
     }
     for line in lines.iter_mut().filter(|line| line.fee_balance.is_some()) {
         let edit = by_source
             .get(&line.source)
-            .ok_or_else(|| conflict("Fee sources changed. Review the invoice again."))?;
+            .ok_or_else(|| OpError::conflict("Fee sources changed. Review the invoice again."))?;
         if edit.description.trim().is_empty()
             || edit.description.chars().count() > 1000
             || edit.description.contains('\0')
         {
-            return Err(err(
-                BAD_REQUEST,
+            return Err(bad_request(
                 "Fee descriptions must contain 1–1000 characters without NUL",
             ));
         }
@@ -229,7 +206,7 @@ pub(super) fn apply_fee_selection(
                     .fee_balance
                     .is_some_and(|balance| balance.agreed_cents != 0))
         {
-            return Err(err(BAD_REQUEST, "Selected fee amounts must be positive"));
+            return Err(bad_request("Selected fee amounts must be positive"));
         }
         line.description = edit.description.trim().to_owned();
         line.amount_cents = edit.amount_cents;
@@ -238,13 +215,15 @@ pub(super) fn apply_fee_selection(
     Ok(())
 }
 
-pub(super) fn subtotal(lines: &[InvoicePreviewLine]) -> Result<i64, ServerFnError> {
+pub(super) fn subtotal(lines: &[InvoicePreviewLine]) -> Result<i64, OpError> {
     lines
         .iter()
         .filter(|line| line.selected)
         .try_fold(0_i64, |subtotal, line| {
             subtotal.checked_add(line.amount_cents).ok_or_else(|| {
-                conflict("Invoice total exceeds the supported range; select a shorter period.")
+                OpError::conflict(
+                    "Invoice total exceeds the supported range; select a shorter period.",
+                )
             })
         })
 }
@@ -252,7 +231,7 @@ pub(super) fn subtotal(lines: &[InvoicePreviewLine]) -> Result<i64, ServerFnErro
 pub(super) fn allocate_lines(
     lines: &mut [InvoicePreviewLine],
     discount_bps: i16,
-) -> Result<(), ServerFnError> {
+) -> Result<(), OpError> {
     // Display dates must not change discount tie-breaking from persisted sources.
     let mut order: Vec<_> = (0..lines.len()).collect();
     order.sort_by(|&a, &b| lines[a].source.cmp(&lines[b].source));
@@ -273,26 +252,24 @@ pub(super) fn allocate_lines(
     Ok(())
 }
 
-pub(super) fn excess(
-    lines: &[InvoicePreviewLine],
-) -> Result<Vec<InvoiceSourceExcess>, ServerFnError> {
+pub(super) fn excess(lines: &[InvoicePreviewLine]) -> Result<Vec<InvoiceSourceExcess>, OpError> {
     let mut excess = Vec::new();
     for line in lines.iter().filter(|line| line.selected) {
         if let Some(balance) = line.fee_balance {
             let net = line
                 .net_before_tax_cents
-                .ok_or_else(|| conflict("Resolve invoice defaults before generating"))?;
+                .ok_or_else(|| OpError::conflict("Resolve invoice defaults before generating"))?;
             let remaining = balance
                 .invoiced_cents
                 .checked_add(net)
                 .and_then(|invoiced| balance.agreed_cents.checked_sub(invoiced))
-                .ok_or_else(|| conflict("Fee balance exceeds the supported range"))?;
+                .ok_or_else(|| OpError::conflict("Fee balance exceeds the supported range"))?;
             if remaining < 0 {
                 excess.push(InvoiceSourceExcess {
                     source: line.source.clone(),
-                    excess_cents: remaining
-                        .checked_neg()
-                        .ok_or_else(|| conflict("Fee excess exceeds the supported range"))?,
+                    excess_cents: remaining.checked_neg().ok_or_else(|| {
+                        OpError::conflict("Fee excess exceeds the supported range")
+                    })?,
                 });
             }
         }
@@ -304,7 +281,7 @@ pub(super) fn excess(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::invoice::InvoiceFeeBalance;
+    use crate::models::invoice::{InvoiceFeeBalance, InvoiceSource};
 
     fn fee() -> InvoicePreviewLine {
         let project_id = uuid::Uuid::now_v7();

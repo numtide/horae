@@ -1,12 +1,14 @@
-use super::*;
+use crate::ops::{Caller, OpError, SnapshotLimits, begin_read_snapshot};
 use crate::server_fns::{
-    invoices, reports,
+    ServerFnError, invoices, reports,
     test_seed::{SeedIds, seed, time_entry, wait_for_blocked},
 };
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::{EntryState, InvoiceStatus};
 use serde_json::{Value, json};
+use sqlx::{PgPool, Postgres, Transaction};
 use std::{sync::Arc, time::Duration};
+use uuid::Uuid;
 
 #[derive(Clone, Copy, Debug)]
 enum Reader {
@@ -437,7 +439,7 @@ async fn readers_preserve_inherited_connection_settings(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn authorized_commits_asynchronously_only_inside_its_snapshot(pool: PgPool) {
+async fn snapshot_reads_commit_asynchronously_only_inside_their_snapshot(pool: PgPool) {
     let fixture = Fixture::new(&pool).await;
     let reader_pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(1)
@@ -467,14 +469,14 @@ async fn authorized_commits_asynchronously_only_inside_its_snapshot(pool: PgPool
                 .fetch_one(&reader_pool)
                 .await
                 .unwrap();
-            let mut tx = authorized(
+            let mut tx = begin_read_snapshot(
                 &reader_pool,
-                fixture.ids.org_id,
-                fixture.ids.user_id,
-                &[Permission::InvoiceReadAll],
+                Caller::session(fixture.ids.org_id, fixture.ids.user_id),
+                SnapshotLimits::LockWait,
             )
             .await
-            .unwrap();
+            .unwrap()
+            .tx;
             let inside = sqlx::query!("SELECT current_setting('transaction_isolation') AS \"isolation!\", current_setting('transaction_read_only') AS \"read_only!\", current_setting('lock_timeout') AS \"timeout!\", current_setting('synchronous_commit') AS \"commit!\"").fetch_one(&mut *tx).await.unwrap();
             assert_eq!(
                 (
@@ -497,12 +499,12 @@ async fn authorized_commits_asynchronously_only_inside_its_snapshot(pool: PgPool
 }
 
 /// With no inherited lock_timeout, the organization `FOR SHARE` gives up after
-/// the 5 s bound (55P03) instead of waiting for the holder. `authorized`
+/// the 5 s bound (55P03) instead of waiting for the holder. The snapshot read
 /// reports that as an internal error, so the bound shows as the wait ending
 /// while the blocker still holds the row.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn authorized_bounds_its_authority_lock_wait(pool: PgPool) {
+async fn snapshot_reads_bound_their_authority_lock_wait(pool: PgPool) {
     let fixture = Fixture::new(&pool).await;
     let mut hold = pool.begin().await.unwrap();
     sqlx::query!(
@@ -513,25 +515,15 @@ async fn authorized_bounds_its_authority_lock_wait(pool: PgPool) {
     .await
     .unwrap();
     let started = std::time::Instant::now();
-    let result = authorized(
+    let result = begin_read_snapshot(
         &pool,
-        fixture.ids.org_id,
-        fixture.ids.user_id,
-        &[Permission::InvoiceReadAll],
+        Caller::session(fixture.ids.org_id, fixture.ids.user_id),
+        SnapshotLimits::LockWait,
     )
     .await
     .map(|_| ());
     let waited = started.elapsed();
-    assert!(
-        matches!(
-            result,
-            Err(ServerFnError::ServerError {
-                code: super::super::INTERNAL_ERROR,
-                ..
-            })
-        ),
-        "{result:?}"
-    );
+    assert!(matches!(result, Err(OpError::Internal(_))), "{result:?}");
     assert!(
         (Duration::from_millis(4900)..Duration::from_secs(8)).contains(&waited),
         "{waited:?}"

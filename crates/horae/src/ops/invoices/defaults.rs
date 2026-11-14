@@ -1,20 +1,18 @@
-use super::*;
 use crate::models::invoice::InvoiceDefaults;
 use horae_core::project::Percentage;
 
-pub(super) fn amounts(
+use super::bad_request;
+use crate::ops::OpError;
+
+pub(crate) fn amounts(
     defaults: &InvoiceDefaults,
     subtotal: i64,
-) -> Result<horae_core::invoice::InvoiceAmounts, ServerFnError> {
+) -> Result<horae_core::invoice::InvoiceAmounts, OpError> {
     if !(0..=365).contains(&defaults.terms_days) {
-        return Err(err(
-            BAD_REQUEST,
-            "Payment terms must be between 0 and 365 days",
-        ));
+        return Err(bad_request("Payment terms must be between 0 and 365 days"));
     }
     if defaults.po_number.chars().count() > 200 || defaults.po_number.contains('\0') {
-        return Err(err(
-            BAD_REQUEST,
+        return Err(bad_request(
             "Purchase order must contain at most 200 characters",
         ));
     }
@@ -23,16 +21,15 @@ pub(super) fn amounts(
             name.trim().is_empty() || name.chars().count() > 100 || name.contains('\0')
         })
     {
-        return Err(err(
-            BAD_REQUEST,
+        return Err(bad_request(
             "A second tax requires a name of 1–100 characters and a percentage",
         ));
     }
-    let percentage = |bps: i16| -> Result<Percentage, ServerFnError> {
+    let percentage = |bps: i16| -> Result<Percentage, OpError> {
         u16::try_from(bps)
             .ok()
             .and_then(|bps| Percentage::try_from(bps).ok())
-            .ok_or_else(|| err(BAD_REQUEST, "Percentages must be between 0 and 100"))
+            .ok_or_else(|| bad_request("Percentages must be between 0 and 100"))
     };
     horae_core::invoice::invoice_amounts(
         subtotal,
@@ -40,7 +37,7 @@ pub(super) fn amounts(
         percentage(defaults.tax1_bps)?,
         percentage(defaults.tax2_bps.unwrap_or(0))?,
     )
-    .map_err(|error| conflict(error.to_string()))
+    .map_err(|error| OpError::conflict(error.to_string()))
 }
 
 pub(super) async fn resolve(
@@ -48,7 +45,7 @@ pub(super) async fn resolve(
     org_id: uuid::Uuid,
     project_ids: &[uuid::Uuid],
     overrides: Option<&InvoiceDefaults>,
-) -> Result<InvoiceDefaults, ServerFnError> {
+) -> Result<InvoiceDefaults, OpError> {
     // Projects without settings participate with the original Net 30 defaults.
     // Lock existing settings so a concurrent edit cannot change the snapshot.
     let rows = sqlx::query_as!(
@@ -60,15 +57,14 @@ pub(super) async fn resolve(
         project_ids,
     )
     .fetch_all(&mut **tx)
-    .await
-    .map_err(server_err)?;
+    .await?;
     let first = rows.first().cloned().unwrap_or_default();
     let different = rows.iter().any(|row| row != &first)
         || (rows.len() < project_ids.len() && first != InvoiceDefaults::default());
     let defaults = match overrides {
         Some(overrides) => overrides.clone(),
         None if different => {
-            return Err(conflict(
+            return Err(OpError::conflict(
                 "Selected projects have different invoice defaults. Choose explicit invoice values before generating.",
             ));
         }

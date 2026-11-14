@@ -4,12 +4,12 @@ pub(crate) use horae_core::types::{
     BudgetKind, EntryState, InvoiceStatus, ProjectRole, ProjectType,
 };
 
+#[cfg(feature = "server")]
+pub(crate) use crate::models::User;
 pub(crate) use crate::models::{
     Approval, ApprovalSummary, Client, DetailedReportRow, Invoice, InvoiceWithLines, OrgBranding,
     Project, ProjectSpend, ReportRow, Task, TimeEntry,
 };
-#[cfg(feature = "server")]
-pub(crate) use crate::models::{InvoiceLine, User};
 
 // HTTP status codes for `ServerFnError::ServerError { code, .. }` — named so
 // error paths read at a glance (see AGENTS.md conventions). Server-only: on the
@@ -489,8 +489,8 @@ mod project_creation;
 mod project_managers;
 mod projects;
 mod reports;
-#[cfg(feature = "server")]
-pub(crate) mod snapshot;
+#[cfg(all(test, feature = "server"))]
+mod snapshot;
 mod time_entries;
 mod users;
 
