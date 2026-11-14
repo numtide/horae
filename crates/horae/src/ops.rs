@@ -123,7 +123,10 @@ impl WriteTx {
         result: Result<Done<T>, OpError>,
         events: &dyn EventSink,
     ) -> Result<T, OpError> {
-        let done = result?;
+        let done = match result {
+            Ok(done) => done,
+            Err(error) => return Err(roll_back(self.tx, error).await),
+        };
         self.tx.commit().await?;
         for event in done.events {
             events.dispatch(event);
@@ -265,10 +268,23 @@ pub(crate) async fn require_administrator(
 impl ReadTx {
     /// Releases the authority locks, held until the result was materialized.
     pub async fn finish<T>(self, result: Result<T, OpError>) -> Result<T, OpError> {
-        let value = result?;
+        let value = match result {
+            Ok(value) => value,
+            Err(error) => return Err(roll_back(self.tx, error).await),
+        };
         self.tx.commit().await?;
         Ok(value)
     }
+}
+
+/// Rolls back a failed operation before its error is returned. Dropping the
+/// transaction would leave the `ROLLBACK` to the task that returns the
+/// connection to the pool, so the actor's `FOR SHARE` locks could outlive the
+/// response. The operation's error is the one to report; a failed rollback
+/// falls back to that pool cleanup.
+async fn roll_back(tx: Tx, error: OpError) -> OpError {
+    let _ = tx.rollback().await;
+    error
 }
 
 #[cfg(test)]
