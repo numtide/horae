@@ -1,4 +1,7 @@
 use super::*;
+use crate::models::permission_editor::PermissionRequester;
+use crate::models::time_report::TimeReportAccess;
+use crate::ops::{Caller, OpError};
 use crate::reports::bounded::ExportPermit;
 use crate::server_fns::test_seed::wait_for_blocked;
 use horae_core::permissions::catalog::BuiltInProfile;
@@ -6,6 +9,17 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use std::time::Duration;
 
 mod grouped;
+
+/// `get_time_report_access` without the session.
+async fn read_access(
+    pool: &PgPool,
+    requester: PermissionRequester,
+) -> Result<TimeReportAccess, OpError> {
+    let read =
+        crate::ops::begin_read(pool, Caller::session(requester.org_id, requester.user_id)).await?;
+    let result = crate::ops::time_reads::reports::access(&read.actor);
+    read.finish(result).await
+}
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
@@ -683,11 +697,11 @@ async fn report_view_follows_the_time_read_grants_not_the_profile(pool: PgPool) 
         (BuiltInProfile::Member, &[Permission::TimeReadAll][..], true),
     ] {
         let ids = scoped(&pool, profile, grants).await;
-        let requester = crate::models::permission_editor::PermissionRequester {
+        let requester = PermissionRequester {
             org_id: ids.org_id,
             user_id: ids.user_id,
         };
-        let access = time::read_access(&pool, requester).await.unwrap();
+        let access = read_access(&pool, requester).await.unwrap();
         assert_eq!(access.requester, requester);
         assert_eq!(access.financial, financial, "{grants:?}");
     }
@@ -698,16 +712,16 @@ async fn report_view_follows_the_time_read_grants_not_the_profile(pool: PgPool) 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn missing_or_invalid_permission_state_is_forbidden_for_every_profile(pool: PgPool) {
-    use crate::ops::{Caller, OpError, begin_read};
+    use crate::ops::begin_read;
     for &profile in BuiltInProfile::ALL {
         for change in ["missing", "grants"] {
             let ids = seed(&pool, profile).await;
-            let requester = crate::models::permission_editor::PermissionRequester {
+            let requester = PermissionRequester {
                 org_id: ids.org_id,
                 user_id: ids.user_id,
             };
             assert!(capture(&pool, &ids).await.is_ok(), "{profile:?}");
-            assert!(time::read_access(&pool, requester).await.is_ok());
+            assert!(read_access(&pool, requester).await.is_ok());
             assert!(
                 projects(&pool, ids.org_id, ids.user_id, "active")
                     .await
@@ -730,10 +744,10 @@ async fn missing_or_invalid_permission_state_is_forbidden_for_every_profile(pool
                 denied,
                 "{profile:?} {change}"
             );
-            assert_eq!(
-                time::read_access(&pool, requester).await.map(|_| ()),
-                denied
-            );
+            assert!(matches!(
+                read_access(&pool, requester).await,
+                Err(OpError::Forbidden(_))
+            ));
             assert_eq!(
                 projects(&pool, ids.org_id, ids.user_id, "active")
                     .await

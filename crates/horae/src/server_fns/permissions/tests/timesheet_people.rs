@@ -1,9 +1,21 @@
 use super::*;
 use crate::models::scoped_time::{TimesheetPeoplePage, TimesheetPeopleQuery};
-use crate::server_fns::permissions::time_entries::{TimeReadError, people};
+use crate::ops::{self, Caller, OpError};
 use crate::server_fns::test_seed::time_entry;
 use horae_core::types::EntryState;
 use std::collections::BTreeSet;
+
+/// `list_timesheet_people` without the session.
+async fn people(
+    pool: &PgPool,
+    org_id: Uuid,
+    user_id: Uuid,
+    query: &TimesheetPeopleQuery,
+) -> Result<TimesheetPeoplePage, OpError> {
+    let mut read = ops::begin_read(pool, Caller::session(org_id, user_id)).await?;
+    let result = ops::time_reads::people(&mut read.tx, &read.actor, query).await;
+    read.finish(result).await
+}
 
 fn ids(page: &TimesheetPeoplePage) -> BTreeSet<Uuid> {
     page.people.iter().map(|person| person.id).collect()
@@ -391,7 +403,7 @@ async fn paging_search_and_identity_filters_only_narrow_current_scope(pool: PgPo
         query.search = search;
         assert!(matches!(
             people(&pool, seed.org_id, seed.user_id, &query).await,
-            Err(TimeReadError::InvalidQuery)
+            Err(OpError::Invalid { .. })
         ));
     }
     query.search.clear();
@@ -401,7 +413,7 @@ async fn paging_search_and_identity_filters_only_narrow_current_scope(pool: PgPo
     });
     assert!(matches!(
         people(&pool, seed.org_id, seed.user_id, &query).await,
-        Err(TimeReadError::InvalidQuery)
+        Err(OpError::Invalid { .. })
     ));
     query.after = second
         .people
@@ -502,7 +514,7 @@ async fn discovery_rechecks_revocation_and_actor_activity_after_waiting(pool: Pg
         revoke.commit().await.unwrap();
         let result = pending.await.unwrap();
         if mode == 3 {
-            assert!(matches!(result, Err(TimeReadError::Forbidden)));
+            assert!(matches!(result, Err(OpError::Forbidden(_))));
         } else {
             assert_eq!(ids(&result.unwrap()), [seed.user_id].into());
         }
@@ -654,7 +666,7 @@ async fn discovery_fails_closed_for_identity_and_invalid_state(pool: PgPool) {
     let query = TimesheetPeopleQuery::default();
     assert!(matches!(
         people(&pool, seed.org_id, foreign.user_id, &query).await,
-        Err(TimeReadError::Forbidden)
+        Err(OpError::Forbidden(_))
     ));
     sqlx::query!(
         "UPDATE person_permission_states SET grants=ARRAY['invalid_grant'] WHERE user_id=$1",
@@ -665,7 +677,7 @@ async fn discovery_fails_closed_for_identity_and_invalid_state(pool: PgPool) {
     .unwrap();
     assert!(matches!(
         people(&pool, seed.org_id, seed.user_id, &query).await,
-        Err(TimeReadError::Unavailable)
+        Err(OpError::Forbidden(message)) if message == "Permission state is unavailable"
     ));
     sqlx::query!(
         "DELETE FROM person_permission_states WHERE user_id=$1",
@@ -676,6 +688,6 @@ async fn discovery_fails_closed_for_identity_and_invalid_state(pool: PgPool) {
     .unwrap();
     assert!(matches!(
         people(&pool, seed.org_id, seed.user_id, &query).await,
-        Err(TimeReadError::Unavailable)
+        Err(OpError::Forbidden(message)) if message == "Permission state is unavailable"
     ));
 }

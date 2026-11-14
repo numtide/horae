@@ -50,8 +50,6 @@ pub async fn apply_timesheet_command(
 pub async fn load_timesheet_page(
     query: crate::models::scoped_time::TimesheetQuery,
 ) -> Result<crate::models::scoped_time::TimesheetPage, ServerFnError> {
-    use permissions::time_entries::TimeReadError;
-
     let user = require_user().await.map_err(|error| match error {
         error @ ServerFnError::ServerError {
             code: UNAUTHORIZED, ..
@@ -62,21 +60,9 @@ pub async fn load_timesheet_page(
         }
     })?;
     let state = crate::state::global_state().await;
-    permissions::time_entries::sheet(&state.db, user.org_id, user.id, &query)
-        .await
-        .map_err(|error| match error {
-            TimeReadError::Forbidden => {
-                forbidden("Timesheet access or identity has changed; refresh the page")
-            }
-            TimeReadError::Conflict(message) => conflict(message),
-            TimeReadError::InvalidQuery => {
-                err(BAD_REQUEST, "Invalid Timesheet date range or cursor")
-            }
-            error => {
-                tracing::error!(%error, "Timesheet read failed");
-                server_err("Timesheet is unavailable")
-            }
-        })
+    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::time_reads::sheet(&mut read.tx, &read.actor, &query).await;
+    Ok(read.finish(result).await?)
 }
 
 /// Minimal authorized person labels; selection never grants entry access.
@@ -84,8 +70,6 @@ pub async fn load_timesheet_page(
 pub async fn list_timesheet_people(
     query: crate::models::scoped_time::TimesheetPeopleQuery,
 ) -> Result<crate::models::scoped_time::TimesheetPeoplePage, ServerFnError> {
-    use permissions::time_entries::TimeReadError;
-
     let user = require_user().await.map_err(|error| match error {
         error @ ServerFnError::ServerError {
             code: UNAUTHORIZED, ..
@@ -96,17 +80,9 @@ pub async fn list_timesheet_people(
         }
     })?;
     let state = crate::state::global_state().await;
-    permissions::time_entries::people(&state.db, user.org_id, user.id, &query)
-        .await
-        .map_err(|error| match error {
-            TimeReadError::Forbidden => forbidden("Current time-read authority is required"),
-            TimeReadError::Conflict(message) => conflict(message),
-            TimeReadError::InvalidQuery => err(BAD_REQUEST, "Invalid timesheet people query"),
-            error => {
-                tracing::error!(%error, "Scoped timesheet people read failed");
-                server_err("Timesheet people are unavailable")
-            }
-        })
+    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::time_reads::people(&mut read.tx, &read.actor, &query).await;
+    Ok(read.finish(result).await?)
 }
 
 /// Read a bounded page of time entries under current canonical permissions.
@@ -114,8 +90,6 @@ pub async fn list_timesheet_people(
 pub async fn list_visible_time_entries(
     query: crate::models::scoped_time::TimeEntryQuery,
 ) -> Result<crate::models::scoped_time::TimeEntryPage, ServerFnError> {
-    use permissions::time_entries::TimeReadError;
-
     let user = require_user().await.map_err(|error| match error {
         error @ ServerFnError::ServerError {
             code: UNAUTHORIZED, ..
@@ -126,19 +100,9 @@ pub async fn list_visible_time_entries(
         }
     })?;
     let state = crate::state::global_state().await;
-    permissions::time_entries::read(&state.db, user.org_id, user.id, &query)
-        .await
-        .map_err(|error| match error {
-            TimeReadError::Forbidden => forbidden("Current time-read authority is required"),
-            TimeReadError::Conflict(message) => conflict(message),
-            TimeReadError::InvalidQuery => {
-                err(BAD_REQUEST, "Invalid time-entry date range or cursor")
-            }
-            error => {
-                tracing::error!(%error, "Scoped time-entry read failed");
-                server_err("Time entries are unavailable")
-            }
-        })
+    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::time_reads::entries(&mut read.tx, &read.actor, &query).await;
+    Ok(read.finish(result).await?)
 }
 
 /// Validate an optional start time (minutes since midnight, 0..=1439) and clamp

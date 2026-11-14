@@ -1,8 +1,20 @@
 use super::*;
-use crate::models::scoped_time::TimeEntryQuery;
-use crate::server_fns::permissions::time_entries::{TimeReadError, read};
+use crate::models::scoped_time::{TimeEntryPage, TimeEntryQuery};
+use crate::ops::{self, Caller, OpError};
 use crate::server_fns::test_seed::time_entry;
 use horae_core::types::EntryState;
+
+/// `list_visible_time_entries` without the session.
+async fn read(
+    pool: &PgPool,
+    org_id: Uuid,
+    user_id: Uuid,
+    query: &TimeEntryQuery,
+) -> Result<TimeEntryPage, OpError> {
+    let mut read = ops::begin_read(pool, Caller::session(org_id, user_id)).await?;
+    let result = ops::time_reads::entries(&mut read.tx, &read.actor, query).await;
+    read.finish(result).await
+}
 
 fn query() -> TimeEntryQuery {
     TimeEntryQuery {
@@ -136,7 +148,7 @@ async fn time_reads_finish_before_competing_revocation_when_read_admitted_first(
     writer.await.unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, &query()).await,
-        Err(TimeReadError::Forbidden)
+        Err(OpError::Forbidden(_))
     ));
 }
 
@@ -348,12 +360,12 @@ async fn time_reads_page_ties_without_loss_and_filters_never_expand_scope(pool: 
     filter.date_from = "2026-09-08".parse().unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, &filter).await,
-        Err(TimeReadError::InvalidQuery)
+        Err(OpError::Invalid { .. })
     ));
     next.date_to = "2026-09-06".parse().unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, &next).await,
-        Err(TimeReadError::InvalidQuery)
+        Err(OpError::Invalid { .. })
     ));
 }
 
@@ -425,7 +437,7 @@ async fn time_reads_recheck_grants_relationships_and_activity_after_wait(pool: P
         revoke.commit().await.unwrap();
         let result = pending.await.unwrap();
         if mode == 2 {
-            assert!(matches!(result, Err(TimeReadError::Forbidden)));
+            assert!(matches!(result, Err(OpError::Forbidden(_))));
         } else {
             assert!(result.unwrap().entries.is_empty());
         }
@@ -439,7 +451,7 @@ async fn time_reads_fail_closed_for_identity_and_invalid_state(pool: PgPool) {
     let foreign = fixture(&pool).await;
     assert!(matches!(
         read(&pool, ids.org_id, foreign.user_id, &query()).await,
-        Err(TimeReadError::Forbidden)
+        Err(OpError::Forbidden(_))
     ));
     sqlx::query!(
         "UPDATE person_permission_states SET grants=ARRAY['invalid_grant'] WHERE user_id=$1",
@@ -450,7 +462,7 @@ async fn time_reads_fail_closed_for_identity_and_invalid_state(pool: PgPool) {
     .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, &query()).await,
-        Err(TimeReadError::Unavailable)
+        Err(OpError::Forbidden(message)) if message == "Permission state is unavailable"
     ));
     sqlx::query!(
         "DELETE FROM person_permission_states WHERE user_id=$1",
@@ -461,7 +473,7 @@ async fn time_reads_fail_closed_for_identity_and_invalid_state(pool: PgPool) {
     .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, &query()).await,
-        Err(TimeReadError::Unavailable)
+        Err(OpError::Forbidden(message)) if message == "Permission state is unavailable"
     ));
 }
 

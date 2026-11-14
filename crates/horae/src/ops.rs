@@ -31,6 +31,7 @@ pub(crate) mod people;
 pub(crate) mod projects;
 pub(crate) mod reports;
 pub(crate) mod time;
+pub(crate) mod time_reads;
 
 pub(crate) use actor::{Actor, Channel};
 pub(crate) use error::OpError;

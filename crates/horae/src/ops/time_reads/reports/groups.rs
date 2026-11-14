@@ -1,40 +1,31 @@
 //! Group only currently readable time; entity labels are not directory access.
 
 use horae_core::permissions::catalog::Permission;
-use sqlx::PgPool;
-use uuid::Uuid;
 
-use crate::models::permission_editor::PermissionRequester;
+use super::super::{check_expected, invalid, requester, require_time_reads};
+use super::{REPORT_FORBIDDEN, REPORT_INVALID, unavailable};
 use crate::models::time_report::{
     TimeReportGroup, TimeReportGroupCursor, TimeReportGroupPage, TimeReportGroupQuery,
     TimeReportGrouping, TimeReportTotals,
 };
-use crate::server_fns::permissions::time_entries::{TimeReadError, begin_read};
+use crate::ops::{Actor, OpError, Tx};
 
 pub(crate) async fn read(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
+    tx: &mut Tx,
+    actor: &Actor,
     query: &TimeReportGroupQuery,
-) -> Result<TimeReportGroupPage, TimeReadError> {
-    let requester = PermissionRequester {
-        org_id,
-        user_id: actor_id,
-    };
-    if query
-        .expected_requester
-        .is_some_and(|expected| expected != requester)
-    {
-        return Err(TimeReadError::Forbidden);
-    }
-    let (mut tx, grants) = begin_read(pool, org_id, actor_id).await?;
+) -> Result<TimeReportGroupPage, OpError> {
+    check_expected(actor, query.expected_requester, REPORT_FORBIDDEN)?;
+    let grants = require_time_reads(actor, REPORT_FORBIDDEN)?;
+    let requester = requester(actor);
+    let (org_id, actor_id) = (actor.org_id(), actor.id());
     if query.date_from > query.date_to
         || query
             .after
             .as_ref()
             .is_some_and(|cursor| cursor.group_by != query.group_by || cursor.name.contains('\0'))
     {
-        return Err(TimeReadError::InvalidQuery);
+        return Err(invalid(REPORT_INVALID));
     }
     let dimension = match query.group_by {
         TimeReportGrouping::Client => "client",
@@ -107,8 +98,8 @@ pub(crate) async fn read(
         query.after.as_ref().map(|cursor| cursor.id),
         query.active_projects_only,
         query.billability.filter(),
-    ).fetch_all(&mut *tx).await?;
-    let stats = rows.first().ok_or(TimeReadError::Unavailable)?;
+    ).fetch_all(&mut **tx).await?;
+    let stats = rows.first().ok_or_else(unavailable)?;
     let totals = TimeReportTotals {
         entry_count: stats.entry_count,
         total_minutes: stats.total_minutes,
@@ -120,16 +111,12 @@ pub(crate) async fn read(
         let Some(id) = row.id else { continue };
         groups.push(TimeReportGroup {
             id,
-            name: row.name.ok_or(TimeReadError::Unavailable)?,
+            name: row.name.ok_or_else(unavailable)?,
             totals: TimeReportTotals {
-                entry_count: row.group_entry_count.ok_or(TimeReadError::Unavailable)?,
-                total_minutes: row.group_total_minutes.ok_or(TimeReadError::Unavailable)?,
-                rounded_minutes: row
-                    .group_rounded_minutes
-                    .ok_or(TimeReadError::Unavailable)?,
-                billable_minutes: row
-                    .group_billable_minutes
-                    .ok_or(TimeReadError::Unavailable)?,
+                entry_count: row.group_entry_count.ok_or_else(unavailable)?,
+                total_minutes: row.group_total_minutes.ok_or_else(unavailable)?,
+                rounded_minutes: row.group_rounded_minutes.ok_or_else(unavailable)?,
+                billable_minutes: row.group_billable_minutes.ok_or_else(unavailable)?,
             },
         });
     }
@@ -143,7 +130,6 @@ pub(crate) async fn read(
     } else {
         None
     };
-    tx.commit().await?;
     Ok(TimeReportGroupPage {
         requester,
         groups,

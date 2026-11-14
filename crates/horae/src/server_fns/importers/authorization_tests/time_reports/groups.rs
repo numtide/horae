@@ -58,7 +58,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         api.call(ENDPOINT, request.clone(), Some(&cookie), false)
             .await
             .status(),
-        StatusCode::INTERNAL_SERVER_ERROR
+        StatusCode::FORBIDDEN
     );
     let grants: Vec<String> =
         serde_json::from_value(json!(BuiltInProfile::Member.selection())).unwrap();
@@ -153,7 +153,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         api.call(ENDPOINT, request.clone(), Some(&cookie), false)
             .await
             .status(),
-        StatusCode::INTERNAL_SERVER_ERROR
+        StatusCode::FORBIDDEN
     );
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
         .execute(pool)

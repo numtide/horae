@@ -5,7 +5,6 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use super::*;
 use crate::models::DetailedReportRow;
 use crate::models::permission_editor::PermissionRequester;
-use crate::models::time_report::TimeReportAccess;
 use crate::models::time_report::TimeReportQuery;
 use crate::reports::bounded::ExportPermit;
 
@@ -42,56 +41,15 @@ async fn begin(
     Ok((tx, grants))
 }
 
-/// Resolve the Reports view with the same current authority as time
-/// downloads. The financial view is for whoever `ops::reports` serves.
-pub(crate) async fn read_access(
-    pool: &PgPool,
-    requester: PermissionRequester,
-) -> Result<TimeReportAccess, StatusCode> {
-    let (tx, grants) = begin(pool, requester).await?;
-    tx.commit().await.map_err(database_error)?;
-    Ok(TimeReportAccess {
-        requester,
-        financial: grants.contains(Permission::TimeReadManaged)
-            || grants.contains(Permission::TimeReadAll),
-    })
-}
-
-/// The caller configures the transaction and owns the lifetime of these gates:
-/// the organization and the person stay locked `FOR SHARE` until it ends.
+/// The actor's time-read grants. The caller configures the transaction and
+/// owns the lifetime of the actor's locks: the organization and the person
+/// stay locked `FOR SHARE` until it ends.
 pub(in crate::reports) async fn authorize_current(
     connection: &mut PgConnection,
     requester: PermissionRequester,
 ) -> Result<PermissionSelection, StatusCode> {
-    sqlx::query_scalar!(
-        "SELECT id FROM organizations WHERE id=$1 FOR SHARE",
-        requester.org_id,
-    )
-    .fetch_optional(&mut *connection)
-    .await
-    .map_err(database_error)?
-    .ok_or(StatusCode::FORBIDDEN)?;
-    sqlx::query_scalar!(
-        "SELECT id FROM users WHERE org_id=$1 AND id=$2 AND active FOR SHARE",
-        requester.org_id,
-        requester.user_id,
-    )
-    .fetch_optional(&mut *connection)
-    .await
-    .map_err(database_error)?
-    .ok_or(StatusCode::FORBIDDEN)?;
-    let grants = super::load_grants(connection, requester.org_id, requester.user_id).await?;
-    if ![
-        Permission::TimeReadOwn,
-        Permission::TimeReadManaged,
-        Permission::TimeReadAll,
-    ]
-    .iter()
-    .any(|permission| grants.contains(*permission))
-    {
-        return Err(StatusCode::FORBIDDEN);
-    }
-    Ok(grants)
+    let actor = super::load_actor(connection, requester.org_id, requester.user_id).await?;
+    crate::ops::time_reads::time_reads(&actor).ok_or(StatusCode::FORBIDDEN)
 }
 
 pub(in crate::reports) async fn entries(

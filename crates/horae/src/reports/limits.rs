@@ -46,25 +46,28 @@ pub(super) fn database_error(error: sqlx::Error) -> StatusCode {
     }
 }
 
-/// The person's stored grants. Missing or invalid state is refused, as
-/// `ops::Actor::load` refuses it on screen; only storage faults are 5xx.
-async fn load_grants(
+/// Loads the exporting person as an [`Actor`](crate::ops::Actor) on the
+/// export's own connection, which keeps the organization and the person
+/// locked `FOR SHARE` until the caller's transaction or savepoint ends. A
+/// missing organization, a foreign or inactive person, and missing or invalid
+/// permission state are refused; a lost race is a retryable 409.
+async fn load_actor(
     connection: &mut PgConnection,
     org_id: Uuid,
     user_id: Uuid,
-) -> Result<horae_core::permissions::catalog::PermissionSelection, StatusCode> {
-    use crate::server_fns::{PermissionStorageError, load_person_permissions};
-    Ok(load_person_permissions(connection, org_id, user_id)
+) -> Result<crate::ops::Actor, StatusCode> {
+    use crate::ops::{Actor, Caller, OpError};
+    let actor = Actor::load(connection, Caller::session(org_id, user_id))
         .await
         .map_err(|error| match error {
-            PermissionStorageError::Database(error) => database_error(error),
-            error => {
-                tracing::error!(%error, "Invalid stored permission state");
-                StatusCode::FORBIDDEN
-            }
-        })?
-        .ok_or(StatusCode::FORBIDDEN)?
-        .grants)
+            OpError::Forbidden(_) => StatusCode::FORBIDDEN,
+            OpError::Conflict(_) => StatusCode::CONFLICT,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        })?;
+    if !actor.is_active() {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    Ok(actor)
 }
 
 #[cfg(test)]

@@ -1,9 +1,20 @@
 use super::*;
-use crate::models::time_report::{TimeReportCursor, TimeReportQuery};
-use crate::server_fns::permissions::time_entries::TimeReadError;
-use crate::server_fns::permissions::time_reports::read;
+use crate::models::time_report::{TimeReportCursor, TimeReportPage, TimeReportQuery};
+use crate::ops::{self, Caller, OpError};
 use crate::server_fns::test_seed::time_entry;
 use horae_core::types::EntryState;
+
+/// `list_visible_time_report_entries` without the session.
+async fn read(
+    pool: &PgPool,
+    org_id: Uuid,
+    user_id: Uuid,
+    query: &TimeReportQuery,
+) -> Result<TimeReportPage, OpError> {
+    let mut read = ops::begin_read(pool, Caller::session(org_id, user_id)).await?;
+    let result = ops::time_reads::reports::entries(&mut read.tx, &read.actor, query).await;
+    read.finish(result).await
+}
 
 fn query() -> TimeReportQuery {
     TimeReportQuery {
@@ -367,7 +378,7 @@ async fn detailed_report_rejects_invalid_queries_and_requesters(pool: PgPool) {
     filter.date_to = "2026-08-31".parse().unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, &filter).await,
-        Err(TimeReadError::InvalidQuery)
+        Err(OpError::Invalid { .. })
     ));
     filter = query();
     filter.after = Some(TimeReportCursor {
@@ -378,13 +389,13 @@ async fn detailed_report_rejects_invalid_queries_and_requesters(pool: PgPool) {
     });
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, &filter).await,
-        Err(TimeReadError::InvalidQuery)
+        Err(OpError::Invalid { .. })
     ));
     filter.after.as_mut().unwrap().project_name.clear();
     filter.after.as_mut().unwrap().spent_date = "2026-10-01".parse().unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, &filter).await,
-        Err(TimeReadError::InvalidQuery)
+        Err(OpError::Invalid { .. })
     ));
     filter = query();
     filter.expected_requester = Some(crate::models::permission_editor::PermissionRequester {
@@ -393,7 +404,7 @@ async fn detailed_report_rejects_invalid_queries_and_requesters(pool: PgPool) {
     });
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, &filter).await,
-        Err(TimeReadError::Forbidden)
+        Err(OpError::Forbidden(_))
     ));
 }
 
@@ -736,8 +747,5 @@ async fn detailed_report_rechecks_direct_actor_deactivation_after_wait(pool: PgP
     let reader = tokio::spawn(async move { read(&db, ids.org_id, ids.user_id, &query()).await });
     wait_for_blocked(&pool, pid).await;
     deactivate.commit().await.unwrap();
-    assert!(matches!(
-        reader.await.unwrap(),
-        Err(TimeReadError::Forbidden)
-    ));
+    assert!(matches!(reader.await.unwrap(), Err(OpError::Forbidden(_))));
 }

@@ -204,9 +204,9 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             false,
         )
         .await;
-    assert_eq!(sheet_error.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(sheet_error.status(), StatusCode::FORBIDDEN);
     let body = sheet_error.text().await.unwrap();
-    assert!(body.contains("Timesheet is unavailable"));
+    assert!(body.contains("Permission state is unavailable"));
     for private in [
         "private_invalid_grant",
         "person_permission_states",
@@ -223,9 +223,9 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             false,
         )
         .await;
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let body = response.text().await.unwrap();
-    assert!(body.contains("Time entries are unavailable"));
+    assert!(body.contains("Permission state is unavailable"));
     for private in [
         "private_invalid_grant",
         "person_permission_states",
@@ -352,9 +352,9 @@ async fn check_people(pool: &PgPool, api: &Api) {
             false,
         )
         .await;
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let body = response.text().await.unwrap();
-    assert!(body.contains("Timesheet people are unavailable"));
+    assert!(body.contains("Permission state is unavailable"));
     for private in [
         "private_invalid_grant",
         "person_permission_states",
