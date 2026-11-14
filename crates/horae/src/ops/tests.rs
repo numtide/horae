@@ -177,12 +177,12 @@ async fn setting(tx: &mut Tx, name: &str) -> String {
 async fn a_snapshot_read_retries_when_access_changes_after_its_snapshot(pool: PgPool) {
     use horae_core::permissions::catalog::Permission;
 
-    use super::testing::{policy_one, set_grants};
+    use super::testing::{provision, set_grants};
     use crate::server_fns::test_seed::wait_for_blocked;
 
     for limits in [SnapshotLimits::Short, SnapshotLimits::LockWait] {
-        let ids = seed_profile(&pool, BuiltInProfile::Member).await;
-        policy_one(&pool, &ids, &[], false).await;
+        let ids = seed(&pool, BuiltInProfile::Member).await;
+        provision(&pool, &ids, &[], false).await;
         let mut change: Tx = pool.begin().await.unwrap();
         let blocker = backend_pid(&mut change).await;
         set_grants(&mut change, &ids, &[Permission::ClientReadAll])
@@ -223,7 +223,7 @@ async fn a_snapshot_read_retries_when_access_changes_after_its_snapshot(pool: Pg
 async fn a_gated_write_chooses_its_isolation_and_holds_the_gate(pool: PgPool) {
     use crate::server_fns::test_seed::wait_for_blocked;
 
-    let ids = seed_profile(&pool, BuiltInProfile::Administrator).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let caller = Caller::session(ids.org_id, ids.user_id);
     let rr = repeatable_read_pool(&pool).await;
     for (isolation, expected) in [
@@ -261,7 +261,7 @@ async fn a_gated_write_loads_the_actor_after_waiting_for_the_gate(pool: PgPool) 
     use super::testing::revoke;
     use crate::server_fns::test_seed::wait_for_blocked;
 
-    let ids = seed_profile(&pool, BuiltInProfile::Administrator).await;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let mut change: Tx = pool.begin().await.unwrap();
     let blocker = backend_pid(&mut change).await;
     revoke(&mut change, ids.org_id, ids.user_id, false).await;
