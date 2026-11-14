@@ -138,7 +138,7 @@ fn unknown_permission_names_are_rejected() {
 }
 
 #[test]
-fn known_permission_name_decodes_without_legacy_role_conversion() {
+fn known_permission_name_decodes_to_its_permission() {
     assert_eq!(
         Permission::deserialize(StrDeserializer::<serde::de::value::Error>::new(
             "time_read_own"

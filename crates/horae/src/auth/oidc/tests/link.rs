@@ -56,8 +56,7 @@ fn rejected(result: Result<LinkOutcome, LinkError>) -> Rejection {
 async fn links_an_unbound_account_exactly_and_repeats_as_a_no_op(pool: PgPool) {
     let id = account(&pool).await;
     let before = sqlx::query!(
-        r#"SELECT email, name, org_role::text AS "role!", cost_rate_cents,
-                  billable_rate_cents, active FROM users WHERE id = $1"#,
+        "SELECT email, name, cost_rate_cents, billable_rate_cents, active FROM users WHERE id = $1",
         id
     )
     .fetch_one(&pool)
@@ -83,21 +82,15 @@ async fn links_an_unbound_account_exactly_and_repeats_as_a_no_op(pool: PgPool) {
     assert_eq!(users(&pool).await, after_link);
 
     let after = sqlx::query!(
-        r#"SELECT email, name, org_role::text AS "role!", cost_rate_cents,
-                  billable_rate_cents, active FROM users WHERE id = $1"#,
+        "SELECT email, name, cost_rate_cents, billable_rate_cents, active FROM users WHERE id = $1",
         id
     )
     .fetch_one(&pool)
     .await
     .unwrap();
     assert_eq!(
-        (
-            before.email,
-            before.name,
-            before.role,
-            before.cost_rate_cents
-        ),
-        (after.email, after.name, after.role, after.cost_rate_cents)
+        (before.email, before.name, before.cost_rate_cents),
+        (after.email, after.name, after.cost_rate_cents)
     );
     assert_eq!(
         (before.billable_rate_cents, before.active),

@@ -4,7 +4,7 @@
 use anyhow::Context;
 use chrono::{NaiveDate, Utc};
 use horae_core::permissions::catalog::BuiltInProfile;
-use horae_core::types::{BudgetKind, OrgRole, ProjectRole, ProjectType, RoundDir};
+use horae_core::types::{BudgetKind, ProjectRole, ProjectType, RoundDir};
 use horae_core::week::iso_week_monday;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -72,11 +72,10 @@ pub async fn run(pool: &PgPool) -> anyhow::Result<()> {
 
     // Admin user (used for DEV_LOGIN)
     sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role, billable_rate_cents)
-         VALUES ($1, $2, 'admin@example.com', 'Admin User', $3, 10000)",
+        "INSERT INTO users (id, org_id, email, name, billable_rate_cents)
+         VALUES ($1, $2, 'admin@example.com', 'Admin User', 10000)",
         ADMIN_ID,
         ORG_ID,
-        provisioning::placeholder_role(BuiltInProfile::Administrator) as OrgRole,
     )
     .execute(&mut *tx)
     .await?;

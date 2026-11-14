@@ -26,7 +26,11 @@ if (!selectionOnly && !fixturesOnly) {
     await page.goto(`${base}/auth/login`);
     await page.getByRole('button', { name: 'Sign in as Admin' }).click();
     await page.waitForURL(`${base}/`);
-    let role = 'admin', amount = 2, fail = false, hold = false, release;
+    // The access flags the overview returns for each built-in profile.
+    const administrator = { can_create: true, can_import: true, can_change_status: true, can_edit: true };
+    const executiveManager = { ...administrator, can_import: false };
+    const member = { can_create: false, can_import: false, can_change_status: false, can_edit: false };
+    let access = administrator, amount = 2, fail = false, hold = false, release;
     let calls = 0;
     let fixtures;
     await page.route('**/api/**', async route => {
@@ -51,10 +55,10 @@ if (!selectionOnly && !fixturesOnly) {
             id: `01950000-0000-7000-8000-${String(i + 1).padStart(12, '0')}`,
             name: `Bulk project ${i + 1}`, code: null, active: true }));
         }
+        const { can_edit, ...flags } = access;
         return route.fulfill({ json: {
-          ...overview, can_create: role !== 'member', can_import: role === 'admin',
-          can_change_status: role !== 'member',
-          projects: fixtures.map(project => ({ ...overview.projects[0], project, can_edit: role !== 'member' })),
+          ...overview, ...flags,
+          projects: fixtures.map(project => ({ ...overview.projects[0], project, can_edit })),
         } });
       }
       return route.continue();
@@ -205,11 +209,11 @@ if (!selectionOnly && !fixturesOnly) {
     await trigger.click();
     await expect(bulkMenu).toContainText('Select at most 100 projects');
     await expect(bulkMenu.getByRole('menuitem', { name: 'Archive projects', exact: true })).toBeDisabled();
-    role = 'manager'; amount = 0; fixtures = undefined;
+    access = executiveManager; amount = 0; fixtures = undefined;
     await visit();
     await expect(page.getByRole('checkbox')).toHaveCount(0);
     await expect(trigger).toBeDisabled();
-    role = 'member'; amount = 2; fixtures = undefined;
+    access = member; amount = 2; fixtures = undefined;
     await visit();
     await expect(page.getByRole('checkbox')).toHaveCount(0);
     await expect(trigger).toHaveCount(0);

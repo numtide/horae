@@ -5,7 +5,7 @@ use horae_core::permissions::catalog::BuiltInProfile;
 
 /// A person of `org_id` holding `profile`'s permission state.
 async fn person(pool: &PgPool, org_id: Uuid, profile: BuiltInProfile) -> Uuid {
-    let id = user(pool, org_id, OrgRole::Member).await;
+    let id = user(pool, org_id).await;
     let mut connection = pool.acquire().await.unwrap();
     crate::server_fns::provisioning::provision(&mut connection, org_id, id, profile)
         .await

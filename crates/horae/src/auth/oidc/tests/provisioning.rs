@@ -88,7 +88,6 @@ async fn first_sign_in_creates_an_active_member_bound_to_the_identity(pool: PgPo
         (user.org_id, user.email.as_str(), user.name.as_str()),
         (org_id, "Ada@Example.com", "Ada Lovelace")
     );
-    assert_eq!(user.org_role, OrgRole::Member);
     assert_eq!(
         crate::server_fns::test_seed::built_in_profile(&pool, org_id, user.id).await,
         Some((

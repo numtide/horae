@@ -3,7 +3,7 @@ use horae_core::permissions::catalog::BuiltInProfile;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = seed(pool, BuiltInProfile::ExecutiveManager).await;
-    let same_org = user(pool, ids.org_id, OrgRole::Manager).await;
+    let same_org = user(pool, ids.org_id).await;
     let foreign = seed(pool, BuiltInProfile::Administrator).await;
     let cookie = api.cookie(ids.user_id).await;
     let changed_cookie = api.cookie(same_org).await;

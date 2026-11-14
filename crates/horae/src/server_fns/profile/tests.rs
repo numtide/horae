@@ -32,14 +32,13 @@ async fn set_workspace_zone(pool: &PgPool, org_id: Uuid, zone: &str) {
 }
 
 /// A second person in the same organization.
-async fn colleague(pool: &PgPool, ids: &SeedIds, role: OrgRole) -> Uuid {
+async fn colleague(pool: &PgPool, ids: &SeedIds) -> Uuid {
     let id = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role) VALUES ($1, $2, $3, 'Colleague', $4)",
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, 'Colleague')",
         id,
         ids.org_id,
         format!("{id}@test.com"),
-        role as OrgRole,
     )
     .execute(pool)
     .await
@@ -122,7 +121,7 @@ async fn a_blank_or_overlong_name_is_rejected(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_profile_save_leaves_colleagues_alone(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
-    let other = colleague(&pool, &ids, OrgRole::Member).await;
+    let other = colleague(&pool, &ids).await;
     update_profile_record(&pool, ids.org_id, ids.user_id, "Ana", Some("Asia/Tokyo"))
         .await
         .unwrap();
@@ -173,7 +172,6 @@ async fn the_session_carries_both_zones_and_the_effective_offset(pool: PgPool) {
             email: "a@test.com".into(),
             name: "A".into(),
             oidc_subject: None,
-            org_role: OrgRole::Admin,
             cost_rate_cents: None,
             billable_rate_cents: None,
             active: true,

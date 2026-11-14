@@ -12,9 +12,9 @@ fn row(hours: &str, first: &str, last: &str, email: &str) -> String {
     format!("2026-01-15,Acme,Website,Design,{hours},{first},{last},{email}\n")
 }
 
-async fn account(pool: &PgPool, org: Uuid, email: &str) -> Option<(String, String, bool)> {
+async fn account(pool: &PgPool, org: Uuid, email: &str) -> Option<(String, bool)> {
     sqlx::query!(
-        r#"SELECT name, org_role::text AS "role!", active FROM users
+        r#"SELECT name, active FROM users
            WHERE org_id = $1 AND email = $2 AND cost_rate_cents IS NULL
              AND billable_rate_cents IS NULL AND oidc_subject IS NULL"#,
         org,
@@ -23,7 +23,7 @@ async fn account(pool: &PgPool, org: Uuid, email: &str) -> Option<(String, Strin
     .fetch_optional(pool)
     .await
     .unwrap()
-    .map(|r| (r.name, r.role, r.active))
+    .map(|r| (r.name, r.active))
 }
 
 async fn import(
@@ -62,7 +62,7 @@ async fn email_rows_create_one_deactivated_person_and_names_never_do(pool: PgPoo
     );
     assert_eq!(
         account(&pool, org, "new@acme.com").await,
-        Some(("New Person".into(), "member".into(), false))
+        Some(("New Person".into(), false))
     );
     assert_eq!(commit.people.len(), 1);
     assert_eq!(commit.people[0].outcome, PersonOutcome::Created);

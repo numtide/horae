@@ -6,7 +6,7 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
-    let restricted = user(pool, ids.org_id, OrgRole::Admin).await;
+    let restricted = user(pool, ids.org_id).await;
     for (actor, permissions) in [
         (ids.user_id, vec![Permission::ClientReadAll]),
         (restricted, vec![]),
@@ -18,13 +18,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             VALUES ($1,$2,$3,1,$4,false,'individual')",
             Uuid::now_v7(), ids.org_id, actor, &grants).execute(pool).await.unwrap();
     }
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     let cookie = api.cookie(ids.user_id).await;
     let restricted_cookie = api.cookie(restricted).await;
     let unbound_detail = json!({"client_id": ids.client_id, "expected_requester": null});

@@ -26,13 +26,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         crate::server_fns::test_seed::clear_state(pool, seed.user_id).await;
         sqlx::query!("INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
             VALUES ($1,$2,$3,1,$4,true,'individual')", Uuid::now_v7(), seed.org_id, seed.user_id, &grants).execute(pool).await.unwrap();
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-            seed.org_id
-        )
-        .execute(pool)
-        .await
-        .unwrap();
     }
     let command = TemplateCommand {
         request_id: Uuid::now_v7(),
@@ -85,10 +78,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .execute(pool)
     .await
     .unwrap();
-    sqlx::query!("UPDATE users SET org_role='admin' WHERE id=$1", ids.user_id)
-        .execute(pool)
-        .await
-        .unwrap();
     // All ordinary grants and claimed identity cannot replace explicit Administrator status.
     let denied = api.call(name, json!({"receipt_id":stored.id,"org_id":foreign.org_id,"user_id":foreign.user_id,"is_administrator":true}), Some(&cookie), false).await;
     assert_eq!(denied.status(), StatusCode::FORBIDDEN);

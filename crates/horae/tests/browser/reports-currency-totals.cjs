@@ -256,7 +256,7 @@ const format = (code, cents) => {
     assert.deepEqual(await assertTotals('after retry'), billable);
     assert.equal(await totalRow.locator('a, button, input, select, [tabindex]').count(), 0, 'Totals add nothing to the tab order');
 
-    await inspectTotals('admin', billable, await totalLines(6));
+    await inspectTotals('administrator', billable, await totalLines(6));
 
     // Report and rate grants are separate (C02). The same session first reads
     // everyone's time and billable rates but no costs, then time alone.

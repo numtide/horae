@@ -30,7 +30,7 @@ async fn read(pool: &PgPool, ids: &SeedIds) -> Vec<crate::models::ProjectBudgetO
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_budget_reader_does_not_require_legacy_management(pool: PgPool) {
+async fn canonical_budget_reader_needs_only_the_read_grant(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
         BuiltInProfile::Member,

@@ -32,7 +32,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .await
     .unwrap();
     let forged = format!(
-        "{path}?org_id={}&actor_id={}&org_role=admin",
+        "{path}?org_id={}&actor_id={}&is_administrator=true",
         foreign.org_id, foreign.user_id
     );
     let response = download(api, &forged, Some(&cookie)).await;

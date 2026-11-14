@@ -2,10 +2,7 @@ use super::own::{OwnPermissionsError, read};
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
 use crate::server_fns::{FORBIDDEN, server_version};
 use dioxus::prelude::ServerFnError;
-use horae_core::{
-    permissions::catalog::{BuiltInProfile, Permission},
-    types::OrgRole,
-};
+use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -35,24 +32,13 @@ async fn with_state(pool: &PgPool, profile: BuiltInProfile, administrator: bool)
     ids
 }
 
-/// The organization's permission policy no longer changes the answer.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn own_permissions_answer_from_the_stored_state_under_either_policy(pool: PgPool) {
+async fn own_permissions_answer_from_the_stored_state(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
-    for policy in [0, 1] {
-        sqlx::query!(
-            "UPDATE organizations SET permission_policy_version = $2 WHERE id = $1",
-            ids.org_id,
-            policy
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        let own = read(&pool, ids.org_id, ids.user_id).await.unwrap();
-        assert!(own.is_administrator, "policy {policy}");
-        assert_eq!(own.profile.as_deref(), Some("Administrator"));
-    }
+    let own = read(&pool, ids.org_id, ids.user_id).await.unwrap();
+    assert!(own.is_administrator);
+    assert_eq!(own.profile.as_deref(), Some("Administrator"));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -93,7 +79,7 @@ async fn own_permissions_name_the_profile_or_template(pool: PgPool) {
 }
 
 // `get_server_version` past its session lookup: the user as `require_user`
-// would load it. The stored role is dead data the check must not read.
+// would load it.
 fn session_user(ids: &SeedIds) -> crate::models::User {
     crate::models::User {
         id: ids.user_id,
@@ -101,7 +87,6 @@ fn session_user(ids: &SeedIds) -> crate::models::User {
         email: String::new(),
         name: String::new(),
         oidc_subject: None,
-        org_role: OrgRole::Admin,
         cost_rate_cents: None,
         billable_rate_cents: None,
         active: true,
@@ -125,7 +110,7 @@ async fn server_version_follows_the_stored_administrator_identity(pool: PgPool) 
     let admin = with_state(&pool, BuiltInProfile::Administrator, true).await;
     let version = server_version(&pool, &session_user(&admin)).await;
     assert_eq!(version.unwrap(), crate::version::current());
-    // Every grant without the identity, and a stored `admin` role, are not enough.
+    // Every grant without the identity is not enough.
     let member = with_state(&pool, BuiltInProfile::Administrator, false).await;
     let version = server_version(&pool, &session_user(&member)).await;
     assert!(is_forbidden(version));

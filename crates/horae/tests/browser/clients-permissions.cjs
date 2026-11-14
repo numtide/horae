@@ -124,10 +124,10 @@ let actor, org, owned = false, restoreSeededStates;
     await expect(edit).toBeFocused();
     console.log('PASS: detail refocus is one-shot across a failed reload; a successful edit returns to Edit client');
 
-    // Catalog reads without management, even for a legacy Administrator role.
+    // Catalog reads without management.
     setGrants(catalog);
     let overview = await success(await loadList());
-    assert.deepEqual([overview.canonical_permissions, overview.can_read, overview.can_manage], [true, true, false]);
+    assert.deepEqual([overview.can_read, overview.can_manage], [true, false]);
     assert.ok([unset, zero].every(client => overview.clients.some(row => row.client.id === client)));
     await expect(page.getByRole('link', { name: 'Permission zero client', exact: true })).toBeVisible();
     await expect(sidebarClients).toBeVisible();
@@ -138,7 +138,7 @@ let actor, org, owned = false, restoreSeededStates;
     await capture('read-only-list');
     for (const client of [unset, zero]) {
       const view = await success(await loadDetail(client));
-      assert.deepEqual([view.canonical_permissions, view.can_manage, Object.hasOwn(view.details, 'billing')], [true, false, false]);
+      assert.deepEqual([view.can_manage, Object.hasOwn(view.details, 'billing')], [false, false]);
       await expect(billing).toBeVisible();
       await expect(billing).not.toContainText('Default rate');
     }

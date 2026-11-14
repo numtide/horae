@@ -216,15 +216,14 @@ impl Api {
     }
 }
 
-async fn user(pool: &PgPool, org_id: Uuid, role: OrgRole) -> Uuid {
+/// Adds a person with no permission state; callers grant what they need.
+async fn user(pool: &PgPool, org_id: Uuid) -> Uuid {
     let id = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role) \
-         VALUES ($1, $2, $3, 'Test User', $4)",
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, 'Test User')",
         id,
         org_id,
         format!("{id}@test.com"),
-        role as OrgRole,
     )
     .execute(pool)
     .await
@@ -466,9 +465,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         .cookie(add_person(&pool, owner.org_id, BuiltInProfile::ExecutiveManager).await)
         .await;
     // A person whose leftover role says admin but who has no stored state.
-    let stateless = api
-        .cookie(user(&pool, owner.org_id, OrgRole::Admin).await)
-        .await;
+    let stateless = api.cookie(user(&pool, owner.org_id).await).await;
     let inactive_id = add_person(&pool, owner.org_id, BuiltInProfile::Administrator).await;
     let inactive = api.cookie(inactive_id).await;
     sqlx::query!("UPDATE users SET active = false WHERE id = $1", inactive_id)

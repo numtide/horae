@@ -21,7 +21,7 @@ async fn assignment_gate_allows_inflight_invoice_organization_fks_to_finish(pool
     .await
     .unwrap();
     let actor = sqlx::query_as!(User,
-        r#"SELECT id, org_id, email, name, oidc_subject, org_role AS "org_role: OrgRole",
+        r#"SELECT id, org_id, email, name, oidc_subject,
         cost_rate_cents, billable_rate_cents, active, created_at AS "created_at: chrono::DateTime<chrono::Utc>"
         FROM users WHERE id=$1"#, ids.user_id,
     ).fetch_one(&pool).await.unwrap();
@@ -741,8 +741,7 @@ async fn invoice_defaults_legacy_insert_preserves_dates_and_exact_total(pool: Pg
             .collect(),
     );
     previous.run(&pool).await.unwrap();
-    let ids =
-        crate::server_fns::test_seed::seed_before_permission_state(&pool, OrgRole::Manager).await;
+    let ids = crate::server_fns::test_seed::seed_tenant(&pool).await;
     let id = uuid::Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents)
@@ -1742,8 +1741,7 @@ async fn effective_minutes_migration_preserves_historical_invoice_quantities(poo
             .collect(),
     );
     previous.run(&pool).await.unwrap();
-    let ids =
-        crate::server_fns::test_seed::seed_before_permission_state(&pool, OrgRole::Manager).await;
+    let ids = crate::server_fns::test_seed::seed_tenant(&pool).await;
     let legacy = time_entry(&pool, &ids, EntryState::Open).await;
     let frozen = time_entry(&pool, &ids, EntryState::Open).await;
     let open = time_entry(&pool, &ids, EntryState::Open).await;

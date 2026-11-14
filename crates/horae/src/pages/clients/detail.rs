@@ -30,9 +30,8 @@ fn ClientDetailContent(id: Uuid) -> Element {
         if archive_pending.peek().is_none() {
             archiving.set(None);
         }
-        let expected = binding.peek().as_ref().map(|(requester, _)| *requester);
-        let view = server_fns::client_detail_view(id.to_string(), expected).await?;
-        super::bind(binding, (view.requester, view.canonical_permissions))?;
+        let view = server_fns::client_detail_view(id.to_string(), *binding.peek()).await?;
+        super::bind(binding, view.requester)?;
         Ok::<_, ServerFnError>(view)
     });
     // The header control to refocus once a save or status change has reloaded.

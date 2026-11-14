@@ -97,14 +97,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .status(),
         StatusCode::OK
     );
-    // The scoped entry reader is the time domain's and still reads the policy.
-    sqlx::query!(
-        "UPDATE organizations SET permission_policy_version=1 WHERE id=$1",
-        ids.org_id
-    )
-    .execute(pool)
-    .await
-    .unwrap();
     // A person without permission state cannot read anything. The view and
     // the downloads refuse, as the financial report does.
     crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;

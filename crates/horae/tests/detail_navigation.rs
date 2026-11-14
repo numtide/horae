@@ -103,7 +103,8 @@ type ProjectSpendResponse = Result<Vec<server_fns::ProjectSpend>, ServerFnError>
 #[derive(Clone, Default)]
 struct Probe {
     member: bool,
-    canonical: bool,
+    /// Reads clients without managing them or their invoices.
+    reader: bool,
     /// Opt-in for tests that refresh Clients through a status change; every
     /// other navigation mutation stays fail-fast.
     allow_client_activity: bool,
@@ -1010,9 +1011,8 @@ mod server_fns {
         }
         Ok(client::ClientDetailView {
             requester: super::client_tests::requester(),
-            canonical_permissions: probe.canonical,
-            can_manage: !probe.member && !probe.canonical,
-            can_read_invoices: !probe.member && !probe.canonical,
+            can_manage: !probe.member && !probe.reader,
+            can_read_invoices: !probe.member && !probe.reader,
             details: get_client_details(id).await?,
         })
     }
@@ -1036,8 +1036,8 @@ mod server_fns {
             "navigation must not change client status"
         );
         assert!(
-            !probe.member && !probe.canonical,
-            "only legacy managers may change client status"
+            !probe.member && !probe.reader,
+            "only client managers may change client status"
         );
         probe.client_status_changes.borrow_mut().push((id, active));
         Ok(super::client_tests::client_record(id))

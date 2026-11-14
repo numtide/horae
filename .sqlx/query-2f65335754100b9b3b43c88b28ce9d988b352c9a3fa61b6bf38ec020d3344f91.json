@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT access_revision,\n         (SELECT count(*) FROM permission_templates) AS templates,\n         (SELECT count(*) FROM person_permission_states) AS people\n         FROM organizations WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "templates",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "people",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "2f65335754100b9b3b43c88b28ce9d988b352c9a3fa61b6bf38ec020d3344f91"
+}

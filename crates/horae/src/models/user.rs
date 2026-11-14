@@ -1,7 +1,5 @@
 #[cfg(feature = "server")]
 use chrono::{DateTime, Utc};
-#[cfg(feature = "server")]
-use horae_core::types::OrgRole;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -117,7 +115,6 @@ pub struct User {
     pub email: String,
     pub name: String,
     pub oidc_subject: Option<String>,
-    pub org_role: OrgRole,
     pub cost_rate_cents: Option<i64>,
     pub billable_rate_cents: Option<i64>,
     pub active: bool,

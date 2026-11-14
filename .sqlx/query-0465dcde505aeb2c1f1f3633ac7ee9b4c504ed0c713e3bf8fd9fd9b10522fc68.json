@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT name, active FROM users\n           WHERE org_id = $1 AND email = $2 AND cost_rate_cents IS NULL\n             AND billable_rate_cents IS NULL AND oidc_subject IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "active",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "0465dcde505aeb2c1f1f3633ac7ee9b4c504ed0c713e3bf8fd9fd9b10522fc68"
+}

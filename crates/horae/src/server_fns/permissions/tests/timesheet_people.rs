@@ -143,7 +143,7 @@ async fn candidates_include_empty_project_members_and_retained_history_without_d
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn profiles_and_custom_grants_use_time_scope_not_legacy_role_or_directory(pool: PgPool) {
+async fn profiles_and_custom_grants_use_time_scope_not_the_directory(pool: PgPool) {
     let seed = fixture(&pool).await;
     let target = person(&pool, seed.org_id, false, BuiltInProfile::Member).await;
     let outside = person(&pool, seed.org_id, false, BuiltInProfile::Member).await;

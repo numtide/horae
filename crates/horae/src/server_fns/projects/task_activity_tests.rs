@@ -7,9 +7,7 @@ use sqlx::PgPool;
 
 #[sqlx::test(migrations = false)]
 #[serial_test::serial]
-async fn project_task_activity_migration_preserves_legacy_and_archives_canonical_links(
-    pool: PgPool,
-) {
+async fn project_task_activity_migration_preserves_existing_links(pool: PgPool) {
     let mut previous = sqlx::migrate!("./migrations");
     previous.migrations = std::borrow::Cow::Owned(
         previous
@@ -20,20 +18,12 @@ async fn project_task_activity_migration_preserves_legacy_and_archives_canonical
     );
     previous.run(&pool).await.unwrap();
     let legacy = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
-    let (canonical, _) = fixture(
-        &pool,
-        BuiltInProfile::Member,
-        PermissionSelection::new(&[Permission::TaskWriteAll]),
-    )
-    .await;
-    for ids in [&legacy, &canonical] {
-        sqlx::query!("UPDATE tasks SET active=false WHERE id=$1", ids.task_id)
-            .execute(&pool)
-            .await
-            .unwrap();
-        sqlx::query!("INSERT INTO project_tasks (project_id,task_id,billable,rate_cents) VALUES ($1,$2,true,1200)", ids.project_id, ids.task_id).execute(&pool).await.unwrap();
-        time_entry(&pool, ids, EntryState::Open).await;
-    }
+    sqlx::query!("UPDATE tasks SET active=false WHERE id=$1", legacy.task_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!("INSERT INTO project_tasks (project_id,task_id,billable,rate_cents) VALUES ($1,$2,true,1200)", legacy.project_id, legacy.task_id).execute(&pool).await.unwrap();
+    time_entry(&pool, &legacy, EntryState::Open).await;
     let legacy_revision = sqlx::query_scalar!(
         "SELECT edit_revision FROM projects WHERE id=$1",
         legacy.project_id
@@ -42,23 +32,28 @@ async fn project_task_activity_migration_preserves_legacy_and_archives_canonical
     .await
     .unwrap();
     sqlx::migrate!("./migrations").run(&pool).await.unwrap();
-    for (ids, active) in [(&legacy, true), (&canonical, false)] {
-        let row = sqlx::query!("SELECT active,billable,rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2", ids.project_id, ids.task_id).fetch_one(&pool).await.unwrap();
-        assert_eq!(
-            (row.active, row.billable, row.rate_cents),
-            (active, true, Some(1200))
-        );
-        assert_eq!(
-            sqlx::query_scalar!(
-                "SELECT sum(minutes)::bigint FROM time_entries WHERE org_id=$1",
-                ids.org_id
-            )
-            .fetch_one(&pool)
-            .await
-            .unwrap(),
-            Some(60)
-        );
-    }
+    let row = sqlx::query!(
+        "SELECT active,billable,rate_cents FROM project_tasks WHERE project_id=$1 AND task_id=$2",
+        legacy.project_id,
+        legacy.task_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (row.active, row.billable, row.rate_cents),
+        (true, true, Some(1200))
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT sum(minutes)::bigint FROM time_entries WHERE org_id=$1",
+            legacy.org_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(60)
+    );
     assert_eq!(
         sqlx::query_scalar!(
             "SELECT edit_revision FROM projects WHERE id=$1",

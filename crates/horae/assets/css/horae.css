@@ -1031,7 +1031,7 @@ tbody tr:hover { background: var(--color-row-hover); }
 .badge-danger  { color: var(--color-danger-fg);  background: var(--color-danger-bg);  border-color: var(--color-danger-line); }
 .badge-info    { color: var(--color-primary-light); background: var(--color-primary-bg); border-color: var(--color-primary-border); }
 .badge-neutral { color: var(--color-text-secondary); background: var(--color-menu); border-color: var(--color-border); }
-/* Compact pill, e.g. the role tag in the account menu header. */
+/* Compact pill, e.g. the profile tag in the account menu header. */
 .badge-sm { gap: 6px; padding: 3px 9px; }
 .badge-sm::before { width: 6px; height: 6px; }
 .badge-success::before,

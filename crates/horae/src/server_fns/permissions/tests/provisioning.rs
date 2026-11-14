@@ -2,7 +2,7 @@ use super::*;
 use crate::models::people::PeopleActivity;
 use crate::models::permission_editor::{ProfileAction, ProfileCommand};
 use crate::server_fns::permissions::{directory, profiles};
-use crate::server_fns::test_seed::{built_in_profile, use_policy_one};
+use crate::server_fns::test_seed::built_in_profile;
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 
@@ -15,7 +15,7 @@ async fn only_user(pool: &PgPool) -> (Uuid, Uuid) {
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn init_creates_an_administrator_who_administers_under_policy_one(pool: PgPool) {
+async fn init_creates_an_administrator_who_administers(pool: PgPool) {
     crate::init::run(&pool, "Contoso", "ops@contoso.example", "Ops")
         .await
         .unwrap();
@@ -25,7 +25,6 @@ async fn init_creates_an_administrator_who_administers_under_policy_one(pool: Pg
         Some((BuiltInProfile::Administrator, true))
     );
 
-    use_policy_one(&pool, org).await;
     let page = directory::read(&pool, org, admin, PeopleActivity::Active, None)
         .await
         .unwrap();
@@ -53,7 +52,7 @@ async fn init_creates_an_administrator_who_administers_under_policy_one(pool: Pg
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn seed_gives_the_demo_admin_the_administrator_state(pool: PgPool) {
     crate::seed::run(&pool).await.unwrap();
-    let admin = sqlx::query!("SELECT org_id, id FROM users WHERE org_role = 'admin'")
+    let admin = sqlx::query!("SELECT org_id, id FROM users WHERE email = 'admin@example.com'")
         .fetch_one(&pool)
         .await
         .unwrap();

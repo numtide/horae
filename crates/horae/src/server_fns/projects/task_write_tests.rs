@@ -349,7 +349,7 @@ async fn task_creation_rechecks_revoked_grants_after_organization_wait(pool: PgP
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn global_task_creation_accepts_current_grant_without_legacy_manager(pool: PgPool) {
+async fn global_task_creation_accepts_a_member_with_the_write_grant(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
         BuiltInProfile::Member,
@@ -374,7 +374,7 @@ async fn global_task_creation_accepts_current_grant_without_legacy_manager(pool:
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn global_task_creation_does_not_inherit_legacy_administrator_authority(pool: PgPool) {
+async fn global_task_creation_needs_a_grant_even_with_the_administrator_profile(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
         BuiltInProfile::Administrator,

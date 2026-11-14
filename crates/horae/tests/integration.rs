@@ -1,7 +1,7 @@
 #![cfg(feature = "server")]
 
 use chrono::{DateTime, Duration, NaiveDate, Utc};
-use horae_core::types::{EntryState, InvoiceStatus, OrgRole, ProjectRole, RoundDir};
+use horae_core::types::{EntryState, InvoiceStatus, ProjectRole, RoundDir};
 use serial_test::serial;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -22,17 +22,15 @@ async fn seed_org(pool: &PgPool) -> Uuid {
     id
 }
 
-async fn seed_user(pool: &PgPool, org_id: Uuid, role: OrgRole) -> Uuid {
+async fn seed_user(pool: &PgPool, org_id: Uuid) -> Uuid {
     let id = Uuid::now_v7();
     let email = format!("{}@test.com", id);
     sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role) \
-         VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, $4)",
         id,
         org_id,
         email,
         "Test User",
-        role as OrgRole,
     )
     .execute(pool)
     .await
@@ -322,7 +320,7 @@ async fn insert_money_entry(
 #[serial]
 async fn timer_start_stop_records_minutes(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // Start a timer by inserting a running entry whose started_at is 5 minutes
@@ -401,7 +399,7 @@ async fn timer_start_stop_records_minutes(pool: PgPool) {
 #[serial]
 async fn timer_under_a_minute_records_zero(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     let entry_id = insert_running_entry(
@@ -460,7 +458,7 @@ async fn timer_under_a_minute_records_zero(pool: PgPool) {
 #[serial]
 async fn one_timer_per_user_enforced(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // First running timer -- should succeed
@@ -504,7 +502,7 @@ async fn one_timer_per_user_enforced(pool: PgPool) {
 #[serial]
 async fn submitted_entries_cannot_be_updated(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     let entry_id = insert_entry(
@@ -578,7 +576,7 @@ async fn rounding_applied_on_submit(pool: PgPool) {
     .await
     .unwrap();
 
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // Insert entry with 8 raw minutes
@@ -659,7 +657,7 @@ async fn rounding_applied_on_submit(pool: PgPool) {
 #[serial]
 async fn unassigned_user_cannot_create_entry(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, _task_id, _) = seed_project_without_assignment(&pool, org_id).await;
 
     // Confirm no assignment exists
@@ -683,8 +681,8 @@ async fn unassigned_user_cannot_create_entry(pool: PgPool) {
 #[serial]
 async fn approval_workflow_approve_and_reject(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
-    let manager_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let user_id = seed_user(&pool, org_id).await;
+    let manager_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     let period_start = NaiveDate::from_ymd_opt(2026, 7, 1).unwrap();
@@ -856,8 +854,8 @@ async fn approval_workflow_approve_and_reject(pool: PgPool) {
 #[serial]
 async fn reject_after_approve_reopens_entries(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
-    let manager_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let user_id = seed_user(&pool, org_id).await;
+    let manager_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     let period_start = NaiveDate::from_ymd_opt(2026, 8, 3).unwrap();
@@ -955,8 +953,8 @@ async fn reject_after_approve_reopens_entries(pool: PgPool) {
 #[serial]
 async fn resubmit_after_approve_is_refused(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
-    let manager_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let user_id = seed_user(&pool, org_id).await;
+    let manager_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     let period_start = NaiveDate::from_ymd_opt(2026, 8, 10).unwrap();
@@ -1073,7 +1071,7 @@ async fn resubmit_after_approve_is_refused(pool: PgPool) {
 #[serial]
 async fn approval_hours_aggregate_billable_within_period(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     let period_start = NaiveDate::from_ymd_opt(2026, 8, 3).unwrap();
@@ -1136,7 +1134,7 @@ async fn approval_hours_aggregate_billable_within_period(pool: PgPool) {
 #[serial]
 async fn new_task_becomes_loggable_on_project(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, _existing_task, _) =
         seed_project_with_assignment(&pool, org_id, user_id).await;
 
@@ -1222,7 +1220,7 @@ async fn new_task_becomes_loggable_on_project(pool: PgPool) {
 #[serial]
 async fn inactive_project_hidden_from_picker_but_kept_on_history(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // Log a completed entry against the project.
@@ -1283,7 +1281,7 @@ async fn inactive_project_hidden_from_picker_but_kept_on_history(pool: PgPool) {
 #[serial]
 async fn generate_invoice_totals_match(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, client_id) =
         seed_project_with_assignment(&pool, org_id, user_id).await;
 
@@ -1496,7 +1494,7 @@ async fn generate_invoice_totals_match(pool: PgPool) {
 #[serial]
 async fn invoiced_entries_cannot_be_rebilled(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, client_id) =
         seed_project_with_assignment(&pool, org_id, user_id).await;
 
@@ -1563,7 +1561,7 @@ async fn invoiced_entries_cannot_be_rebilled(pool: PgPool) {
 #[serial]
 async fn void_invoice_restores_entries(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, client_id) =
         seed_project_with_assignment(&pool, org_id, user_id).await;
 
@@ -1671,7 +1669,7 @@ async fn void_invoice_restores_entries(pool: PgPool) {
 #[serial]
 async fn approved_entries_are_invoiceable(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, client_id) =
         seed_project_with_assignment(&pool, org_id, user_id).await;
 
@@ -1730,7 +1728,7 @@ async fn approved_entries_are_invoiceable(pool: PgPool) {
 #[serial]
 async fn invoicing_update_skips_already_invoiced_entries(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, client_id) =
         seed_project_with_assignment(&pool, org_id, user_id).await;
 
@@ -1809,7 +1807,7 @@ async fn invoicing_update_skips_already_invoiced_entries(pool: PgPool) {
 #[serial]
 async fn duplicate_invoice_numbers_rejected(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (_project_id, _task_id, client_id) =
         seed_project_with_assignment(&pool, org_id, user_id).await;
 
@@ -1838,45 +1836,36 @@ async fn duplicate_invoice_numbers_rejected(pool: PgPool) {
 #[serial]
 async fn admin_creates_user_and_duplicate_rejected(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let _admin_id = seed_user(&pool, org_id, OrgRole::Admin).await;
+    let _admin_id = seed_user(&pool, org_id).await;
 
     // Create a new user via direct SQL (mirroring the create_user server fn logic).
     let new_id = Uuid::now_v7();
     let email = "alice@example.com";
     sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role) \
-         VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, $4)",
         new_id,
         org_id,
         email,
         "Alice",
-        OrgRole::Manager as OrgRole,
     )
     .execute(&pool)
     .await
     .unwrap();
 
-    // Verify the user was created with the correct role.
-    let row = sqlx::query!(
-        r#"SELECT org_role::text as "role!: String", active FROM users WHERE id = $1"#,
-        new_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(row.role, "manager");
-    assert!(row.active);
+    let active = sqlx::query_scalar!("SELECT active FROM users WHERE id = $1", new_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert!(active);
 
     // Attempt to create a second user with the same email — must fail.
     let dup_id = Uuid::now_v7();
     let result = sqlx::query!(
-        "INSERT INTO users (id, org_id, email, name, org_role) \
-         VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, $4)",
         dup_id,
         org_id,
         email,
         "Alice Dup",
-        OrgRole::Member as OrgRole,
     )
     .execute(&pool)
     .await;
@@ -1887,13 +1876,13 @@ async fn admin_creates_user_and_duplicate_rejected(pool: PgPool) {
 }
 
 /// Deactivating a user blocks them from the active-user queries used by
-/// auth helpers (require_admin, require_manager, get_me all filter
-/// `active = true`), while their historical time entries remain intact (FR-002).
+/// authentication (`require_user` and `Actor::load` both filter on `active`),
+/// while their historical time entries remain intact (FR-002).
 #[sqlx::test(migrations = "./migrations")]
 #[serial]
 async fn deactivated_user_blocked_and_history_preserved(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // Create a time entry for this user.
@@ -1916,7 +1905,7 @@ async fn deactivated_user_blocked_and_history_preserved(pool: PgPool) {
         .await
         .unwrap();
 
-    // The active-only user lookup (used by require_admin/require_manager/get_me)
+    // The active-only user lookup (used by `require_user` and `Actor::load`)
     // no longer finds them.
     let found = sqlx::query_scalar!(
         "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND active = true)",
@@ -1932,10 +1921,22 @@ async fn deactivated_user_blocked_and_history_preserved(pool: PgPool) {
     );
 
     // Dev login query also excludes inactive users.
-    let dev_admin = sqlx::query_scalar!(
-        "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND active = true AND org_role = $2)",
+    sqlx::query!(
+        "INSERT INTO person_permission_states
+           (id, org_id, user_id, catalog_version, grants, is_administrator, source)
+         VALUES ($1, $2, $3, 1, '{}', true, 'individual')",
+        Uuid::now_v7(),
+        org_id,
         user_id,
-        OrgRole::Admin as OrgRole,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let dev_admin = sqlx::query_scalar!(
+        "SELECT EXISTS(SELECT 1 FROM users u
+           JOIN person_permission_states p ON p.org_id = u.org_id AND p.user_id = u.id
+           WHERE u.id = $1 AND p.is_administrator AND u.active)",
+        user_id,
     )
     .fetch_one(&pool)
     .await
@@ -1987,79 +1988,6 @@ async fn deactivated_user_blocked_and_history_preserved(pool: PgPool) {
     assert!(found_again, "reactivated user should be findable again");
 }
 
-/// Role model enforces correct gating: the `require_manager` and
-/// `require_admin` server-fn helpers filter `WHERE active = true` and then
-/// check the role on the User model. This test validates the role hierarchy
-/// at the DB level using the same queries the auth helpers use.
-#[sqlx::test(migrations = "./migrations")]
-#[serial]
-async fn role_gating_member_vs_manager_vs_admin(pool: PgPool) {
-    let org_id = seed_org(&pool).await;
-    let member_id = seed_user(&pool, org_id, OrgRole::Member).await;
-    let manager_id = seed_user(&pool, org_id, OrgRole::Manager).await;
-    let admin_id = seed_user(&pool, org_id, OrgRole::Admin).await;
-
-    // The require_admin() helper queries `WHERE id = $1 AND active = true`
-    // then checks `org_role == Admin`. Simulate that check at the DB level.
-    let member_role: OrgRole = sqlx::query_scalar!(
-        r#"SELECT org_role as "org_role!: OrgRole" FROM users WHERE id = $1 AND active = true"#,
-        member_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-
-    let manager_role: OrgRole = sqlx::query_scalar!(
-        r#"SELECT org_role as "org_role!: OrgRole" FROM users WHERE id = $1 AND active = true"#,
-        manager_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-
-    let admin_role: OrgRole = sqlx::query_scalar!(
-        r#"SELECT org_role as "org_role!: OrgRole" FROM users WHERE id = $1 AND active = true"#,
-        admin_id,
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-
-    // Member: denied by both manager and admin gates.
-    assert_eq!(member_role, OrgRole::Member);
-    assert!(
-        !matches!(member_role, OrgRole::Admin | OrgRole::Manager),
-        "member must be denied by require_manager()"
-    );
-    assert_ne!(
-        member_role,
-        OrgRole::Admin,
-        "member must be denied by require_admin()"
-    );
-
-    // Manager: passes manager gate, denied by admin gate.
-    assert!(
-        matches!(manager_role, OrgRole::Admin | OrgRole::Manager),
-        "manager must pass require_manager()"
-    );
-    assert_ne!(
-        manager_role,
-        OrgRole::Admin,
-        "manager must be denied by require_admin()"
-    );
-
-    // Admin: passes both gates.
-    assert!(
-        matches!(admin_role, OrgRole::Admin | OrgRole::Manager),
-        "admin must pass require_manager()"
-    );
-    assert_eq!(
-        admin_role,
-        OrgRole::Admin,
-        "admin must pass require_admin()"
-    );
-}
-
 // ---------------------------------------------------------------------------
 // US3: invoicing tracked time (continued)
 // ---------------------------------------------------------------------------
@@ -2069,7 +1997,7 @@ async fn role_gating_member_vs_manager_vs_admin(pool: PgPool) {
 #[serial]
 async fn rate_resolution_cascade(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Manager).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _client_id) =
         seed_project_with_assignment(&pool, org_id, user_id).await;
 
@@ -2227,7 +2155,7 @@ async fn rate_resolution_cascade(pool: PgPool) {
 #[serial]
 async fn start_minute_round_trips_and_is_constrained(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     async fn insert(
@@ -2332,7 +2260,7 @@ async fn stopping_timer_records_start_minute(pool: PgPool) {
     use chrono::Timelike;
 
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // A timer that started at 09:07 UTC.
@@ -2391,7 +2319,7 @@ async fn stopping_timer_records_start_minute(pool: PgPool) {
 #[serial]
 async fn totals_unaffected_by_start_minute(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     for (minutes, start) in [(30i32, None), (60, Some(540i32)), (90, Some(840))] {
@@ -2437,7 +2365,7 @@ async fn totals_unaffected_by_start_minute(pool: PgPool) {
 #[serial]
 async fn reschedule_moves_open_entry_and_rejects_locked(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // An open timed entry: today 09:00 for 60m.
@@ -2504,7 +2432,7 @@ async fn reschedule_moves_open_entry_and_rejects_locked(pool: PgPool) {
 #[serial]
 async fn reorder_untimed_orders_and_moves_across_days(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // Two untimed entries on today, one on tomorrow (day offset 0 vs 1).
@@ -2587,7 +2515,7 @@ async fn reorder_untimed_orders_and_moves_across_days(pool: PgPool) {
 #[serial]
 async fn submit_week_with_running_timer_is_refused(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     let ws = chrono::Utc::now().date_naive();
@@ -2715,7 +2643,7 @@ async fn submit_week_with_running_timer_is_refused(pool: PgPool) {
 #[serial]
 async fn stop_timer_refuses_entry_that_left_open(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     // A running entry that was (wrongly) locked mid-run: submitted with its
@@ -2790,7 +2718,7 @@ async fn stop_timer_refuses_entry_that_left_open(pool: PgPool) {
 #[serial]
 async fn a_second_running_timer_is_refused_by_the_insert(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
     let today = chrono::Utc::now().date_naive();
 
@@ -2853,7 +2781,7 @@ async fn a_second_running_timer_is_refused_by_the_insert(pool: PgPool) {
 #[serial]
 async fn the_long_timer_sweep_claims_each_timer_once(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let user_id = seed_user(&pool, org_id, OrgRole::Member).await;
+    let user_id = seed_user(&pool, org_id).await;
     let (project_id, task_id, _) = seed_project_with_assignment(&pool, org_id, user_id).await;
 
     sqlx::query!(
@@ -3034,8 +2962,8 @@ async fn line_amount_cents_sql_and_rust_reject_final_overflow(pool: PgPool) {
 #[serial]
 async fn project_spend_grouped_in_sql_matches_the_rust_fold(pool: PgPool) {
     let org_id = seed_org(&pool).await;
-    let ana = seed_user(&pool, org_id, OrgRole::Member).await;
-    let bob = seed_user(&pool, org_id, OrgRole::Member).await;
+    let ana = seed_user(&pool, org_id).await;
+    let bob = seed_user(&pool, org_id).await;
 
     // Project one bills off the task rate, which outranks Ana's assignment and
     // her org-wide default.
