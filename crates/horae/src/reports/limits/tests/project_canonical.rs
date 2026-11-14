@@ -1,8 +1,8 @@
 use super::*;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
-async fn canonical(pool: &PgPool, role: BuiltInProfile, permissions: &[Permission]) -> SeedIds {
-    let ids = seed(pool, role).await;
+async fn canonical(pool: &PgPool, profile: BuiltInProfile, permissions: &[Permission]) -> SeedIds {
+    let ids = seed(pool, profile).await;
     let grants: Vec<String> = serde_json::from_value(
         serde_json::to_value(PermissionSelection::new(permissions)).unwrap(),
     )

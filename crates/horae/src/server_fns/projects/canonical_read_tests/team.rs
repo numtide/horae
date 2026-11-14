@@ -62,7 +62,7 @@ async fn project_reader_can_read_retained_team_without_people_directory_or_rates
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_member_does_not_inherit_legacy_admin_team(pool: PgPool) {
+async fn administrator_profile_without_grants_sees_only_its_own_membership(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
         BuiltInProfile::Administrator,

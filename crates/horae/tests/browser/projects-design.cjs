@@ -15,7 +15,13 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
   const errors = [];
   const mutations = [];
   let empty = false;
-  let role = 'admin';
+  // The access flags the overview returns for each built-in profile.
+  const access = {
+    Administrator: { can_create: true, can_import: true, can_change_status: true, can_edit: true },
+    'Executive Manager': { can_create: true, can_import: false, can_change_status: true, can_edit: true },
+    Member: { can_create: false, can_import: false, can_change_status: false, can_edit: false },
+  };
+  let profile = 'Administrator';
   let spendFails = false;
   let holdSpend = false;
   let releaseSpend;
@@ -57,10 +63,10 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
         fixtureProject = { ...projects[0], id: '01950000-0000-7000-8000-000000000005',
           name: 'Design budget project', code: null, active: true, budget_kind: 'amount',
           budget_amount_cents: 10000, currency: 'EUR' };
+        const { can_edit, ...flags } = access[profile];
         return route.fulfill({ response, json: {
-          ...overview, can_create: role !== 'member', can_import: role === 'admin',
-          can_change_status: role !== 'member',
-          projects: empty ? [] : [{ project: fixtureProject, client: fixtureClient, can_edit: role !== 'member' }],
+          ...overview, ...flags,
+          projects: empty ? [] : [{ project: fixtureProject, client: fixtureClient, can_edit }],
         } });
       }
       return route.continue();
@@ -254,8 +260,8 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
     budgetRows = [];
 
     empty = true;
-    for (const [orgRole, canCreate, canImport] of [['admin', true, true], ['manager', true, false], ['member', false, false]]) {
-      role = orgRole;
+    for (const [name, { can_create: canCreate, can_import: canImport }] of Object.entries(access)) {
+      profile = name;
       await visit();
       const state = page.locator('.empty-state');
       await expect(state.getByRole('heading', { name: 'No projects yet', exact: true })).toBeVisible();
@@ -285,13 +291,13 @@ assert.ok(['localhost', '127.0.0.1'].includes(target.hostname) && target.port !=
         await page.getByRole('button', { name: /Back to Projects/ }).click();
         await expect(page).toHaveURL(`${base}/projects`);
       }
-      console.log(`PASS: empty-state guidance and action visibility for ${orgRole}`);
+      console.log(`PASS: empty-state guidance and action visibility for ${profile}`);
     }
     await page.locator('html').evaluate(root => { root.dataset.theme = 'light'; });
     await expect(page.locator('.empty-state-text')).toHaveCSS('color', 'rgb(107, 100, 89)');
     await expect(page.locator('.empty-state')).toHaveCSS('background-color', 'rgb(248, 245, 238)');
     await page.locator('html').evaluate(root => { root.dataset.theme = 'dark'; });
-    role = 'admin';
+    profile = 'Administrator';
     await page.goto(`${base}/components`);
     for (const name of [/^Actions/, /^Filter by client/]) {
       const trigger = page.getByRole('button', { name });

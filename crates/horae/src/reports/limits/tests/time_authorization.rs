@@ -102,8 +102,8 @@ async fn project(pool: &PgPool, ids: &SeedIds) -> Uuid {
     id
 }
 
-async fn scoped(pool: &PgPool, role: BuiltInProfile, grants: &[Permission]) -> SeedIds {
-    let ids = seed(pool, role).await;
+async fn scoped(pool: &PgPool, profile: BuiltInProfile, grants: &[Permission]) -> SeedIds {
+    let ids = seed(pool, profile).await;
     let grants: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(grants)).unwrap())
             .unwrap();

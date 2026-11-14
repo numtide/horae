@@ -211,12 +211,12 @@ pub(super) fn session_user(ids: &SeedIds) -> User {
 async fn detail_view_identity_and_lifecycle_affordances_follow_the_profile(pool: PgPool) {
     // Archiving needs `ProjectWriteAll` here (nobody manages the project), and
     // the client link needs `ClientReadAll`; a Member has neither.
-    for (role, can_change_status) in [
+    for (profile, can_change_status) in [
         (BuiltInProfile::Administrator, true),
         (BuiltInProfile::ExecutiveManager, true),
         (BuiltInProfile::Member, false),
     ] {
-        let ids = seed(&pool, role).await;
+        let ids = seed(&pool, profile).await;
         sqlx::query!(
             "INSERT INTO assignments (id,project_id,user_id) VALUES ($1,$2,$3)",
             Uuid::now_v7(),
@@ -230,11 +230,15 @@ async fn detail_view_identity_and_lifecycle_affordances_follow_the_profile(pool:
         let view = detail_view::fetch(&pool, &viewer, ids.project_id, None, today())
             .await
             .unwrap();
-        assert_eq!(view.client_id, ids.client_id, "{role:?}");
-        assert_eq!(view.project_type, ProjectType::TimeAndMaterials, "{role:?}");
-        assert!(view.active, "{role:?}");
-        assert_eq!(view.can_open_client, can_change_status, "{role:?}");
-        assert_eq!(view.can_change_status, can_change_status, "{role:?}");
+        assert_eq!(view.client_id, ids.client_id, "{profile:?}");
+        assert_eq!(
+            view.project_type,
+            ProjectType::TimeAndMaterials,
+            "{profile:?}"
+        );
+        assert!(view.active, "{profile:?}");
+        assert_eq!(view.can_open_client, can_change_status, "{profile:?}");
+        assert_eq!(view.can_change_status, can_change_status, "{profile:?}");
 
         sqlx::query!(
             "UPDATE projects SET active=false, project_type='fixed_fee' WHERE id=$1",
@@ -252,9 +256,9 @@ async fn detail_view_identity_and_lifecycle_affordances_follow_the_profile(pool:
         )
         .await
         .unwrap();
-        assert!(!archived.active, "{role:?}");
-        assert_eq!(archived.project_type, ProjectType::FixedFee, "{role:?}");
-        assert_eq!(archived.can_change_status, can_change_status, "{role:?}");
+        assert!(!archived.active, "{profile:?}");
+        assert_eq!(archived.project_type, ProjectType::FixedFee, "{profile:?}");
+        assert_eq!(archived.can_change_status, can_change_status, "{profile:?}");
     }
 }
 

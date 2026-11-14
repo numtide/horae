@@ -568,9 +568,9 @@ mod tests {
 
     async fn linked_seed(
         pool: &PgPool,
-        role: BuiltInProfile,
+        profile: BuiltInProfile,
     ) -> crate::server_fns::test_seed::SeedIds {
-        let ids = seed(pool, role).await;
+        let ids = seed(pool, profile).await;
         sqlx::query!(
             "INSERT INTO project_tasks (project_id, task_id, billable) VALUES ($1, $2, true)",
             ids.project_id,

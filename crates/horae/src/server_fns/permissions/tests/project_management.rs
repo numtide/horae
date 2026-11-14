@@ -961,7 +961,7 @@ async fn historical_replay_does_not_reapply_removed_or_now_ineligible_designatio
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn managed_scope_never_uses_another_project_or_legacy_membership(pool: PgPool) {
+async fn managed_scope_never_uses_another_project_or_tracking_membership(pool: PgPool) {
     let ids = fixture(&pool).await;
     let editor = person(&pool, ids.org_id, &[Permission::ProjectWriteManaged]).await;
     sqlx::query!(

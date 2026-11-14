@@ -5,7 +5,7 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     let mut failures = Vec::new();
-    for (case, role, grants, rate, expected_status, expected_rate) in [
+    for (case, profile, grants, rate, expected_status, expected_rate) in [
         (
             "member_preserves",
             BuiltInProfile::Member,
@@ -15,7 +15,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             Some(8000),
         ),
         (
-            "legacy_admin_has_no_authority",
+            "administrator_profile_without_grants",
             BuiltInProfile::Administrator,
             vec![],
             json!({"action":"preserve"}),
@@ -82,7 +82,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             Some(8000),
         ),
     ] {
-        let ids = crate::server_fns::test_seed::seed(pool, role).await;
+        let ids = crate::server_fns::test_seed::seed(pool, profile).await;
         let grants = PermissionSelection::new(&grants);
         let may_read_rate = grants.contains(Permission::BillableRateReadAll);
         let stored: Vec<String> = serde_json::from_value(json!(grants)).unwrap();

@@ -4,8 +4,8 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 mod billability;
 mod grouped;
 
-async fn scoped(pool: &PgPool, role: BuiltInProfile, selection: &[Permission]) -> SeedIds {
-    let ids = seed(pool, role).await;
+async fn scoped(pool: &PgPool, profile: BuiltInProfile, selection: &[Permission]) -> SeedIds {
+    let ids = seed(pool, profile).await;
     let grants: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(selection)).unwrap())
             .unwrap();

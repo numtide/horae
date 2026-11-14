@@ -107,7 +107,7 @@ pub(super) async fn project_team(
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_project_reader_lists_without_legacy_management_or_tracking(pool: PgPool) {
+async fn canonical_project_reader_lists_without_management_or_tracking(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
         BuiltInProfile::Member,
@@ -125,7 +125,7 @@ async fn canonical_project_reader_lists_without_legacy_management_or_tracking(po
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_project_reader_opens_without_legacy_management_or_tracking(pool: PgPool) {
+async fn canonical_project_reader_opens_without_management_or_tracking(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
         BuiltInProfile::Member,
@@ -140,7 +140,7 @@ async fn canonical_project_reader_opens_without_legacy_management_or_tracking(po
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_own_only_member_does_not_inherit_legacy_manager_project_list(pool: PgPool) {
+async fn manager_profile_without_grants_lists_no_projects(pool: PgPool) {
     let (_, viewer) = fixture(
         &pool,
         BuiltInProfile::ExecutiveManager,
@@ -152,13 +152,13 @@ async fn canonical_own_only_member_does_not_inherit_legacy_manager_project_list(
         .unwrap();
     assert!(
         projects.is_empty(),
-        "legacy Manager disclosed: {projects:?}"
+        "the Manager profile without grants disclosed: {projects:?}"
     );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_own_only_member_does_not_inherit_legacy_manager_project_details(pool: PgPool) {
+async fn manager_profile_without_grants_opens_no_project_details(pool: PgPool) {
     let (ids, _) = fixture(
         &pool,
         BuiltInProfile::ExecutiveManager,
@@ -168,12 +168,17 @@ async fn canonical_own_only_member_does_not_inherit_legacy_manager_project_detai
     let details = project_details(&pool, ids.org_id, ids.user_id, ids.project_id)
         .await
         .unwrap();
-    assert!(details.is_none(), "legacy Manager disclosed: {details:?}");
+    assert!(
+        details.is_none(),
+        "the Manager profile without grants disclosed: {details:?}"
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_project_read_does_not_inherit_legacy_admin_financial_fields(pool: PgPool) {
+async fn canonical_project_read_withholds_financial_fields_from_the_administrator_profile(
+    pool: PgPool,
+) {
     let (ids, viewer) = fixture(
         &pool,
         BuiltInProfile::Administrator,
@@ -196,7 +201,7 @@ async fn canonical_project_read_does_not_inherit_legacy_admin_financial_fields(p
     for field in ["rate_cents", "budget_amount_cents"] {
         assert!(
             payload.get(field).is_none(),
-            "legacy Admin disclosed {field}: {payload}"
+            "the Administrator profile disclosed {field}: {payload}"
         );
     }
 }
@@ -311,7 +316,9 @@ async fn canonical_tags_follow_project_reads_and_revocation(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn canonical_project_details_withhold_legacy_admin_notes_and_rate_controls(pool: PgPool) {
+async fn canonical_project_details_withhold_admin_notes_and_rate_controls_from_a_reader(
+    pool: PgPool,
+) {
     let (ids, _) = fixture(
         &pool,
         BuiltInProfile::Administrator,

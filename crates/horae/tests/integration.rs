@@ -1876,8 +1876,8 @@ async fn admin_creates_user_and_duplicate_rejected(pool: PgPool) {
 }
 
 /// Deactivating a user blocks them from the active-user queries used by
-/// auth helpers (require_admin, require_manager, get_me all filter
-/// `active = true`), while their historical time entries remain intact (FR-002).
+/// authentication (`require_user` and `Actor::load` both filter on `active`),
+/// while their historical time entries remain intact (FR-002).
 #[sqlx::test(migrations = "./migrations")]
 #[serial]
 async fn deactivated_user_blocked_and_history_preserved(pool: PgPool) {
@@ -1905,7 +1905,7 @@ async fn deactivated_user_blocked_and_history_preserved(pool: PgPool) {
         .await
         .unwrap();
 
-    // The active-only user lookup (used by require_admin/require_manager/get_me)
+    // The active-only user lookup (used by `require_user` and `Actor::load`)
     // no longer finds them.
     let found = sqlx::query_scalar!(
         "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND active = true)",

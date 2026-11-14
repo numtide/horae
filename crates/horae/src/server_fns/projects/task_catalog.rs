@@ -186,12 +186,12 @@ mod tests {
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     #[serial_test::serial]
     async fn built_in_profiles_open_the_catalog_by_their_grants(pool: PgPool) {
-        for (role, allowed, edits_rates) in [
+        for (profile, allowed, edits_rates) in [
             (BuiltInProfile::Administrator, true, true),
             (BuiltInProfile::ExecutiveManager, true, false),
             (BuiltInProfile::Member, false, false),
         ] {
-            let ids = seed(&pool, role).await;
+            let ids = seed(&pool, profile).await;
             let requester = PermissionRequester {
                 org_id: ids.org_id,
                 user_id: ids.user_id,
@@ -206,7 +206,7 @@ mod tests {
                             ..
                         })
                     ),
-                    "{role:?}"
+                    "{profile:?}"
                 );
                 continue;
             }
@@ -214,11 +214,11 @@ mod tests {
             assert_eq!(
                 page.tasks.iter().map(|task| task.id).collect::<Vec<_>>(),
                 [ids.task_id],
-                "{role:?}"
+                "{profile:?}"
             );
-            assert!(page.can_edit && page.can_read_rates, "{role:?}");
-            assert_eq!(page.can_edit_rates, edits_rates, "{role:?}");
-            assert_eq!(page.rate_currency.is_some(), edits_rates, "{role:?}");
+            assert!(page.can_edit && page.can_read_rates, "{profile:?}");
+            assert_eq!(page.can_edit_rates, edits_rates, "{profile:?}");
+            assert_eq!(page.rate_currency.is_some(), edits_rates, "{profile:?}");
         }
     }
 

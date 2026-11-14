@@ -95,7 +95,7 @@ async fn task_workflow_identity_rejects_foreign_client_parents(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn task_catalog_accepts_current_read_grant_without_legacy_role(pool: PgPool) {
+async fn task_catalog_opens_to_a_member_with_the_read_grant(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
         BuiltInProfile::Member,
@@ -113,7 +113,7 @@ async fn task_catalog_accepts_current_read_grant_without_legacy_role(pool: PgPoo
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn task_reads_do_not_inherit_legacy_administrator_catalog(pool: PgPool) {
+async fn task_reads_need_a_grant_even_with_the_administrator_profile(pool: PgPool) {
     let (_, viewer) = fixture(
         &pool,
         BuiltInProfile::Administrator,
@@ -126,7 +126,7 @@ async fn task_reads_do_not_inherit_legacy_administrator_catalog(pool: PgPool) {
             .unwrap();
         assert!(
             rows.is_empty(),
-            "legacy role disclosed unrelated tasks: {rows:?}"
+            "the Administrator profile without grants disclosed tasks: {rows:?}"
         );
     }
 }
@@ -165,7 +165,7 @@ async fn task_catalog_withholds_global_rates_without_all_rate_read(pool: PgPool)
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn task_catalog_all_rate_grant_is_independent_of_legacy_role(pool: PgPool) {
+async fn task_catalog_shows_global_rates_to_a_member_with_the_all_rate_grant(pool: PgPool) {
     let (ids, viewer) = fixture(
         &pool,
         BuiltInProfile::Member,

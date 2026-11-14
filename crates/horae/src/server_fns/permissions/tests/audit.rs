@@ -362,7 +362,7 @@ async fn administrator_reads_historical_template_without_intent_or_replay_result
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn legacy_admin_and_all_grants_without_explicit_identity_cannot_read_audit(pool: PgPool) {
+async fn administrator_profile_without_explicit_identity_cannot_read_audit(pool: PgPool) {
     let ids = fixture(&pool, false).await;
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, Uuid::now_v7()).await,

@@ -25,8 +25,8 @@ async fn set_grants(pool: &PgPool, user_id: Uuid, permissions: &[Permission]) {
 
 /// A disposable organization whose person holds exactly `permissions`, with a
 /// client carrying every protected field so payload checks can look for leaks.
-async fn fixture(pool: &PgPool, role: BuiltInProfile, permissions: &[Permission]) -> SeedIds {
-    let ids = seed(pool, role).await;
+async fn fixture(pool: &PgPool, profile: BuiltInProfile, permissions: &[Permission]) -> SeedIds {
+    let ids = seed(pool, profile).await;
     sqlx::query!(
         "UPDATE clients SET address=$2, tax_id=$3, default_rate_cents=12345 WHERE id=$1",
         ids.client_id,
@@ -84,8 +84,8 @@ async fn read_only_client_grant_shows_catalog_without_writes_rates_or_projects(p
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
-async fn unrelated_grants_and_legacy_roles_do_not_open_the_catalog(pool: PgPool) {
-    for (role, permissions) in [
+async fn unrelated_grants_and_profiles_do_not_open_the_catalog(pool: PgPool) {
+    for (profile, permissions) in [
         (BuiltInProfile::Administrator, vec![]),
         (
             BuiltInProfile::ExecutiveManager,
@@ -101,7 +101,7 @@ async fn unrelated_grants_and_legacy_roles_do_not_open_the_catalog(pool: PgPool)
             vec![Permission::ReportProfitabilityRead],
         ),
     ] {
-        let ids = fixture(&pool, role, &permissions).await;
+        let ids = fixture(&pool, profile, &permissions).await;
         let page = overview(&pool, &ids).await.unwrap();
         assert!(!page.can_read && !page.can_manage, "{permissions:?}");
         let payload = serde_json::to_string(&page).unwrap();
@@ -351,8 +351,8 @@ async fn readers_observe_revocation_after_waiting_for_current_authority(pool: Pg
     }
 }
 
-/// The shared detail reader follows the same grants as the page: a dead
-/// legacy Manager role without them sees nothing.
+/// The shared detail reader follows the same grants as the page: the Manager
+/// profile without them sees nothing.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn workflow_reader_follows_grants(pool: PgPool) {
     let ids = fixture(&pool, BuiltInProfile::ExecutiveManager, &[]).await;

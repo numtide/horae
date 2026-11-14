@@ -24,7 +24,7 @@ const columns = ['provider_name', 'provider_address', 'provider_tax_id', 'provid
 const before = JSON.parse(sql(`SELECT row_to_json(o) FROM (SELECT ${columns.join(',')} FROM organizations WHERE id='${org}') o`));
 let restoreSeededStates = () => {};
 const literal = value => value === null ? 'NULL' : `'${String(value).replaceAll("'", "''")}'`;
-// The seeded states are set aside and put back; the role is restored to its observed value.
+// The seeded states are set aside and put back.
 
 (async () => {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
