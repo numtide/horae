@@ -15,8 +15,12 @@ const HEADER: &str = "Date,Client,Project,Task,Hours,Email,Notes\n";
 // One minute (0.02 h), so the thousands of rows these tests put on one
 // person's day stay within its 240-hour limit.
 const ROW: &str = "2026-01-15,Acme,Website,Design,0.02,dev@acme.com,kickoff\n";
+// These waits catch hangs; the tests check ordering, not latency, so the
+// limit only has to outlast a loaded CI machine.
+const HANG_GUARD: Duration = Duration::from_secs(60);
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
 async fn durable_csv_waits_for_input_without_an_open_transaction(pool: PgPool) {
     use super::super::csv_source::import_body_with_lease;
     use crate::jobs;
@@ -70,7 +74,7 @@ async fn durable_csv_waits_for_input_without_an_open_transaction(pool: PgPool) {
             running.spawn(async move {
                 import_body_with_lease(&db, org, "USD", body, mode, Some(&lease)).await
             });
-            tokio::time::timeout(Duration::from_secs(10), waiting.notified())
+            tokio::time::timeout(HANG_GUARD, waiting.notified())
                 .await
                 .unwrap();
             let outside_transaction = sqlx::query_scalar!(
@@ -78,7 +82,7 @@ async fn durable_csv_waits_for_input_without_an_open_transaction(pool: PgPool) {
                 pid,
             ).fetch_one(&pool).await.unwrap();
             stop.send_replace(true);
-            let error = tokio::time::timeout(Duration::from_secs(5), running.join_next())
+            let error = tokio::time::timeout(HANG_GUARD, running.join_next())
                 .await
                 .unwrap()
                 .unwrap()
@@ -103,6 +107,7 @@ async fn durable_csv_waits_for_input_without_an_open_transaction(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
 async fn durable_csv_discards_incomplete_preparation_and_resumes_its_checkpoint(pool: PgPool) {
     use super::super::csv_source::import_body_with_lease;
     use crate::jobs;
@@ -174,6 +179,7 @@ async fn durable_csv_discards_incomplete_preparation_and_resumes_its_checkpoint(
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
 async fn durable_csv_report_metadata_is_bounded_after_recovery(pool: PgPool) {
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
@@ -274,36 +280,43 @@ async fn entry_count(pool: &PgPool, org: Uuid) -> i64 {
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
 async fn durable_csv_resumes_committed_batches_without_recounting_duplicate_rows(pool: PgPool) {
     interrupted_csv_batches(pool, BatchInterruption::Crash, ImportMode::Commit).await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
 async fn durable_csv_cancel_preserves_its_completed_batches_for_manual_retry(pool: PgPool) {
     interrupted_csv_batches(pool, BatchInterruption::Cancel, ImportMode::Commit).await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
 async fn durable_csv_reclaimed_lease_cannot_commit_the_next_batch(pool: PgPool) {
     interrupted_csv_batches(pool, BatchInterruption::Reclaim, ImportMode::Commit).await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
 async fn durable_csv_preview_resumes_after_a_crash_without_recounting_rows(pool: PgPool) {
     interrupted_csv_batches(pool, BatchInterruption::Crash, ImportMode::DryRun).await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
 async fn durable_csv_preview_cancel_preserves_simulation_for_manual_retry(pool: PgPool) {
     interrupted_csv_batches(pool, BatchInterruption::Cancel, ImportMode::DryRun).await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
 async fn durable_csv_preview_rejects_a_stale_next_batch(pool: PgPool) {
     interrupted_csv_batches(pool, BatchInterruption::Reclaim, ImportMode::DryRun).await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
 async fn durable_csv_preview_matches_existing_and_new_rows_with_one_connection(pool: PgPool) {
     use super::super::csv_source::import_body_with_lease;
     use crate::jobs;
@@ -355,7 +368,7 @@ async fn durable_csv_preview_matches_existing_and_new_rows_with_one_connection(p
         .await
         .unwrap();
     let actual = tokio::time::timeout(
-        Duration::from_secs(15),
+        HANG_GUARD,
         import_body_with_lease(
             &single,
             org,
@@ -397,6 +410,7 @@ enum BatchInterruption {
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
 async fn durable_csv_preview_crosses_batch_boundaries_without_committing_domain_data(pool: PgPool) {
     use super::super::csv_source::import_body_with_lease;
     use crate::jobs;
@@ -490,7 +504,7 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption, 
         .with_subscriber(collector),
     );
     send.send(Ok(Bytes::from(first_batch))).await.unwrap();
-    let batch = tokio::time::timeout(Duration::from_secs(10), committed.0.notified()).await;
+    let batch = tokio::time::timeout(HANG_GUARD, committed.0.notified()).await;
     if batch.is_err() {
         run.abort();
     }
@@ -518,10 +532,10 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption, 
         BatchInterruption::Crash => {
             run.abort();
             assert!(run.await.unwrap_err().is_cancelled());
-            tokio::time::timeout(Duration::from_secs(5), send.closed())
+            tokio::time::timeout(HANG_GUARD, send.closed())
                 .await
                 .unwrap();
-            tokio::time::timeout(Duration::from_secs(5), wait_for_session_release(&pool, org))
+            tokio::time::timeout(HANG_GUARD, wait_for_session_release(&pool, org))
                 .await
                 .expect("cancelled import retained its PostgreSQL session lock");
             sqlx::query!(
@@ -535,12 +549,12 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption, 
         }
         BatchInterruption::Cancel => {
             assert!(jobs::cancel(&pool, org, id).await.unwrap());
-            tokio::time::timeout(Duration::from_secs(10), run)
+            tokio::time::timeout(HANG_GUARD, run)
                 .await
                 .unwrap()
                 .unwrap()
                 .unwrap();
-            tokio::time::timeout(Duration::from_secs(5), send.closed())
+            tokio::time::timeout(HANG_GUARD, send.closed())
                 .await
                 .unwrap();
             assert_eq!(
@@ -561,7 +575,7 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption, 
             let next = jobs::claim_lease_for_test(&pool).await;
             send.send(Ok(Bytes::from(ROW.repeat(500)))).await.unwrap();
             drop(send);
-            let error = tokio::time::timeout(Duration::from_secs(10), run)
+            let error = tokio::time::timeout(HANG_GUARD, run)
                 .await
                 .unwrap()
                 .unwrap()
@@ -634,14 +648,14 @@ async fn csv_applies_before_eof_but_transport_failure_rolls_back_everything(pool
     send.send(Ok(Bytes::from(format!("{HEADER}{ROW}"))))
         .await
         .unwrap();
-    tokio::time::timeout(Duration::from_secs(5), applied.0.notified())
+    tokio::time::timeout(HANG_GUARD, applied.0.notified())
         .await
         .expect("SQL must apply a row before the upload ends");
     assert_eq!(entry_count(&pool, org).await, 0, "uncommitted row leaked");
     send.send(Err(std::io::Error::other("upload connection lost")))
         .await
         .unwrap();
-    let error = tokio::time::timeout(Duration::from_secs(5), run)
+    let error = tokio::time::timeout(HANG_GUARD, run)
         .await
         .unwrap()
         .unwrap()
@@ -726,7 +740,7 @@ async fn cancelling_a_csv_waiting_for_more_bytes_releases_its_session(pool: PgPo
     send.send(Ok(Bytes::from(format!("{HEADER}{ROW}"))))
         .await
         .unwrap();
-    tokio::time::timeout(Duration::from_secs(5), applied.0.notified())
+    tokio::time::timeout(HANG_GUARD, applied.0.notified())
         .await
         .unwrap();
     let overlap = import_body(&pool, org, "USD", Body::empty(), ImportMode::Commit)
@@ -735,10 +749,10 @@ async fn cancelling_a_csv_waiting_for_more_bytes_releases_its_session(pool: PgPo
     assert!(overlap.to_string().contains("already running"), "{overlap}");
     run.abort();
     assert!(run.await.unwrap_err().is_cancelled());
-    tokio::time::timeout(Duration::from_secs(5), send.closed())
+    tokio::time::timeout(HANG_GUARD, send.closed())
         .await
         .expect("cancelled parser retained the upload body");
-    let retry = tokio::time::timeout(Duration::from_secs(5), async {
+    let retry = tokio::time::timeout(HANG_GUARD, async {
         wait_for_session_release(&single, org).await;
         import_body(
             &single,
@@ -758,6 +772,7 @@ async fn cancelling_a_csv_waiting_for_more_bytes_releases_its_session(pool: PgPo
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
 async fn durable_csv_cancel_joins_parser_and_preserves_committed_rows(pool: PgPool) {
     use super::super::csv_source::import_body_with_lease;
     use crate::jobs;
@@ -819,12 +834,12 @@ async fn durable_csv_cancel_joins_parser_and_preserves_committed_rows(pool: PgPo
         .with_subscriber(collector),
     );
     send.send(Ok(Bytes::from(csv.clone()))).await.unwrap();
-    tokio::time::timeout(Duration::from_secs(10), applied.0.notified())
+    tokio::time::timeout(HANG_GUARD, applied.0.notified())
         .await
         .unwrap();
     assert!(jobs::cancel(&mut *barrier, org, id).await.unwrap());
     barrier.commit().await.unwrap();
-    tokio::time::timeout(Duration::from_secs(10), run)
+    tokio::time::timeout(HANG_GUARD, run)
         .await
         .unwrap()
         .unwrap()
@@ -863,6 +878,7 @@ async fn durable_csv_cancel_joins_parser_and_preserves_committed_rows(pool: PgPo
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
 async fn durable_csv_stale_commit_is_fenced_without_a_heartbeat(pool: PgPool) {
     use super::super::csv_source::import_body_with_lease;
     use crate::jobs;
@@ -902,7 +918,7 @@ async fn durable_csv_stale_commit_is_fenced_without_a_heartbeat(pool: PgPool) {
     );
     send.send(Ok(Bytes::from(csv.clone()))).await.unwrap();
     drop(send);
-    tokio::time::timeout(Duration::from_secs(10), applied.0.notified())
+    tokio::time::timeout(HANG_GUARD, applied.0.notified())
         .await
         .unwrap();
     sqlx::query!(
@@ -913,7 +929,7 @@ async fn durable_csv_stale_commit_is_fenced_without_a_heartbeat(pool: PgPool) {
     .await
     .unwrap();
     barrier.commit().await.unwrap();
-    let error = tokio::time::timeout(Duration::from_secs(10), run)
+    let error = tokio::time::timeout(HANG_GUARD, run)
         .await
         .unwrap()
         .unwrap()
@@ -1267,7 +1283,7 @@ async fn csv_sql_backpressure_stops_reading_later_input_rows(pool: PgPool) {
         tokio::spawn(
             async move { import_body(&run_pool, org, "USD", body, ImportMode::Commit).await },
         );
-    tokio::time::timeout(Duration::from_secs(5), async {
+    tokio::time::timeout(HANG_GUARD, async {
         while read.load(Ordering::Acquire) < 3 {
             progress.notified().await;
         }
