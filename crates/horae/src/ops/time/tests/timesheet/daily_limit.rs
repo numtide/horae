@@ -196,7 +196,7 @@ async fn stopping_a_timer_keeps_only_the_rest_of_the_day(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(
-        effects.notice.as_deref(),
+        effects.value.notice.as_deref(),
         Some(
             "Daily hours cannot exceed 240. The timer was stopped at 0:50; 0:40 over the limit was not recorded."
         )

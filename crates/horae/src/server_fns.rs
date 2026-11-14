@@ -154,51 +154,6 @@ pub(crate) async fn require_user() -> Result<crate::models::User, ServerFnError>
 // ── Plugin event dispatch helpers ────────────────────────────────────────────
 // Fire-and-forget: spawn dispatch so the core action is never blocked (FR-021).
 
-/// The time-entry lifecycle events the plugin bus announces. Exhaustive on
-/// purpose: adding an `AppEvent::TimeEntry…` variant forces the mapping in
-/// [`dispatch_time_entry_event`] to be spelled out.
-#[cfg(feature = "server")]
-pub(crate) enum TimeEntryEvent {
-    Created,
-    Stopped,
-    Updated,
-    Deleted,
-}
-
-#[cfg(feature = "server")]
-pub(crate) async fn dispatch_time_entry_event(
-    entry: &crate::models::TimeEntry,
-    event: TimeEntryEvent,
-) {
-    let state = crate::state::global_state().await;
-    let occurred_at = chrono::Utc::now();
-    let org_id = entry.org_id;
-    let time_entry = time_entry_payload(entry);
-    let event = match event {
-        TimeEntryEvent::Created => crate::plugin::AppEvent::TimeEntryCreated {
-            occurred_at,
-            org_id,
-            time_entry,
-        },
-        TimeEntryEvent::Stopped => crate::plugin::AppEvent::TimeEntryStopped {
-            occurred_at,
-            org_id,
-            time_entry,
-        },
-        TimeEntryEvent::Updated => crate::plugin::AppEvent::TimeEntryUpdated {
-            occurred_at,
-            org_id,
-            time_entry,
-        },
-        TimeEntryEvent::Deleted => crate::plugin::AppEvent::TimeEntryDeleted {
-            occurred_at,
-            org_id,
-            time_entry,
-        },
-    };
-    state.plugins.dispatch(event);
-}
-
 #[cfg(feature = "server")]
 pub(crate) fn time_entry_payload(
     e: &crate::models::TimeEntry,
