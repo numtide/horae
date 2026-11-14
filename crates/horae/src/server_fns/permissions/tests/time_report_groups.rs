@@ -1,9 +1,22 @@
 use super::*;
-use crate::models::time_report::{TimeReportGroupCursor, TimeReportGroupQuery, TimeReportGrouping};
-use crate::server_fns::permissions::time_entries::TimeReadError;
-use crate::server_fns::permissions::time_reports::groups::read;
+use crate::models::time_report::{
+    TimeReportGroupCursor, TimeReportGroupPage, TimeReportGroupQuery, TimeReportGrouping,
+};
+use crate::ops::{self, Caller, OpError};
 use crate::server_fns::test_seed::time_entry;
 use horae_core::types::EntryState;
+
+/// `list_visible_time_report_groups` without the session.
+async fn read(
+    pool: &PgPool,
+    org_id: Uuid,
+    user_id: Uuid,
+    query: &TimeReportGroupQuery,
+) -> Result<TimeReportGroupPage, OpError> {
+    let mut read = ops::begin_read(pool, Caller::session(org_id, user_id)).await?;
+    let result = ops::time_reads::reports::groups::read(&mut read.tx, &read.actor, query).await;
+    read.finish(result).await
+}
 
 fn query(group_by: TimeReportGrouping) -> TimeReportGroupQuery {
     TimeReportGroupQuery {
@@ -323,7 +336,7 @@ async fn grouped_reports_reject_wrong_requesters_and_cursors(pool: PgPool) {
     });
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, &filter).await,
-        Err(TimeReadError::Forbidden)
+        Err(OpError::Forbidden(_))
     ));
     filter.expected_requester = None;
     for (dimension, name) in [
@@ -337,14 +350,14 @@ async fn grouped_reports_reject_wrong_requesters_and_cursors(pool: PgPool) {
         });
         assert!(matches!(
             read(&pool, ids.org_id, ids.user_id, &filter).await,
-            Err(TimeReadError::InvalidQuery)
+            Err(OpError::Invalid { .. })
         ));
     }
     filter.after = None;
     filter.date_to = "2026-08-31".parse().unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, &filter).await,
-        Err(TimeReadError::InvalidQuery)
+        Err(OpError::Invalid { .. })
     ));
     filter.date_to = "2026-09-30".parse().unwrap();
     let mut wire = serde_json::to_value(&filter).unwrap();
@@ -580,10 +593,7 @@ async fn grouped_reports_recheck_actor_deactivation_after_wait(pool: PgPool) {
     });
     wait_for_blocked(&pool, pid).await;
     deactivate.commit().await.unwrap();
-    assert!(matches!(
-        reader.await.unwrap(),
-        Err(TimeReadError::Forbidden)
-    ));
+    assert!(matches!(reader.await.unwrap(), Err(OpError::Forbidden(_))));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

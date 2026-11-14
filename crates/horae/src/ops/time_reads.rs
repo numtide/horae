@@ -1,48 +1,20 @@
-//! Scoped time reads; neither contextual labels nor running timers grant writes.
+//! Scoped time reads: the Timesheet, its people picker, entry pages and the
+//! ordinary time report. Neither contextual labels nor running timers grant
+//! writes. Run them on [`super::begin_read`]: the actor's locks keep the
+//! organization, its activity and grants stable until rows are materialized.
 
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use horae_core::types::EntryState;
-use sqlx::{PgPool, Postgres, Transaction};
-use uuid::Uuid;
 
-use super::{PermissionStorageError, ReadIsolation, begin_lock_only_read_async_commit};
+use super::{Actor, OpError, Tx};
 use crate::models::people::PeopleCursor;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::scoped_time::{
     TimeEntryCursor, TimeEntryPage, TimeEntryQuery, TimesheetPage, TimesheetPeoplePage,
     TimesheetPeopleQuery, TimesheetPerson, TimesheetQuery, VisibleTimeEntry,
 };
-use crate::ops::{Actor, Caller, OpError};
 
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum TimeReadError {
-    #[error("Current time-read authority is required")]
-    Forbidden,
-    #[error("Permission state is unavailable")]
-    Unavailable,
-    #[error("Invalid time-read query")]
-    InvalidQuery,
-    #[error(transparent)]
-    Storage(#[from] PermissionStorageError),
-    #[error(transparent)]
-    Database(#[from] sqlx::Error),
-    /// A deadlock or serialization failure while loading the actor; a retry may succeed.
-    #[error("{0}")]
-    Conflict(String),
-    #[error(transparent)]
-    Op(OpError),
-}
-
-impl From<OpError> for TimeReadError {
-    fn from(error: OpError) -> Self {
-        match error {
-            // Only missing or invalid stored state is refused while loading.
-            OpError::Forbidden(_) => TimeReadError::Unavailable,
-            OpError::Conflict(message) => TimeReadError::Conflict(message),
-            error => TimeReadError::Op(error),
-        }
-    }
-}
+pub(crate) mod reports;
 
 const TIME_READS: [Permission; 3] = [
     Permission::TimeReadOwn,
@@ -50,44 +22,63 @@ const TIME_READS: [Permission; 3] = [
     Permission::TimeReadAll,
 ];
 
-/// Keep the organization, actor activity and grants stable until rows are
-/// materialized. Authority comes from [`Actor::load`]; the returned selection
-/// holds only the actor's time-read grants.
-pub(super) async fn begin_read(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
-) -> Result<(Transaction<'static, Postgres>, PermissionSelection), TimeReadError> {
-    let mut tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
-    let actor = Actor::load(&mut tx, Caller::session(org_id, actor_id)).await?;
+const SHEET_FORBIDDEN: &str = "Timesheet access or identity has changed; refresh the page";
+const SHEET_INVALID: &str = "Invalid Timesheet date range or cursor";
+const TIME_READ_REQUIRED: &str = "Current time-read authority is required";
+const PEOPLE_INVALID: &str = "Invalid timesheet people query";
+const ENTRIES_INVALID: &str = "Invalid time-entry date range or cursor";
+
+/// The actor's time-read grants, `None` when it holds none. A selection
+/// always carries the Member floor, so an empty one cannot mean "none".
+pub(crate) fn time_reads(actor: &Actor) -> Option<PermissionSelection> {
     let held: Vec<Permission> = TIME_READS
         .into_iter()
         .filter(|permission| actor.has(*permission))
         .collect();
-    if held.is_empty() {
-        return Err(TimeReadError::Forbidden);
+    (!held.is_empty()).then(|| PermissionSelection::new(&held))
+}
+
+fn require_time_reads(actor: &Actor, refusal: &str) -> Result<PermissionSelection, OpError> {
+    time_reads(actor).ok_or_else(|| OpError::forbidden(refusal))
+}
+
+/// The identity a page reports back, so the client can tell a stale session.
+fn requester(actor: &Actor) -> PermissionRequester {
+    PermissionRequester {
+        org_id: actor.org_id(),
+        user_id: actor.id(),
     }
-    Ok((tx, PermissionSelection::new(&held)))
+}
+
+/// Refuses a request made for someone other than the session's person.
+fn check_expected(
+    actor: &Actor,
+    expected: Option<PermissionRequester>,
+    refusal: &str,
+) -> Result<(), OpError> {
+    if expected.is_some_and(|expected| expected != requester(actor)) {
+        return Err(OpError::forbidden(refusal));
+    }
+    Ok(())
+}
+
+fn invalid(message: &str) -> OpError {
+    OpError::Invalid {
+        field: None,
+        message: message.into(),
+    }
 }
 
 /// Resolve selection and entries together; selecting a person never widens row scope.
 pub(crate) async fn sheet(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
+    tx: &mut Tx,
+    actor: &Actor,
     query: &TimesheetQuery,
-) -> Result<TimesheetPage, TimeReadError> {
-    let requester = PermissionRequester {
-        org_id,
-        user_id: actor_id,
-    };
-    if query
-        .expected_requester
-        .is_some_and(|expected| expected != requester)
-    {
-        return Err(TimeReadError::Forbidden);
-    }
-    let (mut tx, grants) = begin_read(pool, org_id, actor_id).await?;
+) -> Result<TimesheetPage, OpError> {
+    check_expected(actor, query.expected_requester, SHEET_FORBIDDEN)?;
+    let grants = require_time_reads(actor, SHEET_FORBIDDEN)?;
+    let requester = requester(actor);
+    let (org_id, actor_id) = (actor.org_id(), actor.id());
     let subject_id = query.subject_id.unwrap_or(actor_id);
     // A teammate can be archived independently of the requester. Hold its
     // activity stable across discovery and the subsequent entry query too.
@@ -96,11 +87,11 @@ pub(crate) async fn sheet(
         org_id,
         subject_id
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await?
-    .ok_or(TimeReadError::Forbidden)?;
+    .ok_or_else(|| OpError::forbidden(SHEET_FORBIDDEN))?;
     let subject = fetch_people(
-        &mut tx,
+        tx,
         requester,
         &grants,
         &TimesheetPeopleQuery {
@@ -111,22 +102,19 @@ pub(crate) async fn sheet(
     .await?
     .into_iter()
     .next()
-    .ok_or(TimeReadError::Forbidden)?;
-    let page = fetch_entries(
-        &mut tx,
-        requester,
-        &grants,
-        &TimeEntryQuery {
-            date_from: query.date_from,
-            date_to: query.date_to,
-            user_id: Some(subject_id),
-            project_id: None,
-            after: query.after.clone(),
-        },
-    )
-    .await?;
-    let zone = crate::timezone::person_zone(&mut *tx, subject_id).await?;
-    tx.commit().await?;
+    .ok_or_else(|| OpError::forbidden(SHEET_FORBIDDEN))?;
+    let entries = TimeEntryQuery {
+        date_from: query.date_from,
+        date_to: query.date_to,
+        user_id: Some(subject_id),
+        project_id: None,
+        after: query.after.clone(),
+    };
+    if !entry_query_is_valid(&entries) {
+        return Err(invalid(SHEET_INVALID));
+    }
+    let page = fetch_entries(tx, requester, &grants, &entries).await?;
+    let zone = crate::timezone::person_zone(&mut **tx, subject_id).await?;
     Ok(TimesheetPage {
         requester,
         subject,
@@ -138,17 +126,23 @@ pub(crate) async fn sheet(
 
 /// Discover identities without requiring time in the displayed date range.
 pub(crate) async fn people(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
+    tx: &mut Tx,
+    actor: &Actor,
     query: &TimesheetPeopleQuery,
-) -> Result<TimesheetPeoplePage, TimeReadError> {
-    let (mut tx, grants) = begin_read(pool, org_id, actor_id).await?;
-    let requester = PermissionRequester {
-        org_id,
-        user_id: actor_id,
-    };
-    let mut people = fetch_people(&mut tx, requester, &grants, query).await?;
+) -> Result<TimesheetPeoplePage, OpError> {
+    let grants = require_time_reads(actor, TIME_READ_REQUIRED)?;
+    let search = query.search.trim();
+    if search.contains('\0')
+        || search.chars().count() > 100
+        || query
+            .after
+            .as_ref()
+            .is_some_and(|cursor| cursor.name.contains('\0'))
+    {
+        return Err(invalid(PEOPLE_INVALID));
+    }
+    let requester = requester(actor);
+    let mut people = fetch_people(tx, requester, &grants, query).await?;
     let next_after = if people.len() > 50 {
         people.truncate(50);
         people.last().map(|person| PeopleCursor {
@@ -158,7 +152,6 @@ pub(crate) async fn people(
     } else {
         None
     };
-    tx.commit().await?;
     Ok(TimesheetPeoplePage {
         requester,
         people,
@@ -167,25 +160,16 @@ pub(crate) async fn people(
 }
 
 async fn fetch_people(
-    tx: &mut Transaction<'_, Postgres>,
+    tx: &mut Tx,
     requester: PermissionRequester,
     grants: &PermissionSelection,
     query: &TimesheetPeopleQuery,
-) -> Result<Vec<TimesheetPerson>, TimeReadError> {
+) -> Result<Vec<TimesheetPerson>, OpError> {
     let PermissionRequester {
         org_id,
         user_id: actor_id,
     } = requester;
     let search = query.search.trim();
-    if search.contains('\0')
-        || search.chars().count() > 100
-        || query
-            .after
-            .as_ref()
-            .is_some_and(|cursor| cursor.name.contains('\0'))
-    {
-        return Err(TimeReadError::InvalidQuery);
-    }
     let people = sqlx::query_as!(
         TimesheetPerson,
         "SELECT u.id,u.name FROM users u
@@ -221,34 +205,32 @@ async fn fetch_people(
     Ok(people)
 }
 
-/// Session-derived identity only; materialize rows while authority is stable.
-pub(crate) async fn read(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
+/// A page of the time entries the actor may read; identity comes from the session only.
+pub(crate) async fn entries(
+    tx: &mut Tx,
+    actor: &Actor,
     query: &TimeEntryQuery,
-) -> Result<TimeEntryPage, TimeReadError> {
-    let (mut tx, grants) = begin_read(pool, org_id, actor_id).await?;
-    let result = fetch_entries(
-        &mut tx,
-        PermissionRequester {
-            org_id,
-            user_id: actor_id,
-        },
-        &grants,
-        query,
-    )
-    .await?;
-    tx.commit().await?;
-    Ok(result)
+) -> Result<TimeEntryPage, OpError> {
+    let grants = require_time_reads(actor, TIME_READ_REQUIRED)?;
+    if !entry_query_is_valid(query) {
+        return Err(invalid(ENTRIES_INVALID));
+    }
+    fetch_entries(tx, requester(actor), &grants, query).await
+}
+
+fn entry_query_is_valid(query: &TimeEntryQuery) -> bool {
+    query.date_from <= query.date_to
+        && !query.after.as_ref().is_some_and(|cursor| {
+            cursor.spent_date < query.date_from || cursor.spent_date > query.date_to
+        })
 }
 
 async fn fetch_entries(
-    tx: &mut Transaction<'_, Postgres>,
+    tx: &mut Tx,
     requester: PermissionRequester,
     grants: &PermissionSelection,
     query: &TimeEntryQuery,
-) -> Result<TimeEntryPage, TimeReadError> {
+) -> Result<TimeEntryPage, OpError> {
     let PermissionRequester {
         org_id,
         user_id: actor_id,
@@ -256,13 +238,6 @@ async fn fetch_entries(
     let own = grants.contains(Permission::TimeReadOwn);
     let managed = grants.contains(Permission::TimeReadManaged);
     let all = grants.contains(Permission::TimeReadAll);
-    if query.date_from > query.date_to
-        || query.after.as_ref().is_some_and(|cursor| {
-            cursor.spent_date < query.date_from || cursor.spent_date > query.date_to
-        })
-    {
-        return Err(TimeReadError::InvalidQuery);
-    }
     let mut entries = sqlx::query_as!(
         VisibleTimeEntry,
         r#"SELECT e.id, e.user_id, u.name AS user_name,
@@ -307,27 +282,4 @@ async fn fetch_entries(
         entries,
         next_after,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{OpError, TimeReadError};
-
-    /// A lost race while loading the actor stays retryable (409 in the
-    /// adapters); missing stored state stays "unavailable".
-    #[test]
-    fn actor_load_errors_keep_their_meaning() {
-        assert!(matches!(
-            TimeReadError::from(OpError::conflict("retry")),
-            TimeReadError::Conflict(message) if message == "retry"
-        ));
-        assert!(matches!(
-            TimeReadError::from(OpError::forbidden("no state")),
-            TimeReadError::Unavailable
-        ));
-        assert!(matches!(
-            TimeReadError::from(OpError::Internal("boom".into())),
-            TimeReadError::Op(OpError::Internal(_))
-        ));
-    }
 }

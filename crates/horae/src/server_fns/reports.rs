@@ -29,12 +29,9 @@ pub async fn get_time_report_access(
         return Err(forbidden("Report requester has changed"));
     }
     let state = crate::state::global_state().await;
-    crate::reports::read_time_report_access(&state.db, requester)
-        .await
-        .map_err(|status| match status {
-            axum::http::StatusCode::FORBIDDEN => forbidden("Current report access is required"),
-            _ => server_err("Report access is unavailable"),
-        })
+    let read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::time_reads::reports::access(&read.actor);
+    Ok(read.finish(result).await?)
 }
 
 /// Nonfinancial detailed time under current scoped authority, in bounded pages.
@@ -42,8 +39,6 @@ pub async fn get_time_report_access(
 pub async fn list_visible_time_report_entries(
     query: crate::models::time_report::TimeReportQuery,
 ) -> Result<crate::models::time_report::TimeReportPage, ServerFnError> {
-    use permissions::time_entries::TimeReadError;
-
     let user = require_user().await.map_err(|error| match error {
         error @ ServerFnError::ServerError {
             code: UNAUTHORIZED, ..
@@ -54,21 +49,9 @@ pub async fn list_visible_time_report_entries(
         }
     })?;
     let state = crate::state::global_state().await;
-    permissions::time_reports::read(&state.db, user.org_id, user.id, &query)
-        .await
-        .map_err(|error| match error {
-            TimeReadError::Forbidden => {
-                forbidden("Current time-report access or identity has changed")
-            }
-            TimeReadError::Conflict(message) => conflict(message),
-            TimeReadError::InvalidQuery => {
-                err(BAD_REQUEST, "Invalid time-report date range or cursor")
-            }
-            error => {
-                tracing::error!(%error, "Scoped time-report read failed");
-                server_err("Time report is unavailable")
-            }
-        })
+    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::time_reads::reports::entries(&mut read.tx, &read.actor, &query).await;
+    Ok(read.finish(result).await?)
 }
 
 // ── Reports (M8) ────────────────────────────────────────────────────────────
@@ -78,8 +61,6 @@ pub async fn list_visible_time_report_entries(
 pub async fn list_visible_time_report_groups(
     query: crate::models::time_report::TimeReportGroupQuery,
 ) -> Result<crate::models::time_report::TimeReportGroupPage, ServerFnError> {
-    use permissions::time_entries::TimeReadError;
-
     let user = require_user().await.map_err(|error| match error {
         error @ ServerFnError::ServerError {
             code: UNAUTHORIZED, ..
@@ -90,21 +71,9 @@ pub async fn list_visible_time_report_groups(
         }
     })?;
     let state = crate::state::global_state().await;
-    permissions::time_reports::groups::read(&state.db, user.org_id, user.id, &query)
-        .await
-        .map_err(|error| match error {
-            TimeReadError::Forbidden => {
-                forbidden("Current time-report access or identity has changed")
-            }
-            TimeReadError::Conflict(message) => conflict(message),
-            TimeReadError::InvalidQuery => {
-                err(BAD_REQUEST, "Invalid time-report date range or cursor")
-            }
-            error => {
-                tracing::error!(%error, "Scoped grouped time-report read failed");
-                server_err("Time report is unavailable")
-            }
-        })
+    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result = ops::time_reads::reports::groups::read(&mut read.tx, &read.actor, &query).await;
+    Ok(read.finish(result).await?)
 }
 
 /// Grouped time report. Groups by "project", "task", "client", or "person", with

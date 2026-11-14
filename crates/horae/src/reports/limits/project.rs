@@ -16,21 +16,8 @@ async fn authorize_project_actor(
     org_id: Uuid,
     actor_id: Uuid,
 ) -> Result<PermissionSelection, StatusCode> {
-    sqlx::query_scalar!("SELECT id FROM organizations WHERE id=$1 FOR SHARE", org_id,)
-        .fetch_optional(&mut *connection)
-        .await
-        .map_err(database_error)?
-        .ok_or(StatusCode::FORBIDDEN)?;
-    sqlx::query_scalar!(
-        "SELECT id FROM users WHERE id=$1 AND org_id=$2 AND active FOR SHARE",
-        actor_id,
-        org_id,
-    )
-    .fetch_optional(&mut *connection)
-    .await
-    .map_err(database_error)?
-    .ok_or(StatusCode::FORBIDDEN)?;
-    load_grants(connection, org_id, actor_id).await
+    let actor = load_actor(connection, org_id, actor_id).await?;
+    actor.grants().cloned().ok_or(StatusCode::FORBIDDEN)
 }
 
 pub(in crate::reports) async fn projects(

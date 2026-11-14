@@ -1,9 +1,21 @@
 use super::*;
 use crate::models::permission_editor::PermissionRequester;
-use crate::models::scoped_time::TimesheetQuery;
-use crate::server_fns::permissions::time_entries::{TimeReadError, sheet};
+use crate::models::scoped_time::{TimesheetPage, TimesheetQuery};
+use crate::ops::{self, Caller, OpError};
 use crate::server_fns::test_seed::time_entry;
 use horae_core::types::EntryState;
+
+/// `load_timesheet_page` without the session.
+async fn sheet(
+    pool: &PgPool,
+    org_id: Uuid,
+    user_id: Uuid,
+    query: &TimesheetQuery,
+) -> Result<TimesheetPage, OpError> {
+    let mut read = ops::begin_read(pool, Caller::session(org_id, user_id)).await?;
+    let result = ops::time_reads::sheet(&mut read.tx, &read.actor, query).await;
+    read.finish(result).await
+}
 
 fn query(subject_id: Option<Uuid>) -> TimesheetQuery {
     TimesheetQuery {
@@ -46,7 +58,7 @@ async fn sheet_resolves_a_members_own_context(pool: PgPool) {
     assert_eq!(result.next_after, None);
     assert!(matches!(
         sheet(&pool, ids.org_id, ids.user_id, &query(Some(Uuid::now_v7()))).await,
-        Err(TimeReadError::Forbidden)
+        Err(OpError::Forbidden(_))
     ));
 }
 
@@ -148,16 +160,16 @@ async fn sheet_rejects_changed_requester_and_inaccessible_subject(pool: PgPool) 
     );
     assert!(matches!(
         sheet(&pool, ids.org_id, target, &request).await,
-        Err(TimeReadError::Forbidden)
+        Err(OpError::Forbidden(_))
     ));
     assert!(matches!(
         sheet(&pool, foreign.org_id, foreign.user_id, &request).await,
-        Err(TimeReadError::Forbidden)
+        Err(OpError::Forbidden(_))
     ));
     for subject in [Uuid::now_v7(), foreign.user_id] {
         assert!(matches!(
             sheet(&pool, ids.org_id, ids.user_id, &query(Some(subject))).await,
-            Err(TimeReadError::Forbidden)
+            Err(OpError::Forbidden(_))
         ));
     }
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", target)
@@ -166,7 +178,7 @@ async fn sheet_rejects_changed_requester_and_inaccessible_subject(pool: PgPool) 
         .unwrap();
     assert!(matches!(
         sheet(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(TimeReadError::Forbidden)
+        Err(OpError::Forbidden(_))
     ));
 }
 
@@ -220,25 +232,25 @@ async fn sheet_exhausts_pages_and_does_not_reuse_scope(pool: PgPool) {
     .unwrap();
     assert!(matches!(
         sheet(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(TimeReadError::Forbidden)
+        Err(OpError::Forbidden(_))
     ));
     let mut invalid = query(None);
     invalid.date_to = "2026-08-31".parse().unwrap();
     assert!(matches!(
         sheet(&pool, ids.org_id, ids.user_id, &invalid).await,
-        Err(TimeReadError::InvalidQuery)
+        Err(OpError::Invalid { .. })
     ));
     invalid = query(None);
     invalid.after = request.after.clone();
     invalid.date_from = "2026-09-08".parse().unwrap();
     assert!(matches!(
         sheet(&pool, ids.org_id, ids.user_id, &invalid).await,
-        Err(TimeReadError::InvalidQuery)
+        Err(OpError::Invalid { .. })
     ));
     sqlx::query!("UPDATE person_permission_states SET grants=ARRAY['private_invalid_grant'] WHERE user_id=$1", ids.user_id).execute(&pool).await.unwrap();
     assert!(matches!(
         sheet(&pool, ids.org_id, ids.user_id, &query(None)).await,
-        Err(TimeReadError::Unavailable)
+        Err(OpError::Forbidden(message)) if message == "Permission state is unavailable"
     ));
 }
 
@@ -264,10 +276,7 @@ async fn sheet_rechecks_selected_activity_after_waiting_for_archive(pool: PgPool
         );
     wait_for_blocked(&pool, pid).await;
     archive.commit().await.unwrap();
-    assert!(matches!(
-        reader.await.unwrap(),
-        Err(TimeReadError::Forbidden)
-    ));
+    assert!(matches!(reader.await.unwrap(), Err(OpError::Forbidden(_))));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -334,7 +343,7 @@ async fn sheet_holds_selected_activity_through_entry_delivery_and_releases_on_ca
             .unwrap();
         assert!(matches!(
             sheet(&pool, ids.org_id, ids.user_id, &query(Some(target))).await,
-            Err(TimeReadError::Forbidden)
+            Err(OpError::Forbidden(_))
         ));
         sqlx::query!("UPDATE users SET active=true WHERE id=$1", target)
             .execute(&pool)

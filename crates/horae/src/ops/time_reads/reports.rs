@@ -3,32 +3,42 @@
 pub(crate) mod groups;
 
 use horae_core::permissions::catalog::Permission;
-use sqlx::PgPool;
-use uuid::Uuid;
 
-use super::time_entries::{TimeReadError, begin_read};
-use crate::models::permission_editor::PermissionRequester;
+use super::{check_expected, invalid, requester, require_time_reads, time_reads};
 use crate::models::time_report::{
-    TimeReportCursor, TimeReportEntry, TimeReportPage, TimeReportQuery, TimeReportTotals,
+    TimeReportAccess, TimeReportCursor, TimeReportEntry, TimeReportPage, TimeReportQuery,
+    TimeReportTotals,
 };
+use crate::ops::{Actor, OpError, Tx};
 
-pub(crate) async fn read(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
+const REPORT_FORBIDDEN: &str = "Current time-report access or identity has changed";
+const REPORT_INVALID: &str = "Invalid time-report date range or cursor";
+const REPORT_UNAVAILABLE: &str = "Time report is unavailable";
+const ACCESS_REQUIRED: &str = "Current report access is required";
+
+fn unavailable() -> OpError {
+    OpError::Internal(REPORT_UNAVAILABLE.into())
+}
+
+/// Which Reports view the actor gets, under the same authority as the time
+/// downloads. The financial view is for whoever `ops::reports` serves.
+pub(crate) fn access(actor: &Actor) -> Result<TimeReportAccess, OpError> {
+    time_reads(actor).ok_or_else(|| OpError::forbidden(ACCESS_REQUIRED))?;
+    Ok(TimeReportAccess {
+        requester: requester(actor),
+        financial: actor.has(Permission::TimeReadManaged) || actor.has(Permission::TimeReadAll),
+    })
+}
+
+pub(crate) async fn entries(
+    tx: &mut Tx,
+    actor: &Actor,
     query: &TimeReportQuery,
-) -> Result<TimeReportPage, TimeReadError> {
-    let requester = PermissionRequester {
-        org_id,
-        user_id: actor_id,
-    };
-    if query
-        .expected_requester
-        .is_some_and(|expected| expected != requester)
-    {
-        return Err(TimeReadError::Forbidden);
-    }
-    let (mut tx, grants) = begin_read(pool, org_id, actor_id).await?;
+) -> Result<TimeReportPage, OpError> {
+    check_expected(actor, query.expected_requester, REPORT_FORBIDDEN)?;
+    let grants = require_time_reads(actor, REPORT_FORBIDDEN)?;
+    let requester = requester(actor);
+    let (org_id, actor_id) = (actor.org_id(), actor.id());
     if query.date_from > query.date_to
         || query.after.as_ref().is_some_and(|cursor| {
             cursor.spent_date < query.date_from
@@ -37,7 +47,7 @@ pub(crate) async fn read(
                 || cursor.task_name.contains('\0')
         })
     {
-        return Err(TimeReadError::InvalidQuery);
+        return Err(invalid(REPORT_INVALID));
     }
     // One snapshot keeps full-period totals consistent with this page. Inline
     // the relation so aggregating minutes need not materialize every entry's text.
@@ -101,8 +111,8 @@ pub(crate) async fn read(
         query.after.as_ref().map(|cursor| cursor.id),
         query.active_projects_only,
         query.billability.filter(),
-    ).fetch_all(&mut *tx).await?;
-    let stats = records.first().ok_or(TimeReadError::Unavailable)?;
+    ).fetch_all(&mut **tx).await?;
+    let stats = records.first().ok_or_else(unavailable)?;
     let totals = TimeReportTotals {
         entry_count: stats.entry_count,
         total_minutes: stats.total_minutes,
@@ -114,13 +124,13 @@ pub(crate) async fn read(
         let Some(id) = record.id else { continue };
         entries.push(TimeReportEntry {
             id,
-            spent_date: record.spent_date.ok_or(TimeReadError::Unavailable)?,
-            project_name: record.project_name.ok_or(TimeReadError::Unavailable)?,
-            task_name: record.task_name.ok_or(TimeReadError::Unavailable)?,
-            user_name: record.user_name.ok_or(TimeReadError::Unavailable)?,
-            minutes: record.minutes.ok_or(TimeReadError::Unavailable)?,
-            rounded_minutes: record.rounded_minutes.ok_or(TimeReadError::Unavailable)?,
-            billable: record.billable.ok_or(TimeReadError::Unavailable)?,
+            spent_date: record.spent_date.ok_or_else(unavailable)?,
+            project_name: record.project_name.ok_or_else(unavailable)?,
+            task_name: record.task_name.ok_or_else(unavailable)?,
+            user_name: record.user_name.ok_or_else(unavailable)?,
+            minutes: record.minutes.ok_or_else(unavailable)?,
+            rounded_minutes: record.rounded_minutes.ok_or_else(unavailable)?,
+            billable: record.billable.ok_or_else(unavailable)?,
             notes: record.notes,
         });
     }
@@ -135,7 +145,6 @@ pub(crate) async fn read(
     } else {
         None
     };
-    tx.commit().await?;
     Ok(TimeReportPage {
         requester,
         entries,
