@@ -521,9 +521,11 @@ async fn materialized_exports_keep_deadlines_and_restore_pool_defaults(pool: PgP
             expected
         );
     }
-    let mut tx = begin_invoice_read(&reader_pool, case.ids.org_id, case.ids.user_id)
-        .await
-        .unwrap();
+    let mut tx =
+        crate::reports::begin_invoice_export(&reader_pool, case.ids.org_id, case.ids.user_id)
+            .await
+            .unwrap()
+            .tx;
     let settings = sqlx::query!(r#"SELECT current_setting('transaction_isolation') AS "isolation!", current_setting('transaction_read_only') AS "read_only!", current_setting('statement_timeout') AS "statement!", current_setting('idle_in_transaction_session_timeout') AS "idle!", current_setting('lock_timeout') AS "lock!""#).fetch_one(&mut *tx).await.unwrap();
     assert_eq!(
         (
@@ -717,10 +719,10 @@ async fn materialized_exports_release_rendered_body_when_final_check_is_interrup
         let second = ExportPermit::acquire().unwrap();
         drop((first, second));
         tokio::time::timeout(Duration::from_secs(5), async {
-            begin_invoice_read(&reader_pool, ids.org_id, ids.user_id)
+            crate::reports::begin_invoice_export(&reader_pool, ids.org_id, ids.user_id)
                 .await
                 .unwrap()
-                .commit()
+                .finish(Ok(()))
                 .await
                 .unwrap();
         })

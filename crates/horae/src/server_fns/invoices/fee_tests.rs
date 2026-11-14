@@ -31,14 +31,6 @@ pub(super) async fn add_person(pool: &PgPool, org_id: Uuid, profile: BuiltInProf
     id
 }
 
-/// Leaves the seeded person with the Member floor only, without the
-/// organization lock the permission editor takes: the change can commit while
-/// an invoice writer waits on another lock, and the writer must read its
-/// authority after that wait.
-pub(super) async fn revoke_unlocked(pool: &PgPool, ids: &SeedIds) {
-    crate::ops::testing::provision(pool, ids, &[], false).await;
-}
-
 /// Leaves the seeded person with the Member floor only, as the permission
 /// editor does: the organization row changes in the same transaction.
 pub(super) async fn revoke(connection: &mut sqlx::PgConnection, ids: &SeedIds) {
@@ -264,7 +256,9 @@ async fn project_fee_context_keeps_monthly_balances_separate(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
-async fn invoice_status_rechecks_authority_after_waiting_for_the_invoice_lock(pool: PgPool) {
+async fn invoice_status_holds_its_authority_while_waiting_for_the_invoice_lock(pool: PgPool) {
+    // The writer loads its actor before the invoice lock, so an access change
+    // that arrives while it waits queues behind it rather than overtaking it.
     for deactivate in [false, true] {
         let ids = single_fee(&pool).await;
         let invoice = generate_invoice_for_period(
@@ -290,35 +284,24 @@ async fn invoice_status_rechecks_authority_after_waiting_for_the_invoice_lock(po
             transition_invoice(&task_pool, ids.org_id, id, InvoiceStatus::Void, ids.user_id).await
         });
         crate::server_fns::test_seed::wait_for_blocked(&pool, pid).await;
-        if deactivate {
-            sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
-                .execute(&pool)
-                .await
-                .unwrap();
-        } else {
-            revoke_unlocked(&pool, &ids).await;
-        }
+        let writer = sqlx::query_scalar!(
+            r#"SELECT pid AS "pid!" FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))"#,
+            pid
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let revocation_pool = pool.clone();
+        let revocation = tokio::spawn(async move {
+            let mut tx = revocation_pool.begin().await.unwrap();
+            crate::ops::testing::revoke(&mut tx, ids.org_id, ids.user_id, deactivate).await;
+            tx.commit().await.unwrap();
+        });
+        crate::server_fns::test_seed::wait_for_blocked(&pool, writer).await;
         blocker.commit().await.unwrap();
-        let error = transition
-            .await
-            .unwrap()
-            .expect_err("a revoked actor must not release reserved fee balances");
-        assert!(
-            matches!(
-                error,
-                ServerFnError::ServerError {
-                    code: FORBIDDEN,
-                    ..
-                }
-            ),
-            "{error}"
-        );
-        let stored = crate::reports::fetch_invoice_metadata(&pool, id, ids.org_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(stored.status, InvoiceStatus::Draft);
-        assert_eq!(stored.total_cents, invoice.invoice.total_cents);
+        let voided = transition.await.unwrap().unwrap();
+        assert_eq!(voided.status, InvoiceStatus::Void);
+        revocation.await.unwrap();
         let denied = preview::prepare(
             &pool,
             (ids.org_id, ids.user_id),
@@ -339,7 +322,7 @@ async fn invoice_status_rechecks_authority_after_waiting_for_the_invoice_lock(po
             ),
             "{denied}"
         );
-        // Verify retained balances without restoring the revoked actor's access.
+        // The void committed before the revocation, so the fee is available again.
         let reviewer = add_person(&pool, ids.org_id, BuiltInProfile::Administrator).await;
         let preview = preview::prepare(
             &pool,
@@ -351,7 +334,10 @@ async fn invoice_status_rechecks_authority_after_waiting_for_the_invoice_lock(po
         )
         .await
         .unwrap();
-        assert_eq!(preview.lines[0].fee_balance.unwrap().remaining_cents, 0);
+        assert_eq!(
+            preview.lines[0].fee_balance.unwrap().remaining_cents,
+            invoice.invoice.total_cents
+        );
     }
 }
 

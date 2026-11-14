@@ -74,25 +74,6 @@ async fn begin(pool: &PgPool) -> Result<Transaction<'_, Postgres>, StatusCode> {
     Ok(tx)
 }
 
-/// A snapshot read holding the actor's whole-invoice read grant.
-pub(super) async fn begin_invoice_read(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
-) -> Result<Transaction<'_, Postgres>, StatusCode> {
-    let mut tx =
-        crate::server_fns::snapshot::authorized(pool, org_id, actor_id, crate::ops::invoices::READ)
-            .await
-            .map_err(|error| match error {
-                dioxus::prelude::ServerFnError::ServerError { code, .. } => {
-                    StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
-                }
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            })?;
-    configure_deadlines(&mut tx).await?;
-    Ok(tx)
-}
-
 #[cfg(test)]
 pub(super) async fn configure_transaction(connection: &mut PgConnection) -> Result<(), StatusCode> {
     // Size checks and payload reads must see exactly the same rows and text.
@@ -153,7 +134,9 @@ pub(super) async fn invoice(
     actor_id: Uuid,
     invoice_id: Uuid,
 ) -> Result<(Invoice, Vec<InvoiceLine>), StatusCode> {
-    let mut tx = begin_invoice_read(pool, org_id, actor_id).await?;
+    let mut tx = super::begin_invoice_export(pool, org_id, actor_id)
+        .await?
+        .tx;
     let result = read_invoice(&mut tx, org_id, invoice_id, XLSX).await?;
     tx.commit().await.map_err(database_error)?;
     Ok(result)
@@ -174,7 +157,9 @@ pub(super) async fn pdf(
     actor_id: Uuid,
     invoice_id: Uuid,
 ) -> Result<PdfInvoice, StatusCode> {
-    let mut tx = begin_invoice_read(pool, org_id, actor_id).await?;
+    let mut tx = super::begin_invoice_export(pool, org_id, actor_id)
+        .await?
+        .tx;
     let size = sqlx::query!(
         r#"SELECT COALESCE(SUM(octet_length(value)::bigint), 0)::bigint as "bytes!",
                   COALESCE(MAX(octet_length(value)), 0) as "field_bytes!"

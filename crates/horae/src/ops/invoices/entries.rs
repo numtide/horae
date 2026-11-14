@@ -1,4 +1,5 @@
-use super::*;
+use super::SourceRead;
+use crate::ops::OpError;
 
 pub(super) struct EntryWithRates {
     pub(super) entry_id: uuid::Uuid,
@@ -19,7 +20,7 @@ pub(super) async fn read(
     (from, to): (chrono::NaiveDate, chrono::NaiveDate),
     selected: Option<&[uuid::Uuid]>,
     mode: SourceRead,
-) -> Result<Vec<EntryWithRates>, ServerFnError> {
+) -> Result<Vec<EntryWithRates>, OpError> {
     // Both reads share eligibility and rate rules; only generation locks sources.
     macro_rules! query {
         ($suffix:literal) => {
@@ -68,8 +69,7 @@ pub(super) async fn read(
                 selected,
             )
             .fetch_all(&mut **tx)
-            .await
-            .map_err(server_err)?
+            .await?
         };
     }
     let entries = match mode {
@@ -77,7 +77,7 @@ pub(super) async fn read(
         SourceRead::Generate => query!("FOR UPDATE OF te"),
     };
     if matches!(mode, SourceRead::Preview) && entries.len() > 10_000 {
-        return Err(conflict(
+        return Err(OpError::conflict(
             "Too much time for one preview; select fewer projects or a shorter period.",
         ));
     }
@@ -85,9 +85,7 @@ pub(super) async fn read(
 }
 
 impl EntryWithRates {
-    pub(super) fn preview(
-        &self,
-    ) -> Result<crate::models::invoice::InvoicePreviewLine, ServerFnError> {
+    pub(super) fn preview(&self) -> Result<crate::models::invoice::InvoicePreviewLine, OpError> {
         use crate::models::invoice::{InvoicePreviewLine, InvoiceSource};
         Ok(InvoicePreviewLine {
             source: InvoiceSource::Time {
@@ -105,9 +103,9 @@ impl EntryWithRates {
         })
     }
 
-    pub(super) fn amount(&self) -> Result<i64, ServerFnError> {
+    pub(super) fn amount(&self) -> Result<i64, OpError> {
         horae_core::invoice::line_amount_cents(self.rate_cents.unwrap_or(0), self.minutes)
-            .map_err(|_| conflict("Invoice line amount exceeds the supported range."))
+            .map_err(|_| OpError::conflict("Invoice line amount exceeds the supported range."))
     }
 
     pub(super) fn description(&self) -> String {

@@ -822,10 +822,7 @@ fn invoice_defaults_validate_all_override_fields() {
         assert!(
             matches!(
                 defaults::amounts(&invalid, 10000),
-                Err(ServerFnError::ServerError {
-                    code: BAD_REQUEST,
-                    ..
-                })
+                Err(crate::ops::OpError::Invalid { field: None, .. })
             ),
             "{invalid:?}"
         );

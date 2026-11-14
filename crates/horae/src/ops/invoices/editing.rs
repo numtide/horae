@@ -1,33 +1,24 @@
-use super::*;
-use crate::models::invoice::{InvoiceExcessConfirmation, InvoiceFeeEdit, InvoiceFeeReview};
-use sqlx::{PgPool, Postgres, Transaction};
+use horae_core::types::InvoiceStatus;
 use uuid::Uuid;
 
-/// Holds the writer's authority for the rest of the transaction: the actor
-/// loads with the organization (already held by `begin_invoice_write`) and
-/// then the person locked `FOR SHARE`, and must hold the whole-invoice write
-/// grant. Returns the actor for writes that need more.
-pub(super) async fn lock_actor(
-    tx: &mut Transaction<'_, Postgres>,
-    org_id: Uuid,
-    actor_id: Uuid,
-) -> Result<crate::ops::Actor, ServerFnError> {
-    let actor = crate::ops::Actor::load(tx, crate::ops::Caller::session(org_id, actor_id)).await?;
-    crate::ops::invoices::authorize_write(&actor)?;
-    Ok(actor)
-}
+use super::{PREPARE, authorize_prepare, authorize_read, bad_request, balances, defaults};
+use crate::models::invoice::{
+    InvoiceDefaults, InvoiceDraftEdit, InvoiceDraftSave, InvoiceEditReview, InvoiceEditor,
+    InvoiceExcessConfirmation, InvoiceFeeEdit, InvoiceFeeReview,
+};
+use crate::models::{Invoice, InvoiceWithLines};
+use crate::ops::{Actor, Done, OpError, Tx};
 
 async fn snapshot(
-    tx: &mut Transaction<'_, Postgres>,
+    tx: &mut Tx,
     org_id: Uuid,
     id: Uuid,
-) -> Result<(Invoice, i64, Vec<balances::BalanceLine>), ServerFnError> {
+) -> Result<(Invoice, i64, Vec<balances::BalanceLine>), OpError> {
     let invoice = crate::reports::fetch_invoice_metadata(&mut **tx, id, org_id)
-        .await
-        .map_err(server_err)?
-        .ok_or_else(|| not_found("Invoice not found"))?;
+        .await?
+        .ok_or_else(|| OpError::not_found("Invoice not found"))?;
     if invoice.status != InvoiceStatus::Draft {
-        return Err(conflict("Only draft invoices can be edited"));
+        return Err(OpError::conflict("Only draft invoices can be edited"));
     }
     let revision = sqlx::query_scalar!(
         "SELECT edit_revision FROM invoices WHERE id=$1 AND org_id=$2",
@@ -35,29 +26,25 @@ async fn snapshot(
         org_id
     )
     .fetch_one(&mut **tx)
-    .await
-    .map_err(server_err)?;
+    .await?;
     let rows = balances::read_lines(tx, org_id, id).await?;
     if rows
         .iter()
         .try_fold(0_i64, |sum, row| sum.checked_add(row.amount_cents))
         != Some(invoice.subtotal_cents)
     {
-        return Err(conflict(
+        return Err(OpError::conflict(
             "Invoice lines do not match its saved subtotal; editing is unavailable.",
         ));
     }
     Ok((invoice, revision, rows))
 }
 
-pub(super) async fn load(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
-    id: Uuid,
-) -> Result<InvoiceEditor, ServerFnError> {
-    let mut tx = begin_invoice_preparation_read(pool, org_id, actor_id).await?;
-    let (invoice, revision, mut rows) = snapshot(&mut tx, org_id, id).await?;
+/// A draft's editable values and fee lines, reviewed against current fee
+/// balances.
+pub(crate) async fn load(tx: &mut Tx, actor: &Actor, id: Uuid) -> Result<InvoiceEditor, OpError> {
+    authorize_read(actor, PREPARE)?;
+    let (invoice, revision, mut rows) = snapshot(tx, actor.org_id(), id).await?;
     let edit = InvoiceDraftEdit {
         revision,
         defaults: InvoiceDefaults {
@@ -79,7 +66,6 @@ pub(super) async fn load(
             .collect(),
     };
     let (review, _) = evaluate(&mut rows, &edit)?;
-    tx.commit().await.map_err(server_err)?;
     Ok(InvoiceEditor {
         edit,
         review,
@@ -87,55 +73,50 @@ pub(super) async fn load(
     })
 }
 
-pub(super) async fn review(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
+/// Reviews an edit of a draft without saving it.
+pub(crate) async fn review(
+    tx: &mut Tx,
+    actor: &Actor,
     id: Uuid,
     edit: &InvoiceDraftEdit,
-) -> Result<InvoiceEditReview, ServerFnError> {
-    let mut tx = begin_invoice_preparation_read(pool, org_id, actor_id).await?;
-    let (_, revision, mut rows) = snapshot(&mut tx, org_id, id).await?;
+) -> Result<InvoiceEditReview, OpError> {
+    authorize_read(actor, PREPARE)?;
+    let (_, revision, mut rows) = snapshot(tx, actor.org_id(), id).await?;
     if revision != edit.revision {
-        return Err(conflict(
+        return Err(OpError::conflict(
             "This invoice changed. Reload it before reviewing your edits.",
         ));
     }
     let (review, _) = evaluate(&mut rows, edit)?;
-    tx.commit().await.map_err(server_err)?;
     Ok(review)
 }
 
 fn evaluate(
     rows: &mut [balances::BalanceLine],
     edit: &InvoiceDraftEdit,
-) -> Result<(InvoiceEditReview, Vec<i64>), ServerFnError> {
+) -> Result<(InvoiceEditReview, Vec<i64>), OpError> {
     let edits: std::collections::BTreeMap<_, _> =
         edit.fees.iter().map(|fee| (fee.line_id, fee)).collect();
     if edits.len() != edit.fees.len()
         || edits.len() != rows.iter().filter(|row| row.fee_id.is_some()).count()
     {
-        return Err(err(
-            BAD_REQUEST,
-            "Supply each existing fee line exactly once",
-        ));
+        return Err(bad_request("Supply each existing fee line exactly once"));
     }
     for row in rows.iter_mut().filter(|row| row.fee_id.is_some()) {
         let fee = edits
             .get(&row.id)
-            .ok_or_else(|| err(BAD_REQUEST, "Fee line does not belong to this invoice"))?;
+            .ok_or_else(|| bad_request("Fee line does not belong to this invoice"))?;
         if fee.description.trim().is_empty()
             || fee.description.chars().count() > 1000
             || fee.description.contains('\0')
         {
-            return Err(err(
-                BAD_REQUEST,
+            return Err(bad_request(
                 "Fee descriptions must contain 1–1000 characters without NUL",
             ));
         }
         // Existing zero-valued sources remain editable without inventing a charge.
         if fee.amount_cents < 0 || (fee.amount_cents == 0 && row.amount_cents != 0) {
-            return Err(err(BAD_REQUEST, "An invoiced fee amount must be positive"));
+            return Err(bad_request("An invoiced fee amount must be positive"));
         }
         row.amount_cents = fee.amount_cents;
         row.description = fee.description.trim().to_owned();
@@ -145,7 +126,7 @@ fn evaluate(
     let subtotal = rows
         .iter()
         .try_fold(0_i64, |sum, row| sum.checked_add(row.amount_cents))
-        .ok_or_else(|| conflict("Invoice amount exceeds the supported range"))?;
+        .ok_or_else(|| OpError::conflict("Invoice amount exceeds the supported range"))?;
     let amounts = defaults::amounts(&edit.defaults, subtotal)?;
     let mut fees = Vec::with_capacity(edits.len());
     for (row, net_cents) in rows
@@ -156,17 +137,19 @@ fn evaluate(
         let (Some(agreed_cents), Some(project_id), Some(period_key)) =
             (row.agreed_cents, row.project_id, row.period_key.as_ref())
         else {
-            return Err(server_err("Invoice fee source is unavailable"));
+            return Err(OpError::Internal(
+                "Invoice fee source is unavailable".into(),
+            ));
         };
         let remaining_cents = row
             .other_invoiced_cents
             .checked_add(*net_cents)
             .and_then(|invoiced| agreed_cents.checked_sub(invoiced))
-            .ok_or_else(|| conflict("Fee balance exceeds the supported range"))?;
+            .ok_or_else(|| OpError::conflict("Fee balance exceeds the supported range"))?;
         let excess_cents = if remaining_cents < 0 {
             remaining_cents
                 .checked_neg()
-                .ok_or_else(|| conflict("Fee excess exceeds the supported range"))?
+                .ok_or_else(|| OpError::conflict("Fee excess exceeds the supported range"))?
         } else {
             0
         };
@@ -184,19 +167,19 @@ fn evaluate(
     Ok((InvoiceEditReview { fees, amounts }, net))
 }
 
-pub(super) async fn save(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
+/// Saves a reviewed edit of a draft. A repeated request returns the invoice as
+/// it saved it.
+pub(crate) async fn save(
+    tx: &mut Tx,
+    actor: &Actor,
     id: Uuid,
     request: &InvoiceDraftSave,
-) -> Result<InvoiceWithLines, ServerFnError> {
+) -> Result<Done<InvoiceWithLines>, OpError> {
     if request.request_id.get_version_num() != 7
         || request.edit.revision < 1
         || request.edit.fees.len() > 10000
     {
-        return Err(err(
-            BAD_REQUEST,
+        return Err(bad_request(
             "Invalid invoice request identity, revision or line count",
         ));
     }
@@ -204,45 +187,47 @@ pub(super) async fn save(
     canonical.edit.fees.sort_by_key(|fee| fee.line_id);
     canonical.review.fees.sort_by_key(|fee| fee.line_id);
     canonical.confirmed_excess.sort_by_key(|fee| fee.line_id);
-    let payload = serde_json::to_value(&canonical).map_err(server_err)?;
-    let mut tx = begin_invoice_write(pool, org_id).await?;
+    let payload = serde_json::to_value(&canonical).map_err(|error| {
+        tracing::error!(%error, "Invoice edit did not serialize");
+        OpError::Internal("Could not complete the request. Please retry.".into())
+    })?;
     // The saved edit reprices fee lines against the same balances the editor
     // showed, as its review did.
-    let actor = lock_actor(&mut tx, org_id, actor_id).await?;
-    crate::ops::invoices::authorize_prepare(&actor)?;
+    authorize_prepare(actor)?;
+    let org_id = actor.org_id();
+    let actor_id = actor.id();
+    balances::lock_invoices(tx, org_id).await?;
     let size = sqlx::query_scalar!(
         r#"SELECT octet_length($1::jsonb::text) AS "size!""#,
         payload
     )
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(server_err)?;
+    .fetch_one(&mut **tx)
+    .await?;
     if size > 262144 {
-        return Err(err(BAD_REQUEST, "Invoice edit exceeds 256 KiB"));
+        return Err(bad_request("Invoice edit exceeds 256 KiB"));
     }
     sqlx::query_scalar!(
         "SELECT id FROM invoices WHERE id=$1 AND org_id=$2 FOR UPDATE",
         id,
         org_id
     )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Invoice not found"))?;
-    let (invoice, revision, mut rows) = snapshot(&mut tx, org_id, id).await?;
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| OpError::not_found("Invoice not found"))?;
+    let (invoice, revision, mut rows) = snapshot(tx, org_id, id).await?;
     if let Some(previous) = sqlx::query!("SELECT actor_id,invoice_id,completed_revision,payload FROM invoice_edit_requests WHERE id=$1 AND org_id=$2", request.request_id, org_id)
-        .fetch_optional(&mut *tx).await.map_err(server_err)? {
+        .fetch_optional(&mut **tx).await? {
         if previous.actor_id != actor_id || previous.invoice_id != id || previous.payload != payload || previous.completed_revision != revision {
-            return Err(conflict("This request or invoice changed. Reload the invoice before saving."));
+            return Err(OpError::conflict("This request or invoice changed. Reload the invoice before saving."));
         }
     } else {
-        if revision != request.edit.revision { return Err(conflict("This invoice changed. Reload it before saving your edits.")); }
+        if revision != request.edit.revision { return Err(OpError::conflict("This invoice changed. Reload it before saving your edits.")); }
         let (mut review, net) = evaluate(&mut rows, &request.edit)?;
         review.fees.sort_by_key(|fee| fee.line_id);
-        if review != canonical.review { return Err(conflict("Fee balances changed. Review the invoice again before saving.")); }
+        if review != canonical.review { return Err(OpError::conflict("Fee balances changed. Review the invoice again before saving.")); }
         let excess: Vec<_> = review.fees.iter().filter(|fee| fee.excess_cents > 0)
             .map(|fee| InvoiceExcessConfirmation { line_id: fee.line_id, excess_cents: fee.excess_cents }).collect();
-        if excess != canonical.confirmed_excess { return Err(conflict("Confirm the exact amount exceeding the fee balance before saving.")); }
+        if excess != canonical.confirmed_excess { return Err(OpError::conflict("Confirm the exact amount exceeding the fee balance before saving.")); }
         let ids: Vec<_> = rows.iter().map(|row| row.id).collect();
         let descriptions: Vec<_> = rows.iter().map(|row| row.description.clone()).collect();
         let gross: Vec<_> = rows.iter().map(|row| row.amount_cents).collect();
@@ -250,24 +235,19 @@ pub(super) async fn save(
         sqlx::query!("UPDATE invoice_line_items l SET description=v.description,amount_cents=v.amount,allocated_discount_cents=v.discount
             FROM unnest($1::uuid[],$2::text[],$3::bigint[],$4::bigint[]) AS v(id,description,amount,discount)
             WHERE l.id=v.id AND l.invoice_id=$5", &ids, &descriptions, &gross, &discounts, id)
-            .execute(&mut *tx).await.map_err(server_err)?;
+            .execute(&mut **tx).await?;
         let values = &request.edit.defaults;
         let due_on = horae_core::project::payment_due_date(invoice.issued_on, values.terms_days as u16)
-            .map_err(|error| err(BAD_REQUEST,error.to_string()))?;
+            .map_err(bad_request)?;
         let amounts = review.amounts;
         sqlx::query!("UPDATE invoices SET due_on=$3,po_number=$4,discount_bps=$5,tax1_bps=$6,
             tax2_name=$7,tax2_bps=$8,discount_cents=$9,tax1_cents=$10,tax2_cents=$11,total_cents=$12
             WHERE org_id=$1 AND id=$2", org_id,id,due_on as chrono::NaiveDate,values.po_number,values.discount_bps,
             values.tax1_bps,values.tax2_name,values.tax2_bps,amounts.discount_cents,amounts.tax1_cents,amounts.tax2_cents,amounts.total_cents)
-            .execute(&mut *tx).await.map_err(server_err)?;
+            .execute(&mut **tx).await?;
         sqlx::query!("INSERT INTO invoice_edit_requests (id,org_id,actor_id,invoice_id,completed_revision,payload)
             SELECT $1,$2,$3,id,edit_revision,$5 FROM invoices WHERE id=$4 AND org_id=$2",
-            request.request_id,org_id,actor_id,id,payload).execute(&mut *tx).await.map_err(server_err)?;
+            request.request_id,org_id,actor_id,id,payload).execute(&mut **tx).await?;
     }
-    let (invoice, lines) = crate::reports::fetch_invoice_from(&mut tx, id, org_id)
-        .await
-        .map_err(server_err)?
-        .ok_or_else(|| not_found("Invoice not found"))?;
-    tx.commit().await.map_err(server_err)?;
-    Ok(InvoiceWithLines { invoice, lines })
+    Ok(Done::new(super::with_lines(tx, org_id, id).await?))
 }
