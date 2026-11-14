@@ -81,7 +81,7 @@ a new one without restarting the stack, run `horae-migrate` — it migrates and 
 which is needed because sqlx checks its queries at compile time.
 
 The 65 original migrations were squashed into one baseline, `0001_baseline.sql`. A database
-migrated before that refuses to start (sqlx reports migration 1 as modified): locally, run
+migrated before that refuses to start (sqlx reports migration 2 as applied but missing): locally, run
 `rm -rf .data`; on a deployment, run `horae migrate reset --confirm` and then `horae init`.
 
 [pgweb](https://github.com/sosedoff/pgweb) runs alongside the app at http://localhost:8081 for
