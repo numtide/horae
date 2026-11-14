@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::ProjectDetails;
 use crate::server_fns::test_seed::{SeedIds, seed};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
