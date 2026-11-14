@@ -41,7 +41,7 @@ pub(super) async fn save(
         .execute(&mut *tx)
         .await
         .map_err(storage_error)?;
-    crate::server_fns::permissions::configure_transaction_limits(&mut tx)
+    crate::ops::configure_transaction_limits(&mut tx)
         .await
         .map_err(storage_error)?;
     let permissions = lock_editor_actor(

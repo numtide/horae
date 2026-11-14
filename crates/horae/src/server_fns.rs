@@ -434,9 +434,7 @@ mod permission_editor;
 mod permissions;
 #[cfg(feature = "server")]
 pub(crate) use permissions::{
-    PermissionStorageError, ReadIsolation, StoredPersonPermissions,
-    begin_lock_only_read_async_commit, configure_transaction_limits, load_person_permissions,
-    provisioning,
+    PermissionStorageError, StoredPersonPermissions, load_person_permissions, provisioning,
 };
 mod plugins;
 mod profile;

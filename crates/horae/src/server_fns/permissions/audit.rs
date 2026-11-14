@@ -5,10 +5,8 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::{
-    PermissionStorageError, ReadIsolation, begin_lock_only_read_async_commit,
-    load_person_permissions,
-};
+use super::{PermissionStorageError, load_person_permissions};
+use crate::ops::{ReadIsolation, begin_lock_only_read_async_commit};
 use crate::models::permission_audit::{
     AuditCursor, AuditEntry, AuditPage, HistoricalSource, PersonSnapshot,
 };

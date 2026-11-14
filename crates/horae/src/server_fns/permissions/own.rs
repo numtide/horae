@@ -5,10 +5,8 @@ use uuid::Uuid;
 
 use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
-use super::{
-    PermissionStorageError, ReadIsolation, begin_lock_only_read_async_commit,
-    load_person_permissions,
-};
+use super::{PermissionStorageError, load_person_permissions};
+use crate::ops::{ReadIsolation, begin_lock_only_read_async_commit};
 use crate::models::own_permissions::OwnPermissions;
 use crate::models::permissions::PermissionSource;
 

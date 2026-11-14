@@ -4,10 +4,8 @@ use horae_core::permissions::catalog::Permission;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::{
-    PermissionStorageError, ReadIsolation, begin_lock_only_read_async_commit,
-    load_person_permissions,
-};
+use super::{PermissionStorageError, load_person_permissions};
+use crate::ops::{ReadIsolation, begin_lock_only_read_async_commit};
 use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage, PersonSummary};
 use crate::models::permission_editor::PermissionRequester;
 
