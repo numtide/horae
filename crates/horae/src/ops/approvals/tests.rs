@@ -25,7 +25,7 @@ pub(crate) async fn add_person(pool: &PgPool, ids: &SeedIds, profile: BuiltInPro
     .await
     .unwrap();
     let mut connection = pool.acquire().await.unwrap();
-    crate::server_fns::provisioning::provision(&mut connection, ids.org_id, user_id, profile)
+    crate::ops::permissions::provisioning::provision(&mut connection, ids.org_id, user_id, profile)
         .await
         .unwrap();
     SeedIds { user_id, ..*ids }

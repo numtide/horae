@@ -908,7 +908,7 @@ async fn create_person(
         }
     };
     // Imported people never bring Harvest privileges with them (015).
-    crate::server_fns::provisioning::provision(
+    crate::ops::permissions::provisioning::provision(
         &mut *conn,
         org_id,
         id,

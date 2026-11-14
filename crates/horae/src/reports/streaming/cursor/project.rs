@@ -1,6 +1,6 @@
 use super::*;
 use crate::reports::ProjectExportRow;
-use crate::server_fns::StoredPersonPermissions;
+use crate::ops::permissions::StoredPersonPermissions;
 
 pub(in crate::reports::streaming) async fn declare_projects(
     connection: &mut PgConnection,

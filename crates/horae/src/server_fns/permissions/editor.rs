@@ -5,7 +5,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::profiles::{self, ProfileCommandError};
-use super::{load_permission_template, load_person_permissions, restore_grants};
+use crate::ops::permissions::{load_permission_template, load_person_permissions, restore_grants};
 use crate::models::permission_editor::{
     PermissionEditor, PermissionRequester, PermissionSnapshot, PermissionSubject,
     PermissionSubjectPage, ProfileDraft, ProfilePreview, ProfileSource, RelationshipRemoval,

@@ -237,6 +237,7 @@ pub(crate) async fn user_payload(
     email: &str,
     name: &str,
 ) -> Result<crate::plugin::event::UserPayload, sqlx::Error> {
+    use crate::ops::permissions::{PermissionStorageError, load_person_permissions, profile_name};
     let state = match load_person_permissions(&mut *connection, org_id, id).await {
         Ok(state) => state,
         Err(PermissionStorageError::Database(error)) => return Err(error),
@@ -248,7 +249,7 @@ pub(crate) async fn user_payload(
     let (is_administrator, profile) = match state {
         Some(state) => (
             state.is_administrator,
-            permissions::own::profile_name(connection, org_id, state.source).await?,
+            profile_name(connection, org_id, state.source).await?,
         ),
         None => (false, None),
     };
@@ -431,11 +432,10 @@ mod invoices;
 mod organization;
 mod permission_editor;
 #[cfg(feature = "server")]
-mod permissions;
-#[cfg(feature = "server")]
-pub(crate) use permissions::{
-    PermissionStorageError, StoredPersonPermissions, load_person_permissions, provisioning,
-};
+pub(crate) mod permissions;
+// Temporary: the server_fns tests still provision through this path.
+#[cfg(all(test, feature = "server"))]
+pub(crate) use crate::ops::permissions::provisioning;
 mod plugins;
 mod profile;
 mod project_creation;

@@ -28,6 +28,7 @@ mod error;
 pub(crate) mod invoices;
 pub(crate) mod organization;
 pub(crate) mod people;
+pub(crate) mod permissions;
 pub(crate) mod projects;
 pub(crate) mod reports;
 pub(crate) mod time;

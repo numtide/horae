@@ -30,7 +30,7 @@ impl EventSink for Recorder {
 pub(crate) async fn become_profile(pool: &PgPool, ids: &SeedIds, profile: BuiltInProfile) {
     clear_state(pool, ids.user_id).await;
     let mut connection = pool.acquire().await.unwrap();
-    crate::server_fns::provisioning::provision(&mut connection, ids.org_id, ids.user_id, profile)
+    super::permissions::provisioning::provision(&mut connection, ids.org_id, ids.user_id, profile)
         .await
         .unwrap();
 }

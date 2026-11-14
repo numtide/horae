@@ -9,7 +9,7 @@ use crate::ops::{self, Caller, people::Existing};
 #[cfg(feature = "server")]
 use horae_core::permissions::catalog::BuiltInProfile;
 #[cfg(feature = "server")]
-use permissions::provisioning;
+use crate::ops::permissions::provisioning;
 
 mod rates;
 pub use rates::{load_person_rates, update_person_rates};
