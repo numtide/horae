@@ -2,7 +2,7 @@
 
 use horae_core::permissions::catalog::Permission;
 
-use super::super::{invalid, require_time_reads};
+use super::super::require_time_reads;
 use super::{REPORT_FORBIDDEN, REPORT_INVALID, unavailable};
 use crate::models::time_report::{
     TimeReportGroup, TimeReportGroupCursor, TimeReportGroupPage, TimeReportGroupQuery,
@@ -24,7 +24,7 @@ pub(crate) async fn read(
             .as_ref()
             .is_some_and(|cursor| cursor.group_by != query.group_by || cursor.name.contains('\0'))
     {
-        return Err(invalid(REPORT_INVALID));
+        return Err(OpError::bad_input(REPORT_INVALID));
     }
     let dimension = match query.group_by {
         TimeReportGrouping::Client => "client",

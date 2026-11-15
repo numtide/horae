@@ -84,10 +84,7 @@ pub(crate) async fn update_branding(
             .filter(|_| value != previous)
             .and_then(crate::models::branding_value_error)
         {
-            return Err(OpError::Invalid {
-                field: None,
-                message: message.to_owned(),
-            });
+            return Err(OpError::bad_input(message));
         }
     }
     let org_id = actor.org_id();

@@ -314,9 +314,7 @@ pub(crate) async fn check_project_budget(
 // The #[server] endpoints grouped by feature; re-exported so call sites keep
 // using `server_fns::<fn>` regardless of which submodule a function lives in.
 #[cfg(all(test, feature = "server"))]
-mod budget_tests;
-#[cfg(feature = "server")]
-pub(crate) mod budgets;
+pub(crate) mod budget_tests;
 #[cfg(all(test, feature = "server"))]
 pub(crate) mod test_seed;
 
@@ -348,8 +346,6 @@ pub use auth::*;
 pub use clients::*;
 pub use importers::*;
 pub use invoices::*;
-// Org-branding endpoints exist but no page consumes them yet.
-#[allow(unused_imports)]
 pub use organization::*;
 pub use permission_editor::*;
 pub use plugins::*;

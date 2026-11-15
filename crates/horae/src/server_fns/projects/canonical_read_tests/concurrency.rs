@@ -34,7 +34,7 @@ impl Reader {
                 }) => Vec::new(),
                 other => panic!("unexpected team result: {other:?}"),
             },
-            Self::Budget => crate::server_fns::budgets::progress_for_viewer(
+            Self::Budget => crate::server_fns::budget_tests::progress_for_viewer(
                 pool,
                 viewer.org_id,
                 viewer.id,

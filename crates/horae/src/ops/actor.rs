@@ -26,7 +26,7 @@ pub(crate) struct Actor {
 }
 
 const STATE_UNAVAILABLE: &str = "Permission state is unavailable";
-pub(crate) const ADMINISTRATOR_REQUIRED: &str = "Active administrator access required";
+const ADMINISTRATOR_REQUIRED: &str = "Active administrator access required";
 
 #[derive(Clone, Copy)]
 enum Lock {

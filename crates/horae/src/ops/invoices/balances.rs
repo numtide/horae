@@ -1,7 +1,6 @@
 use horae_core::project::Percentage;
 use uuid::Uuid;
 
-use super::bad_request;
 use crate::ops::OpError;
 
 /// Serializes the organization's invoice writes: numbering, billing time and
@@ -65,7 +64,7 @@ pub(super) fn allocate(gross: &[i64], discount_bps: i16) -> Result<Vec<i64>, OpE
     let discount = u16::try_from(discount_bps)
         .ok()
         .and_then(|bps| Percentage::try_from(bps).ok())
-        .ok_or_else(|| bad_request("Discount must be between 0 and 100"))?;
+        .ok_or_else(|| OpError::bad_input("Discount must be between 0 and 100"))?;
     horae_core::invoice::allocate_invoice_discount(gross, discount)
         .map_err(|error| OpError::conflict(error.to_string()))
 }

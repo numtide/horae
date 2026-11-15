@@ -43,6 +43,14 @@ impl OpError {
             message: message.to_string(),
         }
     }
+
+    /// Invalid input that no single field is to blame for.
+    pub fn bad_input(message: impl std::fmt::Display) -> Self {
+        Self::Invalid {
+            field: None,
+            message: message.to_string(),
+        }
+    }
 }
 
 impl From<sqlx::Error> for OpError {

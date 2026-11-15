@@ -6,7 +6,7 @@ use chrono::NaiveDate;
 use horae_core::types::InvoiceStatus;
 use uuid::Uuid;
 
-use super::{SourceRead, bad_request, balances, defaults, entries, fees, preview};
+use super::{SourceRead, balances, defaults, entries, fees, preview};
 use crate::models::invoice::{InvoiceDefaults, InvoiceGenerationRequest, InvoiceSource};
 use crate::models::{Invoice, InvoiceLine, InvoiceWithLines};
 use crate::ops::{Actor, Done, OpError, Tx};
@@ -50,15 +50,15 @@ pub(crate) async fn generate(
             || request.review.excess.len() > 10000
             || request.confirmed_excess.len() > 10000
     }) {
-        return Err(bad_request(
+        return Err(OpError::bad_input(
             "Invalid invoice request identity or source count",
         ));
     }
     if from > to {
-        return Err(bad_request("Invoice period ends before it starts"));
+        return Err(OpError::bad_input("Invoice period ends before it starts"));
     }
     if project_ids.is_some_and(|ids| ids.is_empty() || ids.len() > 1000) {
-        return Err(bad_request("Select between 1 and 1000 projects"));
+        return Err(OpError::bad_input("Select between 1 and 1000 projects"));
     }
     let selected = project_ids.map(|ids| {
         ids.iter()
@@ -101,7 +101,7 @@ pub(crate) async fn generate(
         .fetch_one(&mut **tx)
         .await?;
         if size > 262144 {
-            return Err(bad_request("Invoice request exceeds 256 KiB"));
+            return Err(OpError::bad_input("Invoice request exceeds 256 KiB"));
         }
     }
     // Verify the client belongs to this org before selecting any billable
@@ -190,7 +190,7 @@ pub(crate) async fn generate(
     }
     let currency = preview::currency(&prepared)?;
     if !prepared.iter().any(|line| line.selected) {
-        return Err(bad_request("Select at least one invoice charge"));
+        return Err(OpError::bad_input("Select at least one invoice charge"));
     }
     let billed_projects: Vec<_> = prepared
         .iter()
@@ -223,7 +223,7 @@ pub(crate) async fn generate(
     let invoice_id = Uuid::now_v7();
     let issued_on = now.date_naive();
     let due_on = horae_core::project::payment_due_date(issued_on, settings.terms_days as u16)
-        .map_err(bad_request)?;
+        .map_err(OpError::bad_input)?;
     preview::allocate_lines(&mut prepared, settings.discount_bps)?;
     let subtotal_cents = preview::subtotal(&prepared)?;
     let amounts = defaults::amounts(&settings, subtotal_cents)?;

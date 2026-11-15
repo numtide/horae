@@ -1,4 +1,4 @@
-use super::{PREPARE, SourceRead, authorize_read, bad_request, balances, defaults, entries, fees};
+use super::{PREPARE, SourceRead, authorize_read, balances, defaults, entries, fees};
 use crate::models::invoice::{
     InvoiceDefaults, InvoiceFeeSelection, InvoicePreparation, InvoicePreviewLine,
     InvoiceProjectDefaults, InvoiceSourceExcess,
@@ -18,10 +18,10 @@ pub(crate) async fn prepare(
     edits: Option<&[InvoiceFeeSelection]>,
 ) -> Result<InvoicePreparation, OpError> {
     if from > to {
-        return Err(bad_request("Invoice period ends before it starts"));
+        return Err(OpError::bad_input("Invoice period ends before it starts"));
     }
     if selected.is_some_and(|ids| ids.is_empty() || ids.len() > 1000) {
-        return Err(bad_request("Select between 1 and 1000 projects"));
+        return Err(OpError::bad_input("Select between 1 and 1000 projects"));
     }
     if let Some(overrides) = overrides {
         defaults::amounts(overrides, 0)?;
@@ -134,7 +134,7 @@ pub(crate) async fn prepare(
         .as_ref()
         .map(|defaults| {
             horae_core::project::payment_due_date(issued_on, defaults.terms_days as u16)
-                .map_err(bad_request)
+                .map_err(OpError::bad_input)
         })
         .transpose()?;
     Ok(InvoicePreparation {
@@ -185,7 +185,9 @@ pub(super) fn apply_fee_selection(
                 .filter(|line| line.fee_balance.is_some())
                 .count()
     {
-        return Err(bad_request("Supply each available fee source exactly once"));
+        return Err(OpError::bad_input(
+            "Supply each available fee source exactly once",
+        ));
     }
     for line in lines.iter_mut().filter(|line| line.fee_balance.is_some()) {
         let edit = by_source
@@ -195,7 +197,7 @@ pub(super) fn apply_fee_selection(
             || edit.description.chars().count() > 1000
             || edit.description.contains('\0')
         {
-            return Err(bad_request(
+            return Err(OpError::bad_input(
                 "Fee descriptions must contain 1–1000 characters without NUL",
             ));
         }
@@ -206,7 +208,7 @@ pub(super) fn apply_fee_selection(
                     .fee_balance
                     .is_some_and(|balance| balance.agreed_cents != 0))
         {
-            return Err(bad_request("Selected fee amounts must be positive"));
+            return Err(OpError::bad_input("Selected fee amounts must be positive"));
         }
         line.description = edit.description.trim().to_owned();
         line.amount_cents = edit.amount_cents;

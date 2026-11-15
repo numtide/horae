@@ -20,6 +20,11 @@ mod task_catalog;
 
 pub(crate) use budgets::progress as budget_progress;
 pub(crate) use detail::view as detail_view;
+// Tests pin the date that selects a monthly-reset budget's month.
+#[cfg(test)]
+pub(crate) use budgets::progress_on as budget_progress_on;
+#[cfg(test)]
+pub(crate) use detail::view_on as detail_view_on;
 pub(crate) use reads::{ProjectRead, TaskRead, list, overview, spend, tags, tasks};
 pub(crate) use task_catalog::page as task_catalog;
 

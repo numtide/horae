@@ -572,7 +572,7 @@ async fn stale_requester_is_refused_by_project_operations(pool: PgPool) {
         fetch_project_spend(&pool, org_id, user_id, stale)
             .await
             .map(drop),
-        crate::server_fns::budgets::progress_for_viewer(&pool, org_id, user_id, date, stale)
+        crate::server_fns::budget_tests::progress_for_viewer(&pool, org_id, user_id, date, stale)
             .await
             .map(drop),
         task_catalog::fetch_task_catalog(&pool, viewer, TaskActivity::All, None, stale)

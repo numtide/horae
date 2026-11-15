@@ -45,7 +45,7 @@ fn unavailable_email(email: &str) -> String {
 
 /// The most people one request may add, matching the importer's bounded list
 /// of missing people.
-pub(crate) const MAX_NEW_PEOPLE: usize = 500;
+const MAX_NEW_PEOPLE: usize = 500;
 
 /// What adding people does with an email an account already uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,7 +60,7 @@ pub(crate) enum Existing {
 /// or with `PeopleWriteManaged` for a person they manage, and an
 /// administrator's account only as another administrator. The People page
 /// asks the same question to decide which rows offer the action.
-pub(crate) fn may_change_active(
+fn may_change_active(
     write_all: bool,
     write_managed: bool,
     manages: bool,

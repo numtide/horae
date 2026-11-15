@@ -82,20 +82,12 @@ pub(crate) fn authorize_write(actor: &Actor) -> Result<(), OpError> {
 
 /// Refuses an actor who may not price work into a new invoice or a draft.
 /// The write grant is checked first, so its refusal names what is missing.
-pub(crate) fn authorize_prepare(actor: &Actor) -> Result<(), OpError> {
+fn authorize_prepare(actor: &Actor) -> Result<(), OpError> {
     authorize_write(actor)?;
     if holds(actor, PREPARE) {
         Ok(())
     } else {
         Err(OpError::forbidden(PREPARE_REQUIRED))
-    }
-}
-
-/// Invalid input that no single field is to blame for.
-fn bad_request(message: impl std::fmt::Display) -> OpError {
-    OpError::Invalid {
-        field: None,
-        message: message.to_string(),
     }
 }
 

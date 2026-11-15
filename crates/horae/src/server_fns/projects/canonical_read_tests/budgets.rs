@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::budgets::progress_for_viewer;
+use crate::server_fns::budget_tests::progress_for_viewer;
 
 async fn configured(pool: &PgPool, ids: &SeedIds) {
     sqlx::query!(

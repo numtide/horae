@@ -448,7 +448,7 @@ async fn canonical_project_reads_reject_missing_and_invalid_grants(pool: PgPool)
                 .is_err()
         );
         assert!(matches!(
-            crate::server_fns::budgets::progress_for_viewer(
+            crate::server_fns::budget_tests::progress_for_viewer(
                 &pool,
                 ids.org_id,
                 ids.user_id,
