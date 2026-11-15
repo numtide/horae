@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT current_setting('statement_timeout') AS \"statement!\", current_setting('idle_in_transaction_session_timeout') AS \"idle!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "statement!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "idle!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "47e1315762127ef01f6178e3c250673c6c4571e73aa7988a5a623045bba9da33"
+}

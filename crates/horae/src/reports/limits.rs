@@ -51,19 +51,15 @@ pub(super) fn database_error(error: sqlx::Error) -> StatusCode {
 /// locked `FOR SHARE` until the caller's transaction or savepoint ends. A
 /// missing organization, a foreign or inactive person, and missing or invalid
 /// permission state are refused; a lost race is a retryable 409.
-async fn load_actor(
+pub(super) async fn load_actor(
     connection: &mut PgConnection,
     org_id: Uuid,
     user_id: Uuid,
 ) -> Result<crate::ops::Actor, StatusCode> {
-    use crate::ops::{Actor, Caller, OpError};
+    use crate::ops::{Actor, Caller};
     let actor = Actor::load(connection, Caller::session(org_id, user_id))
         .await
-        .map_err(|error| match error {
-            OpError::Forbidden(_) => StatusCode::FORBIDDEN,
-            OpError::Conflict(_) => StatusCode::CONFLICT,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        })?;
+        .map_err(super::op_status)?;
     if !actor.is_active() {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -87,16 +83,11 @@ pub(super) async fn configure_transaction(connection: &mut PgConnection) -> Resu
     configure_deadlines(connection).await
 }
 
+/// The same limits as every operation: never looser than an inherited one.
 pub(super) async fn configure_deadlines(connection: &mut PgConnection) -> Result<(), StatusCode> {
-    sqlx::query!("SET LOCAL statement_timeout = '5s'")
-        .execute(&mut *connection)
+    crate::ops::configure_transaction_limits(connection)
         .await
-        .map_err(database_error)?;
-    sqlx::query!("SET LOCAL idle_in_transaction_session_timeout = '10s'")
-        .execute(&mut *connection)
-        .await
-        .map_err(database_error)?;
-    Ok(())
+        .map_err(database_error)
 }
 
 async fn read_invoice(
@@ -631,6 +622,22 @@ mod tests {
             invoice(&pool, ids.org_id, ids.user_id, id).await,
             Err(StatusCode::PAYLOAD_TOO_LARGE)
         ));
+    }
+
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn export_deadlines_keep_a_stricter_inherited_limit(pool: PgPool) {
+        let mut connection = pool.acquire().await.unwrap();
+        sqlx::query!("SET statement_timeout = '250ms'")
+            .execute(&mut *connection)
+            .await
+            .unwrap();
+        let mut tx = sqlx::Connection::begin(&mut *connection).await.unwrap();
+        configure_deadlines(&mut tx).await.unwrap();
+        let settings = sqlx::query!(r#"SELECT current_setting('statement_timeout') AS "statement!", current_setting('idle_in_transaction_session_timeout') AS "idle!""#).fetch_one(&mut *tx).await.unwrap();
+        assert_eq!(
+            (settings.statement.as_str(), settings.idle.as_str()),
+            ("250ms", "10s")
+        );
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]

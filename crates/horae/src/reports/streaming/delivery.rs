@@ -86,19 +86,10 @@ impl Authority {
         }
         // Purpose::Invoice: the actor locks the organization, then the person,
         // and must still hold the whole-invoice read grant.
-        let actor = crate::ops::Actor::load(
-            connection,
-            crate::ops::Caller::session(self.org_id, self.actor_id),
-        )
-        .await
-        .map_err(|error| match error {
-            crate::ops::OpError::Forbidden(_) => StatusCode::FORBIDDEN,
-            crate::ops::OpError::Conflict(_) => StatusCode::CONFLICT,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        })?;
-        if !crate::ops::invoices::holds(&actor, crate::ops::invoices::READ) {
-            return Err(StatusCode::FORBIDDEN);
-        }
+        let actor =
+            crate::reports::limits::load_actor(connection, self.org_id, self.actor_id).await?;
+        crate::ops::invoices::authorize_read(&actor, crate::ops::invoices::READ)
+            .map_err(crate::reports::op_status)?;
         release_authority(connection).await
     }
 
