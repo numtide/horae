@@ -918,7 +918,7 @@ async fn configured_fixed_fee_hours_are_not_invoiced_but_legacy_fees_are_unchang
         let day = "2026-09-07".parse().unwrap();
         let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day).await;
         let spend =
-            crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
+            crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
                 .await
                 .unwrap();
         let report = crate::server_fns::reports::fetch_report(
@@ -1112,7 +1112,7 @@ async fn selected_project_rate_modes_agree_across_billing_consumers(pool: PgPool
         .await
         .unwrap();
         let spend =
-            crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
+            crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
                 .await
                 .unwrap();
         let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
@@ -1177,7 +1177,7 @@ async fn billing_cascade_agrees_across_all_four_levels_including_zero(pool: PgPo
         .await
         .unwrap();
         let spend =
-            crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
+            crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
                 .await
                 .unwrap();
         let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
@@ -1231,9 +1231,10 @@ async fn project_rate_is_used_by_invoices_reports_and_spend(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(report[0].billable_cents, Some(6000));
-    let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
-        .await
-        .unwrap();
+    let spend =
+        crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
+            .await
+            .unwrap();
     assert_eq!(spend[0].spent_cents, Some(6000));
 }
 
@@ -1270,9 +1271,10 @@ async fn invoiced_amounts_survive_rate_changes_and_void_uses_current_rates(pool:
     .await
     .unwrap();
     assert_eq!(report[0].billable_cents, Some(invoice.invoice.total_cents));
-    let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
-        .await
-        .unwrap();
+    let spend =
+        crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
+            .await
+            .unwrap();
     assert_eq!(spend[0].spent_cents, Some(invoice.invoice.total_cents));
     transition_invoice(
         &pool,
@@ -1287,9 +1289,10 @@ async fn invoiced_amounts_survive_rate_changes_and_void_uses_current_rates(pool:
         .await
         .unwrap();
     assert_eq!(replacement.invoice.total_cents, 6000);
-    let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
-        .await
-        .unwrap();
+    let spend =
+        crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
+            .await
+            .unwrap();
     assert_eq!(
         spend[0].spent_cents,
         Some(6000),
@@ -1339,7 +1342,7 @@ async fn non_billable_context_produces_no_unbilled_amount_on_any_report(pool: Pg
             (60, 0, Some(0))
         );
         let spend =
-            crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
+            crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
                 .await
                 .unwrap();
         assert_eq!(
@@ -1492,9 +1495,10 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
     )
     .await
     .unwrap();
-    let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
-        .await
-        .unwrap();
+    let spend =
+        crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
+            .await
+            .unwrap();
     assert_eq!(
         (
             invoice.lines[0].amount_cents,
@@ -1517,7 +1521,7 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
     .await
     .unwrap_err();
     let spend_error =
-        crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
+        crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
             .await
             .unwrap_err();
     assert!(
@@ -1676,9 +1680,10 @@ async fn assert_reporting_minutes(
         records.iter().map(|row| &row[5]).collect::<Vec<_>>(),
         vec!["0.25", "0.17"]
     );
-    let spend = crate::server_fns::projects::fetch_project_spend(pool, ids.org_id, ids.user_id)
-        .await
-        .unwrap();
+    let spend =
+        crate::server_fns::projects::fetch_project_spend(pool, ids.org_id, ids.user_id, None)
+            .await
+            .unwrap();
     assert_eq!(spend.len(), 1);
     assert_eq!(
         (spend[0].spent_minutes, spend[0].spent_cents),

@@ -157,7 +157,12 @@ async fn project_rows(
 
 /// The tags of every project the actor may read. Empty for an actor with no
 /// authority.
-pub(crate) async fn tags(tx: &mut Tx, actor: &Actor) -> Result<Vec<ProjectTagLink>, OpError> {
+pub(crate) async fn tags(
+    tx: &mut Tx,
+    actor: &Actor,
+    expected: Option<PermissionRequester>,
+) -> Result<Vec<ProjectTagLink>, OpError> {
+    actor.expect_requester(expected, REQUESTER_CHANGED)?;
     if !actor.is_active() {
         return Ok(Vec::new());
     }
@@ -190,7 +195,12 @@ pub(crate) async fn tags(tx: &mut Tx, actor: &Actor) -> Result<Vec<ProjectTagLin
 /// resolved through the FR-024 cascade (task → assignment → project → user
 /// default). Never per-person time or rates. Empty for an actor with no
 /// authority.
-pub(crate) async fn spend(tx: &mut Tx, actor: &Actor) -> Result<Vec<ProjectSpend>, OpError> {
+pub(crate) async fn spend(
+    tx: &mut Tx,
+    actor: &Actor,
+    expected: Option<PermissionRequester>,
+) -> Result<Vec<ProjectSpend>, OpError> {
+    actor.expect_requester(expected, REQUESTER_CHANGED)?;
     if !actor.is_active() {
         return Ok(Vec::new());
     }

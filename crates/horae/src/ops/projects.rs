@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use super::{Actor, Done, OpError, Tx};
 use crate::models::Project;
+use crate::models::permission_editor::PermissionRequester;
 use crate::plugin::AppEvent;
 use crate::plugin::event::{ActiveTransition, active_transition};
 
@@ -34,8 +35,8 @@ pub(crate) fn writes_any(actor: &Actor) -> bool {
     actor.has(Permission::ProjectWriteAll) || actor.has(Permission::ProjectWriteManaged)
 }
 
-/// Archives or restores each project in `sorted_ids`, in that order, so
-/// overlapping batches take their row locks in one global order. A project
+/// Archives or restores 1 to 100 projects, each once, in ascending id order,
+/// so overlapping batches take their row locks in one global order. A project
 /// is written with `ProjectWriteAll`, or with `ProjectWriteManaged` when the
 /// actor manages it. Restoring needs the project's client active: a client
 /// archive locks the same project rows, so the two serialize here.
@@ -49,16 +50,19 @@ pub(crate) fn writes_any(actor: &Actor) -> bool {
 pub(crate) async fn set_active(
     tx: &mut Tx,
     actor: &Actor,
-    sorted_ids: &[Uuid],
+    ids: &[Uuid],
     active: bool,
+    expected: Option<PermissionRequester>,
 ) -> Result<Done<Vec<Project>>, OpError> {
+    actor.expect_requester(expected, REQUESTER_CHANGED)?;
+    let ids = lock_order(ids)?;
     if !actor.is_active() || !writes_any(actor) {
         return Err(OpError::forbidden(WRITE_REQUIRED));
     }
     let org_id = actor.org_id();
-    let mut projects = Vec::with_capacity(sorted_ids.len());
+    let mut projects = Vec::with_capacity(ids.len());
     let mut events = Vec::new();
-    for &project_id in sorted_ids {
+    for project_id in ids {
         let designated = is_designated(tx, actor, project_id).await?;
         let writes = actor.has(Permission::ProjectWriteAll)
             || (designated && actor.has(Permission::ProjectWriteManaged));
@@ -107,6 +111,21 @@ pub(crate) async fn set_active(
     let mut done = Done::new(projects);
     done.events = events;
     Ok(done)
+}
+
+/// A status batch of 1 to 100 ids, sorted and without repeats: the order in
+/// which `set_active` locks them.
+fn lock_order(ids: &[Uuid]) -> Result<Vec<Uuid>, OpError> {
+    if ids.is_empty() || ids.len() > 100 {
+        return Err(OpError::invalid(
+            "project_ids",
+            "Select between 1 and 100 projects",
+        ));
+    }
+    let mut ids = ids.to_vec();
+    ids.sort_unstable();
+    ids.dedup();
+    Ok(ids)
 }
 
 fn event(org_id: Uuid, project: &Project, transition: ActiveTransition) -> AppEvent {
@@ -188,4 +207,25 @@ async fn lock(tx: &mut Tx, org_id: Uuid, project_id: Uuid) -> Result<Project, Op
     .fetch_optional(&mut **tx)
     .await?
     .ok_or_else(|| OpError::not_found(NOT_FOUND))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lock_order_bounds_sorts_and_drops_repeats() {
+        let (low, high) = (Uuid::from_u128(1), Uuid::from_u128(2));
+        assert_eq!(lock_order(&[high, low, high]).unwrap(), [low, high]);
+        assert_eq!(lock_order(&[low; 100]).unwrap(), [low]);
+        for ids in [vec![], vec![low; 101]] {
+            assert_eq!(
+                lock_order(&ids),
+                Err(OpError::invalid(
+                    "project_ids",
+                    "Select between 1 and 100 projects"
+                ))
+            );
+        }
+    }
 }

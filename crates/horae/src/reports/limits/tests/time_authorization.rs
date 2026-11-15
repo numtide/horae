@@ -17,7 +17,7 @@ async fn read_access(
 ) -> Result<TimeReportAccess, OpError> {
     let read =
         crate::ops::begin_read(pool, Caller::session(requester.org_id, requester.user_id)).await?;
-    let result = crate::ops::time_reads::reports::access(&read.actor);
+    let result = crate::ops::time_reads::reports::access(&read.actor, Some(requester));
     read.finish(result).await
 }
 
@@ -738,6 +738,24 @@ async fn report_view_follows_the_time_read_grants_not_the_profile(pool: PgPool) 
         assert_eq!(access.requester, requester);
         assert_eq!(access.financial, financial, "{grants:?}");
     }
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn report_view_refuses_a_page_loaded_for_another_person(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let stale = PermissionRequester {
+        org_id: ids.org_id,
+        user_id: uuid::Uuid::now_v7(),
+    };
+    let read = crate::ops::begin_read(&pool, Caller::session(ids.org_id, ids.user_id))
+        .await
+        .unwrap();
+    let result = crate::ops::time_reads::reports::access(&read.actor, Some(stale));
+    assert_eq!(
+        read.finish(result).await,
+        Err(OpError::forbidden("Report requester has changed"))
+    );
 }
 
 /// A person without a readable permission state is refused (403) by the

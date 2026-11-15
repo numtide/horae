@@ -17,11 +17,13 @@ use horae_core::types::{EntryState, RoundDir};
 use uuid::Uuid;
 
 use super::{Actor, Done, OpError, Tx};
+use crate::models::scoped_time::TimesheetWriteContext;
 use crate::models::{Approval, ApprovalSummary};
 use crate::plugin::AppEvent;
 use crate::plugin::event::submission_payload;
 
 const ACTIVE_REQUIRED: &str = "Active same-organization account required";
+const CONTEXT_CHANGED: &str = "Timesheet context changed; refresh the page";
 const APPROVAL_REQUIRED: &str = "Approval access is required to review timesheets";
 /// Names no person, week or count, so a refused selection reveals nothing
 /// about the records the actor cannot see.
@@ -35,12 +37,18 @@ const RUNNING_TIMER_CONFLICT: &str = "A timer is running in this week. Stop it b
 
 /// Submits the actor's own week: every open entry in `[week_start,
 /// week_start + 6]` becomes submitted, with its rounded minutes frozen, and
-/// the week gets a pending approval.
+/// the week gets a pending approval. `context` must name the actor as both
+/// requester and subject.
 pub(crate) async fn submit_week(
     tx: &mut Tx,
     actor: &Actor,
     week_start: NaiveDate,
+    context: &TimesheetWriteContext,
 ) -> Result<Done<Approval>, OpError> {
+    actor.expect_requester(Some(context.expected_requester), CONTEXT_CHANGED)?;
+    if context.subject_id != actor.id() {
+        return Err(OpError::forbidden(CONTEXT_CHANGED));
+    }
     if !actor.is_active() {
         return Err(OpError::forbidden(ACTIVE_REQUIRED));
     }

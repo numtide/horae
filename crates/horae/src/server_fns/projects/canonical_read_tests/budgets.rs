@@ -23,9 +23,15 @@ async fn configured(pool: &PgPool, ids: &SeedIds) {
 }
 
 async fn read(pool: &PgPool, ids: &SeedIds) -> Vec<crate::models::ProjectBudgetOverview> {
-    progress_for_viewer(pool, ids.org_id, ids.user_id, "2026-09-07".parse().unwrap())
-        .await
-        .unwrap()
+    progress_for_viewer(
+        pool,
+        ids.org_id,
+        ids.user_id,
+        "2026-09-07".parse().unwrap(),
+        None,
+    )
+    .await
+    .unwrap()
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -262,7 +268,8 @@ async fn canonical_budget_skips_hidden_monetary_overflow(pool: PgPool) {
             &pool,
             ids.org_id,
             ids.user_id,
-            "2026-09-07".parse().unwrap()
+            "2026-09-07".parse().unwrap(),
+            None,
         )
         .await,
         Err(ServerFnError::ServerError {

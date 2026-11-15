@@ -166,7 +166,7 @@ async fn private_progress_does_not_prevent_tracking_or_reveal_financial_fields(p
             .is_empty()
     );
     assert!(
-        fetch_project_spend(&pool, viewer.org_id, viewer.id)
+        fetch_project_spend(&pool, viewer.org_id, viewer.id, None)
             .await
             .unwrap()
             .is_empty()
@@ -232,7 +232,7 @@ async fn members_read_progress_of_projects_without_settings(pool: PgPool) {
     assert_eq!(projects[0].budget_minutes, Some(600));
     assert!(projects[0].rate_cents.is_none());
     // Spent money needs a billable-rate read grant.
-    let totals = fetch_project_spend(&pool, viewer.org_id, viewer.id)
+    let totals = fetch_project_spend(&pool, viewer.org_id, viewer.id, None)
         .await
         .unwrap();
     assert_eq!((totals[0].spent_minutes, totals[0].spent_cents), (60, None));
@@ -254,7 +254,7 @@ async fn project_members_receive_progress_without_rates_or_money(pool: PgPool) {
     assert_eq!(projects.len(), 1);
     assert_eq!(projects[0].budget_minutes, Some(600));
     assert_eq!(projects[0].rate_cents, None);
-    let progress = fetch_project_spend(&pool, viewer.org_id, viewer.id)
+    let progress = fetch_project_spend(&pool, viewer.org_id, viewer.id, None)
         .await
         .unwrap();
     assert_eq!(
@@ -405,7 +405,7 @@ async fn project_reads_use_current_authority_and_reject_foreign_scope(pool: PgPo
             .is_empty()
     );
     assert!(
-        fetch_project_spend(&pool, viewer.org_id, viewer.id)
+        fetch_project_spend(&pool, viewer.org_id, viewer.id, None)
             .await
             .unwrap()
             .is_empty()
@@ -481,7 +481,7 @@ async fn outsiders_and_inactive_viewers_have_no_project_reads(pool: PgPool) {
             );
         }
         assert!(
-            fetch_project_spend(&pool, viewer.org_id, viewer.id)
+            fetch_project_spend(&pool, viewer.org_id, viewer.id, None)
                 .await
                 .unwrap()
                 .is_empty()

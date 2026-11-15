@@ -20,7 +20,7 @@ async fn hidden_spend_overflow_does_not_prevent_authorized_hour_totals(pool: PgP
     .await
     .unwrap();
     time_entry(&pool, &ids, EntryState::Open).await;
-    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id)
+    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -32,7 +32,7 @@ async fn hidden_spend_overflow_does_not_prevent_authorized_hour_totals(pool: PgP
     )
     .await;
     assert!(matches!(
-        fetch_project_spend(&pool, ids.org_id, ids.user_id).await,
+        fetch_project_spend(&pool, ids.org_id, ids.user_id, None).await,
         Err(ServerFnError::ServerError {
             code: INTERNAL_ERROR,
             ..
@@ -58,7 +58,7 @@ async fn canonical_spend_excludes_entries_with_foreign_person_parents(pool: PgPo
     .execute(&pool)
     .await
     .unwrap();
-    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id)
+    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -88,10 +88,9 @@ async fn spend_rechecks_financial_only_revocation_after_organization_wait(pool: 
         .unwrap()
         .unwrap();
     let pending_pool = pool.clone();
-    let pending =
-        tokio::spawn(
-            async move { fetch_project_spend(&pending_pool, ids.org_id, ids.user_id).await },
-        );
+    let pending = tokio::spawn(async move {
+        fetch_project_spend(&pending_pool, ids.org_id, ids.user_id, None).await
+    });
     crate::server_fns::test_seed::wait_for_blocked(&pool, holder).await;
     let grants: Vec<String> =
         serde_json::from_value(serde_json::json!(PermissionSelection::new(&[
@@ -129,7 +128,7 @@ async fn tracked(pool: &PgPool, profile: BuiltInProfile, permissions: &[Permissi
 #[serial_test::serial]
 async fn canonical_spend_reads_need_only_the_read_grant(pool: PgPool) {
     let ids = tracked(&pool, BuiltInProfile::Member, &[Permission::ProjectReadAll]).await;
-    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id)
+    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -154,7 +153,7 @@ async fn canonical_spend_withholds_money_after_financial_revocation(pool: PgPool
         &[Permission::ProjectReadAll, Permission::BillableRateReadAll],
     )
     .await;
-    let initial = fetch_project_spend(&pool, ids.org_id, ids.user_id)
+    let initial = fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
         .await
         .unwrap();
     assert_eq!(
@@ -162,7 +161,7 @@ async fn canonical_spend_withholds_money_after_financial_revocation(pool: PgPool
         serde_json::json!(12345)
     );
     replace_grants(&pool, &ids, &[Permission::ProjectReadAll]).await;
-    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id)
+    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -187,13 +186,13 @@ async fn canonical_spend_managed_scope_requires_current_project_designation(pool
     )
     .await;
     assert!(
-        fetch_project_spend(&pool, ids.org_id, ids.user_id)
+        fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
             .await
             .unwrap()
             .is_empty()
     );
     designate(&pool, &ids).await;
-    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id)
+    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -210,7 +209,7 @@ async fn canonical_spend_managed_scope_requires_current_project_designation(pool
     .await
     .unwrap();
     assert!(
-        fetch_project_spend(&pool, ids.org_id, ids.user_id)
+        fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
             .await
             .unwrap()
             .is_empty()
@@ -226,7 +225,7 @@ async fn canonical_spend_zero_and_withheld_money_remain_distinct_without_entries
         PermissionSelection::new(&[Permission::ProjectReadAll, Permission::BillableRateReadAll]),
     )
     .await;
-    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id)
+    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -236,7 +235,7 @@ async fn canonical_spend_zero_and_withheld_money_remain_distinct_without_entries
         serde_json::json!(0)
     );
     replace_grants(&pool, &ids, &[Permission::ProjectReadAll]).await;
-    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id)
+    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -267,7 +266,7 @@ async fn canonical_shared_progress_and_report_permissions_do_not_open_ordinary_m
     .execute(&pool)
     .await
     .unwrap();
-    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id)
+    let rows = fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
@@ -331,7 +330,7 @@ async fn spend_totals_are_exact_for_invoiced_hidden_empty_and_missing_invoice_en
     add_entry(&pool, &ids, ids.project_id, 45, Some(missing)).await;
 
     let totals: std::collections::BTreeMap<_, _> =
-        fetch_project_spend(&pool, ids.org_id, ids.user_id)
+        fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
             .await
             .unwrap()
             .into_iter()

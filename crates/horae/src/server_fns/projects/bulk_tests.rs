@@ -80,7 +80,7 @@ async fn bulk_preserves_invoiced_history_assignments_and_spend(pool: PgPool) {
             .unwrap();
         assert_eq!(billing_snapshot(&pool).await, history);
         assert_eq!(
-            fetch_project_spend(&pool, ids.org_id, ids.user_id)
+            fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
                 .await
                 .unwrap()[0]
                 .spent_cents,
@@ -114,23 +114,39 @@ async fn bulk_accepts_one_hundred_projects_and_mixed_status_noops(pool: PgPool) 
 }
 
 #[test]
-fn bulk_ids_validate_before_writes_and_normalize_duplicates() {
+fn bulk_ids_only_convert() {
     let id = Uuid::now_v7();
     assert_eq!(
         parse_bulk_project_ids(&[id.to_string(), id.to_string()]).unwrap(),
-        vec![id]
+        [id, id]
     );
-    for values in [vec![], vec!["invalid".into()], vec![id.to_string(); 101]] {
-        assert!(matches!(
-            parse_bulk_project_ids(&values),
-            Err(ServerFnError::ServerError {
-                code: BAD_REQUEST,
-                ..
-            })
-        ));
+    assert!(matches!(
+        parse_bulk_project_ids(&["invalid".into()]),
+        Err(ServerFnError::ServerError {
+            code: BAD_REQUEST,
+            ..
+        })
+    ));
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn bulk_size_is_bounded_before_writes(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let before = snapshot(&pool, ids.org_id).await;
+    for targets in [vec![], vec![ids.project_id; 101]] {
+        let error = set_projects_active_records(&pool, ids.org_id, ids.user_id, &targets, false)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                &error,
+                ServerFnError::ServerError { code: BAD_REQUEST, message, .. }
+                    if message == "Select between 1 and 100 projects"
+            ),
+            "{error:?}"
+        );
     }
-    let values: Vec<_> = (0..100).map(|_| Uuid::now_v7().to_string()).collect();
-    assert_eq!(parse_bulk_project_ids(&values).unwrap().len(), 100);
+    assert_eq!(snapshot(&pool, ids.org_id).await, before);
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -196,9 +212,8 @@ async fn bulk_missing_or_foreign_project_rolls_back_earlier_changes(pool: PgPool
     let foreign = seed(&pool, BuiltInProfile::Administrator).await;
     let before = snapshot(&pool, ids.org_id).await;
     for last in [foreign.project_id, Uuid::max()] {
-        let targets =
-            parse_bulk_project_ids(&[ids.project_id.to_string(), last.to_string()]).unwrap();
-        assert_eq!(targets[0], ids.project_id);
+        // Sorted after `ids.project_id`, so the batch archives that first.
+        let targets = [last, ids.project_id];
         let error = set_projects_active_records(&pool, ids.org_id, ids.user_id, &targets, false)
             .await
             .unwrap_err();
@@ -247,9 +262,9 @@ async fn bulk_database_failure_rolls_back_earlier_changes(pool: PgPool) {
 async fn bulk_reversed_overlapping_batches_finish_without_deadlock(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let other = extra_project(&pool, &ids).await;
-    let forward = parse_bulk_project_ids(&[ids.project_id.to_string(), other.to_string()]).unwrap();
-    let reverse = parse_bulk_project_ids(&[other.to_string(), ids.project_id.to_string()]).unwrap();
-    assert_eq!(forward, reverse);
+    // The operation sorts each batch, so the two orders lock alike.
+    let forward = vec![ids.project_id, other];
+    let reverse = vec![other, ids.project_id];
     let mut blocker = pool.begin().await.unwrap();
     let pid = sqlx::query_scalar!("SELECT pg_backend_pid()")
         .fetch_one(&mut *blocker)
@@ -531,4 +546,52 @@ async fn status_changes_return_the_rate_and_money_budget_only_to_their_readers(p
         }
         assert!(!archived.active && restored[0].0.active, "{case}");
     }
+}
+
+/// Every project read and the status write refuse a page loaded for another
+/// person, whichever adapter calls them.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn stale_requester_is_refused_by_project_operations(pool: PgPool) {
+    use crate::models::task::TaskActivity;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let (org_id, user_id) = (ids.org_id, ids.user_id);
+    let stale = Some(PermissionRequester {
+        org_id,
+        user_id: Uuid::now_v7(),
+    });
+    let before = snapshot(&pool, org_id).await;
+    let date = "2026-09-07".parse().unwrap();
+    let viewer = PermissionRequester { org_id, user_id };
+    let recorder = crate::ops::testing::Recorder::default();
+    let targets = [ids.project_id];
+    let results = [
+        fetch_project_tags(&pool, org_id, user_id, stale)
+            .await
+            .map(drop),
+        fetch_project_spend(&pool, org_id, user_id, stale)
+            .await
+            .map(drop),
+        crate::server_fns::budgets::progress_for_viewer(&pool, org_id, user_id, date, stale)
+            .await
+            .map(drop),
+        task_catalog::fetch_task_catalog(&pool, viewer, TaskActivity::All, None, stale)
+            .await
+            .map(drop),
+        set_projects_status(&pool, &recorder, org_id, user_id, &targets, false, stale)
+            .await
+            .map(drop),
+    ];
+    for result in results {
+        assert!(
+            matches!(
+                &result,
+                Err(ServerFnError::ServerError { code: FORBIDDEN, message, .. })
+                    if message == "Project requester has changed"
+            ),
+            "{result:?}"
+        );
+    }
+    assert_eq!(snapshot(&pool, org_id).await, before);
+    assert!(recorder.take().is_empty());
 }

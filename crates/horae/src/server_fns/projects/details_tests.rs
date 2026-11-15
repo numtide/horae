@@ -110,7 +110,7 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
     assert_eq!(details.client_name, "Acme");
     assert_eq!(details.tags, ["Launch"]);
     assert_eq!(details.admin_notes.as_deref(), Some("Private launch plan"));
-    let tags = fetch_project_tags(&pool, ids.org_id, ids.user_id)
+    let tags = fetch_project_tags(&pool, ids.org_id, ids.user_id, None)
         .await
         .unwrap();
     assert_eq!(tags.len(), 1);
@@ -125,7 +125,7 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
             .is_none()
     );
     assert!(
-        fetch_project_tags(&pool, other.org_id, ids.user_id)
+        fetch_project_tags(&pool, other.org_id, ids.user_id, None)
             .await
             .unwrap()
             .is_empty()
@@ -151,7 +151,7 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
             .is_none()
     );
     assert!(
-        fetch_project_tags(&pool, ids.org_id, ids.user_id)
+        fetch_project_tags(&pool, ids.org_id, ids.user_id, None)
             .await
             .unwrap()
             .is_empty()
@@ -183,7 +183,7 @@ async fn project_details_and_tags_follow_current_progress_and_private_permission
         })
     ));
     assert!(
-        fetch_project_tags(&pool, ids.org_id, ids.user_id)
+        fetch_project_tags(&pool, ids.org_id, ids.user_id, None)
             .await
             .unwrap()
             .is_empty()
@@ -204,7 +204,7 @@ async fn unlinked_and_private_project_tags_do_not_leak_into_filters(pool: PgPool
     .await
     .unwrap();
     assert!(
-        fetch_project_tags(&pool, ids.org_id, ids.user_id)
+        fetch_project_tags(&pool, ids.org_id, ids.user_id, None)
             .await
             .unwrap()
             .is_empty()
@@ -229,7 +229,7 @@ async fn unlinked_and_private_project_tags_do_not_leak_into_filters(pool: PgPool
     .await
     .unwrap();
     assert_eq!(
-        fetch_project_tags(&pool, ids.org_id, ids.user_id)
+        fetch_project_tags(&pool, ids.org_id, ids.user_id, None)
             .await
             .unwrap()
             .len(),
@@ -237,7 +237,7 @@ async fn unlinked_and_private_project_tags_do_not_leak_into_filters(pool: PgPool
     );
     sqlx::query!("INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode) VALUES ($1,$2,$3,$4,'person')", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id).execute(&pool).await.unwrap();
     assert!(
-        fetch_project_tags(&pool, ids.org_id, ids.user_id)
+        fetch_project_tags(&pool, ids.org_id, ids.user_id, None)
             .await
             .unwrap()
             .is_empty()
@@ -263,7 +263,7 @@ async fn unlinked_and_private_project_tags_do_not_leak_into_filters(pool: PgPool
     .await
     .unwrap();
     assert_eq!(
-        fetch_project_tags(&pool, ids.org_id, ids.user_id)
+        fetch_project_tags(&pool, ids.org_id, ids.user_id, None)
             .await
             .unwrap()
             .len(),
@@ -277,7 +277,7 @@ async fn unlinked_and_private_project_tags_do_not_leak_into_filters(pool: PgPool
     .await
     .unwrap();
     assert!(
-        fetch_project_tags(&pool, ids.org_id, ids.user_id)
+        fetch_project_tags(&pool, ids.org_id, ids.user_id, None)
             .await
             .unwrap()
             .is_empty()

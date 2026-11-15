@@ -9,6 +9,8 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use super::super::{Actor, OpError, Tx};
+use super::REQUESTER_CHANGED;
+use crate::models::permission_editor::PermissionRequester;
 use crate::models::permissions::PersonPermissions;
 use crate::models::project::ProjectDetailBudget;
 use crate::models::{ProjectBudgetOverview, ProjectBudgetProgress};
@@ -20,7 +22,9 @@ pub(crate) async fn progress(
     tx: &mut Tx,
     actor: &Actor,
     date: NaiveDate,
+    expected: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectBudgetOverview>, OpError> {
+    actor.expect_requester(expected, REQUESTER_CHANGED)?;
     if !actor.is_active() {
         return Ok(Vec::new());
     }

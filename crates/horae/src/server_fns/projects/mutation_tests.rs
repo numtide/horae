@@ -181,7 +181,7 @@ mod project {
                 (settings.rate_mode.as_str(), settings.budget_scope.as_str()),
                 (mode, scope)
             );
-            let spend = fetch_project_spend(&pool, ids.org_id, ids.user_id)
+            let spend = fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
                 .await
                 .unwrap();
             assert_eq!(spend.len(), 1);

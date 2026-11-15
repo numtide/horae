@@ -6,6 +6,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::*;
+use crate::models::permission_editor::PermissionRequester;
 use crate::ops::testing::Recorder;
 use crate::ops::{self, Caller};
 use crate::server_fns::test_seed::seed;
@@ -63,9 +64,52 @@ async fn submitted(pool: &PgPool, ids: &SeedIds) -> Approval {
 }
 
 async fn submit_as(pool: &PgPool, caller: Caller) -> Result<Approval, OpError> {
+    submit_in(pool, caller, own_context).await
+}
+
+/// The context of a page the actor loaded for their own timesheet.
+fn own_context(actor: &Actor) -> TimesheetWriteContext {
+    TimesheetWriteContext {
+        expected_requester: actor.requester(),
+        subject_id: actor.id(),
+    }
+}
+
+/// Submits under the context `context` builds from the loaded actor.
+async fn submit_in(
+    pool: &PgPool,
+    caller: Caller,
+    context: impl FnOnce(&Actor) -> TimesheetWriteContext,
+) -> Result<Approval, OpError> {
     let mut write = ops::begin(pool, caller).await?;
-    let result = submit_week(&mut write.tx, &write.actor, week()).await;
+    let context = context(&write.actor);
+    let result = submit_week(&mut write.tx, &write.actor, week(), &context).await;
     write.commit(result, &Recorder::default()).await
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn submission_refuses_a_context_for_another_requester_or_subject(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    time_entry(&pool, &ids, EntryState::Open).await;
+    let other = Uuid::now_v7();
+    let refused = OpError::forbidden("Timesheet context changed; refresh the page");
+    let stale_requester = submit_in(&pool, caller(&ids), |actor| TimesheetWriteContext {
+        expected_requester: PermissionRequester {
+            user_id: other,
+            ..actor.requester()
+        },
+        ..own_context(actor)
+    })
+    .await;
+    assert_eq!(stale_requester, Err(refused.clone()));
+    let other_subject = submit_in(&pool, caller(&ids), |actor| TimesheetWriteContext {
+        subject_id: other,
+        ..own_context(actor)
+    })
+    .await;
+    assert_eq!(other_subject, Err(refused));
+    assert_eq!(approvals_of(&pool, &ids).await, 0);
 }
 
 /// The approvals stored for `ids`' person.
@@ -437,7 +481,8 @@ async fn decisions_dispatch_their_events_after_commit(pool: PgPool) {
 
     let events = Recorder::default();
     let mut write = ops::begin(&pool, caller(&teammate)).await.unwrap();
-    let result = submit_week(&mut write.tx, &write.actor, week()).await;
+    let context = own_context(&write.actor);
+    let result = submit_week(&mut write.tx, &write.actor, week(), &context).await;
     let approval = write.commit(result, &events).await.unwrap();
     let mut write = ops::begin(&pool, caller(&approver)).await.unwrap();
     let result = approve(&mut write.tx, &write.actor, &[approval.id]).await;

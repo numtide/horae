@@ -169,7 +169,7 @@ async fn legacy_budget_uses_lifetime_raw_minutes_and_list_fee_spend(pool: PgPool
     );
     assert_eq!(budget.headline, exact(120, 150, -30));
     fee_budget(&pool, &ids, Some(10_000)).await;
-    let spend = fetch_project_spend(&pool, ids.org_id, ids.user_id)
+    let spend = fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
         .await
         .unwrap()
         .remove(0)
@@ -203,10 +203,15 @@ async fn configured_budget_applies_rounding_and_saved_nonbillable_inclusion(pool
     entry(&pool, &ids, ids.task_id, "2026-01-01", 50, true).await;
     entry(&pool, &ids, ids.task_id, "2026-09-07", 20, false).await;
     assert_eq!(headline_of(&pool, &viewer, &ids).await, exact(120, 60, 60));
-    let list =
-        crate::server_fns::budgets::progress_for_viewer(&pool, ids.org_id, ids.user_id, today())
-            .await
-            .unwrap();
+    let list = crate::server_fns::budgets::progress_for_viewer(
+        &pool,
+        ids.org_id,
+        ids.user_id,
+        today(),
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!((list[0].budget, list[0].consumed), (Some(120), Some(60)));
     sqlx::query!(
         "UPDATE project_settings SET include_nonbillable=true WHERE project_id=$1",
@@ -422,7 +427,7 @@ async fn legacy_fee_figures_follow_spend_redaction_for_canonical_readers(pool: P
     .await;
     fee_budget(&pool, &ids, Some(10_000)).await;
     entry(&pool, &ids, ids.task_id, "2026-09-01", 60, true).await;
-    let spent = fetch_project_spend(&pool, ids.org_id, ids.user_id)
+    let spent = fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
         .await
         .unwrap()
         .remove(0)
@@ -534,7 +539,7 @@ async fn legacy_hours_budget_ignores_unrelated_money_overflow(pool: PgPool) {
     assert_eq!(headline_of(&pool, &viewer, &ids).await, exact(120, 120, 0));
     // The Projects list still values money and keeps its existing error.
     assert!(
-        fetch_project_spend(&pool, ids.org_id, ids.user_id)
+        fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
             .await
             .is_err()
     );
