@@ -18,7 +18,6 @@ use uuid::Uuid;
 pub(crate) mod audit;
 pub(crate) mod directory;
 pub(crate) mod editor;
-pub(crate) mod own;
 pub(crate) mod profiles;
 pub(crate) mod project_management;
 pub(crate) mod project_people;
@@ -53,10 +52,6 @@ mod audit_tests;
 #[cfg(test)]
 #[path = "permissions/tests/project_management.rs"]
 mod project_management_tests;
-
-#[cfg(test)]
-#[path = "permissions/tests/own.rs"]
-mod own_tests;
 
 #[cfg(test)]
 #[path = "permissions/tests/transaction.rs"]

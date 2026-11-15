@@ -1,10 +1,39 @@
-use super::own::{OwnPermissionsError, read};
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
-use crate::server_fns::{FORBIDDEN, server_version};
-use dioxus::prelude::ServerFnError;
+//! The own-permission explanation, the version gate and the profile save,
+//! each reaching only the session person's records.
+
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use sqlx::PgPool;
 use uuid::Uuid;
+
+use super::*;
+use crate::ops::testing::Recorder;
+use crate::ops::{Caller, begin, begin_read};
+use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+
+/// `get_my_permissions` past its session lookup.
+async fn read(pool: &PgPool, org_id: Uuid, user_id: Uuid) -> Result<OwnPermissions, OpError> {
+    let mut read = begin_read(pool, Caller::session(org_id, user_id)).await?;
+    let result = permissions(&mut read.tx, &read.actor).await;
+    read.finish(result).await
+}
+
+/// `get_server_version` past its session lookup.
+async fn version(pool: &PgPool, ids: &SeedIds) -> Result<String, OpError> {
+    let read = begin_read(pool, Caller::session(ids.org_id, ids.user_id)).await?;
+    let result = server_version(&read.actor);
+    read.finish(result).await
+}
+
+/// `update_own_profile` past its session lookup.
+async fn save(pool: &PgPool, ids: &SeedIds, name: &str, zone: Option<&str>) -> Result<(), OpError> {
+    let mut write = begin(pool, Caller::session(ids.org_id, ids.user_id)).await?;
+    let result = update(&mut write.tx, &write.actor, name, zone).await;
+    write.commit(result, &Recorder::default()).await
+}
+
+fn forbidden(message: &str) -> Result<OwnPermissions, OpError> {
+    Err(OpError::forbidden(message))
+}
 
 async fn state(pool: &PgPool, ids: &SeedIds, profile: BuiltInProfile, administrator: bool) {
     let grants: Vec<String> =
@@ -78,42 +107,17 @@ async fn own_permissions_name_the_profile_or_template(pool: PgPool) {
     assert_eq!(own.profile, None, "individually chosen grants");
 }
 
-// `get_server_version` past its session lookup: the user as `require_user`
-// would load it.
-fn session_user(ids: &SeedIds) -> crate::models::User {
-    crate::models::User {
-        id: ids.user_id,
-        org_id: ids.org_id,
-        email: String::new(),
-        name: String::new(),
-        oidc_subject: None,
-        cost_rate_cents: None,
-        billable_rate_cents: None,
-        active: true,
-        created_at: chrono::Utc::now(),
-    }
-}
-
-fn is_forbidden(result: Result<String, ServerFnError>) -> bool {
-    matches!(
-        result,
-        Err(ServerFnError::ServerError {
-            code: FORBIDDEN,
-            ..
-        })
-    )
-}
-
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn server_version_follows_the_stored_administrator_identity(pool: PgPool) {
     let admin = with_state(&pool, BuiltInProfile::Administrator, true).await;
-    let version = server_version(&pool, &session_user(&admin)).await;
-    assert_eq!(version.unwrap(), crate::version::current());
+    assert_eq!(version(&pool, &admin).await, Ok(crate::version::current()));
     // Every grant without the identity is not enough.
     let member = with_state(&pool, BuiltInProfile::Administrator, false).await;
-    let version = server_version(&pool, &session_user(&member)).await;
-    assert!(is_forbidden(version));
+    assert_eq!(
+        version(&pool, &member).await,
+        Err(OpError::forbidden("Administrator authority is required"))
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -124,8 +128,10 @@ async fn server_version_refuses_a_person_deactivated_mid_session(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-    let version = server_version(&pool, &session_user(&ids)).await;
-    assert!(is_forbidden(version));
+    assert_eq!(
+        version(&pool, &ids).await,
+        Err(OpError::forbidden(IDENTITY_REQUIRED))
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -181,28 +187,26 @@ async fn own_permissions_deny_invalid_identity_and_state(pool: PgPool) {
         (ids.org_id, Uuid::now_v7()),
         (Uuid::now_v7(), ids.user_id),
     ] {
-        assert!(matches!(
-            read(&pool, org, actor).await,
-            Err(OwnPermissionsError::Forbidden)
-        ));
+        assert_eq!(read(&pool, org, actor).await, forbidden(IDENTITY_REQUIRED));
     }
     sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
         .execute(&pool)
         .await
         .unwrap();
-    assert!(matches!(
+    assert_eq!(
         read(&pool, ids.org_id, ids.user_id).await,
-        Err(OwnPermissionsError::Forbidden)
-    ));
+        forbidden(IDENTITY_REQUIRED)
+    );
     sqlx::query!("UPDATE users SET active = true WHERE id = $1", ids.user_id)
         .execute(&pool)
         .await
         .unwrap();
+    // Invalid or missing state fails closed, as `Actor::load` does everywhere.
     sqlx::query!("UPDATE person_permission_states SET grants = ARRAY['private_invalid_grant'] WHERE user_id = $1", ids.user_id).execute(&pool).await.unwrap();
-    assert!(matches!(
+    assert_eq!(
         read(&pool, ids.org_id, ids.user_id).await,
-        Err(OwnPermissionsError::Storage(_))
-    ));
+        forbidden("Permission state is unavailable")
+    );
     sqlx::query!(
         "DELETE FROM person_permission_states WHERE user_id = $1",
         ids.user_id
@@ -210,10 +214,10 @@ async fn own_permissions_deny_invalid_identity_and_state(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    assert!(matches!(
+    assert_eq!(
         read(&pool, ids.org_id, ids.user_id).await,
-        Err(OwnPermissionsError::Unavailable)
-    ));
+        forbidden("Permission state is unavailable")
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
@@ -241,7 +245,7 @@ async fn own_permissions_wait_for_current_actor_deactivation(pool: PgPool) {
             .await
             .unwrap()
             .unwrap(),
-        Err(OwnPermissionsError::Forbidden)
+        Err(OpError::Forbidden(_))
     ));
 }
 
@@ -370,7 +374,7 @@ async fn own_permissions_reload_after_winning_gate_under_repeatable_read_default
             .unwrap()
             .unwrap();
         if deactivate {
-            assert!(matches!(result, Err(OwnPermissionsError::Forbidden)));
+            assert!(matches!(result, Err(OpError::Forbidden(_))));
         } else {
             let result = result.unwrap();
             assert_eq!(
@@ -431,6 +435,114 @@ async fn own_permissions_reader_retains_actor_activity_until_snapshot_is_loaded(
         .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id).await,
-        Err(OwnPermissionsError::Forbidden)
+        Err(OpError::Forbidden(_))
     ));
+}
+
+async fn profile(pool: &PgPool, user_id: Uuid) -> (String, Option<String>) {
+    let row = sqlx::query!("SELECT name, timezone FROM users WHERE id = $1", user_id)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    (row.name, row.timezone)
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_person_saves_their_name_and_zone(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    save(&pool, &ids, "  Ana Ruiz ", Some("Europe/Madrid"))
+        .await
+        .unwrap();
+    assert_eq!(
+        profile(&pool, ids.user_id).await,
+        ("Ana Ruiz".into(), Some("Europe/Madrid".into()))
+    );
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn clearing_the_zone_follows_the_workspace_again(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    save(&pool, &ids, "Ana", Some("Asia/Tokyo")).await.unwrap();
+    save(&pool, &ids, "Ana", None).await.unwrap();
+    assert_eq!(profile(&pool, ids.user_id).await.1, None);
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn an_unknown_zone_is_rejected_and_nothing_changes(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    for bad in ["Mars/Olympus_Mons", "europe/madrid", "+02:00", ""] {
+        assert_eq!(
+            save(&pool, &ids, "Ana", Some(bad)).await,
+            Err(OpError::invalid(
+                "timezone",
+                "Choose a time zone from the list"
+            ))
+        );
+    }
+    assert_eq!(
+        profile(&pool, ids.user_id).await,
+        ("Test User".into(), None)
+    );
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_blank_or_overlong_name_is_rejected(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    for bad in ["   ".to_owned(), "x".repeat(201), "a\0b".to_owned()] {
+        assert_eq!(
+            save(&pool, &ids, &bad, None).await,
+            Err(OpError::invalid(
+                "name",
+                "Enter a name of 1 to 200 characters"
+            ))
+        );
+    }
+    assert_eq!(profile(&pool, ids.user_id).await.0, "Test User");
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_profile_save_leaves_colleagues_alone(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let other = person(&pool, ids.org_id).await;
+    save(&pool, &ids, "Ana", Some("Asia/Tokyo")).await.unwrap();
+    assert_eq!(profile(&pool, other).await, ("Private person".into(), None));
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_deactivated_person_cannot_save(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        save(&pool, &ids, "Ana", None).await,
+        Err(OpError::forbidden("Account is not active"))
+    );
+    assert_eq!(profile(&pool, ids.user_id).await.0, "Test User");
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_personal_zone_overrides_the_workspace_zone(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    sqlx::query!(
+        "UPDATE organizations SET timezone = 'Pacific/Kiritimati' WHERE id = $1",
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        crate::timezone::person_zone(&pool, ids.user_id)
+            .await
+            .unwrap(),
+        "Pacific/Kiritimati"
+    );
+    save(&pool, &ids, "Ana", Some("Etc/GMT+12")).await.unwrap();
+    assert_eq!(
+        crate::timezone::person_zone(&pool, ids.user_id)
+            .await
+            .unwrap(),
+        "Etc/GMT+12"
+    );
 }

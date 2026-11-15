@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET timezone = 'Etc/GMT+5' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "02c57644c83f02b0bd207f207ef2f5d22d68b04e6780247157b0ed2d267753f7"
+}
