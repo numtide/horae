@@ -70,9 +70,10 @@ async fn imported_legacy_project_keeps_exact_rates_and_totals_on_retry(pool: PgP
         (report[0].billable_cents, report[0].cost_cents),
         (Some(13000), Some(3300))
     );
-    let spend = crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
-        .await
-        .unwrap();
+    let spend =
+        crate::server_fns::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
+            .await
+            .unwrap();
     let imported = spend
         .iter()
         .find(|row| row.project_id == project_id)

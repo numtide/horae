@@ -15,17 +15,12 @@ pub async fn submit_week(
     week_start: String,
     context: TimesheetWriteContext,
 ) -> Result<Approval, ServerFnError> {
-    const CONTEXT_CHANGED: &str = "Timesheet context changed; refresh the page";
     let user = require_user().await?;
     let caller = Caller::session(user.org_id, user.id);
-    caller.expect_requester(Some(context.expected_requester), CONTEXT_CHANGED)?;
-    if context.subject_id != user.id {
-        return Err(forbidden(CONTEXT_CHANGED));
-    }
     let state = crate::state::global_state().await;
 
     let ws = parse_date(&week_start, "week_start")?;
-    submit_as(&state.db, caller, ws, &*state.plugins).await
+    submit_as(&state.db, caller, ws, &context, &*state.plugins).await
 }
 
 #[cfg(feature = "server")]
@@ -33,10 +28,12 @@ async fn submit_as(
     pool: &sqlx::PgPool,
     caller: Caller,
     week_start: chrono::NaiveDate,
+    context: &TimesheetWriteContext,
     events: &dyn ops::EventSink,
 ) -> Result<Approval, ServerFnError> {
     let mut write = ops::begin(pool, caller).await?;
-    let result = ops::approvals::submit_week(&mut write.tx, &write.actor, week_start).await;
+    let result =
+        ops::approvals::submit_week(&mut write.tx, &write.actor, week_start, context).await;
     Ok(write.commit(result, events).await?)
 }
 
@@ -162,7 +159,8 @@ async fn reopen_as(
 // mirror the SQL statements.
 #[cfg(all(test, feature = "server"))]
 mod tests {
-    use super::{Approval, approve_as, reopen_as, submit_as};
+    use super::{Approval, TimesheetWriteContext, approve_as, reopen_as, submit_as};
+    use crate::models::permission_editor::PermissionRequester;
     use crate::ops::Caller;
     use crate::ops::approvals::week_has_running_timer;
     use crate::ops::testing::Recorder;
@@ -188,8 +186,12 @@ mod tests {
         week_start: chrono::NaiveDate,
     ) -> Result<(Approval, i32), ServerFnError> {
         let events = Recorder::default();
-        let approval =
-            submit_as(pool, Caller::session(org_id, user_id), week_start, &events).await?;
+        let context = TimesheetWriteContext {
+            expected_requester: PermissionRequester { org_id, user_id },
+            subject_id: user_id,
+        };
+        let caller = Caller::session(org_id, user_id);
+        let approval = submit_as(pool, caller, week_start, &context, &events).await?;
         match events.take().as_slice() {
             [AppEvent::TimesheetSubmitted { submission, .. }] => {
                 Ok((approval, submission.total_minutes))

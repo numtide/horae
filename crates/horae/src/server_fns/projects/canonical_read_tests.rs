@@ -298,7 +298,7 @@ async fn canonical_tags_follow_project_reads_and_revocation(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let tags = fetch_project_tags(&pool, ids.org_id, ids.user_id)
+    let tags = fetch_project_tags(&pool, ids.org_id, ids.user_id, None)
         .await
         .unwrap();
     assert_eq!(tags.len(), 1);
@@ -308,7 +308,7 @@ async fn canonical_tags_follow_project_reads_and_revocation(pool: PgPool) {
     );
     replace_grants(&pool, &ids, &[]).await;
     assert!(
-        fetch_project_tags(&pool, ids.org_id, ids.user_id)
+        fetch_project_tags(&pool, ids.org_id, ids.user_id, None)
             .await
             .unwrap()
             .is_empty()
@@ -443,7 +443,7 @@ async fn canonical_project_reads_reject_missing_and_invalid_grants(pool: PgPool)
                 .is_err()
         );
         assert!(
-            fetch_project_tags(&pool, ids.org_id, ids.user_id)
+            fetch_project_tags(&pool, ids.org_id, ids.user_id, None)
                 .await
                 .is_err()
         );
@@ -452,7 +452,8 @@ async fn canonical_project_reads_reject_missing_and_invalid_grants(pool: PgPool)
                 &pool,
                 ids.org_id,
                 ids.user_id,
-                "2026-09-07".parse().unwrap()
+                "2026-09-07".parse().unwrap(),
+                None,
             )
             .await,
             Err(ServerFnError::ServerError {
@@ -564,7 +565,7 @@ async fn canonical_project_reads_exclude_foreign_client_parent_links(pool: PgPoo
             .is_none()
     );
     assert!(
-        fetch_project_tags(&pool, ids.org_id, ids.user_id)
+        fetch_project_tags(&pool, ids.org_id, ids.user_id, None)
             .await
             .unwrap()
             .is_empty()

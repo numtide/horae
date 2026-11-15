@@ -3,6 +3,8 @@
 use horae_core::permissions::catalog::Permission;
 
 use super::super::{Actor, OpError, Tx};
+use super::REQUESTER_CHANGED;
+use crate::models::permission_editor::PermissionRequester;
 use crate::models::task::{TaskActivity, TaskCatalogEntry, TaskCatalogPage, TaskCursor};
 
 const UNAVAILABLE: &str = "Task catalog access is unavailable";
@@ -14,7 +16,9 @@ pub(crate) async fn page(
     actor: &Actor,
     activity: TaskActivity,
     after: Option<&TaskCursor>,
+    expected: Option<PermissionRequester>,
 ) -> Result<TaskCatalogPage, OpError> {
+    actor.expect_requester(expected, REQUESTER_CHANGED)?;
     if !actor.has(Permission::TaskReadAll) {
         return Err(OpError::forbidden(UNAVAILABLE));
     }

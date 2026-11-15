@@ -5,6 +5,7 @@ pub(crate) mod groups;
 use horae_core::permissions::catalog::Permission;
 
 use super::{invalid, require_time_reads, time_reads};
+use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::{
     TimeReportAccess, TimeReportCursor, TimeReportEntry, TimeReportPage, TimeReportQuery,
     TimeReportTotals,
@@ -15,6 +16,7 @@ const REPORT_FORBIDDEN: &str = "Current time-report access or identity has chang
 const REPORT_INVALID: &str = "Invalid time-report date range or cursor";
 const REPORT_UNAVAILABLE: &str = "Time report is unavailable";
 const ACCESS_REQUIRED: &str = "Current report access is required";
+const REQUESTER_CHANGED: &str = "Report requester has changed";
 
 fn unavailable() -> OpError {
     OpError::Internal(REPORT_UNAVAILABLE.into())
@@ -22,7 +24,11 @@ fn unavailable() -> OpError {
 
 /// Which Reports view the actor gets, under the same authority as the time
 /// downloads. The financial view is for whoever `ops::reports` serves.
-pub(crate) fn access(actor: &Actor) -> Result<TimeReportAccess, OpError> {
+pub(crate) fn access(
+    actor: &Actor,
+    expected: Option<PermissionRequester>,
+) -> Result<TimeReportAccess, OpError> {
+    actor.expect_requester(expected, REQUESTER_CHANGED)?;
     time_reads(actor).ok_or_else(|| OpError::forbidden(ACCESS_REQUIRED))?;
     Ok(TimeReportAccess {
         requester: actor.requester(),

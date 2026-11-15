@@ -160,7 +160,7 @@ async fn catalog_lists_common_tasks_first_across_pages(pool: PgPool) {
     .await
     .unwrap();
 
-    let first = fetch_task_catalog(&pool, requester, TaskActivity::All, None)
+    let first = fetch_task_catalog(&pool, requester, TaskActivity::All, None, None)
         .await
         .unwrap();
     let second = fetch_task_catalog(
@@ -168,6 +168,7 @@ async fn catalog_lists_common_tasks_first_across_pages(pool: PgPool) {
         requester,
         TaskActivity::All,
         first.next_after.as_ref(),
+        None,
     )
     .await
     .unwrap();

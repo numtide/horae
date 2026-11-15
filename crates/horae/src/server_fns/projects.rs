@@ -65,10 +65,8 @@ pub async fn list_project_tags(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectTagLink>, ServerFnError> {
     let viewer = require_user().await?;
-    Caller::session(viewer.org_id, viewer.id)
-        .expect_requester(expected_requester, PROJECT_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
-    fetch_project_tags(&state.db, viewer.org_id, viewer.id).await
+    fetch_project_tags(&state.db, viewer.org_id, viewer.id, expected_requester).await
 }
 
 #[cfg(feature = "server")]
@@ -76,9 +74,10 @@ async fn fetch_project_tags(
     pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
     viewer_id: uuid::Uuid,
+    expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectTagLink>, ServerFnError> {
     let mut read = ops::begin_read(pool, Caller::session(org_id, viewer_id)).await?;
-    let result = ops::projects::tags(&mut read.tx, &read.actor).await;
+    let result = ops::projects::tags(&mut read.tx, &read.actor, expected_requester).await;
     Ok(read.finish(result).await?)
 }
 
@@ -103,8 +102,6 @@ async fn fetch_project_overview(
     Ok(read.finish(result).await?)
 }
 
-#[cfg(feature = "server")]
-const PROJECT_REQUESTER_CHANGED: &str = "Project requester has changed";
 #[cfg(feature = "server")]
 const TASK_REQUESTER_CHANGED: &str = "Task requester has changed";
 
@@ -162,11 +159,9 @@ pub async fn list_project_spend(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectSpend>, ServerFnError> {
     let user = require_user().await?;
-    Caller::session(user.org_id, user.id)
-        .expect_requester(expected_requester, PROJECT_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
 
-    fetch_project_spend(&state.db, user.org_id, user.id).await
+    fetch_project_spend(&state.db, user.org_id, user.id, expected_requester).await
 }
 
 /// Configured budgets use their own period and scope; tracked totals remain
@@ -176,14 +171,13 @@ pub async fn list_project_budget_progress(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<crate::models::ProjectBudgetOverview>, ServerFnError> {
     let user = require_user().await?;
-    Caller::session(user.org_id, user.id)
-        .expect_requester(expected_requester, PROJECT_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
     // Budget months are the workspace's, so every viewer sees the same period.
     let today = crate::timezone::today_for_org(&state.db, user.org_id)
         .await
         .map_err(server_err)?;
-    super::budgets::progress_for_viewer(&state.db, user.org_id, user.id, today).await
+    super::budgets::progress_for_viewer(&state.db, user.org_id, user.id, today, expected_requester)
+        .await
 }
 
 #[cfg(feature = "server")]
@@ -191,9 +185,10 @@ pub(super) async fn fetch_project_spend(
     pool: &sqlx::PgPool,
     org_id: uuid::Uuid,
     viewer_id: uuid::Uuid,
+    expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectSpend>, ServerFnError> {
     let mut read = ops::begin_read(pool, Caller::session(org_id, viewer_id)).await?;
-    let result = ops::projects::spend(&mut read.tx, &read.actor).await;
+    let result = ops::projects::spend(&mut read.tx, &read.actor, expected_requester).await;
     Ok(read.finish(result).await?)
 }
 
@@ -206,8 +201,6 @@ pub async fn set_project_active(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Project, ServerFnError> {
     let user = require_user().await?;
-    Caller::session(user.org_id, user.id)
-        .expect_requester(expected_requester, PROJECT_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let mut projects = set_projects_status(
@@ -217,6 +210,7 @@ pub async fn set_project_active(
         user.id,
         &[project_id],
         active,
+        expected_requester,
     )
     .await?;
     projects
@@ -232,8 +226,6 @@ pub async fn set_projects_active(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<Project>, ServerFnError> {
     let user = require_user().await?;
-    Caller::session(user.org_id, user.id)
-        .expect_requester(expected_requester, PROJECT_REQUESTER_CHANGED)?;
     let ids = parse_bulk_project_ids(&project_ids)?;
     let state = crate::state::global_state().await;
     set_projects_status(
@@ -243,28 +235,23 @@ pub async fn set_projects_active(
         user.id,
         &ids,
         active,
+        expected_requester,
     )
     .await
 }
 
+/// Only converts: `ops::projects::set_active` bounds and orders the batch.
 #[cfg(feature = "server")]
 fn parse_bulk_project_ids(values: &[String]) -> Result<Vec<uuid::Uuid>, ServerFnError> {
-    if values.is_empty() || values.len() > 100 {
-        return Err(err(BAD_REQUEST, "Select between 1 and 100 projects"));
-    }
-    let mut ids = values
+    values
         .iter()
         .map(|value| {
             uuid::Uuid::parse_str(value).map_err(|_| err(BAD_REQUEST, "Invalid project ID"))
         })
-        .collect::<Result<Vec<_>, _>>()?;
-    // Overlapping batches acquire their row locks in one global order.
-    ids.sort_unstable();
-    ids.dedup();
-    Ok(ids)
+        .collect()
 }
 
-/// Archives or restores `sorted_ids` in one transaction through
+/// Archives or restores `ids` in one transaction through
 /// `ops::projects::set_active`, dispatching its events after the commit.
 #[cfg(feature = "server")]
 async fn set_projects_status(
@@ -272,12 +259,15 @@ async fn set_projects_status(
     events: &dyn crate::ops::EventSink,
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
-    sorted_ids: &[uuid::Uuid],
+    ids: &[uuid::Uuid],
     active: bool,
+    expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<Project>, ServerFnError> {
     use crate::ops::{self, Caller};
     let mut write = ops::begin(db, Caller::session(org_id, actor_id)).await?;
-    let result = ops::projects::set_active(&mut write.tx, &write.actor, sorted_ids, active).await;
+    let result =
+        ops::projects::set_active(&mut write.tx, &write.actor, ids, active, expected_requester)
+            .await;
     Ok(write.commit(result, events).await?)
 }
 
@@ -288,12 +278,12 @@ async fn set_projects_active_records(
     db: &sqlx::PgPool,
     org_id: uuid::Uuid,
     actor_id: uuid::Uuid,
-    sorted_ids: &[uuid::Uuid],
+    ids: &[uuid::Uuid],
     active: bool,
 ) -> Result<Vec<(Project, Option<crate::plugin::event::ActiveTransition>)>, ServerFnError> {
     use crate::plugin::{AppEvent, event::ActiveTransition};
     let recorder = crate::ops::testing::Recorder::default();
-    let projects = set_projects_status(db, &recorder, org_id, actor_id, sorted_ids, active).await?;
+    let projects = set_projects_status(db, &recorder, org_id, actor_id, ids, active, None).await?;
     let events = recorder.take();
     Ok(projects
         .into_iter()

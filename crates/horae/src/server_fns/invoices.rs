@@ -41,17 +41,11 @@ async fn begin_write(
     .await?)
 }
 
-/// Parses an optional project selection of 1–1000 IDs.
+/// Parses an optional project selection; the operation bounds it.
 #[cfg(feature = "server")]
 fn parse_projects(
     project_ids: Option<Vec<String>>,
 ) -> Result<Option<Vec<uuid::Uuid>>, ServerFnError> {
-    if project_ids
-        .as_ref()
-        .is_some_and(|ids| ids.is_empty() || ids.len() > 1000)
-    {
-        return Err(err(BAD_REQUEST, "Select between 1 and 1000 projects"));
-    }
     project_ids
         .map(|ids| {
             ids.iter()

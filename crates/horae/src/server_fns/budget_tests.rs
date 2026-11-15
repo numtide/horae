@@ -15,7 +15,7 @@ async fn visible_scopes(
     viewer_id: Uuid,
     date: chrono::NaiveDate,
 ) -> Result<Vec<crate::models::ProjectBudgetProgress>, super::ServerFnError> {
-    super::budgets::progress_for_viewer(pool, org_id, viewer_id, date)
+    super::budgets::progress_for_viewer(pool, org_id, viewer_id, date, None)
         .await
         .map(|projects| {
             projects
@@ -79,7 +79,7 @@ async fn overview_budget_progress_is_current_period_scoped_and_authorized(pool: 
         (ids.project_id, Some(100), 60)
     );
     assert_eq!(rows[0].period_key, "2026-09");
-    let lifetime = super::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id)
+    let lifetime = super::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
         .await
         .unwrap();
     assert_eq!(lifetime[0].spent_minutes, 120);

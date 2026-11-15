@@ -8,22 +8,38 @@ pub async fn load_task_catalog(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<TaskCatalogPage, ServerFnError> {
     let viewer = require_user().await?;
-    let requester = Caller::session(viewer.org_id, viewer.id)
-        .expect_requester(expected_requester, PROJECT_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
-    fetch_task_catalog(&state.db, requester, activity, after.as_ref()).await
+    let viewer = PermissionRequester {
+        org_id: viewer.org_id,
+        user_id: viewer.id,
+    };
+    fetch_task_catalog(
+        &state.db,
+        viewer,
+        activity,
+        after.as_ref(),
+        expected_requester,
+    )
+    .await
 }
 
 #[cfg(feature = "server")]
 pub(super) async fn fetch_task_catalog(
     pool: &sqlx::PgPool,
-    requester: PermissionRequester,
+    viewer: PermissionRequester,
     activity: TaskActivity,
     after: Option<&TaskCursor>,
+    expected_requester: Option<PermissionRequester>,
 ) -> Result<TaskCatalogPage, ServerFnError> {
-    let mut read =
-        ops::begin_read(pool, Caller::session(requester.org_id, requester.user_id)).await?;
-    let result = ops::projects::task_catalog(&mut read.tx, &read.actor, activity, after).await;
+    let mut read = ops::begin_read(pool, Caller::session(viewer.org_id, viewer.user_id)).await?;
+    let result = ops::projects::task_catalog(
+        &mut read.tx,
+        &read.actor,
+        activity,
+        after,
+        expected_requester,
+    )
+    .await;
     Ok(read.finish(result).await?)
 }
 
@@ -64,7 +80,7 @@ mod tests {
             expected.push(id);
         }
         expected.sort();
-        let first = fetch_task_catalog(&pool, requester, TaskActivity::Active, None)
+        let first = fetch_task_catalog(&pool, requester, TaskActivity::Active, None, None)
             .await
             .unwrap();
         assert_eq!(first.tasks.len(), 100);
@@ -73,6 +89,7 @@ mod tests {
             requester,
             TaskActivity::Active,
             first.next_after.as_ref(),
+            None,
         )
         .await
         .unwrap();
@@ -86,7 +103,7 @@ mod tests {
             .collect();
         assert_eq!(actual, expected);
         assert!(!actual.contains(&foreign.task_id));
-        let archived = fetch_task_catalog(&pool, requester, TaskActivity::Archived, None)
+        let archived = fetch_task_catalog(&pool, requester, TaskActivity::Archived, None, None)
             .await
             .unwrap();
         assert_eq!(
@@ -97,12 +114,18 @@ mod tests {
                 .collect::<Vec<_>>(),
             [ids.task_id]
         );
-        let all = fetch_task_catalog(&pool, requester, TaskActivity::All, None)
+        let all = fetch_task_catalog(&pool, requester, TaskActivity::All, None, None)
             .await
             .unwrap();
-        let rest = fetch_task_catalog(&pool, requester, TaskActivity::All, all.next_after.as_ref())
-            .await
-            .unwrap();
+        let rest = fetch_task_catalog(
+            &pool,
+            requester,
+            TaskActivity::All,
+            all.next_after.as_ref(),
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(all.tasks.len() + rest.tasks.len(), 104);
         let invalid = TaskCursor {
             is_default: false,
@@ -110,7 +133,7 @@ mod tests {
             id: Uuid::now_v7(),
         };
         assert!(matches!(
-            fetch_task_catalog(&pool, requester, TaskActivity::All, Some(&invalid)).await,
+            fetch_task_catalog(&pool, requester, TaskActivity::All, Some(&invalid), None).await,
             Err(ServerFnError::ServerError {
                 code: BAD_REQUEST,
                 ..
@@ -133,7 +156,7 @@ mod tests {
                 org_id: ids.org_id,
                 user_id: ids.user_id,
             };
-            let page = fetch_task_catalog(&pool, requester, TaskActivity::All, None).await;
+            let page = fetch_task_catalog(&pool, requester, TaskActivity::All, None, None).await;
             if !allowed {
                 assert!(
                     matches!(
@@ -187,7 +210,7 @@ mod tests {
             .unwrap();
         let pending_pool = pool.clone();
         let pending = tokio::spawn(async move {
-            fetch_task_catalog(&pending_pool, requester, TaskActivity::All, None).await
+            fetch_task_catalog(&pending_pool, requester, TaskActivity::All, None, None).await
         });
         wait_for_blocked(&pool, holder).await;
         let floor: Vec<String> =

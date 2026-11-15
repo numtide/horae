@@ -39,13 +39,14 @@ impl Reader {
                 viewer.org_id,
                 viewer.id,
                 "2026-09-07".parse().unwrap(),
+                None,
             )
             .await
             .unwrap()
             .into_iter()
             .map(|row| row.project_id)
             .collect(),
-            Self::Spend => fetch_project_spend(pool, viewer.org_id, viewer.id)
+            Self::Spend => fetch_project_spend(pool, viewer.org_id, viewer.id, None)
                 .await
                 .unwrap()
                 .into_iter()
@@ -57,7 +58,7 @@ impl Reader {
                 .into_iter()
                 .map(|row| row.id)
                 .collect(),
-            Self::Tags => fetch_project_tags(pool, viewer.org_id, viewer.id)
+            Self::Tags => fetch_project_tags(pool, viewer.org_id, viewer.id, None)
                 .await
                 .unwrap()
                 .into_iter()

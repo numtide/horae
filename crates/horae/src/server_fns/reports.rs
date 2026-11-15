@@ -21,16 +21,9 @@ pub async fn get_time_report_access(
             server_err("Report access is unavailable")
         }
     })?;
-    let requester = crate::models::permission_editor::PermissionRequester {
-        org_id: user.org_id,
-        user_id: user.id,
-    };
-    if expected_requester.is_some_and(|expected| expected != requester) {
-        return Err(forbidden("Report requester has changed"));
-    }
     let state = crate::state::global_state().await;
     let read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
-    let result = ops::time_reads::reports::access(&read.actor);
+    let result = ops::time_reads::reports::access(&read.actor, expected_requester);
     Ok(read.finish(result).await?)
 }
 
