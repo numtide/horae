@@ -1938,7 +1938,7 @@ async fn invoice_defaults_apply_to_selected_fees_without_claiming_other_projects
     )
     .await
     .unwrap();
-    let stored = crate::reports::fetch_invoice_metadata(&pool, result.invoice.id, ids.org_id)
+    let stored = crate::ops::invoices::fetch_invoice_metadata(&pool, result.invoice.id, ids.org_id)
         .await
         .unwrap()
         .unwrap();

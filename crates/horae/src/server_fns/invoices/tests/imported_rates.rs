@@ -62,7 +62,7 @@ async fn imported_legacy_project_keeps_exact_rates_and_totals_on_retry(pool: PgP
         ids.user_id,
         (day, day),
         "project",
-        crate::reports::ReportFilters::default(),
+        crate::ops::reports::ReportFilters::default(),
     )
     .await
     .unwrap();

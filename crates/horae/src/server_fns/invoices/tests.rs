@@ -518,10 +518,11 @@ async fn invoice_defaults_are_invoice_owned_and_only_drafts_are_editable(pool: P
     .execute(&pool)
     .await
     .unwrap();
-    let stored = crate::reports::fetch_invoice_metadata(&pool, created.invoice.id, ids.org_id)
-        .await
-        .unwrap()
-        .unwrap();
+    let stored =
+        crate::ops::invoices::fetch_invoice_metadata(&pool, created.invoice.id, ids.org_id)
+            .await
+            .unwrap()
+            .unwrap();
     assert_eq!(
         (stored.terms_days, stored.tax1_bps, stored.total_cents),
         (14, 2100, 12100)
@@ -592,7 +593,7 @@ async fn invoice_defaults_are_invoice_owned_and_only_drafts_are_editable(pool: P
     )
     .await
     .unwrap();
-    let voided = crate::reports::fetch_invoice_metadata(&pool, stored.id, ids.org_id)
+    let voided = crate::ops::invoices::fetch_invoice_metadata(&pool, stored.id, ids.org_id)
         .await
         .unwrap()
         .unwrap();
@@ -722,7 +723,7 @@ async fn invoice_defaults_edit_rechecks_status_after_waiting_for_a_concurrent_se
         edit.await.unwrap(),
         Err(ServerFnError::ServerError { code: CONFLICT, .. })
     ));
-    let stored = crate::reports::fetch_invoice_metadata(&pool, invoice.id, ids.org_id)
+    let stored = crate::ops::invoices::fetch_invoice_metadata(&pool, invoice.id, ids.org_id)
         .await
         .unwrap()
         .unwrap();
@@ -753,7 +754,7 @@ async fn invoice_defaults_overflow_leaves_dates_and_exact_total(pool: PgPool) {
     )
     .await
     .unwrap();
-    let legacy = crate::reports::fetch_invoice_metadata(&pool, id, ids.org_id)
+    let legacy = crate::ops::invoices::fetch_invoice_metadata(&pool, id, ids.org_id)
         .await
         .unwrap()
         .unwrap();
@@ -770,7 +771,7 @@ async fn invoice_defaults_overflow_leaves_dates_and_exact_total(pool: PgPool) {
             .await
             .is_err()
     );
-    let unchanged = crate::reports::fetch_invoice_metadata(&pool, id, ids.org_id)
+    let unchanged = crate::ops::invoices::fetch_invoice_metadata(&pool, id, ids.org_id)
         .await
         .unwrap()
         .unwrap();
@@ -876,7 +877,7 @@ async fn configured_project_currency_and_cost_override_keep_their_denominations(
         ids.user_id,
         (day, day),
         "project",
-        crate::reports::ReportFilters::default(),
+        crate::ops::reports::ReportFilters::default(),
     )
     .await
     .unwrap();
@@ -926,7 +927,7 @@ async fn configured_fixed_fee_hours_are_not_invoiced_but_legacy_fees_are_unchang
             ids.user_id,
             (day, day),
             "project",
-            crate::reports::ReportFilters::default(),
+            crate::ops::reports::ReportFilters::default(),
         )
         .await
         .unwrap();
@@ -1106,7 +1107,7 @@ async fn selected_project_rate_modes_agree_across_billing_consumers(pool: PgPool
             ids.user_id,
             (day, day),
             "project",
-            crate::reports::ReportFilters::default(),
+            crate::ops::reports::ReportFilters::default(),
         )
         .await
         .unwrap();
@@ -1171,7 +1172,7 @@ async fn billing_cascade_agrees_across_all_four_levels_including_zero(pool: PgPo
             ids.user_id,
             (day, day),
             "project",
-            crate::reports::ReportFilters::default(),
+            crate::ops::reports::ReportFilters::default(),
         )
         .await
         .unwrap();
@@ -1225,7 +1226,7 @@ async fn project_rate_is_used_by_invoices_reports_and_spend(pool: PgPool) {
         ids.user_id,
         (day, day),
         "project",
-        crate::reports::ReportFilters::default(),
+        crate::ops::reports::ReportFilters::default(),
     )
     .await
     .unwrap();
@@ -1264,7 +1265,7 @@ async fn invoiced_amounts_survive_rate_changes_and_void_uses_current_rates(pool:
         ids.user_id,
         (day, day),
         "project",
-        crate::reports::ReportFilters::default(),
+        crate::ops::reports::ReportFilters::default(),
     )
     .await
     .unwrap();
@@ -1325,7 +1326,7 @@ async fn non_billable_context_produces_no_unbilled_amount_on_any_report(pool: Pg
             ids.user_id,
             (day, day),
             "project",
-            crate::reports::ReportFilters::default(),
+            crate::ops::reports::ReportFilters::default(),
         )
         .await
         .unwrap();
@@ -1345,12 +1346,12 @@ async fn non_billable_context_produces_no_unbilled_amount_on_any_report(pool: Pg
             (spend[0].spent_minutes, spend[0].spent_cents),
             (60, Some(0))
         );
-        let detail = crate::reports::fetch_entries(
+        let detail = crate::ops::reports::fetch_entries(
             &pool,
             ids.org_id,
-            crate::reports::TimeScope::everyone(ids.user_id),
+            crate::ops::reports::TimeScope::everyone(ids.user_id),
             (day, day),
-            crate::reports::ReportFilters::default(),
+            crate::ops::reports::ReportFilters::default(),
         )
         .await
         .unwrap();
@@ -1392,7 +1393,7 @@ async fn invoiced_billability_survives_later_project_changes(pool: PgPool) {
         ids.user_id,
         (day, day),
         "project",
-        crate::reports::ReportFilters::default(),
+        crate::ops::reports::ReportFilters::default(),
     )
     .await
     .unwrap();
@@ -1487,7 +1488,7 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
         ids.user_id,
         (day, day),
         "project",
-        crate::reports::ReportFilters::default(),
+        crate::ops::reports::ReportFilters::default(),
     )
     .await
     .unwrap();
@@ -1511,7 +1512,7 @@ async fn large_invoice_and_reports_agree_without_intermediate_overflow(pool: PgP
         ids.user_id,
         (day, day),
         "project",
-        crate::reports::ReportFilters::default(),
+        crate::ops::reports::ReportFilters::default(),
     )
     .await
     .unwrap_err();
@@ -1628,7 +1629,7 @@ async fn assert_reporting_minutes(
         ids.user_id,
         (day, day),
         "project",
-        crate::reports::ReportFilters::default(),
+        crate::ops::reports::ReportFilters::default(),
     )
     .await
     .unwrap();
@@ -1650,12 +1651,12 @@ async fn assert_reporting_minutes(
         Some(1600),
         "labor cost uses worked minutes"
     );
-    let detail = crate::reports::fetch_entries(
+    let detail = crate::ops::reports::fetch_entries(
         pool,
         ids.org_id,
-        crate::reports::TimeScope::everyone(ids.user_id),
+        crate::ops::reports::TimeScope::everyone(ids.user_id),
         (day, day),
-        crate::reports::ReportFilters::default(),
+        crate::ops::reports::ReportFilters::default(),
     )
     .await
     .unwrap();

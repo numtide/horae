@@ -59,9 +59,7 @@ async fn row_version(pool: &PgPool, org_id: Uuid) -> Option<String> {
 }
 
 async fn stored(pool: &PgPool, org_id: Uuid) -> OrgBranding {
-    crate::reports::fetch_branding_from(pool, org_id)
-        .await
-        .unwrap()
+    super::fetch_branding_from(pool, org_id).await.unwrap()
 }
 
 async fn workspace_zone(pool: &PgPool, org_id: Uuid) -> String {

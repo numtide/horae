@@ -21,6 +21,7 @@
 //! with the `Shared` organization gate and then serialize on the
 //! organization's invoice lock ([`balances::lock_invoices`]).
 
+use futures_util::{Stream, TryStreamExt};
 use horae_core::permissions::catalog::Permission;
 use horae_core::types::InvoiceStatus;
 use sqlx::PgConnection;
@@ -172,7 +173,7 @@ pub(crate) async fn detail(
 ) -> Result<InvoiceDetailView, OpError> {
     authorize_read(actor, READ)?;
     let org_id = actor.org_id();
-    let (invoice, lines) = crate::reports::fetch_invoice_from(tx, invoice_id, org_id)
+    let (invoice, lines) = fetch_invoice_from(tx, invoice_id, org_id)
         .await?
         .ok_or_else(|| OpError::not_found("Invoice not found"))?;
     let client_name = client_names(tx, org_id, &[invoice.client_id])
@@ -306,8 +307,64 @@ pub(crate) async fn set_status(
 
 /// The invoice and its lines as they are now, after a write.
 async fn with_lines(tx: &mut Tx, org_id: Uuid, id: Uuid) -> Result<InvoiceWithLines, OpError> {
-    let (invoice, lines) = crate::reports::fetch_invoice_from(tx, id, org_id)
+    let (invoice, lines) = fetch_invoice_from(tx, id, org_id)
         .await?
         .ok_or_else(|| OpError::not_found("Invoice not found"))?;
     Ok(InvoiceWithLines { invoice, lines })
+}
+
+/// Shared org-scoped invoice projection. Callers authorize the actor and choose
+/// the transaction so metadata and lines belong to the same snapshot.
+pub(crate) async fn fetch_invoice_from(
+    connection: &mut sqlx::PgConnection,
+    invoice_id: uuid::Uuid,
+    org_id: uuid::Uuid,
+) -> Result<Option<(crate::models::Invoice, Vec<crate::models::InvoiceLine>)>, sqlx::Error> {
+    let Some(invoice) = fetch_invoice_metadata(&mut *connection, invoice_id, org_id).await? else {
+        return Ok(None);
+    };
+    let lines = stream_invoice_lines(&mut *connection, invoice_id)
+        .try_collect()
+        .await?;
+    Ok(Some((invoice, lines)))
+}
+
+pub(crate) async fn fetch_invoice_metadata(
+    executor: impl sqlx::PgExecutor<'_>,
+    invoice_id: uuid::Uuid,
+    org_id: uuid::Uuid,
+) -> Result<Option<crate::models::Invoice>, sqlx::Error> {
+    sqlx::query_as!(
+        crate::models::Invoice,
+        r#"SELECT id, org_id, client_id, number,
+                  status as "status: InvoiceStatus",
+                  issued_on as "issued_on: chrono::NaiveDate",
+                  due_on as "due_on: chrono::NaiveDate",
+                  currency, total_cents, notes, terms_days, po_number,
+                  discount_bps, tax1_bps, tax2_name, tax2_bps,
+                  subtotal_cents, discount_cents, tax1_cents, tax2_cents,
+                  created_at as "created_at: chrono::DateTime<chrono::Utc>"
+           FROM invoices
+           WHERE id = $1 AND org_id = $2"#,
+        invoice_id,
+        org_id,
+    )
+    .fetch_optional(executor)
+    .await
+}
+
+fn stream_invoice_lines<'e>(
+    executor: impl sqlx::PgExecutor<'e> + 'e,
+    invoice_id: uuid::Uuid,
+) -> impl Stream<Item = Result<crate::models::InvoiceLine, sqlx::Error>> + 'e {
+    sqlx::query_as!(
+        crate::models::InvoiceLine,
+        r#"SELECT id, invoice_id, time_entry_id, fee_occurrence_id, description,
+                  minutes, rate_cents, amount_cents
+           FROM invoice_line_items
+           WHERE invoice_id = $1
+           ORDER BY id"#,
+        invoice_id,
+    )
+    .fetch(executor)
 }

@@ -15,10 +15,11 @@ async fn invoice_fixture(pool: &PgPool) -> (SeedIds, InvoiceWithLines) {
     .await
     .unwrap();
     // Compare persisted values, including the database-generated creation time.
-    invoice.invoice = crate::reports::fetch_invoice_metadata(pool, invoice.invoice.id, ids.org_id)
-        .await
-        .unwrap()
-        .unwrap();
+    invoice.invoice =
+        crate::ops::invoices::fetch_invoice_metadata(pool, invoice.invoice.id, ids.org_id)
+            .await
+            .unwrap()
+            .unwrap();
     (ids, invoice)
 }
 

@@ -394,7 +394,7 @@ async fn imports_preserve_finalized_project_configuration_and_restricted_access(
                 ids.user_id,
                 (day, day),
                 "project",
-                crate::reports::ReportFilters::default(),
+                crate::ops::reports::ReportFilters::default(),
             )
             .await
             .unwrap();

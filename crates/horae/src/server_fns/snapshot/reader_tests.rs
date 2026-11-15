@@ -48,7 +48,7 @@ impl Fixture {
                     org,
                     actor,
                     ("2026-09-07".parse().unwrap(), "2026-09-07".parse().unwrap()),
-                    crate::reports::ReportFilters::default()
+                    crate::ops::reports::ReportFilters::default()
                 )
                 .await?
             ),
@@ -199,7 +199,7 @@ async fn readers_preserve_actor_tenant_filters_and_missing_resources(pool: PgPoo
         fixture.ids.org_id,
         fixture.ids.user_id,
         ("2026-09-07".parse().unwrap(), "2026-09-07".parse().unwrap()),
-        crate::reports::ReportFilters {
+        crate::ops::reports::ReportFilters {
             project_id: Some(foreign.ids.project_id),
             ..Default::default()
         },

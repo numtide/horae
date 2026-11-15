@@ -95,7 +95,7 @@ pub async fn report_time(
 
     let from_date = parse_date(&from, "from")?;
     let to_date = parse_date(&to, "to")?;
-    let filters = crate::reports::ReportFilters {
+    let filters = crate::ops::reports::ReportFilters {
         client_id: parse_opt_uuid(client_id, "client_id")?,
         project_id: parse_opt_uuid(project_id, "project_id")?,
         user_id: parse_opt_uuid(user_id, "user_id")?,
@@ -120,7 +120,7 @@ pub(super) async fn fetch_report(
     viewer_id: uuid::Uuid,
     period: (chrono::NaiveDate, chrono::NaiveDate),
     group_by: &str,
-    filters: crate::reports::ReportFilters,
+    filters: crate::ops::reports::ReportFilters,
 ) -> Result<Vec<ReportRow>, ServerFnError> {
     let mut read = ops::begin_read(pool, Caller::session(org_id, viewer_id)).await?;
     let result = ops::reports::time(&mut read.tx, &read.actor, period, group_by, filters).await;
@@ -142,7 +142,7 @@ pub async fn report_detailed(
 
     let from_date = parse_date(&from, "from")?;
     let to_date = parse_date(&to, "to")?;
-    let filters = crate::reports::ReportFilters {
+    let filters = crate::ops::reports::ReportFilters {
         client_id: parse_opt_uuid(client_id, "client_id")?,
         project_id: parse_opt_uuid(project_id, "project_id")?,
         user_id: parse_opt_uuid(user_id, "user_id")?,
@@ -166,7 +166,7 @@ pub(super) async fn fetch_detailed(
     org_id: uuid::Uuid,
     viewer_id: uuid::Uuid,
     period: (chrono::NaiveDate, chrono::NaiveDate),
-    filters: crate::reports::ReportFilters,
+    filters: crate::ops::reports::ReportFilters,
 ) -> Result<Vec<DetailedReportRow>, ServerFnError> {
     let mut read = ops::begin_read(pool, Caller::session(org_id, viewer_id)).await?;
     let result = ops::reports::detailed(&mut read.tx, &read.actor, period, filters).await;
