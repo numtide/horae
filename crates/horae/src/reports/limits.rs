@@ -125,7 +125,7 @@ async fn read_invoice(
         invoice_id, limits.rows + 1,
     ).fetch_one(&mut *connection).await.map_err(database_error)?;
     check(size.rows, size.bytes, size.field_bytes, remaining)?;
-    super::fetch_invoice_from(connection, invoice_id, org_id)
+    crate::ops::invoices::fetch_invoice_from(connection, invoice_id, org_id)
         .await
         .map_err(database_error)?
         .ok_or(StatusCode::NOT_FOUND)
@@ -200,7 +200,7 @@ async fn read_pdf(
     .fetch_one(&mut *tx)
     .await
     .map_err(database_error)?;
-    let branding = super::fetch_branding_from(&mut *tx, org_id)
+    let branding = crate::ops::organization::fetch_branding_from(&mut *tx, org_id)
         .await
         .map_err(database_error)?;
     Ok(PdfInvoice {

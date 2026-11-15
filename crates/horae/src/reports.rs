@@ -6,7 +6,6 @@
 use axum::extract::{Path, Query};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use futures_util::{Stream, TryStreamExt};
 use horae_core::duration::format_hours2;
 use horae_core::money::format_cents_plain;
 use serde::Deserialize;
@@ -147,15 +146,6 @@ fn query_bool<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<bool,
         .map_err(serde::de::Error::custom)
 }
 
-/// Entity filters shared by grouped reports, detailed rows and downloads.
-#[derive(Clone, Copy, Default)]
-pub(crate) struct ReportFilters {
-    pub client_id: Option<uuid::Uuid>,
-    pub project_id: Option<uuid::Uuid>,
-    pub user_id: Option<uuid::Uuid>,
-    pub tag_id: Option<uuid::Uuid>,
-}
-
 impl ExportParams {
     fn time_query(&self) -> Result<crate::models::time_report::TimeReportQuery, StatusCode> {
         let date_from = self.from.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
@@ -205,81 +195,6 @@ impl ExportParams {
             }
         }
     }
-}
-
-/// Whose time a viewer reads, from their `TimeRead*` grants: their own, the
-/// people and projects they manage, or everyone's.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct TimeScope {
-    pub viewer_id: uuid::Uuid,
-    pub own: bool,
-    pub managed: bool,
-    pub all: bool,
-}
-
-#[cfg(test)]
-impl TimeScope {
-    pub(crate) fn everyone(viewer_id: uuid::Uuid) -> Self {
-        Self {
-            viewer_id,
-            own: true,
-            managed: true,
-            all: true,
-        }
-    }
-}
-
-/// The detailed report's rows within `scope`. The streaming cursor preserves
-/// this projection, filtering and ordering.
-pub(crate) async fn fetch_entries<'e>(
-    executor: impl sqlx::PgExecutor<'e> + 'e,
-    org_id: uuid::Uuid,
-    scope: TimeScope,
-    period: (chrono::NaiveDate, chrono::NaiveDate),
-    filters: ReportFilters,
-) -> Result<Vec<crate::models::DetailedReportRow>, sqlx::Error> {
-    sqlx::query_as!(
-        crate::models::DetailedReportRow,
-        r#"SELECT te.spent_date as "spent_date: chrono::NaiveDate",
-                p.name AS project_name, t.name AS task_name,
-                u.name AS user_name, te.minutes,
-                effective_minutes(te.minutes, te.rounded_minutes, o.round_minutes, o.round_dir) as "rounded_minutes?",
-                (te.billable AND (te.invoice_id IS NOT NULL OR (p.project_type <> 'non_billable' AND COALESCE(pt.billable, t.billable_default)))) as "billable!", te.notes
-         FROM time_entries te
-         JOIN projects p ON te.project_id = p.id
-         JOIN tasks t ON te.task_id = t.id
-         LEFT JOIN project_tasks pt ON pt.project_id = te.project_id AND pt.task_id = te.task_id
-         JOIN users u ON te.user_id = u.id
-         JOIN organizations o ON o.id = te.org_id
-         WHERE te.org_id = $6
-           AND ($11 OR ($9 AND te.user_id = $8) OR ($10 AND (
-             EXISTS (SELECT 1 FROM person_management_assignments m
-               WHERE m.org_id = te.org_id AND m.manager_id = $8 AND m.managed_user_id = te.user_id)
-             OR EXISTS (SELECT 1 FROM project_management_assignments m
-               WHERE m.org_id = te.org_id AND m.manager_id = $8 AND m.project_id = te.project_id))))
-           AND te.spent_date BETWEEN $1 AND $2
-           AND ($3::uuid IS NULL OR p.client_id = $3)
-           AND ($4::uuid IS NULL OR te.project_id = $4)
-           AND ($5::uuid IS NULL OR te.user_id = $5)
-           AND ($7::uuid IS NULL OR EXISTS (
-             SELECT 1 FROM project_tag_links l
-             WHERE l.org_id = te.org_id AND l.project_id = te.project_id AND l.tag_id = $7
-           ))
-         ORDER BY te.spent_date, p.name, t.name, te.id"#,
-        period.0 as chrono::NaiveDate,
-        period.1 as chrono::NaiveDate,
-        filters.client_id,
-        filters.project_id,
-        filters.user_id,
-        org_id,
-        filters.tag_id,
-        scope.viewer_id,
-        scope.own,
-        scope.managed,
-        scope.all,
-    )
-    .fetch_all(executor)
-    .await
 }
 
 pub async fn export_csv(
@@ -577,82 +492,6 @@ fn projects_xlsx(rows: &[ProjectExportRow]) -> Result<Vec<u8>, StatusCode> {
 }
 
 // ── Invoice export ────────────────────────────────────────────────────────────
-
-/// Shared org-scoped invoice projection. Callers authorize the actor and choose
-/// the transaction so metadata and lines belong to the same snapshot.
-pub(crate) async fn fetch_invoice_from(
-    connection: &mut sqlx::PgConnection,
-    invoice_id: uuid::Uuid,
-    org_id: uuid::Uuid,
-) -> Result<Option<(crate::models::Invoice, Vec<crate::models::InvoiceLine>)>, sqlx::Error> {
-    let Some(invoice) = fetch_invoice_metadata(&mut *connection, invoice_id, org_id).await? else {
-        return Ok(None);
-    };
-    let lines = stream_invoice_lines(&mut *connection, invoice_id)
-        .try_collect()
-        .await?;
-    Ok(Some((invoice, lines)))
-}
-
-pub(crate) async fn fetch_invoice_metadata(
-    executor: impl sqlx::PgExecutor<'_>,
-    invoice_id: uuid::Uuid,
-    org_id: uuid::Uuid,
-) -> Result<Option<crate::models::Invoice>, sqlx::Error> {
-    use horae_core::types::InvoiceStatus;
-    sqlx::query_as!(
-        crate::models::Invoice,
-        r#"SELECT id, org_id, client_id, number,
-                  status as "status: InvoiceStatus",
-                  issued_on as "issued_on: chrono::NaiveDate",
-                  due_on as "due_on: chrono::NaiveDate",
-                  currency, total_cents, notes, terms_days, po_number,
-                  discount_bps, tax1_bps, tax2_name, tax2_bps,
-                  subtotal_cents, discount_cents, tax1_cents, tax2_cents,
-                  created_at as "created_at: chrono::DateTime<chrono::Utc>"
-           FROM invoices
-           WHERE id = $1 AND org_id = $2"#,
-        invoice_id,
-        org_id,
-    )
-    .fetch_optional(executor)
-    .await
-}
-
-fn stream_invoice_lines<'e>(
-    executor: impl sqlx::PgExecutor<'e> + 'e,
-    invoice_id: uuid::Uuid,
-) -> impl Stream<Item = Result<crate::models::InvoiceLine, sqlx::Error>> + 'e {
-    sqlx::query_as!(
-        crate::models::InvoiceLine,
-        r#"SELECT id, invoice_id, time_entry_id, fee_occurrence_id, description,
-                  minutes, rate_cents, amount_cents
-           FROM invoice_line_items
-           WHERE invoice_id = $1
-           ORDER BY id"#,
-        invoice_id,
-    )
-    .fetch(executor)
-}
-
-/// The org's invoice branding block, shared with the invoice settings page
-/// (`ops::organization::branding`) so the PDF carries the identity it edits.
-pub(crate) async fn fetch_branding_from(
-    executor: impl sqlx::PgExecutor<'_>,
-    org_id: uuid::Uuid,
-) -> Result<crate::models::OrgBranding, sqlx::Error> {
-    sqlx::query_as!(
-        crate::models::OrgBranding,
-        r#"SELECT provider_name, provider_address, provider_tax_id,
-                  provider_email, provider_phone,
-                  bank_name, bank_iban, bank_bic, bank_routing, bank_account,
-                  invoice_notes, invoice_payment_terms
-           FROM organizations WHERE id = $1"#,
-        org_id,
-    )
-    .fetch_one(executor)
-    .await
-}
 
 pub async fn export_invoice_csv(
     session: Session,

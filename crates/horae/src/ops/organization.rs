@@ -36,11 +36,30 @@ pub(crate) async fn branding(tx: &mut Tx, actor: &Actor) -> Result<OrgBranding, 
 }
 
 async fn current_branding(tx: &mut Tx, actor: &Actor) -> Result<OrgBranding, OpError> {
-    match crate::reports::fetch_branding_from(&mut **tx, actor.org_id()).await {
+    match fetch_branding_from(&mut **tx, actor.org_id()).await {
         Ok(branding) => Ok(branding),
         Err(sqlx::Error::RowNotFound) => Err(OpError::not_found(NOT_FOUND)),
         Err(error) => Err(error.into()),
     }
+}
+
+/// The org's invoice branding block, shared with the invoice PDF
+/// (`reports::limits::pdf`) so the PDF carries the identity [`branding`] edits.
+pub(crate) async fn fetch_branding_from(
+    executor: impl sqlx::PgExecutor<'_>,
+    org_id: uuid::Uuid,
+) -> Result<crate::models::OrgBranding, sqlx::Error> {
+    sqlx::query_as!(
+        crate::models::OrgBranding,
+        r#"SELECT provider_name, provider_address, provider_tax_id,
+                  provider_email, provider_phone,
+                  bank_name, bank_iban, bank_bic, bank_routing, bank_account,
+                  invoice_notes, invoice_payment_terms
+           FROM organizations WHERE id = $1"#,
+        org_id,
+    )
+    .fetch_one(executor)
+    .await
 }
 
 /// Saves the branding edited from `expected`. The request carries every

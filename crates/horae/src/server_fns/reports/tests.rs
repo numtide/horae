@@ -74,7 +74,7 @@ async fn report(pool: &PgPool, viewer: &SeedIds, dimension: &str) -> Vec<ReportR
         viewer.user_id,
         (day, day),
         dimension,
-        crate::reports::ReportFilters::default(),
+        crate::ops::reports::ReportFilters::default(),
     )
     .await
     .unwrap()
@@ -83,7 +83,7 @@ async fn report(pool: &PgPool, viewer: &SeedIds, dimension: &str) -> Vec<ReportR
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial]
 async fn tag_filters_keep_report_dimensions_and_details_in_sync(pool: PgPool) {
-    use crate::reports::ReportFilters;
+    use crate::ops::reports::ReportFilters;
     let (first, second) = fixtures(&pool, "EUR").await;
     let foreign = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     entries(&pool, &first, &[(60, None, true), (30, None, false)]).await;
@@ -313,7 +313,7 @@ async fn report_uses_current_active_actor_and_tenant_for_every_filter(pool: PgPo
                 first.user_id,
                 (day, day),
                 "project",
-                crate::reports::ReportFilters {
+                crate::ops::reports::ReportFilters {
                     client_id: client,
                     project_id: project,
                     user_id: user,
@@ -333,7 +333,7 @@ async fn report_uses_current_active_actor_and_tenant_for_every_filter(pool: PgPo
             user_id,
             (day, day),
             "project",
-            crate::reports::ReportFilters::default(),
+            crate::ops::reports::ReportFilters::default(),
         )
         .await
         .unwrap_err();
@@ -466,7 +466,7 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
             first.user_id,
             (day, day),
             "project",
-            crate::reports::ReportFilters {
+            crate::ops::reports::ReportFilters {
                 client_id: client,
                 project_id: project,
                 user_id: user,
@@ -519,7 +519,7 @@ async fn filters_and_renames_keep_report_identity_and_totals(pool: PgPool) {
             first.user_id,
             (outside, outside),
             "project",
-            crate::reports::ReportFilters::default()
+            crate::ops::reports::ReportFilters::default()
         )
         .await
         .unwrap()
