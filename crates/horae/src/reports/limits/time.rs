@@ -72,6 +72,20 @@ pub(in crate::reports) async fn entries(
         return Err(StatusCode::BAD_REQUEST);
     }
     let (mut tx, grants) = begin(pool, requester).await?;
+    let result = read_entries(&mut tx, requester, &grants, query).await;
+    finish(tx, result).await
+}
+
+async fn read_entries(
+    tx: &mut PgConnection,
+    requester: PermissionRequester,
+    grants: &PermissionSelection,
+    query: &TimeReportQuery,
+) -> Result<TimeExport, StatusCode> {
+    let PermissionRequester {
+        org_id,
+        user_id: actor_id,
+    } = requester;
     // A single snapshot both bounds and materializes the authorized projection.
     let records = sqlx::query!(
         r#"WITH bounded AS MATERIALIZED (
@@ -154,7 +168,6 @@ pub(in crate::reports) async fn entries(
             notes: record.notes,
         });
     }
-    tx.commit().await.map_err(database_error)?;
     contexts.sort_unstable();
     contexts.dedup();
     Ok(TimeExport {
@@ -175,8 +188,8 @@ impl TimeExportScope {
     ) -> Result<axum::body::Body, StatusCode> {
         let body = permit.render(render).await?;
         let (mut tx, grants) = begin(pool, self.requester).await?;
-        authorize_rows(&mut tx, self.requester, &grants, &self.contexts).await?;
-        tx.commit().await.map_err(database_error)?;
+        let result = authorize_rows(&mut tx, self.requester, &grants, &self.contexts).await;
+        finish(tx, result).await?;
         Ok(body)
     }
 }

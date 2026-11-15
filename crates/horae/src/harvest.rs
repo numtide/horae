@@ -105,9 +105,22 @@ async fn begin_read(
             error => ApiError::from(dioxus::prelude::ServerFnError::from(error)),
         })?;
     if !read.actor.is_active() {
-        return Err(forbidden(&format!("{subject} access is unavailable")));
+        let refusal = forbidden(&format!("{subject} access is unavailable"));
+        return Err(read.refuse(refusal).await);
     }
     Ok(read)
+}
+
+/// Ends `read` with the handler's result. A refusal rolls back before it is
+/// answered, so the read's authority locks do not outlive the response.
+async fn finish_read<T>(read: ops::ReadTx, result: Result<T, ApiError>) -> Result<T, ApiError> {
+    match result {
+        Ok(value) => {
+            read.finish(Ok(())).await.map_err(internal)?;
+            Ok(value)
+        }
+        Err(error) => Err(read.refuse(error).await),
+    }
 }
 
 /// What the caller's stored grants let them read from time entries. Managed
@@ -192,7 +205,7 @@ fn page_window(page: Option<i64>, per_page: Option<i64>) -> Result<(i64, i64, i6
 async fn users_me(user: AuthUser, State(db): State<PgPool>) -> ApiResult<HarvestUser> {
     // Everyone reads their own identity; rates follow the same rule as /users.
     let mut access = user_access::begin(&db, &user).await?;
-    let row: UserRow = sqlx::query_as!(
+    let row = sqlx::query_as!(
         UserRow,
         r#"SELECT u.harvest_id AS id, u.name, u.email, u.active,
          COALESCE(p.is_administrator, false) AS "is_admin!",
@@ -206,8 +219,8 @@ async fn users_me(user: AuthUser, State(db): State<PgPool>) -> ApiResult<Harvest
     )
     .fetch_one(&mut *access.read.tx)
     .await
-    .map_err(internal)?;
-    access.read.finish(Ok(())).await.map_err(internal)?;
+    .map_err(internal);
+    let row = finish_read(access.read, row).await?;
 
     Ok(Json(user_row_to_harvest(&row, access.rates)))
 }
@@ -375,6 +388,43 @@ async fn time_entries_page(
         .map_err(internal)?;
     // Count and rows are read under the grants held for the whole read.
     let mut read = begin_read(db, caller, "Time entry").await?;
+    let result = time_entry_rows(
+        &mut read,
+        caller,
+        requested_user,
+        project_id,
+        &filters,
+        per_page,
+        offset,
+    )
+    .await;
+    let (total_entries, rows) = finish_read(read, result).await?;
+
+    let entries: Vec<HarvestTimeEntry> = rows
+        .iter()
+        .map(|r| time_entry_row_to_harvest(r, round_min, round_dir))
+        .collect();
+
+    Ok(Json(HarvestPagination::new(
+        "time_entries",
+        entries,
+        page,
+        per_page,
+        total_entries,
+        "/harvest/v2/time_entries",
+    )))
+}
+
+/// The entry count and page in the caller's time scope, read under `read`.
+async fn time_entry_rows(
+    read: &mut ops::ReadTx,
+    caller: &AuthUser,
+    requested_user: Option<Uuid>,
+    project_id: Option<Uuid>,
+    filters: &TimeEntryFilters,
+    per_page: i64,
+    offset: i64,
+) -> Result<(i64, Vec<TimeEntryRow>), ApiError> {
     let view = TimeView::of(&read.actor);
     let user_id_filter = scoped_user_filter(caller, view, requested_user)?;
 
@@ -485,21 +535,7 @@ async fn time_entries_page(
     .fetch_all(&mut *read.tx)
     .await
     .map_err(internal)?;
-    read.finish(Ok(())).await.map_err(internal)?;
-
-    let entries: Vec<HarvestTimeEntry> = rows
-        .iter()
-        .map(|r| time_entry_row_to_harvest(r, round_min, round_dir))
-        .collect();
-
-    Ok(Json(HarvestPagination::new(
-        "time_entries",
-        entries,
-        page,
-        per_page,
-        total_entries,
-        "/harvest/v2/time_entries",
-    )))
+    Ok((total_entries, rows))
 }
 
 async fn get_time_entry(
@@ -520,11 +556,22 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
         .await
         .map_err(internal)?;
     let mut read = begin_read(db, caller, "Time entry").await?;
+    let result = scoped_time_entry(&mut read, caller, id).await;
+    let row = finish_read(read, result).await?;
+
+    Ok(Json(time_entry_row_to_harvest(&row, round_min, round_dir)))
+}
+
+async fn scoped_time_entry(
+    read: &mut ops::ReadTx,
+    caller: &AuthUser,
+    id: Uuid,
+) -> Result<TimeEntryRow, ApiError> {
     let view = TimeView::of(&read.actor);
     // Refuses a caller without any time-read grant.
     scoped_user_filter(caller, view, None)?;
 
-    let row = sqlx::query_as!(
+    sqlx::query_as!(
         TimeEntryRow,
         r#"SELECT te.harvest_id AS id,
                te.spent_date as "spent_date: chrono::NaiveDate",
@@ -584,10 +631,7 @@ async fn time_entry_by_id(db: &PgPool, caller: &AuthUser, id: Uuid) -> ApiResult
     .fetch_optional(&mut *read.tx)
     .await
     .map_err(internal)?
-    .ok_or_else(not_found)?;
-    read.finish(Ok(())).await.map_err(internal)?;
-
-    Ok(Json(time_entry_row_to_harvest(&row, round_min, round_dir)))
+    .ok_or_else(not_found)
 }
 
 // ── Projects ────────────────────────────────────────────────────────────────
@@ -909,27 +953,28 @@ async fn users_page(
     filters: UserFilters,
 ) -> ApiResult<HarvestPagination<HarvestUser>> {
     let mut access = user_access::begin(db, caller).await?;
-    if !access.list {
-        return Err(forbidden("Listing users requires people access"));
-    }
+    let result = async {
+        if !access.list {
+            return Err(forbidden("Listing users requires people access"));
+        }
 
-    let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
+        let (page, per_page, offset) = page_window(filters.page, filters.per_page)?;
 
-    let total = sqlx::query_scalar!(
-        "SELECT COUNT(*) FROM users
+        let total = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM users
          WHERE org_id = $1
            AND ($2::bool IS NULL OR active = $2)",
-        caller.org_id,
-        filters.is_active,
-    )
-    .fetch_one(&mut *access.read.tx)
-    .await
-    .map_err(internal)?
-    .unwrap_or(0);
+            caller.org_id,
+            filters.is_active,
+        )
+        .fetch_one(&mut *access.read.tx)
+        .await
+        .map_err(internal)?
+        .unwrap_or(0);
 
-    let rows = sqlx::query_as!(
-        UserRow,
-        r#"SELECT u.harvest_id AS id, u.name, u.email, u.active,
+        let rows = sqlx::query_as!(
+            UserRow,
+            r#"SELECT u.harvest_id AS id, u.name, u.email, u.active,
          COALESCE(p.is_administrator, false) AS "is_admin!",
          u.cost_rate_cents, u.billable_rate_cents,
          (SELECT default_currency FROM organizations o WHERE o.id = u.org_id) AS "org_currency!",
@@ -940,15 +985,18 @@ async fn users_page(
            AND ($2::bool IS NULL OR u.active = $2)
          ORDER BY u.name, u.id
          LIMIT $3 OFFSET $4"#,
-        caller.org_id,
-        filters.is_active,
-        per_page,
-        offset,
-    )
-    .fetch_all(&mut *access.read.tx)
-    .await
-    .map_err(internal)?;
-    access.read.finish(Ok(())).await.map_err(internal)?;
+            caller.org_id,
+            filters.is_active,
+            per_page,
+            offset,
+        )
+        .fetch_all(&mut *access.read.tx)
+        .await
+        .map_err(internal)?;
+        Ok((page, per_page, total, rows))
+    }
+    .await;
+    let (page, per_page, total, rows) = finish_read(access.read, result).await?;
 
     let items: Vec<HarvestUser> = rows
         .iter()
@@ -1384,6 +1432,55 @@ mod tests {
         .await
         .unwrap();
         id
+    }
+
+    /// A refusal after `begin_read` rolls back before it is answered, so the
+    /// caller's `FOR SHARE` locks do not outlive the response.
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    async fn refusals_release_the_read_locks(pool: PgPool) {
+        use crate::server_fns::test_seed::organization_lockable;
+        let ids = seed(&pool, BuiltInProfile::Member).await;
+        let other = colleague(&pool, &ids).await;
+        let theirs = insert_entry(&pool, &ids, other, "theirs").await;
+        let released = |path: &str| {
+            assert!(
+                organization_lockable(&pool, ids.org_id),
+                "{path} still holds the organization lock"
+            );
+        };
+        let status = refused(
+            users_page(&pool, &caller(&ids), no_user_filters()).await,
+            "users",
+        );
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        released("users");
+        let filters = TimeEntryFilters {
+            user_id: Some(other.to_string()),
+            ..no_time_entry_filters()
+        };
+        let status = refused(
+            time_entries_page(&pool, &caller(&ids), filters).await,
+            "time entries",
+        );
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        released("time entries");
+        let status = refused(
+            time_entry_by_id(&pool, &caller(&ids), theirs).await,
+            "time entry",
+        );
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        released("time entry");
+
+        sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let refusal = task_reads::read(&pool, &caller(&ids), &TaskFilters::default(), None, 1, 0)
+            .await
+            .err()
+            .expect("an inactive person read the tasks");
+        assert_eq!(refusal.status, StatusCode::FORBIDDEN);
+        released("begin_read");
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]

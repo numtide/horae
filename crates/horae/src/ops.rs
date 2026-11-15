@@ -196,7 +196,7 @@ pub(crate) async fn begin(pool: &PgPool, caller: Caller) -> Result<WriteTx, OpEr
         .begin_with("BEGIN ISOLATION LEVEL READ COMMITTED, READ WRITE")
         .await?;
     configure_transaction_limits(&mut tx).await?;
-    let actor = Actor::load(&mut tx, caller).await?;
+    let (tx, actor) = load_actor(tx, caller).await?;
     Ok(WriteTx { tx, actor })
 }
 
@@ -218,6 +218,12 @@ impl WriteTx {
         }
         Ok(done.value)
     }
+
+    /// Rolls back a write the adapter refuses outside its operation, and
+    /// returns the adapter's error.
+    pub async fn refuse<E>(self, error: E) -> E {
+        roll_back(self.tx, error).await
+    }
 }
 
 /// A read in progress. Its only writes are the authority locks
@@ -229,8 +235,8 @@ pub(crate) struct ReadTx {
 }
 
 pub(crate) async fn begin_read(pool: &PgPool, caller: Caller) -> Result<ReadTx, OpError> {
-    let mut tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
-    let actor = Actor::load(&mut tx, caller).await?;
+    let tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
+    let (tx, actor) = load_actor(tx, caller).await?;
     Ok(ReadTx { tx, actor })
 }
 
@@ -292,14 +298,18 @@ pub(crate) async fn begin_read_snapshot(
         match Actor::load(&mut tx, caller).await {
             Ok(actor) => {
                 if let Some(previous) = inherited_lock_timeout {
-                    sqlx::query!("SELECT set_config('lock_timeout', $1, true)", previous)
-                        .fetch_one(&mut *tx)
-                        .await?;
+                    let restored =
+                        sqlx::query!("SELECT set_config('lock_timeout', $1, true)", previous)
+                            .fetch_one(&mut *tx)
+                            .await;
+                    if let Err(error) = restored {
+                        return Err(roll_back(tx, OpError::from(error)).await);
+                    }
                 }
                 return Ok(ReadTx { tx, actor });
             }
             Err(OpError::Conflict(_)) => tx.rollback().await?,
-            Err(error) => return Err(error),
+            Err(error) => return Err(roll_back(tx, error).await),
         }
     }
     Err(OpError::conflict(
@@ -331,7 +341,7 @@ pub(crate) async fn begin_gated(
     let mut tx = pool.begin_with(begin).await?;
     configure_transaction_limits(&mut tx).await?;
     lock_organization(&mut tx, caller.org_id, gate).await?;
-    let actor = Actor::load(&mut tx, caller).await?;
+    let (tx, actor) = load_actor(tx, caller).await?;
     Ok(WriteTx { tx, actor })
 }
 
@@ -358,6 +368,38 @@ impl ReadTx {
         self.tx.commit().await?;
         Ok(value)
     }
+
+    /// Rolls back a read the adapter refuses outside its operation, and
+    /// returns the adapter's error.
+    pub async fn refuse<E>(self, error: E) -> E {
+        roll_back(self.tx, error).await
+    }
+}
+
+/// [`Actor::load`], rolling back when it fails: by then it may hold the
+/// organization's and person's `FOR SHARE` locks, and any gate taken before it.
+async fn load_actor(mut tx: Tx, caller: Caller) -> Result<(Tx, Actor), OpError> {
+    match Actor::load(&mut tx, caller).await {
+        Ok(actor) => Ok((tx, actor)),
+        Err(error) => Err(roll_back(tx, error).await),
+    }
+}
+
+/// Commits `tx` if `result` succeeded and rolls it back otherwise, before the
+/// result is answered. For writers that run their own transaction instead of
+/// [`begin`] and [`WriteTx::commit`]; `commit_failed` reports a failed commit.
+pub(crate) async fn commit_or_roll_back<T, E>(
+    tx: Transaction<'_, Postgres>,
+    result: Result<T, E>,
+    commit_failed: impl FnOnce(sqlx::Error) -> E,
+) -> Result<T, E> {
+    match result {
+        Ok(value) => {
+            tx.commit().await.map_err(commit_failed)?;
+            Ok(value)
+        }
+        Err(error) => Err(roll_back(tx, error).await),
+    }
 }
 
 /// Rolls back a failed operation before its error is returned. Dropping the
@@ -365,7 +407,7 @@ impl ReadTx {
 /// connection to the pool, so the actor's `FOR SHARE` locks could outlive the
 /// response. The operation's error is the one to report; a failed rollback
 /// falls back to that pool cleanup.
-async fn roll_back(tx: Tx, error: OpError) -> OpError {
+async fn roll_back<E>(tx: Transaction<'_, Postgres>, error: E) -> E {
     let _ = tx.rollback().await;
     error
 }

@@ -16,6 +16,22 @@ pub(super) async fn read(
     )
     .await?;
     let mut read = begin_read(db, caller, "Project").await?;
+    let result = visible_projects(
+        &mut read, caller, filters, client_id, project_id, limit, offset,
+    )
+    .await;
+    finish_read(read, result).await
+}
+
+async fn visible_projects(
+    read: &mut ops::ReadTx,
+    caller: &AuthUser,
+    filters: &ProjectFilters,
+    client_id: Option<Uuid>,
+    project_id: Option<Uuid>,
+    limit: i64,
+    offset: i64,
+) -> Result<(i64, Vec<ProjectRow>), ApiError> {
     // Count and page must use the same visible set, including out-of-range pages.
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
@@ -90,6 +106,5 @@ pub(super) async fn read(
                 .ok_or_else(|| internal("Missing client name"))?,
         });
     }
-    read.finish(Ok(())).await.map_err(internal)?;
     Ok((total, rows))
 }

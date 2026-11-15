@@ -27,7 +27,17 @@ pub(in crate::reports) async fn projects(
     scope: &str,
 ) -> Result<Vec<ProjectExportRow>, StatusCode> {
     let mut tx = begin_project_transaction(pool).await?;
-    let grants = authorize_project_actor(&mut tx, org_id, actor_id).await?;
+    let result = project_rows(&mut tx, org_id, actor_id, scope).await;
+    finish(tx, result).await
+}
+
+async fn project_rows(
+    tx: &mut PgConnection,
+    org_id: Uuid,
+    actor_id: Uuid,
+    scope: &str,
+) -> Result<Vec<ProjectExportRow>, StatusCode> {
+    let grants = authorize_project_actor(tx, org_id, actor_id).await?;
     // One fresh statement sees completed scope changes after the gate wait,
     // while keeping size checks and payload on the same database snapshot.
     let records = sqlx::query!(
@@ -90,7 +100,6 @@ pub(in crate::reports) async fn projects(
             active: record.active.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
         });
     }
-    tx.commit().await.map_err(database_error)?;
     Ok(rows)
 }
 
@@ -102,8 +111,9 @@ pub(in crate::reports) async fn authorize_projects(
     monetary_project_ids: &[Uuid],
 ) -> Result<(), StatusCode> {
     let mut tx = begin_project_transaction(pool).await?;
-    authorize_project_rows(&mut tx, org_id, actor_id, project_ids, monetary_project_ids).await?;
-    tx.commit().await.map_err(database_error)
+    let result =
+        authorize_project_rows(&mut tx, org_id, actor_id, project_ids, monetary_project_ids).await;
+    finish(tx, result).await
 }
 
 pub(in crate::reports) async fn authorize_project_rows(

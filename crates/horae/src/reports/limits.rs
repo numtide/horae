@@ -83,6 +83,15 @@ pub(super) async fn configure_transaction(connection: &mut PgConnection) -> Resu
     configure_deadlines(connection).await
 }
 
+/// Commits an export's transaction, or rolls a refused one back before the
+/// refusal is answered, so the actor's `FOR SHARE` locks end with it.
+async fn finish<T>(
+    tx: Transaction<'_, Postgres>,
+    result: Result<T, StatusCode>,
+) -> Result<T, StatusCode> {
+    crate::ops::commit_or_roll_back(tx, result, database_error).await
+}
+
 /// The same limits as every operation: never looser than an inherited one.
 pub(super) async fn configure_deadlines(connection: &mut PgConnection) -> Result<(), StatusCode> {
     crate::ops::configure_transaction_limits(connection)
@@ -131,9 +140,8 @@ pub(super) async fn invoice(
     let mut tx = super::begin_invoice_export(pool, org_id, actor_id)
         .await?
         .tx;
-    let result = read_invoice(&mut tx, org_id, invoice_id, XLSX).await?;
-    tx.commit().await.map_err(database_error)?;
-    Ok(result)
+    let result = read_invoice(&mut tx, org_id, invoice_id, XLSX).await;
+    finish(tx, result).await
 }
 
 pub(super) struct PdfInvoice {
@@ -154,6 +162,15 @@ pub(super) async fn pdf(
     let mut tx = super::begin_invoice_export(pool, org_id, actor_id)
         .await?
         .tx;
+    let result = read_pdf(&mut tx, org_id, invoice_id).await;
+    finish(tx, result).await
+}
+
+async fn read_pdf(
+    tx: &mut PgConnection,
+    org_id: Uuid,
+    invoice_id: Uuid,
+) -> Result<PdfInvoice, StatusCode> {
     let size = sqlx::query!(
         r#"SELECT COALESCE(SUM(octet_length(value)::bigint), 0)::bigint as "bytes!",
                   COALESCE(MAX(octet_length(value)), 0) as "field_bytes!"
@@ -175,7 +192,7 @@ pub(super) async fn pdf(
         bytes: PDF.bytes - size.bytes,
         ..PDF
     };
-    let (invoice, lines) = read_invoice(&mut tx, org_id, invoice_id, remaining).await?;
+    let (invoice, lines) = read_invoice(tx, org_id, invoice_id, remaining).await?;
     let client = sqlx::query!(
         "SELECT name, address, tax_id FROM clients WHERE id = $1",
         invoice.client_id
@@ -186,7 +203,6 @@ pub(super) async fn pdf(
     let branding = super::fetch_branding_from(&mut *tx, org_id)
         .await
         .map_err(database_error)?;
-    tx.commit().await.map_err(database_error)?;
     Ok(PdfInvoice {
         invoice,
         lines,
@@ -209,6 +225,7 @@ mod tests {
     mod authorization;
     mod project_authorization;
     mod project_canonical;
+    mod refusals;
     mod time_authorization;
 
     async fn entries(

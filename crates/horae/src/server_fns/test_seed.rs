@@ -63,6 +63,35 @@ pub async fn wait_for_other_transactions(pool: &PgPool) {
     .expect("finished reads must end their transactions");
 }
 
+/// Whether another connection can lock the organization row `FOR UPDATE NOWAIT`
+/// right now. Call it once a refused request has returned. The probe runs on
+/// another thread while this runtime is blocked, so the pool's deferred
+/// cleanup of a dropped transaction cannot run first: only a request that
+/// rolled back before answering leaves the row free.
+pub fn organization_lockable(pool: &PgPool, org_id: Uuid) -> bool {
+    use sqlx::{Connection, PgConnection};
+    let options = (*pool.connect_options()).clone();
+    std::thread::spawn(move || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async move {
+                let mut connection = PgConnection::connect_with(&options).await.unwrap();
+                let mut probe = connection.begin().await.unwrap();
+                sqlx::query!(
+                    "SELECT id FROM organizations WHERE id = $1 FOR UPDATE NOWAIT",
+                    org_id
+                )
+                .fetch_one(&mut *probe)
+                .await
+                .is_ok()
+            })
+    })
+    .join()
+    .unwrap()
+}
+
 /// A second pool on the same database whose transactions default to REPEATABLE
 /// READ, to prove a writer selects the isolation its checks rely on rather than
 /// inheriting the server default.

@@ -70,6 +70,39 @@ async fn denied_time_export_releases_authority_before_pool_cleanup(pool: PgPool)
     assert!(lock.is_ok(), "denied export retained authority: {lock:?}");
 }
 
+/// A capture whose scope was revoked is refused at release, and the refusal
+/// rolls back before it is answered.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn refused_time_export_release_returns_its_locks(pool: PgPool) {
+    let ids = scoped(
+        &pool,
+        BuiltInProfile::Member,
+        &[Permission::TimeReadManaged],
+    )
+    .await;
+    let target = person(&pool, ids.org_id).await;
+    let owner = SeedIds {
+        user_id: target,
+        ..ids
+    };
+    add_entries(&pool, &owner, 1).await;
+    sqlx::query!("INSERT INTO person_management_assignments (id,org_id,manager_id,managed_user_id) VALUES ($1,$2,$3,$4)", Uuid::now_v7(), ids.org_id, ids.user_id, target).execute(&pool).await.unwrap();
+    let export = capture(&pool, &ids).await.unwrap();
+    sqlx::query!(
+        "DELETE FROM person_management_assignments WHERE manager_id=$1",
+        ids.user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(render(&pool, export).await, Err(StatusCode::FORBIDDEN));
+    assert!(
+        crate::server_fns::test_seed::organization_lockable(&pool, ids.org_id),
+        "the refused release still holds the organization lock"
+    );
+}
+
 async fn capture(pool: &PgPool, ids: &SeedIds) -> Result<time::TimeExport, StatusCode> {
     time::entries(
         pool,

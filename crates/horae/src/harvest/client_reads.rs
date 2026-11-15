@@ -9,6 +9,18 @@ pub(super) async fn read(
     offset: i64,
 ) -> Result<(i64, Vec<ClientRow>), ApiError> {
     let mut read = begin_read(db, caller, "Client").await?;
+    let result = visible_clients(&mut read, caller, filters, client_id, limit, offset).await;
+    finish_read(read, result).await
+}
+
+async fn visible_clients(
+    read: &mut ops::ReadTx,
+    caller: &AuthUser,
+    filters: &ClientFilters,
+    client_id: Option<Uuid>,
+    limit: i64,
+    offset: i64,
+) -> Result<(i64, Vec<ClientRow>), ApiError> {
     // Count and page share one source snapshot, including exhausted pages.
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
@@ -58,6 +70,5 @@ pub(super) async fn read(
                 .ok_or_else(|| internal("Missing client timestamp"))?,
         });
     }
-    read.finish(Ok(())).await.map_err(internal)?;
     Ok((total, rows))
 }
