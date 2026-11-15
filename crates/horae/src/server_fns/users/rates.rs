@@ -97,7 +97,7 @@ async fn authorize(
     .await
     .map_err(server_err)?
     .ok_or_else(|| forbidden("Current rate access is required"))?;
-    let permissions = crate::server_fns::permissions::load_person_permissions(tx, org_id, actor_id)
+    let permissions = crate::ops::permissions::load_person_permissions(tx, org_id, actor_id)
         .await
         .map_err(|error| {
             tracing::error!(%error, "Unable to load rate permissions");

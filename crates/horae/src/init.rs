@@ -8,7 +8,7 @@ use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::server_fns::provisioning;
+use crate::ops::permissions::provisioning;
 
 /// Create the organization and its first admin user.
 ///

@@ -150,7 +150,7 @@ fn main() -> anyhow::Result<()> {
                         name,
                         profile,
                     } => {
-                        use server_fns::provisioning;
+                        use ops::permissions::provisioning;
                         let built_in = provisioning::parse_profile(&profile).ok_or_else(|| {
                             anyhow::anyhow!(
                                 "Unknown profile {profile:?}; use administrator, \

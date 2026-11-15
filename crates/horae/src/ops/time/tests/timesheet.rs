@@ -159,7 +159,7 @@ async fn fixture(pool: &PgPool) -> Fixture {
     .await
     .unwrap();
     // The target stops their own timer too, which loads their stored state.
-    crate::server_fns::provisioning::provision(
+    crate::ops::permissions::provisioning::provision(
         &mut pool.acquire().await.unwrap(),
         ids.org_id,
         target,

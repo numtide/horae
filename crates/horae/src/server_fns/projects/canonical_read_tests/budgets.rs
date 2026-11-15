@@ -390,7 +390,7 @@ async fn canonical_budget_summaries_exclude_unallocated_hours_and_money_but_not_
                     && row.budget.is_none()
                     && row.consumed == 120 * unit)
         );
-        let alerts = crate::server_fns::budgets::configured_progress(
+        let alerts = crate::notifications::budgets::configured_progress(
             &mut pool.acquire().await.unwrap(),
             ids.org_id,
             ids.project_id,

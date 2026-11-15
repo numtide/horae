@@ -13,7 +13,7 @@ use crate::models::permission_editor::PermissionRequester;
 use crate::plugin::AppEvent;
 use crate::plugin::event::{ActiveTransition, active_transition};
 
-mod budgets;
+pub(crate) mod budgets;
 mod detail;
 mod reads;
 mod task_catalog;
@@ -125,7 +125,7 @@ pub(crate) async fn set_active(
 
 fn event(org_id: Uuid, project: &Project, transition: ActiveTransition) -> AppEvent {
     let occurred_at = chrono::Utc::now();
-    let project = crate::server_fns::project_payload(project);
+    let project = crate::plugin::event::project_payload(project);
     match transition {
         ActiveTransition::Reactivated => AppEvent::ProjectReactivated {
             occurred_at,

@@ -5,7 +5,7 @@ use serde::Serialize;
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
-use super::{PermissionStorageError, load_person_permissions};
+use crate::ops::permissions::{PermissionStorageError, load_person_permissions};
 
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project_managers::ProjectManagersCommandKind;

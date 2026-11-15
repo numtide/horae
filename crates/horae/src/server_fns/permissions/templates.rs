@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
 
-use super::{PermissionStorageError, load_person_permissions, restore_grants};
+use crate::ops::permissions::{PermissionStorageError, load_person_permissions, restore_grants};
 
 pub(crate) use crate::models::permission_editor::{
     TemplateAction, TemplateCommand, TemplateOutcome,

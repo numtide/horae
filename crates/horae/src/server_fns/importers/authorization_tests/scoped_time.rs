@@ -37,7 +37,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .unwrap();
     sqlx::query!("UPDATE users SET oidc_subject=id::text, cost_rate_cents=6000, billable_rate_cents=10000 WHERE org_id=$1", ids.org_id).execute(pool).await.unwrap();
     let cookie = api.cookie(ids.user_id).await;
-    let request = json!({"query":{"date_from":"2026-09-01","date_to":"2026-09-30","user_id":null,"project_id":null,"after":null}});
     let mut sheet_request = json!({"query":{"subject_id":target,"date_from":"2026-09-01","date_to":"2026-09-30","after":null,"expected_requester":null}});
     assert_eq!(
         api.call("load_timesheet_page", sheet_request.clone(), None, false)
@@ -63,19 +62,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     assert_eq!(own_sheet["subject"]["id"], json!(ids.user_id));
     assert_eq!(own_sheet["entries"], json!([]));
     sheet_request["query"]["subject_id"] = json!(target);
-    let empty = json!({"requester":{"org_id":ids.org_id,"user_id":ids.user_id},"entries":[],"next_after":null});
-    assert_eq!(
-        api.call("list_visible_time_entries", request.clone(), None, false)
-            .await
-            .status(),
-        StatusCode::UNAUTHORIZED
-    );
-    // A Member reads only their own time: the teammate's entry stays hidden.
-    assert_eq!(
-        api.json("list_visible_time_entries", request.clone(), &cookie)
-            .await,
-        empty
-    );
     let grants: Vec<String> = serde_json::from_value(json!(PermissionSelection::new(&[
         Permission::TimeReadManaged
     ])))
@@ -83,11 +69,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants).execute(pool).await.unwrap();
-    assert_eq!(
-        api.json("list_visible_time_entries", request.clone(), &cookie)
-            .await,
-        empty
-    );
     sqlx::query!("INSERT INTO person_management_assignments (id,org_id,manager_id,managed_user_id) VALUES ($1,$2,$3,$4)", Uuid::now_v7(), ids.org_id, ids.user_id, target).execute(pool).await.unwrap();
     let expected = json!({
         "requester":{"org_id":ids.org_id,"user_id":ids.user_id},
@@ -144,34 +125,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .status(),
         StatusCode::BAD_REQUEST
     );
-    assert_eq!(
-        api.json("list_visible_time_entries", request.clone(), &cookie)
-            .await,
-        expected
-    );
-    let mut forged = request.clone();
-    forged["org_id"] = json!(foreign.org_id);
-    forged["user_id"] = json!(foreign.user_id);
-    forged["is_administrator"] = json!(true);
-    assert_eq!(
-        api.json("list_visible_time_entries", forged, &cookie).await,
-        expected
-    );
-    let mut filtered = request.clone();
-    filtered["query"]["user_id"] = json!(foreign.user_id);
-    assert_eq!(
-        api.json("list_visible_time_entries", filtered, &cookie)
-            .await,
-        empty
-    );
-    let mut invalid = request.clone();
-    invalid["query"]["date_to"] = json!("2026-08-31");
-    assert_eq!(
-        api.call("list_visible_time_entries", invalid, Some(&cookie), false)
-            .await
-            .status(),
-        StatusCode::BAD_REQUEST
-    );
     sqlx::query!(
         "DELETE FROM person_management_assignments WHERE manager_id=$1",
         ids.user_id
@@ -189,11 +142,6 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .await
         .status(),
         StatusCode::FORBIDDEN
-    );
-    assert_eq!(
-        api.json("list_visible_time_entries", request.clone(), &cookie)
-            .await,
-        empty
     );
     sqlx::query!("UPDATE person_permission_states SET grants=ARRAY['private_invalid_grant'] WHERE user_id=$1", ids.user_id).execute(pool).await.unwrap();
     let sheet_error = api
@@ -215,37 +163,12 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     ] {
         assert!(!body.contains(private), "{body}");
     }
-    let response = api
-        .call(
-            "list_visible_time_entries",
-            request.clone(),
-            Some(&cookie),
-            false,
-        )
-        .await;
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let body = response.text().await.unwrap();
-    assert!(body.contains("Permission state is unavailable"));
-    for private in [
-        "private_invalid_grant",
-        "person_permission_states",
-        "SELECT",
-        "sqlx",
-    ] {
-        assert!(!body.contains(private), "{body}");
-    }
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
         .execute(pool)
         .await
         .unwrap();
     assert_eq!(
         api.call("load_timesheet_page", sheet_request, Some(&cookie), false)
-            .await
-            .status(),
-        StatusCode::UNAUTHORIZED
-    );
-    assert_eq!(
-        api.call("list_visible_time_entries", request, Some(&cookie), false)
             .await
             .status(),
         StatusCode::UNAUTHORIZED
@@ -329,8 +252,8 @@ async fn check_people(pool: &PgPool, api: &Api) {
         ..ids
     };
     crate::server_fns::test_seed::time_entry(pool, &target_ids, EntryState::Open).await;
-    let entries = api.json("list_visible_time_entries", json!({"query":{"date_from":"2026-09-01","date_to":"2026-09-30","user_id":target,"project_id":null,"after":null}}), &cookie).await;
-    assert_eq!(entries["entries"], json!([]));
+    let sheet = api.json("load_timesheet_page", json!({"query":{"subject_id":target,"date_from":"2026-09-01","date_to":"2026-09-30","after":null,"expected_requester":null}}), &cookie).await;
+    assert_eq!(sheet["entries"], json!([]));
     sqlx::query!(
         "DELETE FROM project_management_assignments WHERE manager_id=$1",
         ids.user_id

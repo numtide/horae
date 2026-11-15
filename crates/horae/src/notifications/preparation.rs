@@ -134,7 +134,7 @@ async fn prepare_locked(
     // Settings writers update the parent through revision triggers, and grant
     // and project-manager changes move the organization's access revision.
     // Read after the parent waits; child locks here would invert that order.
-    // The recipient rule matches `server_fns::budgets::enqueue_alerts`.
+    // The recipient rule matches `notifications::budgets::enqueue_alerts`.
     let Some(row) = sqlx::query!(
         r#"SELECT n.id, n.created_at AS "created_at: DateTime<Utc>", n.period_key, n.threshold,
                   p.name, u.email,
@@ -157,7 +157,7 @@ async fn prepare_locked(
            LEFT JOIN person_permission_states s ON s.org_id=n.org_id AND s.user_id=u.id
            WHERE n.id=$1 AND n.org_id=$2 AND n.recipient_id=$3 AND n.project_id=$4"#,
         payload.notification_id, event.org_id, target.recipient_id, target.project_id,
-        crate::server_fns::budgets::CATALOG_VERSION,
+        super::budgets::CATALOG_VERSION,
     ).fetch_optional(&mut **tx).await? else {
         return Ok(None);
     };

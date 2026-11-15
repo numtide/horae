@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::models::time_report::{TimeReportGrouping, TimeReportQuery};
-use crate::server_fns::StoredPersonPermissions;
+use crate::ops::permissions::StoredPersonPermissions;
 use horae_core::permissions::catalog::Permission;
 
 pub(in crate::reports::streaming) async fn declare(

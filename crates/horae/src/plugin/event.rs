@@ -376,6 +376,105 @@ pub fn active_transition(was_active: Option<bool>, now_active: bool) -> Option<A
     }
 }
 
+pub(crate) fn time_entry_payload(e: &crate::models::TimeEntry) -> TimeEntryPayload {
+    TimeEntryPayload {
+        id: e.id,
+        user_id: e.user_id,
+        project_id: e.project_id,
+        task_id: e.task_id,
+        spent_date: e.spent_date,
+        minutes: e.minutes,
+        billable: e.billable,
+        is_running: e.is_running,
+        notes: e.notes.clone(),
+        started_at: e.started_at,
+    }
+}
+
+pub(crate) fn invoice_payload(inv: &crate::models::Invoice) -> InvoicePayload {
+    InvoicePayload {
+        id: inv.id,
+        client_id: inv.client_id,
+        invoice_number: inv.number.clone(),
+        status: inv.status.to_string(),
+        issue_date: inv.issued_on,
+        due_date: inv.due_on,
+        currency: inv.currency.clone(),
+        total_cents: inv.total_cents,
+    }
+}
+
+pub(crate) fn submission_payload(
+    a: &crate::models::Approval,
+    total_minutes: i32,
+) -> SubmissionPayload {
+    SubmissionPayload {
+        id: a.id,
+        user_id: a.user_id,
+        week_start: a.period_start,
+        status: a.state.to_string(),
+        total_minutes,
+    }
+}
+
+pub(crate) fn project_payload(p: &crate::models::Project) -> ProjectPayload {
+    ProjectPayload {
+        id: p.id,
+        client_id: p.client_id,
+        name: p.name.clone(),
+        project_type: p.project_type.to_string(),
+        budget_kind: p.budget_kind.to_string(),
+        active: p.active,
+    }
+}
+
+pub(crate) fn task_payload(t: &crate::models::Task) -> TaskPayload {
+    TaskPayload {
+        id: t.id,
+        name: t.name.clone(),
+        billable_default: t.billable_default,
+        default_rate_cents: t.default_rate_cents,
+        active: t.active,
+    }
+}
+
+/// The plugin payload for a person, with their stored Administrator identity
+/// and the profile their permissions come from. A person without stored
+/// permissions, or with a state this build cannot read, is reported as a
+/// non-administrator without a profile.
+pub(crate) async fn user_payload(
+    connection: &mut sqlx::PgConnection,
+    org_id: Uuid,
+    id: Uuid,
+    email: &str,
+    name: &str,
+) -> Result<UserPayload, sqlx::Error> {
+    use crate::ops::permissions::{PermissionStorageError, load_person_permissions, profile_name};
+    let state = match load_person_permissions(&mut *connection, org_id, id).await {
+        Ok(state) => state,
+        Err(PermissionStorageError::Database(error)) => return Err(error),
+        Err(error) => {
+            tracing::error!(%error, "Invalid stored permission state");
+            None
+        }
+    };
+    let (is_administrator, profile) = match state {
+        Some(state) => (
+            state.is_administrator,
+            profile_name(connection, org_id, state.source).await?,
+        ),
+        None => (false, None),
+    };
+    Ok(UserPayload {
+        id,
+        email: email.to_owned(),
+        name: name.to_owned(),
+        is_administrator,
+        profile,
+        method: None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

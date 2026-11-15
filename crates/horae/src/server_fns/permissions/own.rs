@@ -1,16 +1,13 @@
 //! Current own-access explanation, with no authority to inspect another person.
 
-use sqlx::{PgConnection, PgPool};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
 
-use super::{
-    PermissionStorageError, ReadIsolation, begin_lock_only_read_async_commit,
-    load_person_permissions,
-};
 use crate::models::own_permissions::OwnPermissions;
-use crate::models::permissions::PermissionSource;
+use crate::ops::permissions::{PermissionStorageError, load_person_permissions, profile_name};
+use crate::ops::{ReadIsolation, begin_lock_only_read_async_commit};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum OwnPermissionsError {
@@ -72,30 +69,6 @@ pub(crate) async fn read(
     };
     tx.commit().await?;
     Ok(result)
-}
-
-/// The name a person's access goes by: their built-in profile's label or the
-/// template they were given. Individually chosen grants have none.
-pub(crate) async fn profile_name(
-    connection: &mut PgConnection,
-    org_id: Uuid,
-    source: PermissionSource,
-) -> Result<Option<String>, sqlx::Error> {
-    match source {
-        PermissionSource::BuiltIn(profile) => Ok(Some(
-            crate::components::permission_description::profile_label(profile).to_owned(),
-        )),
-        PermissionSource::Template { id, .. } => {
-            sqlx::query_scalar!(
-                "SELECT name FROM permission_templates WHERE org_id = $1 AND id = $2",
-                org_id,
-                id
-            )
-            .fetch_optional(connection)
-            .await
-        }
-        PermissionSource::Individual => Ok(None),
-    }
 }
 
 /// Whether the person holds Administrator authority now, from their stored

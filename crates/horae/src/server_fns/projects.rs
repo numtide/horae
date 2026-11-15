@@ -9,6 +9,8 @@ use crate::models::ProjectTagLink;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::ProjectOverview;
 use crate::models::task::TaskRateEdit;
+#[cfg(feature = "server")]
+use crate::plugin::event::task_payload;
 
 mod detail_view;
 pub use detail_view::get_project_detail_view;

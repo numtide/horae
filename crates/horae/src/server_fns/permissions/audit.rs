@@ -5,15 +5,13 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::{
-    PermissionStorageError, ReadIsolation, begin_lock_only_read_async_commit,
-    load_person_permissions,
-};
 use crate::models::permission_audit::{
     AuditCursor, AuditEntry, AuditPage, HistoricalSource, PersonSnapshot,
 };
 pub(super) use crate::models::permission_audit::{AuditPrincipal, HistoricalAudit};
 use crate::models::permission_editor::PermissionRequester;
+use crate::ops::permissions::{PermissionStorageError, load_person_permissions};
+use crate::ops::{ReadIsolation, begin_lock_only_read_async_commit};
 
 pub(crate) async fn page(
     pool: &PgPool,
@@ -248,6 +246,8 @@ async fn begin_read(
 
 /// Reads one historical record using authenticated requester/tenant IDs.
 /// No receipt lookup or snapshot decoding occurs before current authorization.
+/// No adapter serves it: the audit tests check projection and locking through it.
+#[cfg(test)]
 pub(crate) async fn read(
     pool: &PgPool,
     org_id: Uuid,

@@ -237,7 +237,7 @@ async fn queued(
     .await
     .unwrap();
     sqlx::query!("INSERT INTO project_settings (id,org_id,project_id,creator_id,rate_mode,alert_enabled,alert_threshold) VALUES ($1,$2,$3,$4,'project',true,0)", Uuid::now_v7(), ids.org_id, ids.project_id, ids.user_id).execute(pool).await.unwrap();
-    crate::server_fns::budgets::enqueue_alerts(
+    super::budgets::enqueue_alerts(
         pool,
         ids.org_id,
         ids.project_id,
@@ -616,10 +616,9 @@ async fn alert_recipients_and_delivery_follow_project_and_billable_rate_reads(po
             }
         }
         expected.sort_unstable();
-        let enqueued =
-            crate::server_fns::budgets::enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
-                .await
-                .unwrap();
+        let enqueued = super::budgets::enqueue_alerts(&pool, ids.org_id, ids.project_id, date)
+            .await
+            .unwrap();
         assert_eq!(enqueued, expected.len(), "amount budget: {amount}");
         let chosen = sqlx::query_scalar!(
             "SELECT recipient_id FROM project_budget_notifications WHERE org_id = $1 ORDER BY recipient_id",
@@ -680,7 +679,7 @@ async fn alert_recipients_and_delivery_follow_project_and_billable_rate_reads(po
     .await
     .unwrap();
     assert_eq!(
-        crate::server_fns::budgets::enqueue_alerts(&pool, foreign.org_id, project, date)
+        super::budgets::enqueue_alerts(&pool, foreign.org_id, project, date)
             .await
             .unwrap(),
         0

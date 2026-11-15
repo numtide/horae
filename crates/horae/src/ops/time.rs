@@ -15,7 +15,7 @@ use crate::models::scoped_time::{
 };
 use crate::models::time_entry::TimeEntryContext;
 use crate::plugin::AppEvent;
-use crate::server_fns::time_entry_payload;
+use crate::plugin::event::time_entry_payload;
 
 const ACTIVE_ACCOUNT_REQUIRED: &str = "Active account required";
 const NO_RUNNING_TIMER: &str = "No running timer found for this entry";

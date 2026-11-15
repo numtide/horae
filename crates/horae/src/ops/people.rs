@@ -13,11 +13,11 @@
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use uuid::Uuid;
 
+use super::permissions::provisioning;
 use super::{Actor, Done, OpError, Tx};
 use crate::models::user::{Activation, AddedPeople, NewPerson, UserListItem};
 use crate::plugin::AppEvent;
 use crate::plugin::event::{ActiveTransition, UserPayload, active_transition};
-use crate::server_fns::provisioning;
 
 const NOT_FOUND: &str = "Person not found";
 const WRITE_REQUIRED: &str = "Permission to manage people is required";
@@ -307,7 +307,7 @@ async fn identity(
     name: String,
     active: bool,
 ) -> Result<(UserListItem, UserPayload), OpError> {
-    let payload = crate::server_fns::user_payload(tx, org_id, id, &email, &name).await?;
+    let payload = crate::plugin::event::user_payload(tx, org_id, id, &email, &name).await?;
     Ok((
         UserListItem {
             id,
