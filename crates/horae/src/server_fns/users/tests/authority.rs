@@ -572,7 +572,11 @@ async fn people_answers_carry_no_rates_or_sign_in_details(pool: PgPool) {
         crate::server_fns::users::rates::read_person_rates(
             &pool,
             Caller::session(ids.org_id, people_admin),
-            member
+            member,
+            crate::models::permission_editor::PermissionRequester {
+                org_id: ids.org_id,
+                user_id: people_admin,
+            },
         )
         .await,
         Err(ServerFnError::ServerError {
