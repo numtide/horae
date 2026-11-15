@@ -122,9 +122,9 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let response = api
         .call("list_people", request.clone(), Some(&cookie), false)
         .await;
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let body = response.text().await.unwrap();
-    assert!(body.contains("People directory is unavailable"));
+    assert!(body.contains("Permission state is unavailable"));
     for private in [
         "private_invalid_grant",
         "person_permission_states",

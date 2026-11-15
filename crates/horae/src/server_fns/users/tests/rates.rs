@@ -1,13 +1,44 @@
 use super::*;
 use crate::models::user::{PersonRate, PersonRates};
+use crate::ops::testing::Recorder;
 use crate::server_fns::test_seed::seed;
-use crate::server_fns::users::rates::{read_person_rates, write_person_rates};
+use crate::server_fns::users::rates;
 use horae_core::permissions::catalog::{
     BuiltInProfile, PERMISSION_CATALOG_VERSION, Permission, PermissionSelection,
 };
 use horae_core::permissions::rates::RateEdit;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+async fn read_person_rates(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+    target: Uuid,
+) -> Result<PersonRates, ServerFnError> {
+    rates::read_person_rates(pool, Caller::session(org, actor), target).await
+}
+
+async fn write_person_rates(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+    target: Uuid,
+    currency: &str,
+    billable: RateEdit,
+    cost: RateEdit,
+) -> Result<PersonRates, ServerFnError> {
+    rates::write_person_rates(
+        pool,
+        &Recorder::default(),
+        Caller::session(org, actor),
+        target,
+        currency,
+        billable,
+        cost,
+    )
+    .await
+}
 
 fn code(error: ServerFnError) -> u16 {
     match error {
