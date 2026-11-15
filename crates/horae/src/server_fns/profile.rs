@@ -43,9 +43,13 @@ pub async fn update_own_profile(
     name: String,
     timezone: Option<String>,
 ) -> Result<(), ServerFnError> {
+    use crate::ops::{self, Caller};
     let user = require_user().await?;
     let state = crate::state::global_state().await;
-    update_profile_record(&state.db, user.org_id, user.id, &name, timezone.as_deref()).await
+    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result =
+        ops::profile::update(&mut write.tx, &write.actor, &name, timezone.as_deref()).await;
+    Ok(write.commit(result, &*state.plugins).await?)
 }
 
 /// Change the organization's time zone, which every person without their own
@@ -65,42 +69,6 @@ pub async fn set_workspace_timezone(timezone: String) -> Result<(), ServerFnErro
 fn issuer_host(issuer: &str) -> String {
     let rest = issuer.split_once("://").map_or(issuer, |(_, rest)| rest);
     rest.split('/').next().unwrap_or(rest).to_owned()
-}
-
-#[cfg(feature = "server")]
-fn zone(name: &str) -> Result<&'static str, ServerFnError> {
-    crate::timezone::parse(name)
-        .map(|zone| zone.name())
-        .ok_or_else(|| err(BAD_REQUEST, "Choose a time zone from the list"))
-}
-
-#[cfg(feature = "server")]
-pub(super) async fn update_profile_record(
-    db: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    user_id: uuid::Uuid,
-    name: &str,
-    timezone: Option<&str>,
-) -> Result<(), ServerFnError> {
-    let name = name.trim();
-    if !crate::models::user::profile_name_is_valid(name) {
-        return Err(err(BAD_REQUEST, "Enter a name of 1 to 200 characters"));
-    }
-    let timezone = timezone.map(zone).transpose()?;
-    let updated = sqlx::query!(
-        "UPDATE users SET name = $3, timezone = $4 WHERE id = $1 AND org_id = $2 AND active",
-        user_id,
-        org_id,
-        name,
-        timezone,
-    )
-    .execute(db)
-    .await
-    .map_err(server_err)?;
-    if updated.rows_affected() == 0 {
-        return Err(unauthorized("Account is not active"));
-    }
-    Ok(())
 }
 
 #[cfg(all(test, feature = "server"))]

@@ -41,8 +41,8 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
     restoreSeededStates = setAsideSeededStates(actor.org_id);
     assert.equal(sql(`SELECT count(*) FROM person_permission_states WHERE org_id='${actor.org_id}'`), '0');
     await page.goto(`${base}/settings`);
-    // Without a stored state there is nothing to explain.
-    await expect(section.getByRole('alert')).toContainText('Could not load your permissions');
+    // Without a stored state there is nothing to explain; an Administrator has to repair it.
+    await expect(section.getByRole('alert')).toContainText('Ask an Administrator to check your access');
     await expect(page.getByRole('heading', { name: 'Profile', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Appearance', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Plugins', exact: true })).toBeVisible();
@@ -99,7 +99,7 @@ const floor = "ARRAY['time_read_own','time_write_own','expense_read_own','expens
 
     sql(`UPDATE person_permission_states SET catalog_version=2 WHERE id='${stateId}'`);
     await refresh.click();
-    await expect(section.getByRole('alert')).toContainText('Could not load your permissions');
+    await expect(section.getByRole('alert')).toContainText('Ask an Administrator to check your access');
     await expect(section).not.toContainText('View your own time');
     await expect(section).not.toContainText('person_permission_states');
     sql(`UPDATE person_permission_states SET catalog_version=1 WHERE id='${stateId}'`);

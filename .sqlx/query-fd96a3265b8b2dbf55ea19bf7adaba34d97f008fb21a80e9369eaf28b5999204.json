@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE users SET name = $3, timezone = $4 WHERE id = $1 AND org_id = $2 AND active",
+  "query": "UPDATE users SET name = $3, timezone = $4 WHERE id = $1 AND org_id = $2",
   "describe": {
     "columns": [],
     "parameters": {
@@ -13,5 +13,5 @@
     },
     "nullable": []
   },
-  "hash": "98e8c16c391592019bd1b6ecf61a5ad33a954c3295e5c880ff23641a48cfdfb5"
+  "hash": "fd96a3265b8b2dbf55ea19bf7adaba34d97f008fb21a80e9369eaf28b5999204"
 }

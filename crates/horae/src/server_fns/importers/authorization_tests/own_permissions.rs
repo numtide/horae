@@ -50,8 +50,9 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .execute(pool)
     .await
     .unwrap();
+    // Unreadable state fails closed, as every operation's actor does.
     let response = api.call(name, json!({}), Some(&cookie), false).await;
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let catalog_error = response.text().await.unwrap();
     assert!(catalog_error.contains("Permission state is unavailable"));
     for private in ["catalog", "person_permission_states", "sqlx", "SELECT"] {
@@ -73,7 +74,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .await
     .unwrap();
     let response = api.call(name, json!({}), Some(&cookie), false).await;
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let body = response.text().await.unwrap();
     assert!(body.contains("Permission state is unavailable"));
     for private in [
