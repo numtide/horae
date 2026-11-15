@@ -13,11 +13,13 @@ use horae_core::permissions::rates::{
 use horae_core::permissions::{AccessScope, ManagementAssignments, ScopedResource};
 use uuid::Uuid;
 
+use crate::models::permission_editor::PermissionRequester;
 use crate::models::user::{PersonRate, PersonRates};
 use crate::ops::{Actor, Done, OpError, Tx};
 
 const ACCESS_REQUIRED: &str = "Current rate access is required";
 const EDIT_REQUIRED: &str = "Current rate editing authority is required";
+const SESSION_CHANGED: &str = "Your session changed. Reload this page.";
 
 /// What the actor may do with each of one person's rates.
 #[derive(Debug, Clone, Copy)]
@@ -29,11 +31,14 @@ struct RateAccess {
 }
 
 /// Reads a person's rates, each withheld unless the actor may read it.
+/// `expected` is the requester the page was loaded for.
 pub(crate) async fn load(
     tx: &mut Tx,
     actor: &Actor,
     person_id: Uuid,
+    expected: PermissionRequester,
 ) -> Result<PersonRates, OpError> {
+    same_requester(actor, expected)?;
     let access = access(tx, actor, person_id).await?;
     visible(tx, actor, person_id, access).await
 }
@@ -44,10 +49,12 @@ pub(crate) async fn update(
     tx: &mut Tx,
     actor: &Actor,
     person_id: Uuid,
+    expected: PermissionRequester,
     currency: &str,
     billable: RateEdit,
     cost: RateEdit,
 ) -> Result<Done<PersonRates>, OpError> {
+    same_requester(actor, expected)?;
     let access = access(tx, actor, person_id).await?;
     let denied = |_| OpError::forbidden(EDIT_REQUIRED);
     let billable = billable.authorize(access.write_billable).map_err(denied)?;
@@ -82,6 +89,15 @@ pub(crate) async fn update(
     .execute(&mut **tx)
     .await?;
     Ok(Done::new(visible(tx, actor, person_id, access).await?))
+}
+
+/// Refuses a page loaded for another requester. The rates page answers this
+/// 409 by asking for a reload, so it stays a conflict rather than the shared 403.
+fn same_requester(actor: &Actor, expected: PermissionRequester) -> Result<(), OpError> {
+    actor
+        .expect_requester(Some(expected), SESSION_CHANGED)
+        .map(drop)
+        .map_err(|_| OpError::conflict(SESSION_CHANGED))
 }
 
 /// The actor's access to each of the person's rates, from its stored grants

@@ -12,9 +12,15 @@ pub async fn load_person_rates(
     person_id: uuid::Uuid,
     expected_requester: PermissionRequester,
 ) -> Result<PersonRates, ServerFnError> {
-    let caller = rate_caller(expected_requester).await?;
+    let viewer = require_user().await?;
     let state = crate::state::global_state().await;
-    read_person_rates(&state.db, caller, person_id).await
+    read_person_rates(
+        &state.db,
+        Caller::session(viewer.org_id, viewer.id),
+        person_id,
+        expected_requester,
+    )
+    .await
 }
 
 /// Change a person's rates. `currency` is the one the form showed, so an
@@ -27,13 +33,14 @@ pub async fn update_person_rates(
     billable: RateEdit,
     cost: RateEdit,
 ) -> Result<PersonRates, ServerFnError> {
-    let caller = rate_caller(expected_requester).await?;
+    let viewer = require_user().await?;
     let state = crate::state::global_state().await;
     write_person_rates(
         &state.db,
         &*state.plugins,
-        caller,
+        Caller::session(viewer.org_id, viewer.id),
         person_id,
+        expected_requester,
         &currency,
         billable,
         cost,
@@ -42,31 +49,29 @@ pub async fn update_person_rates(
 }
 
 #[cfg(feature = "server")]
-async fn rate_caller(expected: PermissionRequester) -> Result<Caller, ServerFnError> {
-    let actor = require_user().await?;
-    if expected.org_id != actor.org_id || expected.user_id != actor.id {
-        return Err(conflict("Your session changed. Reload this page."));
-    }
-    Ok(Caller::session(actor.org_id, actor.id))
-}
-
-#[cfg(feature = "server")]
 pub(crate) async fn read_person_rates(
     db: &sqlx::PgPool,
     caller: Caller,
     person_id: uuid::Uuid,
+    expected_requester: PermissionRequester,
 ) -> Result<PersonRates, ServerFnError> {
     let mut read = ops::begin_read(db, caller).await?;
-    let result = ops::people::rates::load(&mut read.tx, &read.actor, person_id).await;
+    let result =
+        ops::people::rates::load(&mut read.tx, &read.actor, person_id, expected_requester).await;
     Ok(read.finish(result).await?)
 }
 
 #[cfg(feature = "server")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a session adapter passes each server function argument through"
+)]
 pub(crate) async fn write_person_rates(
     db: &sqlx::PgPool,
     events: &dyn ops::EventSink,
     caller: Caller,
     person_id: uuid::Uuid,
+    expected_requester: PermissionRequester,
     currency: &str,
     billable: RateEdit,
     cost: RateEdit,
@@ -76,6 +81,7 @@ pub(crate) async fn write_person_rates(
         &mut write.tx,
         &write.actor,
         person_id,
+        expected_requester,
         currency,
         billable,
         cost,

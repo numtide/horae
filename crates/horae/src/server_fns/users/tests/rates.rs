@@ -1,4 +1,5 @@
 use super::*;
+use crate::models::permission_editor::PermissionRequester;
 use crate::models::user::{PersonRate, PersonRates};
 use crate::ops::testing::Recorder;
 use crate::server_fns::test_seed::seed;
@@ -16,7 +17,17 @@ async fn read_person_rates(
     actor: Uuid,
     target: Uuid,
 ) -> Result<PersonRates, ServerFnError> {
-    rates::read_person_rates(pool, Caller::session(org, actor), target).await
+    rates::read_person_rates(
+        pool,
+        Caller::session(org, actor),
+        target,
+        requester(org, actor),
+    )
+    .await
+}
+
+fn requester(org_id: Uuid, user_id: Uuid) -> PermissionRequester {
+    PermissionRequester { org_id, user_id }
 }
 
 async fn write_person_rates(
@@ -33,6 +44,7 @@ async fn write_person_rates(
         &Recorder::default(),
         Caller::session(org, actor),
         target,
+        requester(org, actor),
         currency,
         billable,
         cost,
@@ -389,6 +401,54 @@ async fn rates_round_trip_exact_minor_units(pool: PgPool) {
         .unwrap();
     assert_eq!(read.billable.unwrap().cents, None);
     assert_eq!(read.cost.unwrap().cents, None);
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn a_page_loaded_for_another_requester_asks_for_a_reload(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let target = person(&pool, ids.org_id, BuiltInProfile::Member).await;
+    let eur = currency(&pool, ids.org_id).await;
+    let caller = Caller::session(ids.org_id, ids.user_id);
+    let other = requester(ids.org_id, target);
+    let reload = |error| match error {
+        ServerFnError::ServerError { code, message, .. } => {
+            assert_eq!(code, CONFLICT);
+            assert_eq!(message, "Your session changed. Reload this page.");
+        }
+        other => panic!("unexpected error {other:?}"),
+    };
+
+    reload(
+        rates::read_person_rates(&pool, caller, target, other)
+            .await
+            .unwrap_err(),
+    );
+    reload(
+        rates::write_person_rates(
+            &pool,
+            &Recorder::default(),
+            caller,
+            target,
+            other,
+            &eur,
+            RateEdit::Set(1),
+            RateEdit::Set(1),
+        )
+        .await
+        .unwrap_err(),
+    );
+    let stored = sqlx::query!(
+        "SELECT billable_rate_cents, cost_rate_cents FROM users WHERE id=$1",
+        target
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        (stored.billable_rate_cents, stored.cost_rate_cents),
+        (Some(12000), Some(5000))
+    );
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
