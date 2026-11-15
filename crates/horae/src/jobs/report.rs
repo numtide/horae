@@ -220,16 +220,9 @@ async fn download_access(
     org_id: Uuid,
     actor_id: Uuid,
 ) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, axum::http::StatusCode> {
-    use crate::ops::OpError;
     super::access::begin_admin_access(pool, org_id, actor_id)
         .await
-        .map_err(|error| match error {
-            OpError::Forbidden(_) | OpError::NotFound(_) => axum::http::StatusCode::FORBIDDEN,
-            OpError::Conflict(_) => axum::http::StatusCode::CONFLICT,
-            OpError::Invalid { .. } | OpError::Internal(_) => {
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR
-            }
-        })
+        .map_err(crate::reports::op_status)
 }
 
 fn download_body(

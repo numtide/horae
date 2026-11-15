@@ -57,13 +57,16 @@ async fn require_invoice_reader(session: &Session) -> Result<(uuid::Uuid, uuid::
     let state = crate::state::global_state().await;
     let read = crate::ops::begin_read(&state.db, crate::ops::Caller::session(org_id, user_id))
         .await
-        .map_err(invoice_export_status)?;
+        .map_err(op_status)?;
     let allowed = crate::ops::invoices::authorize_read(&read.actor, crate::ops::invoices::READ);
-    read.finish(allowed).await.map_err(invoice_export_status)?;
+    read.finish(allowed).await.map_err(op_status)?;
     Ok((user_id, org_id))
 }
 
-fn invoice_export_status(error: crate::ops::OpError) -> StatusCode {
+/// The status every Axum route (exports, reports, job downloads) answers an
+/// [`OpError`](crate::ops::OpError) with. A hidden record is refused as
+/// forbidden rather than not found, so a download never confirms it exists.
+pub(crate) fn op_status(error: crate::ops::OpError) -> StatusCode {
     use crate::ops::OpError;
     match error {
         OpError::Forbidden(_) | OpError::NotFound(_) => StatusCode::FORBIDDEN,
@@ -85,9 +88,9 @@ async fn begin_invoice_export(
         crate::ops::SnapshotLimits::LockWait,
     )
     .await
-    .map_err(invoice_export_status)?;
+    .map_err(op_status)?;
     crate::ops::invoices::authorize_read(&read.actor, crate::ops::invoices::READ)
-        .map_err(invoice_export_status)?;
+        .map_err(op_status)?;
     limits::configure_deadlines(&mut read.tx).await?;
     Ok(read)
 }
@@ -105,7 +108,7 @@ async fn render_invoice_export(
         .await?
         .finish(Ok(()))
         .await
-        .map_err(invoice_export_status)?;
+        .map_err(op_status)?;
     Ok(body)
 }
 
