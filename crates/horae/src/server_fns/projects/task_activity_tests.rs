@@ -305,6 +305,54 @@ async fn archive_waits_for_existing_time_writer_and_observes_committed_timer(poo
     );
 }
 
+/// `set_task_active` holds the `AccessChange` gate, which stops every access
+/// check in the organization: each refusal rolls back before it is answered.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn refused_activation_changes_release_the_gate(pool: PgPool) {
+    use crate::server_fns::test_seed::{organization_lockable, seed};
+    let member = seed(&pool, BuiltInProfile::Member).await;
+    let refused =
+        set_task_active_record(&pool, member.org_id, member.user_id, member.task_id, false).await;
+    assert_eq!(
+        refused.err().map(|error| error.to_string()),
+        Some(forbidden("Current task editing authority is required").to_string())
+    );
+    assert!(
+        organization_lockable(&pool, member.org_id),
+        "without authority"
+    );
+
+    let (ids, _) = fixture(
+        &pool,
+        BuiltInProfile::Member,
+        PermissionSelection::new(&[Permission::TaskWriteAll]),
+    )
+    .await;
+    let missing = uuid::Uuid::now_v7();
+    let refused = set_task_active_record(&pool, ids.org_id, ids.user_id, missing, false).await;
+    assert_eq!(
+        refused.err().map(|error| error.to_string()),
+        Some(not_found("Task not found").to_string())
+    );
+    assert!(organization_lockable(&pool, ids.org_id), "missing task");
+
+    let entry = time_entry(&pool, &ids, horae_core::types::EntryState::Open).await;
+    sqlx::query!(
+        "UPDATE time_entries SET is_running=true,started_at=now() WHERE id=$1",
+        entry
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let refused = set_task_active_record(&pool, ids.org_id, ids.user_id, ids.task_id, false).await;
+    assert_eq!(
+        refused.err().map(|error| error.to_string()),
+        Some(conflict("A running timer prevents archiving this task").to_string())
+    );
+    assert!(organization_lockable(&pool, ids.org_id), "running timer");
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn archive_excludes_new_tracking_writers_before_task_lock_and_commit(pool: PgPool) {

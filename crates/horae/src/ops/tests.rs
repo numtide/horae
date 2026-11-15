@@ -10,7 +10,7 @@ use super::testing::Recorder;
 use super::*;
 use crate::plugin::event::ClientPayload;
 use crate::server_fns::test_seed::repeatable_read_pool;
-use crate::server_fns::test_seed::seed;
+use crate::server_fns::test_seed::{clear_state, organization_lockable, seed};
 
 fn created(client_id: Uuid, org_id: Uuid) -> AppEvent {
     AppEvent::ClientCreated {
@@ -122,7 +122,6 @@ async fn a_refused_operation_releases_its_authority_locks(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let caller = Caller::session(ids.org_id, ids.user_id);
     let refused = || OpError::forbidden("refused");
-    let options = (*pool.connect_options()).clone();
     for write in [false, true] {
         let result = if write {
             let write = begin(&pool, caller).await.unwrap();
@@ -134,31 +133,44 @@ async fn a_refused_operation_releases_its_authority_locks(pool: PgPool) {
             read.finish(Err::<(), _>(refused())).await
         };
         assert_eq!(result, Err(refused()));
-        // Probe from another thread while this runtime is blocked, so the
-        // pool's own cleanup of the connection cannot run first.
-        let (options, org_id) = (options.clone(), ids.org_id);
-        let locked = std::thread::spawn(move || {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap()
-                .block_on(async move {
-                    let mut connection = sqlx::PgConnection::connect_with(&options).await.unwrap();
-                    let mut probe = connection.begin().await.unwrap();
-                    sqlx::query!(
-                        "SELECT id FROM organizations WHERE id = $1 FOR UPDATE NOWAIT",
-                        org_id
-                    )
-                    .fetch_one(&mut *probe)
-                    .await
-                    .is_err()
-                })
-        })
-        .join()
-        .unwrap();
         assert!(
-            !locked,
+            organization_lockable(&pool, ids.org_id),
             "the refused operation still holds the organization lock"
+        );
+    }
+}
+
+/// An actor that cannot be loaded (here, a person without permission state)
+/// is refused only after `Actor::load`, and `begin_gated`'s gate, took their
+/// locks: every way in rolls back before returning that refusal.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_refused_actor_releases_its_locks_in_every_begin(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    clear_state(&pool, ids.user_id).await;
+    let caller = Caller::session(ids.org_id, ids.user_id);
+    for case in 0..5 {
+        let result = match case {
+            0 => begin(&pool, caller).await.map(drop),
+            1 => begin_read(&pool, caller).await.map(drop),
+            2 => begin_read_snapshot(&pool, caller, SnapshotLimits::Short)
+                .await
+                .map(drop),
+            3 => begin_read_snapshot(&pool, caller, SnapshotLimits::LockWait)
+                .await
+                .map(drop),
+            _ => begin_gated(
+                &pool,
+                caller,
+                OrganizationLock::AccessChange,
+                WriteIsolation::ReadCommitted,
+            )
+            .await
+            .map(drop),
+        };
+        assert!(matches!(result, Err(OpError::Forbidden(_))), "case {case}");
+        assert!(
+            organization_lockable(&pool, ids.org_id),
+            "case {case} still holds the organization lock"
         );
     }
 }

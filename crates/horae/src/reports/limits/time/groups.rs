@@ -24,6 +24,17 @@ pub(in crate::reports) async fn read(
         return Err(StatusCode::BAD_REQUEST);
     }
     let (mut tx, grants) = begin(pool, requester).await?;
+    let result = read_groups(&mut tx, requester, &grants, query, dimension).await;
+    finish(tx, result).await
+}
+
+async fn read_groups(
+    tx: &mut PgConnection,
+    requester: PermissionRequester,
+    grants: &PermissionSelection,
+    query: &TimeReportQuery,
+    dimension: TimeReportGrouping,
+) -> Result<GroupExport, StatusCode> {
     let dimension = match dimension {
         TimeReportGrouping::Client => "client",
         TimeReportGrouping::Project => "project",
@@ -129,7 +140,6 @@ pub(in crate::reports) async fn read(
             _ => return Err(StatusCode::INTERNAL_SERVER_ERROR),
         }
     }
-    tx.commit().await.map_err(database_error)?;
     Ok(GroupExport {
         rows,
         scope: TimeExportScope {

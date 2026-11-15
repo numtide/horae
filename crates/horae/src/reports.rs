@@ -89,9 +89,14 @@ async fn begin_invoice_export(
     )
     .await
     .map_err(op_status)?;
-    crate::ops::invoices::authorize_read(&read.actor, crate::ops::invoices::READ)
-        .map_err(op_status)?;
-    limits::configure_deadlines(&mut read.tx).await?;
+    if let Err(error) =
+        crate::ops::invoices::authorize_read(&read.actor, crate::ops::invoices::READ)
+    {
+        return Err(op_status(read.refuse(error).await));
+    }
+    if let Err(status) = limits::configure_deadlines(&mut read.tx).await {
+        return Err(read.refuse(status).await);
+    }
     Ok(read)
 }
 

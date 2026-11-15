@@ -44,8 +44,21 @@ pub(super) async fn save(
     crate::ops::configure_transaction_limits(&mut tx)
         .await
         .map_err(storage_error)?;
+    let result = save_in(&mut tx, actor_id, org_id, request, email_available).await;
+    // A refusal rolls back before it is answered: until then the gate stops
+    // every access check in the organization.
+    crate::ops::commit_or_roll_back(tx, result, storage_error).await
+}
+
+async fn save_in(
+    tx: &mut crate::ops::Tx,
+    actor_id: Uuid,
+    org_id: Uuid,
+    request: &ProjectEditRequest,
+    email_available: bool,
+) -> Result<Saved, ServerFnError> {
     let permissions = lock_editor_actor(
-        &mut tx,
+        tx,
         actor_id,
         org_id,
         request.project_id,
@@ -118,13 +131,13 @@ pub(super) async fn save(
         request.project_id,
         org_id,
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await
     .map_err(storage_error)?
     .ok_or_else(|| not_found("Project not found"))?;
-    let mut before = load_project_form(&mut tx, org_id, request.project_id).await?;
+    let mut before = load_project_form(tx, org_id, request.project_id).await?;
     let mut view = before.clone();
-    super::projection::redact(&mut tx, org_id, actor_id, &permissions, &mut view).await?;
+    super::projection::redact(tx, org_id, actor_id, &permissions, &mut view).await?;
     let access = view
         .access
         .ok_or_else(|| server_err("Project editor access is unavailable"))?;
@@ -141,7 +154,7 @@ pub(super) async fn save(
         org_id,
         actor_id,
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await
     .map_err(storage_error)?;
     if let Some(completed) = completed {
@@ -159,8 +172,7 @@ pub(super) async fn save(
                 "This edit was already saved or the project changed. Reload before editing again.",
             ));
         }
-        let project = project_record(&mut tx, org_id, request.project_id).await?;
-        tx.commit().await.map_err(storage_error)?;
+        let project = project_record(tx, org_id, request.project_id).await?;
         return Ok(Saved {
             project,
             changed: false,
@@ -171,7 +183,7 @@ pub(super) async fn save(
         "SELECT EXISTS(SELECT 1 FROM project_edit_requests WHERE id=$1)",
         request.id
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await
     .map_err(storage_error)?
     .unwrap_or(false)
@@ -192,7 +204,7 @@ pub(super) async fn save(
         actor_id,
         request.id,
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await
     .map_err(storage_error)?
     .unwrap_or(false)
@@ -228,7 +240,7 @@ pub(super) async fn save(
         keep_budget,
         &retained_tasks,
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await
     .map_err(storage_error)?
     .unwrap_or(false);
@@ -261,7 +273,7 @@ pub(super) async fn save(
         client_id,
         org_id,
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await
     .map_err(storage_error)?
     .ok_or_else(|| with_field(not_found("Client not found"), ProjectFormField::Client))?;
@@ -287,7 +299,7 @@ pub(super) async fn save(
         r#"SELECT EXISTS(SELECT 1 FROM time_entries WHERE project_id = $1)
           OR EXISTS(SELECT 1 FROM project_fee_occurrences WHERE project_id = $1) as "has_history!""#,
         request.project_id,
-    ).fetch_one(&mut *tx).await.map_err(storage_error)?;
+    ).fetch_one(&mut **tx).await.map_err(storage_error)?;
     if has_history
         && (form.project_type != before.form.project_type
             || form.client_id != before.form.client_id)
@@ -297,7 +309,7 @@ pub(super) async fn save(
         ));
     }
     let parsed = validate_edit(&before, form, email_available)?;
-    super::task_activity::apply(&mut tx, org_id, &before, form, &request.task_activity).await?;
+    super::task_activity::apply(tx, org_id, &before, form, &request.task_activity).await?;
     let reset_task_default = before.configured
         && (form.rate_mode == RateMode::Legacy
             || (form.project_type == ProjectType::TimeAndMaterials
@@ -351,28 +363,20 @@ pub(super) async fn save(
             form.project_type as ProjectType, parsed.rate_cents, parsed.budget_kind as BudgetKind,
             parsed.budget_cents, parsed.budget_minutes, keep_budget, keep_rate,
             keep_budget_cents, keep_budget_minutes,
-        ).execute(&mut *tx).await.map_err(storage_error)?;
+        ).execute(&mut **tx).await.map_err(storage_error)?;
         if before.configured {
-            save_settings(
-                &mut tx,
-                org_id,
-                request.project_id,
-                form,
-                &parsed,
-                unchanged,
-            )
-            .await?;
+            save_settings(tx, org_id, request.project_id, form, &parsed, unchanged).await?;
         }
         if may_write_notes && form.admin_notes != before.form.admin_notes {
             sqlx::query!(
                 "INSERT INTO project_private_settings (id,org_id,project_id,admin_notes) VALUES ($1,$2,$3,$4)
                  ON CONFLICT (project_id) DO UPDATE SET admin_notes = EXCLUDED.admin_notes",
                 Uuid::now_v7(), org_id, request.project_id, form.admin_notes.trim(),
-            ).execute(&mut *tx).await.map_err(storage_error)?;
+            ).execute(&mut **tx).await.map_err(storage_error)?;
         }
-        save_tags(&mut tx, org_id, request.project_id, &parsed.tags).await?;
+        save_tags(tx, org_id, request.project_id, &parsed.tags).await?;
         team_events = super::associations::save(
-            &mut tx,
+            tx,
             org_id,
             &before,
             form,
@@ -382,13 +386,13 @@ pub(super) async fn save(
         )
         .await?;
         if !keep_fees {
-            save_milestones(&mut tx, org_id, &before, form, &parsed).await?;
+            save_milestones(tx, org_id, &before, form, &parsed).await?;
         }
     }
     // Run even for an unchanged form: delegation is independent of membership
     // and its access revision must still be checked. Self-removal happens last.
     let managers_changed = project_management::execute_in_transaction(
-        &mut tx,
+        tx,
         org_id,
         actor_id,
         &ProjectManagersCommand {
@@ -406,16 +410,15 @@ pub(super) async fn save(
         "SELECT edit_revision FROM projects WHERE id = $1",
         request.project_id
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await
     .map_err(storage_error)?;
     sqlx::query!(
         "INSERT INTO project_edit_requests (id,org_id,project_id,actor_id,expected_revision,completed_revision,payload)
          VALUES ($1,$2,$3,$4,$5,$6,$7)",
         request.id, org_id, request.project_id, actor_id, request.expected_revision, completed_revision, payload,
-    ).execute(&mut *tx).await.map_err(storage_error)?;
-    let project = project_record(&mut tx, org_id, request.project_id).await?;
-    tx.commit().await.map_err(storage_error)?;
+    ).execute(&mut **tx).await.map_err(storage_error)?;
+    let project = project_record(tx, org_id, request.project_id).await?;
     Ok(Saved {
         project,
         changed: completed_revision != revision || managers_changed,

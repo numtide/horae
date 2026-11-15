@@ -9,6 +9,18 @@ pub(super) async fn read(
     offset: i64,
 ) -> Result<(i64, Vec<TaskRow>), ApiError> {
     let mut read = begin_read(db, caller, "Task").await?;
+    let result = visible_tasks(&mut read, caller, filters, task_id, limit, offset).await;
+    finish_read(read, result).await
+}
+
+async fn visible_tasks(
+    read: &mut ops::ReadTx,
+    caller: &AuthUser,
+    filters: &TaskFilters,
+    task_id: Option<Uuid>,
+    limit: i64,
+    offset: i64,
+) -> Result<(i64, Vec<TaskRow>), ApiError> {
     // Count and rows share the authorized snapshot, even beyond the last page.
     let records = sqlx::query!(
         r#"WITH visible AS MATERIALIZED (
@@ -58,6 +70,5 @@ pub(super) async fn read(
             default_rate_currency: record.default_rate_currency,
         });
     }
-    read.finish(Ok(())).await.map_err(internal)?;
     Ok((total, rows))
 }

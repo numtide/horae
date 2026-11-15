@@ -56,6 +56,21 @@ fn delete(id: Uuid, expected_access_revision: i64) -> TemplateCommand {
     }
 }
 
+/// The refusal comes after the organization is locked `FOR UPDATE`, which
+/// stops every access check in it: it rolls back before it is answered.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn a_refused_template_command_releases_the_organization(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    assert!(matches!(
+        execute(&pool, ids.org_id, ids.user_id, &create("Refused", 0)).await,
+        Err(TemplateCommandError::Forbidden)
+    ));
+    assert!(crate::server_fns::test_seed::organization_lockable(
+        &pool, ids.org_id
+    ));
+}
+
 async fn revision_and_count(pool: &PgPool, org: Uuid) -> (i64, i64) {
     let row = sqlx::query!(
         "SELECT access_revision, (SELECT count(*) FROM permission_templates WHERE org_id = $1) AS count

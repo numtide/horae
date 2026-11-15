@@ -400,17 +400,18 @@ async fn begin_task_write(
     actor_id: uuid::Uuid,
     gate: OrganizationLock,
 ) -> Result<(crate::ops::Tx, crate::ops::Actor), ServerFnError> {
-    let crate::ops::WriteTx { tx, actor } = crate::ops::begin_gated(
+    let write = crate::ops::begin_gated(
         db,
         crate::ops::Caller::session(org_id, actor_id),
         gate,
         crate::ops::WriteIsolation::ReadCommitted,
     )
     .await?;
-    if !actor.has(Permission::TaskWriteAll) {
-        return Err(forbidden("Current task editing authority is required"));
+    if !write.actor.has(Permission::TaskWriteAll) {
+        let refusal = forbidden("Current task editing authority is required");
+        return Err(write.refuse(refusal).await);
     }
-    Ok((tx, actor))
+    Ok((write.tx, write.actor))
 }
 
 /// Adds a task to the organization catalog. Projects link tasks through the
@@ -628,6 +629,20 @@ async fn set_task_active_record(
     // Tracking writers hold the shared gate through entry insertion.
     let (mut tx, actor) =
         begin_task_write(db, org_id, actor_id, OrganizationLock::AccessChange).await?;
+    // The gate stops every access check in the organization: a refusal rolls
+    // back before it is answered.
+    let result = set_task_active_in(&mut tx, &actor, org_id, task_id, active).await;
+    crate::ops::commit_or_roll_back(tx, result, server_err).await
+}
+
+#[cfg(feature = "server")]
+async fn set_task_active_in(
+    tx: &mut sqlx::PgConnection,
+    actor: &crate::ops::Actor,
+    org_id: uuid::Uuid,
+    task_id: uuid::Uuid,
+    active: bool,
+) -> Result<(Task, Option<crate::plugin::AppEvent>), ServerFnError> {
     if !active {
         // Link updates invalidate editors through their parent project trigger.
         // Take every parent before the task/link locks, in stable order.
@@ -642,7 +657,7 @@ async fn set_task_active_record(
         .await
         .map_err(server_err)?;
     }
-    let before = lock_task(&mut tx, org_id, task_id).await?;
+    let before = lock_task(tx, org_id, task_id).await?;
 
     if !active {
         let running = sqlx::query_scalar!(
@@ -712,13 +727,12 @@ async fn set_task_active_record(
     if !actor.has(Permission::BillableRateReadAll) {
         task.default_rate_cents = None;
     }
-    tx.commit().await.map_err(server_err)?;
     Ok((task, event))
 }
 
 #[cfg(feature = "server")]
 async fn lock_task(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: &mut sqlx::PgConnection,
     org_id: uuid::Uuid,
     task_id: uuid::Uuid,
 ) -> Result<Task, ServerFnError> {
@@ -730,7 +744,7 @@ async fn lock_task(
         task_id,
         org_id,
     )
-    .fetch_optional(&mut **tx)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(server_err)?
     .ok_or_else(|| not_found("Task not found"))
