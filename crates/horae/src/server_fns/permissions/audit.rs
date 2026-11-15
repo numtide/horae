@@ -246,6 +246,8 @@ async fn begin_read(
 
 /// Reads one historical record using authenticated requester/tenant IDs.
 /// No receipt lookup or snapshot decoding occurs before current authorization.
+/// No adapter serves it: the audit tests check projection and locking through it.
+#[cfg(test)]
 pub(crate) async fn read(
     pool: &PgPool,
     org_id: Uuid,

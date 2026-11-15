@@ -90,26 +90,6 @@ pub async fn list_timesheet_people(
     Ok(read.finish(result).await?)
 }
 
-/// Read a bounded page of time entries under current canonical permissions.
-#[server]
-pub async fn list_visible_time_entries(
-    query: crate::models::scoped_time::TimeEntryQuery,
-) -> Result<crate::models::scoped_time::TimeEntryPage, ServerFnError> {
-    let user = require_user().await.map_err(|error| match error {
-        error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => error,
-        error => {
-            tracing::error!(%error, "Unable to authenticate time-entry read");
-            server_err("Time entries are unavailable")
-        }
-    })?;
-    let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
-    let result = ops::time_reads::entries(&mut read.tx, &read.actor, &query).await;
-    Ok(read.finish(result).await?)
-}
-
 /// Only the session user's active, assigned project/task combinations; no rates.
 #[server]
 pub async fn list_time_entry_contexts()

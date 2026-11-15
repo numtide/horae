@@ -7,7 +7,7 @@ Represents one administrator-requested API or CSV import.
 - `id`: UUIDv7 primary key.
 - `org_id`: organization owner; foreign key and authorization boundary.
 - `kind`: API or CSV import kind.
-- `payload`: JSON envelope `{ "version": 1, "payload": { ... } }` without credentials or raw request streams. Reads also accept the original unversioned tagged enum; unknown versions enter the bounded failure path.
+- `payload`: JSON envelope `{ "version": 1, "payload": { ... } }` without credentials or raw request streams. Unversioned payloads from before versioning and unknown versions enter the bounded failure path.
 - `status`: queued, running, succeeded, failed, or cancelled.
 - `attempts`, `max_attempts`: retry accounting. Both execution errors and expired claims consume the persisted attempt budget; manual retry starts a new budget on the same job.
 - `available_at`: earliest retry/start time.

@@ -14,6 +14,14 @@
 //! let result = ops::clients::set_active(&mut write.tx, &write.actor, client_id, active).await;
 //! Ok(write.commit(result, &*state.plugins).await?)
 //! ```
+//!
+//! Plugin events take one of two paths. Operations return them in [`Done`]
+//! and [`WriteTx::commit`] dispatches them in memory after the commit, so a
+//! crash between the two loses them. Two writers instead insert their event
+//! into the outbox (`jobs::enqueue_outbox`) inside their own transaction:
+//! `finalize_project_draft` (`project_created`) and the Harvest importer
+//! (`user_created`). Their delivery survives a crash right after the commit,
+//! which is why they stay on the outbox rather than moving to [`Done`].
 
 use sqlx::{PgConnection, PgPool, Postgres, Transaction};
 use uuid::Uuid;

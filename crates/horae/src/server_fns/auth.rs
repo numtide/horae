@@ -39,35 +39,6 @@ pub(super) async fn current_user(
     })
 }
 
-/// Read one permission-change record under the session's current Administrator authority.
-/// Missing and foreign receipt IDs are indistinguishable; snapshots confer no authority.
-#[server]
-pub async fn get_permission_audit(
-    receipt_id: uuid::Uuid,
-) -> Result<Option<crate::models::permission_audit::AuditEntry>, ServerFnError> {
-    let user = require_user().await.map_err(|error| match error {
-        error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => error,
-        error => {
-            tracing::error!(%error, "Unable to authenticate permission history request");
-            server_err("Permission history is unavailable")
-        }
-    })?;
-    let state = crate::state::global_state().await;
-    super::permissions::audit::read(&state.db, user.org_id, user.id, receipt_id)
-        .await
-        .map_err(|error| match error {
-            super::permissions::audit::AuditReadError::Forbidden => {
-                forbidden("Current administrator authority is required")
-            }
-            error => {
-                tracing::error!(%error, "Unable to load permission history");
-                server_err("Permission history is unavailable")
-            }
-        })
-}
-
 /// Browse bounded permission history under current explicit Administrator authority.
 #[server]
 pub async fn list_permission_audit(

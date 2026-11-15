@@ -187,7 +187,7 @@ Rules on top of idiomatic Rust (see the `rust-best-practices` skill). These come
 
 - **Named status codes, not integer literals.** When building `ServerFnError::ServerError { code, .. }` in `server_fns.rs`, use named constants (e.g. `NOT_FOUND`, `FORBIDDEN`) rather than bare `404`/`403`, so error paths read at a glance.
 - **Avoid `Option<bool>` parameters.** `Some(false)` is ambiguous at the call site. For a two-state flag on a server function, prefer a plainly named `bool` with an obvious default, or a small purpose-named enum.
-- **New modules use the `foo.rs` + `foo/` layout, not `foo/mod.rs`.** A multi-file module lives in `foo.rs` (the module root) beside a `foo/` directory of submodules — as `pages`, `models`, `components`, and `server_fns` already do. `mod.rs` is *not* deprecated (the Rust Reference keeps both forms working), but the Reference encourages the sibling-file form and it keeps the tree free of many identically-named `mod.rs` files. The remaining `auth/mod.rs`, `harvest/mod.rs`, and `plugin/mod.rs` predate this rule; convert them opportunistically, not in unrelated PRs.
+- **New modules use the `foo.rs` + `foo/` layout, not `foo/mod.rs`.** A multi-file module lives in `foo.rs` (the module root) beside a `foo/` directory of submodules — as `pages`, `models`, `components`, and `server_fns` already do. `mod.rs` is *not* deprecated (the Rust Reference keeps both forms working), but the Reference encourages the sibling-file form and it keeps the tree free of many identically-named `mod.rs` files. The remaining `plugin/mod.rs` predates this rule; convert it opportunistically, not in an unrelated PR.
 
 ### Harvest parity
 
