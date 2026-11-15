@@ -84,6 +84,36 @@ pub(super) async fn exercise(
             );
         }
     }
+    // Rejected uploads still being sent when the server answers, several at
+    // once, must reach the CLI as the 401/403, not as a transport error. The
+    // HTTP matrix checks deterministically that the server reads them first.
+    let large_path = dir.path().join("large.csv");
+    let row = csv.lines().nth(1).unwrap();
+    std::fs::write(
+        &large_path,
+        format!(
+            "{csv}{}",
+            format!("{row}\n").repeat(4 * 1024 * 1024 / row.len())
+        ),
+    )
+    .unwrap();
+    let large_str = large_path.to_str().unwrap();
+    let uploads = rejected.iter().flat_map(|cookie| {
+        (0..4).map(move |_| async move {
+            let (code, result) = call(
+                api,
+                cookie,
+                &["import", "harvest-csv", large_str, "--dry-run"],
+            )
+            .await;
+            assert_eq!(code, 1, "{result}");
+            assert!(
+                matches!(result["error"]["http_status"].as_u64(), Some(401 | 403)),
+                "{result}"
+            );
+        })
+    });
+    futures_util::future::join_all(uploads).await;
     for command in ["status", "report", "cancel", "retry", "wait"] {
         let (code, result) = call(api, outsider, &["jobs", command, &archived_id]).await;
         assert_eq!(code, 1, "{command}: {result}");

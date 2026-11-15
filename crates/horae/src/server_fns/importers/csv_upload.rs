@@ -70,6 +70,23 @@ impl CsvUpload {
             Self::File(_) => Err(ServerFnError::new("CSV upload has no request body")),
         }
     }
+
+    /// Read and drop up to `limit` bytes before a rejection. Closing the
+    /// connection with unread request bytes makes the kernel send a reset that
+    /// can reach the client before the response, which then sees a transport
+    /// error instead of the status.
+    pub(super) async fn discard(self, limit: usize) {
+        use futures_util::StreamExt;
+        let Self::Body(body) = self else { return };
+        let mut stream = body.into_data_stream();
+        let mut read = 0;
+        while read <= limit {
+            let Some(Ok(chunk)) = stream.next().await else {
+                return;
+            };
+            read += chunk.len();
+        }
+    }
 }
 
 #[cfg(all(test, feature = "server"))]
@@ -98,6 +115,16 @@ mod tests {
                 if code == dioxus_fullstack::StatusCode::FORBIDDEN.as_u16())
             );
         }
+    }
+
+    #[tokio::test]
+    async fn discard_stops_reading_past_its_limit() {
+        let endless = futures_util::stream::repeat_with(|| {
+            Ok::<_, std::io::Error>(dioxus_fullstack::body::Bytes::from_static(b"row\n"))
+        });
+        CsvUpload::Body(Body::from_stream(endless))
+            .discard(1024)
+            .await;
     }
 
     #[tokio::test]

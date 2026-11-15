@@ -145,7 +145,7 @@ impl Api {
         name: &str,
         body: Value,
         cookie: Option<&str>,
-        unread_upload: bool,
+        drained_upload: bool,
     ) -> reqwest::Response {
         let path = if name == "csv" {
             format!(
@@ -196,8 +196,8 @@ impl Api {
                     request = request.query(&[(field, value)]);
                 }
             }
-            if unread_upload {
-                request = request.header("X-Test-Unread-Upload", "true");
+            if drained_upload {
+                request = request.header("X-Test-Drained-Upload", "true");
             }
         } else {
             request = request
@@ -350,15 +350,19 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
                         .get("X-Test-Revoke-Download")
                         .map(|actor| Uuid::parse_str(actor.to_str().unwrap()).unwrap());
                     let upload_pool = pool.clone();
-                    let request = if request.headers().contains_key("X-Test-Unread-Upload") {
-                        request.map(|_| {
-                            Body::from_stream(futures_util::stream::poll_fn(
-                                |_| -> std::task::Poll<
-                                    Option<Result<axum::body::Bytes, std::io::Error>>,
-                                > {
-                                    panic!("unauthorized CSV job read its upload");
-                                },
-                            ))
+                    let drained = request
+                        .headers()
+                        .contains_key("X-Test-Drained-Upload")
+                        .then(|| Arc::new(std::sync::atomic::AtomicBool::new(false)));
+                    let request = if let Some(drained) = drained.clone() {
+                        request.map(|body| {
+                            use futures_util::StreamExt;
+                            // Polled only after the handler has read the whole upload.
+                            let end = futures_util::stream::poll_fn(move |_| {
+                                drained.store(true, std::sync::atomic::Ordering::SeqCst);
+                                std::task::Poll::Ready(None)
+                            });
+                            Body::from_stream(body.into_data_stream().chain(end))
                         })
                     } else if let Some(actor) = request.headers().get("X-Test-Revoke-Upload") {
                         let actor = Uuid::parse_str(actor.to_str().unwrap()).unwrap();
@@ -375,6 +379,12 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
                         request
                     };
                     let response = next.run(request).await;
+                    if let Some(drained) = drained {
+                        assert!(
+                            drained.load(std::sync::atomic::Ordering::SeqCst),
+                            "rejected CSV job left its upload unread"
+                        );
+                    }
                     if let Some(actor) = revoke_download {
                         assert_eq!(response.status(), StatusCode::OK);
                         // Preparation succeeded, but the client has not polled the body yet.
