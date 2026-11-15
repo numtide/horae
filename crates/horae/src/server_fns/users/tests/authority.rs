@@ -569,8 +569,12 @@ async fn people_answers_carry_no_rates_or_sign_in_details(pool: PgPool) {
     }
     // The People Admin still cannot read those rates directly.
     assert!(matches!(
-        crate::server_fns::users::rates::read_person_rates(&pool, ids.org_id, people_admin, member)
-            .await,
+        crate::server_fns::users::rates::read_person_rates(
+            &pool,
+            Caller::session(ids.org_id, people_admin),
+            member
+        )
+        .await,
         Err(ServerFnError::ServerError {
             code: FORBIDDEN,
             ..
@@ -712,10 +716,9 @@ async fn the_directory_offers_archiving_where_the_operation_allows_it(pool: PgPo
     }
     grant(&pool, manager, &[Permission::PeopleWriteManaged]).await;
     for actor in [ids.user_id, people_admin, manager] {
-        let page = crate::server_fns::permissions::directory::read(
+        let page = people_page(
             &pool,
-            ids.org_id,
-            actor,
+            Caller::session(ids.org_id, actor),
             PeopleActivity::All,
             None,
         )

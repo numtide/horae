@@ -16,7 +16,6 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use uuid::Uuid;
 
 pub(crate) mod audit;
-pub(crate) mod directory;
 pub(crate) mod editor;
 pub(crate) mod own;
 pub(crate) mod profiles;

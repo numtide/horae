@@ -1,7 +1,7 @@
 use super::*;
 use crate::models::people::PeopleActivity;
 use crate::models::permission_editor::{ProfileAction, ProfileCommand};
-use crate::server_fns::permissions::{directory, profiles};
+use crate::server_fns::permissions::profiles;
 use crate::server_fns::test_seed::built_in_profile;
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
@@ -25,9 +25,17 @@ async fn init_creates_an_administrator_who_administers(pool: PgPool) {
         Some((BuiltInProfile::Administrator, true))
     );
 
-    let page = directory::read(&pool, org, admin, PeopleActivity::Active, None)
+    let mut read = crate::ops::begin_read(&pool, crate::ops::Caller::session(org, admin))
         .await
         .unwrap();
+    let page = crate::ops::people::directory::page(
+        &mut read.tx,
+        &read.actor,
+        PeopleActivity::Active,
+        None,
+    )
+    .await;
+    let page = read.finish(page).await.unwrap();
     assert_eq!(page.people.len(), 1);
 
     // The permission editor accepts the administrator and keeps them the last one.

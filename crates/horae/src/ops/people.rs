@@ -1,4 +1,6 @@
-//! People operations: adding people and archiving or restoring them.
+//! People operations: adding people and archiving or restoring them. The
+//! People page's directory and each person's rates live in [`directory`] and
+//! [`rates`].
 //!
 //! Adding people needs `PeopleWriteAll`, which the Administrator, Executive
 //! Manager and People Admin profiles hold. Archiving and restoring also accept
@@ -18,6 +20,9 @@ use super::{Actor, Done, OpError, Tx};
 use crate::models::user::{Activation, AddedPeople, NewPerson, UserListItem};
 use crate::plugin::AppEvent;
 use crate::plugin::event::{ActiveTransition, UserPayload, active_transition};
+
+pub(crate) mod directory;
+pub(crate) mod rates;
 
 const NOT_FOUND: &str = "Person not found";
 const WRITE_REQUIRED: &str = "Permission to manage people is required";

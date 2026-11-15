@@ -1,6 +1,22 @@
 use super::*;
-use crate::models::people::{PeopleActivity, PeopleCursor};
-use crate::server_fns::permissions::directory::{DirectoryError, read};
+use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage};
+use crate::ops::{Caller, OpError};
+
+async fn read(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+    activity: PeopleActivity,
+    after: Option<&PeopleCursor>,
+) -> Result<PeoplePage, OpError> {
+    crate::server_fns::users::people_page(pool, Caller::session(org, actor), activity, after).await
+}
+
+fn forbidden(result: &Result<PeoplePage, OpError>, message: &str) -> bool {
+    matches!(result, Err(OpError::Forbidden(text)) if text == message)
+}
+
+const READ_REQUIRED: &str = "Current people-read authority is required";
 
 async fn grants(pool: &PgPool, actor: Uuid, selection: PermissionSelection) {
     let values: Vec<String> =
@@ -55,10 +71,7 @@ async fn directory_uses_each_profiles_people_grants_not_other_scope(pool: PgPool
                     page.people.iter().map(|row| row.id).collect();
                 assert_eq!(actual, [ids.user_id, target].into_iter().collect());
             }
-            _ => assert!(
-                matches!(result, Err(DirectoryError::Forbidden)),
-                "{profile:?}: {result:?}"
-            ),
+            _ => assert!(forbidden(&result, READ_REQUIRED), "{profile:?}: {result:?}"),
         }
     }
     sqlx::query!(
@@ -129,10 +142,7 @@ async fn directory_rechecks_grant_revocation_and_direct_deactivation_after_wait(
         });
         wait_for_blocked(&pool, holder).await;
         revoke.commit().await.unwrap();
-        assert!(matches!(
-            pending.await.unwrap(),
-            Err(DirectoryError::Forbidden)
-        ));
+        assert!(forbidden(&pending.await.unwrap(), READ_REQUIRED));
     }
 }
 
@@ -275,7 +285,7 @@ async fn directory_orders_by_name_then_id_and_accepts_deleted_cursor_without_ext
             Some(&invalid)
         )
         .await,
-        Err(DirectoryError::InvalidCursor)
+        Err(OpError::Invalid { message, .. }) if message == "Invalid directory cursor"
     ));
 }
 
@@ -472,54 +482,32 @@ async fn directory_denies_foreign_inactive_and_invalid_authority_even_for_empty_
         (foreign.org_id, ids.user_id),
         (ids.org_id, Uuid::now_v7()),
     ] {
-        assert!(matches!(
-            read(&pool, org, actor, PeopleActivity::All, Some(&cursor)).await,
-            Err(DirectoryError::Forbidden)
-        ));
+        let result = read(&pool, org, actor, PeopleActivity::All, Some(&cursor)).await;
+        assert!(forbidden(&result, READ_REQUIRED), "{result:?}");
     }
-    sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
-        .execute(&pool)
-        .await
-        .unwrap();
-    assert!(matches!(
+    let page = || {
         read(
             &pool,
             ids.org_id,
             ids.user_id,
             PeopleActivity::All,
-            Some(&cursor)
+            Some(&cursor),
         )
-        .await,
-        Err(DirectoryError::Forbidden)
-    ));
+    };
+    sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(forbidden(&page().await, READ_REQUIRED));
     sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
         .execute(&pool)
         .await
         .unwrap();
     grants(&pool, ids.user_id, BuiltInProfile::Member.selection()).await;
-    assert!(matches!(
-        read(
-            &pool,
-            ids.org_id,
-            ids.user_id,
-            PeopleActivity::All,
-            Some(&cursor)
-        )
-        .await,
-        Err(DirectoryError::Forbidden)
-    ));
+    assert!(forbidden(&page().await, READ_REQUIRED));
+    // Invalid or missing stored state fails closed in `Actor::load`.
     sqlx::query!("UPDATE person_permission_states SET grants=ARRAY['unknown_private_grant'] WHERE user_id=$1", ids.user_id).execute(&pool).await.unwrap();
-    assert!(matches!(
-        read(
-            &pool,
-            ids.org_id,
-            ids.user_id,
-            PeopleActivity::All,
-            Some(&cursor)
-        )
-        .await,
-        Err(DirectoryError::Storage(_))
-    ));
+    assert!(forbidden(&page().await, "Permission state is unavailable"));
     sqlx::query!(
         "DELETE FROM person_permission_states WHERE user_id=$1",
         ids.user_id
@@ -527,15 +515,5 @@ async fn directory_denies_foreign_inactive_and_invalid_authority_even_for_empty_
     .execute(&pool)
     .await
     .unwrap();
-    assert!(matches!(
-        read(
-            &pool,
-            ids.org_id,
-            ids.user_id,
-            PeopleActivity::All,
-            Some(&cursor)
-        )
-        .await,
-        Err(DirectoryError::Unavailable)
-    ));
+    assert!(forbidden(&page().await, "Permission state is unavailable"));
 }

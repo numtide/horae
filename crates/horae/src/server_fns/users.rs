@@ -1,5 +1,4 @@
-//! User server functions: session adapters over `ops::people`, plus the
-//! people directory.
+//! User server functions: session adapters over `ops::people`.
 
 use super::*;
 use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage};
@@ -33,20 +32,25 @@ pub async fn list_people(
         }
     })?;
     let state = crate::state::global_state().await;
-    permissions::directory::read(&state.db, user.org_id, user.id, activity, after.as_ref())
-        .await
-        .map_err(|error| match error {
-            permissions::directory::DirectoryError::Forbidden => {
-                forbidden("Current people-read authority is required")
-            }
-            permissions::directory::DirectoryError::InvalidCursor => {
-                err(BAD_REQUEST, "Invalid directory cursor")
-            }
-            error => {
-                tracing::error!(%error, "People directory read failed");
-                server_err("People directory is unavailable")
-            }
-        })
+    Ok(people_page(
+        &state.db,
+        Caller::session(user.org_id, user.id),
+        activity,
+        after.as_ref(),
+    )
+    .await?)
+}
+
+#[cfg(feature = "server")]
+pub(crate) async fn people_page(
+    db: &sqlx::PgPool,
+    caller: Caller,
+    activity: PeopleActivity,
+    after: Option<&PeopleCursor>,
+) -> Result<PeoplePage, ops::OpError> {
+    let mut read = ops::begin_read(db, caller).await?;
+    let result = ops::people::directory::page(&mut read.tx, &read.actor, activity, after).await;
+    read.finish(result).await
 }
 
 /// List identities for the directory and workflow pickers, without financial
