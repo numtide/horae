@@ -13,6 +13,7 @@
 //! rates or sign-in details.
 
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
+use horae_core::permissions::person_management::may_change_active;
 use uuid::Uuid;
 
 use super::permissions::provisioning;
@@ -54,20 +55,6 @@ pub(crate) enum Existing {
     Refuse,
     /// Leave the account alone and report the email as already present.
     Skip,
-}
-
-/// Whether an actor may archive or restore a person: with `PeopleWriteAll`,
-/// or with `PeopleWriteManaged` for a person they manage, and an
-/// administrator's account only as another administrator. The People page
-/// asks the same question to decide which rows offer the action.
-pub(crate) fn may_change_active(
-    write_all: bool,
-    write_managed: bool,
-    manages: bool,
-    actor_administrator: bool,
-    target_administrator: bool,
-) -> bool {
-    (write_all || (write_managed && manages)) && (actor_administrator || !target_administrator)
 }
 
 /// Identities for the directory pickers. Archived people need `PeopleReadAll`;

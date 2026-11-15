@@ -94,5 +94,20 @@ pub fn validate_no_self_management(
     Ok(())
 }
 
+/// Whether an actor may archive or restore a person: with `PeopleWriteAll`,
+/// or with `PeopleWriteManaged` for a person they manage, and an
+/// administrator's account only as another administrator. The People page
+/// asks the same question to decide which rows offer the action.
+#[must_use]
+pub fn may_change_active(
+    write_all: bool,
+    write_managed: bool,
+    manages: bool,
+    actor_administrator: bool,
+    target_administrator: bool,
+) -> bool {
+    (write_all || (write_managed && manages)) && (actor_administrator || !target_administrator)
+}
+
 #[cfg(test)]
 mod tests;

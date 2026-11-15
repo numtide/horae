@@ -2,11 +2,12 @@
 //! tasks, each limited to what the actor may read.
 
 use horae_core::permissions::catalog::Permission;
+use horae_core::permissions::projects::writes_any;
 use horae_core::types::{BudgetKind, ProjectType};
 use uuid::Uuid;
 
 use super::super::{Actor, OpError, Tx};
-use super::{REQUESTER_CHANGED, writes_any};
+use super::REQUESTER_CHANGED;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::{ProjectOverview, ProjectOverviewClient, ProjectOverviewRow};
 use crate::models::{Project, ProjectSpend, ProjectTagLink, Task};
@@ -46,7 +47,7 @@ pub(crate) async fn overview(
         requester,
         can_create: actor.has(Permission::ProjectCreateAll),
         can_import: actor.administrator(),
-        can_change_status: writes_any(actor),
+        can_change_status: writes_any(|permission| actor.has(permission)),
         // The Clients page's `ClientReadScope::can_read`.
         can_open_clients: actor.has(Permission::ClientReadAll),
         projects: project_rows(tx, actor, None, true, ProjectRead::Overview).await?,

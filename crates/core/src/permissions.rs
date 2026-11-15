@@ -8,7 +8,9 @@ use uuid::Uuid;
 
 pub mod approvals;
 pub mod catalog;
+pub mod invoices;
 pub mod person_management;
+pub mod projects;
 pub mod rates;
 
 /// Explicitly granted record scopes; management assignments alone grant nothing.

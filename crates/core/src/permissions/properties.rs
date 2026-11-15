@@ -14,7 +14,9 @@ use super::{
     AccessScope, Actor, ManagementAssignments, ScopedResource,
     approvals::approval_records_covered,
     catalog::{PERMISSION_CATALOG_VERSION, Permission, PermissionSelection, StoredPermissionError},
-    person_management::has_person_management_grant,
+    invoices,
+    person_management::{has_person_management_grant, may_change_active},
+    projects,
     rates::{
         BillableRateOwner, BillableRateResource, RateAction, billable_rate_access, cost_rate_access,
     },
@@ -653,6 +655,106 @@ proptest! {
         prop_assert!(!cost_rate_access(&selection, action, &world.actor, world.actor.org_id));
     }
 
+    /// Managing a project only ever adds to what someone may do with it, and
+    /// whoever may edit some project counts as a project writer. Holding a
+    /// write grant is exactly what lets a person edit a project they manage.
+    /// Catches: a managed-only writer refused on their own project, or the
+    /// status affordance offered to someone who can edit nothing.
+    #[test]
+    fn project_writing_follows_the_write_grants_and_management(requested in grants()) {
+        let selection = PermissionSelection::new(&requested);
+        let has = |permission| selection.contains(permission);
+        prop_assert!(!projects::writes(has, false) || projects::writes(has, true));
+        prop_assert!(!projects::writes(has, true) || projects::writes_any(has));
+        prop_assert_eq!(projects::writes_any(has), projects::writes(has, true));
+        prop_assert_eq!(projects::writes(has, false), has(Permission::ProjectWriteAll));
+        prop_assert!(!projects::reads_money(has, false) || projects::reads_money(has, true));
+        prop_assert_eq!(projects::reads_money(has, false), has(Permission::BillableRateReadAll));
+    }
+
+    /// No project write grant means no project editing, however much
+    /// management or other authority is held.
+    /// Catches: project creation, reading or management alone allowing edits.
+    #[test]
+    fn project_writing_needs_a_project_write_grant(
+        requested in grants_from(without(|grant| matches!(
+            grant,
+            Permission::ProjectWriteAll | Permission::ProjectWriteManaged
+        ))),
+        managed in any::<bool>(),
+    ) {
+        let selection = PermissionSelection::new(&requested);
+        let has = |permission| selection.contains(permission);
+        prop_assert!(!projects::writes_any(has));
+        prop_assert!(!projects::writes(has, managed));
+    }
+
+    /// No billable-rate grant means a project's rate and money budget stay
+    /// hidden, however much management or project authority is held.
+    /// Catches: project editing or management disclosing project money.
+    #[test]
+    fn project_money_needs_a_billable_rate_grant(
+        requested in grants_from(without(is_billable_rate)),
+        managed in any::<bool>(),
+    ) {
+        let selection = PermissionSelection::new(&requested);
+        prop_assert!(!projects::reads_money(|permission| selection.contains(permission), managed));
+    }
+
+    /// Whoever may prepare an invoice may also change its status, and the
+    /// invoice sets are met only by holding each grant they name.
+    /// Catches: a preparation set that no longer includes the write grant,
+    /// so `authorize_prepare`'s write check would stop naming what is missing.
+    #[test]
+    fn invoice_preparation_implies_invoice_writing(requested in grants()) {
+        let selection = PermissionSelection::new(&requested);
+        let has = |permission| selection.contains(permission);
+        prop_assert!(!invoices::holds(has, invoices::PREPARE) || invoices::holds(has, invoices::WRITE));
+        for required in [invoices::READ, invoices::WRITE, invoices::PREPARE] {
+            prop_assert_eq!(
+                invoices::holds(has, required),
+                required.iter().all(|&grant| selection.contains(grant))
+            );
+        }
+    }
+
+}
+
+/// The managed invoice grants authorize nothing yet, so no invoice action may
+/// require one: holding only them opens no invoice action.
+/// Catches: a managed grant added to a set before the invoice scope is decided
+/// (T006), exposing whole invoices through one of their projects.
+#[test]
+fn managed_invoice_grants_open_no_invoice_action() {
+    let managed = PermissionSelection::new(&[
+        Permission::InvoiceReadManaged,
+        Permission::InvoiceDraftWriteManaged,
+        Permission::InvoiceWriteManaged,
+    ]);
+    for required in [invoices::READ, invoices::WRITE, invoices::PREPARE] {
+        assert!(!invoices::holds(
+            |permission| managed.contains(permission),
+            required
+        ));
+    }
+}
+
+/// Archiving or restoring a person needs a people-write grant that covers
+/// them, and an administrator's account only yields to another administrator.
+/// Catches: a managed-only writer reaching people they do not manage, or a
+/// non-administrator archiving an administrator.
+#[test]
+fn changing_a_person_needs_coverage_and_administrator_parity() {
+    for bits in 0..32u8 {
+        let [write_all, write_managed, manages, actor_admin, target_admin] =
+            [0, 1, 2, 3, 4].map(|bit| bits & (1 << bit) != 0);
+        let covered = write_all || (write_managed && manages);
+        assert_eq!(
+            may_change_active(write_all, write_managed, manages, actor_admin, target_admin),
+            covered && (actor_admin || !target_admin),
+            "{bits:05b}"
+        );
+    }
 }
 
 /// A person can receive managed people exactly when they hold a time,
