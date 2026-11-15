@@ -263,6 +263,9 @@ pub async fn list_harvest_import_jobs(
     .await
 }
 
+#[cfg(feature = "server")]
+const MAX_CSV_UPLOAD_BYTES: usize = 50 * 1024 * 1024;
+
 /// Buffer and enqueue a CSV import so the request body is not tied to the
 /// lifetime of the background worker.
 #[dioxus_fullstack::post("/api/import/harvest/csv-job/{mode}")]
@@ -270,9 +273,15 @@ pub async fn start_harvest_csv_import(
     mode: ImportMode,
     file: CsvUpload,
 ) -> Result<crate::models::JobStatus, ServerFnError> {
-    let admin = require_administrator().await?;
-    let key = submission_key("csv").await?;
-    let body = axum::body::to_bytes(file.into_body()?, 50 * 1024 * 1024)
+    let admitted = async { Ok((require_administrator().await?, submission_key("csv").await?)) };
+    let (admin, key) = match admitted.await {
+        Ok(admitted) => admitted,
+        Err(error) => {
+            file.discard(MAX_CSV_UPLOAD_BYTES).await;
+            return Err(error);
+        }
+    };
+    let body = axum::body::to_bytes(file.into_body()?, MAX_CSV_UPLOAD_BYTES)
         .await
         .map_err(|_| err(BAD_REQUEST, "CSV upload is incomplete or exceeds 50 MiB"))?;
     let state = crate::state::global_state().await;
