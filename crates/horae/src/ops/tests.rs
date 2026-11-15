@@ -115,6 +115,54 @@ async fn a_failed_operation_rolls_back_and_dispatches_nothing(pool: PgPool) {
     assert!(!client_exists(&pool, inserted.value).await);
 }
 
+/// A refused read or write releases the actor's `FOR SHARE` locks before it
+/// returns the error, not later when the pool recycles its connection.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_refused_operation_releases_its_authority_locks(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let caller = Caller::session(ids.org_id, ids.user_id);
+    let refused = || OpError::forbidden("refused");
+    let options = (*pool.connect_options()).clone();
+    for write in [false, true] {
+        let result = if write {
+            let write = begin(&pool, caller).await.unwrap();
+            write
+                .commit(Err::<Done<()>, _>(refused()), &Recorder::default())
+                .await
+        } else {
+            let read = begin_read(&pool, caller).await.unwrap();
+            read.finish(Err::<(), _>(refused())).await
+        };
+        assert_eq!(result, Err(refused()));
+        // Probe from another thread while this runtime is blocked, so the
+        // pool's own cleanup of the connection cannot run first.
+        let (options, org_id) = (options.clone(), ids.org_id);
+        let locked = std::thread::spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async move {
+                    let mut connection = sqlx::PgConnection::connect_with(&options).await.unwrap();
+                    let mut probe = connection.begin().await.unwrap();
+                    sqlx::query!(
+                        "SELECT id FROM organizations WHERE id = $1 FOR UPDATE NOWAIT",
+                        org_id
+                    )
+                    .fetch_one(&mut *probe)
+                    .await
+                    .is_err()
+                })
+        })
+        .join()
+        .unwrap();
+        assert!(
+            !locked,
+            "the refused operation still holds the organization lock"
+        );
+    }
+}
+
 /// A deferred constraint fails at COMMIT, after the operation succeeded.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_failed_commit_dispatches_nothing(pool: PgPool) {
