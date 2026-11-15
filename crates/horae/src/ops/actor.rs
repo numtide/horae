@@ -7,6 +7,7 @@ use sqlx::PgConnection;
 
 use super::permissions::{PermissionStorageError, load_person_permissions};
 use super::{Caller, OpError};
+use crate::models::permission_editor::PermissionRequester;
 use crate::models::permissions::PersonPermissions;
 
 /// The entry point a request came through. Tokens and the CLI join later.
@@ -141,6 +142,24 @@ impl Actor {
         &self.identity
     }
 
+    /// The identity a page reports back, so the client can tell a stale session.
+    pub fn requester(&self) -> PermissionRequester {
+        PermissionRequester {
+            org_id: self.org_id(),
+            user_id: self.id(),
+        }
+    }
+
+    /// [`Actor::requester`], refused with `Forbidden(refusal)` when the page
+    /// bound its request to someone else. `None` binds to no one.
+    pub fn expect_requester(
+        &self,
+        expected: Option<PermissionRequester>,
+        refusal: &str,
+    ) -> Result<PermissionRequester, OpError> {
+        expect(self.requester(), expected, refusal)
+    }
+
     /// An active person of this organization; `false` means no authority.
     pub fn is_active(&self) -> bool {
         self.identity.active
@@ -193,6 +212,33 @@ impl Actor {
             Err(OpError::forbidden(ADMINISTRATOR_REQUIRED))
         }
     }
+}
+
+impl Caller {
+    /// [`Actor::expect_requester`] before the actor is loaded, for adapters
+    /// that refuse a stale page before opening their transaction.
+    pub fn expect_requester(
+        &self,
+        expected: Option<PermissionRequester>,
+        refusal: &str,
+    ) -> Result<PermissionRequester, OpError> {
+        let requester = PermissionRequester {
+            org_id: self.org_id,
+            user_id: self.user_id,
+        };
+        expect(requester, expected, refusal)
+    }
+}
+
+fn expect(
+    requester: PermissionRequester,
+    expected: Option<PermissionRequester>,
+    refusal: &str,
+) -> Result<PermissionRequester, OpError> {
+    if expected.is_some_and(|expected| expected != requester) {
+        return Err(OpError::forbidden(refusal));
+    }
+    Ok(requester)
 }
 
 #[cfg(test)]

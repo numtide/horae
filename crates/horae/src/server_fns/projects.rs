@@ -65,7 +65,8 @@ pub async fn list_project_tags(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectTagLink>, ServerFnError> {
     let viewer = require_user().await?;
-    project_requester(&viewer, expected_requester)?;
+    Caller::session(viewer.org_id, viewer.id)
+        .expect_requester(expected_requester, PROJECT_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
     fetch_project_tags(&state.db, viewer.org_id, viewer.id).await
 }
@@ -103,19 +104,9 @@ async fn fetch_project_overview(
 }
 
 #[cfg(feature = "server")]
-fn project_requester(
-    viewer: &User,
-    expected_requester: Option<PermissionRequester>,
-) -> Result<PermissionRequester, ServerFnError> {
-    let requester = PermissionRequester {
-        org_id: viewer.org_id,
-        user_id: viewer.id,
-    };
-    if expected_requester.is_some_and(|expected| expected != requester) {
-        return Err(forbidden("Project requester has changed"));
-    }
-    Ok(requester)
-}
+const PROJECT_REQUESTER_CHANGED: &str = "Project requester has changed";
+#[cfg(feature = "server")]
+const TASK_REQUESTER_CHANGED: &str = "Task requester has changed";
 
 #[server]
 pub async fn list_projects(
@@ -171,7 +162,8 @@ pub async fn list_project_spend(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectSpend>, ServerFnError> {
     let user = require_user().await?;
-    project_requester(&user, expected_requester)?;
+    Caller::session(user.org_id, user.id)
+        .expect_requester(expected_requester, PROJECT_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
 
     fetch_project_spend(&state.db, user.org_id, user.id).await
@@ -184,7 +176,8 @@ pub async fn list_project_budget_progress(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<crate::models::ProjectBudgetOverview>, ServerFnError> {
     let user = require_user().await?;
-    project_requester(&user, expected_requester)?;
+    Caller::session(user.org_id, user.id)
+        .expect_requester(expected_requester, PROJECT_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
     // Budget months are the workspace's, so every viewer sees the same period.
     let today = crate::timezone::today_for_org(&state.db, user.org_id)
@@ -213,7 +206,8 @@ pub async fn set_project_active(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Project, ServerFnError> {
     let user = require_user().await?;
-    project_requester(&user, expected_requester)?;
+    Caller::session(user.org_id, user.id)
+        .expect_requester(expected_requester, PROJECT_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let mut projects = set_projects_status(
@@ -238,7 +232,8 @@ pub async fn set_projects_active(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<Project>, ServerFnError> {
     let user = require_user().await?;
-    project_requester(&user, expected_requester)?;
+    Caller::session(user.org_id, user.id)
+        .expect_requester(expected_requester, PROJECT_REQUESTER_CHANGED)?;
     let ids = parse_bulk_project_ids(&project_ids)?;
     let state = crate::state::global_state().await;
     set_projects_status(
@@ -372,8 +367,8 @@ pub async fn create_task(
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
     let actor = require_user().await?;
-    project_requester(&actor, Some(expected_requester))
-        .map_err(|_| forbidden("Task requester has changed"))?;
+    Caller::session(actor.org_id, actor.id)
+        .expect_requester(Some(expected_requester), TASK_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
     let (task, event) = create_catalog_task(
         &state.db,
@@ -471,8 +466,8 @@ pub async fn update_task(
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
     let actor = require_user().await?;
-    project_requester(&actor, Some(expected_requester))
-        .map_err(|_| forbidden("Task requester has changed"))?;
+    Caller::session(actor.org_id, actor.id)
+        .expect_requester(Some(expected_requester), TASK_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
     let (task, event) = update_task_record(
@@ -610,8 +605,8 @@ pub async fn set_task_active(
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
     let actor = require_user().await?;
-    project_requester(&actor, Some(expected_requester))
-        .map_err(|_| forbidden("Task requester has changed"))?;
+    Caller::session(actor.org_id, actor.id)
+        .expect_requester(Some(expected_requester), TASK_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
     let (task, event) =

@@ -17,13 +17,10 @@ async fn requester(expected: Option<PermissionRequester>) -> Result<User, Server
             server_err("Project managers are unavailable")
         }
     })?;
-    if expected
-        .is_some_and(|expected| expected.org_id != user.org_id || expected.user_id != user.id)
-    {
-        return Err(forbidden(
-            "Sign in as the original requester before retrying",
-        ));
-    }
+    crate::ops::Caller::session(user.org_id, user.id).expect_requester(
+        expected,
+        "Sign in as the original requester before retrying",
+    )?;
     Ok(user)
 }
 

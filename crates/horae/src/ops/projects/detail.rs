@@ -7,7 +7,7 @@ use horae_core::types::ProjectType;
 use uuid::Uuid;
 
 use super::super::{Actor, OpError, Tx};
-use super::{NOT_FOUND, requester};
+use super::{NOT_FOUND, REQUESTER_CHANGED};
 use crate::models::ProjectDetails;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::{ProjectDetailIdentity, ProjectDetailView};
@@ -21,7 +21,7 @@ pub(crate) async fn view(
     expected: Option<PermissionRequester>,
     today: NaiveDate,
 ) -> Result<ProjectDetailView, OpError> {
-    let requester = requester(actor, expected)?;
+    let requester = actor.expect_requester(expected, REQUESTER_CHANGED)?;
     if !actor.is_active() {
         return Err(OpError::forbidden("Project access is unavailable"));
     }

@@ -41,26 +41,6 @@ fn require_time_reads(actor: &Actor, refusal: &str) -> Result<PermissionSelectio
     time_reads(actor).ok_or_else(|| OpError::forbidden(refusal))
 }
 
-/// The identity a page reports back, so the client can tell a stale session.
-fn requester(actor: &Actor) -> PermissionRequester {
-    PermissionRequester {
-        org_id: actor.org_id(),
-        user_id: actor.id(),
-    }
-}
-
-/// Refuses a request made for someone other than the session's person.
-fn check_expected(
-    actor: &Actor,
-    expected: Option<PermissionRequester>,
-    refusal: &str,
-) -> Result<(), OpError> {
-    if expected.is_some_and(|expected| expected != requester(actor)) {
-        return Err(OpError::forbidden(refusal));
-    }
-    Ok(())
-}
-
 fn invalid(message: &str) -> OpError {
     OpError::Invalid {
         field: None,
@@ -74,9 +54,8 @@ pub(crate) async fn sheet(
     actor: &Actor,
     query: &TimesheetQuery,
 ) -> Result<TimesheetPage, OpError> {
-    check_expected(actor, query.expected_requester, SHEET_FORBIDDEN)?;
+    let requester = actor.expect_requester(query.expected_requester, SHEET_FORBIDDEN)?;
     let grants = require_time_reads(actor, SHEET_FORBIDDEN)?;
-    let requester = requester(actor);
     let (org_id, actor_id) = (actor.org_id(), actor.id());
     let subject_id = query.subject_id.unwrap_or(actor_id);
     // A teammate can be archived independently of the requester. Hold its
@@ -140,7 +119,7 @@ pub(crate) async fn people(
     {
         return Err(invalid(PEOPLE_INVALID));
     }
-    let requester = requester(actor);
+    let requester = actor.requester();
     let mut people = fetch_people(tx, requester, &grants, query).await?;
     let next_after = if people.len() > 50 {
         people.truncate(50);
@@ -216,7 +195,7 @@ pub(crate) async fn entries(
     if !entry_query_is_valid(query) {
         return Err(invalid("Invalid time-entry date range or cursor"));
     }
-    fetch_entries(tx, requester(actor), &grants, query).await
+    fetch_entries(tx, actor.requester(), &grants, query).await
 }
 
 fn entry_query_is_valid(query: &TimeEntryQuery) -> bool {

@@ -8,7 +8,8 @@ pub async fn load_task_catalog(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<TaskCatalogPage, ServerFnError> {
     let viewer = require_user().await?;
-    let requester = project_requester(&viewer, expected_requester)?;
+    let requester = Caller::session(viewer.org_id, viewer.id)
+        .expect_requester(expected_requester, PROJECT_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
     fetch_task_catalog(&state.db, requester, activity, after.as_ref()).await
 }

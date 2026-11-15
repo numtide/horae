@@ -3,7 +3,6 @@
 use horae_core::permissions::catalog::Permission;
 
 use super::super::{Actor, OpError, Tx};
-use crate::models::permission_editor::PermissionRequester;
 use crate::models::task::{TaskActivity, TaskCatalogEntry, TaskCatalogPage, TaskCursor};
 
 const UNAVAILABLE: &str = "Task catalog access is unavailable";
@@ -70,10 +69,7 @@ pub(crate) async fn page(
         None
     };
     Ok(TaskCatalogPage {
-        requester: PermissionRequester {
-            org_id,
-            user_id: actor.id(),
-        },
+        requester: actor.requester(),
         can_edit,
         can_read_rates,
         can_edit_rates,

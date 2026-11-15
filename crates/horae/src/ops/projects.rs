@@ -9,7 +9,6 @@ use uuid::Uuid;
 
 use super::{Actor, Done, OpError, Tx};
 use crate::models::Project;
-use crate::models::permission_editor::PermissionRequester;
 use crate::plugin::AppEvent;
 use crate::plugin::event::{ActiveTransition, active_transition};
 
@@ -27,20 +26,7 @@ const NOT_FOUND: &str = "Project not found";
 const WRITE_REQUIRED: &str = "Project editing access required";
 const RESTORE_CLIENT_FIRST: &str = "Restore the client before restoring this project.";
 
-/// The page's requester, refused when it is not the one the page loaded for.
-fn requester(
-    actor: &Actor,
-    expected: Option<PermissionRequester>,
-) -> Result<PermissionRequester, OpError> {
-    let requester = PermissionRequester {
-        org_id: actor.org_id(),
-        user_id: actor.id(),
-    };
-    if expected.is_some_and(|expected| expected != requester) {
-        return Err(OpError::forbidden("Project requester has changed"));
-    }
-    Ok(requester)
-}
+const REQUESTER_CHANGED: &str = "Project requester has changed";
 
 /// Whether the actor may write projects at all: everyone's, or the ones they
 /// manage. Offered as the status affordance before a project is chosen.
