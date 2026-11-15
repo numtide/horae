@@ -15,8 +15,31 @@ pub(super) async fn finalize_draft_record(
     email_available: bool,
 ) -> Result<Uuid, ServerFnError> {
     let mut tx = pool.begin().await.map_err(storage_error)?;
-    let actor =
-        lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::AccessChange).await?;
+    let result = finalize_in(
+        &mut tx,
+        actor_id,
+        org_id,
+        draft_id,
+        expected_revision,
+        form,
+        email_available,
+    )
+    .await;
+    // A refusal rolls back before it is answered: until then the gate stops
+    // every access check in the organization.
+    crate::ops::commit_or_roll_back(tx, result, storage_error).await
+}
+
+async fn finalize_in(
+    tx: &mut crate::ops::Tx,
+    actor_id: Uuid,
+    org_id: Uuid,
+    draft_id: Uuid,
+    expected_revision: i64,
+    form: &ProjectForm,
+    email_available: bool,
+) -> Result<Uuid, ServerFnError> {
+    let actor = lock_creation_actor(tx, actor_id, org_id, OrganizationLock::AccessChange).await?;
     let draft = sqlx::query!(
         "SELECT revision, completed_project_id, discarded_at FROM project_drafts
          WHERE id = $1 AND org_id = $2 AND creator_id = $3 FOR UPDATE",
@@ -24,12 +47,11 @@ pub(super) async fn finalize_draft_record(
         org_id,
         actor_id,
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await
     .map_err(storage_error)?
     .ok_or_else(|| not_found("Project draft not found"))?;
     if let Some(project_id) = draft.completed_project_id {
-        tx.commit().await.map_err(storage_error)?;
         return Ok(project_id);
     }
     if draft.discarded_at.is_some() || draft.revision != expected_revision {
@@ -45,7 +67,7 @@ pub(super) async fn finalize_draft_record(
             ProjectFormField::Client,
         )
     })?;
-    let client = lock_creation_client(&mut tx, client_id, org_id)
+    let client = lock_creation_client(tx, client_id, org_id)
         .await
         .map_err(|error| with_field(error, ProjectFormField::Client))?;
     let currency = form.currency.as_deref().unwrap_or(&client.currency);
@@ -53,7 +75,7 @@ pub(super) async fn finalize_draft_record(
         "SELECT default_currency FROM organizations WHERE id = $1",
         org_id,
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await
     .map_err(storage_error)?;
     // Person and task rates inherit only in the organization's currency, so
@@ -82,7 +104,7 @@ pub(super) async fn finalize_draft_record(
         project_id, org_id, client_id, form.name.trim(), code, form.project_type as ProjectType,
         currency, settings.starts_on as Option<chrono::NaiveDate>, settings.ends_on as Option<chrono::NaiveDate>, settings.rate_cents,
         settings.budget_kind as BudgetKind, settings.budget_cents, settings.budget_minutes,
-    ).fetch_one(&mut *tx).await.map_err(storage_error)?;
+    ).fetch_one(&mut **tx).await.map_err(storage_error)?;
 
     let (fee_mode, fee_amount, monthly_day) = match &settings.fee {
         None => (None, None, None),
@@ -113,12 +135,12 @@ pub(super) async fn finalize_draft_record(
         fee_mode, fee_amount, monthly_day, settings.terms_days, settings.po_number,
         settings.discount_bps, settings.tax1_bps, settings.tax2.as_ref().map(|(name, _)| name.as_str()),
         settings.tax2.as_ref().map(|(_, bps)| *bps),
-    ).execute(&mut *tx).await.map_err(storage_error)?;
+    ).execute(&mut **tx).await.map_err(storage_error)?;
     if !form.admin_notes.trim().is_empty() {
         sqlx::query!(
             "INSERT INTO project_private_settings (id, org_id, project_id, admin_notes) VALUES ($1,$2,$3,$4)",
             Uuid::now_v7(), org_id, project_id, form.admin_notes.trim(),
-        ).execute(&mut *tx).await.map_err(storage_error)?;
+        ).execute(&mut **tx).await.map_err(storage_error)?;
     }
     if let Some(FeeSchedule::Milestones { milestones }) = &settings.fee {
         for (position, milestone) in milestones.iter().enumerate() {
@@ -128,7 +150,7 @@ pub(super) async fn finalize_draft_record(
                 "INSERT INTO project_fee_milestones (id,org_id,project_id,name,due_on,amount_cents,position)
                  VALUES ($1,$2,$3,$4,$5,$6,$7)",
                 Uuid::now_v7(), org_id, project_id, milestone.name, milestone.due_on as chrono::NaiveDate, milestone.amount_cents, position,
-            ).execute(&mut *tx).await.map_err(storage_error)?;
+            ).execute(&mut **tx).await.map_err(storage_error)?;
         }
     }
     // Consistent ordering avoids inverted row locks when projects reuse tags.
@@ -139,7 +161,7 @@ pub(super) async fn finalize_draft_record(
             "INSERT INTO project_tags (id,org_id,name) VALUES ($1,$2,$3)
              ON CONFLICT (org_id, lower(btrim(name))) DO UPDATE SET name = project_tags.name RETURNING id",
             Uuid::now_v7(), org_id, name,
-        ).fetch_one(&mut *tx).await.map_err(storage_error)?;
+        ).fetch_one(&mut **tx).await.map_err(storage_error)?;
         sqlx::query!(
             "INSERT INTO project_tag_links (id,org_id,project_id,tag_id) VALUES ($1,$2,$3,$4)",
             Uuid::now_v7(),
@@ -147,11 +169,11 @@ pub(super) async fn finalize_draft_record(
             project_id,
             tag_id,
         )
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await
         .map_err(storage_error)?;
     }
-    save_members(&mut tx, org_id, project_id, form, currency == org_currency).await?;
+    save_members(tx, org_id, project_id, form, currency == org_currency).await?;
     let mut manager_ids: Vec<Uuid> = form
         .team
         .iter()
@@ -167,7 +189,7 @@ pub(super) async fn finalize_draft_record(
     }
     if !manager_ids.is_empty() {
         crate::server_fns::permissions::project_management::designate_created(
-            &mut tx,
+            tx,
             org_id,
             actor_id,
             project_id,
@@ -176,7 +198,7 @@ pub(super) async fn finalize_draft_record(
         .await
         .map_err(managers_error)?;
     }
-    save_tasks(&mut tx, org_id, project_id, form, currency).await?;
+    save_tasks(tx, org_id, project_id, form, currency).await?;
 
     let event = crate::plugin::AppEvent::ProjectCreated {
         occurred_at: project.created_at,
@@ -184,7 +206,7 @@ pub(super) async fn finalize_draft_record(
         project: project_payload(&project),
     };
     crate::jobs::enqueue_outbox(
-        &mut tx,
+        tx,
         org_id,
         "project_created",
         serde_json::to_value(event).map_err(|_| server_err("Could not record project creation"))?,
@@ -194,8 +216,7 @@ pub(super) async fn finalize_draft_record(
     sqlx::query!(
         "UPDATE project_drafts SET payload = $2, completed_project_id = $3, updated_at = now() WHERE id = $1",
         draft_id, payload, project_id,
-    ).execute(&mut *tx).await.map_err(storage_error)?;
-    tx.commit().await.map_err(storage_error)?;
+    ).execute(&mut **tx).await.map_err(storage_error)?;
     Ok(project_id)
 }
 

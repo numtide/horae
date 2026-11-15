@@ -113,7 +113,17 @@ pub(crate) async fn execute(
     request: &TemplateCommand,
 ) -> Result<TemplateOutcome, TemplateCommandError> {
     let mut tx = pool.begin().await?;
-    super::configure_administration(&mut tx).await?;
+    let result = execute_in(&mut tx, org_id, actor_id, request).await;
+    crate::ops::commit_or_roll_back(tx, result, TemplateCommandError::from).await
+}
+
+async fn execute_in(
+    tx: &mut PgConnection,
+    org_id: Uuid,
+    actor_id: Uuid,
+    request: &TemplateCommand,
+) -> Result<TemplateOutcome, TemplateCommandError> {
+    super::configure_administration(tx).await?;
     let org = sqlx::query!(
         "SELECT access_revision FROM organizations WHERE id = $1 FOR UPDATE",
         org_id
@@ -131,7 +141,7 @@ pub(crate) async fn execute(
     if active != Some(true) {
         return Err(TemplateCommandError::Forbidden);
     }
-    let authority = load_person_permissions(&mut tx, org_id, actor_id).await?;
+    let authority = load_person_permissions(tx, org_id, actor_id).await?;
     if !authority.is_some_and(|state| state.is_administrator) {
         return Err(TemplateCommandError::Forbidden);
     }
@@ -152,9 +162,7 @@ pub(crate) async fn execute(
         if receipt.intent != serde_json::to_value(&intent)? {
             return Err(TemplateCommandError::RequestConflict);
         }
-        let result = serde_json::from_value(receipt.result)?;
-        tx.commit().await?;
-        return Ok(result);
+        return Ok(serde_json::from_value(receipt.result)?);
     }
     if intent.expected_access_revision != org.access_revision {
         return Err(TemplateCommandError::Stale);
@@ -163,14 +171,14 @@ pub(crate) async fn execute(
     let (before, after, detached_people) = match &intent.action {
         TemplateAction::Create { name, grants } => (
             None,
-            Some(create(&mut tx, org_id, name, grants).await?),
+            Some(create(tx, org_id, name, grants).await?),
             Vec::new(),
         ),
         TemplateAction::Delete {
             id,
             expected_revision,
         } => {
-            let (before, people) = delete(&mut tx, org_id, *id, *expected_revision).await?;
+            let (before, people) = delete(tx, org_id, *id, *expected_revision).await?;
             (Some(before), None, people)
         }
     };
@@ -211,7 +219,6 @@ pub(crate) async fn execute(
     )
     .execute(&mut *tx)
     .await?;
-    tx.commit().await?;
     Ok(result)
 }
 

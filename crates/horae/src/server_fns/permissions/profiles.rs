@@ -109,7 +109,17 @@ pub(crate) async fn save(
     request: &ProfileCommand,
 ) -> Result<(ProfileOutcome, Option<AppEvent>), ProfileCommandError> {
     let mut tx = pool.begin().await?;
-    super::configure_administration(&mut tx).await?;
+    let result = save_in(&mut tx, org_id, actor_id, request).await;
+    crate::ops::commit_or_roll_back(tx, result, ProfileCommandError::from).await
+}
+
+async fn save_in(
+    tx: &mut PgConnection,
+    org_id: Uuid,
+    actor_id: Uuid,
+    request: &ProfileCommand,
+) -> Result<(ProfileOutcome, Option<AppEvent>), ProfileCommandError> {
+    super::configure_administration(tx).await?;
     let org = sqlx::query!(
         "SELECT access_revision FROM organizations WHERE id = $1 FOR UPDATE",
         org_id
@@ -127,7 +137,7 @@ pub(crate) async fn save(
     if active != Some(true) {
         return Err(ProfileCommandError::Forbidden);
     }
-    if !load_person_permissions(&mut tx, org_id, actor_id)
+    if !load_person_permissions(tx, org_id, actor_id)
         .await?
         .is_some_and(|state| state.is_administrator)
     {
@@ -156,7 +166,6 @@ pub(crate) async fn save(
             return Err(ProfileCommandError::RequestConflict);
         }
         let outcome = serde_json::from_value(receipt.result)?;
-        tx.commit().await?;
         return Ok((outcome, None));
     }
     if org.access_revision != intent.expected_access_revision {
@@ -175,7 +184,7 @@ pub(crate) async fn save(
         removed_projects,
         removed_people,
         ..
-    } = evaluate(&mut tx, org_id, &draft, grants).await?;
+    } = evaluate(tx, org_id, &draft, grants).await?;
     if !removed_projects
         .iter()
         .map(|row| row.id)
@@ -194,7 +203,7 @@ pub(crate) async fn save(
         org.access_revision
     };
     if changed {
-        persist(&mut tx, org_id, intent.user_id, &after).await?;
+        persist(tx, org_id, intent.user_id, &after).await?;
         sqlx::query!("DELETE FROM project_management_assignments WHERE org_id = $1 AND manager_id = $2 AND id = ANY($3)",
             org_id, intent.user_id, &intent.remove_projects).execute(&mut *tx).await?;
         sqlx::query!("DELETE FROM person_management_assignments WHERE org_id = $1 AND manager_id = $2 AND id = ANY($3)",
@@ -248,7 +257,7 @@ pub(crate) async fn save(
         .fetch_one(&mut *tx)
         .await?;
         let user = crate::plugin::event::user_payload(
-            &mut tx,
+            tx,
             org_id,
             intent.user_id,
             &person.email,
@@ -263,7 +272,6 @@ pub(crate) async fn save(
     } else {
         None
     };
-    tx.commit().await?;
     Ok((result, event))
 }
 

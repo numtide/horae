@@ -104,6 +104,22 @@ async fn state(pool: &PgPool, org: Uuid, user: Uuid) -> PersonPermissions {
         .unwrap()
 }
 
+/// The refusal comes after the organization is locked `FOR UPDATE`, which
+/// stops every access check in it: it rolls back before it is answered.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn a_refused_profile_command_releases_the_organization(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Member).await;
+    let request = apply(ids.user_id, BuiltInProfile::PeopleAdmin);
+    assert!(matches!(
+        execute(&pool, ids.org_id, ids.user_id, &request).await,
+        Err(ProfileCommandError::Forbidden)
+    ));
+    assert!(crate::server_fns::test_seed::organization_lockable(
+        &pool, ids.org_id
+    ));
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn profile_command_waits_for_direct_actor_deactivation_even_on_replay(pool: PgPool) {

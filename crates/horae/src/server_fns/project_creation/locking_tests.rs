@@ -65,6 +65,72 @@ impl Operation {
     }
 }
 
+/// A saved creation draft, and an edit of the seeded project that would save
+/// it unchanged.
+async fn draft_and_edit(pool: &PgPool, ids: &SeedIds) -> (Uuid, ProjectEditRequest) {
+    let editor = editing::load_editable_project(pool, ids.user_id, ids.org_id, ids.project_id)
+        .await
+        .unwrap();
+    let request = ProjectEditRequest {
+        task_activity: Vec::new(),
+        id: Uuid::now_v7(),
+        project_id: ids.project_id,
+        expected_revision: editor.revision,
+        expected_requester: editor.access.as_ref().map(|access| access.requester),
+        managers: editor
+            .access
+            .as_ref()
+            .map(|access| (&access.managers).into()),
+        form: editor.form,
+        unchanged: Vec::new(),
+    };
+    let draft = Uuid::now_v7();
+    save_draft_record(pool, ids.user_id, ids.org_id, draft, 0, &request.form)
+        .await
+        .unwrap();
+    (draft, request)
+}
+
+/// The editor's save and `finalize` hold the `AccessChange` gate, which stops
+/// every access check in the organization: a refusal, whether at the gate or
+/// further in, rolls back before it is answered.
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn refused_gated_project_writes_release_the_gate(pool: PgPool) {
+    use crate::server_fns::test_seed::organization_lockable;
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    let (draft, request) = draft_and_edit(&pool, &ids).await;
+    let code = |result: Result<(), ServerFnError>| match result {
+        Err(ServerFnError::ServerError { code, .. }) => code,
+        other => panic!("expected a refusal: {other:?}"),
+    };
+
+    let stale = ProjectEditRequest {
+        expected_requester: None,
+        ..request.clone()
+    };
+    let result = Operation::SaveEditor.run(&pool, &ids, draft, &stale).await;
+    assert_eq!(code(result), CONFLICT);
+    assert!(organization_lockable(&pool, ids.org_id), "stale editor");
+    let result = Operation::Finalize
+        .run(&pool, &ids, Uuid::now_v7(), &request)
+        .await;
+    assert_eq!(code(result), NOT_FOUND);
+    assert!(organization_lockable(&pool, ids.org_id), "missing draft");
+
+    crate::ops::testing::set_grants(&mut pool.acquire().await.unwrap(), &ids, &[])
+        .await
+        .unwrap();
+    for operation in [Operation::SaveEditor, Operation::Finalize] {
+        let result = operation.run(&pool, &ids, draft, &request).await;
+        assert_eq!(code(result), FORBIDDEN, "{operation:?}");
+        assert!(
+            organization_lockable(&pool, ids.org_id),
+            "{operation:?} without authority"
+        );
+    }
+}
+
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn every_project_entry_gates_before_actor_and_rechecks_revocation(pool: PgPool) {
@@ -81,26 +147,7 @@ async fn every_project_entry_gates_before_actor_and_rechecks_revocation(pool: Pg
         Operation::Finalize,
     ] {
         let ids = seed(&pool, BuiltInProfile::Administrator).await;
-        let editor = editing::load_editable_project(&pool, ids.user_id, ids.org_id, ids.project_id)
-            .await
-            .unwrap();
-        let request = ProjectEditRequest {
-            task_activity: Vec::new(),
-            id: Uuid::now_v7(),
-            project_id: ids.project_id,
-            expected_revision: editor.revision,
-            expected_requester: editor.access.as_ref().map(|access| access.requester),
-            managers: editor
-                .access
-                .as_ref()
-                .map(|access| (&access.managers).into()),
-            form: editor.form,
-            unchanged: Vec::new(),
-        };
-        let draft = Uuid::now_v7();
-        save_draft_record(&pool, ids.user_id, ids.org_id, draft, 0, &request.form)
-            .await
-            .unwrap();
+        let (draft, request) = draft_and_edit(&pool, &ids).await;
         let mut revocation = pool.begin().await.unwrap();
         let pid = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
             .fetch_one(&mut *revocation)
