@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::wait_for_blocked;
+use crate::server_fns::test_seed::{wait_for_blocked, wait_for_other_transactions};
 use horae_core::permissions::catalog::BuiltInProfile;
 use serde_json::Value;
 use std::{sync::Arc, time::Duration};
@@ -273,31 +273,6 @@ async fn editor_snapshots_refresh_after_organization_row_change_without_rebasing
             EditorRead::Review => assert_status(result, CONFLICT),
         }
     }
-}
-
-/// Wait until no other session in this database is inside a transaction.
-///
-/// A dropped transaction's `ROLLBACK` is sent by the task that returns its
-/// connection to the pool, and a cancelled read may close its connection
-/// instead, so a read can report its result while its backend still holds
-/// the organization and person locks it took.
-async fn wait_for_other_transactions(pool: &PgPool) {
-    tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            let open = sqlx::query_scalar!(
-                r#"SELECT count(*) AS "count!" FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND xact_start IS NOT NULL"#,
-            )
-            .fetch_one(pool)
-            .await
-            .unwrap();
-            if open == 0 {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("finished reads must end their transactions");
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

@@ -38,6 +38,31 @@ pub async fn wait_for_waiters(pool: &PgPool, blocker: i32, count: i64) {
     }).await.expect("operation must wait for the competing transaction");
 }
 
+/// Wait until no other session in this database is inside a transaction.
+///
+/// A dropped transaction's `ROLLBACK` is sent by the task that returns its
+/// connection to the pool, and a cancelled read may close its connection
+/// instead, so a read can report its result while its backend still holds
+/// the organization and person locks it took.
+pub async fn wait_for_other_transactions(pool: &PgPool) {
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let open = sqlx::query_scalar!(
+                r#"SELECT count(*) AS "count!" FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND xact_start IS NOT NULL"#,
+            )
+            .fetch_one(pool)
+            .await
+            .unwrap();
+            if open == 0 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("finished reads must end their transactions");
+}
+
 /// A second pool on the same database whose transactions default to REPEATABLE
 /// READ, to prove a writer selects the isolation its checks rely on rather than
 /// inheriting the server default.

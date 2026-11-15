@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::wait_for_blocked;
+use crate::server_fns::test_seed::{wait_for_blocked, wait_for_other_transactions};
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use serde_json::{Value, json};
 use std::{sync::Arc, time::Duration};
@@ -404,6 +404,7 @@ async fn materialized_exports_retain_authority_and_release_cancelled_reads(pool:
                 Err(StatusCode::FORBIDDEN)
             );
             assert_eq!(case.stored(&pool).await, before);
+            wait_for_other_transactions(&pool).await;
             let mut writer = pool.begin().await.unwrap();
             sqlx::query!(
                 "SELECT id FROM organizations WHERE id=$1 FOR UPDATE NOWAIT",
