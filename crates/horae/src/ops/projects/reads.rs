@@ -6,7 +6,7 @@ use horae_core::types::{BudgetKind, ProjectType};
 use uuid::Uuid;
 
 use super::super::{Actor, OpError, Tx};
-use super::{requester, writes_any};
+use super::{REQUESTER_CHANGED, writes_any};
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::{ProjectOverview, ProjectOverviewClient, ProjectOverviewRow};
 use crate::models::{Project, ProjectSpend, ProjectTagLink, Task};
@@ -38,7 +38,7 @@ pub(crate) async fn overview(
     actor: &Actor,
     expected: Option<PermissionRequester>,
 ) -> Result<ProjectOverview, OpError> {
-    let requester = requester(actor, expected)?;
+    let requester = actor.expect_requester(expected, REQUESTER_CHANGED)?;
     if !actor.is_active() {
         return Err(OpError::forbidden("Current project access is required"));
     }

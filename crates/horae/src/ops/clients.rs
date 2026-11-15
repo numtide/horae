@@ -88,19 +88,7 @@ fn payload(client: &Client) -> ClientPayload {
     }
 }
 
-fn requester(
-    actor: &Actor,
-    expected: Option<PermissionRequester>,
-) -> Result<PermissionRequester, OpError> {
-    let requester = PermissionRequester {
-        org_id: actor.org_id(),
-        user_id: actor.id(),
-    };
-    if expected.is_some_and(|expected| expected != requester) {
-        return Err(OpError::forbidden("Client requester has changed"));
-    }
-    Ok(requester)
-}
+const REQUESTER_CHANGED: &str = "Client requester has changed";
 
 /// Creates a client, standalone or inline from the project form. A default
 /// rate needs [`writes_default_rate`]; an empty one leaves it unset.
@@ -359,7 +347,7 @@ pub(crate) async fn detail_view(
     client_id: Uuid,
     expected: Option<PermissionRequester>,
 ) -> Result<ClientDetailView, OpError> {
-    let requester = requester(actor, expected)?;
+    let requester = actor.expect_requester(expected, REQUESTER_CHANGED)?;
     let details = details(tx, actor, client_id).await?;
     Ok(ClientDetailView {
         requester,
@@ -376,7 +364,7 @@ pub(crate) async fn overview(
     actor: &Actor,
     expected: Option<PermissionRequester>,
 ) -> Result<ClientOverview, OpError> {
-    let requester = requester(actor, expected)?;
+    let requester = actor.expect_requester(expected, REQUESTER_CHANGED)?;
     if !actor.is_active() {
         return Err(OpError::forbidden("Current client access is required"));
     }

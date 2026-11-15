@@ -182,3 +182,22 @@ async fn an_unlocked_load_does_not_wait_for_an_access_change(pool: PgPool) {
     assert!(actor.administrator());
     change.rollback().await.unwrap();
 }
+
+#[test]
+fn a_page_bound_to_someone_else_is_refused_with_the_domain_text() {
+    let caller = Caller::session(Uuid::now_v7(), Uuid::now_v7());
+    let own = PermissionRequester {
+        org_id: caller.org_id,
+        user_id: caller.user_id,
+    };
+    let other = PermissionRequester {
+        user_id: Uuid::now_v7(),
+        ..own
+    };
+    assert_eq!(caller.expect_requester(None, "changed"), Ok(own));
+    assert_eq!(caller.expect_requester(Some(own), "changed"), Ok(own));
+    assert_eq!(
+        caller.expect_requester(Some(other), "changed"),
+        Err(OpError::forbidden("changed"))
+    );
+}

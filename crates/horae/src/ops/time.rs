@@ -377,13 +377,10 @@ async fn authorize(
     actor: &Actor,
     context: &TimesheetWriteContext,
 ) -> Result<Authority, OpError> {
-    if context.expected_requester.org_id != actor.org_id()
-        || context.expected_requester.user_id != actor.id()
-    {
-        return Err(OpError::forbidden(
-            "Timesheet identity changed; refresh the page",
-        ));
-    }
+    actor.expect_requester(
+        Some(context.expected_requester),
+        "Timesheet identity changed; refresh the page",
+    )?;
     let org = actor.org_id();
     if !actor.is_active() || !subject_is_active(tx, org, context.subject_id).await? {
         return Err(OpError::forbidden(ACTIVE_ACCOUNTS_REQUIRED));

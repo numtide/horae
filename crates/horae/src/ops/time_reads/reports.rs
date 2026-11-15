@@ -4,7 +4,7 @@ pub(crate) mod groups;
 
 use horae_core::permissions::catalog::Permission;
 
-use super::{check_expected, invalid, requester, require_time_reads, time_reads};
+use super::{invalid, require_time_reads, time_reads};
 use crate::models::time_report::{
     TimeReportAccess, TimeReportCursor, TimeReportEntry, TimeReportPage, TimeReportQuery,
     TimeReportTotals,
@@ -25,7 +25,7 @@ fn unavailable() -> OpError {
 pub(crate) fn access(actor: &Actor) -> Result<TimeReportAccess, OpError> {
     time_reads(actor).ok_or_else(|| OpError::forbidden(ACCESS_REQUIRED))?;
     Ok(TimeReportAccess {
-        requester: requester(actor),
+        requester: actor.requester(),
         financial: actor.has(Permission::TimeReadManaged) || actor.has(Permission::TimeReadAll),
     })
 }
@@ -35,9 +35,8 @@ pub(crate) async fn entries(
     actor: &Actor,
     query: &TimeReportQuery,
 ) -> Result<TimeReportPage, OpError> {
-    check_expected(actor, query.expected_requester, REPORT_FORBIDDEN)?;
+    let requester = actor.expect_requester(query.expected_requester, REPORT_FORBIDDEN)?;
     let grants = require_time_reads(actor, REPORT_FORBIDDEN)?;
-    let requester = requester(actor);
     let (org_id, actor_id) = (actor.org_id(), actor.id());
     if query.date_from > query.date_to
         || query.after.as_ref().is_some_and(|cursor| {

@@ -2,7 +2,7 @@
 
 use horae_core::permissions::catalog::Permission;
 
-use super::super::{check_expected, invalid, requester, require_time_reads};
+use super::super::{invalid, require_time_reads};
 use super::{REPORT_FORBIDDEN, REPORT_INVALID, unavailable};
 use crate::models::time_report::{
     TimeReportGroup, TimeReportGroupCursor, TimeReportGroupPage, TimeReportGroupQuery,
@@ -15,9 +15,8 @@ pub(crate) async fn read(
     actor: &Actor,
     query: &TimeReportGroupQuery,
 ) -> Result<TimeReportGroupPage, OpError> {
-    check_expected(actor, query.expected_requester, REPORT_FORBIDDEN)?;
+    let requester = actor.expect_requester(query.expected_requester, REPORT_FORBIDDEN)?;
     let grants = require_time_reads(actor, REPORT_FORBIDDEN)?;
-    let requester = requester(actor);
     let (org_id, actor_id) = (actor.org_id(), actor.id());
     if query.date_from > query.date_to
         || query

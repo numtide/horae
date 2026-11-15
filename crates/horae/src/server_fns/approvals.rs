@@ -15,25 +15,17 @@ pub async fn submit_week(
     week_start: String,
     context: TimesheetWriteContext,
 ) -> Result<Approval, ServerFnError> {
+    const CONTEXT_CHANGED: &str = "Timesheet context changed; refresh the page";
     let user = require_user().await?;
-    let user_id = user.id;
-    let org_id = user.org_id;
-    if context.expected_requester.user_id != user_id
-        || context.expected_requester.org_id != org_id
-        || context.subject_id != user_id
-    {
-        return Err(forbidden("Timesheet context changed; refresh the page"));
+    let caller = Caller::session(user.org_id, user.id);
+    caller.expect_requester(Some(context.expected_requester), CONTEXT_CHANGED)?;
+    if context.subject_id != user.id {
+        return Err(forbidden(CONTEXT_CHANGED));
     }
     let state = crate::state::global_state().await;
 
     let ws = parse_date(&week_start, "week_start")?;
-    submit_as(
-        &state.db,
-        Caller::session(org_id, user_id),
-        ws,
-        &*state.plugins,
-    )
-    .await
+    submit_as(&state.db, caller, ws, &*state.plugins).await
 }
 
 #[cfg(feature = "server")]

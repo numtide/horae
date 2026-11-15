@@ -22,11 +22,10 @@ async fn editor_user() -> Result<User, ServerFnError> {
 #[cfg(feature = "server")]
 async fn expected_editor_user(expected: PermissionRequester) -> Result<User, ServerFnError> {
     let user = editor_user().await?;
-    if user.org_id != expected.org_id || user.id != expected.user_id {
-        return Err(forbidden(
-            "Sign in as the original requester before retrying",
-        ));
-    }
+    crate::ops::Caller::session(user.org_id, user.id).expect_requester(
+        Some(expected),
+        "Sign in as the original requester before retrying",
+    )?;
     Ok(user)
 }
 
