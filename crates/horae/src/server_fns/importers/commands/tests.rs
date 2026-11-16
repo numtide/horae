@@ -1,6 +1,6 @@
 use super::*;
-use crate::ops::testing::{assign_profile, revoke};
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::ops::testing::{Recorder, assign_profile, revoke};
+use crate::server_fns::test_seed::{SeedIds, organization_lockable, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use std::time::Duration;
 
@@ -8,6 +8,86 @@ mod preview_commit;
 mod requester;
 
 const CSV: &[u8] = b"Date,Client,Project,Task,Hours,Email\n";
+
+// The adapters as the tests call them: without a plugin host, and checking
+// that no import command dispatches an in-memory event (its events go
+// through the outbox when the job runs).
+
+async fn no_events<T>(
+    run: impl AsyncFnOnce(&Recorder) -> Result<T, ServerFnError>,
+) -> Result<T, ServerFnError> {
+    let events = Recorder::default();
+    let result = run(&events).await;
+    assert!(
+        events.take().is_empty(),
+        "import commands dispatch no events"
+    );
+    result
+}
+
+async fn start_api(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+    payload: &jobs::JobPayload,
+    key: &str,
+    policy: JobPolicy,
+    generation: i64,
+) -> Result<JobStatus, ServerFnError> {
+    no_events(async |events| {
+        super::start_api(
+            pool, org_id, actor_id, payload, key, policy, generation, events,
+        )
+        .await
+    })
+    .await
+}
+
+async fn start_csv(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+    mode: ImportMode,
+    body: Vec<u8>,
+    key: &str,
+    policy: JobPolicy,
+) -> Result<JobStatus, ServerFnError> {
+    no_events(async |events| {
+        super::start_csv(pool, org_id, actor_id, mode, body, key, policy, events).await
+    })
+    .await
+}
+
+async fn cancel(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+    id: Uuid,
+) -> Result<JobStatus, ServerFnError> {
+    no_events(async |events| super::cancel(pool, org_id, actor_id, id, events).await).await
+}
+
+async fn retry(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+    id: Uuid,
+) -> Result<JobStatus, ServerFnError> {
+    no_events(async |events| super::retry(pool, org_id, actor_id, id, events).await).await
+}
+
+async fn commit_preview(
+    pool: &PgPool,
+    org_id: Uuid,
+    actor_id: Uuid,
+    preview_id: Uuid,
+    policy: JobPolicy,
+) -> Result<JobStatus, ServerFnError> {
+    no_events(async |events| {
+        super::commit_preview(pool, org_id, actor_id, preview_id, policy, events).await
+    })
+    .await
+}
 
 #[derive(Clone, Copy, Debug)]
 enum Operation {
@@ -672,4 +752,44 @@ async fn authorized_submissions_do_not_wait_for_the_running_import_reservation(p
         .await
         .unwrap();
     reservation.close().await.unwrap();
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+#[serial_test::serial]
+async fn refused_commands_release_the_authority_locks_before_answering(pool: PgPool) {
+    let (ids, _) = fixture(&pool).await;
+    let missing = Uuid::now_v7();
+    // Refused after authorization, with the actor's locks and the connection gate held.
+    for refused in [
+        retry(&pool, ids.org_id, ids.user_id, missing).await,
+        commit_preview(
+            &pool,
+            ids.org_id,
+            ids.user_id,
+            missing,
+            JobPolicy::default(),
+        )
+        .await,
+    ] {
+        assert!(
+            matches!(
+                refused,
+                Err(ServerFnError::ServerError {
+                    code: NOT_FOUND,
+                    ..
+                })
+            ),
+            "{refused:?}"
+        );
+        assert!(organization_lockable(&pool, ids.org_id));
+    }
+    // Refused by the authorization itself.
+    assign_profile(&pool, ids.org_id, ids.user_id, BuiltInProfile::Member).await;
+    for operation in OPERATIONS {
+        assert_denied(
+            run(&pool, ids.org_id, ids.user_id, missing, operation).await,
+            operation,
+        );
+        assert!(organization_lockable(&pool, ids.org_id), "{operation:?}");
+    }
 }

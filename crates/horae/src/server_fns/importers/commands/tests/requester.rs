@@ -69,7 +69,10 @@ async fn waiting_duplicate_keeps_the_first_committed_requester(pool: PgPool) {
     for operation in [Operation::Api, Operation::Csv] {
         let (ids, _) = fixture(&pool).await;
         let other = another_admin(&pool, ids.org_id).await;
-        let mut first = begin_access(&pool, ids.org_id, ids.user_id).await.unwrap();
+        let mut first = ops::begin(&pool, Caller::session(ids.org_id, ids.user_id))
+            .await
+            .unwrap()
+            .tx;
         let id = match operation {
             Operation::Api => {
                 jobs::enqueue_api_in(

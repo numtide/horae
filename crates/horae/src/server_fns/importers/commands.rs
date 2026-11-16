@@ -1,10 +1,17 @@
-//! Session-bound importer operations, separate from queue worker mechanics.
+//! Session adapters over `ops::importers` for the import jobs, shared by the
+//! server functions and their tests.
 
 use super::*;
-use crate::{config::JobPolicy, jobs, models::JobStatus};
+use crate::{
+    config::JobPolicy,
+    jobs,
+    models::JobStatus,
+    ops::{self, Caller, EventSink},
+};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+#[expect(clippy::too_many_arguments, reason = "mirrors the request's fields")]
 pub(super) async fn start_api(
     pool: &PgPool,
     org_id: Uuid,
@@ -13,16 +20,22 @@ pub(super) async fn start_api(
     key: &str,
     policy: JobPolicy,
     generation: i64,
+    events: &dyn EventSink,
 ) -> Result<JobStatus, ServerFnError> {
-    let mut tx = begin_access(pool, org_id, actor_id).await?;
-    let id = jobs::enqueue_api_in(&mut tx, org_id, payload, key, policy, generation, actor_id)
-        .await
-        .map_err(map_enqueue_error)?;
-    let result = required_job(&mut tx, org_id, id).await?;
-    tx.commit().await.map_err(server_err)?;
-    Ok(result)
+    let mut write = ops::begin(pool, Caller::session(org_id, actor_id)).await?;
+    let result = ops::importers::start_api(
+        &mut write.tx,
+        &write.actor,
+        payload,
+        key,
+        policy,
+        generation,
+    )
+    .await;
+    Ok(write.commit(result, events).await?)
 }
 
+#[expect(clippy::too_many_arguments, reason = "mirrors the request's fields")]
 pub(super) async fn start_csv(
     pool: &PgPool,
     org_id: Uuid,
@@ -31,25 +44,12 @@ pub(super) async fn start_csv(
     body: Vec<u8>,
     key: &str,
     policy: JobPolicy,
+    events: &dyn EventSink,
 ) -> Result<JobStatus, ServerFnError> {
-    let mut tx = begin_access(pool, org_id, actor_id).await?;
-    if !jobs::request_exists(&mut *tx, org_id, "harvest_csv_import", key)
-        .await
-        .map_err(server_err)?
-    {
-        crate::importers::harvest::csv_source::validate_upload_headers(&body).map_err(|_| {
-            err(
-                BAD_REQUEST,
-                "Not a recognizable Harvest CSV; check required columns",
-            )
-        })?;
-    }
-    let id = jobs::enqueue_csv_in(&mut tx, org_id, mode, body, key, policy, actor_id)
-        .await
-        .map_err(map_enqueue_error)?;
-    let result = required_job(&mut tx, org_id, id).await?;
-    tx.commit().await.map_err(server_err)?;
-    Ok(result)
+    let mut write = ops::begin(pool, Caller::session(org_id, actor_id)).await?;
+    let result =
+        ops::importers::start_csv(&mut write.tx, &write.actor, mode, body, key, policy).await;
+    Ok(write.commit(result, events).await?)
 }
 
 pub(super) async fn cancel(
@@ -57,15 +57,11 @@ pub(super) async fn cancel(
     org_id: Uuid,
     actor_id: Uuid,
     id: Uuid,
+    events: &dyn EventSink,
 ) -> Result<JobStatus, ServerFnError> {
-    let mut tx = begin_access(pool, org_id, actor_id).await?;
-    jobs::cancel(&mut *tx, org_id, id)
-        .await
-        .map_err(server_err)?;
-    // Completion can race cancellation; report the actual retained state.
-    let result = required_job(&mut tx, org_id, id).await?;
-    tx.commit().await.map_err(server_err)?;
-    Ok(result)
+    let mut write = ops::begin(pool, Caller::session(org_id, actor_id)).await?;
+    let result = ops::importers::cancel(&mut write.tx, &write.actor, id).await;
+    Ok(write.commit(result, events).await?)
 }
 
 pub(super) async fn retry(
@@ -73,17 +69,11 @@ pub(super) async fn retry(
     org_id: Uuid,
     actor_id: Uuid,
     id: Uuid,
+    events: &dyn EventSink,
 ) -> Result<JobStatus, ServerFnError> {
-    let mut tx = begin_access(pool, org_id, actor_id).await?;
-    if !jobs::retry_in(&mut tx, org_id, id)
-        .await
-        .map_err(map_enqueue_error)?
-    {
-        return Err(err(NOT_FOUND, "Import job not found or is not retryable"));
-    }
-    let result = required_job(&mut tx, org_id, id).await?;
-    tx.commit().await.map_err(server_err)?;
-    Ok(result)
+    let mut write = ops::begin(pool, Caller::session(org_id, actor_id)).await?;
+    let result = ops::importers::retry(&mut write.tx, &write.actor, id).await;
+    Ok(write.commit(result, events).await?)
 }
 
 pub(super) async fn commit_preview(
@@ -92,15 +82,12 @@ pub(super) async fn commit_preview(
     actor_id: Uuid,
     preview_id: Uuid,
     policy: JobPolicy,
+    events: &dyn EventSink,
 ) -> Result<JobStatus, ServerFnError> {
-    let mut tx = begin_access(pool, org_id, actor_id).await?;
-    let id = jobs::commit_preview_in(&mut tx, org_id, preview_id, policy, actor_id)
-        .await
-        .map_err(map_enqueue_error)?
-        .ok_or_else(|| err(NOT_FOUND, "Import job not found"))?;
-    let result = required_job(&mut tx, org_id, id).await?;
-    tx.commit().await.map_err(server_err)?;
-    Ok(result)
+    let mut write = ops::begin(pool, Caller::session(org_id, actor_id)).await?;
+    let result =
+        ops::importers::commit_preview(&mut write.tx, &write.actor, preview_id, policy).await;
+    Ok(write.commit(result, events).await?)
 }
 
 pub(super) async fn error_summary(
@@ -109,20 +96,10 @@ pub(super) async fn error_summary(
     actor_id: Uuid,
     id: Uuid,
 ) -> Result<crate::models::ErrorSummary, ServerFnError> {
-    // Read-only, over a report that no longer changes once the run ends: it
-    // skips the organization lock, so it never queues behind an import or an
-    // access change, and every read below is scoped by `org_id`.
-    let mut connection = pool.acquire().await.map_err(server_err)?;
-    crate::ops::Actor::load_unlocked(
-        &mut connection,
-        crate::ops::Caller::session(org_id, actor_id),
-    )
-    .await?
-    .require_administrator()?;
-    jobs::report::summarize(&mut connection, org_id, id)
-        .await
-        .map_err(server_err)?
-        .ok_or_else(|| err(NOT_FOUND, "Import job not found"))
+    let mut connection = pool.acquire().await.map_err(ops::OpError::from)?;
+    let actor =
+        ops::Actor::load_unlocked(&mut connection, Caller::session(org_id, actor_id)).await?;
+    Ok(ops::importers::error_summary(&mut connection, &actor, id).await?)
 }
 
 pub(super) async fn status(
@@ -131,12 +108,9 @@ pub(super) async fn status(
     actor_id: Uuid,
     id: Uuid,
 ) -> Result<Option<JobStatus>, ServerFnError> {
-    let mut tx = begin_access(pool, org_id, actor_id).await?;
-    let result = jobs::status(&mut *tx, org_id, id)
-        .await
-        .map_err(server_err)?;
-    tx.commit().await.map_err(server_err)?;
-    Ok(result)
+    let mut read = ops::begin_read(pool, Caller::session(org_id, actor_id)).await?;
+    let result = ops::importers::status(&mut read.tx, &read.actor, id).await;
+    Ok(read.finish(result).await?)
 }
 
 pub(super) async fn history(
@@ -146,31 +120,9 @@ pub(super) async fn history(
     limit: i64,
     before: Option<Uuid>,
 ) -> Result<Vec<JobStatus>, ServerFnError> {
-    let mut tx = begin_access(pool, org_id, actor_id).await?;
-    let result = jobs::list(&mut *tx, org_id, limit, before)
-        .await
-        .map_err(server_err)?;
-    tx.commit().await.map_err(server_err)?;
-    Ok(result)
-}
-
-async fn required_job(
-    connection: &mut sqlx::PgConnection,
-    org_id: Uuid,
-    id: Uuid,
-) -> Result<JobStatus, ServerFnError> {
-    jobs::status(connection, org_id, id)
-        .await
-        .map_err(server_err)?
-        .ok_or_else(|| err(NOT_FOUND, "Import job not found"))
-}
-
-async fn begin_access(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
-) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, ServerFnError> {
-    Ok(jobs::access::begin_admin_access(pool, org_id, actor_id).await?)
+    let mut read = ops::begin_read(pool, Caller::session(org_id, actor_id)).await?;
+    let result = ops::importers::history(&mut read.tx, &read.actor, limit, before).await;
+    Ok(read.finish(result).await?)
 }
 
 #[cfg(test)]
