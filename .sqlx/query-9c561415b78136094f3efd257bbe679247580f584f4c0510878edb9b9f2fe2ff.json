@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.last_budget_alert_pct, o.budget_alert_pcts,\n                  (SELECT COALESCE(SUM(te.minutes), 0)\n                   FROM time_entries te\n                   LEFT JOIN invoices i ON i.id = te.invoice_id AND i.org_id = te.org_id\n                   WHERE te.project_id = p.id AND te.org_id = p.org_id\n                     AND (te.invoice_id IS NULL OR i.id IS NOT NULL))::bigint AS \"consumed!\"\n           FROM projects p\n           JOIN organizations o ON o.id = p.org_id\n           WHERE p.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last_budget_alert_pct",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "budget_alert_pcts",
+        "type_info": "Int4Array"
+      },
+      {
+        "ordinal": 2,
+        "name": "consumed!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "9c561415b78136094f3efd257bbe679247580f584f4c0510878edb9b9f2fe2ff"
+}

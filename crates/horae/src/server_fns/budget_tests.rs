@@ -1,10 +1,13 @@
-use super::claim_budget_band;
-use crate::ops::testing::set_grants;
+use crate::ops::testing::{Recorder, set_grants};
+use crate::plugin::AppEvent;
 use crate::server_fns::test_seed::seed;
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use sqlx::PgPool;
 
-use crate::notifications::budgets::{BudgetProgress, configured_progress, enqueue_alerts, sweep};
+use crate::notifications::budgets::{
+    BudgetProgress, announce_plugin_bands, claim_budget_band, configured_progress, enqueue_alerts,
+    sweep,
+};
 use crate::server_fns::test_seed::{SeedIds, time_entry};
 use horae_core::types::EntryState;
 use uuid::Uuid;
@@ -975,4 +978,86 @@ async fn concurrent_budget_checks_have_one_band_claimant(pool: PgPool) {
         .unwrap(),
         Some(80)
     );
+}
+
+/// `(over_budget, band, consumed_minutes)` for each plugin budget event, in
+/// dispatch order.
+fn plugin_bands(events: Vec<AppEvent>) -> Vec<(bool, i32, Option<i32>)> {
+    events
+        .into_iter()
+        .map(|event| match event {
+            AppEvent::ProjectOverBudget { budget, .. } => {
+                (true, budget.threshold_pct, budget.consumed_minutes)
+            }
+            AppEvent::ProjectBudgetThresholdReached { budget, .. } => {
+                (false, budget.threshold_pct, budget.consumed_minutes)
+            }
+            other => panic!("unexpected event {other:?}"),
+        })
+        .collect()
+}
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn plugin_budget_bands_count_the_spent_minutes_the_projects_list_shows(pool: PgPool) {
+    let ids = seed(&pool, BuiltInProfile::Administrator).await;
+    // Workspace rounding would value the open entries at 30 + 30 and the frozen
+    // one at 40; Spent counts the tracked minutes only.
+    sqlx::query!(
+        "UPDATE organizations SET round_minutes = 15, round_dir = 'up' WHERE id = $1",
+        ids.org_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE projects SET budget_kind = 'hours', budget_minutes = 60,
+           last_budget_alert_pct = NULL WHERE id = $1",
+        ids.project_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let entry = |minutes: i32, rounded: Option<i32>, state: EntryState| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query!(
+                "INSERT INTO time_entries (id, org_id, user_id, project_id, task_id,
+                   spent_date, minutes, rounded_minutes, billable, state)
+                 VALUES ($1, $2, $3, $4, $5, '2026-09-07', $6, $7, true, $8)",
+                Uuid::now_v7(),
+                ids.org_id,
+                ids.user_id,
+                ids.project_id,
+                ids.task_id,
+                minutes,
+                rounded,
+                state as EntryState,
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+    };
+    let spent = || async {
+        super::projects::fetch_project_spend(&pool, ids.org_id, ids.user_id, None)
+            .await
+            .unwrap()[0]
+            .spent_minutes as i32
+    };
+    let events = Recorder::default();
+
+    entry(25, None, EntryState::Open).await;
+    entry(25, Some(40), EntryState::Approved).await;
+    announce_plugin_bands(&pool, &events, ids.project_id)
+        .await
+        .unwrap();
+    assert_eq!(spent().await, 50);
+    assert_eq!(plugin_bands(events.take()), [(false, 80, Some(50))]);
+
+    entry(15, None, EntryState::Open).await;
+    announce_plugin_bands(&pool, &events, ids.project_id)
+        .await
+        .unwrap();
+    assert_eq!(spent().await, 65);
+    assert_eq!(plugin_bands(events.take()), [(true, 100, Some(65))]);
 }
