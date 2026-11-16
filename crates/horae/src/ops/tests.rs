@@ -12,6 +12,8 @@ use crate::plugin::event::ClientPayload;
 use crate::server_fns::test_seed::repeatable_read_pool;
 use crate::server_fns::test_seed::{clear_state, organization_lockable, seed};
 
+mod snapshot;
+
 fn created(client_id: Uuid, org_id: Uuid) -> AppEvent {
     AppEvent::ClientCreated {
         occurred_at: chrono::Utc::now(),
