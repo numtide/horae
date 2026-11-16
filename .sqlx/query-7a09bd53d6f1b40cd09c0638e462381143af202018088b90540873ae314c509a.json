@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.is_administrator, p.built_in_profile\n         FROM users u JOIN person_permission_states p ON p.user_id = u.id\n         WHERE u.email = 'ada@test.com'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_administrator",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "built_in_profile",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "7a09bd53d6f1b40cd09c0638e462381143af202018088b90540873ae314c509a"
+}

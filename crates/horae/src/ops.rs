@@ -128,6 +128,8 @@ async fn configure_limits(
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Caller {
     pub org_id: Uuid,
+    /// The nil UUID for a channel with no person ([`Channel::Operator`],
+    /// [`Channel::System`]).
     pub user_id: Uuid,
     pub channel: Channel,
 }
@@ -138,6 +140,24 @@ impl Caller {
             org_id,
             user_id,
             channel: Channel::Session,
+        }
+    }
+
+    /// The server's operator at its terminal (the CLI).
+    pub fn operator(org_id: Uuid) -> Self {
+        Self {
+            org_id,
+            user_id: Uuid::nil(),
+            channel: Channel::Operator,
+        }
+    }
+
+    /// Horae itself, acting on no one's behalf (an OIDC first sign-in).
+    pub fn system(org_id: Uuid) -> Self {
+        Self {
+            org_id,
+            user_id: Uuid::nil(),
+            channel: Channel::System,
         }
     }
 }
@@ -172,6 +192,14 @@ impl EventSink for PluginRegistry {
     fn dispatch(&self, event: AppEvent) {
         PluginRegistry::dispatch(self, event);
     }
+}
+
+/// Drops committed events: for the CLI, which runs no plugins, and for entry
+/// points that report the event themselves.
+pub(crate) struct NoEvents;
+
+impl EventSink for NoEvents {
+    fn dispatch(&self, _: AppEvent) {}
 }
 
 /// A write in progress: its transaction and the actor loaded inside it.
