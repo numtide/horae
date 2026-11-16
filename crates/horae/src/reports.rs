@@ -63,11 +63,11 @@ async fn require_invoice_reader(session: &Session) -> Result<(uuid::Uuid, uuid::
 /// forbidden rather than not found, so a download never confirms it exists.
 pub(crate) fn op_status(error: crate::ops::OpError) -> StatusCode {
     use crate::ops::OpError;
-    match error {
+    match error.kind() {
         OpError::Forbidden(_) | OpError::NotFound(_) => StatusCode::FORBIDDEN,
         OpError::Conflict(_) => StatusCode::CONFLICT,
         OpError::Invalid { .. } => StatusCode::BAD_REQUEST,
-        OpError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        OpError::Internal(_) | OpError::Detailed { .. } => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 

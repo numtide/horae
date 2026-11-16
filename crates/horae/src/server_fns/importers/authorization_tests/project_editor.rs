@@ -192,10 +192,10 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let revoked: Vec<String> =
         serde_json::from_value(json!(PermissionSelection::new(&[]))).unwrap();
     // Valid revocation retains the immutable own-work floor. Missing that floor
-    // is malformed stored policy, not an ordinary permission denial.
+    // is malformed stored policy, which fails closed as unavailable state.
     for (grants, status) in [
         (revoked, StatusCode::FORBIDDEN),
-        (Vec::new(), StatusCode::INTERNAL_SERVER_ERROR),
+        (Vec::new(), StatusCode::FORBIDDEN),
     ] {
         sqlx::query!(
             "UPDATE person_permission_states SET grants=$2 WHERE user_id=$1",

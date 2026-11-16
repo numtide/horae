@@ -130,7 +130,9 @@ async fn check_historical_shapes(
     ids: &crate::server_fns::test_seed::SeedIds,
     cookie: &str,
 ) {
-    use crate::server_fns::permissions::{calls::profiles, project_management};
+    use crate::models::project_managers as project_management_models;
+    use crate::server_fns::permissions::calls::profiles;
+    use crate::server_fns::project_managers::calls as project_management;
     let profile = profiles::ProfileCommand {
         request_id: Uuid::now_v7(),
         expected_access_revision: 1,
@@ -144,7 +146,7 @@ async fn check_historical_shapes(
     profiles::execute(pool, ids.org_id, ids.user_id, &profile)
         .await
         .unwrap();
-    let project = project_management::ProjectManagersCommand {
+    let project = project_management_models::ProjectManagersCommand {
         kind: crate::models::project_managers::ProjectManagersCommandKind::ReplaceProjectManagers,
         request_id: Uuid::now_v7(),
         expected_access_revision: 1,

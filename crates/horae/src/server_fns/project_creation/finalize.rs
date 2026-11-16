@@ -1,6 +1,6 @@
-use super::validation::{optional_amount, optional_hours, with_field};
 use super::*;
 use crate::models::project_creation::{ProjectFormField, ReportVisibility, TaskSource};
+use crate::ops::projects::form::{optional_amount, optional_hours};
 use horae_core::project::{BudgetMode, FeeSchedule, MonthlyFeeDay, RateMode};
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -188,15 +188,14 @@ async fn finalize_in(
         manager_ids.push(actor_id);
     }
     if !manager_ids.is_empty() {
-        crate::server_fns::permissions::project_management::designate_created(
+        crate::ops::projects::managers::designate_created(
             tx,
             org_id,
             actor_id,
             project_id,
             manager_ids,
         )
-        .await
-        .map_err(managers_error)?;
+        .await?;
     }
     save_tasks(tx, org_id, project_id, form, currency).await?;
 

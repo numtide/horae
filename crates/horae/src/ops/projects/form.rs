@@ -1,13 +1,19 @@
-use super::*;
-use crate::models::project_creation::{FeeMode, ProjectFormField, TaskSource};
+//! The project form's validation, shared by creating a project and editing
+//! one: field formats, limits, and the values a project row stores.
+
+use crate::models::project_creation::{
+    FeeMode, ProjectForm, ProjectFormField, TaskAccess, TaskSource,
+};
+use crate::ops::OpError;
 use chrono::NaiveDate;
 use horae_core::project::{
     BudgetMode, FeeMilestone, FeeSchedule, Percentage, ProjectValidationError, RateMode,
 };
+use horae_core::types::{BudgetKind, ProjectType};
 use std::collections::HashSet;
 
 /// Parsed values for the active controls; hidden values remain only in the draft.
-pub(super) struct ValidatedProject {
+pub(crate) struct ValidatedProject {
     pub starts_on: Option<NaiveDate>,
     pub ends_on: Option<NaiveDate>,
     pub rate_mode: &'static str,
@@ -26,32 +32,31 @@ pub(super) struct ValidatedProject {
     pub tags: Vec<String>,
 }
 
-pub(super) fn optional_amount(value: &str, field: &str) -> Result<Option<i64>, ServerFnError> {
+pub(crate) fn optional_amount(value: &str, field: &str) -> Result<Option<i64>, OpError> {
     if value.trim().is_empty() {
         return Ok(None);
     }
     let amount = horae_core::money::parse_cents(value.trim()).map_err(|_| {
-        err(
-            BAD_REQUEST,
-            format!("{field}: enter an amount with at most two decimal places"),
-        )
+        OpError::bad_input(format!(
+            "{field}: enter an amount with at most two decimal places"
+        ))
     })?;
     if amount < 0 {
-        return Err(err(BAD_REQUEST, format!("{field}: cannot be negative")));
+        return Err(OpError::bad_input(format!("{field}: cannot be negative")));
     }
     Ok(Some(amount))
 }
 
-pub(super) fn optional_hours(value: &str) -> Result<Option<i64>, ServerFnError> {
+pub(crate) fn optional_hours(value: &str) -> Result<Option<i64>, OpError> {
     if value.trim().is_empty() {
         return Ok(None);
     }
     horae_core::duration::parse(value.trim())
         .map(|minutes| Some(i64::from(minutes)))
-        .map_err(|_| err(BAD_REQUEST, "Budget: enter valid hours, e.g. 120 or 7:30"))
+        .map_err(|_| OpError::bad_input("Budget: enter valid hours, e.g. 120 or 7:30"))
 }
 
-fn date(value: &str, field: &str) -> Result<Option<NaiveDate>, ServerFnError> {
+fn date(value: &str, field: &str) -> Result<Option<NaiveDate>, OpError> {
     let value = value.trim();
     if value.is_empty() {
         return Ok(None);
@@ -59,60 +64,87 @@ fn date(value: &str, field: &str) -> Result<Option<NaiveDate>, ServerFnError> {
     // Keep the browser's ISO format; chrono also accepts some unpadded forms.
     let date = value
         .parse::<NaiveDate>()
-        .map_err(|_| err(BAD_REQUEST, format!("{field}: use YYYY-MM-DD")))?;
+        .map_err(|_| OpError::bad_input(format!("{field}: use YYYY-MM-DD")))?;
     if date.format("%Y-%m-%d").to_string() != value {
-        return Err(err(BAD_REQUEST, format!("{field}: use YYYY-MM-DD")));
+        return Err(OpError::bad_input(format!("{field}: use YYYY-MM-DD")));
     }
     Ok(Some(date))
 }
 
-fn percentage(value: &str, field: &str) -> Result<i16, ServerFnError> {
+fn percentage(value: &str, field: &str) -> Result<i16, OpError> {
     if value.trim().is_empty() {
         return Ok(0);
     }
     let parsed: Percentage = value
         .parse()
-        .map_err(|error| err(BAD_REQUEST, format!("{field}: {error}")))?;
-    i16::try_from(parsed.basis_points()).map_err(|_| err(BAD_REQUEST, "Invalid percentage"))
+        .map_err(|error| OpError::bad_input(format!("{field}: {error}")))?;
+    i16::try_from(parsed.basis_points()).map_err(|_| OpError::bad_input("Invalid percentage"))
 }
 
-fn bounded_text(
-    value: &str,
-    limit: usize,
-    required: bool,
-    field: &str,
-) -> Result<(), ServerFnError> {
+fn bounded_text(value: &str, limit: usize, required: bool, field: &str) -> Result<(), OpError> {
     if value.contains('\0')
         || value.trim().chars().count() > limit
         || (required && value.trim().is_empty())
     {
-        return Err(err(
-            BAD_REQUEST,
-            format!(
-                "{field}: enter {}–{limit} characters",
-                usize::from(required)
-            ),
-        ));
+        return Err(OpError::bad_input(format!(
+            "{field}: enter {}–{limit} characters",
+            usize::from(required)
+        )));
     }
     Ok(())
 }
 
-pub(super) fn with_field(mut error: ServerFnError, field: ProjectFormField) -> ServerFnError {
-    if let ServerFnError::ServerError {
-        code: BAD_REQUEST | NOT_FOUND | CONFLICT,
-        details,
-        ..
-    } = &mut error
+/// The form as stored JSON, within the size and content limits shared by
+/// drafts and edits.
+pub(crate) fn form_payload(form: &ProjectForm) -> Result<serde_json::Value, OpError> {
+    if form.tasks.len() > 500
+        || form.team.len() > 500
+        || form.tags.len() > 50
+        || form.milestones.len() > 100
+        || form.tasks.iter().any(|task| matches!(&task.access, TaskAccess::Restricted { user_ids } if user_ids.len() > 500))
     {
-        *details = Some(serde_json::json!({ "field": field }));
+        return Err(OpError::bad_input("Too many project tasks, people, tags or milestones"));
     }
-    error
+    let payload = serde_json::to_value(form).map_err(internal)?;
+    fn contains_nul(value: &serde_json::Value) -> bool {
+        match value {
+            serde_json::Value::String(text) => text.contains('\0'),
+            serde_json::Value::Array(values) => values.iter().any(contains_nul),
+            serde_json::Value::Object(values) => values.values().any(contains_nul),
+            _ => false,
+        }
+    }
+    if contains_nul(&payload) {
+        return Err(OpError::bad_input(
+            "Project fields cannot contain a null character",
+        ));
+    }
+    // The indented representation is a conservative bound for PostgreSQL's
+    // jsonb text size, which also includes spaces after keys and separators.
+    if serde_json::to_string_pretty(&payload)
+        .map_err(internal)?
+        .len()
+        > 256 * 1024
+    {
+        return Err(OpError::bad_input("Project draft exceeds 256 KiB"));
+    }
+    Ok(payload)
+}
+
+/// A fault the project form answers with its own text, as it always has.
+pub(crate) fn internal(error: impl std::fmt::Display) -> OpError {
+    OpError::Internal(error.to_string())
+}
+
+/// Names the form field to blame (see [`OpError::with_field`]).
+pub(crate) fn with_field(error: OpError, field: ProjectFormField) -> OpError {
+    error.with_field(field)
 }
 
 fn sum_budgets<'a>(
     values: impl Iterator<Item = (ProjectFormField, &'a str)>,
     money: bool,
-) -> Result<Option<i64>, ServerFnError> {
+) -> Result<Option<i64>, OpError> {
     let mut total = None;
     for (field, value) in values {
         let amount = if money {
@@ -122,20 +154,19 @@ fn sum_budgets<'a>(
         }
         .map_err(|error| with_field(error, field))?;
         if let Some(amount) = amount {
-            total =
-                Some(total.unwrap_or(0_i64).checked_add(amount).ok_or_else(|| {
-                    with_field(err(BAD_REQUEST, "Budget total is too large"), field)
-                })?);
+            total = Some(total.unwrap_or(0_i64).checked_add(amount).ok_or_else(|| {
+                with_field(OpError::bad_input("Budget total is too large"), field)
+            })?);
         }
     }
     Ok(total)
 }
 
-pub(super) fn validate_project_form(
+pub(crate) fn validate_project_form(
     form: &ProjectForm,
     currency: &str,
     email_available: bool,
-) -> Result<ValidatedProject, ServerFnError> {
+) -> Result<ValidatedProject, OpError> {
     let starts_on = date(&form.starts_on, "Start date")
         .map_err(|error| with_field(error, ProjectFormField::StartsOn))?;
     let ends_on = date(&form.ends_on, "End date")
@@ -153,9 +184,9 @@ pub(super) fn validate_project_form(
             ProjectValidationError::Code => ProjectFormField::Code,
             ProjectValidationError::Currency => ProjectFormField::Currency,
             ProjectValidationError::DateOrder => ProjectFormField::EndsOn,
-            _ => return err(BAD_REQUEST, error),
+            _ => return OpError::bad_input(error),
         };
-        with_field(err(BAD_REQUEST, error), field)
+        with_field(OpError::bad_input(error), field)
     })?;
     form.budget_mode
         .validate_for(form.project_type)
@@ -165,7 +196,7 @@ pub(super) fn validate_project_form(
             } else {
                 ProjectFormField::BudgetMode
             };
-            with_field(err(BAD_REQUEST, error), field)
+            with_field(OpError::bad_input(error), field)
         })?;
     bounded_text(&form.admin_notes, 10000, false, "Private notes")
         .map_err(|error| with_field(error, ProjectFormField::AdminNotes))?;
@@ -180,7 +211,7 @@ pub(super) fn validate_project_form(
             RateMode::Project => "project",
             RateMode::Legacy => {
                 return Err(with_field(
-                    err(BAD_REQUEST, "Select person, task or project rates"),
+                    OpError::bad_input("Select person, task or project rates"),
                     ProjectFormField::RateMode,
                 ));
             }
@@ -189,7 +220,9 @@ pub(super) fn validate_project_form(
     let rate_cents = if is_hourly && form.rate_mode == RateMode::Project {
         Some(
             optional_amount(&form.project_rate, "Project rate")
-                .and_then(|value| value.ok_or_else(|| err(BAD_REQUEST, "Project rate is required")))
+                .and_then(|value| {
+                    value.ok_or_else(|| OpError::bad_input("Project rate is required"))
+                })
                 .map_err(|error| with_field(error, ProjectFormField::ProjectRate))?,
         )
     } else {
@@ -252,25 +285,19 @@ pub(super) fn validate_project_form(
     let alert_threshold = if form.budget_alert && form.budget_mode != BudgetMode::None {
         if !email_available {
             return Err(with_field(
-                err(BAD_REQUEST, "Budget email delivery is not configured"),
+                OpError::bad_input("Budget email delivery is not configured"),
                 ProjectFormField::BudgetAlert,
             ));
         }
         let threshold = form.budget_alert_at.trim().parse::<i16>().map_err(|_| {
             with_field(
-                err(
-                    BAD_REQUEST,
-                    "Budget alert: enter a whole percentage from 0 to 100",
-                ),
+                OpError::bad_input("Budget alert: enter a whole percentage from 0 to 100"),
                 ProjectFormField::BudgetAlertAt,
             )
         })?;
         if !(0..=100).contains(&threshold) {
             return Err(with_field(
-                err(
-                    BAD_REQUEST,
-                    "Budget alert: enter a whole percentage from 0 to 100",
-                ),
+                OpError::bad_input("Budget alert: enter a whole percentage from 0 to 100"),
                 ProjectFormField::BudgetAlertAt,
             ));
         }
@@ -284,7 +311,7 @@ pub(super) fn validate_project_form(
             FeeMode::Single | FeeMode::Monthly => {
                 let amount_cents = optional_amount(&form.fee_amount, "Fixed fee")
                     .and_then(|value| {
-                        value.ok_or_else(|| err(BAD_REQUEST, "Fixed fee amount is required"))
+                        value.ok_or_else(|| OpError::bad_input("Fixed fee amount is required"))
                     })
                     .map_err(|error| with_field(error, ProjectFormField::FeeAmount))?;
                 if form.fee_mode == FeeMode::Single {
@@ -299,7 +326,7 @@ pub(super) fn validate_project_form(
             FeeMode::Milestones => {
                 if form.milestones.is_empty() {
                     return Err(with_field(
-                        err(BAD_REQUEST, ProjectValidationError::Milestones),
+                        OpError::bad_input(ProjectValidationError::Milestones),
                         ProjectFormField::Milestones,
                     ));
                 }
@@ -308,28 +335,28 @@ pub(super) fn validate_project_form(
                 let mut total = 0_i64;
                 for item in &form.milestones {
                     if !ids.insert(item.id) {
-                        return Err(err(BAD_REQUEST, "Duplicate milestone"));
+                        return Err(OpError::bad_input("Duplicate milestone"));
                     }
                     bounded_text(&item.name, 200, true, "Milestone name").map_err(|error| {
                         with_field(error, ProjectFormField::MilestoneName(item.id))
                     })?;
                     let due_on = date(&item.due_on, "Milestone date")
                         .and_then(|value| {
-                            value.ok_or_else(|| err(BAD_REQUEST, "Milestone date is required"))
+                            value.ok_or_else(|| OpError::bad_input("Milestone date is required"))
                         })
                         .map_err(|error| {
                             with_field(error, ProjectFormField::MilestoneDate(item.id))
                         })?;
                     let amount_cents = optional_amount(&item.amount, "Milestone fee")
                         .and_then(|value| {
-                            value.ok_or_else(|| err(BAD_REQUEST, "Milestone amount is required"))
+                            value.ok_or_else(|| OpError::bad_input("Milestone amount is required"))
                         })
                         .map_err(|error| {
                             with_field(error, ProjectFormField::MilestoneAmount(item.id))
                         })?;
                     total = total.checked_add(amount_cents).ok_or_else(|| {
                         with_field(
-                            err(BAD_REQUEST, "Milestone total is too large"),
+                            OpError::bad_input("Milestone total is too large"),
                             ProjectFormField::MilestoneAmount(item.id),
                         )
                     })?;
@@ -342,7 +369,7 @@ pub(super) fn validate_project_form(
                 FeeSchedule::Milestones { milestones }
             }
         };
-        fee.validate().map_err(|error| err(BAD_REQUEST, error))?;
+        fee.validate().map_err(OpError::bad_input)?;
         Some(fee)
     } else {
         None
@@ -356,13 +383,13 @@ pub(super) fn validate_project_form(
     };
     let terms_days = defaults.terms_days.trim().parse::<i16>().map_err(|_| {
         with_field(
-            err(BAD_REQUEST, "Payment terms: enter 0–365 days"),
+            OpError::bad_input("Payment terms: enter 0–365 days"),
             ProjectFormField::PaymentTerms,
         )
     })?;
     if !(0..=365).contains(&terms_days) {
         return Err(with_field(
-            err(BAD_REQUEST, "Payment terms: enter 0–365 days"),
+            OpError::bad_input("Payment terms: enter 0–365 days"),
             ProjectFormField::PaymentTerms,
         ));
     }
@@ -378,7 +405,7 @@ pub(super) fn validate_project_form(
         .map(|tax| {
             bounded_text(&tax.name, 100, true, "Second tax name")
                 .map_err(|error| with_field(error, ProjectFormField::SecondTaxName))?;
-            Ok::<_, ServerFnError>((
+            Ok::<_, OpError>((
                 tax.name.trim().into(),
                 percentage(&tax.percentage, "Second tax")
                     .map_err(|error| with_field(error, ProjectFormField::SecondTax))?,
@@ -397,7 +424,7 @@ pub(super) fn validate_project_form(
     let mut people = HashSet::new();
     for member in &form.team {
         if !people.insert(member.user_id) {
-            return Err(err(BAD_REQUEST, "A person can only be assigned once"));
+            return Err(OpError::bad_input("A person can only be assigned once"));
         }
         optional_amount(&member.cost_rate, "Cost rate")
             .map_err(|error| with_field(error, ProjectFormField::CostRate(member.user_id)))?;
@@ -411,18 +438,18 @@ pub(super) fn validate_project_form(
     let mut new_task_names = HashSet::new();
     for task in &form.tasks {
         if !task_rows.insert(task.id) {
-            return Err(err(BAD_REQUEST, "Duplicate task row"));
+            return Err(OpError::bad_input("Duplicate task row"));
         }
         match &task.source {
             TaskSource::Existing { task_id } if !catalog_tasks.insert(*task_id) => {
-                return Err(err(BAD_REQUEST, "A task can only be selected once"));
+                return Err(OpError::bad_input("A task can only be selected once"));
             }
             TaskSource::New { name } => {
                 bounded_text(name, 200, true, "Task name")
                     .map_err(|error| with_field(error, ProjectFormField::TaskName(task.id)))?;
                 if !new_task_names.insert(name.trim().to_lowercase()) {
                     return Err(with_field(
-                        err(BAD_REQUEST, "Duplicate new task name"),
+                        OpError::bad_input("Duplicate new task name"),
                         ProjectFormField::TaskName(task.id),
                     ));
                 }
@@ -433,7 +460,7 @@ pub(super) fn validate_project_form(
             && user_ids.iter().any(|id| !people.contains(id))
         {
             return Err(with_field(
-                err(BAD_REQUEST, "Task access must refer to selected teammates"),
+                OpError::bad_input("Task access must refer to selected teammates"),
                 ProjectFormField::TaskAccess(task.id),
             ));
         }
@@ -466,6 +493,8 @@ pub(super) fn validate_project_form(
 mod tests {
     use super::*;
     use crate::models::project_creation::{InvoiceDefaultsInput, SecondTaxInput};
+    use crate::server_fns::BAD_REQUEST;
+    use dioxus::prelude::ServerFnError;
     use uuid::Uuid;
 
     #[test]
@@ -707,7 +736,7 @@ mod tests {
 
     fn assert_rejection_field(form: &ProjectForm, email: bool, expected: serde_json::Value) {
         let Err(ServerFnError::ServerError { code, details, .. }) =
-            validate_project_form(form, "EUR", email)
+            validate_project_form(form, "EUR", email).map_err(ServerFnError::from)
         else {
             panic!("Expected a field rejection for {expected}");
         };
@@ -769,7 +798,7 @@ mod tests {
                 code,
                 message,
                 details,
-            }) = validate_project_form(&form, &currency, false)
+            }) = validate_project_form(&form, &currency, false).map_err(ServerFnError::from)
             else {
                 panic!("Expected a field rejection for {field}");
             };
@@ -811,7 +840,7 @@ mod tests {
                 code,
                 message,
                 details,
-            }) = validate_project_form(&form, "EUR", false)
+            }) = validate_project_form(&form, "EUR", false).map_err(ServerFnError::from)
             else {
                 panic!("Expected a field rejection for {field}");
             };

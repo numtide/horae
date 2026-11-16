@@ -211,9 +211,10 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         ("save_project_managers", save.clone()),
     ] {
         let response = api.call(name, body, Some(&cookie), false).await;
-        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        // The actor's own invalid state fails closed, as for every operation.
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
         let message = response.text().await.unwrap();
-        assert!(message.contains("Project managers are unavailable"));
+        assert!(message.contains("Permission state is unavailable"));
         assert!(!message.contains("private_invalid_grant"));
         assert!(!message.contains("person_permission_states"));
     }

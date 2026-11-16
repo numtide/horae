@@ -194,7 +194,9 @@ async fn every_project_entry_gates_before_actor_and_rechecks_revocation(pool: Pg
         .expect("organization must precede actor");
         revocation.commit().await.unwrap();
         let (result, ids, request) = requests.join_next().await.unwrap().unwrap();
-        let expected = if matches!(operation, Operation::LoadEditor | Operation::SaveEditor) {
+        // The editor's save keeps its SERIALIZABLE snapshot and conflicts; its
+        // load takes a new snapshot once the revocation commits, and is refused.
+        let expected = if matches!(operation, Operation::SaveEditor) {
             CONFLICT
         } else {
             FORBIDDEN

@@ -387,7 +387,8 @@ fn historical_decoder_distinguishes_missing_change_from_explicit_noop() {
 #[serial_test::serial]
 async fn profile_and_project_history_decode_exact_changes_and_noops(pool: PgPool) {
     use super::calls::profiles::{ProfileAction, ProfileCommand};
-    use super::project_management::ProjectManagersCommand;
+    use crate::models::project_managers::ProjectManagersCommand;
+    use crate::server_fns::project_managers::calls as project_management;
     let ids = fixture(&pool, true).await;
     let mut profile = ProfileCommand {
         request_id: Uuid::now_v7(),
@@ -443,7 +444,7 @@ async fn profile_and_project_history_decode_exact_changes_and_noops(pool: PgPool
         project_id: ids.project_id,
         manager_ids: vec![ids.user_id],
     };
-    super::project_management::execute(&pool, ids.org_id, ids.user_id, &managers)
+    project_management::execute(&pool, ids.org_id, ids.user_id, &managers)
         .await
         .unwrap();
     let added_id = receipt_id(&pool, managers.request_id).await;
@@ -461,7 +462,7 @@ async fn profile_and_project_history_decode_exact_changes_and_noops(pool: PgPool
     );
     managers.request_id = Uuid::now_v7();
     managers.expected_access_revision = 2;
-    super::project_management::execute(&pool, ids.org_id, ids.user_id, &managers)
+    project_management::execute(&pool, ids.org_id, ids.user_id, &managers)
         .await
         .unwrap();
     let noop = read(
@@ -476,7 +477,7 @@ async fn profile_and_project_history_decode_exact_changes_and_noops(pool: PgPool
     assert!(serde_json::to_value(noop).unwrap()["audit"]["details"]["change"].is_null());
     managers.request_id = Uuid::now_v7();
     managers.manager_ids.clear();
-    super::project_management::execute(&pool, ids.org_id, ids.user_id, &managers)
+    project_management::execute(&pool, ids.org_id, ids.user_id, &managers)
         .await
         .unwrap();
     let removed = read(

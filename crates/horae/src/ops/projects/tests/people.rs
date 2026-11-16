@@ -1,7 +1,59 @@
-use super::*;
+//! The project form's people through their adapter, as the person a test names.
+
 use crate::models::people::PeopleCursor;
-use crate::models::project_people::{ProjectPeopleContext as Context, ProjectPeopleQuery as Query};
-use crate::server_fns::permissions::project_people::{ProjectPeopleError, read};
+use crate::models::project_people::{
+    ProjectPeopleContext as Context, ProjectPeopleQuery as Query, ProjectPeopleResult,
+};
+use crate::ops::testing::save_state;
+use crate::ops::{Caller, OpError};
+use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
+use sqlx::PgPool;
+use std::time::Duration;
+use uuid::Uuid;
+
+const EDITING: &str = "Current project editing authority is required";
+/// The actor's own stored permission state is missing or invalid.
+const STATE_UNAVAILABLE: &str = "Permission state is unavailable";
+
+async fn person(pool: &PgPool, org: Uuid, admin: bool, profile: BuiltInProfile) -> Uuid {
+    let id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, 'Person')",
+        id,
+        org,
+        format!("{id}@test.com")
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    save_state(pool, org, id, admin, &profile.selection()).await;
+    id
+}
+
+/// A seeded organization whose person is an administrator.
+async fn fixture(pool: &PgPool) -> SeedIds {
+    let ids = seed(pool, BuiltInProfile::Member).await;
+    save_state(
+        pool,
+        ids.org_id,
+        ids.user_id,
+        true,
+        &BuiltInProfile::Administrator.selection(),
+    )
+    .await;
+    ids
+}
+
+async fn read(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+    context: Context,
+    query: &Query,
+) -> Result<ProjectPeopleResult, OpError> {
+    crate::server_fns::project_people_page(pool, Caller::session(org, actor), context, query).await
+}
 
 async fn grants(pool: &PgPool, actor: Uuid, permissions: &[Permission]) {
     let values: Vec<String> = serde_json::from_value(
@@ -44,7 +96,7 @@ async fn project_people_authorizes_the_operation_not_the_directory(pool: PgPool)
         for context in [create, edit] {
             assert!(matches!(
                 read(&pool, ids.org_id, ids.user_id, context, &search("")).await,
-                Err(ProjectPeopleError::Forbidden)
+                Err(OpError::Forbidden(message)) if message == EDITING
             ));
         }
     }
@@ -58,12 +110,12 @@ async fn project_people_authorizes_the_operation_not_the_directory(pool: PgPool)
     assert!(result.people.iter().any(|p| p.id == target));
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, edit, &search("")).await,
-        Err(ProjectPeopleError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
     grants(&pool, ids.user_id, &[Permission::ProjectWriteManaged]).await;
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, edit, &search("")).await,
-        Err(ProjectPeopleError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
     sqlx::query!("INSERT INTO project_management_assignments (id,org_id,manager_id,project_id) VALUES ($1,$2,$3,$4)", Uuid::now_v7(), ids.org_id, ids.user_id, ids.project_id).execute(&pool).await.unwrap();
     assert_eq!(
@@ -85,7 +137,7 @@ async fn project_people_authorizes_the_operation_not_the_directory(pool: PgPool)
     ] {
         assert!(matches!(
             read(&pool, ids.org_id, ids.user_id, context, &search("")).await,
-            Err(ProjectPeopleError::Forbidden)
+            Err(OpError::Forbidden(message)) if message == EDITING
         ));
     }
     grants(&pool, ids.user_id, &[Permission::ProjectWriteAll]).await;
@@ -122,7 +174,7 @@ async fn project_people_authorizes_the_operation_not_the_directory(pool: PgPool)
             &search("")
         )
         .await,
-        Err(ProjectPeopleError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
 }
 
@@ -254,7 +306,7 @@ async fn project_people_validates_bounded_input_only_after_authorization(pool: P
     for query in &invalid {
         assert!(matches!(
             read(&pool, ids.org_id, ids.user_id, Context::Create, query).await,
-            Err(ProjectPeopleError::InvalidInput)
+            Err(OpError::Invalid { message, .. }) if message == "Invalid project people query"
         ));
     }
     assert!(
@@ -303,7 +355,7 @@ async fn project_people_validates_bounded_input_only_after_authorization(pool: P
     for query in &invalid {
         assert!(matches!(
             read(&pool, ids.org_id, ids.user_id, Context::Create, query).await,
-            Err(ProjectPeopleError::Forbidden)
+            Err(OpError::Forbidden(message)) if message == EDITING
         ));
     }
     assert!(matches!(
@@ -315,7 +367,7 @@ async fn project_people_validates_bounded_input_only_after_authorization(pool: P
             &Query::Resolve { ids: vec![] }
         )
         .await,
-        Err(ProjectPeopleError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
 }
 
@@ -363,7 +415,7 @@ async fn project_people_rechecks_designation_after_waiting_for_revocation(pool: 
     removal.commit().await.unwrap();
     assert!(matches!(
         pending.await.unwrap(),
-        Err(ProjectPeopleError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
     assert!(matches!(
         read(
@@ -376,7 +428,7 @@ async fn project_people_rechecks_designation_after_waiting_for_revocation(pool: 
             }
         )
         .await,
-        Err(ProjectPeopleError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
 }
 
@@ -393,7 +445,7 @@ async fn project_people_denies_invalid_authority_even_for_empty_resolution(pool:
     ] {
         assert!(matches!(
             read(&pool, org, actor, Context::Create, &query).await,
-            Err(ProjectPeopleError::Forbidden)
+            Err(OpError::Forbidden(message)) if message == EDITING
         ));
     }
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
@@ -402,7 +454,7 @@ async fn project_people_denies_invalid_authority_even_for_empty_resolution(pool:
         .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, Context::Create, &query).await,
-        Err(ProjectPeopleError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
     sqlx::query!("UPDATE users SET active=true WHERE id=$1", ids.user_id)
         .execute(&pool)
@@ -411,7 +463,7 @@ async fn project_people_denies_invalid_authority_even_for_empty_resolution(pool:
     sqlx::query!("UPDATE person_permission_states SET grants=ARRAY['unknown_private_grant'] WHERE user_id=$1", ids.user_id).execute(&pool).await.unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, Context::Create, &query).await,
-        Err(ProjectPeopleError::Storage(_))
+        Err(OpError::Forbidden(message)) if message == STATE_UNAVAILABLE
     ));
     sqlx::query!(
         "DELETE FROM person_permission_states WHERE user_id=$1",
@@ -422,7 +474,7 @@ async fn project_people_denies_invalid_authority_even_for_empty_resolution(pool:
     .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, Context::Create, &query).await,
-        Err(ProjectPeopleError::Unavailable)
+        Err(OpError::Forbidden(message)) if message == STATE_UNAVAILABLE
     ));
 }
 
@@ -472,7 +524,7 @@ async fn project_people_rechecks_grants_and_direct_deactivation_after_wait(pool:
         revoke.commit().await.unwrap();
         assert!(matches!(
             pending.await.unwrap(),
-            Err(ProjectPeopleError::Forbidden)
+            Err(OpError::Forbidden(message)) if message == EDITING
         ));
     }
 }
@@ -540,7 +592,7 @@ async fn project_people_holds_authority_until_read_finishes(pool: PgPool) {
         .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, Context::Create, &search("")).await,
-        Err(ProjectPeopleError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
 }
 

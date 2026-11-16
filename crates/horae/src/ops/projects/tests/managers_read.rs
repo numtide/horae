@@ -1,6 +1,7 @@
 use super::*;
-use crate::server_fns::permissions::project_management::read;
+use crate::server_fns::project_managers::calls::read;
 use serde_json::json;
+use uuid::Uuid;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
@@ -72,7 +73,7 @@ async fn manager_reader_requires_current_project_edit_scope_not_identity_or_memb
         permissions(&pool, ids.org_id, ids.user_id, &grants).await;
         assert!(matches!(
             read(&pool, ids.org_id, ids.user_id, ids.project_id).await,
-            Err(ProjectManagersError::Forbidden)
+            Err(OpError::Forbidden(message)) if message == EDITING
         ));
     }
     sqlx::query!(
@@ -84,7 +85,7 @@ async fn manager_reader_requires_current_project_edit_scope_not_identity_or_memb
     .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, ids.project_id).await,
-        Err(ProjectManagersError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
     permissions(
         &pool,
@@ -119,7 +120,7 @@ async fn manager_reader_requires_current_project_edit_scope_not_identity_or_memb
     for project in [foreign.project_id, Uuid::now_v7()] {
         assert!(matches!(
             read(&pool, ids.org_id, ids.user_id, project).await,
-            Err(ProjectManagersError::Forbidden)
+            Err(OpError::Forbidden(message)) if message == EDITING
         ));
     }
     let mut remove = request(ids.project_id, &[]);
@@ -132,11 +133,11 @@ async fn manager_reader_requires_current_project_edit_scope_not_identity_or_memb
     );
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, ids.project_id).await,
-        Err(ProjectManagersError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &remove).await,
-        Err(ProjectManagersError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
 }
 
@@ -175,7 +176,7 @@ async fn manager_reader_rechecks_revocation_after_the_organization_wait(pool: Pg
     hold.commit().await.unwrap();
     assert!(matches!(
         pending.await.unwrap(),
-        Err(ProjectManagersError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
 }
 
@@ -258,7 +259,7 @@ async fn manager_reader_observes_direct_deactivation_before_its_actor_lock(pool:
     hold.commit().await.unwrap();
     assert!(matches!(
         pending.await.unwrap(),
-        Err(ProjectManagersError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
 }
 
@@ -296,6 +297,6 @@ async fn manager_reader_materializes_before_a_waiting_actor_deactivation(pool: P
     revoke.await.unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, ids.project_id).await,
-        Err(ProjectManagersError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
 }

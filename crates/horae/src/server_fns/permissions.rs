@@ -1,7 +1,5 @@
-//! Permission commands and reads that have not moved to `ops` yet. Their
-//! stored state is loaded through `ops::permissions`.
-
-use sqlx::PgConnection;
+//! Tests of the stored permission state and the permission editor, which live
+//! in `ops::permissions`.
 
 // The tests below reach the storage functions through `use super::*`.
 #[cfg(test)]
@@ -13,24 +11,10 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 #[cfg(test)]
 use uuid::Uuid;
 
-pub(crate) mod project_management;
-pub(crate) mod project_people;
-
 /// The permission editor and history as the tests call them.
 #[cfg(test)]
 #[path = "permissions/tests/calls.rs"]
 pub(crate) mod calls;
-
-/// Bound authorization transactions independently of pooled connection defaults.
-/// Left to the project managers and the project editor until they move to `ops`.
-pub(super) async fn configure_administration(
-    connection: &mut PgConnection,
-) -> Result<(), sqlx::Error> {
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE")
-        .execute(&mut *connection)
-        .await?;
-    crate::ops::configure_transaction_limits(connection).await
-}
 
 #[cfg(test)]
 #[path = "permissions/tests/storage.rs"]
@@ -47,10 +31,6 @@ mod profile_tests;
 #[cfg(test)]
 #[path = "permissions/tests/audit.rs"]
 mod audit_tests;
-
-#[cfg(test)]
-#[path = "permissions/tests/project_management.rs"]
-mod project_management_tests;
 
 #[cfg(test)]
 #[path = "permissions/tests/transaction.rs"]

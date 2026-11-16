@@ -1,81 +1,65 @@
+//! The clients and tasks the editor offers, searched and paged.
+
 use super::*;
-use crate::models::permission_editor::PermissionRequester;
+use crate::models::project_creation::{
+    PROJECT_EDITOR_SESSION_CHANGED, ProjectEditorCatalog, ProjectEditorCatalogSearch,
+    ProjectEditorContext,
+};
 use horae_core::permissions::{
-    Actor, ManagementAssignments,
+    ManagementAssignments,
     rates::{BillableRateOwner, BillableRateResource, RateAction, billable_rate_access},
 };
 
-pub(in crate::server_fns::project_creation) async fn read(
-    pool: &sqlx::PgPool,
-    actor_id: Uuid,
-    org_id: Uuid,
+/// One page of active clients and tasks for the editor of `context`'s
+/// project, bound to the requester the editor was loaded for. Task rates show
+/// only to someone who may read the task catalog's billable rates.
+pub(crate) async fn read(
+    tx: &mut Tx,
+    actor: &Actor,
     context: ProjectEditorContext,
     search: &ProjectEditorCatalogSearch,
     email_available: bool,
-) -> Result<ProjectEditorCatalog, ServerFnError> {
-    let mut tx = pool.begin().await.map_err(storage_error)?;
-    crate::server_fns::permissions::configure_administration(&mut tx)
-        .await
-        .map_err(storage_error)?;
-    let permissions = lock_editor_actor(
-        &mut tx,
-        actor_id,
-        org_id,
-        context.project_id,
-        OrganizationLock::Shared,
-    )
-    .await?;
-    let requester = PermissionRequester {
-        org_id,
-        user_id: actor_id,
-    };
-    if context.requester != requester {
-        return Err(ServerFnError::ServerError {
-            code: CONFLICT,
-            message: "Your session changed. Reload the project before continuing.".into(),
-            details: Some(serde_json::json!({
-                "reason": crate::models::project_creation::PROJECT_EDITOR_SESSION_CHANGED
-            })),
-        });
-    }
+) -> Result<ProjectEditorCatalog, OpError> {
+    let org_id = actor.org_id();
+    authorize_write(tx, actor, context.project_id).await?;
+    let requester = actor
+        .expect_requester(Some(context.requester), SESSION_CHANGED)
+        .map_err(|_| session_changed())?;
     // All-project scope still requires a real project in the authenticated tenant.
     let exists = sqlx::query_scalar!(
         "SELECT EXISTS(SELECT 1 FROM projects WHERE org_id=$1 AND id=$2)",
         org_id,
         context.project_id,
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await
-    .map_err(storage_error)?;
+    .map_err(storage)?;
     if exists != Some(true) {
-        return Err(forbidden("Current project editing authority is required"));
+        return Err(OpError::forbidden(EDITING_REQUIRED));
     }
     for search in [&search.clients, &search.tasks] {
         if search.query.chars().count() > 100
             || search.query.contains('\0')
             || search.offset > 10000
         {
-            return Err(err(
-                BAD_REQUEST,
+            return Err(OpError::bad_input(
                 "Narrow the catalog search to at most 100 characters",
             ));
         }
     }
-    let actor = Actor {
-        id: actor_id,
-        org_id,
-        active: true,
-    };
+    let grants = actor
+        .grants()
+        .ok_or_else(|| OpError::forbidden(EDITING_REQUIRED))?;
     let read_task_rates = billable_rate_access(
-        &permissions.grants,
+        grants,
         RateAction::Read,
-        &actor,
+        actor.identity(),
         &BillableRateResource {
             org_id,
             owner: BillableRateOwner::GlobalTask,
         },
         &ManagementAssignments {
-            actor_id,
+            actor_id: actor.id(),
             org_id,
             people: &[],
             projects: &[],
@@ -85,9 +69,9 @@ pub(in crate::server_fns::project_creation) async fn read(
         "SELECT default_currency FROM organizations WHERE id = $1",
         org_id,
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await
-    .map_err(storage_error)?;
+    .map_err(storage)?;
     let mut clients = sqlx::query_as!(
         CreationClient,
         "SELECT id, name, currency, active, NULL::bigint AS default_rate_cents FROM clients
@@ -97,9 +81,9 @@ pub(in crate::server_fns::project_creation) async fn read(
         search.clients.query.trim(),
         i64::from(search.clients.offset),
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut **tx)
     .await
-    .map_err(storage_error)?;
+    .map_err(storage)?;
     let mut tasks = sqlx::query_as!(
         CreationTask,
         "SELECT id, name, billable_default AS billable,
@@ -112,14 +96,13 @@ pub(in crate::server_fns::project_creation) async fn read(
         i64::from(search.tasks.offset),
         read_task_rates,
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut **tx)
     .await
-    .map_err(storage_error)?;
+    .map_err(storage)?;
     let more_clients = clients.len() > 50;
     let more_tasks = tasks.len() > 50;
     clients.truncate(50);
     tasks.truncate(50);
-    tx.commit().await.map_err(storage_error)?;
     Ok(ProjectEditorCatalog {
         context: ProjectEditorContext {
             requester,
@@ -132,4 +115,12 @@ pub(in crate::server_fns::project_creation) async fn read(
         more_clients,
         more_tasks,
     })
+}
+
+const SESSION_CHANGED: &str = "Your session changed. Reload the project before continuing.";
+
+/// The catalog was asked for by a page loaded for someone else: a conflict the
+/// page answers by reloading, which [`PROJECT_EDITOR_SESSION_CHANGED`] tells it.
+fn session_changed() -> OpError {
+    OpError::conflict(SESSION_CHANGED).with_reason(PROJECT_EDITOR_SESSION_CHANGED)
 }

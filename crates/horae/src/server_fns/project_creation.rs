@@ -17,14 +17,15 @@ use crate::models::project_people::{
 use crate::plugin::event::project_payload;
 
 #[cfg(feature = "server")]
-mod validation;
+use crate::ops::projects::form::{form_payload, validate_project_form};
 #[cfg(feature = "server")]
-use validation::validate_project_form;
+use crate::ops::{self, Caller, EventSink, OpError, SnapshotLimits, WriteIsolation};
 #[cfg(feature = "server")]
 mod finalize;
 #[cfg(feature = "server")]
 use finalize::finalize_draft_record;
-#[cfg(feature = "server")]
+/// The project editor as its tests call it.
+#[cfg(all(test, feature = "server"))]
 pub(super) mod editing;
 #[cfg(feature = "server")]
 mod options;
@@ -51,20 +52,7 @@ pub async fn project_people(
 ) -> Result<ProjectPeopleResult, ServerFnError> {
     let caller = session_caller_or("Project people are unavailable").await?;
     let state = crate::state::global_state().await;
-    permissions::project_people::read(&state.db, caller.org_id, caller.user_id, context, &query)
-        .await
-        .map_err(|error| match error {
-            permissions::project_people::ProjectPeopleError::Forbidden => {
-                forbidden("Current project editing authority is required")
-            }
-            permissions::project_people::ProjectPeopleError::InvalidInput => {
-                err(BAD_REQUEST, "Invalid project people query")
-            }
-            error => {
-                tracing::error!(%error, "Project people read failed");
-                server_err("Project people are unavailable")
-            }
-        })
+    Ok(project_people_page(&state.db, caller, context, &query).await?)
 }
 
 /// Read catalogs for the canonical editor under its current operation authority.
@@ -75,15 +63,10 @@ pub async fn project_editor_catalog(
 ) -> Result<ProjectEditorCatalog, ServerFnError> {
     let caller = session_caller_or("Project catalogs are unavailable").await?;
     let state = crate::state::global_state().await;
-    editing::catalog::read(
-        &state.db,
-        caller.user_id,
-        caller.org_id,
-        context,
-        &search,
-        state.mail.is_some(),
+    Ok(
+        project_editor_catalog_page(&state.db, caller, context, &search, state.mail.is_some())
+            .await?,
     )
-    .await
 }
 
 /// Load the existing project into the same form used for creation.
@@ -91,34 +74,88 @@ pub async fn project_editor_catalog(
 pub async fn load_project_editor(project_id: uuid::Uuid) -> Result<EditableProject, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    editing::load_editable_project(&state.db, caller.user_id, caller.org_id, project_id).await
+    Ok(project_editor_view(&state.db, caller, project_id).await?)
 }
 
 #[server]
 pub async fn save_project_editor(request: ProjectEditRequest) -> Result<uuid::Uuid, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let saved = editing::save_project_edit(
+    let saved = project_editor_save(
         &state.db,
-        caller.user_id,
-        caller.org_id,
+        caller,
         &request,
         state.mail.is_some(),
+        &*state.plugins,
     )
     .await?;
-    if saved.changed {
-        state
-            .plugins
-            .dispatch(crate::plugin::AppEvent::ProjectUpdated {
-                occurred_at: chrono::Utc::now(),
-                org_id: caller.org_id,
-                project: project_payload(&saved.project),
-            });
-    }
-    for event in saved.team_events {
-        state.plugins.dispatch(event);
-    }
-    Ok(saved.project.id)
+    Ok(saved.id)
+}
+
+#[cfg(feature = "server")]
+pub(crate) async fn project_people_page(
+    db: &sqlx::PgPool,
+    caller: Caller,
+    context: ProjectPeopleContext,
+    query: &ProjectPeopleQuery,
+) -> Result<ProjectPeopleResult, OpError> {
+    let mut read = ops::begin_read(db, caller).await?;
+    let result = ops::projects::people::read(&mut read.tx, &read.actor, context, query).await;
+    read.finish(result).await
+}
+
+#[cfg(feature = "server")]
+pub(crate) async fn project_editor_catalog_page(
+    db: &sqlx::PgPool,
+    caller: Caller,
+    context: ProjectEditorContext,
+    search: &ProjectEditorCatalogSearch,
+    email_available: bool,
+) -> Result<ProjectEditorCatalog, OpError> {
+    let mut read = ops::begin_read(db, caller).await?;
+    let result = ops::projects::editor::catalog::read(
+        &mut read.tx,
+        &read.actor,
+        context,
+        search,
+        email_available,
+    )
+    .await;
+    read.finish(result).await
+}
+
+/// Every section of the editor comes from one snapshot.
+#[cfg(feature = "server")]
+pub(crate) async fn project_editor_view(
+    db: &sqlx::PgPool,
+    caller: Caller,
+    project_id: uuid::Uuid,
+) -> Result<EditableProject, OpError> {
+    let mut read = ops::begin_read_snapshot(db, caller, SnapshotLimits::Short).await?;
+    let result = ops::projects::editor::load(&mut read.tx, &read.actor, project_id).await;
+    read.finish(result).await
+}
+
+/// A save can change managers, so it holds the organization's `AccessChange`
+/// gate, and runs at SERIALIZABLE so a lost race is a conflict to reload.
+#[cfg(feature = "server")]
+pub(crate) async fn project_editor_save(
+    db: &sqlx::PgPool,
+    caller: Caller,
+    request: &ProjectEditRequest,
+    email_available: bool,
+    events: &dyn EventSink,
+) -> Result<Project, OpError> {
+    let mut write = ops::begin_gated(
+        db,
+        caller,
+        OrganizationLock::AccessChange,
+        WriteIsolation::Serializable,
+    )
+    .await?;
+    let result =
+        ops::projects::editor::save(&mut write.tx, &write.actor, request, email_available).await;
+    write.commit(result, events).await
 }
 
 /// Resolve only the selected active task/person identities, independently of pagination.
@@ -241,17 +278,22 @@ fn storage_error(error: sqlx::Error) -> ServerFnError {
     server_err("Could not save or load the project. Please retry.")
 }
 
-/// A manager designation failure inside a project write: a lost race is
-/// retryable like any other write of the project, not an outage.
+/// Names the form field a creation refusal blames, as
+/// [`OpError::with_field`] does for the operations.
 #[cfg(feature = "server")]
-fn managers_error(
-    error: crate::server_fns::permissions::project_management::ProjectManagersError,
+fn with_field(
+    mut error: ServerFnError,
+    field: crate::models::project_creation::ProjectFormField,
 ) -> ServerFnError {
-    use crate::server_fns::permissions::project_management::ProjectManagersError;
-    match error {
-        ProjectManagersError::Database(error) => storage_error(error),
-        error => crate::server_fns::project_managers::map_error(error),
+    if let ServerFnError::ServerError {
+        code: BAD_REQUEST | NOT_FOUND | CONFLICT,
+        details,
+        ..
+    } = &mut error
+    {
+        *details = Some(serde_json::json!({ "field": field }));
     }
+    error
 }
 
 /// The project form's client dialog (`clients::create_project_client`) as the
@@ -437,46 +479,7 @@ fn validate_draft_form(
             "Setting rates, fees, money budgets or invoice defaults requires permission to edit billable rates",
         ));
     }
-    form_payload(form)
-}
-
-/// The form as stored JSON, within the size and content limits shared by
-/// drafts and edits.
-#[cfg(feature = "server")]
-fn form_payload(form: &ProjectForm) -> Result<serde_json::Value, ServerFnError> {
-    if form.tasks.len() > 500
-        || form.team.len() > 500
-        || form.tags.len() > 50
-        || form.milestones.len() > 100
-        || form.tasks.iter().any(|task| matches!(&task.access, TaskAccess::Restricted { user_ids } if user_ids.len() > 500))
-    {
-        return Err(err(BAD_REQUEST, "Too many project tasks, people, tags or milestones"));
-    }
-    let payload = serde_json::to_value(form).map_err(server_err)?;
-    fn contains_nul(value: &serde_json::Value) -> bool {
-        match value {
-            serde_json::Value::String(text) => text.contains('\0'),
-            serde_json::Value::Array(values) => values.iter().any(contains_nul),
-            serde_json::Value::Object(values) => values.values().any(contains_nul),
-            _ => false,
-        }
-    }
-    if contains_nul(&payload) {
-        return Err(err(
-            BAD_REQUEST,
-            "Project fields cannot contain a null character",
-        ));
-    }
-    // The indented representation is a conservative bound for PostgreSQL's
-    // jsonb text size, which also includes spaces after keys and separators.
-    if serde_json::to_string_pretty(&payload)
-        .map_err(server_err)?
-        .len()
-        > 256 * 1024
-    {
-        return Err(err(BAD_REQUEST, "Project draft exceeds 256 KiB"));
-    }
-    Ok(payload)
+    Ok(form_payload(form)?)
 }
 
 /// What a creator may put in a draft's protected fields: cost rates with

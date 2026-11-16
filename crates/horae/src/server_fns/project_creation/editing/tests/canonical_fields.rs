@@ -387,7 +387,7 @@ async fn canonical_blank_task_removal_preserves_stale_fee_total_without_financia
 #[serial_test::serial]
 async fn canonical_editor_uses_designations_instead_of_assignment_roles(pool: PgPool) {
     use crate::models::project_managers::{ProjectManagersCommand, ProjectManagersCommandKind};
-    use crate::server_fns::permissions::project_management;
+    use crate::server_fns::project_managers::calls as project_management;
 
     let (owner, original) = configured_fixture(&pool).await;
     assert!(
@@ -723,9 +723,10 @@ async fn canonical_save_preserves_withheld_fields_and_original_retry_intent(pool
         .expect("project editing alone can preserve protected fields");
     assert!(changed);
     let mut tx = pool.begin().await.unwrap();
-    let stored = load_project_form(&mut tx, owner.org_id, original.id)
-        .await
-        .unwrap();
+    let stored =
+        crate::ops::projects::editor::load_project_form(&mut tx, owner.org_id, original.id)
+            .await
+            .unwrap();
     tx.commit().await.unwrap();
     let mut expected = original.form;
     expected.name.clone_from(&request.form.name);

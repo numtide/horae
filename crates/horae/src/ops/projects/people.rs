@@ -1,59 +1,28 @@
-//! Project-team selection without directory or financial access.
+//! The people a project form offers for its team: names only, without the
+//! directory's details or anyone's rates.
 
 use horae_core::permissions::catalog::Permission;
-use sqlx::PgPool;
-use uuid::Uuid;
 
+use super::EDITING_REQUIRED;
 use crate::models::people::PeopleCursor;
-use crate::models::permission_editor::PermissionRequester;
 use crate::models::project_people::{
     ProjectPeopleContext, ProjectPeopleQuery, ProjectPeopleResult, ProjectPersonChoice,
 };
-use crate::ops::permissions::{PermissionStorageError, load_person_permissions};
-use crate::ops::{ReadIsolation, begin_lock_only_read_async_commit};
+use crate::ops::{Actor, OpError, Tx};
 
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum ProjectPeopleError {
-    #[error("Current project editing authority is required")]
-    Forbidden,
-    #[error("Permission state is unavailable")]
-    Unavailable,
-    #[error("Invalid project people query")]
-    InvalidInput,
-    #[error(transparent)]
-    Storage(#[from] PermissionStorageError),
-    #[error(transparent)]
-    Database(#[from] sqlx::Error),
-}
+const INVALID_QUERY: &str = "Invalid project people query";
 
-/// Derive actor and organization from authentication; reauthorize every request.
+/// Searches or resolves active people for the form `context` names: creating
+/// a project needs `ProjectCreateAll`, editing one needs authority to edit it.
 pub(crate) async fn read(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
+    tx: &mut Tx,
+    actor: &Actor,
     context: ProjectPeopleContext,
     query: &ProjectPeopleQuery,
-) -> Result<ProjectPeopleResult, ProjectPeopleError> {
-    let mut tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
-    sqlx::query_scalar!("SELECT id FROM organizations WHERE id=$1 FOR SHARE", org_id)
-        .fetch_optional(&mut *tx)
-        .await?
-        .ok_or(ProjectPeopleError::Forbidden)?;
-    let actor = sqlx::query_scalar!(
-        "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
-        org_id,
-        actor_id
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
-    if actor.is_none() {
-        return Err(ProjectPeopleError::Forbidden);
-    }
-    let state = load_person_permissions(&mut tx, org_id, actor_id)
-        .await?
-        .ok_or(ProjectPeopleError::Unavailable)?;
+) -> Result<ProjectPeopleResult, OpError> {
+    let org_id = actor.org_id();
     let authorized = match context {
-        ProjectPeopleContext::Create => state.grants.contains(Permission::ProjectCreateAll),
+        ProjectPeopleContext::Create => actor.has(Permission::ProjectCreateAll),
         ProjectPeopleContext::Edit { project_id } => {
             sqlx::query_scalar!(
                 "SELECT EXISTS(SELECT 1 FROM projects p WHERE p.org_id=$1 AND p.id=$2
@@ -62,17 +31,17 @@ pub(crate) async fn read(
                    WHERE m.org_id=p.org_id AND m.project_id=p.id AND m.manager_id=$3))))",
                 org_id,
                 project_id,
-                actor_id,
-                state.grants.contains(Permission::ProjectWriteAll),
-                state.grants.contains(Permission::ProjectWriteManaged),
+                actor.id(),
+                actor.has(Permission::ProjectWriteAll),
+                actor.has(Permission::ProjectWriteManaged),
             )
-            .fetch_one(&mut *tx)
+            .fetch_one(&mut **tx)
             .await?
                 == Some(true)
         }
     };
     if !authorized {
-        return Err(ProjectPeopleError::Forbidden);
+        return Err(OpError::forbidden(EDITING_REQUIRED));
     }
     let (people, next_after) = match query {
         ProjectPeopleQuery::Search { query, after } => {
@@ -83,7 +52,7 @@ pub(crate) async fn read(
                     .as_ref()
                     .is_some_and(|cursor| cursor.name.contains('\0'))
             {
-                return Err(ProjectPeopleError::InvalidInput);
+                return Err(OpError::bad_input(INVALID_QUERY));
             }
             let mut people = sqlx::query_as!(
                 ProjectPersonChoice,
@@ -96,7 +65,7 @@ pub(crate) async fn read(
                 after.as_ref().map(|cursor| cursor.name.as_str()),
                 after.as_ref().map(|cursor| cursor.id),
             )
-            .fetch_all(&mut *tx)
+            .fetch_all(&mut **tx)
             .await?;
             let next_after = if people.len() > 50 {
                 people.truncate(50);
@@ -111,7 +80,7 @@ pub(crate) async fn read(
         }
         ProjectPeopleQuery::Resolve { ids } => {
             if ids.len() > 500 {
-                return Err(ProjectPeopleError::InvalidInput);
+                return Err(OpError::bad_input(INVALID_QUERY));
             }
             let people = sqlx::query_as!(
                 ProjectPersonChoice,
@@ -120,17 +89,13 @@ pub(crate) async fn read(
                 org_id,
                 ids,
             )
-            .fetch_all(&mut *tx)
+            .fetch_all(&mut **tx)
             .await?;
             (people, None)
         }
     };
-    tx.commit().await?;
     Ok(ProjectPeopleResult {
-        requester: PermissionRequester {
-            org_id,
-            user_id: actor_id,
-        },
+        requester: actor.requester(),
         people,
         next_after,
     })

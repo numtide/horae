@@ -1,7 +1,6 @@
-use super::*;
 use crate::ops::{ReadIsolation, begin_lock_only_read_async_commit, configure_transaction_limits};
-use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::{PgConnection, PgPool};
 
 /// (connection default, expected local statement_timeout, expected local
 /// idle_in_transaction_session_timeout). Covers each unit Postgres prints for
@@ -122,16 +121,6 @@ async fn administration_transactions_bound_limits_and_commit_durably(
         for (default, statement, idle) in CASES {
             let pool = single_connection(&pool_opts, &connect_opts, default).await;
             let commit = commit_default(&pool, forced).await;
-            let mut tx = pool.begin().await.unwrap();
-            configure_administration(&mut tx).await.unwrap();
-            assert_eq!(
-                shown(&mut tx, "transaction_isolation").await,
-                "read committed"
-            );
-            assert_limits(&mut tx, default, statement, idle).await;
-            assert_eq!(shown(&mut tx, "synchronous_commit").await, commit);
-            tx.commit().await.unwrap();
-
             let mut tx = pool.begin().await.unwrap();
             configure_transaction_limits(&mut tx).await.unwrap();
             assert_limits(&mut tx, default, statement, idle).await;
