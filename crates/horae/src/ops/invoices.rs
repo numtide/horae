@@ -23,6 +23,7 @@
 
 use futures_util::{Stream, TryStreamExt};
 use horae_core::permissions::catalog::Permission;
+use horae_core::permissions::invoices;
 use horae_core::types::InvoiceStatus;
 use sqlx::PgConnection;
 use uuid::Uuid;
@@ -43,14 +44,7 @@ pub(crate) mod preview;
 
 pub(crate) use generate::{Generation, generate};
 
-/// Reading issued invoices, including their exports.
-pub(crate) const READ: &[Permission] = &[Permission::InvoiceReadAll];
-/// Changing an invoice's status.
-pub(crate) const WRITE: &[Permission] = &[Permission::InvoiceWriteAll];
-/// Previewing and generating an invoice from uninvoiced work, and editing a
-/// draft's values and fee lines.
-pub(crate) const PREPARE: &[Permission] =
-    &[Permission::InvoiceWriteAll, Permission::BillableRateReadAll];
+pub(crate) use horae_core::permissions::invoices::{PREPARE, READ, WRITE};
 
 const ACCESS_REQUIRED: &str = "Current access is required";
 const WRITE_REQUIRED: &str = "Permission to manage all invoices is required";
@@ -58,7 +52,7 @@ const PREPARE_REQUIRED: &str = "Preparing or editing an invoice requires permiss
 
 /// Whether the actor holds every `required` grant.
 pub(crate) fn holds(actor: &Actor, required: &[Permission]) -> bool {
-    required.iter().all(|&permission| actor.has(permission))
+    invoices::holds(|permission| actor.has(permission), required)
 }
 
 /// Refuses a read unless the actor holds every `required` grant: [`READ`]

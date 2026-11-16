@@ -3,6 +3,7 @@
 
 use chrono::NaiveDate;
 use horae_core::permissions::catalog::Permission;
+use horae_core::permissions::projects;
 use horae_core::types::ProjectType;
 use uuid::Uuid;
 
@@ -52,9 +53,7 @@ pub(crate) async fn view_on(
     )
     .fetch_one(&mut **tx)
     .await?;
-    // The same rule as `set_active`.
-    let can_edit = actor.has(Permission::ProjectWriteAll)
-        || (actor.has(Permission::ProjectWriteManaged) && context.managed);
+    let can_edit = projects::writes(|permission| actor.has(permission), context.managed);
     let member_ids = team_member_ids(tx, actor, project_id).await?;
     let team = sqlx::query_as!(
         ProjectDetailIdentity,

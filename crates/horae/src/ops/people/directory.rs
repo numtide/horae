@@ -2,8 +2,8 @@
 //! grants. Workflow pickers use [`super::list`] or their own operation scope.
 
 use horae_core::permissions::catalog::Permission;
+use horae_core::permissions::person_management::may_change_active;
 
-use super::may_change_active;
 use crate::models::people::{PeopleActivity, PeopleCursor, PeoplePage, PersonSummary};
 use crate::models::permission_editor::PermissionRequester;
 use crate::ops::{Actor, OpError, Tx};

@@ -343,7 +343,7 @@ pub(crate) async fn detail_view(
     Ok(ClientDetailView {
         requester,
         can_manage: actor.has(Permission::ClientWriteAll),
-        can_read_invoices: actor.has(Permission::InvoiceReadAll),
+        can_read_invoices: super::invoices::holds(actor, super::invoices::READ),
         details,
     })
 }
@@ -377,7 +377,7 @@ pub(crate) async fn invoices(
     actor: &Actor,
     client_id: Uuid,
 ) -> Result<Vec<Invoice>, OpError> {
-    if !actor.has(Permission::InvoiceReadAll) {
+    if !super::invoices::holds(actor, super::invoices::READ) {
         return Err(OpError::forbidden(INVOICES_REQUIRED));
     }
     details(tx, actor, client_id).await?;

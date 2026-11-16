@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
-use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
+use horae_core::permissions::catalog::PERMISSION_CATALOG_VERSION;
+use horae_core::permissions::invoices;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -119,7 +120,7 @@ pub(super) async fn release_navigation() {
 /// `get_invoice` require, from a catalog this build understands.
 fn reads_invoices(own: &OwnPermissions) -> bool {
     own.catalog_version == PERMISSION_CATALOG_VERSION
-        && own.grants.contains(&Permission::InvoiceReadAll)
+        && invoices::holds(|grant| own.grants.contains(&grant), invoices::READ)
 }
 
 /// Check this tab's current user's unresolved mutation before exposing invoice actions.
