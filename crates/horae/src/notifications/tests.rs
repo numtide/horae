@@ -5,6 +5,7 @@ use crate::config::MailConfig;
 use uuid::Uuid;
 
 mod authority;
+mod budgets;
 
 struct Stub {
     _directory: tempfile::TempDir,

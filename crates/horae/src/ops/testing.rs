@@ -25,6 +25,32 @@ impl EventSink for Recorder {
     }
 }
 
+/// Replaces a person's permission state with exactly `grants`, stored as an
+/// individual selection.
+pub(crate) async fn save_state(
+    pool: &PgPool,
+    org: Uuid,
+    user: Uuid,
+    admin: bool,
+    grants: &PermissionSelection,
+) {
+    let ids: Vec<String> = serde_json::from_value(serde_json::to_value(grants).unwrap()).unwrap();
+    clear_state(pool, user).await;
+    sqlx::query!(
+        "INSERT INTO person_permission_states
+         (id, org_id, user_id, catalog_version, grants, is_administrator, source)
+         VALUES ($1, $2, $3, 1, $4, $5, 'individual')",
+        Uuid::now_v7(),
+        org,
+        user,
+        &ids,
+        admin
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 /// Replaces the seeded person's permission state with `profile`'s built-in
 /// state, as if the permission editor had assigned it.
 pub(crate) async fn become_profile(pool: &PgPool, ids: &SeedIds, profile: BuiltInProfile) {

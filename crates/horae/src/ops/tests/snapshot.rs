@@ -1,8 +1,11 @@
-use crate::ops::{Caller, OpError, SnapshotLimits, begin_read_snapshot};
-use crate::server_fns::{
-    ServerFnError, invoices, reports,
-    test_seed::{SeedIds, seed, time_entry, wait_for_blocked},
-};
+//! Snapshot consistency of the materialized readers (detailed report, invoice
+//! list and invoice detail) against concurrent access changes.
+
+use crate::models::DetailedReportRow;
+use crate::models::invoice::{InvoiceDetailView, InvoiceListItem};
+use crate::ops::reports::ReportFilters;
+use crate::ops::{Caller, OpError, SnapshotLimits, begin_read, begin_read_snapshot};
+use crate::server_fns::test_seed::{SeedIds, seed, time_entry, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::{EntryState, InvoiceStatus};
 use serde_json::{Value, json};
@@ -40,20 +43,11 @@ impl Fixture {
         org: Uuid,
         actor: Uuid,
         reader: Reader,
-    ) -> Result<Value, ServerFnError> {
+    ) -> Result<Value, OpError> {
         Ok(match reader {
-            Reader::Detailed => json!(
-                reports::fetch_detailed(
-                    pool,
-                    org,
-                    actor,
-                    ("2026-09-07".parse().unwrap(), "2026-09-07".parse().unwrap()),
-                    crate::ops::reports::ReportFilters::default()
-                )
-                .await?
-            ),
-            Reader::List => json!(invoices::fetch_list(pool, org, actor, None).await?),
-            Reader::Invoice => json!(invoices::fetch_detail(pool, org, actor, self.invoice).await?),
+            Reader::Detailed => json!(detailed(pool, org, actor, ReportFilters::default()).await?),
+            Reader::List => json!(invoice_list(pool, org, actor, None).await?),
+            Reader::Invoice => json!(invoice_detail(pool, org, actor, self.invoice).await?),
         })
     }
 
@@ -61,7 +55,7 @@ impl Fixture {
         self: &Arc<Self>,
         pool: &PgPool,
         reader: Reader,
-    ) -> tokio::task::JoinHandle<Result<Value, ServerFnError>> {
+    ) -> tokio::task::JoinHandle<Result<Value, OpError>> {
         let fixture = Arc::clone(self);
         let pool = pool.clone();
         tokio::spawn(async move {
@@ -72,17 +66,48 @@ impl Fixture {
     }
 }
 
-fn denied(result: Result<Value, ServerFnError>) {
-    assert!(
-        matches!(
-            result,
-            Err(ServerFnError::ServerError {
-                code: super::super::FORBIDDEN,
-                ..
-            })
-        ),
-        "{result:?}"
-    );
+/// The detailed report on 2026-09-07, as `get_detailed_report` reads it.
+async fn detailed(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+    filters: ReportFilters,
+) -> Result<Vec<DetailedReportRow>, OpError> {
+    let day = "2026-09-07".parse().unwrap();
+    let mut read = begin_read(pool, Caller::session(org, actor)).await?;
+    let result =
+        crate::ops::reports::detailed(&mut read.tx, &read.actor, (day, day), filters).await;
+    read.finish(result).await
+}
+
+/// The invoice list, as `list_invoices` reads it.
+async fn invoice_list(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+    status: Option<InvoiceStatus>,
+) -> Result<Vec<InvoiceListItem>, OpError> {
+    let mut read =
+        begin_read_snapshot(pool, Caller::session(org, actor), SnapshotLimits::LockWait).await?;
+    let result = crate::ops::invoices::list_items(&mut read.tx, &read.actor, status).await;
+    read.finish(result).await
+}
+
+/// One invoice, as `get_invoice` reads it.
+async fn invoice_detail(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+    invoice: Uuid,
+) -> Result<InvoiceDetailView, OpError> {
+    let mut read =
+        begin_read_snapshot(pool, Caller::session(org, actor), SnapshotLimits::LockWait).await?;
+    let result = crate::ops::invoices::detail(&mut read.tx, &read.actor, invoice).await;
+    read.finish(result).await
+}
+
+fn denied(result: Result<Value, OpError>) {
+    assert!(matches!(result, Err(OpError::Forbidden(_))), "{result:?}");
 }
 
 async fn pid(tx: &mut Transaction<'_, Postgres>) -> i32 {
@@ -171,7 +196,7 @@ async fn readers_preserve_actor_tenant_filters_and_missing_resources(pool: PgPoo
             denied(fixture.read(&pool, org, actor, reader).await);
         }
     }
-    let list = invoices::fetch_list(
+    let list = invoice_list(
         &pool,
         fixture.ids.org_id,
         fixture.ids.user_id,
@@ -181,25 +206,14 @@ async fn readers_preserve_actor_tenant_filters_and_missing_resources(pool: PgPoo
     .unwrap();
     assert!(list.is_empty());
     for id in [foreign.invoice, Uuid::now_v7()] {
-        let result =
-            invoices::fetch_detail(&pool, fixture.ids.org_id, fixture.ids.user_id, id).await;
-        assert!(
-            matches!(
-                result,
-                Err(ServerFnError::ServerError {
-                    code: super::super::NOT_FOUND,
-                    ..
-                })
-            ),
-            "{result:?}"
-        );
+        let result = invoice_detail(&pool, fixture.ids.org_id, fixture.ids.user_id, id).await;
+        assert!(matches!(result, Err(OpError::NotFound(_))), "{result:?}");
     }
-    let rows = reports::fetch_detailed(
+    let rows = detailed(
         &pool,
         fixture.ids.org_id,
         fixture.ids.user_id,
-        ("2026-09-07".parse().unwrap(), "2026-09-07".parse().unwrap()),
-        crate::ops::reports::ReportFilters {
+        ReportFilters {
             project_id: Some(foreign.ids.project_id),
             ..Default::default()
         },

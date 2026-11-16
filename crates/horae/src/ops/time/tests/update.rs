@@ -1,7 +1,6 @@
 use super::*;
-use crate::server_fns::test_seed::{seed, wait_for_blocked};
-use horae_core::permissions::catalog::BuiltInProfile;
-use sqlx::PgPool;
+use crate::models::user::User;
+use crate::server_fns::test_seed::wait_for_blocked;
 use std::time::Duration;
 
 pub(super) async fn editable_entry(pool: &PgPool, billable: bool) -> TimeEntry {
@@ -73,10 +72,7 @@ async fn restricted_empty_task_rejects_picker_manual_and_timer_starts(pool: PgPo
             },
         )
         .await;
-        assert!(matches!(
-            result,
-            Err(ServerFnError::ServerError { code: CONFLICT, .. })
-        ));
+        assert!(matches!(result, Err(OpError::Conflict(_))));
     }
 }
 
@@ -131,10 +127,7 @@ async fn restriction_changes_are_rechecked_before_manual_or_timer_insertion(pool
                 .unwrap()
                 .unwrap()
                 .unwrap();
-            assert!(matches!(
-                result,
-                Err(ServerFnError::ServerError { code: CONFLICT, .. })
-            ));
+            assert!(matches!(result, Err(OpError::Conflict(_))));
             assert_eq!(
                 sqlx::query_scalar!(
                     "SELECT count(*) FROM time_entries WHERE user_id = $1",
@@ -156,10 +149,7 @@ async fn revoked_timer_stop_preserves_the_open_state_guard(pool: PgPool) {
         .execute(&pool).await.unwrap();
     restrict_task(&pool, &entry).await;
     let result = stop_entry_timer(&pool, entry.user_id, entry.id).await;
-    assert!(matches!(
-        result,
-        Err(ServerFnError::ServerError { code: CONFLICT, .. })
-    ));
+    assert!(matches!(result, Err(OpError::Conflict(_))));
     let row = sqlx::query!(
         "SELECT is_running, minutes FROM time_entries WHERE id = $1",
         entry.id
@@ -242,16 +232,19 @@ async fn assignment_cascade_allows_an_inflight_entry_project_fk_to_finish(pool: 
         )
         .await
         .map(|_| ())
+        .map_err(|error| error.to_string())
     });
     wait_for_blocked(&pool, blocker).await;
     let writer = sqlx::query_scalar!(
         "SELECT pid AS \"pid!\" FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid))", blocker,
     ).fetch_one(&pool).await.unwrap();
     let db = pool.clone();
+    // Assignments have no operation in `ops` yet; the adapter's helper removes one.
     requests.spawn(async move {
-        crate::server_fns::projects::remove_assignment(&db, &actor, assignment)
+        crate::server_fns::remove_assignment(&db, &actor, assignment)
             .await
             .map(|removed| assert!(removed.is_some()))
+            .map_err(|error| error.to_string())
     });
     wait_for_blocked(&pool, writer).await;
     barrier.commit().await.unwrap();
@@ -360,13 +353,7 @@ async fn revoked_grant_does_not_trap_an_own_running_timer(pool: PgPool) {
     restrict_task(&pool, &entry).await;
     let foreign_user = seed(&pool, BuiltInProfile::Member).await;
     let foreign = stop_entry_timer(&pool, foreign_user.user_id, running.id).await;
-    assert!(matches!(
-        foreign,
-        Err(ServerFnError::ServerError {
-            code: NOT_FOUND,
-            ..
-        })
-    ));
+    assert!(matches!(foreign, Err(OpError::NotFound(_))));
     let (stopped, _) = stop_entry_timer(&pool, entry.user_id, running.id)
         .await
         .unwrap();

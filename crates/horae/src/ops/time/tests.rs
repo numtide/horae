@@ -8,7 +8,123 @@ use crate::ops::testing::Recorder;
 use crate::ops::{self, Caller};
 use crate::server_fns::test_seed::{SeedIds, seed};
 
+mod activity;
+mod entries;
 mod timesheet;
+mod update;
+
+/// The timer operations run as the session adapters run them, for tests that
+/// name only the person. An unknown person gets an organization of their own,
+/// so the actor carries no authority.
+async fn session_write(pool: &PgPool, user_id: Uuid) -> ops::WriteTx {
+    let org_id = sqlx::query_scalar!("SELECT org_id FROM users WHERE id=$1", user_id)
+        .fetch_optional(pool)
+        .await
+        .unwrap()
+        .unwrap_or_else(Uuid::now_v7);
+    ops::begin(pool, Caller::session(org_id, user_id))
+        .await
+        .unwrap()
+}
+
+/// New own time for tests: a running entry starts the timer (which files it on
+/// today, with no minutes, start or billability request); any other is created
+/// on the person's own Timesheet.
+struct NewTimeEntry<'a> {
+    project_id: Uuid,
+    task_id: Uuid,
+    spent_date: NaiveDate,
+    minutes: i32,
+    notes: Option<&'a str>,
+    billable: bool,
+    start_minute: Option<i32>,
+    is_running: bool,
+}
+
+async fn insert_time_entry(
+    pool: &PgPool,
+    user_id: Uuid,
+    input: NewTimeEntry<'_>,
+) -> Result<TimeEntry, OpError> {
+    use crate::models::permission_editor::PermissionRequester;
+
+    if input.is_running {
+        return start_timer_record(pool, user_id, input.project_id, input.task_id, input.notes)
+            .await;
+    }
+    let mut write = session_write(pool, user_id).await;
+    let context = TimesheetWriteContext {
+        expected_requester: PermissionRequester {
+            org_id: write.actor.org_id(),
+            user_id,
+        },
+        subject_id: user_id,
+    };
+    let command = TimesheetCommand::Create {
+        entry: TimesheetEntryInput {
+            project_id: input.project_id,
+            task_id: input.task_id,
+            spent_date: input.spent_date,
+            minutes: input.minutes,
+            notes: input.notes.map(str::to_owned),
+            billable: input.billable,
+            start_minute: input.start_minute,
+        },
+    };
+    let result = apply(&mut write.tx, &write.actor, &context, command).await;
+    let events = Recorder::default();
+    write.commit(result, &events).await?;
+    let [AppEvent::TimeEntryCreated { time_entry, .. }] = &events.take()[..] else {
+        panic!("a created entry announces itself once");
+    };
+    Ok(sqlx::query_as!(
+        TimeEntry,
+        r#"SELECT id, org_id, user_id, project_id, task_id,
+                spent_date as "spent_date: chrono::NaiveDate",
+                minutes, start_minute, sort_order, rounded_minutes, notes, billable, is_running,
+                started_at as "started_at: chrono::DateTime<chrono::Utc>",
+                state as "state: EntryState", invoice_id,
+                created_at as "created_at: chrono::DateTime<chrono::Utc>",
+                updated_at as "updated_at: chrono::DateTime<chrono::Utc>"
+           FROM time_entries WHERE id = $1"#,
+        time_entry.id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap())
+}
+
+async fn start_timer_record(
+    pool: &PgPool,
+    user_id: Uuid,
+    project_id: Uuid,
+    task_id: Uuid,
+    notes: Option<&str>,
+) -> Result<TimeEntry, OpError> {
+    let mut write = session_write(pool, user_id).await;
+    let result = start_timer(&mut write.tx, &write.actor, project_id, task_id, notes).await;
+    write.commit(result, &Recorder::default()).await
+}
+
+/// The timer widget's stop, by the person who owns the timer.
+async fn stop_entry_timer(
+    pool: &PgPool,
+    user_id: Uuid,
+    entry_id: Uuid,
+) -> Result<(TimeEntry, Option<String>), OpError> {
+    let mut write = session_write(pool, user_id).await;
+    let result = stop_timer(&mut write.tx, &write.actor, entry_id).await;
+    write.commit(result, &Recorder::default()).await
+}
+
+async fn fetch_time_entry_contexts(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<Vec<TimeEntryContext>, OpError> {
+    let mut write = session_write(pool, user_id).await;
+    let result = contexts(&mut write.tx, &write.actor).await.map(Done::new);
+    write.commit(result, &Recorder::default()).await
+}
 
 #[test]
 fn snaps_unaligned_start_to_the_grid() {

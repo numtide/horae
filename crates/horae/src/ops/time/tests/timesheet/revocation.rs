@@ -293,10 +293,7 @@ async fn waiting_writes_recheck_entry_state_after_the_submission_barrier(pool: P
             .unwrap()
             .unwrap();
         assert!(
-            matches!(
-                result,
-                Err(ServerFnError::ServerError { code: CONFLICT, .. })
-            ),
+            matches!(result, Err(OpError::Conflict(_))),
             "reorder={reorder}: {result:?}"
         );
         let stored = sqlx::query!(
