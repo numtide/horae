@@ -66,7 +66,44 @@ pub(crate) fn op_status(error: crate::ops::OpError) -> StatusCode {
     match error {
         OpError::Forbidden(_) | OpError::NotFound(_) => StatusCode::FORBIDDEN,
         OpError::Conflict(_) => StatusCode::CONFLICT,
-        OpError::Invalid { .. } | OpError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        OpError::Invalid { .. } => StatusCode::BAD_REQUEST,
+        OpError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+#[cfg(test)]
+mod op_status_tests {
+    use super::op_status;
+    use crate::ops::OpError;
+    use axum::http::StatusCode;
+
+    #[test]
+    fn invalid_input_is_a_bad_request() {
+        assert_eq!(
+            op_status(OpError::invalid("from", "Invalid date")),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            op_status(OpError::bad_input("Invalid filters")),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn other_errors_keep_their_status() {
+        assert_eq!(
+            op_status(OpError::not_found("hidden")),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            op_status(OpError::forbidden("refused")),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(op_status(OpError::conflict("raced")), StatusCode::CONFLICT);
+        assert_eq!(
+            op_status(OpError::Internal("failed".into())),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
     }
 }
 
