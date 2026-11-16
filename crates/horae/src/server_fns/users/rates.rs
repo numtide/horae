@@ -12,15 +12,9 @@ pub async fn load_person_rates(
     person_id: uuid::Uuid,
     expected_requester: PermissionRequester,
 ) -> Result<PersonRates, ServerFnError> {
-    let viewer = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    read_person_rates(
-        &state.db,
-        Caller::session(viewer.org_id, viewer.id),
-        person_id,
-        expected_requester,
-    )
-    .await
+    read_person_rates(&state.db, caller, person_id, expected_requester).await
 }
 
 /// Change a person's rates. `currency` is the one the form showed, so an
@@ -33,12 +27,12 @@ pub async fn update_person_rates(
     billable: RateEdit,
     cost: RateEdit,
 ) -> Result<PersonRates, ServerFnError> {
-    let viewer = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     write_person_rates(
         &state.db,
         &*state.plugins,
-        Caller::session(viewer.org_id, viewer.id),
+        caller,
         person_id,
         expected_requester,
         &currency,

@@ -12,17 +12,9 @@ mod tests;
 pub async fn get_time_report_access(
     expected_requester: Option<crate::models::permission_editor::PermissionRequester>,
 ) -> Result<crate::models::time_report::TimeReportAccess, ServerFnError> {
-    let user = require_user().await.map_err(|error| match error {
-        error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => error,
-        error => {
-            tracing::error!(%error, "Unable to authenticate report access");
-            server_err("Report access is unavailable")
-        }
-    })?;
+    let caller = session_caller_or("Report access is unavailable").await?;
     let state = crate::state::global_state().await;
-    let read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let read = ops::begin_read(&state.db, caller).await?;
     let result = ops::time_reads::reports::access(&read.actor, expected_requester);
     Ok(read.finish(result).await?)
 }
@@ -32,17 +24,9 @@ pub async fn get_time_report_access(
 pub async fn list_visible_time_report_entries(
     query: crate::models::time_report::TimeReportQuery,
 ) -> Result<crate::models::time_report::TimeReportPage, ServerFnError> {
-    let user = require_user().await.map_err(|error| match error {
-        error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => error,
-        error => {
-            tracing::error!(%error, "Unable to authenticate time-report read");
-            server_err("Time report is unavailable")
-        }
-    })?;
+    let caller = session_caller_or("Time report is unavailable").await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut read = ops::begin_read(&state.db, caller).await?;
     let result = ops::time_reads::reports::entries(&mut read.tx, &read.actor, &query).await;
     Ok(read.finish(result).await?)
 }
@@ -54,17 +38,9 @@ pub async fn list_visible_time_report_entries(
 pub async fn list_visible_time_report_groups(
     query: crate::models::time_report::TimeReportGroupQuery,
 ) -> Result<crate::models::time_report::TimeReportGroupPage, ServerFnError> {
-    let user = require_user().await.map_err(|error| match error {
-        error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => error,
-        error => {
-            tracing::error!(%error, "Unable to authenticate grouped time-report read");
-            server_err("Time report is unavailable")
-        }
-    })?;
+    let caller = session_caller_or("Time report is unavailable").await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut read = ops::begin_read(&state.db, caller).await?;
     let result = ops::time_reads::reports::groups::read(&mut read.tx, &read.actor, &query).await;
     Ok(read.finish(result).await?)
 }
@@ -83,7 +59,7 @@ pub async fn report_time(
     user_id: Option<String>,
     tag_id: Option<String>,
 ) -> Result<Vec<ReportRow>, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
 
     let from_date = parse_date(&from, "from")?;
@@ -97,8 +73,8 @@ pub async fn report_time(
 
     fetch_report(
         &state.db,
-        user.org_id,
-        user.id,
+        caller.org_id,
+        caller.user_id,
         (from_date, to_date),
         &group_by,
         filters,
@@ -131,7 +107,7 @@ pub async fn report_detailed(
     user_id: Option<String>,
     tag_id: Option<String>,
 ) -> Result<Vec<DetailedReportRow>, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
 
     let from_date = parse_date(&from, "from")?;
     let to_date = parse_date(&to, "to")?;
@@ -145,8 +121,8 @@ pub async fn report_detailed(
     let state = crate::state::global_state().await;
     fetch_detailed(
         &state.db,
-        user.org_id,
-        user.id,
+        caller.org_id,
+        caller.user_id,
         (from_date, to_date),
         filters,
     )
@@ -171,7 +147,7 @@ pub(super) async fn fetch_detailed(
 /// Collect dashboard widgets from all loaded plugins (FR-022).
 #[server]
 pub async fn get_plugin_widgets() -> Result<Vec<PluginWidget>, ServerFnError> {
-    let _user = require_user().await?;
+    session_caller().await?;
     let state = crate::state::global_state().await;
     let widgets = state.plugins.collect_widgets().await;
     Ok(widgets

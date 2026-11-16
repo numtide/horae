@@ -7,15 +7,10 @@ pub async fn get_project_detail_view(
     project_id: String,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<ProjectDetailView, ServerFnError> {
-    let viewer = require_user().await?;
+    let caller = session_caller().await?;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read_snapshot(
-        &state.db,
-        Caller::session(viewer.org_id, viewer.id),
-        ops::SnapshotLimits::Short,
-    )
-    .await?;
+    let mut read = ops::begin_read_snapshot(&state.db, caller, ops::SnapshotLimits::Short).await?;
     let result =
         ops::projects::detail_view(&mut read.tx, &read.actor, project_id, expected_requester).await;
     Ok(read.finish(result).await?)

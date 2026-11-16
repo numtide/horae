@@ -7,21 +7,15 @@ use crate::models::project_managers::{
 };
 
 #[cfg(feature = "server")]
-async fn requester(expected: Option<PermissionRequester>) -> Result<User, ServerFnError> {
-    let user = require_user().await.map_err(|error| match error {
-        error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => error,
-        error => {
-            tracing::error!(%error, "Unable to authenticate project manager request");
-            server_err("Project managers are unavailable")
-        }
-    })?;
-    crate::ops::Caller::session(user.org_id, user.id).expect_requester(
+async fn requester(
+    expected: Option<PermissionRequester>,
+) -> Result<crate::ops::Caller, ServerFnError> {
+    let caller = session_caller_or("Project managers are unavailable").await?;
+    caller.expect_requester(
         expected,
         "Sign in as the original requester before retrying",
     )?;
-    Ok(user)
+    Ok(caller)
 }
 
 #[cfg(feature = "server")]
@@ -47,9 +41,9 @@ pub async fn load_project_managers(
     project_id: uuid::Uuid,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<ProjectManagers, ServerFnError> {
-    let user = requester(expected_requester).await?;
+    let caller = requester(expected_requester).await?;
     let state = crate::state::global_state().await;
-    permissions::project_management::read(&state.db, user.org_id, user.id, project_id)
+    permissions::project_management::read(&state.db, caller.org_id, caller.user_id, project_id)
         .await
         .map_err(map_error)
 }
@@ -60,9 +54,9 @@ pub async fn save_project_managers(
     command: ProjectManagersCommand,
     expected_requester: PermissionRequester,
 ) -> Result<ProjectManagersOutcome, ServerFnError> {
-    let user = requester(Some(expected_requester)).await?;
+    let caller = requester(Some(expected_requester)).await?;
     let state = crate::state::global_state().await;
-    permissions::project_management::execute(&state.db, user.org_id, user.id, &command)
+    permissions::project_management::execute(&state.db, caller.org_id, caller.user_id, &command)
         .await
         .map_err(map_error)
 }

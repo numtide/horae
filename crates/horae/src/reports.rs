@@ -37,15 +37,11 @@ async fn require_session(session: &Session) -> Result<(uuid::Uuid, uuid::Uuid), 
         .await
         .ok_or(StatusCode::UNAUTHORIZED)?;
     let state = crate::state::global_state().await;
-    let org_id = sqlx::query_scalar!(
-        "SELECT org_id FROM users WHERE id = $1 AND active = true",
-        user_id,
-    )
-    .fetch_optional(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .ok_or(StatusCode::UNAUTHORIZED)?;
-    Ok((user_id, org_id))
+    let caller = crate::server_fns::active_caller(&state.db, user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    Ok((caller.user_id, caller.org_id))
 }
 
 /// Refuses a session whose stored state does not grant reading every invoice,

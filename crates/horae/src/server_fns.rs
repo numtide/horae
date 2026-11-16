@@ -151,6 +151,98 @@ pub(crate) async fn require_user() -> Result<crate::models::User, ServerFnError>
     .ok_or_else(|| unauthorized("Account is not active"))
 }
 
+/// The session's organization and person, for endpoints that need nothing
+/// else from the account. Refuses a deactivated account with the same 401 as
+/// [`require_user`]; the operation's transaction then loads the actor.
+#[cfg(feature = "server")]
+pub(crate) async fn session_caller() -> Result<crate::ops::Caller, ServerFnError> {
+    let user_id = session_user_id().await?;
+    let state = crate::state::global_state().await;
+    active_caller(&state.db, user_id)
+        .await
+        .map_err(server_err)?
+        .ok_or_else(|| unauthorized("Account is not active"))
+}
+
+/// [`session_caller`] for endpoints that answer any failure other than a 401
+/// as `unavailable`, without exposing the cause.
+#[cfg(feature = "server")]
+pub(crate) async fn session_caller_or(
+    unavailable: &'static str,
+) -> Result<crate::ops::Caller, ServerFnError> {
+    session_caller()
+        .await
+        .map_err(|error| unavailable_unless_unauthorized(error, unavailable))
+}
+
+#[cfg(feature = "server")]
+fn unavailable_unless_unauthorized(error: ServerFnError, unavailable: &str) -> ServerFnError {
+    match error {
+        error @ ServerFnError::ServerError {
+            code: UNAUTHORIZED, ..
+        } => error,
+        error => {
+            tracing::error!(%error, unavailable, "Unable to authenticate request");
+            server_err(unavailable)
+        }
+    }
+}
+
+/// The person's session caller if their account is still active. Shared by
+/// the server functions and the Axum export routes.
+#[cfg(feature = "server")]
+pub(crate) async fn active_caller(
+    db: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+) -> Result<Option<crate::ops::Caller>, sqlx::Error> {
+    let org_id = sqlx::query_scalar!(
+        "SELECT org_id FROM users WHERE id = $1 AND active = true",
+        user_id,
+    )
+    .fetch_optional(db)
+    .await?;
+    Ok(org_id.map(|org_id| crate::ops::Caller::session(org_id, user_id)))
+}
+
+/// Test fixtures hold a whole `User`; the read helpers take its caller.
+#[cfg(all(test, feature = "server"))]
+impl From<&User> for crate::ops::Caller {
+    fn from(user: &User) -> Self {
+        Self::session(user.org_id, user.id)
+    }
+}
+
+#[cfg(all(test, feature = "server"))]
+mod session_caller_tests {
+    use super::*;
+
+    #[test]
+    fn a_sign_in_refusal_keeps_its_status_and_message() {
+        let error = unavailable_unless_unauthorized(
+            unauthorized("Account is not active"),
+            "Timesheet is unavailable",
+        );
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError { code: UNAUTHORIZED, ref message, .. }
+                if message == "Account is not active"
+        ));
+    }
+
+    #[test]
+    fn any_other_failure_reads_as_unavailable() {
+        let error = unavailable_unless_unauthorized(
+            server_err("pool timed out"),
+            "Timesheet is unavailable",
+        );
+        assert!(matches!(
+            error,
+            ServerFnError::ServerError { code: INTERNAL_ERROR, ref message, .. }
+                if message == "Timesheet is unavailable"
+        ));
+    }
+}
+
 // ── Feature modules ──────────────────────────────────────────────────────────
 // The #[server] endpoints grouped by feature; re-exported so call sites keep
 // using `server_fns::<fn>` regardless of which submodule a function lives in.

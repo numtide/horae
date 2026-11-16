@@ -45,20 +45,12 @@ pub async fn list_permission_audit(
     after: Option<crate::models::permission_audit::AuditCursor>,
     expected_requester: Option<crate::models::permission_editor::PermissionRequester>,
 ) -> Result<crate::models::permission_audit::AuditPage, ServerFnError> {
-    let user = require_user().await.map_err(|error| match error {
-        error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => error,
-        error => {
-            tracing::error!(%error, "Unable to authenticate permission history request");
-            server_err("Permission history is unavailable")
-        }
-    })?;
+    let caller = session_caller_or("Permission history is unavailable").await?;
     let state = crate::state::global_state().await;
     super::permissions::audit::page(
         &state.db,
-        user.org_id,
-        user.id,
+        caller.org_id,
+        caller.user_id,
         after.as_ref(),
         expected_requester,
     )
@@ -79,18 +71,10 @@ pub async fn list_permission_audit(
 #[server]
 pub async fn get_my_permissions()
 -> Result<crate::models::own_permissions::OwnPermissions, ServerFnError> {
-    use crate::ops::{self, Caller};
-    let user = require_user().await.map_err(|error| match error {
-        error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => error,
-        error => {
-            tracing::error!(%error, "Unable to authenticate own permission request");
-            server_err("Permission state is unavailable")
-        }
-    })?;
+    use crate::ops;
+    let caller = session_caller_or("Permission state is unavailable").await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut read = ops::begin_read(&state.db, caller).await?;
     let result = ops::profile::permissions(&mut read.tx, &read.actor).await;
     Ok(read.finish(result).await?)
 }
@@ -98,10 +82,10 @@ pub async fn get_my_permissions()
 /// The running server's version label, for administrators only.
 #[server]
 pub async fn get_server_version() -> Result<String, ServerFnError> {
-    use crate::ops::{self, Caller};
-    let user = require_user().await?;
+    use crate::ops;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let read = ops::begin_read(&state.db, caller).await?;
     let result = ops::profile::server_version(&read.actor);
     Ok(read.finish(result).await?)
 }

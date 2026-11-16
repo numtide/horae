@@ -49,17 +49,9 @@ pub async fn project_people(
     context: ProjectPeopleContext,
     query: ProjectPeopleQuery,
 ) -> Result<ProjectPeopleResult, ServerFnError> {
-    let actor = require_user().await.map_err(|error| match error {
-        error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => error,
-        error => {
-            tracing::error!(%error, "Unable to authenticate project people request");
-            server_err("Project people are unavailable")
-        }
-    })?;
+    let caller = session_caller_or("Project people are unavailable").await?;
     let state = crate::state::global_state().await;
-    permissions::project_people::read(&state.db, actor.org_id, actor.id, context, &query)
+    permissions::project_people::read(&state.db, caller.org_id, caller.user_id, context, &query)
         .await
         .map_err(|error| match error {
             permissions::project_people::ProjectPeopleError::Forbidden => {
@@ -81,20 +73,12 @@ pub async fn project_editor_catalog(
     context: ProjectEditorContext,
     search: ProjectEditorCatalogSearch,
 ) -> Result<ProjectEditorCatalog, ServerFnError> {
-    let actor = require_user().await.map_err(|error| match error {
-        error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => error,
-        error => {
-            tracing::error!(%error, "Unable to authenticate project catalog request");
-            server_err("Project catalogs are unavailable")
-        }
-    })?;
+    let caller = session_caller_or("Project catalogs are unavailable").await?;
     let state = crate::state::global_state().await;
     editing::catalog::read(
         &state.db,
-        actor.id,
-        actor.org_id,
+        caller.user_id,
+        caller.org_id,
         context,
         &search,
         state.mail.is_some(),
@@ -105,19 +89,19 @@ pub async fn project_editor_catalog(
 /// Load the existing project into the same form used for creation.
 #[server]
 pub async fn load_project_editor(project_id: uuid::Uuid) -> Result<EditableProject, ServerFnError> {
-    let actor = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    editing::load_editable_project(&state.db, actor.id, actor.org_id, project_id).await
+    editing::load_editable_project(&state.db, caller.user_id, caller.org_id, project_id).await
 }
 
 #[server]
 pub async fn save_project_editor(request: ProjectEditRequest) -> Result<uuid::Uuid, ServerFnError> {
-    let actor = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let saved = editing::save_project_edit(
         &state.db,
-        actor.id,
-        actor.org_id,
+        caller.user_id,
+        caller.org_id,
         &request,
         state.mail.is_some(),
     )
@@ -127,7 +111,7 @@ pub async fn save_project_editor(request: ProjectEditRequest) -> Result<uuid::Uu
             .plugins
             .dispatch(crate::plugin::AppEvent::ProjectUpdated {
                 occurred_at: chrono::Utc::now(),
-                org_id: actor.org_id,
+                org_id: caller.org_id,
                 project: project_payload(&saved.project),
             });
     }
@@ -143,9 +127,16 @@ pub async fn project_creation_selection(
     task_ids: Vec<uuid::Uuid>,
     user_ids: Vec<uuid::Uuid>,
 ) -> Result<CreationSelection, ServerFnError> {
-    let actor = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    load_selected_catalog(&state.db, actor.id, actor.org_id, &task_ids, &user_ids).await
+    load_selected_catalog(
+        &state.db,
+        caller.user_id,
+        caller.org_id,
+        &task_ids,
+        &user_ids,
+    )
+    .await
 }
 
 /// Resolve an existing draft selection without searching or fetching a whole catalog.
@@ -153,21 +144,21 @@ pub async fn project_creation_selection(
 pub async fn project_creation_client(
     client_id: uuid::Uuid,
 ) -> Result<Option<CreationClient>, ServerFnError> {
-    let actor = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    load_selected_client(&state.db, actor.id, actor.org_id, client_id).await
+    load_selected_client(&state.db, caller.user_id, caller.org_id, client_id).await
 }
 
 #[server]
 pub async fn project_creation_options(
     search: CreationSearch,
 ) -> Result<CreationOptions, ServerFnError> {
-    let actor = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     load_creation_options(
         &state.db,
-        actor.id,
-        actor.org_id,
+        caller.user_id,
+        caller.org_id,
         &search,
         state.mail.is_some(),
     )
@@ -180,12 +171,12 @@ pub async fn finalize_project_draft(
     expected_revision: i64,
     form: ProjectForm,
 ) -> Result<uuid::Uuid, ServerFnError> {
-    let actor = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     finalize_draft_record(
         &state.db,
-        actor.id,
-        actor.org_id,
+        caller.user_id,
+        caller.org_id,
         draft_id,
         expected_revision,
         &form,
@@ -196,9 +187,9 @@ pub async fn finalize_project_draft(
 
 #[server]
 pub async fn load_project_draft() -> Result<Option<ProjectDraft>, ServerFnError> {
-    let actor = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    load_draft_record(&state.db, actor.id, actor.org_id).await
+    load_draft_record(&state.db, caller.user_id, caller.org_id).await
 }
 
 #[server]
@@ -207,12 +198,12 @@ pub async fn save_project_draft(
     expected_revision: i64,
     form: ProjectForm,
 ) -> Result<DraftSaved, ServerFnError> {
-    let actor = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     save_draft_record(
         &state.db,
-        actor.id,
-        actor.org_id,
+        caller.user_id,
+        caller.org_id,
         draft_id,
         expected_revision,
         &form,
@@ -225,12 +216,12 @@ pub async fn discard_project_draft(
     draft_id: uuid::Uuid,
     expected_revision: i64,
 ) -> Result<(), ServerFnError> {
-    let actor = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     discard_draft_record(
         &state.db,
-        actor.id,
-        actor.org_id,
+        caller.user_id,
+        caller.org_id,
         draft_id,
         expected_revision,
     )

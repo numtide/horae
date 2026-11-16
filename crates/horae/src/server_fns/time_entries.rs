@@ -4,31 +4,16 @@ use super::*;
 #[cfg(feature = "server")]
 use crate::notifications::budgets::check_project_budget;
 #[cfg(feature = "server")]
-use crate::ops::{self, Caller};
-
-/// The Timesheet's session check: a signed-out person gets 401, anything else
-/// reads as the sheet being unavailable.
-#[cfg(feature = "server")]
-async fn timesheet_user() -> Result<crate::models::User, ServerFnError> {
-    require_user().await.map_err(|error| match error {
-        error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => error,
-        error => {
-            tracing::error!(%error, "Timesheet operation failed");
-            server_err("Timesheet is unavailable")
-        }
-    })
-}
+use crate::ops;
 
 /// Eligible, writable tracking choices for one explicitly selected person.
 #[server]
 pub async fn load_timesheet_tracking(
     context: crate::models::scoped_time::TimesheetWriteContext,
 ) -> Result<Vec<crate::models::scoped_time::TimesheetTrackingOption>, ServerFnError> {
-    let user = timesheet_user().await?;
+    let caller = session_caller_or("Timesheet is unavailable").await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut read = ops::begin_read(&state.db, caller).await?;
     let result = ops::time::tracking(&mut read.tx, &read.actor, &context).await;
     Ok(read.finish(result).await?)
 }
@@ -41,9 +26,9 @@ pub async fn apply_timesheet_command(
     context: crate::models::scoped_time::TimesheetWriteContext,
     command: crate::models::scoped_time::TimesheetCommand,
 ) -> Result<Option<String>, ServerFnError> {
-    let user = timesheet_user().await?;
+    let caller = session_caller_or("Timesheet is unavailable").await?;
     let state = crate::state::global_state().await;
-    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut write = ops::begin(&state.db, caller).await?;
     let result = ops::time::apply(&mut write.tx, &write.actor, &context, command).await;
     let change = write.commit(result, &*state.plugins).await?;
     for project in change.projects {
@@ -57,17 +42,9 @@ pub async fn apply_timesheet_command(
 pub async fn load_timesheet_page(
     query: crate::models::scoped_time::TimesheetQuery,
 ) -> Result<crate::models::scoped_time::TimesheetPage, ServerFnError> {
-    let user = require_user().await.map_err(|error| match error {
-        error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => error,
-        error => {
-            tracing::error!(%error, "Unable to authenticate Timesheet read");
-            server_err("Timesheet is unavailable")
-        }
-    })?;
+    let caller = session_caller_or("Timesheet is unavailable").await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut read = ops::begin_read(&state.db, caller).await?;
     let result = ops::time_reads::sheet(&mut read.tx, &read.actor, &query).await;
     Ok(read.finish(result).await?)
 }
@@ -77,17 +54,9 @@ pub async fn load_timesheet_page(
 pub async fn list_timesheet_people(
     query: crate::models::scoped_time::TimesheetPeopleQuery,
 ) -> Result<crate::models::scoped_time::TimesheetPeoplePage, ServerFnError> {
-    let user = require_user().await.map_err(|error| match error {
-        error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => error,
-        error => {
-            tracing::error!(%error, "Unable to authenticate timesheet people read");
-            server_err("Timesheet people are unavailable")
-        }
-    })?;
+    let caller = session_caller_or("Timesheet people are unavailable").await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut read = ops::begin_read(&state.db, caller).await?;
     let result = ops::time_reads::people(&mut read.tx, &read.actor, &query).await;
     Ok(read.finish(result).await?)
 }
@@ -96,9 +65,9 @@ pub async fn list_timesheet_people(
 #[server]
 pub async fn list_time_entry_contexts()
 -> Result<Vec<crate::models::time_entry::TimeEntryContext>, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut read = ops::begin_read(&state.db, caller).await?;
     let result = ops::time::contexts(&mut read.tx, &read.actor).await;
     Ok(read.finish(result).await?)
 }
@@ -111,11 +80,11 @@ pub async fn start_timer(
     task_id: String,
     notes: Option<String>,
 ) -> Result<TimeEntry, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let task_id = parse_uuid(&task_id, "task_id")?;
-    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut write = ops::begin(&state.db, caller).await?;
     let result = ops::time::start_timer(
         &mut write.tx,
         &write.actor,
@@ -131,10 +100,10 @@ pub async fn start_timer(
 /// the day; the notice, when present, says how much the daily limit cut.
 #[server]
 pub async fn stop_timer(entry_id: String) -> Result<(TimeEntry, Option<String>), ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let entry_id = parse_uuid(&entry_id, "entry_id")?;
-    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut write = ops::begin(&state.db, caller).await?;
     let result = ops::time::stop_timer(&mut write.tx, &write.actor, entry_id).await;
     let (entry, notice) = write.commit(result, &*state.plugins).await?;
     tokio::spawn(check_project_budget(state, entry.project_id));
@@ -144,9 +113,9 @@ pub async fn stop_timer(entry_id: String) -> Result<(TimeEntry, Option<String>),
 /// Return the currently running timer for the authenticated user, if any.
 #[server]
 pub async fn get_current_timer() -> Result<Option<TimeEntry>, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut read = ops::begin_read(&state.db, caller).await?;
     let result = ops::time::current_timer(&mut read.tx, &read.actor).await;
     Ok(read.finish(result).await?)
 }
@@ -161,7 +130,7 @@ async fn session_write(pool: &sqlx::PgPool, user_id: uuid::Uuid) -> ops::WriteTx
         .await
         .unwrap()
         .unwrap_or_else(uuid::Uuid::now_v7);
-    ops::begin(pool, Caller::session(org_id, user_id))
+    ops::begin(pool, ops::Caller::session(org_id, user_id))
         .await
         .unwrap()
 }

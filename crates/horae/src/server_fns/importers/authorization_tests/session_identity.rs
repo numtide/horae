@@ -55,4 +55,24 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             .status(),
         StatusCode::UNAUTHORIZED
     );
+
+    // `session_caller` and `session_caller_or` refuse exactly as `get_me` does.
+    for name in [
+        "get_server_version",
+        "get_week_start",
+        "list_tracking_projects",
+        "get_my_permissions",
+        "get_time_report_access",
+    ] {
+        for (cookie, message) in [
+            (None, "Not authenticated — please sign in."),
+            (Some(cookie.as_str()), "Account is not active"),
+            (Some(missing.as_str()), "Account is not active"),
+        ] {
+            let response = api.call(name, json!({}), cookie, false).await;
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{name}");
+            let body = response.text().await.unwrap();
+            assert!(body.contains(message), "{name}: {body}");
+        }
+    }
 }
