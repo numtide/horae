@@ -3,11 +3,12 @@
 //! [`rates`].
 //!
 //! Adding people needs `PeopleWriteAll`, which the Administrator, Executive
-//! Manager and People Admin profiles hold. Archiving and restoring also accept
+//! Manager and People Admin profiles hold; the CLI and OIDC sign-up add people
+//! through their own channels (see [`add`]). Archiving and restoring also accept
 //! `PeopleWriteManaged` for the people the actor manages. Who is an
-//! administrator is decided only in the permission editor, so these operations
-//! never name one and leave an administrator's account to another
-//! administrator.
+//! administrator is decided in the permission editor, so these operations
+//! never name one for a signed-in person (only the server's operator can) and
+//! leave an administrator's account to another administrator.
 //!
 //! Answers carry identity only (`UserListItem`): a people grant does not open
 //! rates or sign-in details.
@@ -17,13 +18,16 @@ use horae_core::permissions::person_management::may_change_active;
 use uuid::Uuid;
 
 use super::permissions::provisioning;
-use super::{Actor, Done, OpError, Tx};
+use super::{Actor, Channel, Done, OpError, Tx};
 use crate::models::user::{Activation, AddedPeople, NewPerson, UserListItem};
 use crate::plugin::AppEvent;
 use crate::plugin::event::{ActiveTransition, UserPayload, active_transition};
 
 pub(crate) mod directory;
 pub(crate) mod rates;
+
+#[cfg(test)]
+mod channel_tests;
 
 const NOT_FOUND: &str = "Person not found";
 const WRITE_REQUIRED: &str = "Permission to manage people is required";
@@ -34,6 +38,7 @@ const ADMINISTRATOR_PROFILE: &str =
     "Administrators are chosen in the permission editor, not when adding a person";
 const PROFILE_NEEDS_ADMINISTRATOR: &str =
     "Only an administrator can add a person with a profile other than Member";
+const SYSTEM_ADDS_MEMBERS: &str = "Automatic sign-up adds members only";
 const ADMINISTRATOR_TARGET: &str = "Only an administrator can archive or restore an administrator";
 const LAST_ADMINISTRATOR: &str = "The organization must keep at least one active administrator.";
 
@@ -82,9 +87,16 @@ pub(crate) async fn list(
     .await?)
 }
 
-/// Adds people with `profile`'s permission state. A person with more than the
-/// Member profile is effectively a permission change, so only an
-/// administrator may choose one, and nobody becomes an administrator here.
+/// Adds people with `profile`'s permission state.
+///
+/// What each channel may add:
+/// - a signed-in person: anyone with `PeopleWriteAll` adds members; a person
+///   with more than the Member profile is effectively a permission change, so
+///   only an administrator may choose one, and nobody becomes an administrator
+///   here;
+/// - the server's operator (`horae user create`): any built-in profile,
+///   Administrator included;
+/// - the system (an OIDC first sign-in): members only.
 pub(crate) async fn add(
     tx: &mut Tx,
     actor: &Actor,
@@ -93,14 +105,24 @@ pub(crate) async fn add(
     activation: Activation,
     existing: Existing,
 ) -> Result<Done<AddedPeople>, OpError> {
-    if !actor.has(Permission::PeopleWriteAll) {
-        return Err(OpError::forbidden(WRITE_REQUIRED));
-    }
-    if profile == BuiltInProfile::Administrator {
-        return Err(OpError::invalid("profile", ADMINISTRATOR_PROFILE));
-    }
-    if profile != BuiltInProfile::Member && !actor.administrator() {
-        return Err(OpError::forbidden(PROFILE_NEEDS_ADMINISTRATOR));
+    match actor.channel() {
+        Channel::Session => {
+            if !actor.has(Permission::PeopleWriteAll) {
+                return Err(OpError::forbidden(WRITE_REQUIRED));
+            }
+            if profile == BuiltInProfile::Administrator {
+                return Err(OpError::invalid("profile", ADMINISTRATOR_PROFILE));
+            }
+            if profile != BuiltInProfile::Member && !actor.administrator() {
+                return Err(OpError::forbidden(PROFILE_NEEDS_ADMINISTRATOR));
+            }
+        }
+        Channel::Operator => {}
+        Channel::System => {
+            if profile != BuiltInProfile::Member {
+                return Err(OpError::forbidden(SYSTEM_ADDS_MEMBERS));
+            }
+        }
     }
     if people.is_empty() || people.len() > MAX_NEW_PEOPLE {
         return Err(OpError::invalid(

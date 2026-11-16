@@ -28,6 +28,9 @@ use uuid::Uuid;
 use crate::auth::session::set_session_user_id;
 use crate::config::{AutoProvision, OidcConfig};
 use crate::models::User;
+use crate::models::user::{Activation, NewPerson};
+use crate::ops::{self, people::Existing};
+use horae_core::permissions::catalog::BuiltInProfile;
 
 /// Session key holding the in-flight authorization request's CSRF, PKCE, and
 /// nonce secrets between `/auth/login` and `/auth/callback`.
@@ -435,49 +438,71 @@ async fn provision(
     identity: &Identity,
     email: &str,
 ) -> anyhow::Result<Option<User>> {
-    let mut tx = db.begin().await?;
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-        .execute(&mut *tx)
-        .await?;
-    // Lock the organization row before the email, the order every
-    // user-creating path follows, so none of them can deadlock another.
-    let organizations = sqlx::query_scalar!("SELECT id FROM organizations FOR KEY SHARE")
-        .fetch_all(&mut *tx)
+    let organizations = sqlx::query_scalar!("SELECT id FROM organizations")
+        .fetch_all(db)
         .await?;
     let [org_id] = organizations[..] else {
         return Ok(None);
     };
-    if crate::db::lock_new_user_email(&mut tx, email).await? {
-        return Ok(None);
+    let mut write = ops::begin(db, ops::Caller::system(org_id)).await?;
+    let result = add_member(&mut write.tx, &write.actor, identity, email).await;
+    // The sign-in reports `UserCreated` itself once the session exists.
+    match write.commit(result, &ops::NoEvents).await {
+        Ok(user) => Ok(user),
+        // A concurrent sign-in won the email or the subject.
+        Err(ops::OpError::Conflict(_)) => Ok(None),
+        Err(error) => Err(error.into()),
     }
+}
+
+/// Adds the member through `ops::people::add`, which locks the organization,
+/// then the email, and binds the identity. `None` when an account holds the
+/// email.
+async fn add_member(
+    tx: &mut ops::Tx,
+    actor: &ops::Actor,
+    identity: &Identity,
+    email: &str,
+) -> Result<ops::Done<Option<User>>, ops::OpError> {
+    let person = NewPerson {
+        email: email.to_owned(),
+        name: account_name(identity.name.as_deref(), email),
+    };
+    let added = ops::people::add(
+        tx,
+        actor,
+        &[person],
+        BuiltInProfile::Member,
+        Activation::Active,
+        Existing::Skip,
+    )
+    .await?;
+    let Some(person) = added.value.added.first() else {
+        return Ok(ops::Done::new(None));
+    };
     let user = sqlx::query_as!(
         User,
-        r#"INSERT INTO users (id, org_id, email, name, oidc_subject, oidc_issuer)
-           VALUES ($1, $6, $2, $3, $4, $5)
-           ON CONFLICT DO NOTHING
+        r#"UPDATE users SET oidc_subject = $2, oidc_issuer = $3
+           WHERE id = $1
            RETURNING id, org_id, email, name, oidc_subject,
                      cost_rate_cents, billable_rate_cents, active,
                      created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
-        Uuid::now_v7(),
-        email,
-        account_name(identity.name.as_deref(), email),
+        person.id,
         identity.subject,
         identity.issuer,
-        org_id,
     )
-    .fetch_optional(&mut *tx)
-    .await?;
-    if let Some(user) = &user {
-        crate::ops::permissions::provisioning::provision(
-            &mut tx,
-            org_id,
-            user.id,
-            horae_core::permissions::catalog::BuiltInProfile::Member,
-        )
-        .await?;
-    }
-    tx.commit().await?;
-    Ok(user)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(|error| {
+        match error
+            .as_database_error()
+            .and_then(|error| error.constraint())
+        {
+            Some("users_oidc_subject_key") => ops::OpError::conflict("Subject already bound"),
+            _ => ops::OpError::from(error),
+        }
+    })?;
+    Ok(ops::Done::new(Some(user)))
 }
 
 /// The token's display name, or the email's local part when it has none.
