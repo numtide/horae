@@ -22,23 +22,9 @@ pub async fn list_people(
     activity: PeopleActivity,
     after: Option<PeopleCursor>,
 ) -> Result<PeoplePage, ServerFnError> {
-    let user = require_user().await.map_err(|error| match error {
-        error @ ServerFnError::ServerError {
-            code: UNAUTHORIZED, ..
-        } => error,
-        error => {
-            tracing::error!(%error, "Unable to authenticate directory request");
-            server_err("People directory is unavailable")
-        }
-    })?;
+    let caller = session_caller_or("People directory is unavailable").await?;
     let state = crate::state::global_state().await;
-    Ok(people_page(
-        &state.db,
-        Caller::session(user.org_id, user.id),
-        activity,
-        after.as_ref(),
-    )
-    .await?)
+    Ok(people_page(&state.db, caller, activity, after.as_ref()).await?)
 }
 
 #[cfg(feature = "server")]
@@ -58,9 +44,9 @@ pub(crate) async fn people_page(
 /// including archived people requires permission to view everyone.
 #[server]
 pub async fn list_users(include_inactive: bool) -> Result<Vec<UserListItem>, ServerFnError> {
-    let viewer = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, Caller::session(viewer.org_id, viewer.id)).await?;
+    let mut read = ops::begin_read(&state.db, caller).await?;
     let result = ops::people::list(&mut read.tx, &read.actor, include_inactive).await;
     Ok(read.finish(result).await?)
 }
@@ -73,19 +59,11 @@ pub async fn create_user(
     name: String,
     profile: String,
 ) -> Result<UserListItem, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let profile = provisioning::parse_profile(&profile)
         .ok_or_else(|| err(BAD_REQUEST, "Choose one of the built-in profiles"))?;
     let state = crate::state::global_state().await;
-    insert_user(
-        &state.db,
-        &*state.plugins,
-        Caller::session(user.org_id, user.id),
-        &email,
-        &name,
-        profile,
-    )
-    .await
+    insert_user(&state.db, &*state.plugins, caller, &email, &name, profile).await
 }
 
 /// Add members, deactivated unless the caller chose otherwise. The Harvest run
@@ -97,12 +75,12 @@ pub async fn add_harvest_people(
     people: Vec<NewPerson>,
     activation: Activation,
 ) -> Result<AddedPeople, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     add_people(
         &state.db,
         &*state.plugins,
-        Caller::session(user.org_id, user.id),
+        caller,
         &people,
         BuiltInProfile::Member,
         activation,
@@ -115,17 +93,10 @@ pub async fn add_harvest_people(
 /// time entries are kept (FR-002).
 #[server]
 pub async fn set_user_active(user_id: String, active: bool) -> Result<UserListItem, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let user_id = parse_uuid(&user_id, "user_id")?;
     let state = crate::state::global_state().await;
-    change_user_active(
-        &state.db,
-        &*state.plugins,
-        Caller::session(user.org_id, user.id),
-        user_id,
-        active,
-    )
-    .await
+    change_user_active(&state.db, &*state.plugins, caller, user_id, active).await
 }
 
 /// Add one active person, refusing an email already in use.

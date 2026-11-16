@@ -7,12 +7,12 @@ use crate::models::user::ProfileOptions;
 /// offer. The person's other values come from `get_me`.
 #[server]
 pub async fn get_profile_options() -> Result<ProfileOptions, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let row = sqlx::query!(
         "SELECT u.oidc_issuer, u.timezone, o.timezone AS workspace_timezone
          FROM users u JOIN organizations o ON o.id = u.org_id WHERE u.id = $1",
-        user.id
+        caller.user_id
     )
     .fetch_one(&state.db)
     .await
@@ -43,10 +43,10 @@ pub async fn update_own_profile(
     name: String,
     timezone: Option<String>,
 ) -> Result<(), ServerFnError> {
-    use crate::ops::{self, Caller};
-    let user = require_user().await?;
+    use crate::ops;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut write = ops::begin(&state.db, caller).await?;
     let result =
         ops::profile::update(&mut write.tx, &write.actor, &name, timezone.as_deref()).await;
     Ok(write.commit(result, &*state.plugins).await?)
@@ -56,10 +56,10 @@ pub async fn update_own_profile(
 /// follows. Needs permission to manage the company.
 #[server]
 pub async fn set_workspace_timezone(timezone: String) -> Result<(), ServerFnError> {
-    use crate::ops::{self, Caller};
-    let user = require_user().await?;
+    use crate::ops;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut write = ops::begin(&state.db, caller).await?;
     let result = ops::organization::set_timezone(&mut write.tx, &write.actor, &timezone).await;
     Ok(write.commit(result, &*state.plugins).await?)
 }

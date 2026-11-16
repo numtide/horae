@@ -12,7 +12,7 @@ pub struct PluginInfo {
 /// List the plugins currently loaded by the server.
 #[server]
 pub async fn list_plugins() -> Result<Vec<PluginInfo>, ServerFnError> {
-    let _user = require_user().await?;
+    session_caller().await?;
     let state = crate::state::global_state().await;
 
     Ok(state

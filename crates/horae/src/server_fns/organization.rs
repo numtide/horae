@@ -2,17 +2,17 @@
 
 use super::*;
 #[cfg(feature = "server")]
-use crate::ops::{self, Caller};
+use crate::ops;
 
 /// First weekday of the signed-in user's organization, shared by the timesheet
 /// and its date picker. Invalid stored configuration must not silently default.
 #[server]
 pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let day = sqlx::query_scalar!(
         "SELECT week_start FROM organizations WHERE id = $1",
-        user.org_id
+        caller.org_id
     )
     .fetch_one(&state.db)
     .await
@@ -35,7 +35,7 @@ pub async fn get_week_start() -> Result<chrono::Weekday, ServerFnError> {
 /// Any signed-in user may read it (it is not sensitive).
 #[server]
 pub async fn get_org_name() -> Result<String, ServerFnError> {
-    let user_id = require_user().await?.id;
+    let user_id = session_caller().await?.user_id;
     let state = crate::state::global_state().await;
 
     let name = sqlx::query_scalar!(
@@ -56,9 +56,9 @@ pub async fn get_org_name() -> Result<String, ServerFnError> {
 
 #[server]
 pub async fn get_org_branding() -> Result<OrgBranding, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut read = ops::begin_read(&state.db, caller).await?;
     let result = ops::organization::branding(&mut read.tx, &read.actor).await;
     Ok(read.finish(result).await?)
 }
@@ -68,9 +68,9 @@ pub async fn update_org_branding(
     branding: OrgBranding,
     expected: OrgBranding,
 ) -> Result<OrgBranding, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut write = ops::begin(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut write = ops::begin(&state.db, caller).await?;
     let result =
         ops::organization::update_branding(&mut write.tx, &write.actor, &expected, &branding).await;
     Ok(write.commit(result, &*state.plugins).await?)

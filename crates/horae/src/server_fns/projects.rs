@@ -64,9 +64,9 @@ mod common_task_tests;
 pub async fn list_project_tags(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectTagLink>, ServerFnError> {
-    let viewer = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    fetch_project_tags(&state.db, viewer.org_id, viewer.id, expected_requester).await
+    fetch_project_tags(&state.db, caller.org_id, caller.user_id, expected_requester).await
 }
 
 #[cfg(feature = "server")]
@@ -86,18 +86,18 @@ async fn fetch_project_tags(
 pub async fn get_project_overview(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<ProjectOverview, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    fetch_project_overview(&state.db, &user, expected_requester).await
+    fetch_project_overview(&state.db, caller, expected_requester).await
 }
 
 #[cfg(feature = "server")]
 async fn fetch_project_overview(
     pool: &sqlx::PgPool,
-    viewer: &User,
+    viewer: impl Into<Caller>,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<ProjectOverview, ServerFnError> {
-    let mut read = ops::begin_read(pool, Caller::session(viewer.org_id, viewer.id)).await?;
+    let mut read = ops::begin_read(pool, viewer.into()).await?;
     let result = ops::projects::overview(&mut read.tx, &read.actor, expected_requester).await;
     Ok(read.finish(result).await?)
 }
@@ -110,12 +110,12 @@ pub async fn list_projects(
     client_id: Option<String>,
     include_inactive: bool,
 ) -> Result<Vec<Project>, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let client_id = parse_opt_uuid(client_id, "client_id")?;
     projects_for_viewer(
         &state.db,
-        &user,
+        caller,
         client_id,
         include_inactive,
         ProjectRead::Overview,
@@ -127,20 +127,20 @@ pub async fn list_projects(
 /// Reporting visibility must not prevent a teammate from using their timesheet.
 #[server]
 pub async fn list_tracking_projects() -> Result<Vec<Project>, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    projects_for_viewer(&state.db, &user, None, true, ProjectRead::Tracking).await
+    projects_for_viewer(&state.db, caller, None, true, ProjectRead::Tracking).await
 }
 
 #[cfg(feature = "server")]
 async fn projects_for_viewer(
     pool: &sqlx::PgPool,
-    viewer: &User,
+    viewer: impl Into<Caller>,
     client_id: Option<uuid::Uuid>,
     include_inactive: bool,
     purpose: ProjectRead,
 ) -> Result<Vec<Project>, ServerFnError> {
-    let mut read = ops::begin_read(pool, Caller::session(viewer.org_id, viewer.id)).await?;
+    let mut read = ops::begin_read(pool, viewer.into()).await?;
     let result = ops::projects::list(
         &mut read.tx,
         &read.actor,
@@ -158,10 +158,10 @@ async fn projects_for_viewer(
 pub async fn list_project_spend(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<ProjectSpend>, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
 
-    fetch_project_spend(&state.db, user.org_id, user.id, expected_requester).await
+    fetch_project_spend(&state.db, caller.org_id, caller.user_id, expected_requester).await
 }
 
 /// Configured budgets use their own period and scope; tracked totals remain
@@ -170,9 +170,9 @@ pub async fn list_project_spend(
 pub async fn list_project_budget_progress(
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<crate::models::ProjectBudgetOverview>, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let mut read = ops::begin_read(&state.db, caller).await?;
     let result =
         ops::projects::budget_progress(&mut read.tx, &read.actor, expected_requester).await;
     Ok(read.finish(result).await?)
@@ -198,14 +198,14 @@ pub async fn set_project_active(
     active: bool,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Project, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let project_id = parse_uuid(&project_id, "project_id")?;
     let mut projects = set_projects_status(
         &state.db,
         &*state.plugins,
-        user.org_id,
-        user.id,
+        caller.org_id,
+        caller.user_id,
         &[project_id],
         active,
         expected_requester,
@@ -223,14 +223,14 @@ pub async fn set_projects_active(
     active: bool,
     expected_requester: Option<PermissionRequester>,
 ) -> Result<Vec<Project>, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let ids = parse_bulk_project_ids(&project_ids)?;
     let state = crate::state::global_state().await;
     set_projects_status(
         &state.db,
         &*state.plugins,
-        user.org_id,
-        user.id,
+        caller.org_id,
+        caller.user_id,
         &ids,
         active,
         expected_requester,
@@ -320,28 +320,28 @@ async fn set_project_active_record(
 /// Lists all active org-level tasks.
 #[server]
 pub async fn list_tasks() -> Result<Vec<Task>, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
 
-    tasks_for_viewer(&state.db, &user, None, TaskRead::Catalog).await
+    tasks_for_viewer(&state.db, caller, None, TaskRead::Catalog).await
 }
 
 /// Rate-free task identities, including archived tasks in the viewer's history.
 #[server]
 pub async fn list_tracking_tasks() -> Result<Vec<Task>, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    tasks_for_viewer(&state.db, &user, None, TaskRead::Tracking).await
+    tasks_for_viewer(&state.db, caller, None, TaskRead::Tracking).await
 }
 
 #[cfg(feature = "server")]
 async fn tasks_for_viewer(
     pool: &sqlx::PgPool,
-    viewer: &User,
+    viewer: impl Into<Caller>,
     project_id: Option<uuid::Uuid>,
     purpose: TaskRead,
 ) -> Result<Vec<Task>, ServerFnError> {
-    let mut read = ops::begin_read(pool, Caller::session(viewer.org_id, viewer.id)).await?;
+    let mut read = ops::begin_read(pool, viewer.into()).await?;
     let result = ops::projects::tasks(&mut read.tx, &read.actor, project_id, purpose).await;
     Ok(read.finish(result).await?)
 }
@@ -354,14 +354,13 @@ pub async fn create_task(
     rate: TaskRateEdit,
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
-    let actor = require_user().await?;
-    Caller::session(actor.org_id, actor.id)
-        .expect_requester(Some(expected_requester), TASK_REQUESTER_CHANGED)?;
+    let caller = session_caller().await?;
+    caller.expect_requester(Some(expected_requester), TASK_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
     let (task, event) = create_catalog_task(
         &state.db,
-        actor.org_id,
-        actor.id,
+        caller.org_id,
+        caller.user_id,
         &name,
         billable_default,
         is_default,
@@ -373,7 +372,7 @@ pub async fn create_task(
         .plugins
         .dispatch(crate::plugin::AppEvent::TaskCreated {
             occurred_at: chrono::Utc::now(),
-            org_id: actor.org_id,
+            org_id: caller.org_id,
             task: event,
         });
     Ok(task)
@@ -454,15 +453,14 @@ pub async fn update_task(
     rate: TaskRateEdit,
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
-    let actor = require_user().await?;
-    Caller::session(actor.org_id, actor.id)
-        .expect_requester(Some(expected_requester), TASK_REQUESTER_CHANGED)?;
+    let caller = session_caller().await?;
+    caller.expect_requester(Some(expected_requester), TASK_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
     let (task, event) = update_task_record(
         &state.db,
-        actor.org_id,
-        actor.id,
+        caller.org_id,
+        caller.user_id,
         task_id,
         &name,
         billable_default,
@@ -475,7 +473,7 @@ pub async fn update_task(
             .plugins
             .dispatch(crate::plugin::AppEvent::TaskUpdated {
                 occurred_at: chrono::Utc::now(),
-                org_id: actor.org_id,
+                org_id: caller.org_id,
                 task: payload,
             });
     }
@@ -593,13 +591,12 @@ pub async fn set_task_active(
     active: bool,
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
-    let actor = require_user().await?;
-    Caller::session(actor.org_id, actor.id)
-        .expect_requester(Some(expected_requester), TASK_REQUESTER_CHANGED)?;
+    let caller = session_caller().await?;
+    caller.expect_requester(Some(expected_requester), TASK_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
     let (task, event) =
-        set_task_active_record(&state.db, actor.org_id, actor.id, task_id, active).await?;
+        set_task_active_record(&state.db, caller.org_id, caller.user_id, task_id, active).await?;
     if let Some(event) = event {
         state.plugins.dispatch(event);
     }

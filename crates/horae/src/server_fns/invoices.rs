@@ -57,10 +57,10 @@ fn parse_projects(
 
 #[server]
 pub async fn get_invoice_editor(invoice_id: String) -> Result<InvoiceEditor, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
-    let mut read = begin_read(&state.db, user.org_id, user.id).await?;
+    let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
     let result = crate::ops::invoices::editing::load(&mut read.tx, &read.actor, id).await;
     Ok(read.finish(result).await?)
 }
@@ -70,10 +70,10 @@ pub async fn review_invoice_edit(
     invoice_id: String,
     edit: InvoiceDraftEdit,
 ) -> Result<InvoiceEditReview, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
-    let mut read = begin_read(&state.db, user.org_id, user.id).await?;
+    let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
     let result = crate::ops::invoices::editing::review(&mut read.tx, &read.actor, id, &edit).await;
     Ok(read.finish(result).await?)
 }
@@ -83,10 +83,10 @@ pub async fn save_invoice_draft(
     invoice_id: String,
     request: InvoiceDraftSave,
 ) -> Result<InvoiceWithLines, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
-    let mut write = begin_write(&state.db, user.org_id, user.id).await?;
+    let mut write = begin_write(&state.db, caller.org_id, caller.user_id).await?;
     let result =
         crate::ops::invoices::editing::save(&mut write.tx, &write.actor, id, &request).await;
     Ok(write.commit(result, &*state.plugins).await?)
@@ -101,7 +101,7 @@ pub async fn prepare_invoice(
     overrides: Option<InvoiceDefaults>,
     fees: Option<Vec<InvoiceFeeSelection>>,
 ) -> Result<InvoicePreparation, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let selected = parse_projects(project_ids)?;
     let client_id = parse_uuid(&client_id, "client_id")?;
@@ -109,7 +109,7 @@ pub async fn prepare_invoice(
         parse_date(&period_from, "period_from")?,
         parse_date(&period_to, "period_to")?,
     );
-    let mut read = begin_read(&state.db, user.org_id, user.id).await?;
+    let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
     let result = crate::ops::invoices::preview::prepare(
         &mut read.tx,
         &read.actor,
@@ -151,7 +151,7 @@ mod client_label_tests;
 
 #[server]
 pub async fn list_invoices(status: Option<String>) -> Result<Vec<InvoiceListItem>, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
 
     let status_filter: Option<InvoiceStatus> = status
@@ -159,18 +159,18 @@ pub async fn list_invoices(status: Option<String>) -> Result<Vec<InvoiceListItem
         .map(|s| parse_enum(s, "status"))
         .transpose()?;
 
-    let mut read = begin_read(&state.db, user.org_id, user.id).await?;
+    let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
     let result = crate::ops::invoices::list_items(&mut read.tx, &read.actor, status_filter).await;
     Ok(read.finish(result).await?)
 }
 
 #[server]
 pub async fn get_invoice(invoice_id: String) -> Result<InvoiceDetailView, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
 
     let state = crate::state::global_state().await;
-    let mut read = begin_read(&state.db, user.org_id, user.id).await?;
+    let mut read = begin_read(&state.db, caller.org_id, caller.user_id).await?;
     let result = crate::ops::invoices::detail(&mut read.tx, &read.actor, id).await;
     Ok(read.finish(result).await?)
 }
@@ -184,13 +184,13 @@ pub async fn generate_invoice(
     overrides: Option<InvoiceDefaults>,
     request: InvoiceGenerationRequest,
 ) -> Result<InvoiceWithLines, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let client_id = parse_uuid(&client_id, "client_id")?;
     let from = parse_date(&period_from, "period_from")?;
     let to = parse_date(&period_to, "period_to")?;
     let project_ids = parse_projects(project_ids)?;
-    let mut write = begin_write(&state.db, user.org_id, user.id).await?;
+    let mut write = begin_write(&state.db, caller.org_id, caller.user_id).await?;
     let result = crate::ops::invoices::generate(
         &mut write.tx,
         &write.actor,
@@ -211,12 +211,12 @@ pub async fn update_invoice_status(
     invoice_id: String,
     new_status: String,
 ) -> Result<Invoice, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let id = parse_uuid(&invoice_id, "invoice_id")?;
     let target: InvoiceStatus = parse_enum(&new_status, "status")?;
 
-    let mut write = begin_write(&state.db, user.org_id, user.id).await?;
+    let mut write = begin_write(&state.db, caller.org_id, caller.user_id).await?;
     let result = crate::ops::invoices::set_status(&mut write.tx, &write.actor, id, target).await;
     Ok(write.commit(result, &*state.plugins).await?)
 }

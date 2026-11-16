@@ -15,8 +15,7 @@ pub async fn submit_week(
     week_start: String,
     context: TimesheetWriteContext,
 ) -> Result<Approval, ServerFnError> {
-    let user = require_user().await?;
-    let caller = Caller::session(user.org_id, user.id);
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
 
     let ws = parse_date(&week_start, "week_start")?;
@@ -44,15 +43,9 @@ pub async fn list_approvals(
     status: Option<String>,
     week_start: String,
 ) -> Result<Vec<ApprovalSummary>, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
-    list_week(
-        &state.db,
-        Caller::session(user.org_id, user.id),
-        status,
-        &week_start,
-    )
-    .await
+    list_week(&state.db, caller, status, &week_start).await
 }
 
 #[cfg(feature = "server")]
@@ -86,19 +79,14 @@ async fn approve_as(
 /// Approve a single submitted week.
 #[server]
 pub async fn approve_submission(approval_id: String) -> Result<Approval, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let id = parse_uuid(&approval_id, "approval_id")?;
     let state = crate::state::global_state().await;
-    approve_as(
-        &state.db,
-        Caller::session(user.org_id, user.id),
-        &[id],
-        &*state.plugins,
-    )
-    .await?
-    .into_iter()
-    .next()
-    .ok_or_else(|| not_found("Approval not found or not in 'submitted' state"))
+    approve_as(&state.db, caller, &[id], &*state.plugins)
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(|| not_found("Approval not found or not in 'submitted' state"))
 }
 
 /// Approve several submitted weeks at once (the "approve visible" action).
@@ -107,20 +95,15 @@ pub async fn approve_submission(approval_id: String) -> Result<Approval, ServerF
 /// denied outright.
 #[server]
 pub async fn approve_submissions(approval_ids: Vec<String>) -> Result<usize, ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let ids = approval_ids
         .iter()
         .map(|s| parse_uuid(s, "approval_id"))
         .collect::<Result<Vec<_>, _>>()?;
     let state = crate::state::global_state().await;
-    Ok(approve_as(
-        &state.db,
-        Caller::session(user.org_id, user.id),
-        &ids,
-        &*state.plugins,
-    )
-    .await?
-    .len())
+    Ok(approve_as(&state.db, caller, &ids, &*state.plugins)
+        .await?
+        .len())
 }
 
 /// Reject a submitted week, or reopen an already-approved one. Reopens the
@@ -128,16 +111,10 @@ pub async fn approve_submissions(approval_ids: Vec<String>) -> Result<usize, Ser
 /// submit (and approve) wrote.
 #[server]
 pub async fn reject_submission(approval_id: String) -> Result<(), ServerFnError> {
-    let user = require_user().await?;
+    let caller = session_caller().await?;
     let approval_id = parse_uuid(&approval_id, "approval_id")?;
     let state = crate::state::global_state().await;
-    reopen_as(
-        &state.db,
-        Caller::session(user.org_id, user.id),
-        approval_id,
-        &*state.plugins,
-    )
-    .await?;
+    reopen_as(&state.db, caller, approval_id, &*state.plugins).await?;
     Ok(())
 }
 

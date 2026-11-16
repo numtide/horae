@@ -34,7 +34,7 @@ pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
         dioxus_fullstack::FullstackContext::extract::<tower_sessions::Session, _>().await?;
     let attempt = crate::importers::harvest::OAuthAttempt {
         nonce: nonce.clone(),
-        user_id: admin.id,
+        user_id: admin.user_id,
         org_id: admin.org_id,
         version: crate::importers::harvest::account_switch::Version {
             account_generation: current.account_generation,
@@ -99,7 +99,7 @@ pub async fn save_harvest_client(
         &state.db,
         &state.harvest,
         admin.org_id,
-        admin.id,
+        admin.user_id,
         &client_id,
         client_secret.as_deref(),
         &redirect_url,
@@ -122,7 +122,7 @@ pub async fn remove_harvest_client(
         &state.db,
         &state.harvest,
         admin.org_id,
-        admin.id,
+        admin.user_id,
         confirm_disconnect,
     )
     .await
@@ -162,7 +162,7 @@ pub async fn harvest_change_account(
     crate::importers::harvest::account_switch::change(
         &state.db,
         admin.org_id,
-        admin.id,
+        admin.user_id,
         &expected_account,
         expected_generation,
         expected_revision,
@@ -206,7 +206,7 @@ pub async fn harvest_disconnect() -> Result<(), ServerFnError> {
     let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
 
-    crate::importers::harvest::credentials::disconnect(&state.db, admin.org_id, admin.id)
+    crate::importers::harvest::credentials::disconnect(&state.db, admin.org_id, admin.user_id)
         .await
         .map_err(map_api_error)
 }
@@ -227,7 +227,7 @@ pub async fn start_harvest_api_import(
     commands::start_api(
         &state.db,
         admin.org_id,
-        admin.id,
+        admin.user_id,
         &payload,
         &key,
         state.job_policy,
@@ -243,7 +243,7 @@ pub async fn get_harvest_import_job(
 ) -> Result<Option<crate::models::JobStatus>, ServerFnError> {
     let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
-    commands::status(&state.db, admin.org_id, admin.id, job_id).await
+    commands::status(&state.db, admin.org_id, admin.user_id, job_id).await
 }
 
 #[dioxus_fullstack::post("/api/import/harvest/history")]
@@ -256,7 +256,7 @@ pub async fn list_harvest_import_jobs(
     commands::history(
         &state.db,
         admin.org_id,
-        admin.id,
+        admin.user_id,
         limit.unwrap_or(20),
         before,
     )
@@ -288,7 +288,7 @@ pub async fn start_harvest_csv_import(
     commands::start_csv(
         &state.db,
         admin.org_id,
-        admin.id,
+        admin.user_id,
         mode,
         body.to_vec(),
         &key,
@@ -305,7 +305,14 @@ pub async fn commit_harvest_import_preview(
 ) -> Result<crate::models::JobStatus, ServerFnError> {
     let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
-    commands::commit_preview(&state.db, admin.org_id, admin.id, job_id, state.job_policy).await
+    commands::commit_preview(
+        &state.db,
+        admin.org_id,
+        admin.user_id,
+        job_id,
+        state.job_policy,
+    )
+    .await
 }
 
 /// A finished run's errors grouped by problem, and the people behind them.
@@ -315,7 +322,7 @@ pub async fn harvest_import_error_summary(
 ) -> Result<crate::models::ErrorSummary, ServerFnError> {
     let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
-    commands::error_summary(&state.db, admin.org_id, admin.id, job_id).await
+    commands::error_summary(&state.db, admin.org_id, admin.user_id, job_id).await
 }
 
 #[dioxus_fullstack::post("/api/import/harvest/cancel")]
@@ -324,7 +331,7 @@ pub async fn cancel_harvest_import_job(
 ) -> Result<crate::models::JobStatus, ServerFnError> {
     let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
-    commands::cancel(&state.db, admin.org_id, admin.id, job_id).await
+    commands::cancel(&state.db, admin.org_id, admin.user_id, job_id).await
 }
 
 #[dioxus_fullstack::post("/api/import/harvest/retry")]
@@ -333,24 +340,21 @@ pub async fn retry_harvest_import_job(
 ) -> Result<crate::models::JobStatus, ServerFnError> {
     let admin = require_administrator().await?;
     let state = crate::state::global_state().await;
-    commands::retry(&state.db, admin.org_id, admin.id, job_id).await
+    commands::retry(&state.db, admin.org_id, admin.user_id, job_id).await
 }
 
 /// The signed-in person, if they are an active administrator. This refuses
 /// early and without locks; each change and job read checks again inside its
 /// own transaction (`credentials::authorize_change`, `jobs::access`).
 #[cfg(feature = "server")]
-async fn require_administrator() -> Result<crate::models::User, ServerFnError> {
-    let user = require_user().await?;
+async fn require_administrator() -> Result<crate::ops::Caller, ServerFnError> {
+    let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let mut connection = state.db.acquire().await.map_err(server_err)?;
-    crate::ops::Actor::load_unlocked(
-        &mut connection,
-        crate::ops::Caller::session(user.org_id, user.id),
-    )
-    .await?
-    .require_administrator()?;
-    Ok(user)
+    crate::ops::Actor::load_unlocked(&mut connection, caller)
+        .await?
+        .require_administrator()?;
+    Ok(caller)
 }
 
 #[cfg(feature = "server")]
