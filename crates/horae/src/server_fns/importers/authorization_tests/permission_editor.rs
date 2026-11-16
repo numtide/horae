@@ -320,25 +320,20 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         StatusCode::BAD_REQUEST
     );
     sqlx::query!("UPDATE person_permission_states SET grants=ARRAY['private-invalid-grant'] WHERE user_id=$1", ids.user_id).execute(pool).await.unwrap();
-    let unavailable = api
-        .call("load_permission_editor", lookup, Some(&cookie), false)
-        .await;
-    assert_eq!(unavailable.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    let message = unavailable.text().await.unwrap();
-    assert!(message.contains("Permission editor is unavailable"));
-    assert!(!message.contains("private-invalid-grant"));
-    let unavailable = api
-        .call(
-            "list_permission_subjects",
-            json!({"after":null}),
-            Some(&cookie),
-            false,
-        )
-        .await;
-    assert_eq!(unavailable.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    let message = unavailable.text().await.unwrap();
-    assert!(message.contains("Permission editor is unavailable"));
-    assert!(!message.contains("private-invalid-grant"));
+    // The editor's own invalid state refuses like any other ops request.
+    for (name, body) in [
+        ("load_permission_editor", lookup),
+        ("list_permission_subjects", json!({"after":null})),
+    ] {
+        let refused = api.call(name, body, Some(&cookie), false).await;
+        assert_eq!(refused.status(), StatusCode::FORBIDDEN, "{name}");
+        let message = refused.text().await.unwrap();
+        assert!(
+            message.contains("Permission state is unavailable"),
+            "{name}"
+        );
+        assert!(!message.contains("private-invalid-grant"), "{name}");
+    }
 }
 
 async fn check_template_capacity(pool: &PgPool, api: &Api) {

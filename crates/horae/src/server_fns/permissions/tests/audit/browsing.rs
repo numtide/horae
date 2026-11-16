@@ -1,7 +1,7 @@
 use super::*;
 use crate::models::permission_audit::AuditCursor;
 use crate::models::permission_editor::PermissionRequester;
-use crate::server_fns::permissions::audit::page;
+use crate::server_fns::permissions::calls::audit::page;
 
 async fn receipts(pool: &PgPool, ids: &SeedIds, count: i64) -> Vec<Uuid> {
     let mut records = Vec::new();
@@ -14,7 +14,7 @@ async fn receipts(pool: &PgPool, ids: &SeedIds, count: i64) -> Vec<Uuid> {
                 grants: BuiltInProfile::Member.selection().iter().collect(),
             },
         };
-        super::super::templates::execute(pool, ids.org_id, ids.user_id, &command)
+        super::super::calls::templates::execute(pool, ids.org_id, ids.user_id, &command)
             .await
             .unwrap();
         records.push(receipt_id(pool, command.request_id).await);
@@ -138,7 +138,7 @@ async fn history_page_rejects_malformed_history_without_partial_success(pool: Pg
     .unwrap();
     assert!(matches!(
         page(&pool, ids.org_id, ids.user_id, None, None).await,
-        Err(AuditReadError::InvalidDocument)
+        Err(e) if e == history_unavailable()
     ));
     assert!(
         read(&pool, ids.org_id, ids.user_id, records[0])
@@ -172,12 +172,12 @@ async fn history_page_reauthorizes_empty_and_continuation_requests_and_binds_req
     ] {
         assert!(matches!(
             page(&pool, ids.org_id, ids.user_id, None, Some(expected)).await,
-            Err(AuditReadError::Forbidden)
+            Err(e) if e == forbidden()
         ));
     }
     assert!(matches!(
         page(&pool, ids.org_id, nonadmin, None, None).await,
-        Err(AuditReadError::Forbidden)
+        Err(e) if e == forbidden()
     ));
     let records = receipts(&pool, &ids, 26).await;
     let first = page(&pool, ids.org_id, ids.user_id, None, None)
@@ -200,7 +200,7 @@ async fn history_page_reauthorizes_empty_and_continuation_requests_and_binds_req
             Some(first.requester)
         )
         .await,
-        Err(AuditReadError::Forbidden)
+        Err(e) if e == forbidden()
     ));
 }
 
@@ -248,7 +248,7 @@ async fn history_page_waits_for_revocation_commit_or_rollback_at_each_gate(pool:
             }
             let result = reader.join_next().await.unwrap().unwrap();
             if commit {
-                assert!(matches!(result, Err(AuditReadError::Forbidden)));
+                assert!(matches!(result, Err(e) if e == forbidden()));
             } else {
                 assert_eq!(result.unwrap().entries.len(), 1);
             }
@@ -312,7 +312,7 @@ async fn admitted_history_page_finishes_before_revocation_at_each_gate(pool: PgP
         writer.join_next().await.unwrap().unwrap();
         assert!(matches!(
             page(&pool, ids.org_id, ids.user_id, None, None).await,
-            Err(AuditReadError::Forbidden)
+            Err(e) if e == forbidden()
         ));
     }
 }

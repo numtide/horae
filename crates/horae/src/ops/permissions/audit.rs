@@ -1,33 +1,38 @@
-//! Administrator-only historical projection, never a source of current authority.
+//! The permission history: an administrator-only projection of stored
+//! receipts, never a source of current authority.
 
 use chrono::{DateTime, Utc};
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
-use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
+use super::{AUTHORITY_REQUIRED, require_administrator};
 use crate::models::permission_audit::{
-    AuditCursor, AuditEntry, AuditPage, HistoricalSource, PersonSnapshot,
+    AuditCursor, AuditEntry, AuditPage, AuditPrincipal, HistoricalAudit, HistoricalSource,
+    PersonSnapshot,
 };
-pub(super) use crate::models::permission_audit::{AuditPrincipal, HistoricalAudit};
 use crate::models::permission_editor::PermissionRequester;
-use crate::ops::permissions::{PermissionStorageError, load_person_permissions};
-use crate::ops::{ReadIsolation, begin_lock_only_read_async_commit};
+use crate::ops::{Actor, OpError, Tx};
 
+/// What the history answers for a receipt it cannot show; the cause is logged.
+pub(crate) const HISTORY_UNAVAILABLE: &str = "Permission history is unavailable";
+pub(crate) const UNSUPPORTED_FORMAT: &str = "Unsupported audit format";
+pub(crate) const INVALID_DOCUMENT: &str = "Invalid historical permission audit";
+
+fn unavailable(reason: &str) -> OpError {
+    tracing::error!(reason, "Unable to load permission history");
+    OpError::Internal(HISTORY_UNAVAILABLE.into())
+}
+
+/// A page of the organization's history, newest first. `expected` is the
+/// requester the page was loaded for.
 pub(crate) async fn page(
-    pool: &PgPool,
-    org_id: Uuid,
-    requester_id: Uuid,
+    tx: &mut Tx,
+    actor: &Actor,
     after: Option<&AuditCursor>,
-    expected_requester: Option<PermissionRequester>,
-) -> Result<AuditPage, AuditReadError> {
-    let requester = PermissionRequester {
-        org_id,
-        user_id: requester_id,
-    };
-    if expected_requester.is_some_and(|expected| expected != requester) {
-        return Err(AuditReadError::Forbidden);
-    }
-    let mut tx = begin_read(pool, org_id, requester_id).await?;
+    expected: Option<PermissionRequester>,
+) -> Result<AuditPage, OpError> {
+    let requester = actor.expect_requester(expected, AUTHORITY_REQUIRED)?;
+    require_administrator(actor)?;
     let mut rows = sqlx::query_as!(
         StoredAudit,
         r#"SELECT id,actor_user_id,operator_id,operator_command,format_version,audit,
@@ -36,18 +41,19 @@ pub(crate) async fn page(
            WHERE org_id=$1
              AND ($2::timestamptz IS NULL OR (created_at,id)<($2,$3))
            ORDER BY created_at DESC,id DESC LIMIT 26"#,
-        org_id,
+        actor.org_id(),
         after.map(|cursor| cursor.created_at) as Option<DateTime<Utc>>,
         after.map(|cursor| cursor.id)
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut **tx)
     .await?;
     let has_more = rows.len() > 25;
     rows.truncate(25);
     let entries = rows
         .into_iter()
         .map(StoredAudit::project)
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(unavailable)?;
     let next_after = if has_more {
         entries.last().map(|entry| AuditCursor {
             created_at: entry.created_at,
@@ -56,12 +62,36 @@ pub(crate) async fn page(
     } else {
         None
     };
-    tx.commit().await?;
     Ok(AuditPage {
         requester,
         entries,
         next_after,
     })
+}
+
+/// One historical record. No receipt lookup or decoding happens before the
+/// actor is authorized. No adapter serves it: the audit tests check
+/// projection and locking through it.
+#[cfg(test)]
+pub(crate) async fn read(
+    tx: &mut Tx,
+    actor: &Actor,
+    receipt_id: Uuid,
+) -> Result<Option<AuditEntry>, OpError> {
+    require_administrator(actor)?;
+    let row = sqlx::query_as!(
+        StoredAudit,
+        "SELECT id, actor_user_id, operator_id, operator_command, format_version, audit,
+                created_at as \"created_at: DateTime<Utc>\"
+        FROM permission_change_receipts WHERE org_id = $1 AND id = $2",
+        actor.org_id(),
+        receipt_id
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+    row.map(StoredAudit::project)
+        .transpose()
+        .map_err(unavailable)
 }
 
 struct StoredAudit {
@@ -75,7 +105,7 @@ struct StoredAudit {
 }
 
 impl StoredAudit {
-    fn project(self) -> Result<AuditEntry, AuditReadError> {
+    fn project(self) -> Result<AuditEntry, &'static str> {
         let actor = match (self.actor_user_id, self.operator_id, self.operator_command) {
             (Some(user_id), None, None) => AuditPrincipal::User { user_id },
             (None, Some(invocation_id), Some(command))
@@ -86,7 +116,7 @@ impl StoredAudit {
                     command,
                 }
             }
-            _ => return Err(AuditReadError::InvalidDocument),
+            _ => return Err(INVALID_DOCUMENT),
         };
         Ok(AuditEntry {
             id: self.id,
@@ -95,20 +125,6 @@ impl StoredAudit {
             audit: decode(self.format_version, self.audit)?,
         })
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum AuditReadError {
-    #[error("Current administrator authority is required")]
-    Forbidden,
-    #[error("Unsupported audit format")]
-    UnsupportedFormat,
-    #[error("Invalid historical permission audit")]
-    InvalidDocument,
-    #[error(transparent)]
-    Storage(#[from] PermissionStorageError),
-    #[error(transparent)]
-    Database(#[from] sqlx::Error),
 }
 
 fn revision_step(before: i64, after: i64, changed: bool) -> bool {
@@ -191,12 +207,14 @@ impl HistoricalAudit {
     }
 }
 
-pub(super) fn decode(
+/// Decodes a stored audit document, or names why it cannot be shown
+/// ([`UNSUPPORTED_FORMAT`] or [`INVALID_DOCUMENT`]).
+pub(crate) fn decode(
     version: i32,
     document: serde_json::Value,
-) -> Result<HistoricalAudit, AuditReadError> {
+) -> Result<HistoricalAudit, &'static str> {
     if version != 1 {
-        return Err(AuditReadError::UnsupportedFormat);
+        return Err(UNSUPPORTED_FORMAT);
     }
     let decoded = if document.get("user_id").is_some() {
         serde_json::from_value(document).map(HistoricalAudit::Profile)
@@ -205,67 +223,9 @@ pub(super) fn decode(
     } else {
         serde_json::from_value(document).map(HistoricalAudit::Template)
     }
-    .map_err(|_| AuditReadError::InvalidDocument)?;
+    .map_err(|_| INVALID_DOCUMENT)?;
     if !decoded.valid() {
-        return Err(AuditReadError::InvalidDocument);
+        return Err(INVALID_DOCUMENT);
     }
     Ok(decoded)
-}
-
-/// Hold the same current authority through either historical projection.
-async fn begin_read(
-    pool: &PgPool,
-    org_id: Uuid,
-    requester: Uuid,
-) -> Result<Transaction<'_, Postgres>, AuditReadError> {
-    let mut tx = begin_lock_only_read_async_commit(pool, ReadIsolation::ReadCommitted).await?;
-    let organization = sqlx::query_scalar!(
-        "SELECT id FROM organizations WHERE id = $1 FOR SHARE",
-        org_id
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
-    let active = sqlx::query_scalar!(
-        "SELECT id FROM users WHERE org_id = $1 AND id = $2 AND active FOR SHARE",
-        org_id,
-        requester
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
-    if organization.is_none() || active.is_none() {
-        return Err(AuditReadError::Forbidden);
-    }
-    if !load_person_permissions(&mut tx, org_id, requester)
-        .await?
-        .is_some_and(|state| state.is_administrator)
-    {
-        return Err(AuditReadError::Forbidden);
-    }
-    Ok(tx)
-}
-
-/// Reads one historical record using authenticated requester/tenant IDs.
-/// No receipt lookup or snapshot decoding occurs before current authorization.
-/// No adapter serves it: the audit tests check projection and locking through it.
-#[cfg(test)]
-pub(crate) async fn read(
-    pool: &PgPool,
-    org_id: Uuid,
-    requester: Uuid,
-    receipt_id: Uuid,
-) -> Result<Option<AuditEntry>, AuditReadError> {
-    let mut tx = begin_read(pool, org_id, requester).await?;
-    let row = sqlx::query_as!(
-        StoredAudit,
-        "SELECT id, actor_user_id, operator_id, operator_command, format_version, audit,
-                created_at as \"created_at: DateTime<Utc>\"
-        FROM permission_change_receipts WHERE org_id = $1 AND id = $2",
-        org_id,
-        receipt_id
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
-    let record = row.map(StoredAudit::project).transpose()?;
-    tx.commit().await?;
-    Ok(record)
 }

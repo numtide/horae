@@ -7,22 +7,22 @@ use sqlx::PgConnection;
 #[cfg(test)]
 use crate::models::permissions::{PermissionSource, PersonPermissions};
 #[cfg(test)]
-use crate::ops::permissions::{
-    PermissionStorageError, load_permission_template, load_person_permissions,
-};
+use crate::ops::permissions::{load_permission_template, load_person_permissions};
 #[cfg(test)]
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 #[cfg(test)]
 use uuid::Uuid;
 
-pub(crate) mod audit;
-pub(crate) mod editor;
-pub(crate) mod profiles;
 pub(crate) mod project_management;
 pub(crate) mod project_people;
-pub(crate) mod templates;
+
+/// The permission editor and history as the tests call them.
+#[cfg(test)]
+#[path = "permissions/tests/calls.rs"]
+pub(crate) mod calls;
 
 /// Bound authorization transactions independently of pooled connection defaults.
+/// Left to the project managers and the project editor until they move to `ops`.
 pub(super) async fn configure_administration(
     connection: &mut PgConnection,
 ) -> Result<(), sqlx::Error> {

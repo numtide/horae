@@ -1,7 +1,7 @@
 //! Exercise the registered permission-history route using real session cookies.
 
 use super::*;
-use crate::server_fns::permissions::templates::{self, TemplateAction, TemplateCommand};
+use crate::server_fns::permissions::calls::templates::{self, TemplateAction, TemplateCommand};
 use horae_core::permissions::catalog::BuiltInProfile;
 
 const NAME: &str = "list_permission_audit";
@@ -94,7 +94,12 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     .execute(pool)
     .await
     .unwrap();
-    assert_unavailable(api.call(NAME, first_page(), Some(&cookie), false).await).await;
+    // The reader's own invalid state refuses like any other ops read.
+    let response = api.call(NAME, first_page(), Some(&cookie), false).await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let text = response.text().await.unwrap();
+    assert!(text.contains("Permission state is unavailable"), "{text}");
+    assert!(!text.contains("secret_invalid_grant"), "{text}");
     sqlx::query!("UPDATE users SET active=false WHERE id=$1", ids.user_id)
         .execute(pool)
         .await
@@ -125,7 +130,7 @@ async fn check_historical_shapes(
     ids: &crate::server_fns::test_seed::SeedIds,
     cookie: &str,
 ) {
-    use crate::server_fns::permissions::{profiles, project_management};
+    use crate::server_fns::permissions::{calls::profiles, project_management};
     let profile = profiles::ProfileCommand {
         request_id: Uuid::now_v7(),
         expected_access_revision: 1,

@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::permissions::editor;
+use crate::server_fns::permissions::calls::{editor, state_unavailable};
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
@@ -129,18 +129,18 @@ async fn subject_discovery_requires_current_explicit_identity(pool: PgPool) {
     for actor in [all_grants, foreign.user_id, Uuid::now_v7()] {
         assert!(matches!(
             editor::subjects(&pool, ids.org_id, actor, None).await,
-            Err(ProfileCommandError::Forbidden)
+            Err(e) if e == forbidden()
         ));
         assert!(matches!(
             editor::subjects(&pool, ids.org_id, actor, Some(Uuid::max())).await,
-            Err(ProfileCommandError::Forbidden)
+            Err(e) if e == forbidden()
         ));
     }
     sqlx::query!("UPDATE person_permission_states SET grants=ARRAY['private-invalid-grant'] WHERE user_id=$1", ids.user_id)
         .execute(&pool).await.unwrap();
     assert!(matches!(
         editor::subjects(&pool, ids.org_id, ids.user_id, None).await,
-        Err(ProfileCommandError::Storage(_))
+        Err(e) if e == state_unavailable()
     ));
 }
 
@@ -185,11 +185,11 @@ async fn subject_discovery_rechecks_revocation_after_gate_wait_and_between_pages
     revoke.commit().await.unwrap();
     assert!(matches!(
         pending.await.unwrap(),
-        Err(ProfileCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
     assert!(matches!(
         editor::subjects(&pool, ids.org_id, ids.user_id, None).await,
-        Err(ProfileCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
 }
 
@@ -216,7 +216,7 @@ async fn subject_discovery_rechecks_direct_deactivation(pool: PgPool) {
     revoke.commit().await.unwrap();
     assert!(matches!(
         pending.await.unwrap(),
-        Err(ProfileCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
 }
 

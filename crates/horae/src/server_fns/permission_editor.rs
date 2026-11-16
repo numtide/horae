@@ -1,73 +1,29 @@
-//! Session-derived permission administration; legacy policy remains unavailable.
+//! Permission editor server functions: session adapters over
+//! `ops::permissions::{editor, profiles, templates}`.
 
 use super::*;
+#[cfg(feature = "server")]
+use crate::db::OrganizationLock;
 use crate::models::permission_editor::{
     PermissionEditor, PermissionRequester, PermissionSubjectPage, ProfileCommand, ProfileDraft,
     ProfileOutcome, ProfilePreview, TemplateCommand, TemplateDeletionPreview, TemplateOutcome,
 };
+#[cfg(feature = "server")]
+use crate::ops::{self, Caller, EventSink, OpError, WriteIsolation, permissions};
+#[cfg(feature = "server")]
+use sqlx::PgPool;
 
 #[cfg(feature = "server")]
-async fn editor_user() -> Result<crate::ops::Caller, ServerFnError> {
-    session_caller_or("Permission editor is unavailable").await
-}
-
-#[cfg(feature = "server")]
-async fn expected_editor_user(
-    expected: PermissionRequester,
-) -> Result<crate::ops::Caller, ServerFnError> {
-    let caller = editor_user().await?;
-    caller.expect_requester(
-        Some(expected),
-        "Sign in as the original requester before retrying",
-    )?;
-    Ok(caller)
-}
-
-#[cfg(feature = "server")]
-fn profile_error(error: permissions::profiles::ProfileCommandError) -> ServerFnError {
-    use permissions::profiles::ProfileCommandError as Error;
-    match error {
-        Error::Forbidden => forbidden("Current administrator authority is required"),
-        Error::NotFound => not_found("Person or profile not found"),
-        error @ (Error::Stale
-        | Error::RequestConflict
-        | Error::Confirmation
-        | Error::LastAdministrator) => conflict(error),
-        error @ (Error::AdministratorSelection | Error::Selection(_)) => err(BAD_REQUEST, error),
-        error => {
-            tracing::error!(%error, "Permission editor operation failed");
-            server_err("Permission editor is unavailable")
-        }
-    }
-}
-
-#[cfg(feature = "server")]
-fn template_error(error: permissions::templates::TemplateCommandError) -> ServerFnError {
-    use permissions::templates::TemplateCommandError as Error;
-    match error {
-        Error::Forbidden => forbidden("Current administrator authority is required"),
-        Error::NotFound => not_found("Profile not found"),
-        error @ (Error::Stale | Error::RequestConflict | Error::NameConflict | Error::Limit) => {
-            conflict(error)
-        }
-        error @ (Error::Name(_) | Error::Selection(_)) => err(BAD_REQUEST, error),
-        error => {
-            tracing::error!(%error, "Permission template operation failed");
-            server_err("Permission editor is unavailable")
-        }
-    }
-}
+const UNAVAILABLE: &str = permissions::EDITOR_UNAVAILABLE;
 
 /// Discover local permission-editor subjects under current Administrator authority.
 #[server]
 pub async fn list_permission_subjects(
     after: Option<uuid::Uuid>,
 ) -> Result<PermissionSubjectPage, ServerFnError> {
-    let caller = editor_user().await?;
+    let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    permissions::editor::subjects(&state.db, caller.org_id, caller.user_id, after)
-        .await
-        .map_err(profile_error)
+    Ok(subject_page(&state.db, caller, after).await?)
 }
 
 /// Load current person permissions and reusable choices without inferring a profile.
@@ -75,11 +31,9 @@ pub async fn list_permission_subjects(
 pub async fn load_permission_editor(
     user_id: uuid::Uuid,
 ) -> Result<PermissionEditor, ServerFnError> {
-    let caller = editor_user().await?;
+    let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    permissions::editor::load(&state.db, caller.org_id, caller.user_id, user_id)
-        .await
-        .map_err(profile_error)
+    Ok(editor_view(&state.db, caller, user_id).await?)
 }
 
 /// Compute exact effects; this read-only proposal never authorizes its later save.
@@ -87,11 +41,9 @@ pub async fn load_permission_editor(
 pub async fn preview_person_permissions(
     draft: ProfileDraft,
 ) -> Result<ProfilePreview, ServerFnError> {
-    let caller = editor_user().await?;
+    let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    permissions::editor::preview(&state.db, caller.org_id, caller.user_id, &draft)
-        .await
-        .map_err(profile_error)
+    Ok(profile_preview(&state.db, caller, &draft).await?)
 }
 
 /// Revalidate and commit the explicit final proposal and confirmed relationship losses.
@@ -100,16 +52,16 @@ pub async fn save_person_permissions(
     command: ProfileCommand,
     expected_requester: PermissionRequester,
 ) -> Result<ProfileOutcome, ServerFnError> {
-    let caller = expected_editor_user(expected_requester).await?;
+    let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    let (outcome, event) =
-        permissions::profiles::save(&state.db, caller.org_id, caller.user_id, &command)
-            .await
-            .map_err(profile_error)?;
-    if let Some(event) = event {
-        state.plugins.dispatch(event);
-    }
-    Ok(outcome)
+    Ok(save_profile(
+        &state.db,
+        caller,
+        &command,
+        expected_requester,
+        &*state.plugins,
+    )
+    .await?)
 }
 
 /// Show the current affected people; deletion preserves their grants and identity.
@@ -119,18 +71,16 @@ pub async fn preview_permission_template_deletion(
     expected_access_revision: i64,
     expected_template_revision: i64,
 ) -> Result<TemplateDeletionPreview, ServerFnError> {
-    let caller = editor_user().await?;
+    let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    permissions::editor::preview_template_deletion(
+    Ok(template_deletion_preview(
         &state.db,
-        caller.org_id,
-        caller.user_id,
+        caller,
         template_id,
         expected_access_revision,
         expected_template_revision,
     )
-    .await
-    .map_err(profile_error)
+    .await?)
 }
 
 /// Create a reusable selection or detach and delete a previously reviewed template.
@@ -139,9 +89,106 @@ pub async fn save_permission_template(
     command: TemplateCommand,
     expected_requester: PermissionRequester,
 ) -> Result<TemplateOutcome, ServerFnError> {
-    let caller = expected_editor_user(expected_requester).await?;
+    let caller = session_caller_or(UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    permissions::templates::execute(&state.db, caller.org_id, caller.user_id, &command)
-        .await
-        .map_err(template_error)
+    Ok(save_template(
+        &state.db,
+        caller,
+        &command,
+        expected_requester,
+        &*state.plugins,
+    )
+    .await?)
+}
+
+#[cfg(feature = "server")]
+pub(crate) async fn subject_page(
+    db: &PgPool,
+    caller: Caller,
+    after: Option<uuid::Uuid>,
+) -> Result<PermissionSubjectPage, OpError> {
+    let mut read = ops::begin_read(db, caller).await?;
+    let result = permissions::editor::subjects(&mut read.tx, &read.actor, after).await;
+    read.finish(result).await
+}
+
+#[cfg(feature = "server")]
+pub(crate) async fn editor_view(
+    db: &PgPool,
+    caller: Caller,
+    user_id: uuid::Uuid,
+) -> Result<PermissionEditor, OpError> {
+    let mut read = ops::begin_read(db, caller).await?;
+    let result = permissions::editor::load(&mut read.tx, &read.actor, user_id).await;
+    read.finish(result).await
+}
+
+#[cfg(feature = "server")]
+pub(crate) async fn profile_preview(
+    db: &PgPool,
+    caller: Caller,
+    draft: &ProfileDraft,
+) -> Result<ProfilePreview, OpError> {
+    let mut read = ops::begin_read(db, caller).await?;
+    let result = permissions::editor::preview(&mut read.tx, &read.actor, draft).await;
+    read.finish(result).await
+}
+
+#[cfg(feature = "server")]
+pub(crate) async fn template_deletion_preview(
+    db: &PgPool,
+    caller: Caller,
+    template_id: uuid::Uuid,
+    expected_access_revision: i64,
+    expected_template_revision: i64,
+) -> Result<TemplateDeletionPreview, OpError> {
+    let mut read = ops::begin_read(db, caller).await?;
+    let result = permissions::editor::preview_template_deletion(
+        &mut read.tx,
+        &read.actor,
+        template_id,
+        expected_access_revision,
+        expected_template_revision,
+    )
+    .await;
+    read.finish(result).await
+}
+
+#[cfg(feature = "server")]
+pub(crate) async fn save_profile(
+    db: &PgPool,
+    caller: Caller,
+    command: &ProfileCommand,
+    expected: PermissionRequester,
+    events: &dyn EventSink,
+) -> Result<ProfileOutcome, OpError> {
+    let mut write = access_change(db, caller).await?;
+    let result = permissions::profiles::save(&mut write.tx, &write.actor, command, expected).await;
+    write.commit(result, events).await
+}
+
+#[cfg(feature = "server")]
+pub(crate) async fn save_template(
+    db: &PgPool,
+    caller: Caller,
+    command: &TemplateCommand,
+    expected: PermissionRequester,
+    events: &dyn EventSink,
+) -> Result<TemplateOutcome, OpError> {
+    let mut write = access_change(db, caller).await?;
+    let result = permissions::templates::save(&mut write.tx, &write.actor, command, expected).await;
+    write.commit(result, events).await
+}
+
+/// Every editor save changes access, so it holds the organization's
+/// `AccessChange` gate: concurrent reads and saves wait for it.
+#[cfg(feature = "server")]
+async fn access_change(db: &PgPool, caller: Caller) -> Result<ops::WriteTx, OpError> {
+    ops::begin_gated(
+        db,
+        caller,
+        OrganizationLock::AccessChange,
+        WriteIsolation::ReadCommitted,
+    )
+    .await
 }
