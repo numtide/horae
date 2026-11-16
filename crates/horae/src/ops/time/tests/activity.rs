@@ -1,7 +1,5 @@
-use super::update_tests::editable_entry;
+use super::update::editable_entry;
 use super::*;
-use sqlx::PgPool;
-use uuid::Uuid;
 
 #[derive(Clone, Copy, Debug)]
 enum Operation {
@@ -15,7 +13,7 @@ async fn attempt(
     actor: Uuid,
     entry: &TimeEntry,
     operation: Operation,
-) -> Result<(), ServerFnError> {
+) -> Result<(), OpError> {
     match operation {
         Operation::Create | Operation::Start => insert_time_entry(
             pool,
@@ -73,13 +71,7 @@ async fn every_time_mutation_denies_inactive_and_missing_owners_without_changes(
             for actor in [entry.user_id, Uuid::now_v7()] {
                 let result = attempt(&pool, actor, &entry, operation).await;
                 assert!(
-                    matches!(
-                        result,
-                        Err(ServerFnError::ServerError {
-                            code: FORBIDDEN,
-                            ..
-                        })
-                    ),
+                    matches!(result, Err(OpError::Forbidden(_))),
                     "administrator={administrator} {operation:?}: {result:?}"
                 );
                 let after = sqlx::query_scalar!("SELECT jsonb_agg(to_jsonb(e) ORDER BY e.id) FROM time_entries e WHERE user_id=$1", entry.user_id)

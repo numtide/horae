@@ -1,11 +1,9 @@
 //! The Timesheet commands through `ops::begin` / `ops::begin_read`, as the
-//! session adapters run them, with errors as the adapters return them.
+//! session adapters run them.
 
 use super::*;
 use crate::models::permission_editor::PermissionRequester;
-use crate::server_fns::CONFLICT;
 use crate::server_fns::test_seed::time_entry;
-use dioxus::prelude::ServerFnError;
 use horae_core::permissions::catalog::PermissionSelection;
 use sqlx::{Postgres, Transaction};
 
@@ -19,24 +17,10 @@ async fn tracking(
     org: Uuid,
     actor: Uuid,
     context: &TimesheetWriteContext,
-) -> Result<Vec<TimesheetTrackingOption>, ServerFnError> {
+) -> Result<Vec<TimesheetTrackingOption>, OpError> {
     let mut read = ops::begin_read(pool, Caller::session(org, actor)).await?;
     let result = crate::ops::time::tracking(&mut read.tx, &read.actor, context).await;
-    Ok(read.finish(result).await?)
-}
-
-/// The timer widget's stop, by the person who owns the timer.
-async fn stop_entry_timer(
-    pool: &PgPool,
-    user_id: Uuid,
-    entry_id: Uuid,
-) -> Result<(TimeEntry, Option<String>), OpError> {
-    let org_id = sqlx::query_scalar!("SELECT org_id FROM users WHERE id=$1", user_id)
-        .fetch_one(pool)
-        .await?;
-    let mut write = ops::begin(pool, Caller::session(org_id, user_id)).await?;
-    let result = stop_timer(&mut write.tx, &write.actor, entry_id).await;
-    write.commit(result, &Recorder::default()).await
+    read.finish(result).await
 }
 
 /// Commits the command and returns its result with the events it would
@@ -47,10 +31,10 @@ async fn apply(
     actor: Uuid,
     context: &TimesheetWriteContext,
     command: TimesheetCommand,
-) -> Result<Done<TimesheetChange>, ServerFnError> {
+) -> Result<Done<TimesheetChange>, OpError> {
     let mut write = ops::begin(pool, Caller::session(org, actor)).await?;
     let done = crate::ops::time::apply(&mut write.tx, &write.actor, context, command).await?;
-    write.tx.commit().await.map_err(OpError::from)?;
+    write.tx.commit().await?;
     Ok(done)
 }
 
@@ -90,10 +74,7 @@ async fn archived_project_task_excludes_choices_and_new_time_without_changing_gl
         },
     ] {
         let error = fixture.execute(&pool, command).await.unwrap_err();
-        assert!(
-            matches!(error, ServerFnError::ServerError { code: CONFLICT, .. }),
-            "{error:?}"
-        );
+        assert!(matches!(error, OpError::Conflict(_)), "{error:?}");
     }
     assert!(
         sqlx::query_scalar!("SELECT active FROM tasks WHERE id=$1", fixture.ids.task_id)
@@ -133,7 +114,7 @@ impl Fixture {
         .await
     }
 
-    async fn execute(&self, pool: &PgPool, command: TimesheetCommand) -> Result<(), ServerFnError> {
+    async fn execute(&self, pool: &PgPool, command: TimesheetCommand) -> Result<(), OpError> {
         apply(
             pool,
             self.ids.org_id,
@@ -216,20 +197,11 @@ async fn an_actor_without_stored_state_is_forbidden(pool: PgPool) {
         .await;
 
     for result in [read.map(|_| ()), write] {
-        assert!(
-            matches!(
-                result,
-                Err(ServerFnError::ServerError {
-                    code: crate::server_fns::FORBIDDEN,
-                    ..
-                })
-            ),
-            "{result:?}"
-        );
+        assert!(matches!(result, Err(OpError::Forbidden(_))), "{result:?}");
     }
 }
 
-/// A start outside the day is bad input (400), and nothing is written.
+/// A start outside the day is invalid input, and nothing is written.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_start_outside_the_day_is_rejected_as_invalid(pool: PgPool) {
     let f = fixture(&pool).await;
@@ -243,11 +215,8 @@ async fn a_start_outside_the_day_is_rejected_as_invalid(pool: PgPool) {
     assert!(
         matches!(
             &result,
-            Err(ServerFnError::ServerError {
-                code: crate::server_fns::BAD_REQUEST,
-                message,
-                ..
-            }) if message == "start time must be within the day (0..=1439)"
+            Err(OpError::Invalid { message, .. })
+                if message == "start time must be within the day (0..=1439)"
         ),
         "{result:?}"
     );
