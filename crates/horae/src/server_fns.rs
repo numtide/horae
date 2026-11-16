@@ -97,7 +97,7 @@ impl From<crate::ops::OpError> for ServerFnError {
 #[cfg(feature = "server")]
 pub(crate) fn parse_uuid(s: &str, field: &str) -> Result<uuid::Uuid, ServerFnError> {
     s.parse()
-        .map_err(|_| server_err(format!("Invalid {field}")))
+        .map_err(|_| err(BAD_REQUEST, format!("Invalid {field}")))
 }
 
 /// Parse an optional UUID filter: `None`/empty → `None`, otherwise a validated
@@ -118,7 +118,7 @@ pub(crate) fn parse_opt_uuid(
 #[cfg(feature = "server")]
 pub(crate) fn parse_date(s: &str, field: &str) -> Result<chrono::NaiveDate, ServerFnError> {
     s.parse()
-        .map_err(|_| server_err(format!("Invalid {field} (use YYYY-MM-DD)")))
+        .map_err(|_| err(BAD_REQUEST, format!("Invalid {field} (use YYYY-MM-DD)")))
 }
 
 /// Parse a stringly enum argument (roles, states, kinds), mapping a malformed
@@ -126,7 +126,7 @@ pub(crate) fn parse_date(s: &str, field: &str) -> Result<chrono::NaiveDate, Serv
 #[cfg(feature = "server")]
 pub(crate) fn parse_enum<T: std::str::FromStr>(s: &str, field: &str) -> Result<T, ServerFnError> {
     s.parse()
-        .map_err(|_| server_err(format!("Invalid {field}")))
+        .map_err(|_| err(BAD_REQUEST, format!("Invalid {field}")))
 }
 
 /// Load the session's user, requiring the account to still be active. This is
@@ -165,6 +165,8 @@ mod clients;
 mod importers;
 mod invoices;
 mod organization;
+#[cfg(all(test, feature = "server"))]
+mod parse_tests;
 mod permission_editor;
 #[cfg(feature = "server")]
 pub(crate) mod permissions;
