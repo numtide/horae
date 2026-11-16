@@ -1,5 +1,6 @@
 use super::profiles::{ProfileAction, ProfileCommand, ProfileCommandError, execute};
 use super::*;
+use crate::ops::testing::save_state;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
@@ -16,45 +17,6 @@ mod project_people_tests;
 
 #[path = "subjects.rs"]
 mod subjects_tests;
-
-#[path = "time_entries.rs"]
-mod time_entries_tests;
-
-#[path = "time_reports.rs"]
-mod time_reports_tests;
-
-#[path = "time_report_groups.rs"]
-mod time_report_groups_tests;
-
-#[path = "timesheet_people.rs"]
-mod timesheet_people_tests;
-
-#[path = "timesheet_context.rs"]
-mod timesheet_context_tests;
-
-async fn save_state(
-    pool: &PgPool,
-    org: Uuid,
-    user: Uuid,
-    admin: bool,
-    grants: &PermissionSelection,
-) {
-    let ids: Vec<String> = serde_json::from_value(serde_json::to_value(grants).unwrap()).unwrap();
-    crate::server_fns::test_seed::clear_state(pool, user).await;
-    sqlx::query!(
-        "INSERT INTO person_permission_states
-         (id, org_id, user_id, catalog_version, grants, is_administrator, source)
-         VALUES ($1, $2, $3, 1, $4, $5, 'individual')",
-        Uuid::now_v7(),
-        org,
-        user,
-        &ids,
-        admin
-    )
-    .execute(pool)
-    .await
-    .unwrap();
-}
 
 async fn fixture(pool: &PgPool) -> SeedIds {
     let ids = seed(pool, BuiltInProfile::Member).await;

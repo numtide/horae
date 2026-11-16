@@ -39,7 +39,7 @@ fn query(group_by: TimeReportGrouping) -> TimeReportGroupQuery {
 #[serial_test::serial]
 async fn billability_narrows_every_grouping_before_totals_and_cursor(pool: PgPool) {
     use crate::models::time_report::TimeReportBillability;
-    let ids = super::time_reports_tests::active_projects_fixture(&pool).await;
+    let ids = super::time_reports::active_projects_fixture(&pool).await;
     sqlx::query!(
         "UPDATE projects SET project_type='non_billable' WHERE id=$1",
         ids.project_id
@@ -82,7 +82,7 @@ async fn billability_narrows_every_grouping_before_totals_and_cursor(pool: PgPoo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn active_projects_only_narrows_every_grouping_before_totals(pool: PgPool) {
-    let ids = super::time_reports_tests::active_projects_fixture(&pool).await;
+    let ids = super::time_reports::active_projects_fixture(&pool).await;
     for group_by in [
         TimeReportGrouping::Client,
         TimeReportGrouping::Project,

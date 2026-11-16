@@ -15,6 +15,8 @@ use crate::models::scoped_time::{
 };
 
 pub(crate) mod reports;
+#[cfg(test)]
+mod tests;
 
 const TIME_READS: [Permission; 3] = [
     Permission::TimeReadOwn,
@@ -174,23 +176,6 @@ async fn fetch_people(
     .fetch_all(&mut **tx)
     .await?;
     Ok(people)
-}
-
-/// A page of the time entries the actor may read; identity comes from the session only.
-/// No adapter serves it: the scope tests read the shared entry reader through it.
-#[cfg(test)]
-pub(crate) async fn entries(
-    tx: &mut Tx,
-    actor: &Actor,
-    query: &TimeEntryQuery,
-) -> Result<TimeEntryPage, OpError> {
-    let grants = require_time_reads(actor, TIME_READ_REQUIRED)?;
-    if !entry_query_is_valid(query) {
-        return Err(OpError::bad_input(
-            "Invalid time-entry date range or cursor",
-        ));
-    }
-    fetch_entries(tx, actor.requester(), &grants, query).await
 }
 
 fn entry_query_is_valid(query: &TimeEntryQuery) -> bool {

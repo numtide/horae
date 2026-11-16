@@ -12,7 +12,7 @@ async fn read(
     query: &TimeEntryQuery,
 ) -> Result<TimeEntryPage, OpError> {
     let mut read = ops::begin_read(pool, Caller::session(org_id, user_id)).await?;
-    let result = ops::time_reads::entries(&mut read.tx, &read.actor, query).await;
+    let result = super::entries(&mut read.tx, &read.actor, query).await;
     read.finish(result).await
 }
 
