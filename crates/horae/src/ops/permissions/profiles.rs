@@ -1,55 +1,32 @@
-//! Atomic person permission changes; runtime policy activation is separate.
+//! Saving a person's permissions, with the relationship losses the
+//! administrator confirmed, as one receipted change.
 
 use horae_core::permissions::{
-    catalog::{
-        BuiltInProfile, PERMISSION_CATALOG_VERSION, Permission, PermissionSelection,
-        StoredPermissionError,
-    },
+    catalog::{BuiltInProfile, PERMISSION_CATALOG_VERSION, Permission, PermissionSelection},
     person_management::has_person_management_grant,
 };
 use serde::Serialize;
-use sqlx::{PgConnection, PgPool};
+use sqlx::PgConnection;
 use uuid::Uuid;
 
-use crate::models::permissions::{PermissionSource, PersonPermissions};
-use crate::ops::permissions::{
-    PermissionStorageError, load_permission_template, load_person_permissions,
+use super::{
+    REQUEST_CONFLICT, REQUESTER_CHANGED, access_revision, increment, load_permission_template,
+    load_person_permissions, require_administrator, selection, stored, unavailable,
 };
+use crate::models::permission_audit::RemovedRelationship as RelationshipRemoval;
+use crate::models::permission_editor::{
+    PermissionRequester, ProfileAction, ProfileCommand, ProfileDraft, ProfileOutcome,
+};
+use crate::models::permissions::{PermissionSource, PersonPermissions};
+use crate::ops::{Actor, Done, OpError, Tx};
 use crate::plugin::AppEvent;
 
-use crate::models::permission_audit::RemovedRelationship as RelationshipRemoval;
-use crate::models::permission_editor::ProfileDraft;
-pub(crate) use crate::models::permission_editor::{ProfileAction, ProfileCommand, ProfileOutcome};
-
-#[derive(Debug, thiserror::Error)]
-pub(crate) enum ProfileCommandError {
-    #[error("Current administrator authority is required")]
-    Forbidden,
-    #[error("Permission state has changed; confirm again")]
-    Stale,
-    #[error("Person or profile not found")]
-    NotFound,
-    #[error("The request identifier was used for different intent")]
-    RequestConflict,
-    #[error("Confirm the exact current relationship removals")]
-    Confirmation,
-    #[error("At least one active administrator must remain")]
-    LastAdministrator,
-    #[error("Administrator selection requires all Administrator permissions")]
-    AdministratorSelection,
-    #[error("Permission revision exhausted")]
-    RevisionExhausted,
-    #[error("Unsupported stored command format")]
-    ReceiptVersion,
-    #[error(transparent)]
-    Selection(#[from] StoredPermissionError),
-    #[error(transparent)]
-    Storage(#[from] PermissionStorageError),
-    #[error(transparent)]
-    Database(#[from] sqlx::Error),
-    #[error(transparent)]
-    Json(#[from] serde_json::Error),
-}
+pub(crate) const STALE: &str = "Permission state has changed; confirm again";
+pub(crate) const PERSON_NOT_FOUND: &str = "Person or profile not found";
+pub(crate) const CONFIRMATION: &str = "Confirm the exact current relationship removals";
+pub(crate) const LAST_ADMINISTRATOR: &str = "At least one active administrator must remain";
+pub(crate) const ADMINISTRATOR_SELECTION: &str =
+    "Administrator selection requires all Administrator permissions";
 
 #[derive(Serialize)]
 pub(super) struct ProfileChange {
@@ -68,16 +45,14 @@ struct ProfileAudit {
     change: Option<ProfileChange>,
 }
 
-fn increment(revision: i64) -> Result<i64, ProfileCommandError> {
-    revision
-        .checked_add(1)
-        .ok_or(ProfileCommandError::RevisionExhausted)
+fn not_found() -> OpError {
+    OpError::not_found(PERSON_NOT_FOUND)
 }
 
-fn canonical_ids(ids: &mut [Uuid]) -> Result<(), ProfileCommandError> {
+fn canonical_ids(ids: &mut [Uuid]) -> Result<(), OpError> {
     ids.sort_unstable();
     if ids.windows(2).any(|pair| pair[0] == pair[1]) {
-        return Err(ProfileCommandError::Confirmation);
+        return Err(OpError::conflict(CONFIRMATION));
     }
     Ok(())
 }
@@ -86,69 +61,27 @@ fn reads_projects(grants: &PermissionSelection) -> bool {
     grants.contains(Permission::ProjectReadManaged) || grants.contains(Permission::ProjectReadAll)
 }
 
-/// [`save`] without its plugin event, for tests that only need the outcome.
-#[cfg(test)]
-pub(crate) async fn execute(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
-    request: &ProfileCommand,
-) -> Result<ProfileOutcome, ProfileCommandError> {
-    Ok(save(pool, org_id, actor_id, request).await?.0)
-}
-
-/// Saves a person's permissions and returns the `user_permissions_changed`
-/// event when the save changed them; the caller dispatches it after the commit
-/// this function makes, and a replayed request announces nothing again.
-/// Caller supplies authenticated organization/actor IDs. No user/project DML or
-/// external work occurs while holding the organization serialization gate.
+/// Saves a person's permissions under the organization's `AccessChange` gate
+/// (`ops::begin_gated`), which the adapter takes before the actor's locks. A
+/// save that changes them announces `user_permissions_changed`; a replayed
+/// request returns its receipt's outcome and announces nothing again. No
+/// user/project DML or external work happens while the gate is held.
 pub(crate) async fn save(
-    pool: &PgPool,
-    org_id: Uuid,
-    actor_id: Uuid,
+    tx: &mut Tx,
+    actor: &Actor,
     request: &ProfileCommand,
-) -> Result<(ProfileOutcome, Option<AppEvent>), ProfileCommandError> {
-    let mut tx = pool.begin().await?;
-    let result = save_in(&mut tx, org_id, actor_id, request).await;
-    crate::ops::commit_or_roll_back(tx, result, ProfileCommandError::from).await
-}
-
-async fn save_in(
-    tx: &mut PgConnection,
-    org_id: Uuid,
-    actor_id: Uuid,
-    request: &ProfileCommand,
-) -> Result<(ProfileOutcome, Option<AppEvent>), ProfileCommandError> {
-    super::configure_administration(tx).await?;
-    let org = sqlx::query!(
-        "SELECT access_revision FROM organizations WHERE id = $1 FOR UPDATE",
-        org_id
-    )
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or(ProfileCommandError::Forbidden)?;
-    let active = sqlx::query_scalar!(
-        "SELECT active FROM users WHERE org_id = $1 AND id = $2 FOR SHARE",
-        org_id,
-        actor_id
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
-    if active != Some(true) {
-        return Err(ProfileCommandError::Forbidden);
-    }
-    if !load_person_permissions(tx, org_id, actor_id)
-        .await?
-        .is_some_and(|state| state.is_administrator)
-    {
-        return Err(ProfileCommandError::Forbidden);
-    }
-    let grants = PermissionSelection::from_stored(PERMISSION_CATALOG_VERSION, &request.grants)?;
+    expected: PermissionRequester,
+) -> Result<Done<ProfileOutcome>, OpError> {
+    actor.expect_requester(Some(expected), REQUESTER_CHANGED)?;
+    require_administrator(actor)?;
+    let (org_id, actor_id) = (actor.org_id(), actor.id());
+    let current_revision = access_revision(tx, org_id).await?;
+    let grants = selection(&request.grants)?;
     let mut intent = request.clone();
     intent.grants = grants.iter().collect();
     canonical_ids(&mut intent.remove_projects)?;
     canonical_ids(&mut intent.remove_people)?;
-    let intent_json = serde_json::to_value(&intent)?;
+    let intent_json = serde_json::to_value(&intent).map_err(unavailable)?;
     if let Some(receipt) = sqlx::query!(
         "SELECT format_version, intent, result FROM permission_change_receipts
          WHERE org_id = $1 AND actor_user_id = $2 AND request_id = $3",
@@ -156,20 +89,20 @@ async fn save_in(
         actor_id,
         intent.request_id
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await?
     {
         if receipt.format_version != 1 {
-            return Err(ProfileCommandError::ReceiptVersion);
+            return Err(unavailable("Unsupported stored command format"));
         }
         if receipt.intent != intent_json {
-            return Err(ProfileCommandError::RequestConflict);
+            return Err(OpError::conflict(REQUEST_CONFLICT));
         }
-        let outcome = serde_json::from_value(receipt.result)?;
-        return Ok((outcome, None));
+        let outcome = serde_json::from_value(receipt.result).map_err(unavailable)?;
+        return Ok(Done::new(outcome));
     }
-    if org.access_revision != intent.expected_access_revision {
-        return Err(ProfileCommandError::Stale);
+    if current_revision != intent.expected_access_revision {
+        return Err(OpError::conflict(STALE));
     }
     let draft = ProfileDraft {
         user_id: intent.user_id,
@@ -194,26 +127,26 @@ async fn save_in(
             .map(|row| row.id)
             .eq(intent.remove_people.iter().copied())
     {
-        return Err(ProfileCommandError::Confirmation);
+        return Err(OpError::conflict(CONFIRMATION));
     }
     let changed = before != after;
     let access_revision = if changed {
-        increment(org.access_revision)?
+        increment(current_revision)?
     } else {
-        org.access_revision
+        current_revision
     };
     if changed {
         persist(tx, org_id, intent.user_id, &after).await?;
         sqlx::query!("DELETE FROM project_management_assignments WHERE org_id = $1 AND manager_id = $2 AND id = ANY($3)",
-            org_id, intent.user_id, &intent.remove_projects).execute(&mut *tx).await?;
+            org_id, intent.user_id, &intent.remove_projects).execute(&mut **tx).await?;
         sqlx::query!("DELETE FROM person_management_assignments WHERE org_id = $1 AND manager_id = $2 AND id = ANY($3)",
-            org_id, intent.user_id, &intent.remove_people).execute(&mut *tx).await?;
+            org_id, intent.user_id, &intent.remove_people).execute(&mut **tx).await?;
         sqlx::query!(
             "UPDATE organizations SET access_revision = $2 WHERE id = $1",
             org_id,
             access_revision
         )
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
     }
     let result = ProfileOutcome {
@@ -224,7 +157,7 @@ async fn save_in(
     };
     let audit = ProfileAudit {
         user_id: intent.user_id,
-        previous_access_revision: org.access_revision,
+        previous_access_revision: current_revision,
         access_revision,
         change: changed.then_some(ProfileChange {
             catalog_version: PERMISSION_CATALOG_VERSION,
@@ -243,56 +176,50 @@ async fn save_in(
         actor_id,
         intent.request_id,
         intent_json,
-        serde_json::to_value(&result)?,
-        serde_json::to_value(&audit)?
+        serde_json::to_value(&result).map_err(unavailable)?,
+        serde_json::to_value(&audit).map_err(unavailable)?
     )
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await?;
-    let event = if changed {
-        let person = sqlx::query!(
-            "SELECT email, name FROM users WHERE org_id = $1 AND id = $2",
-            org_id,
-            intent.user_id
-        )
-        .fetch_one(&mut *tx)
-        .await?;
-        let user = crate::plugin::event::user_payload(
-            tx,
-            org_id,
-            intent.user_id,
-            &person.email,
-            &person.name,
-        )
-        .await?;
-        Some(AppEvent::UserPermissionsChanged {
-            occurred_at: chrono::Utc::now(),
-            org_id,
-            user,
-        })
-    } else {
-        None
-    };
-    Ok((result, event))
+    if !changed {
+        return Ok(Done::new(result));
+    }
+    let person = sqlx::query!(
+        "SELECT email, name FROM users WHERE org_id = $1 AND id = $2",
+        org_id,
+        intent.user_id
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+    let user =
+        crate::plugin::event::user_payload(tx, org_id, intent.user_id, &person.email, &person.name)
+            .await?;
+    Ok(Done::new(result).with(AppEvent::UserPermissionsChanged {
+        occurred_at: chrono::Utc::now(),
+        org_id,
+        user,
+    }))
 }
 
-/// Evaluates confirmed input under an already-held organization gate.
+/// Evaluates confirmed input under an already-held organization lock.
 /// Both preview and save use this calculation; no state is written here.
 pub(super) async fn evaluate(
     connection: &mut PgConnection,
     org_id: Uuid,
     draft: &ProfileDraft,
     grants: PermissionSelection,
-) -> Result<ProfileChange, ProfileCommandError> {
+) -> Result<ProfileChange, OpError> {
     if let ProfileAction::Template {
         id,
         expected_revision,
     } = &draft.action
     {
         let template = load_permission_template(connection, org_id, *id)
-            .await?
-            .ok_or(ProfileCommandError::NotFound)?;
+            .await
+            .map_err(stored)?
+            .ok_or_else(not_found)?;
         if template.revision != *expected_revision {
-            return Err(ProfileCommandError::Stale);
+            return Err(OpError::conflict(STALE));
         }
     }
     let target_active = sqlx::query_scalar!(
@@ -302,12 +229,13 @@ pub(super) async fn evaluate(
     )
     .fetch_optional(&mut *connection)
     .await?
-    .ok_or(ProfileCommandError::NotFound)?;
+    .ok_or_else(not_found)?;
     let before = load_person_permissions(connection, org_id, draft.user_id)
-        .await?
-        .ok_or(ProfileCommandError::NotFound)?;
+        .await
+        .map_err(stored)?
+        .ok_or_else(not_found)?;
     if before.revision != draft.expected_person_revision {
-        return Err(ProfileCommandError::Stale);
+        return Err(OpError::conflict(STALE));
     }
     let (source, is_administrator) = match draft.action {
         ProfileAction::Edit => (
@@ -316,7 +244,7 @@ pub(super) async fn evaluate(
         ),
         ProfileAction::BuiltIn { profile } => {
             if profile == BuiltInProfile::Administrator && grants != profile.selection() {
-                return Err(ProfileCommandError::AdministratorSelection);
+                return Err(OpError::invalid("grants", ADMINISTRATOR_SELECTION));
             }
             (
                 PermissionSource::BuiltIn(profile),
@@ -385,7 +313,7 @@ async fn ensure_other_administrator(
     connection: &mut PgConnection,
     org: Uuid,
     target: Uuid,
-) -> Result<(), ProfileCommandError> {
+) -> Result<(), OpError> {
     let others = sqlx::query_scalar!(
         "SELECT p.user_id FROM person_permission_states p
          JOIN users u ON u.id = p.user_id AND u.org_id = p.org_id
@@ -398,11 +326,12 @@ async fn ensure_other_administrator(
     .await?;
     for user in &others {
         load_person_permissions(connection, org, *user)
-            .await?
-            .ok_or(ProfileCommandError::NotFound)?;
+            .await
+            .map_err(stored)?
+            .ok_or_else(not_found)?;
     }
     if others.is_empty() {
-        return Err(ProfileCommandError::LastAdministrator);
+        return Err(OpError::conflict(LAST_ADMINISTRATOR));
     }
     Ok(())
 }
@@ -412,13 +341,15 @@ async fn persist(
     org: Uuid,
     user: Uuid,
     state: &PersonPermissions,
-) -> Result<(), ProfileCommandError> {
+) -> Result<(), OpError> {
     let (source, built_in, template, applied_revision) = match state.source {
         PermissionSource::BuiltIn(profile) => (
             "built_in",
-            Some(serde_json::from_value::<String>(serde_json::to_value(
-                profile,
-            )?)?),
+            Some(
+                serde_json::to_value(profile)
+                    .and_then(serde_json::from_value::<String>)
+                    .map_err(unavailable)?,
+            ),
             None,
             None,
         ),
@@ -428,7 +359,9 @@ async fn persist(
         } => ("template", None, Some(id), Some(applied_revision)),
         PermissionSource::Individual => ("individual", None, None, None),
     };
-    let grant_ids: Vec<String> = serde_json::from_value(serde_json::to_value(&state.grants)?)?;
+    let grant_ids: Vec<String> = serde_json::to_value(&state.grants)
+        .and_then(serde_json::from_value)
+        .map_err(unavailable)?;
     sqlx::query!(
         "UPDATE person_permission_states SET grants = $3, is_administrator = $4,
          source = $5, built_in_profile = $6, template_id = $7, applied_template_revision = $8,

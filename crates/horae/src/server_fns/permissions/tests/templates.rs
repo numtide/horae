@@ -1,5 +1,10 @@
-use super::templates::{TemplateAction, TemplateCommand, TemplateCommandError, execute};
+use super::calls::templates::{TemplateAction, TemplateCommand, execute};
+use super::calls::{
+    forbidden, limit, name_conflict, request_conflict, state_unavailable, template_not_found,
+    template_stale, unavailable,
+};
 use super::*;
+use crate::ops::OpError;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
@@ -56,15 +61,15 @@ fn delete(id: Uuid, expected_access_revision: i64) -> TemplateCommand {
     }
 }
 
-/// The refusal comes after the organization is locked `FOR UPDATE`, which
-/// stops every access check in it: it rolls back before it is answered.
+/// The refusal comes after the organization's `AccessChange` gate is taken,
+/// which stops every access check in it: it rolls back before it is answered.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_refused_template_command_releases_the_organization(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &create("Refused", 0)).await,
-        Err(TemplateCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
     assert!(crate::server_fns::test_seed::organization_lockable(
         &pool, ids.org_id
@@ -106,7 +111,7 @@ async fn template_command_waits_for_direct_actor_deactivation_on_replay(pool: Pg
     revoke.commit().await.unwrap();
     assert!(matches!(
         pending.await.unwrap(),
-        Err(TemplateCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
     assert_eq!(revision_and_count(&pool, ids.org_id).await, (1, 1));
 }
@@ -144,10 +149,9 @@ async fn template_command_overrides_readonly_defaults_and_keeps_stricter_timeout
     .await
     .unwrap()
     .unwrap_err();
-    let TemplateCommandError::Database(sqlx::Error::Database(error)) = error else {
-        panic!("Expected statement timeout: {error}")
-    };
-    assert_eq!(error.code().as_deref(), Some("57014"));
+    // Failing well inside two seconds shows the connection's 250 ms limit held,
+    // not the transaction's own 5 s one; `OpError` keeps the cause in the log.
+    assert!(matches!(error, OpError::Internal(_)), "{error}");
     hold.rollback().await.unwrap();
     let defaults = sqlx::query!("SELECT current_setting('statement_timeout') AS timeout, current_setting('default_transaction_read_only') AS readonly")
         .fetch_one(&restricted).await.unwrap();
@@ -192,7 +196,7 @@ async fn create_canonical_retry_returns_one_historical_change(pool: PgPool) {
     command.expected_access_revision = 1;
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &command).await,
-        Err(TemplateCommandError::RequestConflict)
+        Err(e) if e == request_conflict()
     ));
 }
 
@@ -205,12 +209,15 @@ async fn equivalent_names_and_invalid_confirmed_selections_roll_back(pool: PgPoo
         .unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &create(" equipo ", 1)).await,
-        Err(TemplateCommandError::NameConflict)
+        Err(e) if e == name_conflict()
     ));
     for name in [" ".to_owned(), "x".repeat(101)] {
         assert!(matches!(
             execute(&pool, ids.org_id, ids.user_id, &create(&name, 1)).await,
-            Err(TemplateCommandError::Name(_))
+            Err(OpError::Invalid {
+                field: Some("name"),
+                ..
+            })
         ));
     }
     let floor: Vec<_> = BuiltInProfile::Member.selection().iter().collect();
@@ -226,7 +233,10 @@ async fn equivalent_names_and_invalid_confirmed_selections_roll_back(pool: PgPoo
         };
         assert!(matches!(
             execute(&pool, ids.org_id, ids.user_id, &command).await,
-            Err(TemplateCommandError::Selection(_))
+            Err(OpError::Invalid {
+                field: Some("grants"),
+                ..
+            })
         ));
     }
     assert_eq!(revision_and_count(&pool, ids.org_id).await, (1, 1));
@@ -274,7 +284,7 @@ async fn missing_foreign_and_non_admin_authority_deny(pool: PgPool) {
     for actor in [other.user_id, Uuid::now_v7()] {
         assert!(matches!(
             execute(&pool, ids.org_id, actor, &create("Denied", 0)).await,
-            Err(TemplateCommandError::Forbidden)
+            Err(e) if e == forbidden()
         ));
     }
     let grants: Vec<String> = serde_json::from_value(
@@ -290,7 +300,7 @@ async fn missing_foreign_and_non_admin_authority_deny(pool: PgPool) {
     sqlx::query!("UPDATE person_permission_states SET is_administrator = false, grants = $2 WHERE user_id = $1", ids.user_id, &grants).execute(&pool).await.unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &create("Denied", 0)).await,
-        Err(TemplateCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
     sqlx::query!(
         "DELETE FROM person_permission_states WHERE user_id = $1",
@@ -301,7 +311,7 @@ async fn missing_foreign_and_non_admin_authority_deny(pool: PgPool) {
     .unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &create("Denied", 0)).await,
-        Err(TemplateCommandError::Forbidden)
+        Err(e) if e == state_unavailable()
     ));
     assert_eq!(revision_and_count(&pool, ids.org_id).await, (0, 0));
 }
@@ -456,13 +466,14 @@ async fn concurrent_creators_never_exceed_fifty_profiles(pool: PgPool) {
         execute(&pool, ids.org_id, ids.user_id, &first),
         execute(&pool, ids.org_id, ids.user_id, &second)
     );
-    assert!(matches!(
-        results,
-        (Ok(_), Err(TemplateCommandError::Stale)) | (Err(TemplateCommandError::Stale), Ok(_))
-    ));
+    let refusals = match results {
+        (Ok(_), Err(error)) | (Err(error), Ok(_)) => error,
+        results => panic!("expected one save and one refusal: {results:?}"),
+    };
+    assert_eq!(refusals, template_stale());
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &create("Too many", 50)).await,
-        Err(TemplateCommandError::Limit)
+        Err(e) if e == limit()
     ));
     assert_eq!(revision_and_count(&pool, ids.org_id).await, (50, 50));
     assert_eq!(receipts(&pool, ids.org_id).await.len(), 50);
@@ -478,7 +489,7 @@ async fn stale_foreign_and_exhausted_revisions_never_partially_delete(pool: PgPo
         .unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &create("Stale", 0)).await,
-        Err(TemplateCommandError::Stale)
+        Err(e) if e == template_stale()
     ));
     assert!(matches!(
         execute(
@@ -488,7 +499,7 @@ async fn stale_foreign_and_exhausted_revisions_never_partially_delete(pool: PgPo
             &delete(created.template_id, 0)
         )
         .await,
-        Err(TemplateCommandError::Stale)
+        Err(e) if e == template_stale()
     ));
     assert!(matches!(
         execute(
@@ -498,7 +509,7 @@ async fn stale_foreign_and_exhausted_revisions_never_partially_delete(pool: PgPo
             &delete(created.template_id, 0)
         )
         .await,
-        Err(TemplateCommandError::NotFound)
+        Err(e) if e == template_not_found()
     ));
     let mut stale = delete(created.template_id, 1);
     stale.action = TemplateAction::Delete {
@@ -507,7 +518,7 @@ async fn stale_foreign_and_exhausted_revisions_never_partially_delete(pool: PgPo
     };
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &stale).await,
-        Err(TemplateCommandError::Stale)
+        Err(e) if e == template_stale()
     ));
     sqlx::query!("UPDATE person_permission_states SET source = 'template', template_id = $2, applied_template_revision = 0, revision = $3 WHERE user_id = $1", ids.user_id, created.template_id, i64::MAX).execute(&pool).await.unwrap();
     assert!(matches!(
@@ -518,7 +529,7 @@ async fn stale_foreign_and_exhausted_revisions_never_partially_delete(pool: PgPo
             &delete(created.template_id, 1)
         )
         .await,
-        Err(TemplateCommandError::RevisionExhausted)
+        Err(e) if e == unavailable()
     ));
     let state =
         load_person_permissions(&mut pool.acquire().await.unwrap(), ids.org_id, ids.user_id)
@@ -550,7 +561,7 @@ async fn stale_foreign_and_exhausted_revisions_never_partially_delete(pool: PgPo
             &create("Overflow", i64::MAX)
         )
         .await,
-        Err(TemplateCommandError::RevisionExhausted)
+        Err(e) if e == unavailable()
     ));
     assert_eq!(revision_and_count(&pool, ids.org_id).await, (i64::MAX, 1));
     assert_eq!(receipts(&pool, ids.org_id).await.len(), 1);
@@ -596,7 +607,7 @@ async fn revocation_winning_org_gate_denies_pending_replay_and_new_command(pool:
             held.commit().await.unwrap();
             assert!(matches!(
                 pending.await.unwrap(),
-                Err(TemplateCommandError::Forbidden)
+                Err(e) if e == forbidden()
             ));
             assert_eq!(revision_and_count(&pool, ids.org_id).await, (1, 1));
             assert_eq!(receipts(&pool, ids.org_id).await.len(), 1);
@@ -622,7 +633,7 @@ async fn invalid_stored_authority_and_template_grants_fail_closed(pool: PgPool) 
         .unwrap();
         assert!(matches!(
             execute(&pool, ids.org_id, ids.user_id, &create("Denied", 1)).await,
-            Err(TemplateCommandError::Storage(_))
+            Err(e) if e == state_unavailable()
         ));
     }
     // Restore the actor, then corrupt the independently loaded template selection.
@@ -659,7 +670,7 @@ async fn invalid_stored_authority_and_template_grants_fail_closed(pool: PgPool) 
             &delete(created.template_id, 1)
         )
         .await,
-        Err(TemplateCommandError::Storage(_))
+        Err(e) if e == unavailable()
     ));
     assert_eq!(revision_and_count(&pool, ids.org_id).await, (1, 1));
     assert_eq!(receipts(&pool, ids.org_id).await.len(), 1);
@@ -677,7 +688,7 @@ async fn failed_audit_insert_rolls_back_creation_and_detachment(pool: PgPool) {
     for request in [create("Rolled back", 1), delete(created.template_id, 1)] {
         assert!(matches!(
             execute(&pool, ids.org_id, ids.user_id, &request).await,
-            Err(TemplateCommandError::Database(_))
+            Err(OpError::Internal(_))
         ));
         assert_eq!(revision_and_count(&pool, ids.org_id).await, (1, 1));
         assert_eq!(receipts(&pool, ids.org_id).await.len(), 1);
@@ -747,9 +758,7 @@ async fn malformed_assignee_aborts_all_detachments(pool: PgPool) {
             &delete(created.template_id, 1)
         )
         .await,
-        Err(TemplateCommandError::Storage(
-            PermissionStorageError::Identifier(_)
-        ))
+        Err(e) if e == unavailable()
     ));
     let after = sqlx::query_scalar!(
         "SELECT jsonb_agg(s ORDER BY user_id) FROM person_permission_states s WHERE org_id = $1",
@@ -905,7 +914,7 @@ async fn command_receipts_are_not_shared_between_administrators(pool: PgPool) {
     ).execute(&pool).await.unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, second_actor, &request).await,
-        Err(TemplateCommandError::Stale)
+        Err(e) if e == template_stale()
     ));
     request.expected_access_revision = 1;
     request.action = create("Other", 1).action;
@@ -933,7 +942,7 @@ async fn unsupported_receipt_version_fails_without_repeating_the_change(pool: Pg
     .unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(TemplateCommandError::ReceiptVersion)
+        Err(e) if e == unavailable()
     ));
     assert_eq!(revision_and_count(&pool, ids.org_id).await, (1, 1));
     assert_eq!(receipts(&pool, ids.org_id).await.len(), 1);

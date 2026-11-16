@@ -1,17 +1,82 @@
-//! Stored permission state: loading it and writing it for new people.
+//! Stored permission state: loading it, writing it for new people, and the
+//! administrator's permission editor and history over it.
 //!
-//! These functions read and write storage; they decide nothing. To authorize,
-//! use [`Actor`](super::Actor), which loads the acting person through
-//! [`load_person_permissions`].
+//! The storage functions here decide nothing. To authorize, use
+//! [`Actor`](super::Actor), which loads the acting person through
+//! [`load_person_permissions`]. The editor ([`editor`], [`profiles`],
+//! [`templates`]) and the history ([`audit`]) serve current administrators only.
 
-use horae_core::permissions::catalog::{Permission, PermissionSelection, StoredPermissionError};
+use horae_core::permissions::catalog::{
+    PERMISSION_CATALOG_VERSION, Permission, PermissionSelection, StoredPermissionError,
+};
 use serde::{Deserialize, de::IntoDeserializer};
 use sqlx::PgConnection;
 use uuid::Uuid;
 
+use super::{Actor, OpError};
 use crate::models::permissions::{PermissionSource, PermissionTemplate, PersonPermissions};
 
+pub(crate) mod audit;
+pub(crate) mod editor;
+pub(crate) mod profiles;
 pub(crate) mod provisioning;
+pub(crate) mod templates;
+
+/// The editor's and the history's refusal for anyone but a current administrator.
+pub(crate) const AUTHORITY_REQUIRED: &str = "Current administrator authority is required";
+/// A save's refusal when the page was loaded for someone else.
+pub(crate) const REQUESTER_CHANGED: &str = "Sign in as the original requester before retrying";
+pub(crate) const REQUEST_CONFLICT: &str = "The request identifier was used for different intent";
+/// What the editor answers for a fault it does not explain; the cause is logged.
+pub(crate) const EDITOR_UNAVAILABLE: &str = "Permission editor is unavailable";
+
+/// Refuses anyone but a current administrator, in the editor's words rather
+/// than [`Actor::require_administrator`]'s, which the page already shows.
+fn require_administrator(actor: &Actor) -> Result<(), OpError> {
+    if actor.administrator() {
+        Ok(())
+    } else {
+        Err(OpError::forbidden(AUTHORITY_REQUIRED))
+    }
+}
+
+/// Logs a fault the editor does not explain and answers it as unavailable.
+fn unavailable(error: impl std::fmt::Display) -> OpError {
+    tracing::error!(%error, "Permission editor operation failed");
+    OpError::Internal(EDITOR_UNAVAILABLE.into())
+}
+
+/// Someone else's stored state failed to load: a storage error maps like any
+/// other, invalid state is a fault the editor does not explain.
+fn stored(error: PermissionStorageError) -> OpError {
+    match error {
+        PermissionStorageError::Database(error) => error.into(),
+        error => unavailable(error),
+    }
+}
+
+/// The confirmed grants, refused as given rather than repaired.
+fn selection(grants: &[Permission]) -> Result<PermissionSelection, OpError> {
+    PermissionSelection::from_stored(PERMISSION_CATALOG_VERSION, grants)
+        .map_err(|error| OpError::invalid("grants", error))
+}
+
+fn increment(revision: i64) -> Result<i64, OpError> {
+    revision
+        .checked_add(1)
+        .ok_or_else(|| unavailable("Permission revision exhausted"))
+}
+
+/// The organization's access revision. The actor's `FOR SHARE` lock, or a
+/// save's `AccessChange` gate, keeps it until the transaction ends.
+async fn access_revision(connection: &mut PgConnection, org_id: Uuid) -> Result<i64, OpError> {
+    Ok(sqlx::query_scalar!(
+        "SELECT access_revision FROM organizations WHERE id = $1",
+        org_id
+    )
+    .fetch_one(connection)
+    .await?)
+}
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum PermissionStorageError {

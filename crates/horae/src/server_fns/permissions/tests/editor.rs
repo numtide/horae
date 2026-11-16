@@ -1,6 +1,6 @@
 use super::*;
 use crate::models::permission_editor::ProfileDraft;
-use crate::server_fns::permissions::editor;
+use crate::server_fns::permissions::calls::{editor, template_stale};
 
 fn draft(request: &ProfileCommand) -> ProfileDraft {
     ProfileDraft {
@@ -76,7 +76,7 @@ async fn editor_loss_names_cover_only_current_outgoing_effects(pool: PgPool) {
     for requester in [manager, ids.user_id, foreign.user_id] {
         assert!(matches!(
             editor::preview(&pool, ids.org_id, requester, &proposal).await,
-            Err(ProfileCommandError::Forbidden)
+            Err(e) if e == forbidden()
         ));
     }
     assert!(matches!(
@@ -87,7 +87,7 @@ async fn editor_loss_names_cover_only_current_outgoing_effects(pool: PgPool) {
             &draft(&apply(foreign.user_id, BuiltInProfile::Member))
         )
         .await,
-        Err(ProfileCommandError::NotFound)
+        Err(e) if e == not_found()
     ));
 }
 
@@ -143,7 +143,7 @@ async fn editor_preview_matches_saved_effects_without_writing(pool: PgPool) {
     );
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &command).await,
-        Err(ProfileCommandError::Confirmation)
+        Err(e) if e == confirmation()
     ));
     command.remove_projects = vec![project];
     command.remove_people = vec![managed_person];
@@ -174,7 +174,7 @@ async fn editor_preview_matches_saved_effects_without_writing(pool: PgPool) {
     );
     assert!(matches!(
         editor::preview(&pool, ids.org_id, ids.user_id, &draft(&command)).await,
-        Err(ProfileCommandError::Stale)
+        Err(e) if e == stale()
     ));
 }
 
@@ -192,7 +192,7 @@ async fn editor_noop_and_last_admin_proposals_are_truthful(pool: PgPool) {
     let demote = apply(ids.user_id, BuiltInProfile::Member);
     assert!(matches!(
         editor::preview(&pool, ids.org_id, ids.user_id, &draft(&demote)).await,
-        Err(ProfileCommandError::LastAdministrator)
+        Err(e) if e == last_administrator()
     ));
     assert_eq!(state(&pool, ids.org_id, ids.user_id).await.revision, 0);
 }
@@ -234,12 +234,12 @@ async fn editor_denies_wrong_authority_and_foreign_targets(pool: PgPool) {
     let user = person(&pool, ids.org_id, false, BuiltInProfile::Administrator).await;
     assert!(matches!(
         editor::load(&pool, ids.org_id, user, ids.user_id).await,
-        Err(ProfileCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
     for target in [foreign.user_id, Uuid::now_v7()] {
         assert!(matches!(
             editor::load(&pool, ids.org_id, ids.user_id, target).await,
-            Err(ProfileCommandError::NotFound)
+            Err(e) if e == not_found()
         ));
     }
 }
@@ -272,11 +272,11 @@ async fn editor_direct_actor_deactivation_wins_preview_and_load(pool: PgPool) {
     revoke.commit().await.unwrap();
     assert!(matches!(
         pending.await.unwrap(),
-        Err(ProfileCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
     assert!(matches!(
         editor::load(&pool, ids.org_id, ids.user_id, ids.user_id).await,
-        Err(ProfileCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
 }
 
@@ -284,7 +284,7 @@ async fn editor_direct_actor_deactivation_wins_preview_and_load(pool: PgPool) {
 #[serial_test::serial]
 async fn template_deletion_preview_preserves_people_and_fences_its_affected_set(pool: PgPool) {
     use crate::models::permission_editor::ProfileSource;
-    use crate::server_fns::permissions::templates::{self, TemplateAction, TemplateCommand};
+    use crate::server_fns::permissions::calls::templates::{self, TemplateAction, TemplateCommand};
     let ids = fixture(&pool).await;
     let target = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
     let created = templates::execute(
@@ -360,7 +360,7 @@ async fn template_deletion_preview_preserves_people_and_fences_its_affected_set(
         .unwrap();
     assert!(matches!(
         templates::execute(&pool, ids.org_id, ids.user_id, &deletion).await,
-        Err(templates::TemplateCommandError::Stale)
+        Err(e) if e == template_stale()
     ));
     // Reapply the template with individual grants to exercise actual detachment.
     command.request_id = Uuid::now_v7();

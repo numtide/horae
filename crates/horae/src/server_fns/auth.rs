@@ -45,25 +45,24 @@ pub async fn list_permission_audit(
     after: Option<crate::models::permission_audit::AuditCursor>,
     expected_requester: Option<crate::models::permission_editor::PermissionRequester>,
 ) -> Result<crate::models::permission_audit::AuditPage, ServerFnError> {
-    let caller = session_caller_or("Permission history is unavailable").await?;
+    use crate::ops::permissions::audit::HISTORY_UNAVAILABLE;
+    let caller = session_caller_or(HISTORY_UNAVAILABLE).await?;
     let state = crate::state::global_state().await;
-    super::permissions::audit::page(
-        &state.db,
-        caller.org_id,
-        caller.user_id,
-        after.as_ref(),
-        expected_requester,
-    )
-    .await
-    .map_err(|error| match error {
-        super::permissions::audit::AuditReadError::Forbidden => {
-            forbidden("Current administrator authority is required")
-        }
-        error => {
-            tracing::error!(%error,"Unable to load permission history");
-            server_err("Permission history is unavailable")
-        }
-    })
+    Ok(audit_page(&state.db, caller, after.as_ref(), expected_requester).await?)
+}
+
+#[cfg(feature = "server")]
+pub(crate) async fn audit_page(
+    db: &sqlx::PgPool,
+    caller: crate::ops::Caller,
+    after: Option<&crate::models::permission_audit::AuditCursor>,
+    expected_requester: Option<crate::models::permission_editor::PermissionRequester>,
+) -> Result<crate::models::permission_audit::AuditPage, crate::ops::OpError> {
+    use crate::ops;
+    let mut read = ops::begin_read(db, caller).await?;
+    let result =
+        ops::permissions::audit::page(&mut read.tx, &read.actor, after, expected_requester).await;
+    read.finish(result).await
 }
 
 /// Explain the session person's stored permissions. This display snapshot

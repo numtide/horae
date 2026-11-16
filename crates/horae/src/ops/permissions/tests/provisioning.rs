@@ -1,7 +1,7 @@
 use super::*;
 use crate::models::people::PeopleActivity;
 use crate::models::permission_editor::{ProfileAction, ProfileCommand};
-use crate::server_fns::permissions::profiles;
+use crate::server_fns::permissions::calls::{last_administrator, profiles};
 use crate::server_fns::test_seed::built_in_profile;
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
@@ -53,7 +53,7 @@ async fn init_creates_an_administrator_who_administers(pool: PgPool) {
     };
     assert!(matches!(
         profiles::execute(&pool, org, admin, &demote).await,
-        Err(profiles::ProfileCommandError::LastAdministrator)
+        Err(e) if e == last_administrator()
     ));
 }
 

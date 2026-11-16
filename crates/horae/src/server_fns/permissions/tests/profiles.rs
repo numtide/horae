@@ -1,5 +1,10 @@
-use super::profiles::{ProfileAction, ProfileCommand, ProfileCommandError, execute};
+use super::calls::profiles::{ProfileAction, ProfileCommand, execute};
+use super::calls::{
+    administrator_selection, confirmation, forbidden, last_administrator, not_found,
+    request_conflict, stale, unavailable,
+};
 use super::*;
+use crate::ops::OpError;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
@@ -104,8 +109,8 @@ async fn state(pool: &PgPool, org: Uuid, user: Uuid) -> PersonPermissions {
         .unwrap()
 }
 
-/// The refusal comes after the organization is locked `FOR UPDATE`, which
-/// stops every access check in it: it rolls back before it is answered.
+/// The refusal comes after the organization's `AccessChange` gate is taken,
+/// which stops every access check in it: it rolls back before it is answered.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn a_refused_profile_command_releases_the_organization(pool: PgPool) {
@@ -113,7 +118,7 @@ async fn a_refused_profile_command_releases_the_organization(pool: PgPool) {
     let request = apply(ids.user_id, BuiltInProfile::PeopleAdmin);
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
     assert!(crate::server_fns::test_seed::organization_lockable(
         &pool, ids.org_id
@@ -148,7 +153,7 @@ async fn profile_command_waits_for_direct_actor_deactivation_even_on_replay(pool
     revoke.commit().await.unwrap();
     assert!(matches!(
         pending.await.unwrap(),
-        Err(ProfileCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
     assert_eq!(state(&pool, ids.org_id, user).await.revision, 1);
 }
@@ -178,7 +183,7 @@ async fn profile_command_rechecks_remaining_administrator_after_deactivation_wai
     revoke.commit().await.unwrap();
     assert!(matches!(
         pending.await.unwrap(),
-        Err(ProfileCommandError::LastAdministrator)
+        Err(e) if e == last_administrator()
     ));
     assert!(state(&pool, ids.org_id, ids.user_id).await.is_administrator);
 }
@@ -448,7 +453,7 @@ async fn last_active_administrator_cannot_be_demoted_or_replaced_by_equivalent_g
     let request = apply(ids.user_id, BuiltInProfile::Member);
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::LastAdministrator)
+        Err(e) if e == last_administrator()
     ));
     assert_eq!(state(&pool, ids.org_id, ids.user_id).await.revision, 0);
 }
@@ -526,13 +531,13 @@ async fn reduced_administrator_and_stale_person_proposals_are_rejected(pool: PgP
     request.grants = BuiltInProfile::Member.selection().iter().collect();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::AdministratorSelection)
+        Err(e) if e == administrator_selection()
     ));
     request = apply(user, BuiltInProfile::ProjectManager);
     request.expected_person_revision = 1;
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::Stale)
+        Err(e) if e == stale()
     ));
     assert_eq!(state(&pool, ids.org_id, user).await.revision, 0);
 }
@@ -591,14 +596,14 @@ async fn simultaneous_losses_require_exact_confirmation_preserve_history_and_nev
     request.remove_projects = vec![project_link];
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::Confirmation)
+        Err(e) if e == confirmation()
     ));
     assert_eq!(relationship_ids(&pool, ids.org_id).await, original_links);
     assert_eq!(state(&pool, ids.org_id, user).await.revision, 0);
     request.remove_people = vec![person_link, incoming];
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::Confirmation)
+        Err(e) if e == confirmation()
     ));
     request.remove_people = vec![person_link];
     execute(&pool, ids.org_id, ids.user_id, &request)
@@ -682,7 +687,7 @@ async fn read_only_retention_and_explicit_keep_project_access_preserve_independe
         .collect();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::Confirmation)
+        Err(e) if e == confirmation()
     ));
     request.remove_people = vec![person_link];
     execute(&pool, ids.org_id, ids.user_id, &request)
@@ -701,7 +706,7 @@ async fn read_only_retention_and_explicit_keep_project_access_preserve_independe
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn adjusted_template_reset_and_replay_after_deletion_use_explicit_intent(pool: PgPool) {
-    use super::templates::{self, TemplateAction, TemplateCommand};
+    use super::calls::templates::{self, TemplateAction, TemplateCommand};
     let ids = fixture(&pool).await;
     let user = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
     let creation = TemplateCommand {
@@ -771,14 +776,14 @@ async fn adjusted_template_reset_and_replay_after_deletion_use_explicit_intent(p
     request.expected_person_revision = 3;
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::NotFound)
+        Err(e) if e == not_found()
     ));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn all_grant_template_cannot_confer_identity_and_cross_command_keys_conflict(pool: PgPool) {
-    use super::templates::{self, TemplateAction, TemplateCommand, TemplateCommandError};
+    use super::calls::templates::{self, TemplateAction, TemplateCommand};
     let ids = fixture(&pool).await;
     let user = person(&pool, ids.org_id, true, BuiltInProfile::Administrator).await;
     let mut creation = TemplateCommand {
@@ -801,7 +806,7 @@ async fn all_grant_template_cannot_confer_identity_and_cross_command_keys_confli
     request.request_id = creation.request_id;
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::RequestConflict)
+        Err(e) if e == request_conflict()
     ));
     request.request_id = Uuid::now_v7();
     execute(&pool, ids.org_id, ids.user_id, &request)
@@ -813,7 +818,7 @@ async fn all_grant_template_cannot_confer_identity_and_cross_command_keys_confli
     creation.request_id = request.request_id;
     assert!(matches!(
         templates::execute(&pool, ids.org_id, ids.user_id, &creation).await,
-        Err(TemplateCommandError::RequestConflict)
+        Err(e) if e == request_conflict()
     ));
     assert!(matches!(
         execute(
@@ -823,7 +828,7 @@ async fn all_grant_template_cannot_confer_identity_and_cross_command_keys_confli
             &apply(user, BuiltInProfile::Administrator)
         )
         .await,
-        Err(ProfileCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
 }
 
@@ -847,7 +852,7 @@ async fn concurrent_self_demotions_leave_one_active_explicit_administrator(pool:
     retry.expected_access_revision = 1;
     assert!(matches!(
         execute(&pool, ids.org_id, remaining, &retry).await,
-        Err(ProfileCommandError::LastAdministrator)
+        Err(e) if e == last_administrator()
     ));
     let count = sqlx::query_scalar!("SELECT count(*) FROM person_permission_states p JOIN users u ON u.id = p.user_id WHERE p.org_id = $1 AND p.is_administrator AND u.active", ids.org_id).fetch_one(&pool).await.unwrap();
     assert_eq!(count, Some(1));
@@ -884,11 +889,11 @@ async fn revocation_winning_gate_denies_new_and_replayed_changes(pool: PgPool) {
     tx.commit().await.unwrap();
     assert!(matches!(
         waiting.await.unwrap(),
-        Err(ProfileCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
     assert!(matches!(
         execute(&pool, org, actor, &apply(user, BuiltInProfile::Member)).await,
-        Err(ProfileCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
     assert_eq!(state(&pool, org, user).await.revision, 1);
 }
@@ -907,7 +912,7 @@ async fn audit_failure_rolls_back_profile_and_both_relationship_sets(pool: PgPoo
     request.remove_people = vec![person];
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::Database(_))
+        Err(OpError::Internal(_))
     ));
     assert_eq!(state(&pool, ids.org_id, user).await, before);
     assert_eq!(relationship_ids(&pool, ids.org_id).await, links);
@@ -1005,7 +1010,7 @@ async fn canonical_actor_tenant_and_target_checks_precede_mutation(pool: PgPool)
     for actor in [non_admin, foreign.user_id, Uuid::now_v7()] {
         assert!(matches!(
             execute(&pool, ids.org_id, actor, &request).await,
-            Err(ProfileCommandError::Forbidden)
+            Err(e) if e == forbidden()
         ));
     }
     for user in [foreign.user_id, Uuid::now_v7()] {
@@ -1017,7 +1022,7 @@ async fn canonical_actor_tenant_and_target_checks_precede_mutation(pool: PgPool)
                 &apply(user, BuiltInProfile::Member)
             )
             .await,
-            Err(ProfileCommandError::NotFound)
+            Err(e) if e == not_found()
         ));
     }
     sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
@@ -1026,7 +1031,7 @@ async fn canonical_actor_tenant_and_target_checks_precede_mutation(pool: PgPool)
         .unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::Forbidden)
+        Err(e) if e == forbidden()
     ));
     assert_eq!(state(&pool, ids.org_id, non_admin).await.revision, 0);
 }
@@ -1045,7 +1050,7 @@ async fn malformed_person_or_remaining_administrator_state_fails_closed(pool: Pg
             &apply(other, BuiltInProfile::Member)
         )
         .await,
-        Err(ProfileCommandError::Storage(_))
+        Err(e) if e == unavailable()
     ));
     assert!(matches!(
         execute(
@@ -1055,7 +1060,7 @@ async fn malformed_person_or_remaining_administrator_state_fails_closed(pool: Pg
             &apply(ids.user_id, BuiltInProfile::Member)
         )
         .await,
-        Err(ProfileCommandError::Storage(_))
+        Err(e) if e == unavailable()
     ));
     assert_eq!(state(&pool, ids.org_id, ids.user_id).await.revision, 0);
 }
@@ -1063,7 +1068,7 @@ async fn malformed_person_or_remaining_administrator_state_fails_closed(pool: Pg
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn stale_template_and_org_revision_and_exhausted_revisions_roll_back(pool: PgPool) {
-    use super::templates::{self, TemplateAction, TemplateCommand};
+    use super::calls::templates::{self, TemplateAction, TemplateCommand};
     let ids = fixture(&pool).await;
     let user = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
     let created = templates::execute(
@@ -1089,7 +1094,7 @@ async fn stale_template_and_org_revision_and_exhausted_revisions_roll_back(pool:
     };
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::Stale)
+        Err(e) if e == stale()
     ));
     request.action = ProfileAction::Template {
         id: created.template_id,
@@ -1104,7 +1109,7 @@ async fn stale_template_and_org_revision_and_exhausted_revisions_roll_back(pool:
     .unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::Stale)
+        Err(e) if e == stale()
     ));
     sqlx::query!(
         "UPDATE organizations SET access_revision = $2 WHERE id = $1",
@@ -1117,7 +1122,7 @@ async fn stale_template_and_org_revision_and_exhausted_revisions_roll_back(pool:
     request.expected_access_revision = i64::MAX;
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::RevisionExhausted)
+        Err(e) if e == unavailable()
     ));
     sqlx::query!(
         "UPDATE organizations SET access_revision = 1 WHERE id = $1",
@@ -1139,7 +1144,7 @@ async fn stale_template_and_org_revision_and_exhausted_revisions_roll_back(pool:
     request.expected_person_revision = i64::MAX;
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::RevisionExhausted)
+        Err(e) if e == unavailable()
     ));
     assert_eq!(
         state(&pool, ids.org_id, user).await.source,
@@ -1161,14 +1166,14 @@ async fn invalid_confirmations_and_noncanonical_grants_are_not_silently_repaired
         request.grants = grants;
         assert!(matches!(
             execute(&pool, ids.org_id, ids.user_id, &request).await,
-            Err(ProfileCommandError::Selection(_))
+            Err(OpError::Invalid { .. })
         ));
     }
     request.grants = BuiltInProfile::Member.selection().iter().collect();
     request.remove_people = vec![user, user];
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::Confirmation)
+        Err(e) if e == confirmation()
     ));
     let mut unknown = serde_json::to_value(&request).unwrap();
     unknown["is_administrator"] = serde_json::json!(true);
@@ -1205,7 +1210,7 @@ async fn unchanged_and_unrelated_edits_do_not_clean_up_preexisting_incompatible_
     request.remove_people = vec![person];
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &request).await,
-        Err(ProfileCommandError::Confirmation)
+        Err(e) if e == confirmation()
     ));
     request.remove_projects.clear();
     request.remove_people.clear();
@@ -1262,12 +1267,12 @@ async fn recreated_relationship_invalidates_waiting_confirmation_without_partial
     tx.commit().await.unwrap();
     assert!(matches!(
         waiting.await.unwrap(),
-        Err(ProfileCommandError::Stale)
+        Err(e) if e == stale()
     ));
     request.expected_access_revision = 1;
     assert!(matches!(
         execute(&pool, org, actor, &request).await,
-        Err(ProfileCommandError::Confirmation)
+        Err(e) if e == confirmation()
     ));
     assert_eq!(
         relationship_ids(&pool, org).await,
@@ -1286,7 +1291,7 @@ async fn a_changing_save_announces_the_new_permissions_to_plugins(pool: PgPool) 
     let ids = fixture(&pool).await;
     let user = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
     let request = apply(user, BuiltInProfile::ProjectManager);
-    let (outcome, event) = super::profiles::save(&pool, ids.org_id, ids.user_id, &request)
+    let (outcome, event) = super::calls::profiles::save(&pool, ids.org_id, ids.user_id, &request)
         .await
         .unwrap();
     assert!(outcome.changed);
@@ -1303,7 +1308,7 @@ async fn a_changing_save_announces_the_new_permissions_to_plugins(pool: PgPool) 
     assert!(!payload.is_administrator);
     assert_eq!(payload.method, None);
 
-    let (_, replay) = super::profiles::save(&pool, ids.org_id, ids.user_id, &request)
+    let (_, replay) = super::calls::profiles::save(&pool, ids.org_id, ids.user_id, &request)
         .await
         .unwrap();
     assert!(replay.is_none(), "a replay announces nothing again");
@@ -1314,7 +1319,7 @@ async fn a_changing_save_announces_the_new_permissions_to_plugins(pool: PgPool) 
         expected_person_revision: outcome.person_revision,
         ..request
     };
-    let (outcome, event) = super::profiles::save(&pool, ids.org_id, ids.user_id, &unchanged)
+    let (outcome, event) = super::calls::profiles::save(&pool, ids.org_id, ids.user_id, &unchanged)
         .await
         .unwrap();
     assert!(!outcome.changed);

@@ -1,6 +1,9 @@
-use super::audit::{AuditPrincipal, AuditReadError, decode, read};
-use super::templates::{TemplateAction, TemplateCommand};
+use super::calls::audit::{INVALID_DOCUMENT, UNSUPPORTED_FORMAT, decode, read};
+use super::calls::templates::{TemplateAction, TemplateCommand};
+use super::calls::{forbidden, history_unavailable, state_unavailable};
 use super::*;
+use crate::models::permission_audit::AuditPrincipal;
+use crate::ops::OpError;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use serde_json::json;
@@ -48,7 +51,7 @@ async fn direct_deactivation_winning_user_lock_denies_audit_read(pool: PgPool) {
             .await
             .unwrap()
             .unwrap(),
-        Err(AuditReadError::Forbidden)
+        Err(e) if e == forbidden()
     ));
 }
 
@@ -133,7 +136,7 @@ async fn audit_reader_holds_requester_until_materialization_finishes(pool: PgPoo
         .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, receipt).await,
-        Err(AuditReadError::Forbidden)
+        Err(e) if e == forbidden()
     ));
 }
 
@@ -167,10 +170,9 @@ async fn audit_timeout_preserves_stricter_limits_and_releases_locks(pool: PgPool
     .await
     .unwrap()
     .unwrap_err();
-    let AuditReadError::Database(sqlx::Error::Database(error)) = error else {
-        panic!("Expected statement timeout: {error}")
-    };
-    assert_eq!(error.code().as_deref(), Some("57014"));
+    // Failing well inside two seconds shows the connection's 250 ms limit held,
+    // not the transaction's own 5 s one; `OpError` keeps the cause in the log.
+    assert!(matches!(error, OpError::Internal(_)), "{error}");
     hold.rollback().await.unwrap();
     assert_eq!(
         sqlx::query_scalar!("SELECT current_setting('statement_timeout')")
@@ -295,7 +297,7 @@ async fn create_template(pool: &PgPool, ids: &SeedIds) -> (Uuid, Uuid) {
             grants: BuiltInProfile::Member.selection().iter().collect(),
         },
     };
-    let outcome = super::templates::execute(pool, ids.org_id, ids.user_id, &request)
+    let outcome = super::calls::templates::execute(pool, ids.org_id, ids.user_id, &request)
         .await
         .unwrap();
     (
@@ -337,7 +339,7 @@ async fn administrator_reads_historical_template_without_intent_or_replay_result
             expected_revision: 0,
         },
     };
-    super::templates::execute(&pool, ids.org_id, ids.user_id, &deletion)
+    super::calls::templates::execute(&pool, ids.org_id, ids.user_id, &deletion)
         .await
         .unwrap();
     let historical = read(&pool, ids.org_id, ids.user_id, receipt)
@@ -366,7 +368,7 @@ async fn administrator_profile_without_explicit_identity_cannot_read_audit(pool:
     let ids = fixture(&pool, false).await;
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, Uuid::now_v7()).await,
-        Err(AuditReadError::Forbidden)
+        Err(e) if e == forbidden()
     ));
 }
 
@@ -374,23 +376,17 @@ async fn administrator_profile_without_explicit_identity_cannot_read_audit(pool:
 fn historical_decoder_distinguishes_missing_change_from_explicit_noop() {
     let mut audit =
         json!({"project_id": Uuid::now_v7(), "previous_access_revision": 4, "access_revision": 4});
-    assert!(matches!(
-        decode(1, audit.clone()),
-        Err(AuditReadError::InvalidDocument)
-    ));
+    assert!(matches!(decode(1, audit.clone()), Err(INVALID_DOCUMENT)));
     audit["change"] = serde_json::Value::Null;
     assert!(decode(1, audit.clone()).is_ok());
     audit["access_revision"] = json!(5);
-    assert!(matches!(
-        decode(1, audit),
-        Err(AuditReadError::InvalidDocument)
-    ));
+    assert!(matches!(decode(1, audit), Err(INVALID_DOCUMENT)));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn profile_and_project_history_decode_exact_changes_and_noops(pool: PgPool) {
-    use super::profiles::{ProfileAction, ProfileCommand};
+    use super::calls::profiles::{ProfileAction, ProfileCommand};
     use super::project_management::ProjectManagersCommand;
     let ids = fixture(&pool, true).await;
     let mut profile = ProfileCommand {
@@ -405,7 +401,7 @@ async fn profile_and_project_history_decode_exact_changes_and_noops(pool: PgPool
         remove_projects: vec![],
         remove_people: vec![],
     };
-    super::profiles::execute(&pool, ids.org_id, ids.user_id, &profile)
+    super::calls::profiles::execute(&pool, ids.org_id, ids.user_id, &profile)
         .await
         .unwrap();
     let record = read(
@@ -427,7 +423,7 @@ async fn profile_and_project_history_decode_exact_changes_and_noops(pool: PgPool
     profile.expected_access_revision = 1;
     profile.expected_person_revision = 1;
     profile.action = ProfileAction::Edit;
-    super::profiles::execute(&pool, ids.org_id, ids.user_id, &profile)
+    super::calls::profiles::execute(&pool, ids.org_id, ids.user_id, &profile)
         .await
         .unwrap();
     let noop = read(
@@ -529,7 +525,7 @@ async fn tenant_and_activity_checks_precede_receipt_existence_and_decode(pool: P
     for actor in [foreign.user_id, Uuid::now_v7()] {
         assert!(matches!(
             read(&pool, ids.org_id, actor, receipt).await,
-            Err(AuditReadError::Forbidden)
+            Err(e) if e == forbidden()
         ));
     }
     sqlx::query!(
@@ -545,7 +541,7 @@ async fn tenant_and_activity_checks_precede_receipt_existence_and_decode(pool: P
         .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, receipt).await,
-        Err(AuditReadError::Forbidden)
+        Err(e) if e == forbidden()
     ));
     sqlx::query!("UPDATE users SET active = true WHERE id = $1", ids.user_id)
         .execute(&pool)
@@ -553,7 +549,7 @@ async fn tenant_and_activity_checks_precede_receipt_existence_and_decode(pool: P
         .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, receipt).await,
-        Err(AuditReadError::UnsupportedFormat)
+        Err(e) if e == history_unavailable()
     ));
     sqlx::query!(
         "UPDATE permission_change_receipts SET format_version = 1, audit = '{}'::jsonb WHERE id = $1",
@@ -564,7 +560,7 @@ async fn tenant_and_activity_checks_precede_receipt_existence_and_decode(pool: P
     .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, receipt).await,
-        Err(AuditReadError::InvalidDocument)
+        Err(e) if e == history_unavailable()
     ));
     sqlx::query!(
         "UPDATE person_permission_states SET grants = ARRAY['not_a_permission'] WHERE user_id = $1",
@@ -575,7 +571,7 @@ async fn tenant_and_activity_checks_precede_receipt_existence_and_decode(pool: P
     .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, ids.user_id, receipt).await,
-        Err(AuditReadError::Storage(_))
+        Err(e) if e == state_unavailable()
     ));
 }
 
@@ -622,7 +618,7 @@ async fn failed_mutation_has_no_success_audit_and_reads_do_not_write(pool: PgPoo
         },
     };
     assert!(
-        super::templates::execute(&pool, ids.org_id, ids.user_id, &request)
+        super::calls::templates::execute(&pool, ids.org_id, ids.user_id, &request)
             .await
             .is_err()
     );
@@ -687,7 +683,7 @@ async fn revocation_winning_gate_denies_waiting_historical_reader(pool: PgPool) 
             .await
             .unwrap()
             .unwrap(),
-        Err(AuditReadError::Forbidden)
+        Err(e) if e == forbidden()
     ));
 }
 
@@ -751,7 +747,7 @@ async fn reader_winning_gate_finishes_before_revocation_and_later_reads_fail(poo
         .unwrap();
     assert!(matches!(
         read(&pool, org, actor, receipt).await,
-        Err(AuditReadError::Forbidden)
+        Err(e) if e == forbidden()
     ));
 }
 
@@ -793,14 +789,14 @@ async fn current_administrator_reads_inactive_authors_history_without_live_state
     .unwrap();
     assert!(matches!(
         read(&pool, ids.org_id, admin, receipt).await,
-        Err(AuditReadError::Forbidden)
+        Err(e) if e == state_unavailable()
     ));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn template_detachment_history_preserves_exact_grants_and_provenance(pool: PgPool) {
-    use super::profiles::{ProfileAction, ProfileCommand};
+    use super::calls::profiles::{ProfileAction, ProfileCommand};
     let ids = fixture(&pool, true).await;
     let user = person(&pool, ids.org_id, false, BuiltInProfile::Member).await;
     let (_, template) = create_template(&pool, &ids).await;
@@ -817,7 +813,7 @@ async fn template_detachment_history_preserves_exact_grants_and_provenance(pool:
         remove_projects: vec![],
         remove_people: vec![],
     };
-    super::profiles::execute(&pool, ids.org_id, ids.user_id, &application)
+    super::calls::profiles::execute(&pool, ids.org_id, ids.user_id, &application)
         .await
         .unwrap();
     let deletion = TemplateCommand {
@@ -828,7 +824,7 @@ async fn template_detachment_history_preserves_exact_grants_and_provenance(pool:
             expected_revision: 0,
         },
     };
-    super::templates::execute(&pool, ids.org_id, ids.user_id, &deletion)
+    super::calls::templates::execute(&pool, ids.org_id, ids.user_id, &deletion)
         .await
         .unwrap();
     let stored = sqlx::query!(
@@ -873,7 +869,7 @@ async fn template_detachment_history_preserves_exact_grants_and_provenance(pool:
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn profile_history_keeps_removed_relationships_after_grants_change_again(pool: PgPool) {
-    use super::profiles::{ProfileAction, ProfileCommand};
+    use super::calls::profiles::{ProfileAction, ProfileCommand};
     let ids = fixture(&pool, true).await;
     let manager = person(&pool, ids.org_id, false, BuiltInProfile::ProjectManager).await;
     let project_link = Uuid::now_v7();
@@ -912,7 +908,7 @@ async fn profile_history_keeps_removed_relationships_after_grants_change_again(p
         remove_projects: vec![project_link],
         remove_people: vec![person_link],
     };
-    super::profiles::execute(&pool, ids.org_id, ids.user_id, &command)
+    super::calls::profiles::execute(&pool, ids.org_id, ids.user_id, &command)
         .await
         .unwrap();
     let stored = sqlx::query!(
@@ -931,7 +927,7 @@ async fn profile_history_keeps_removed_relationships_after_grants_change_again(p
     command.grants = BuiltInProfile::ProjectManager.selection().iter().collect();
     command.remove_projects.clear();
     command.remove_people.clear();
-    super::profiles::execute(&pool, ids.org_id, ids.user_id, &command)
+    super::calls::profiles::execute(&pool, ids.org_id, ids.user_id, &command)
         .await
         .unwrap();
     let historical = serde_json::to_value(
@@ -960,10 +956,7 @@ async fn profile_history_keeps_removed_relationships_after_grants_change_again(p
 #[test]
 fn historical_decoder_rejects_unknown_mixed_fields_and_invalid_revision_steps() {
     let base = json!({"project_id": Uuid::now_v7(), "previous_access_revision": 0, "access_revision": 0, "change": null});
-    assert!(matches!(
-        decode(2, base.clone()),
-        Err(AuditReadError::UnsupportedFormat)
-    ));
+    assert!(matches!(decode(2, base.clone()), Err(UNSUPPORTED_FORMAT)));
     for (field, value) in [
         ("extra", json!(true)),
         ("user_id", json!(Uuid::now_v7())),
@@ -973,10 +966,7 @@ fn historical_decoder_rejects_unknown_mixed_fields_and_invalid_revision_steps() 
     ] {
         let mut bad = base.clone();
         bad[field] = value;
-        assert!(
-            matches!(decode(1, bad), Err(AuditReadError::InvalidDocument)),
-            "{field}"
-        );
+        assert!(matches!(decode(1, bad), Err(INVALID_DOCUMENT)), "{field}");
     }
 }
 
@@ -990,10 +980,7 @@ fn historical_decoder_rejects_missing_template_snapshots_and_invalid_grants() {
     for field in ["before", "after"] {
         let mut missing = base.clone();
         missing.as_object_mut().unwrap().remove(field);
-        assert!(matches!(
-            decode(1, missing),
-            Err(AuditReadError::InvalidDocument)
-        ));
+        assert!(matches!(decode(1, missing), Err(INVALID_DOCUMENT)));
     }
     for (field, value) in [
         ("catalog_version", json!(99)),
@@ -1004,10 +991,7 @@ fn historical_decoder_rejects_missing_template_snapshots_and_invalid_grants() {
     ] {
         let mut bad = base.clone();
         bad["after"][field] = value;
-        assert!(
-            matches!(decode(1, bad), Err(AuditReadError::InvalidDocument)),
-            "{field}"
-        );
+        assert!(matches!(decode(1, bad), Err(INVALID_DOCUMENT)), "{field}");
     }
 }
 
@@ -1028,9 +1012,6 @@ fn historical_person_snapshot_validates_provenance_without_inferring_admin_ident
     ] {
         let mut bad = base.clone();
         bad["change"]["after"]["source"] = source;
-        assert!(matches!(
-            decode(1, bad),
-            Err(AuditReadError::InvalidDocument)
-        ));
+        assert!(matches!(decode(1, bad), Err(INVALID_DOCUMENT)));
     }
 }

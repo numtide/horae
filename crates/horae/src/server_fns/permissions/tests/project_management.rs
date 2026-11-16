@@ -1026,7 +1026,8 @@ async fn legacy_user_share_locks_allow_manager_and_receipt_foreign_keys(pool: Pg
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn actual_template_command_receipt_cannot_be_reused_for_project_delegation(pool: PgPool) {
-    use super::templates::{TemplateAction, TemplateCommand, TemplateCommandError};
+    use super::calls::request_conflict;
+    use super::calls::templates::{TemplateAction, TemplateCommand};
     let ids = fixture(&pool).await;
     sqlx::query!(
         "UPDATE person_permission_states SET is_administrator = true WHERE user_id = $1",
@@ -1043,7 +1044,7 @@ async fn actual_template_command_receipt_cannot_be_reused_for_project_delegation
             grants: BuiltInProfile::Member.selection().iter().collect(),
         },
     };
-    super::templates::execute(&pool, ids.org_id, ids.user_id, &command)
+    super::calls::templates::execute(&pool, ids.org_id, ids.user_id, &command)
         .await
         .unwrap();
     let mut delegation = request(ids.project_id, &[ids.user_id]);
@@ -1060,7 +1061,7 @@ async fn actual_template_command_receipt_cannot_be_reused_for_project_delegation
     let mut other = command;
     other.request_id = delegation.request_id;
     assert!(matches!(
-        super::templates::execute(&pool, ids.org_id, ids.user_id, &other).await,
-        Err(TemplateCommandError::RequestConflict)
+        super::calls::templates::execute(&pool, ids.org_id, ids.user_id, &other).await,
+        Err(e) if e == request_conflict()
     ));
 }
