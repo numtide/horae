@@ -187,21 +187,23 @@ async fn submission_freezes_the_minutes_after_a_competing_edit(pool: PgPool) {
 async fn submission_uses_one_pool_connection(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::Member).await;
     time_entry(&pool, &ids, EntryState::Open).await;
-    let single = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(1)
-        .acquire_timeout(Duration::from_millis(200))
+    // Room for a second connection, so needing one shows up as the pool's size
+    // rather than as an acquire timeout racing a slow first connect.
+    let pool_of_two = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(2)
         .connect_with((*pool.connect_options()).clone())
         .await
         .unwrap();
     let result = submit_user_week(
-        &single,
+        &pool_of_two,
         ids.user_id,
         ids.org_id,
         "2026-09-07".parse().unwrap(),
     )
     .await;
     assert!(result.is_ok(), "{result:?}");
-    single.close().await;
+    assert_eq!(pool_of_two.size(), 1);
+    pool_of_two.close().await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
