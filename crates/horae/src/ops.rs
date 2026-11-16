@@ -33,6 +33,7 @@ mod actor;
 pub(crate) mod approvals;
 pub(crate) mod clients;
 mod error;
+pub(crate) mod importers;
 pub(crate) mod invoices;
 pub(crate) mod organization;
 pub(crate) mod people;

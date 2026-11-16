@@ -6,6 +6,7 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 use super::{JobLease, lease::Interrupted};
+use crate::ops;
 
 pub(crate) const REPORT_BYTES: usize = 16 * 1024;
 const CHUNK_BYTES: usize = 64 * 1024;
@@ -183,23 +184,13 @@ async fn download_response(
         http::{StatusCode, header},
         response::IntoResponse,
     };
-    let mut tx = download_access(pool, org_id, actor_id).await?;
-    let job = super::status(&mut *tx, org_id, job_id)
+    let mut read = download_access(pool, org_id, actor_id).await?;
+    let result = ops::importers::error_details(&mut read.tx, &read.actor, job_id).await;
+    let ops::importers::ErrorDetails { end, tail } = read
+        .finish(result)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(crate::reports::op_status)?
         .ok_or(StatusCode::NOT_FOUND)?;
-    let report: ImportReport = serde_json::from_value(job.report.ok_or(StatusCode::NOT_FOUND)?)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let end = i64::try_from(report.archived_error_chunks())
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let mut tail = Vec::new();
-    for error in report.row_errors {
-        serde_json::to_writer(&mut tail, &error).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        tail.push(b'\n');
-    }
-    tx.commit()
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok((
         [
             (header::CONTENT_TYPE, "application/x-ndjson".to_owned()),
@@ -219,8 +210,8 @@ async fn download_access(
     pool: &sqlx::PgPool,
     org_id: Uuid,
     actor_id: Uuid,
-) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, axum::http::StatusCode> {
-    super::access::begin_admin_access(pool, org_id, actor_id)
+) -> Result<ops::ReadTx, axum::http::StatusCode> {
+    ops::begin_read(pool, ops::Caller::session(org_id, actor_id))
         .await
         .map_err(crate::reports::op_status)
 }
@@ -241,22 +232,30 @@ fn download_body(
             let pool = pool.clone();
             async move {
                 if pending.is_empty() && (next < end || tail.is_some()) {
-                    let mut tx = download_access(&pool, org_id, actor_id)
+                    let mut read = download_access(&pool, org_id, actor_id)
                         .await
                         .map_err(|status| std::io::Error::other(status.to_string()))?;
-                    if next < end {
-                        let page = chunks(&mut *tx, org_id, job_id, next, end)
+                    let page = if next < end {
+                        ops::importers::error_chunks(&mut read.tx, &read.actor, job_id, next, end)
                             .await
-                            .map_err(|_| std::io::Error::other("report archive is incomplete"))?;
+                            .map(Some)
+                    } else {
+                        // The tail still needs current authority, like every page.
+                        read.actor.require_administrator().map(|()| None)
+                    };
+                    // Release authority and the connection before client-paced output.
+                    let page = read.finish(page).await.map_err(|error| match error {
+                        ops::OpError::Forbidden(_) => {
+                            std::io::Error::other(crate::reports::op_status(error).to_string())
+                        }
+                        _ => std::io::Error::other("report archive is incomplete"),
+                    })?;
+                    if let Some(page) = page {
                         next += page.len() as i64;
                         pending.extend(page);
                     } else if let Some(bytes) = tail.take().filter(|bytes| !bytes.is_empty()) {
                         pending.push_back(bytes);
                     }
-                    // Release authority and the connection before client-paced output.
-                    tx.commit()
-                        .await
-                        .map_err(|_| std::io::Error::other("report download failed"))?;
                 }
                 let chunk = pending.pop_front();
                 Ok::<_, std::io::Error>(chunk.map(|chunk| (chunk, (next, pending, tail))))
