@@ -46,7 +46,7 @@ fn unavailable_email(email: &str) -> String {
 
 /// The most people one request may add, matching the importer's bounded list
 /// of missing people.
-pub(crate) const MAX_NEW_PEOPLE: usize = 500;
+const MAX_NEW_PEOPLE: usize = 500;
 
 /// What adding people does with an email an account already uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

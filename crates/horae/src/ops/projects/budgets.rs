@@ -15,10 +15,21 @@ use crate::models::permissions::PersonPermissions;
 use crate::models::project::ProjectDetailBudget;
 use crate::models::{ProjectBudgetOverview, ProjectBudgetProgress};
 
+/// [`progress_on`] the organization's today, read in the same transaction.
+/// Budget months are the workspace's, so every viewer sees the same period.
+pub(crate) async fn progress(
+    tx: &mut Tx,
+    actor: &Actor,
+    expected: Option<PermissionRequester>,
+) -> Result<Vec<ProjectBudgetOverview>, OpError> {
+    let today = crate::timezone::today_for_org(&mut **tx, actor.org_id()).await?;
+    progress_on(tx, actor, today, expected).await
+}
+
 /// Every readable configured project's progress in the period of `date`.
 /// Scope details are kept only for those who may read them, and money only
 /// for those who may see it. Empty for an actor with no authority.
-pub(crate) async fn progress(
+pub(crate) async fn progress_on(
     tx: &mut Tx,
     actor: &Actor,
     date: NaiveDate,
@@ -227,7 +238,7 @@ pub(super) async fn headline(
 }
 
 /// Whether PostgreSQL refused a value as out of range for its numeric type.
-pub(crate) fn numeric_overflow(error: &sqlx::Error) -> bool {
+fn numeric_overflow(error: &sqlx::Error) -> bool {
     error
         .as_database_error()
         .is_some_and(|error| error.code().as_deref() == Some("22003"))

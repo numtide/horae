@@ -203,7 +203,7 @@ async fn configured_budget_applies_rounding_and_saved_nonbillable_inclusion(pool
     entry(&pool, &ids, ids.task_id, "2026-01-01", 50, true).await;
     entry(&pool, &ids, ids.task_id, "2026-09-07", 20, false).await;
     assert_eq!(headline_of(&pool, &viewer, &ids).await, exact(120, 60, 60));
-    let list = crate::server_fns::budgets::progress_for_viewer(
+    let list = crate::server_fns::budget_tests::progress_for_viewer(
         &pool,
         ids.org_id,
         ids.user_id,

@@ -172,12 +172,10 @@ pub async fn list_project_budget_progress(
 ) -> Result<Vec<crate::models::ProjectBudgetOverview>, ServerFnError> {
     let user = require_user().await?;
     let state = crate::state::global_state().await;
-    // Budget months are the workspace's, so every viewer sees the same period.
-    let today = crate::timezone::today_for_org(&state.db, user.org_id)
-        .await
-        .map_err(server_err)?;
-    super::budgets::progress_for_viewer(&state.db, user.org_id, user.id, today, expected_requester)
-        .await
+    let mut read = ops::begin_read(&state.db, Caller::session(user.org_id, user.id)).await?;
+    let result =
+        ops::projects::budget_progress(&mut read.tx, &read.actor, expected_requester).await;
+    Ok(read.finish(result).await?)
 }
 
 #[cfg(feature = "server")]

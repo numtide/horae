@@ -1,7 +1,7 @@
 use horae_core::types::InvoiceStatus;
 use uuid::Uuid;
 
-use super::{PREPARE, authorize_prepare, authorize_read, bad_request, balances, defaults};
+use super::{PREPARE, authorize_prepare, authorize_read, balances, defaults};
 use crate::models::invoice::{
     InvoiceDefaults, InvoiceDraftEdit, InvoiceDraftSave, InvoiceEditReview, InvoiceEditor,
     InvoiceExcessConfirmation, InvoiceFeeEdit, InvoiceFeeReview,
@@ -100,23 +100,27 @@ fn evaluate(
     if edits.len() != edit.fees.len()
         || edits.len() != rows.iter().filter(|row| row.fee_id.is_some()).count()
     {
-        return Err(bad_request("Supply each existing fee line exactly once"));
+        return Err(OpError::bad_input(
+            "Supply each existing fee line exactly once",
+        ));
     }
     for row in rows.iter_mut().filter(|row| row.fee_id.is_some()) {
         let fee = edits
             .get(&row.id)
-            .ok_or_else(|| bad_request("Fee line does not belong to this invoice"))?;
+            .ok_or_else(|| OpError::bad_input("Fee line does not belong to this invoice"))?;
         if fee.description.trim().is_empty()
             || fee.description.chars().count() > 1000
             || fee.description.contains('\0')
         {
-            return Err(bad_request(
+            return Err(OpError::bad_input(
                 "Fee descriptions must contain 1–1000 characters without NUL",
             ));
         }
         // Existing zero-valued sources remain editable without inventing a charge.
         if fee.amount_cents < 0 || (fee.amount_cents == 0 && row.amount_cents != 0) {
-            return Err(bad_request("An invoiced fee amount must be positive"));
+            return Err(OpError::bad_input(
+                "An invoiced fee amount must be positive",
+            ));
         }
         row.amount_cents = fee.amount_cents;
         row.description = fee.description.trim().to_owned();
@@ -179,7 +183,7 @@ pub(crate) async fn save(
         || request.edit.revision < 1
         || request.edit.fees.len() > 10000
     {
-        return Err(bad_request(
+        return Err(OpError::bad_input(
             "Invalid invoice request identity, revision or line count",
         ));
     }
@@ -204,7 +208,7 @@ pub(crate) async fn save(
     .fetch_one(&mut **tx)
     .await?;
     if size > 262144 {
-        return Err(bad_request("Invoice edit exceeds 256 KiB"));
+        return Err(OpError::bad_input("Invoice edit exceeds 256 KiB"));
     }
     sqlx::query_scalar!(
         "SELECT id FROM invoices WHERE id=$1 AND org_id=$2 FOR UPDATE",
@@ -237,8 +241,7 @@ pub(crate) async fn save(
             WHERE l.id=v.id AND l.invoice_id=$5", &ids, &descriptions, &gross, &discounts, id)
             .execute(&mut **tx).await?;
         let values = &request.edit.defaults;
-        let due_on = horae_core::project::payment_due_date(invoice.issued_on, values.terms_days as u16)
-            .map_err(bad_request)?;
+        let due_on = horae_core::project::payment_due_date(invoice.issued_on, values.terms_days as u16).map_err(OpError::bad_input)?;
         let amounts = review.amounts;
         sqlx::query!("UPDATE invoices SET due_on=$3,po_number=$4,discount_bps=$5,tax1_bps=$6,
             tax2_name=$7,tax2_bps=$8,discount_cents=$9,tax1_cents=$10,tax2_cents=$11,total_cents=$12

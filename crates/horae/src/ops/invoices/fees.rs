@@ -1,4 +1,4 @@
-use super::{SourceRead, bad_request};
+use super::SourceRead;
 use crate::models::invoice::{InvoiceFeeBalance, InvoicePreviewLine, InvoiceSource};
 use crate::ops::OpError;
 use chrono::{Datelike, Months, NaiveDate};
@@ -236,7 +236,7 @@ async fn scheduled_fees(
     mode: SourceRead,
 ) -> Result<Vec<Occurrence>, OpError> {
     if from > to {
-        return Err(bad_request("Invoice period ends before it starts"));
+        return Err(OpError::bad_input("Invoice period ends before it starts"));
     }
     macro_rules! projects_query {
         ($suffix:literal) => {
@@ -318,7 +318,9 @@ async fn scheduled_fees(
                     - start.month() as i32
                     + 1;
                 if months > 1200 {
-                    return Err(bad_request("Monthly fee periods must not exceed 100 years"));
+                    return Err(OpError::bad_input(
+                        "Monthly fee periods must not exceed 100 years",
+                    ));
                 }
                 let day = match project.monthly_day.as_deref() {
                     Some("first") => MonthlyFeeDay::First,
@@ -331,10 +333,10 @@ async fn scheduled_fees(
                     .ok_or_else(|| OpError::conflict("Project fee amount is missing"))?;
                 let mut month = start
                     .with_day(1)
-                    .ok_or_else(|| bad_request("Invalid invoice period"))?;
+                    .ok_or_else(|| OpError::bad_input("Invalid invoice period"))?;
                 for _ in 0..months {
                     let due = monthly_fee_date(month.year(), month.month(), day)
-                        .map_err(|error| bad_request(error.to_string()))?;
+                        .map_err(|error| OpError::bad_input(error.to_string()))?;
                     if due >= start && due <= end {
                         occurrences.push(Occurrence {
                             project_id: project.id,
@@ -351,7 +353,7 @@ async fn scheduled_fees(
                         });
                     }
                     month = month.checked_add_months(Months::new(1)).ok_or_else(|| {
-                        bad_request("Invoice period exceeds the supported calendar")
+                        OpError::bad_input("Invoice period exceeds the supported calendar")
                     })?;
                 }
             }

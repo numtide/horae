@@ -13,9 +13,21 @@ use crate::models::ProjectDetails;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::{ProjectDetailIdentity, ProjectDetailView};
 
-/// The detail page. `today` selects a monthly-reset budget's month, as the
-/// Projects list does. A project the actor may not read is not found.
+/// [`view_on`] the organization's today, read in the same transaction, as
+/// the Projects list does.
 pub(crate) async fn view(
+    tx: &mut Tx,
+    actor: &Actor,
+    project_id: Uuid,
+    expected: Option<PermissionRequester>,
+) -> Result<ProjectDetailView, OpError> {
+    let today = crate::timezone::today_for_org(&mut **tx, actor.org_id()).await?;
+    view_on(tx, actor, project_id, expected, today).await
+}
+
+/// The detail page. `today` selects a monthly-reset budget's month. A
+/// project the actor may not read is not found.
+pub(crate) async fn view_on(
     tx: &mut Tx,
     actor: &Actor,
     project_id: Uuid,

@@ -1,7 +1,6 @@
 use crate::models::invoice::InvoiceDefaults;
 use horae_core::project::Percentage;
 
-use super::bad_request;
 use crate::ops::OpError;
 
 pub(crate) fn amounts(
@@ -9,10 +8,12 @@ pub(crate) fn amounts(
     subtotal: i64,
 ) -> Result<horae_core::invoice::InvoiceAmounts, OpError> {
     if !(0..=365).contains(&defaults.terms_days) {
-        return Err(bad_request("Payment terms must be between 0 and 365 days"));
+        return Err(OpError::bad_input(
+            "Payment terms must be between 0 and 365 days",
+        ));
     }
     if defaults.po_number.chars().count() > 200 || defaults.po_number.contains('\0') {
-        return Err(bad_request(
+        return Err(OpError::bad_input(
             "Purchase order must contain at most 200 characters",
         ));
     }
@@ -21,7 +22,7 @@ pub(crate) fn amounts(
             name.trim().is_empty() || name.chars().count() > 100 || name.contains('\0')
         })
     {
-        return Err(bad_request(
+        return Err(OpError::bad_input(
             "A second tax requires a name of 1–100 characters and a percentage",
         ));
     }
@@ -29,7 +30,7 @@ pub(crate) fn amounts(
         u16::try_from(bps)
             .ok()
             .and_then(|bps| Percentage::try_from(bps).ok())
-            .ok_or_else(|| bad_request("Percentages must be between 0 and 100"))
+            .ok_or_else(|| OpError::bad_input("Percentages must be between 0 and 100"))
     };
     horae_core::invoice::invoice_amounts(
         subtotal,

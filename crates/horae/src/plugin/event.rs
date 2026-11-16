@@ -391,6 +391,15 @@ pub(crate) fn time_entry_payload(e: &crate::models::TimeEntry) -> TimeEntryPaylo
     }
 }
 
+pub(crate) fn client_payload(client: &crate::models::Client) -> ClientPayload {
+    ClientPayload {
+        id: client.id,
+        name: client.name.clone(),
+        currency: client.currency.clone(),
+        active: client.active,
+    }
+}
+
 pub(crate) fn invoice_payload(inv: &crate::models::Invoice) -> InvoicePayload {
     InvoicePayload {
         id: inv.id,

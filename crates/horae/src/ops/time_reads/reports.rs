@@ -4,7 +4,7 @@ pub(crate) mod groups;
 
 use horae_core::permissions::catalog::Permission;
 
-use super::{invalid, require_time_reads, time_reads};
+use super::{require_time_reads, time_reads};
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::{
     TimeReportAccess, TimeReportCursor, TimeReportEntry, TimeReportPage, TimeReportQuery,
@@ -52,7 +52,7 @@ pub(crate) async fn entries(
                 || cursor.task_name.contains('\0')
         })
     {
-        return Err(invalid(REPORT_INVALID));
+        return Err(OpError::bad_input(REPORT_INVALID));
     }
     // One snapshot keeps full-period totals consistent with this page. Inline
     // the relation so aggregating minutes need not materialize every entry's text.

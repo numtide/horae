@@ -41,13 +41,6 @@ fn require_time_reads(actor: &Actor, refusal: &str) -> Result<PermissionSelectio
     time_reads(actor).ok_or_else(|| OpError::forbidden(refusal))
 }
 
-fn invalid(message: &str) -> OpError {
-    OpError::Invalid {
-        field: None,
-        message: message.into(),
-    }
-}
-
 /// Resolve selection and entries together; selecting a person never widens row scope.
 pub(crate) async fn sheet(
     tx: &mut Tx,
@@ -89,7 +82,7 @@ pub(crate) async fn sheet(
         after: query.after.clone(),
     };
     if !entry_query_is_valid(&entries) {
-        return Err(invalid(SHEET_INVALID));
+        return Err(OpError::bad_input(SHEET_INVALID));
     }
     let page = fetch_entries(tx, requester, &grants, &entries).await?;
     let zone = crate::timezone::person_zone(&mut **tx, subject_id).await?;
@@ -117,7 +110,7 @@ pub(crate) async fn people(
             .as_ref()
             .is_some_and(|cursor| cursor.name.contains('\0'))
     {
-        return Err(invalid(PEOPLE_INVALID));
+        return Err(OpError::bad_input(PEOPLE_INVALID));
     }
     let requester = actor.requester();
     let mut people = fetch_people(tx, requester, &grants, query).await?;
@@ -193,7 +186,9 @@ pub(crate) async fn entries(
 ) -> Result<TimeEntryPage, OpError> {
     let grants = require_time_reads(actor, TIME_READ_REQUIRED)?;
     if !entry_query_is_valid(query) {
-        return Err(invalid("Invalid time-entry date range or cursor"));
+        return Err(OpError::bad_input(
+            "Invalid time-entry date range or cursor",
+        ));
     }
     fetch_entries(tx, actor.requester(), &grants, query).await
 }

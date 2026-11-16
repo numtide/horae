@@ -14,7 +14,7 @@ use crate::models::client::{
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::{Client, Invoice};
 use crate::plugin::AppEvent;
-use crate::plugin::event::{ActiveTransition, ClientPayload, active_transition};
+use crate::plugin::event::{ActiveTransition, active_transition, client_payload};
 
 const NOT_FOUND: &str = "Client not found";
 const WRITE_REQUIRED: &str = "Client management access required";
@@ -79,15 +79,6 @@ fn billing(actor: &Actor, default_rate_cents: Option<i64>) -> Option<ClientBilli
     reads_default_rate(actor).then_some(ClientBilling { default_rate_cents })
 }
 
-fn payload(client: &Client) -> ClientPayload {
-    ClientPayload {
-        id: client.id,
-        name: client.name.clone(),
-        currency: client.currency.clone(),
-        active: client.active,
-    }
-}
-
 const REQUESTER_CHANGED: &str = "Client requester has changed";
 
 /// Creates a client, standalone or inline from the project form. A default
@@ -123,7 +114,7 @@ pub(crate) async fn create(
     let event = AppEvent::ClientCreated {
         occurred_at: chrono::Utc::now(),
         org_id: actor.org_id(),
-        client: payload(&client),
+        client: client_payload(&client),
     };
     Ok(Done::new(ClientDetails {
         billing: billing(actor, rate),
@@ -210,7 +201,7 @@ pub(crate) async fn update(
     let event = updated.as_ref().map(|client| AppEvent::ClientUpdated {
         occurred_at: chrono::Utc::now(),
         org_id,
-        client: payload(client),
+        client: client_payload(client),
     });
     let done = Done::new(ClientDetails {
         client: updated.unwrap_or(before),
@@ -266,18 +257,18 @@ pub(crate) async fn set_active(
     .await?;
     let event = updated.as_ref().and_then(|client| {
         let occurred_at = chrono::Utc::now();
-        let client_payload = payload(client);
+        let payload = client_payload(client);
         Some(
             match active_transition(Some(before.active), client.active)? {
                 ActiveTransition::Reactivated => AppEvent::ClientReactivated {
                     occurred_at,
                     org_id,
-                    client: client_payload,
+                    client: payload,
                 },
                 ActiveTransition::Deactivated => AppEvent::ClientDeactivated {
                     occurred_at,
                     org_id,
-                    client: client_payload,
+                    client: payload,
                 },
             },
         )
