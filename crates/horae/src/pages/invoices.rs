@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use horae_core::money::format_cents_plain;
 use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
+use horae_core::permissions::invoices;
 use horae_core::types::InvoiceStatus;
 use uuid::Uuid;
 
@@ -24,29 +25,24 @@ mod settings;
 pub use settings::InvoiceSettings;
 
 /// Whether the session's own permissions, from a catalog this build
-/// understands, hold every `required` grant. Reading needs `InvoiceReadAll`,
-/// which `RecoveryGate` checks.
+/// understands, hold every `required` grant: the same sets the server checks.
+/// Reading ([`invoices::READ`]) is checked by `RecoveryGate`.
 fn holds(session: crate::components::session::Session, required: &[Permission]) -> bool {
     matches!(
         &*session.permissions.read(),
         Some(Ok(own)) if own.catalog_version == PERMISSION_CATALOG_VERSION
-            && required.iter().all(|grant| own.grants.contains(grant))
+            && invoices::holds(|grant| own.grants.contains(&grant), required)
     )
 }
 
-/// Whether to offer changing an invoice's status: the grant that server
-/// function requires.
+/// Whether to offer changing an invoice's status.
 fn manages_invoices(session: crate::components::session::Session) -> bool {
-    holds(session, &[Permission::InvoiceWriteAll])
+    holds(session, invoices::WRITE)
 }
 
-/// Whether to offer preparing a new invoice or editing a draft's values,
-/// which show billable pricing beyond what an issued invoice records.
+/// Whether to offer preparing a new invoice or editing a draft's values.
 fn prepares_invoices(session: crate::components::session::Session) -> bool {
-    holds(
-        session,
-        &[Permission::InvoiceWriteAll, Permission::BillableRateReadAll],
-    )
+    holds(session, invoices::PREPARE)
 }
 
 /// The badge class for an invoice status — one convention for list and detail.

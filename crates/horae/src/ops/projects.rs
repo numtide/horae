@@ -4,6 +4,7 @@
 //! Every decision goes through [`Actor::has`], on the actor's stored grants.
 
 use horae_core::permissions::catalog::Permission;
+use horae_core::permissions::projects;
 use horae_core::types::{BudgetKind, ProjectType};
 use uuid::Uuid;
 
@@ -29,12 +30,6 @@ const RESTORE_CLIENT_FIRST: &str = "Restore the client before restoring this pro
 
 const REQUESTER_CHANGED: &str = "Project requester has changed";
 
-/// Whether the actor may write projects at all: everyone's, or the ones they
-/// manage. Offered as the status affordance before a project is chosen.
-pub(crate) fn writes_any(actor: &Actor) -> bool {
-    actor.has(Permission::ProjectWriteAll) || actor.has(Permission::ProjectWriteManaged)
-}
-
 /// Archives or restores 1 to 100 projects, each once, in ascending id order,
 /// so overlapping batches take their row locks in one global order. A project
 /// is written with `ProjectWriteAll`, or with `ProjectWriteManaged` when the
@@ -56,7 +51,7 @@ pub(crate) async fn set_active(
 ) -> Result<Done<Vec<Project>>, OpError> {
     actor.expect_requester(expected, REQUESTER_CHANGED)?;
     let ids = lock_order(ids)?;
-    if !actor.is_active() || !writes_any(actor) {
+    if !actor.is_active() || !projects::writes_any(|permission| actor.has(permission)) {
         return Err(OpError::forbidden(WRITE_REQUIRED));
     }
     let org_id = actor.org_id();
@@ -64,9 +59,7 @@ pub(crate) async fn set_active(
     let mut events = Vec::new();
     for project_id in ids {
         let designated = is_designated(tx, actor, project_id).await?;
-        let writes = actor.has(Permission::ProjectWriteAll)
-            || (designated && actor.has(Permission::ProjectWriteManaged));
-        if !writes {
+        if !projects::writes(|permission| actor.has(permission), designated) {
             return Err(refusal(tx, actor, project_id).await?);
         }
         let before = lock(tx, org_id, project_id).await?;
@@ -148,9 +141,7 @@ fn event(org_id: Uuid, project: &Project, transition: ActiveTransition) -> AppEv
 /// Hides the rate and the money budget from an actor without
 /// `BillableRateReadAll`, or `BillableRateReadManaged` on a project they manage.
 fn redact_money(actor: &Actor, designated: bool, mut project: Project) -> Project {
-    if !(actor.has(Permission::BillableRateReadAll)
-        || (designated && actor.has(Permission::BillableRateReadManaged)))
-    {
+    if !projects::reads_money(|permission| actor.has(permission), designated) {
         project.rate_cents = None;
         project.budget_amount_cents = None;
     }

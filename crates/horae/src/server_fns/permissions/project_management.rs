@@ -1,6 +1,7 @@
 //! Project delegation changes scope, never grants or tracking membership.
 
 use horae_core::permissions::catalog::Permission;
+use horae_core::permissions::projects;
 use serde::Serialize;
 use sqlx::{PgConnection, PgPool};
 use uuid::Uuid;
@@ -90,11 +91,11 @@ pub(crate) async fn authorize_actor(
     let actor = load_person_permissions(connection, org_id, actor_id)
         .await?
         .ok_or(ProjectManagersError::Forbidden)?;
-    if !actor.grants.contains(Permission::ProjectWriteAll) {
-        if !actor.grants.contains(Permission::ProjectWriteManaged) {
-            return Err(ProjectManagersError::Forbidden);
-        }
-        let designated = sqlx::query_scalar!(
+    let has = |permission| actor.grants.contains(permission);
+    let mut managed = false;
+    // Only a managed-only writer depends on the designation.
+    if projects::writes_any(has) && !projects::writes(has, false) {
+        managed = sqlx::query_scalar!(
             "SELECT EXISTS(SELECT 1 FROM project_management_assignments
              WHERE org_id = $1 AND project_id = $2 AND manager_id = $3)",
             org_id,
@@ -102,10 +103,11 @@ pub(crate) async fn authorize_actor(
             actor_id
         )
         .fetch_one(connection)
-        .await?;
-        if designated != Some(true) {
-            return Err(ProjectManagersError::Forbidden);
-        }
+        .await?
+            == Some(true);
+    }
+    if !projects::writes(has, managed) {
+        return Err(ProjectManagersError::Forbidden);
     }
     Ok(actor)
 }
