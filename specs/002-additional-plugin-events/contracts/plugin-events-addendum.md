@@ -90,6 +90,10 @@ Each band fires **at most once** per crossing (deduped via `projects.last_budget
 `time_entries.notified_long_running_at`, cleared on stop). Budget events never fire for projects
 whose `budget_kind` is `none`.
 
+Budget events fire only for projects without budget settings and with an `hours` budget. Their
+`consumed_minutes` is the project's lifetime tracked minutes, the same Spent figure the Projects
+list shows: workspace rounding and frozen rounded minutes do not count.
+
 ```json
 {
   "event": "project_budget_threshold_reached",

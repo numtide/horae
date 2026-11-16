@@ -2,6 +2,8 @@
 
 use super::*;
 #[cfg(feature = "server")]
+use crate::notifications::budgets::check_project_budget;
+#[cfg(feature = "server")]
 use crate::ops::{self, Caller};
 
 /// The Timesheet's session check: a signed-out person gets 401, anything else
