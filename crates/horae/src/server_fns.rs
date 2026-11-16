@@ -271,8 +271,6 @@ mod project_creation;
 mod project_managers;
 mod projects;
 mod reports;
-#[cfg(all(test, feature = "server"))]
-mod snapshot;
 mod time_entries;
 mod users;
 

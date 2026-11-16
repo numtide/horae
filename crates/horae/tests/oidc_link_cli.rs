@@ -1,6 +1,6 @@
 #![cfg(feature = "server")]
 
-//! `horae user link-oidc` and `horae user list` through the real binary.
+//! `horae user create`, `user link-oidc` and `user list` through the real binary.
 
 use sqlx::{ConnectOptions, PgPool};
 use std::process::{Command, Output};
@@ -331,4 +331,62 @@ async fn user_list_shows_ids_but_no_identity(pool: PgPool) {
         assert!(stdout.contains(&id.to_string()), "{stdout}");
     }
     assert_private(&list);
+}
+
+#[sqlx::test(migrations = "./migrations")]
+#[serial_test::serial]
+async fn user_create_adds_any_built_in_profile_and_refuses_a_held_email(pool: PgPool) {
+    let database = pool.connect_options().to_url_lossy().to_string();
+    let create = |email: &'static str, profile: &'static str| {
+        horae(
+            &database,
+            None,
+            &[
+                "user",
+                "create",
+                "--email",
+                email,
+                "--name",
+                "Ada",
+                "--profile",
+                profile,
+            ],
+        )
+    };
+
+    let orphan = create("ada@test.com", "member");
+    assert_eq!(orphan.status.code(), Some(1), "{orphan:?}");
+    assert!(
+        text(&orphan)
+            .1
+            .contains("No organization found. Run `init` first."),
+        "{orphan:?}"
+    );
+
+    setup(&pool).await;
+    let admin = create("ada@test.com", "administrator");
+    assert!(admin.status.success(), "{admin:?}");
+    assert_eq!(
+        text(&admin).0.trim(),
+        "Created user: Ada (ada@test.com) [administrator]"
+    );
+    let state = sqlx::query!(
+        "SELECT p.is_administrator, p.built_in_profile
+         FROM users u JOIN person_permission_states p ON p.user_id = u.id
+         WHERE u.email = 'ada@test.com'"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(state.is_administrator);
+    assert_eq!(state.built_in_profile.as_deref(), Some("administrator"));
+
+    let twin = create("ADA@test.com", "member");
+    assert_eq!(twin.status.code(), Some(1), "{twin:?}");
+    assert!(
+        text(&twin)
+            .1
+            .contains("A user with the email ADA@test.com already exists"),
+        "{twin:?}"
+    );
 }

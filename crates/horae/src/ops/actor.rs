@@ -10,10 +10,17 @@ use super::{Caller, OpError};
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::permissions::PersonPermissions;
 
-/// The entry point a request came through. Tokens and the CLI join later.
+/// The entry point a request came through. Tokens join later.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Channel {
+    /// A signed-in person.
     Session,
+    /// The server's operator at its terminal: no person, and no grants. Each
+    /// operation that accepts it says what it may do.
+    Operator,
+    /// Horae acting on its own, such as an OIDC first sign-in: no person, and
+    /// no grants. Each operation that accepts it says what it may do.
+    System,
 }
 
 #[derive(Debug)]
@@ -87,7 +94,8 @@ impl Actor {
                     .await?
             }
         };
-        if organization.is_none() {
+        // Only the organization is locked for a channel with no person.
+        if organization.is_none() || caller.channel != Channel::Session {
             return Ok(actor);
         }
         let person = match lock {
@@ -165,13 +173,6 @@ impl Actor {
         self.identity.active
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "read once the CLI acts through an operator channel"
-        )
-    )]
     pub fn channel(&self) -> Channel {
         self.channel
     }

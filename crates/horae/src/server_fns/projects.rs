@@ -787,7 +787,7 @@ pub(super) async fn insert_assignment(
 
 /// Removes a project member like [`insert_assignment`] adds one.
 #[cfg(all(test, feature = "server"))]
-pub(super) async fn remove_assignment(
+pub(crate) async fn remove_assignment(
     db: &sqlx::PgPool,
     admin: &User,
     id: uuid::Uuid,

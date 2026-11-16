@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO users (id, org_id, email, name, oidc_subject, oidc_issuer)\n           VALUES ($1, $6, $2, $3, $4, $5)\n           ON CONFLICT DO NOTHING\n           RETURNING id, org_id, email, name, oidc_subject,\n                     cost_rate_cents, billable_rate_cents, active,\n                     created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
+  "query": "UPDATE users SET oidc_subject = $2, oidc_issuer = $3\n           WHERE id = $1\n           RETURNING id, org_id, email, name, oidc_subject,\n                     cost_rate_cents, billable_rate_cents, active,\n                     created_at as \"created_at: chrono::DateTime<chrono::Utc>\"",
   "describe": {
     "columns": [
       {
@@ -53,10 +53,7 @@
       "Left": [
         "Uuid",
         "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Uuid"
+        "Text"
       ]
     },
     "nullable": [
@@ -71,5 +68,5 @@
       false
     ]
   },
-  "hash": "f8f2d0bfc2475490f23d2b3c84b65188fede176f24d2cf81b50c7ea5018c934f"
+  "hash": "8ef91049b81e3df5153423c1d25934056252711e14d1247aa77368db6daa37fc"
 }

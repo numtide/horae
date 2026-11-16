@@ -159,38 +159,26 @@ fn main() -> anyhow::Result<()> {
                             )
                         })?;
 
-                        let mut tx = pool.begin().await?;
-                        sqlx::query!("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-                            .execute(&mut *tx)
-                            .await?;
-                        // Organization row, then email: the lock order of every
-                        // path that creates a user.
-                        let org_id = sqlx::query_scalar!(
-                            "SELECT id FROM organizations LIMIT 1 FOR KEY SHARE"
+                        let org_id = sqlx::query_scalar!("SELECT id FROM organizations LIMIT 1")
+                            .fetch_optional(&pool)
+                            .await?
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("No organization found. Run `init` first.")
+                            })?;
+                        let mut write = ops::begin(&pool, ops::Caller::operator(org_id)).await?;
+                        let result = ops::people::add(
+                            &mut write.tx,
+                            &write.actor,
+                            &[models::user::NewPerson { email, name }],
+                            built_in,
+                            models::user::Activation::Active,
+                            ops::people::Existing::Refuse,
                         )
-                        .fetch_optional(&mut *tx)
-                        .await?
-                        .ok_or_else(|| {
-                            anyhow::anyhow!("No organization found. Run `init` first.")
-                        })?;
-                        if db::lock_new_user_email(&mut tx, &email).await? {
-                            anyhow::bail!("A user with the email {email} already exists.");
-                        }
-
-                        let id = uuid::Uuid::now_v7();
-                        sqlx::query!(
-                            "INSERT INTO users (id, org_id, email, name) VALUES ($1, $2, $3, $4)",
-                            id,
-                            org_id,
-                            email,
-                            name,
-                        )
-                        .execute(&mut *tx)
-                        .await?;
-                        provisioning::provision(&mut tx, org_id, id, built_in).await?;
-                        tx.commit().await?;
-
-                        println!("Created user: {name} ({email}) [{profile}]");
+                        .await;
+                        // The CLI runs no plugins, so no one hears of the new person.
+                        let added = write.commit(result, &ops::NoEvents).await?;
+                        let user = &added.added[0];
+                        println!("Created user: {} ({}) [{profile}]", user.name, user.email);
                     }
                     cli::UserAction::LinkOidc {
                         user_id,

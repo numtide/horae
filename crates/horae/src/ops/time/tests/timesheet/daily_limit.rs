@@ -14,7 +14,7 @@ fn at(f: &Fixture, day: &str, minutes: i32) -> TimesheetEntryInput {
     }
 }
 
-async fn create(pool: &PgPool, f: &Fixture, day: &str, minutes: i32) -> Result<(), ServerFnError> {
+async fn create(pool: &PgPool, f: &Fixture, day: &str, minutes: i32) -> Result<(), OpError> {
     f.execute(
         pool,
         TimesheetCommand::Create {
@@ -25,13 +25,9 @@ async fn create(pool: &PgPool, f: &Fixture, day: &str, minutes: i32) -> Result<(
 }
 
 #[track_caller]
-fn assert_daily_limit(result: Result<(), ServerFnError>) {
+fn assert_daily_limit(result: Result<(), OpError>) {
     match result {
-        Err(ServerFnError::ServerError {
-            code: CONFLICT,
-            message,
-            ..
-        }) => assert_eq!(message, "Daily hours cannot exceed 240."),
+        Err(OpError::Conflict(message)) => assert_eq!(message, "Daily hours cannot exceed 240."),
         other => panic!("expected the daily limit, got {other:?}"),
     }
 }

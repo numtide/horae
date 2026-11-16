@@ -360,7 +360,7 @@ async fn coverage_conflicts_are_explicit_pending_submitted_editing_integration(p
     ] {
         assert!(matches!(
             f.execute(&pool, command).await,
-            Err(ServerFnError::ServerError { code: CONFLICT, .. })
+            Err(OpError::Conflict(_))
         ));
     }
     assert_eq!(snapshot(&pool, f.ids.org_id).await, before);
@@ -557,13 +557,7 @@ async fn reorders_reject_locked_timed_and_running_entries_atomically(pool: PgPoo
                 },
             )
             .await;
-        assert!(
-            matches!(
-                result,
-                Err(ServerFnError::ServerError { code: CONFLICT, .. })
-            ),
-            "{result:?}"
-        );
+        assert!(matches!(result, Err(OpError::Conflict(_))), "{result:?}");
         assert_eq!(snapshot(&pool, f.ids.org_id).await, before);
     }
     let result = f
@@ -576,10 +570,7 @@ async fn reorders_reject_locked_timed_and_running_entries_atomically(pool: PgPoo
         )
         .await;
     assert!(
-        matches!(
-            result,
-            Err(ServerFnError::ServerError { code: CONFLICT, .. })
-        ),
+        matches!(result, Err(OpError::Conflict(_))),
         "a running timer cannot change day: {result:?}"
     );
     assert_eq!(snapshot(&pool, f.ids.org_id).await, before);
