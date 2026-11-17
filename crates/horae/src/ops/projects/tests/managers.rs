@@ -1,9 +1,11 @@
-//! The manager editor through its adapters, as the person a test names.
+//! The manager editor in the transactions its adapters open, as the person a
+//! test names.
 
-use crate::models::project_managers::ProjectManagersCommand;
-use crate::ops::OpError;
+use crate::models::permission_editor::PermissionRequester;
+use crate::models::project_managers::{ProjectManagersCommand, ProjectManagersOutcome};
 use crate::ops::permissions::load_person_permissions;
-use crate::server_fns::project_managers::calls::execute;
+use crate::ops::testing::Recorder;
+use crate::ops::{self, Caller, OpError, WriteIsolation};
 use crate::testing::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
 use sqlx::PgPool;
@@ -72,6 +74,30 @@ fn request(project_id: Uuid, managers: &[Uuid]) -> ProjectManagersCommand {
         project_id,
         manager_ids: managers.to_vec(),
     }
+}
+
+/// Saves the manager set the way its adapter does: under the organization's
+/// `AccessChange` gate, bound to the actor's own page.
+async fn execute(
+    pool: &PgPool,
+    org: Uuid,
+    actor: Uuid,
+    command: &ProjectManagersCommand,
+) -> Result<ProjectManagersOutcome, OpError> {
+    let requester = PermissionRequester {
+        org_id: org,
+        user_id: actor,
+    };
+    let mut write = ops::begin_gated(
+        pool,
+        Caller::session(org, actor),
+        crate::db::OrganizationLock::AccessChange,
+        WriteIsolation::ReadCommitted,
+    )
+    .await?;
+    let result =
+        ops::projects::managers::save(&mut write.tx, &write.actor, command, requester).await;
+    write.commit(result, &Recorder::default()).await
 }
 
 async fn managers(pool: &PgPool, org: Uuid, project: Uuid) -> Vec<Uuid> {
@@ -836,9 +862,7 @@ async fn replacement_audits_exact_delta_and_preserves_membership_history_and_oth
     let cost_id = Uuid::now_v7();
     sqlx::query!("INSERT INTO project_member_costs (id, org_id, project_id, user_id, cost_rate_cents) VALUES ($1, $2, $3, $4, 6789)",
         cost_id, ids.org_id, ids.project_id, ids.user_id).execute(&pool).await.unwrap();
-    let entry =
-        crate::testing::time_entry(&pool, &ids, horae_core::types::EntryState::Open)
-            .await;
+    let entry = crate::testing::time_entry(&pool, &ids, horae_core::types::EntryState::Open).await;
     let other_project = Uuid::now_v7();
     sqlx::query!("INSERT INTO projects (id, org_id, client_id, name, currency) VALUES ($1, $2, $3, 'Other', 'EUR')",
         other_project, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
@@ -1041,9 +1065,29 @@ async fn legacy_user_share_locks_allow_manager_and_receipt_foreign_keys(pool: Pg
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn actual_template_command_receipt_cannot_be_reused_for_project_delegation(pool: PgPool) {
-    use crate::server_fns::permissions::calls;
-    use calls::request_conflict;
-    use calls::templates::{TemplateAction, TemplateCommand};
+    use crate::models::permission_editor::{TemplateAction, TemplateCommand, TemplateOutcome};
+    use crate::ops::permissions::REQUEST_CONFLICT;
+    async fn save_template(
+        pool: &PgPool,
+        ids: &SeedIds,
+        command: &TemplateCommand,
+    ) -> Result<TemplateOutcome, OpError> {
+        let mut write = ops::begin_gated(
+            pool,
+            Caller::session(ids.org_id, ids.user_id),
+            crate::db::OrganizationLock::AccessChange,
+            WriteIsolation::ReadCommitted,
+        )
+        .await?;
+        let requester = PermissionRequester {
+            org_id: ids.org_id,
+            user_id: ids.user_id,
+        };
+        let result =
+            ops::permissions::templates::save(&mut write.tx, &write.actor, command, requester)
+                .await;
+        write.commit(result, &Recorder::default()).await
+    }
     let ids = fixture(&pool).await;
     sqlx::query!(
         "UPDATE person_permission_states SET is_administrator = true WHERE user_id = $1",
@@ -1060,9 +1104,7 @@ async fn actual_template_command_receipt_cannot_be_reused_for_project_delegation
             grants: BuiltInProfile::Member.selection().iter().collect(),
         },
     };
-    calls::templates::execute(&pool, ids.org_id, ids.user_id, &command)
-        .await
-        .unwrap();
+    save_template(&pool, &ids, &command).await.unwrap();
     let mut delegation = request(ids.project_id, &[ids.user_id]);
     delegation.expected_access_revision = 1;
     delegation.request_id = command.request_id;
@@ -1077,7 +1119,7 @@ async fn actual_template_command_receipt_cannot_be_reused_for_project_delegation
     let mut other = command;
     other.request_id = delegation.request_id;
     assert!(matches!(
-        calls::templates::execute(&pool, ids.org_id, ids.user_id, &other).await,
-        Err(e) if e == request_conflict()
+        save_template(&pool, &ids, &other).await,
+        Err(e) if e == OpError::conflict(REQUEST_CONFLICT)
     ));
 }

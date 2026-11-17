@@ -436,16 +436,27 @@ async fn admin_creation_and_provisioning_of_case_variant_emails_create_one_accou
     });
     wait_for_links(&pool, 1).await;
     let db = pool.clone();
+    // The administrator adds Ada in the transaction the people page opens.
     let admin = tokio::spawn(async move {
-        crate::server_fns::insert_user(
-            &db,
-            &crate::ops::testing::Recorder::default(),
-            crate::ops::Caller::session(ids.org_id, ids.user_id),
-            "Ada@example.com",
-            "Ada",
+        use crate::models::user::{Activation, NewPerson};
+        let ada = NewPerson {
+            email: "Ada@example.com".into(),
+            name: "Ada".into(),
+        };
+        let caller = crate::ops::Caller::session(ids.org_id, ids.user_id);
+        let mut write = crate::ops::begin(&db, caller).await?;
+        let result = crate::ops::people::add(
+            &mut write.tx,
+            &write.actor,
+            &[ada],
             BuiltInProfile::Member,
+            Activation::Active,
+            crate::ops::people::Existing::Refuse,
         )
-        .await
+        .await;
+        write
+            .commit(result, &crate::ops::testing::Recorder::default())
+            .await
     });
     wait_for_links(&pool, 2).await;
     blocker.commit().await.unwrap();
