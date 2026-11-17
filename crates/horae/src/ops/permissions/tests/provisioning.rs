@@ -2,7 +2,7 @@ use super::*;
 use crate::models::people::PeopleActivity;
 use crate::models::permission_editor::{ProfileAction, ProfileCommand};
 use crate::server_fns::permissions::calls::{last_administrator, profiles};
-use crate::server_fns::test_seed::built_in_profile;
+use crate::testing::built_in_profile;
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 

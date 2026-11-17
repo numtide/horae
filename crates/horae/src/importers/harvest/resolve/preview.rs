@@ -223,7 +223,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn checkpoint_retains_link_activity_and_derives_missing_legacy_field(pool: sqlx::PgPool) {
-        let ids = crate::server_fns::test_seed::seed(
+        let ids = crate::testing::seed(
             &pool,
             horae_core::permissions::catalog::BuiltInProfile::Administrator,
         )
@@ -269,7 +269,7 @@ mod tests {
     async fn checkpoint_restores_known_task_currency_and_keeps_old_currency_unknown(
         pool: sqlx::PgPool,
     ) {
-        let ids = crate::server_fns::test_seed::seed(
+        let ids = crate::testing::seed(
             &pool,
             horae_core::permissions::catalog::BuiltInProfile::Administrator,
         )
@@ -333,7 +333,7 @@ mod tests {
     async fn a_person_whose_email_was_taken_meanwhile_is_reported_not_restored(pool: sqlx::PgPool) {
         use horae_core::importers::harvest::types::{ImportMode, SourceKind};
 
-        let ids = crate::server_fns::test_seed::seed(
+        let ids = crate::testing::seed(
             &pool,
             horae_core::permissions::catalog::BuiltInProfile::Administrator,
         )

@@ -1,6 +1,6 @@
 use super::*;
 use crate::plugin::event::ActiveTransition;
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::testing::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use std::time::Duration;
@@ -132,12 +132,7 @@ mod project {
             ("person", "project", BudgetMode::None, "", "", 9000),
         ] {
             let ids = configured_project(&pool, mode, scope).await;
-            crate::server_fns::test_seed::time_entry(
-                &pool,
-                &ids,
-                horae_core::types::EntryState::Open,
-            )
-            .await;
+            crate::testing::time_entry(&pool, &ids, horae_core::types::EntryState::Open).await;
             let mut edit = request(&pool, &ids).await;
             edit.form.name = "Renamed".into();
             edit.form.currency = Some(" eur ".into());
@@ -270,12 +265,7 @@ mod project {
                 ),
                 ("Renamed", project_type, None)
             );
-            crate::server_fns::test_seed::time_entry(
-                &pool,
-                &ids,
-                horae_core::types::EntryState::Open,
-            )
-            .await;
+            crate::testing::time_entry(&pool, &ids, horae_core::types::EntryState::Open).await;
             for field in ["type", "currency", "budget"] {
                 let mut rejected = request(&pool, &ids).await;
                 match field {

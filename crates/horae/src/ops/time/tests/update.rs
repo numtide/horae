@@ -1,6 +1,6 @@
 use super::*;
 use crate::models::user::User;
-use crate::server_fns::test_seed::wait_for_blocked;
+use crate::testing::wait_for_blocked;
 use std::time::Duration;
 
 pub(super) async fn editable_entry(pool: &PgPool, billable: bool) -> TimeEntry {

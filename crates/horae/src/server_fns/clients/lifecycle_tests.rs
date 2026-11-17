@@ -5,9 +5,7 @@
 use super::*;
 use crate::ops::testing::set_grants;
 use crate::plugin::event::ActiveTransition;
-use crate::server_fns::test_seed::{
-    SeedIds, repeatable_read_pool, seed, time_entry, wait_for_blocked,
-};
+use crate::testing::{SeedIds, repeatable_read_pool, seed, time_entry, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 use sqlx::PgPool;

@@ -2,9 +2,8 @@ use super::canonical_fields::{canonical_actor, keep_protected};
 use super::*;
 use crate::models::project_creation::{ProjectFieldAccess, ProtectedProjectField};
 use crate::models::project_managers::{ProjectManagersCommand, ProjectManagersCommandKind};
-use crate::server_fns::{
-    project_managers::calls as project_management, test_seed::wait_for_blocked,
-};
+use crate::server_fns::project_managers::calls as project_management;
+use crate::testing::wait_for_blocked;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use tokio::task::JoinSet;
 

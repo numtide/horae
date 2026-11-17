@@ -4,7 +4,7 @@ use crate::models::project_managers::ProjectManagersCommand;
 use crate::ops::OpError;
 use crate::ops::permissions::load_person_permissions;
 use crate::server_fns::project_managers::calls::execute;
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::testing::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
 use sqlx::PgPool;
 use std::time::Duration;
@@ -25,7 +25,7 @@ async fn permissions(pool: &PgPool, org: Uuid, user: Uuid, grants: &[Permission]
     let ids: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(grants)).unwrap())
             .unwrap();
-    crate::server_fns::test_seed::clear_state(pool, user).await;
+    crate::testing::clear_state(pool, user).await;
     sqlx::query!(
         "INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
          VALUES ($1, $2, $3, 1, $4, false, 'individual')
@@ -837,7 +837,7 @@ async fn replacement_audits_exact_delta_and_preserves_membership_history_and_oth
     sqlx::query!("INSERT INTO project_member_costs (id, org_id, project_id, user_id, cost_rate_cents) VALUES ($1, $2, $3, $4, 6789)",
         cost_id, ids.org_id, ids.project_id, ids.user_id).execute(&pool).await.unwrap();
     let entry =
-        crate::server_fns::test_seed::time_entry(&pool, &ids, horae_core::types::EntryState::Open)
+        crate::testing::time_entry(&pool, &ids, horae_core::types::EntryState::Open)
             .await;
     let other_project = Uuid::now_v7();
     sqlx::query!("INSERT INTO projects (id, org_id, client_id, name, currency) VALUES ($1, $2, $3, 'Other', 'EUR')",

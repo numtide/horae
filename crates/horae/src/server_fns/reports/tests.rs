@@ -1,6 +1,6 @@
 use super::*;
 use crate::ops::testing::provision;
-use crate::server_fns::test_seed::{SeedIds, seed};
+use crate::testing::{SeedIds, seed};
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use serial_test::serial;
 use sqlx::PgPool;

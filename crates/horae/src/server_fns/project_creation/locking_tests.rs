@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::testing::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use tokio::task::JoinSet;
@@ -97,7 +97,7 @@ async fn draft_and_edit(pool: &PgPool, ids: &SeedIds) -> (Uuid, ProjectEditReque
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn refused_gated_project_writes_release_the_gate(pool: PgPool) {
-    use crate::server_fns::test_seed::organization_lockable;
+    use crate::testing::organization_lockable;
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let (draft, request) = draft_and_edit(&pool, &ids).await;
     let code = |result: Result<(), ServerFnError>| match result {

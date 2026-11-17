@@ -6,8 +6,8 @@ use horae_core::permissions::catalog::BuiltInProfile;
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     check_requester_binding(pool, api).await;
     check_template_capacity(pool, api).await;
-    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+    let ids = crate::testing::seed(pool, BuiltInProfile::Member).await;
+    let foreign = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
     let target = super::user(pool, ids.org_id).await;
     let cookie = api.cookie(ids.user_id).await;
     let member_cookie = api.cookie(target).await;
@@ -33,7 +33,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     for (user, admin) in [(ids.user_id, true), (target, false)] {
         let grants: Vec<String> =
             serde_json::from_value(json!(BuiltInProfile::Administrator.selection())).unwrap();
-        crate::server_fns::test_seed::clear_state(pool, user).await;
+        crate::testing::clear_state(pool, user).await;
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
             VALUES ($1,$2,$3,1,$4,$5,'individual')", Uuid::now_v7(), ids.org_id, user, &grants, admin)
             .execute(pool).await.unwrap();
@@ -337,13 +337,13 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
 }
 
 async fn check_template_capacity(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
+    let ids = crate::testing::seed(pool, BuiltInProfile::Member).await;
     let other = super::user(pool, ids.org_id).await;
     let grants: Vec<String> =
         serde_json::from_value(json!(BuiltInProfile::Administrator.selection())).unwrap();
     for user in [ids.user_id, other] {
         let admin = true;
-        crate::server_fns::test_seed::clear_state(pool, user).await;
+        crate::testing::clear_state(pool, user).await;
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
             VALUES ($1,$2,$3,1,$4,$5,'individual')", Uuid::now_v7(), ids.org_id, user, &grants, admin)
             .execute(pool).await.unwrap();
@@ -491,14 +491,14 @@ async fn check_template_capacity(pool: &PgPool, api: &Api) {
 }
 
 async fn check_requester_binding(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
+    let ids = crate::testing::seed(pool, BuiltInProfile::Member).await;
     let other = super::user(pool, ids.org_id).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+    let foreign = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
     for user in [ids.user_id, other] {
         let grants: Vec<String> =
             serde_json::from_value(json!(BuiltInProfile::Administrator.selection())).unwrap();
         let admin = true;
-        crate::server_fns::test_seed::clear_state(pool, user).await;
+        crate::testing::clear_state(pool, user).await;
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
             VALUES ($1,$2,$3,1,$4,$5,'individual')", Uuid::now_v7(), ids.org_id, user, &grants, admin)
             .execute(pool).await.unwrap();
@@ -587,7 +587,7 @@ async fn check_authentication_failure(pool: &PgPool, api: &Api, target: Uuid, co
         .unwrap()
         .unwrap();
     let cancel = async {
-        crate::server_fns::test_seed::wait_for_blocked(pool, holder).await;
+        crate::testing::wait_for_blocked(pool, holder).await;
         let cancelled = sqlx::query_scalar!("SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE datname=current_database() AND $1 = ANY(pg_blocking_pids(pid))", holder)
             .fetch_all(pool).await.unwrap();
         assert_eq!(cancelled, vec![Some(true)]);

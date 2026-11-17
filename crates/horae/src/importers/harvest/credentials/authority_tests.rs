@@ -1,7 +1,7 @@
 use super::*;
 use crate::importers::harvest::{ApiImportError, account_switch};
 use crate::ops::testing::{assign_profile, revoke};
-use crate::server_fns::test_seed::{seed, wait_for_blocked};
+use crate::testing::{seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use std::time::Duration;
@@ -47,7 +47,7 @@ async fn run(pool: &PgPool, org: Uuid, actor: Uuid, change: Change) -> anyhow::R
     }
 }
 
-async fn connected(pool: &PgPool) -> crate::server_fns::test_seed::SeedIds {
+async fn connected(pool: &PgPool) -> crate::testing::SeedIds {
     let ids = seed(pool, BuiltInProfile::Administrator).await;
     store(
         pool,

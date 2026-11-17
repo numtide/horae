@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::wait_for_blocked;
+use crate::testing::wait_for_blocked;
 use horae_core::permissions::catalog::BuiltInProfile;
 
 #[derive(Clone, Copy, Debug)]
@@ -589,7 +589,7 @@ async fn detail_view_observes_report_visibility_revoked_by_the_project_editor(po
     let no_grants: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(&[])).unwrap())
             .unwrap();
-    crate::server_fns::test_seed::clear_state(&pool, member_id).await;
+    crate::testing::clear_state(&pool, member_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states
          (id, org_id, user_id, catalog_version, grants, is_administrator, source)

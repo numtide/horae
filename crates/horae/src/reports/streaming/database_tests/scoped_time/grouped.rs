@@ -342,7 +342,7 @@ async fn grouped_csv_keeps_authority_between_fragment_batches_and_releases_on_ca
             )
             .await
         });
-        crate::server_fns::test_seed::wait_for_blocked(&pool, blocker_pid).await;
+        crate::testing::wait_for_blocked(&pool, blocker_pid).await;
         let reader_pid = sqlx::query_scalar!("SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid))", blocker_pid)
             .fetch_one(&pool).await.unwrap().unwrap();
         let writer_pool = pool.clone();
@@ -359,7 +359,7 @@ async fn grouped_csv_keeps_authority_between_fragment_batches_and_releases_on_ca
                 .execute(&mut *tx).await.unwrap();
             tx.commit().await.unwrap();
         });
-        crate::server_fns::test_seed::wait_for_blocked(&pool, reader_pid).await;
+        crate::testing::wait_for_blocked(&pool, reader_pid).await;
         if cancel {
             pending.abort();
             assert!(pending.await.unwrap_err().is_cancelled());

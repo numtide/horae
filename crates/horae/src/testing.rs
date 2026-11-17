@@ -1,7 +1,8 @@
-//! Shared fixture for the in-crate `#[sqlx::test]` guard tests: one minimal
-//! tenant (org, user, client, project, task) to hang time entries off. These
-//! tests live inside the crate because `tests/` cannot import a bin crate's
-//! modules.
+//! Shared fixture for the in-crate `#[sqlx::test]` tests: one minimal tenant
+//! (org, user, client, project, task) to hang time entries off, and helpers
+//! that wait on database locks. These tests live inside the crate because
+//! `tests/` cannot import a bin crate's modules. Backend modules use it, so it
+//! must not depend on `server_fns`.
 
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;

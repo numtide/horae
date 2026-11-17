@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::ops::approvals::tests::add_person;
-use crate::server_fns::test_seed::{seed, time_entry};
+use crate::testing::{seed, time_entry};
 use horae_core::permissions::catalog::BuiltInProfile;
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {

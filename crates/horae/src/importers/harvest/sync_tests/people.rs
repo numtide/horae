@@ -149,7 +149,7 @@ async fn people_are_matched_or_created_and_their_entries_import(pool: PgPool) {
     );
     assert_eq!((created.oidc_subject, created.oidc_issuer), (None, None));
     assert_eq!(
-        crate::server_fns::test_seed::built_in_profile(&pool, org, created.id).await,
+        crate::testing::built_in_profile(&pool, org, created.id).await,
         Some((BuiltInProfile::Member, false))
     );
 
@@ -487,11 +487,11 @@ async fn an_account_created_while_the_import_waits_is_never_duplicated(pool: PgP
     .unwrap();
     let mut data = valid_data();
     data.users = serde_json::from_value(json!([{"id":4,"email":"late@example.com"}])).unwrap();
-    let rr = crate::server_fns::test_seed::repeatable_read_pool(&pool).await;
+    let rr = crate::testing::repeatable_read_pool(&pool).await;
     let import = tokio::spawn(async move {
         apply_api_data(&rr, org, "USD", ImportMode::Commit, &data, day(4)).await
     });
-    crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+    crate::testing::wait_for_blocked(&pool, blocker).await;
     signup.commit().await.unwrap();
     let report = tokio::time::timeout(std::time::Duration::from_secs(10), import)
         .await

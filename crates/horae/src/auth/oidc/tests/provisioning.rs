@@ -89,7 +89,7 @@ async fn first_sign_in_creates_an_active_member_bound_to_the_identity(pool: PgPo
         (org_id, "Ada@Example.com", "Ada Lovelace")
     );
     assert_eq!(
-        crate::server_fns::test_seed::built_in_profile(&pool, org_id, user.id).await,
+        crate::testing::built_in_profile(&pool, org_id, user.id).await,
         Some((
             horae_core::permissions::catalog::BuiltInProfile::Member,
             false
@@ -415,7 +415,7 @@ async fn concurrent_sign_ins_with_case_variant_emails_create_one_account(pool: P
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn admin_creation_and_provisioning_of_case_variant_emails_create_one_account(pool: PgPool) {
-    let ids = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
+    let ids = crate::testing::seed(&pool, BuiltInProfile::Administrator).await;
     // Hold the email lock. The sign-in queues on the email first and the
     // administrator's request queues behind it, so the sign-in commits first
     // and the administrator must see its lowercase twin.

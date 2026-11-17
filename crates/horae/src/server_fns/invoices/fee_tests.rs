@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::{SeedIds, seed};
+use crate::testing::{SeedIds, seed};
 use horae_core::permissions::catalog::{BuiltInProfile, Permission};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -283,7 +283,7 @@ async fn invoice_status_holds_its_authority_while_waiting_for_the_invoice_lock(p
         let transition = tokio::spawn(async move {
             transition_invoice(&task_pool, ids.org_id, id, InvoiceStatus::Void, ids.user_id).await
         });
-        crate::server_fns::test_seed::wait_for_blocked(&pool, pid).await;
+        crate::testing::wait_for_blocked(&pool, pid).await;
         let writer = sqlx::query_scalar!(
             r#"SELECT pid AS "pid!" FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))"#,
             pid
@@ -297,7 +297,7 @@ async fn invoice_status_holds_its_authority_while_waiting_for_the_invoice_lock(p
             crate::ops::testing::revoke(&mut tx, ids.org_id, ids.user_id, deactivate).await;
             tx.commit().await.unwrap();
         });
-        crate::server_fns::test_seed::wait_for_blocked(&pool, writer).await;
+        crate::testing::wait_for_blocked(&pool, writer).await;
         blocker.commit().await.unwrap();
         let voided = transition.await.unwrap().unwrap();
         assert_eq!(voided.status, InvoiceStatus::Void);
@@ -733,7 +733,7 @@ async fn reviewed_generation_does_not_materialize_unselected_months(pool: PgPool
 #[serial_test::serial]
 async fn reviewed_generation_rejects_changed_time_before_claiming_it(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
-    let entry = crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
+    let entry = crate::testing::time_entry(&pool, &ids, EntryState::Open).await;
     let period = ("2026-09-01".parse().unwrap(), "2026-09-30".parse().unwrap());
     let defaults = InvoiceDefaults::default();
     let review = preview::prepare(
@@ -1601,7 +1601,7 @@ async fn mixed_time_and_fee_discount_conserves_cents_without_reopening_time(pool
     .unwrap();
     let time_project = Uuid::now_v7();
     sqlx::query!("INSERT INTO projects (id,org_id,client_id,name,currency,rate_cents) VALUES ($1,$2,$3,'Hourly','EUR',60)", time_project, ids.org_id, ids.client_id).execute(&pool).await.unwrap();
-    let entry = crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
+    let entry = crate::testing::time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
         "UPDATE time_entries SET project_id=$2,minutes=1 WHERE id=$1",
         entry,
@@ -2218,7 +2218,7 @@ async fn fee_total_overflow_rolls_back_occurrences_and_invoice(pool: PgPool) {
 async fn fee_invoice_does_not_claim_hours_or_another_clients_fee(pool: PgPool) {
     let ids = single_fee(&pool).await;
     let other = single_fee(&pool).await;
-    let entry = crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
+    let entry = crate::testing::time_entry(&pool, &ids, EntryState::Open).await;
     let invoice = generate_invoice_for_period(
         &pool,
         ids.org_id,
@@ -2251,7 +2251,7 @@ async fn fee_invoice_does_not_claim_hours_or_another_clients_fee(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn invoice_line_sources_reject_mixed_sources_and_invented_fee_quantities(pool: PgPool) {
     let ids = single_fee(&pool).await;
-    let entry = crate::server_fns::test_seed::time_entry(&pool, &ids, EntryState::Open).await;
+    let entry = crate::testing::time_entry(&pool, &ids, EntryState::Open).await;
     let invoice = generate_invoice_for_period(
         &pool,
         ids.org_id,

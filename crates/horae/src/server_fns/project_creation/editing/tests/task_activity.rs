@@ -1,7 +1,7 @@
 use super::canonical_fields::{canonical_actor, keep_protected};
 use super::*;
 use crate::models::project_creation::ProjectTaskActivity;
-use crate::server_fns::test_seed::{SeedIds, time_entry};
+use crate::testing::{SeedIds, time_entry};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 

@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use super::*;
 use crate::ops::testing::save_state;
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::testing::{SeedIds, seed, wait_for_blocked};
 
 mod time_entries;
 mod time_report_groups;

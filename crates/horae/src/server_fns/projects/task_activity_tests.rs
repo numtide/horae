@@ -1,6 +1,6 @@
 use super::canonical_read_tests::fixture;
 use super::*;
-use crate::server_fns::test_seed::{time_entry, wait_for_blocked};
+use crate::testing::{time_entry, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::PermissionSelection;
 use sqlx::PgPool;
@@ -310,7 +310,7 @@ async fn archive_waits_for_existing_time_writer_and_observes_committed_timer(poo
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn refused_activation_changes_release_the_gate(pool: PgPool) {
-    use crate::server_fns::test_seed::{organization_lockable, seed};
+    use crate::testing::{organization_lockable, seed};
     let member = seed(&pool, BuiltInProfile::Member).await;
     let refused =
         set_task_active_record(&pool, member.org_id, member.user_id, member.task_id, false).await;

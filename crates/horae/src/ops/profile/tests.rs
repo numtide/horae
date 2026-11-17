@@ -8,7 +8,7 @@ use uuid::Uuid;
 use super::*;
 use crate::ops::testing::Recorder;
 use crate::ops::{Caller, begin, begin_read};
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::testing::{SeedIds, seed, wait_for_blocked};
 
 /// `get_my_permissions` past its session lookup.
 async fn read(pool: &PgPool, org_id: Uuid, user_id: Uuid) -> Result<OwnPermissions, OpError> {
@@ -38,7 +38,7 @@ fn forbidden(message: &str) -> Result<OwnPermissions, OpError> {
 async fn state(pool: &PgPool, ids: &SeedIds, profile: BuiltInProfile, administrator: bool) {
     let grants: Vec<String> =
         serde_json::from_value(serde_json::to_value(profile.selection()).unwrap()).unwrap();
-    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+    crate::testing::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source, revision)
         VALUES ($1, $2, $3, 1, $4, $5, 'individual', 3)", Uuid::now_v7(), ids.org_id, ids.user_id, &grants, administrator).execute(pool).await.unwrap();
 }

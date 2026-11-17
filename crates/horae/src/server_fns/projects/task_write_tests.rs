@@ -1,6 +1,6 @@
 use super::canonical_read_tests::fixture;
 use super::*;
-use crate::server_fns::test_seed::wait_for_blocked;
+use crate::testing::wait_for_blocked;
 use horae_core::permissions::catalog::{BuiltInProfile, PermissionSelection};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -410,7 +410,7 @@ async fn global_task_creation_needs_a_grant_even_with_the_administrator_profile(
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn task_creation_waits_behind_the_organization_before_authorizing(pool: PgPool) {
-    let ids = crate::server_fns::test_seed::seed(&pool, BuiltInProfile::Administrator).await;
+    let ids = crate::testing::seed(&pool, BuiltInProfile::Administrator).await;
     let mut revocation = pool.begin().await.unwrap();
     let pid = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
         .fetch_one(&mut *revocation)

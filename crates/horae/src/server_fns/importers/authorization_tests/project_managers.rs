@@ -7,15 +7,15 @@ use horae_core::permissions::catalog::{Permission, PermissionSelection};
 async fn grants(pool: &PgPool, org: Uuid, person: Uuid, selection: &[Permission]) {
     let grants: Vec<String> =
         serde_json::from_value(json!(PermissionSelection::new(selection))).unwrap();
-    crate::server_fns::test_seed::clear_state(pool, person).await;
+    crate::testing::clear_state(pool, person).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
         VALUES ($1,$2,$3,1,$4,false,'individual') ON CONFLICT (org_id,user_id) DO UPDATE SET grants=EXCLUDED.grants",
         Uuid::now_v7(),org,person,&grants).execute(pool).await.unwrap();
 }
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+    let ids = crate::testing::seed(pool, BuiltInProfile::Member).await;
+    let foreign = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
     let target = user(pool, ids.org_id).await;
     let cookie = api.cookie(ids.user_id).await;
     let requester = json!({"org_id":ids.org_id,"user_id":ids.user_id});

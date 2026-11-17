@@ -10,7 +10,7 @@ use uuid::Uuid;
 use super::*;
 use crate::ops::Caller;
 use crate::ops::testing::{Recorder, provision, set_grants};
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::testing::{SeedIds, seed, wait_for_blocked};
 
 #[derive(Debug, Clone, Copy)]
 enum Who {
@@ -377,7 +377,7 @@ async fn a_save_waiting_on_a_competing_edit_is_refused_whatever_it_requested(poo
 #[serial_test::serial]
 async fn branding_rechecks_authority_after_the_organization_wait(pool: PgPool) {
     // The write's isolation must not come from the session default.
-    let run_pool = crate::server_fns::test_seed::repeatable_read_pool(&pool).await;
+    let run_pool = crate::testing::repeatable_read_pool(&pool).await;
     for deactivate in [false, true] {
         for change in [false, true] {
             let ids = administrator(&pool).await;

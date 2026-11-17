@@ -2,8 +2,8 @@ use super::*;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::user::{PersonRate, PersonRates};
 use crate::ops::testing::Recorder;
-use crate::server_fns::test_seed::seed;
 use crate::server_fns::users::rates;
+use crate::testing::seed;
 use horae_core::permissions::catalog::{
     BuiltInProfile, PERMISSION_CATALOG_VERSION, Permission, PermissionSelection,
 };
@@ -95,7 +95,7 @@ async fn grant(pool: &PgPool, org: Uuid, actor: Uuid, grants: &[Permission], man
     let values: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(grants)).unwrap())
             .unwrap();
-    crate::server_fns::test_seed::clear_state(pool, actor).await;
+    crate::testing::clear_state(pool, actor).await;
     sqlx::query!(
         "INSERT INTO person_permission_states
            (id, org_id, user_id, catalog_version, grants, is_administrator, source)

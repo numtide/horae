@@ -9,8 +9,8 @@ use uuid::Uuid;
 use super::testing::Recorder;
 use super::*;
 use crate::plugin::event::ClientPayload;
-use crate::server_fns::test_seed::repeatable_read_pool;
-use crate::server_fns::test_seed::{clear_state, organization_lockable, seed};
+use crate::testing::repeatable_read_pool;
+use crate::testing::{clear_state, organization_lockable, seed};
 
 mod snapshot;
 
@@ -240,7 +240,7 @@ async fn a_snapshot_read_retries_when_access_changes_after_its_snapshot(pool: Pg
     use horae_core::permissions::catalog::Permission;
 
     use super::testing::{provision, set_grants};
-    use crate::server_fns::test_seed::wait_for_blocked;
+    use crate::testing::wait_for_blocked;
 
     for limits in [SnapshotLimits::Short, SnapshotLimits::LockWait] {
         let ids = seed(&pool, BuiltInProfile::Member).await;
@@ -283,7 +283,7 @@ async fn a_snapshot_read_retries_when_access_changes_after_its_snapshot(pool: Pg
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_gated_write_chooses_its_isolation_and_holds_the_gate(pool: PgPool) {
-    use crate::server_fns::test_seed::wait_for_blocked;
+    use crate::testing::wait_for_blocked;
 
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let caller = Caller::session(ids.org_id, ids.user_id);
@@ -321,7 +321,7 @@ async fn a_gated_write_chooses_its_isolation_and_holds_the_gate(pool: PgPool) {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn a_gated_write_loads_the_actor_after_waiting_for_the_gate(pool: PgPool) {
     use super::testing::revoke;
-    use crate::server_fns::test_seed::wait_for_blocked;
+    use crate::testing::wait_for_blocked;
 
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let mut change: Tx = pool.begin().await.unwrap();

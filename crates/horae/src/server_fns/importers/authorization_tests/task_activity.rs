@@ -46,11 +46,11 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
             StatusCode::OK,
         ),
     ] {
-        let ids = crate::server_fns::test_seed::seed(pool, profile).await;
+        let ids = crate::testing::seed(pool, profile).await;
         let grants = PermissionSelection::new(&grants);
         let may_read_rate = grants.contains(Permission::BillableRateReadAll);
         let stored: Vec<String> = serde_json::from_value(json!(grants)).unwrap();
-        crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+        crate::testing::clear_state(pool, ids.user_id).await;
         sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
             VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &stored)
             .execute(pool).await.unwrap();
@@ -62,12 +62,8 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         .await
         .unwrap();
         if running {
-            let entry = crate::server_fns::test_seed::time_entry(
-                pool,
-                &ids,
-                horae_core::types::EntryState::Open,
-            )
-            .await;
+            let entry =
+                crate::testing::time_entry(pool, &ids, horae_core::types::EntryState::Open).await;
             sqlx::query!(
                 "UPDATE time_entries SET is_running=true,started_at=now() WHERE id=$1",
                 entry
@@ -94,8 +90,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
                     .status(),
                 StatusCode::FORBIDDEN
             );
-            let foreign =
-                crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+            let foreign = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
             let mut foreign_request = request.clone();
             foreign_request["task_id"] = json!(foreign.task_id);
             assert_eq!(

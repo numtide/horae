@@ -1,5 +1,5 @@
 pub(super) use crate::ops::testing::become_profile;
-use crate::server_fns::test_seed::seed;
+use crate::testing::seed;
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;

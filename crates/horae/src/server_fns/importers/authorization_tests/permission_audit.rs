@@ -23,8 +23,8 @@ async fn entry(api: &Api, cookie: &str, receipt: Uuid) -> Value {
 }
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+    let ids = crate::testing::seed(pool, BuiltInProfile::Member).await;
+    let foreign = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
     let cookie = api.cookie(ids.user_id).await;
     assert_eq!(
         api.call(NAME, first_page(), None, false).await.status(),
@@ -39,7 +39,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
     let grants: Vec<String> =
         serde_json::from_value(json!(BuiltInProfile::Administrator.selection())).unwrap();
     for seed in [&ids, &foreign] {
-        crate::server_fns::test_seed::clear_state(pool, seed.user_id).await;
+        crate::testing::clear_state(pool, seed.user_id).await;
         sqlx::query!("INSERT INTO person_permission_states (id, org_id, user_id, catalog_version, grants, is_administrator, source)
             VALUES ($1,$2,$3,1,$4,true,'individual')", Uuid::now_v7(), seed.org_id, seed.user_id, &grants).execute(pool).await.unwrap();
     }
@@ -127,7 +127,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
 async fn check_historical_shapes(
     pool: &PgPool,
     api: &Api,
-    ids: &crate::server_fns::test_seed::SeedIds,
+    ids: &crate::testing::SeedIds,
     cookie: &str,
 ) {
     use crate::models::project_managers as project_management_models;
@@ -193,8 +193,8 @@ async fn check_historical_shapes(
 async fn check_browsing(
     pool: &PgPool,
     api: &Api,
-    ids: &crate::server_fns::test_seed::SeedIds,
-    foreign: &crate::server_fns::test_seed::SeedIds,
+    ids: &crate::testing::SeedIds,
+    foreign: &crate::testing::SeedIds,
     cookie: &str,
 ) {
     use crate::models::permission_audit::AuditPage;
@@ -342,7 +342,7 @@ async fn check_auth_lookup_error(pool: &PgPool, api: &Api, cookie: &str) {
             .unwrap()
             .unwrap();
         let cancel = async {
-            crate::server_fns::test_seed::wait_for_blocked(pool, holder).await;
+            crate::testing::wait_for_blocked(pool, holder).await;
             let cancelled = sqlx::query_scalar!("SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE datname=current_database() AND $1 = ANY(pg_blocking_pids(pid))", holder).fetch_all(pool).await.unwrap();
             assert_eq!(cancelled, vec![Some(true)]);
             hold.rollback().await.unwrap();
