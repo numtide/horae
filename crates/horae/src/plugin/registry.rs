@@ -401,7 +401,8 @@ struct WidgetInner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugin::event::{InvoicePayload, TimeEntryPayload, UserPayload};
+    use crate::plugin::event::{InvoicePayload, ProfileRef, TimeEntryPayload, UserPayload};
+    use horae_core::permissions::catalog::BuiltInProfile;
 
     mod initialization;
     mod isolation;
@@ -507,6 +508,7 @@ mod tests {
                 name: "Test".into(),
                 is_administrator: false,
                 profile: Some("Member".into()),
+                profile_ref: Some(ProfileRef::BuiltIn(BuiltInProfile::Member)),
                 method: Some("dev".into()),
             },
         };

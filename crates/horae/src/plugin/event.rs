@@ -280,10 +280,23 @@ pub struct UserPayload {
     /// permissions come from; `None` for individually chosen grants or a
     /// person without stored permissions.
     pub profile: Option<String>,
+    /// The same profile by a stable identity that survives renamed templates
+    /// and relabelled built-in profiles; `None` whenever `profile` is.
+    pub profile_ref: Option<ProfileRef>,
     /// How the user authenticated — set on login events, and on the account
     /// creation a first OIDC sign-in performs; omitted otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub method: Option<String>,
+}
+
+/// The profile a person's permissions come from, as plugins see it:
+/// `{"built_in": "accounting"}` or `{"template": "<uuid>"}`. Unlike
+/// `PermissionSource`, it leaves out the template revision that was applied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProfileRef {
+    BuiltIn(horae_core::permissions::catalog::BuiltInProfile),
+    Template(Uuid),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -458,6 +471,7 @@ pub(crate) async fn user_payload(
     email: &str,
     name: &str,
 ) -> Result<UserPayload, sqlx::Error> {
+    use crate::models::permissions::PermissionSource;
     use crate::ops::permissions::{PermissionStorageError, load_person_permissions, profile_name};
     let state = match load_person_permissions(&mut *connection, org_id, id).await {
         Ok(state) => state,
@@ -467,12 +481,17 @@ pub(crate) async fn user_payload(
             None
         }
     };
-    let (is_administrator, profile) = match state {
+    let (is_administrator, profile, profile_ref) = match state {
         Some(state) => (
             state.is_administrator,
             profile_name(connection, org_id, state.source).await?,
+            match state.source {
+                PermissionSource::BuiltIn(profile) => Some(ProfileRef::BuiltIn(profile)),
+                PermissionSource::Template { id, .. } => Some(ProfileRef::Template(id)),
+                PermissionSource::Individual => None,
+            },
         ),
-        None => (false, None),
+        None => (false, None, None),
     };
     Ok(UserPayload {
         id,
@@ -480,6 +499,7 @@ pub(crate) async fn user_payload(
         name: name.to_owned(),
         is_administrator,
         profile,
+        profile_ref,
         method: None,
     })
 }
@@ -487,6 +507,7 @@ pub(crate) async fn user_payload(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use horae_core::permissions::catalog::BuiltInProfile;
 
     #[test]
     fn project_membership_payload_excludes_private_configuration() {
@@ -613,6 +634,7 @@ mod tests {
                 name: "Sam".into(),
                 is_administrator: false,
                 profile: Some("Project Manager".into()),
+                profile_ref: Some(ProfileRef::BuiltIn(BuiltInProfile::ProjectManager)),
                 method: None,
             },
         };
@@ -632,10 +654,116 @@ mod tests {
             name: "Sam".into(),
             is_administrator: true,
             profile: None,
+            profile_ref: None,
             method: None,
         };
         let json = serde_json::to_string(&user).unwrap();
         assert!(json.contains("\"profile\":null"), "{json}");
+        assert!(json.contains("\"profile_ref\":null"), "{json}");
+    }
+
+    /// The plugin contract: the exact JSON of a built-in and a template profile.
+    #[test]
+    fn profile_ref_serializes_as_a_tagged_identity() {
+        let template = Uuid::from_u128(0x0195_0000_0000_7000_8000_0000_0000_00a1);
+        assert_eq!(
+            serde_json::to_value(ProfileRef::BuiltIn(BuiltInProfile::Accounting)).unwrap(),
+            serde_json::json!({ "built_in": "accounting" })
+        );
+        assert_eq!(
+            serde_json::to_value(ProfileRef::Template(template)).unwrap(),
+            serde_json::json!({ "template": "01950000-0000-7000-8000-0000000000a1" })
+        );
+        let user = UserPayload {
+            id: Uuid::nil(),
+            email: "sam@acme.test".into(),
+            name: "Sam".into(),
+            is_administrator: false,
+            profile: Some("Night shift".into()),
+            profile_ref: Some(ProfileRef::Template(template)),
+            method: None,
+        };
+        assert_eq!(
+            serde_json::to_value(user).unwrap(),
+            serde_json::json!({
+                "id": "00000000-0000-0000-0000-000000000000",
+                "email": "sam@acme.test",
+                "name": "Sam",
+                "is_administrator": false,
+                "profile": "Night shift",
+                "profile_ref": { "template": "01950000-0000-7000-8000-0000000000a1" },
+            })
+        );
+    }
+
+    /// `user_payload` reads the reference from the stored permission source:
+    /// a built-in profile, a template, and none for individual grants or a
+    /// person without stored permissions.
+    #[sqlx::test(migrator = "crate::db::MIGRATOR")]
+    #[serial_test::serial]
+    async fn user_payload_carries_the_profile_ref_of_the_stored_source(pool: sqlx::PgPool) {
+        use crate::server_fns::test_seed::{clear_state, seed};
+
+        async fn payload(pool: &sqlx::PgPool, org_id: Uuid, id: Uuid) -> UserPayload {
+            let mut connection = pool.acquire().await.unwrap();
+            user_payload(&mut connection, org_id, id, "sam@acme.test", "Sam")
+                .await
+                .unwrap()
+        }
+
+        let ids = seed(&pool, BuiltInProfile::Accounting).await;
+        let user = payload(&pool, ids.org_id, ids.user_id).await;
+        assert_eq!(
+            (user.profile.as_deref(), user.profile_ref),
+            (
+                Some("Accounting"),
+                Some(ProfileRef::BuiltIn(BuiltInProfile::Accounting))
+            )
+        );
+
+        let template = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO permission_templates (id, org_id, name, catalog_version, grants)
+             SELECT $1, org_id, 'Night shift', catalog_version, grants
+               FROM person_permission_states WHERE user_id = $2",
+            template,
+            ids.user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "UPDATE person_permission_states
+                SET source = 'template', built_in_profile = NULL, template_id = $2,
+                    applied_template_revision = 0
+              WHERE user_id = $1",
+            ids.user_id,
+            template
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let user = payload(&pool, ids.org_id, ids.user_id).await;
+        assert_eq!(
+            (user.profile.as_deref(), user.profile_ref),
+            (Some("Night shift"), Some(ProfileRef::Template(template)))
+        );
+
+        sqlx::query!(
+            "UPDATE person_permission_states
+                SET source = 'individual', template_id = NULL, applied_template_revision = NULL
+              WHERE user_id = $1",
+            ids.user_id
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let user = payload(&pool, ids.org_id, ids.user_id).await;
+        assert_eq!((user.profile, user.profile_ref), (None, None));
+
+        clear_state(&pool, ids.user_id).await;
+        let user = payload(&pool, ids.org_id, ids.user_id).await;
+        assert_eq!((user.profile, user.profile_ref), (None, None));
     }
 
     #[test]

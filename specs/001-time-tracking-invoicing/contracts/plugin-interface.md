@@ -181,6 +181,7 @@ Fired after a user successfully authenticates (for audit-log plugins).
     "name": "Casey Rivera",
     "is_administrator": false,
     "profile": "Member",
+    "profile_ref": { "built_in": "member" },
     "method": "oidc"
   }
 }
@@ -190,7 +191,13 @@ Every `user` payload carries `is_administrator`, the person's stored
 Administrator identity, and `profile`: the built-in profile's label
 (`"Member"`, `"Project Manager"`, `"Executive Manager"`, …) or the permission
 template's name their permissions come from, or `null` for individually chosen
-grants or a person without stored permissions. Earlier releases sent an
+grants or a person without stored permissions. `profile_ref` names the same
+profile by an identity that survives a renamed template or a relabelled
+built-in profile: `{"built_in": "<profile>"}` with one of `member`,
+`project_manager`, `people_admin`, `accounting`, `executive_manager` or
+`administrator`, or `{"template": "<template id>"}`. It is `null` whenever
+`profile` is. Plugins that decide by profile should match on `profile_ref`
+and keep `profile` for display. Earlier releases sent an
 `org_role` field instead; it is gone, and there is no ABI version to negotiate.
 
 ______________________________________________________________________
