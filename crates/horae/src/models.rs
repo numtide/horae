@@ -2,14 +2,12 @@ pub mod approval;
 pub mod assignment;
 pub mod client;
 pub mod invoice;
-mod jobs;
+pub mod jobs;
 pub mod organization;
 pub mod own_permissions;
 pub mod people;
 pub(crate) mod permission_audit;
 pub(crate) mod permission_editor;
-#[cfg(feature = "server")]
-pub(crate) mod permissions;
 pub mod project;
 pub mod project_creation;
 pub mod project_managers;
@@ -24,23 +22,15 @@ pub use approval::{Approval, ApprovalSummary};
 #[cfg(test)]
 pub use assignment::Assignment;
 pub use client::Client;
-#[cfg(feature = "server")]
-pub use invoice::InvoiceLine;
 pub use invoice::{Invoice, InvoiceWithLines};
-#[cfg(feature = "server")]
-pub use jobs::ErrorSample;
 pub use jobs::{
     CommitAvailability, ErrorGroup, ErrorSummary, JobErrorKind, JobStatus, MissingPerson,
     RetryAvailability,
 };
 pub use organization::{OrgBranding, branding_value_error};
-#[cfg(any(feature = "server", test))]
-pub use project::ProjectBudgetProgress;
 pub use project::{Project, ProjectBudgetOverview, ProjectDetails, ProjectTagLink};
 pub use task::Task;
 pub use time_entry::TimeEntry;
-#[cfg(feature = "server")]
-pub use user::User;
 
 /// Per-project tracked totals: all logged minutes, and the billable amount in
 /// cents (rates resolved via FR-024). Powers the Projects overview's Spent column.
@@ -75,7 +65,6 @@ pub struct ReportRow {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct DetailedReportRow {
     pub spent_date: chrono::NaiveDate,
     pub project_name: String,

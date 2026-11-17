@@ -7,8 +7,9 @@ use horae_core::types::InvoiceStatus;
 use uuid::Uuid;
 
 use super::{SourceRead, balances, defaults, entries, fees, preview};
+use crate::models::invoice::InvoiceLine;
 use crate::models::invoice::{InvoiceDefaults, InvoiceGenerationRequest, InvoiceSource};
-use crate::models::{Invoice, InvoiceLine, InvoiceWithLines};
+use crate::models::{Invoice, InvoiceWithLines};
 use crate::ops::{Actor, Done, OpError, Tx};
 use crate::plugin::AppEvent;
 use crate::plugin::event::invoice_payload;

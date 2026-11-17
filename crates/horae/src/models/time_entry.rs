@@ -12,7 +12,6 @@ pub struct TimeEntryContext {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct TimeEntry {
     pub id: Uuid,
     pub org_id: Uuid,

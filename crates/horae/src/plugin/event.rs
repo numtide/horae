@@ -471,7 +471,7 @@ pub(crate) async fn user_payload(
     email: &str,
     name: &str,
 ) -> Result<UserPayload, sqlx::Error> {
-    use crate::models::permissions::PermissionSource;
+    use crate::ops::permissions::PermissionSource;
     use crate::ops::permissions::{PermissionStorageError, load_person_permissions, profile_name};
     let state = match load_person_permissions(&mut *connection, org_id, id).await {
         Ok(state) => state,

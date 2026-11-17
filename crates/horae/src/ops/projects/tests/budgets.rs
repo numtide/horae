@@ -7,7 +7,8 @@ use horae_core::types::EntryState;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::models::{ProjectBudgetProgress, ProjectSpend};
+use crate::models::ProjectSpend;
+use crate::models::project::ProjectBudgetProgress;
 use crate::notifications::budgets::{BudgetProgress, configured_progress};
 use crate::ops::testing::set_grants;
 use crate::ops::{Caller, OpError, begin_read};

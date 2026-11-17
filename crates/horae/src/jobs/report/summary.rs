@@ -9,7 +9,8 @@ use horae_core::importers::harvest::types::{
 use sqlx::PgConnection;
 use uuid::Uuid;
 
-use crate::models::{ErrorGroup, ErrorSample, ErrorSummary, MissingPerson};
+use crate::models::jobs::ErrorSample;
+use crate::models::{ErrorGroup, ErrorSummary, MissingPerson};
 
 const SHOWN_GROUPS: usize = 50;
 const SHOWN_PEOPLE: usize = 500;

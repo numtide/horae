@@ -133,18 +133,6 @@ pub struct TimeEntryCursor {
     pub id: Uuid,
 }
 
-/// Inclusive dates and optional narrowing filters, applied after scope checks.
-#[cfg(feature = "server")]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TimeEntryQuery {
-    pub date_from: NaiveDate,
-    pub date_to: NaiveDate,
-    pub user_id: Option<Uuid>,
-    pub project_id: Option<Uuid>,
-    pub after: Option<TimeEntryCursor>,
-}
-
 /// Authorized entry facts and contextual labels; no rates or invoice metadata.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -169,14 +157,4 @@ pub struct VisibleTimeEntry {
     pub sort_order: i32,
     pub state: EntryState,
     pub created_at: DateTime<Utc>,
-}
-
-/// Reauthorized on every page. Exhaust pages before presenting period totals.
-#[cfg(feature = "server")]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TimeEntryPage {
-    pub requester: PermissionRequester,
-    pub entries: Vec<VisibleTimeEntry>,
-    pub next_after: Option<TimeEntryCursor>,
 }

@@ -2,7 +2,8 @@ use axum::http::StatusCode;
 use sqlx::{PgConnection, PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::models::{Invoice, InvoiceLine, OrgBranding};
+use crate::models::invoice::InvoiceLine;
+use crate::models::{Invoice, OrgBranding};
 
 use super::ProjectExportRow;
 

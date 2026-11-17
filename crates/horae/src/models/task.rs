@@ -62,7 +62,6 @@ pub enum TaskRateEdit {
 /// An org-level task (global catalog entry). Tasks are enabled per project via
 /// `project_tasks`; a task row here does NOT belong to a specific project.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "server", derive(sqlx::FromRow))]
 pub struct Task {
     pub id: Uuid,
     pub org_id: Uuid,

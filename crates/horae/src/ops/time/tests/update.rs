@@ -1,5 +1,5 @@
 use super::*;
-use crate::models::user::User;
+use crate::ops::people::User;
 use crate::server_fns::test_seed::wait_for_blocked;
 use std::time::Duration;
 

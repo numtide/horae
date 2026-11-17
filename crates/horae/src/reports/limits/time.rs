@@ -6,6 +6,7 @@ use super::*;
 use crate::models::DetailedReportRow;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::TimeReportQuery;
+use crate::ops::time_reads::reports::billable_filter;
 use crate::reports::bounded::ExportPermit;
 
 pub(in crate::reports) mod groups;
@@ -138,7 +139,7 @@ async fn read_entries(
         query.date_from as _, query.date_to as _, &query.client_ids, &query.project_ids,
         &query.user_ids, &query.task_ids, &query.tag_ids, XLSX.rows, XLSX.bytes, MAX_FIELD_BYTES,
         query.active_projects_only,
-        query.billability.filter(),
+        billable_filter(query.billability),
     ).fetch_all(&mut *tx).await.map_err(database_error)?;
     let mut rows = Vec::with_capacity(records.len());
     let mut contexts = Vec::with_capacity(records.len());

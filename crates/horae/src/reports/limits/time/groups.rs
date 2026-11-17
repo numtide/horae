@@ -107,7 +107,7 @@ async fn read_groups(
         query.date_from as _, query.date_to as _, &query.client_ids, &query.project_ids,
         &query.user_ids, &query.task_ids, &query.tag_ids, dimension, XLSX.rows, XLSX.bytes, MAX_FIELD_BYTES,
         query.active_projects_only,
-        query.billability.filter(),
+        billable_filter(query.billability),
     ).fetch_all(&mut *tx).await.map_err(database_error)?;
     let mut rows = Vec::new();
     let mut contexts = Vec::new();
