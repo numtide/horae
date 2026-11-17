@@ -1264,6 +1264,12 @@ async fn a_changing_save_announces_the_new_permissions_to_plugins(pool: PgPool) 
     };
     assert_eq!((org_id, payload.id), (ids.org_id, user));
     assert_eq!(payload.profile.as_deref(), Some("Project Manager"));
+    assert_eq!(
+        payload.profile_ref,
+        Some(crate::plugin::event::ProfileRef::BuiltIn(
+            BuiltInProfile::ProjectManager
+        ))
+    );
     assert!(!payload.is_administrator);
     assert_eq!(payload.method, None);
 

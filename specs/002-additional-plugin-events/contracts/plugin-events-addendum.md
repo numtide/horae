@@ -53,7 +53,7 @@ the base catalog):
   "event": "user_permissions_changed",
   "occurred_at": "2026-07-13T10:00:00Z",
   "org_id": "0195...-0001",
-  "user": { "id": "0195...-0002", "email": "sam@acme.test", "name": "Sam", "is_administrator": false, "profile": "Project Manager" }
+  "user": { "id": "0195...-0002", "email": "sam@acme.test", "name": "Sam", "is_administrator": false, "profile": "Project Manager", "profile_ref": { "built_in": "project_manager" } }
 }
 ```
 

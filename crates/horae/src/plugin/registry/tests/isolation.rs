@@ -54,6 +54,7 @@ fn login_event() -> AppEvent {
             name: "Test".into(),
             is_administrator: false,
             profile: Some("Member".into()),
+            profile_ref: Some(ProfileRef::BuiltIn(BuiltInProfile::Member)),
             method: Some("dev".into()),
         },
     }
