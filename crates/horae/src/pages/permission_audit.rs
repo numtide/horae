@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
-use horae_core::permissions::catalog::Permission;
+use horae_core::permissions::catalog::{Permission, profile_label};
 
-use crate::components::permission_description::{permission_description, profile_label};
+use crate::components::permission_description::permission_description;
 use crate::models::permission_audit::*;
 use crate::models::permission_editor::PermissionRequester;
 use crate::server_fns;
