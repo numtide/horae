@@ -47,7 +47,7 @@ pub(super) async fn fetch_task_catalog(
 mod tests {
     use super::super::canonical_read_tests::fixture;
     use super::*;
-    use crate::server_fns::test_seed::{seed, wait_for_blocked};
+    use crate::testing::{seed, wait_for_blocked};
     use horae_core::permissions::catalog::{BuiltInProfile, PermissionSelection};
     use sqlx::PgPool;
     use uuid::Uuid;

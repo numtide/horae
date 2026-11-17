@@ -1,6 +1,6 @@
 use super::*;
 use crate::ops::testing::{Recorder, set_grants};
-use crate::server_fns::test_seed::{SeedIds, built_in_profile, seed, wait_for_blocked};
+use crate::testing::{SeedIds, built_in_profile, seed, wait_for_blocked};
 use horae_core::permissions::catalog::Permission;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -120,7 +120,7 @@ async fn project_editor_and_user_revocation_commit_in_gate_order(pool: PgPool) {
             }
         );
         // The project editor answers from stored grants, not the role.
-        let manager_ids = crate::server_fns::test_seed::SeedIds {
+        let manager_ids = crate::testing::SeedIds {
             user_id: manager.id,
             ..ids
         };

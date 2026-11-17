@@ -293,7 +293,7 @@ mod tests {
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn import_batches_join_the_access_gate_before_resource_locks(pool: sqlx::PgPool) {
-        let ids = crate::server_fns::test_seed::seed(
+        let ids = crate::testing::seed(
             &pool,
             horae_core::permissions::catalog::BuiltInProfile::Administrator,
         )
@@ -338,14 +338,14 @@ mod tests {
                 .unwrap();
             tx.commit().await.unwrap();
         });
-        crate::server_fns::test_seed::wait_for_blocked(&pool, holder).await;
+        crate::testing::wait_for_blocked(&pool, holder).await;
         access.commit().await.unwrap();
         pending.await.unwrap();
     }
 
     #[sqlx::test(migrator = "crate::db::MIGRATOR")]
     async fn api_planning_policy_ends_with_the_transaction(pool: sqlx::PgPool) {
-        let ids = crate::server_fns::test_seed::seed(
+        let ids = crate::testing::seed(
             &pool,
             horae_core::permissions::catalog::BuiltInProfile::Administrator,
         )

@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::models::permission_editor::PermissionRequester;
-use crate::server_fns::test_seed::time_entry;
+use crate::testing::time_entry;
 use horae_core::permissions::catalog::PermissionSelection;
 use sqlx::{Postgres, Transaction};
 
@@ -171,7 +171,7 @@ async fn fixture(pool: &PgPool) -> Fixture {
         serde_json::to_value(PermissionSelection::new(&[Permission::TimeWriteManaged])).unwrap(),
     )
     .unwrap();
-    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+    crate::testing::clear_state(pool, ids.user_id).await;
     sqlx::query!("INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source) VALUES ($1,$2,$3,1,$4,false,'individual')", Uuid::now_v7(), ids.org_id, ids.user_id, &grants)
         .execute(pool).await.unwrap();
     let context = TimesheetWriteContext {
@@ -189,7 +189,7 @@ async fn fixture(pool: &PgPool) -> Fixture {
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_actor_without_stored_state_is_forbidden(pool: PgPool) {
     let f = fixture(&pool).await;
-    crate::server_fns::test_seed::clear_state(&pool, f.ids.user_id).await;
+    crate::testing::clear_state(&pool, f.ids.user_id).await;
 
     let read = tracking(&pool, f.ids.org_id, f.ids.user_id, &f.context).await;
     let write = f

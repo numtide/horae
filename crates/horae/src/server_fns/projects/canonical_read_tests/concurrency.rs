@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::wait_for_blocked;
+use crate::testing::{remove_assignment, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 
 #[derive(Clone, Copy, Debug)]
@@ -492,20 +492,6 @@ async fn detail_view_observes_membership_removed_behind_the_lock_only_access_gat
     .execute(&pool)
     .await
     .unwrap();
-    let admin_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO users (id,org_id,email,name) VALUES ($1,$2,$3,'Gate admin')",
-        admin_id,
-        ids.org_id,
-        format!("{admin_id}@test.com"),
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let admin = User {
-        id: admin_id,
-        ..super::detail::session_user(&ids)
-    };
     detail_view::fetch(&pool, &viewer, ids.project_id, None, today())
         .await
         .unwrap();
@@ -518,7 +504,7 @@ async fn detail_view_observes_membership_removed_behind_the_lock_only_access_gat
     let holder = backend_pid(&mut hold).await;
     let writer_pool = pool.clone();
     let writer =
-        tokio::spawn(async move { remove_assignment(&writer_pool, &admin, assignment).await });
+        tokio::spawn(async move { remove_assignment(&writer_pool, ids.org_id, assignment).await });
     let writer_pid = blocked_by(&pool, holder).await;
     let reader_pool = pool.clone();
     let reader_viewer = viewer.clone();
@@ -589,7 +575,7 @@ async fn detail_view_observes_report_visibility_revoked_by_the_project_editor(po
     let no_grants: Vec<String> =
         serde_json::from_value(serde_json::to_value(PermissionSelection::new(&[])).unwrap())
             .unwrap();
-    crate::server_fns::test_seed::clear_state(&pool, member_id).await;
+    crate::testing::clear_state(&pool, member_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states
          (id, org_id, user_id, catalog_version, grants, is_administrator, source)
@@ -698,20 +684,6 @@ async fn membership_removal_waits_for_a_reader_that_already_holds_authority(pool
     .execute(&pool)
     .await
     .unwrap();
-    let admin_id = Uuid::now_v7();
-    sqlx::query!(
-        "INSERT INTO users (id,org_id,email,name) VALUES ($1,$2,$3,'Gate admin')",
-        admin_id,
-        ids.org_id,
-        format!("{admin_id}@test.com"),
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    let admin = User {
-        id: admin_id,
-        ..super::detail::session_user(&ids)
-    };
     // The reader takes its authority locks, then waits on a later table.
     let mut hold = pool.begin().await.unwrap();
     sqlx::query!("LOCK TABLE project_tags IN ACCESS EXCLUSIVE MODE")
@@ -727,7 +699,7 @@ async fn membership_removal_waits_for_a_reader_that_already_holds_authority(pool
     let reader_pid = blocked_by(&pool, holder).await;
     let writer_pool = pool.clone();
     let writer =
-        tokio::spawn(async move { remove_assignment(&writer_pool, &admin, assignment).await });
+        tokio::spawn(async move { remove_assignment(&writer_pool, ids.org_id, assignment).await });
     wait_for_blocked(&pool, reader_pid).await;
     hold.rollback().await.unwrap();
     assert_eq!(reader.await.unwrap().unwrap().project.id, ids.project_id);

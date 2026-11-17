@@ -142,7 +142,7 @@ mod tests {
     use crate::ops::approvals::week_has_running_timer;
     use crate::ops::testing::Recorder;
     use crate::plugin::AppEvent;
-    use crate::server_fns::test_seed::{SeedIds, seed};
+    use crate::testing::{SeedIds, seed};
     use dioxus::prelude::ServerFnError;
     use horae_core::permissions::catalog::BuiltInProfile;
     use horae_core::types::EntryState;

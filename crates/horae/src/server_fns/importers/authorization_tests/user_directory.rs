@@ -14,8 +14,8 @@ async fn person(pool: &PgPool, org_id: Uuid, profile: BuiltInProfile) -> Uuid {
 }
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
-    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
-    let foreign = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Administrator).await;
+    let ids = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
+    let foreign = crate::testing::seed(pool, BuiltInProfile::Administrator).await;
     let people_admin = person(pool, ids.org_id, BuiltInProfile::PeopleAdmin).await;
     let project_manager = person(pool, ids.org_id, BuiltInProfile::ProjectManager).await;
     let member = person(pool, ids.org_id, BuiltInProfile::Member).await;

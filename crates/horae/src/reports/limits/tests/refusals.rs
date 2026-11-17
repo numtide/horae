@@ -4,7 +4,7 @@
 use super::*;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::TimeReportGrouping;
-use crate::server_fns::test_seed::organization_lockable;
+use crate::testing::organization_lockable;
 use horae_core::permissions::catalog::BuiltInProfile;
 
 fn assert_released(pool: &PgPool, ids: &SeedIds, path: &str) {

@@ -9,7 +9,7 @@ use uuid::Uuid;
 const ISSUER: &str = "https://id.example.com";
 
 async fn account(pool: &PgPool) -> Uuid {
-    crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member)
+    crate::testing::seed(pool, BuiltInProfile::Member)
         .await
         .user_id
 }

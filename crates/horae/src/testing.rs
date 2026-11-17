@@ -1,12 +1,16 @@
-//! Shared fixture for the in-crate `#[sqlx::test]` guard tests: one minimal
-//! tenant (org, user, client, project, task) to hang time entries off. These
-//! tests live inside the crate because `tests/` cannot import a bin crate's
-//! modules.
+//! Shared fixture for the in-crate `#[sqlx::test]` tests: one minimal tenant
+//! (org, user, client, project, task) to hang time entries off, and helpers
+//! that wait on database locks. These tests live inside the crate because
+//! `tests/` cannot import a bin crate's modules. Backend modules use it, so it
+//! must not depend on `server_fns`.
 
 use horae_core::permissions::catalog::BuiltInProfile;
+use horae_core::types::ProjectRole;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::db::{OrganizationLock, lock_organization};
+use crate::models::Assignment;
 use crate::ops::permissions::provisioning;
 
 pub struct SeedIds {
@@ -291,4 +295,115 @@ pub async fn clear_state(pool: &PgPool, user_id: Uuid) {
     .execute(pool)
     .await
     .unwrap();
+}
+
+/// Adds a project member the way a team change does (organization gate, then
+/// the project revision), for tests of what a membership change waits for.
+/// Production membership changes go through the project editor.
+pub async fn insert_assignment(
+    db: &PgPool,
+    org_id: Uuid,
+    project_id: Uuid,
+    user_id: Uuid,
+    role: ProjectRole,
+) -> Result<Assignment, sqlx::Error> {
+    let mut tx = begin_assignment_change(db, org_id).await?;
+    if !lock_project_revision(&mut tx, org_id, project_id).await? {
+        return Err(sqlx::Error::RowNotFound);
+    }
+    sqlx::query_scalar!(
+        "SELECT p.id FROM projects p JOIN users u ON u.org_id = p.org_id
+         WHERE p.id = $1 AND u.id = $2 AND p.org_id = $3 FOR SHARE OF u",
+        project_id,
+        user_id,
+        org_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(sqlx::Error::RowNotFound)?;
+    let id = Uuid::now_v7();
+    let assignment = sqlx::query_as!(
+        Assignment,
+        r#"INSERT INTO assignments (id, project_id, user_id, role)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, project_id, user_id, role as "role: ProjectRole", rate_cents,
+                   created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        id,
+        project_id,
+        user_id,
+        role as ProjectRole,
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(assignment)
+}
+
+/// Removes a project member like [`insert_assignment`] adds one.
+pub async fn remove_assignment(
+    db: &PgPool,
+    org_id: Uuid,
+    id: Uuid,
+) -> Result<Option<Assignment>, sqlx::Error> {
+    let mut tx = begin_assignment_change(db, org_id).await?;
+    let project_id = sqlx::query_scalar!(
+        "SELECT a.project_id FROM assignments a
+         JOIN projects p ON p.id=a.project_id JOIN users u ON u.id=a.user_id
+         WHERE a.id=$1 AND p.org_id=$2 AND u.org_id=$2",
+        id,
+        org_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some(project_id) = project_id else {
+        tx.commit().await?;
+        return Ok(None);
+    };
+    if !lock_project_revision(&mut tx, org_id, project_id).await? {
+        tx.commit().await?;
+        return Ok(None);
+    }
+    // Delete and capture the row atomically so the event carries its details
+    // and a concurrent delete cannot double-notify.
+    let removed = sqlx::query_as!(
+        Assignment,
+        r#"DELETE FROM assignments a USING projects p, users u
+         WHERE a.id = $1 AND a.project_id = p.id AND a.user_id = u.id
+           AND p.org_id = $2 AND u.org_id = $2 AND a.project_id = $3
+         RETURNING a.id, a.project_id, a.user_id, a.role as "role: ProjectRole", a.rate_cents,
+                   a.created_at as "created_at: chrono::DateTime<chrono::Utc>""#,
+        id,
+        org_id,
+        project_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(removed)
+}
+
+async fn begin_assignment_change(
+    db: &PgPool,
+    org_id: Uuid,
+) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, sqlx::Error> {
+    let mut tx = db.begin().await?;
+    lock_organization(&mut tx, org_id, OrganizationLock::AccessChange).await?;
+    Ok(tx)
+}
+
+async fn lock_project_revision(
+    db: &mut sqlx::PgConnection,
+    org_id: Uuid,
+    project_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    // Child revision triggers write this parent. Permit entry/invoice FK checks
+    // to finish before any dependent membership cascade waits for those writers.
+    sqlx::query_scalar!(
+        "SELECT id FROM projects WHERE id=$1 AND org_id=$2 FOR NO KEY UPDATE",
+        project_id,
+        org_id,
+    )
+    .fetch_optional(db)
+    .await
+    .map(|row| row.is_some())
 }

@@ -1,7 +1,7 @@
 //! Clients page readers on stored grants.
 
 use super::*;
-use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
+use crate::testing::{SeedIds, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use sqlx::PgPool;
@@ -36,7 +36,7 @@ async fn fixture(pool: &PgPool, profile: BuiltInProfile, permissions: &[Permissi
     .execute(pool)
     .await
     .unwrap();
-    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+    crate::testing::clear_state(pool, ids.user_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states (id,org_id,user_id,catalog_version,grants,is_administrator,source)
          VALUES ($1,$2,$3,1,'{}',false,'individual')",

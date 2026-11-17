@@ -3,7 +3,7 @@
 //! of these races is in `server_fns/clients/lifecycle_tests.rs`.
 
 use super::*;
-use crate::server_fns::test_seed::{SeedIds, repeatable_read_pool, seed, wait_for_blocked};
+use crate::testing::{SeedIds, repeatable_read_pool, seed, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use std::time::Duration;

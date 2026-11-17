@@ -7,7 +7,7 @@ use uuid::Uuid;
 use super::*;
 use crate::ops::Tx;
 use crate::ops::testing::provision;
-use crate::server_fns::test_seed::{clear_state, seed};
+use crate::testing::{clear_state, seed};
 
 async fn load(pool: &PgPool, org_id: Uuid, user_id: Uuid) -> Result<Actor, OpError> {
     let mut tx: Tx = pool.begin().await.unwrap();

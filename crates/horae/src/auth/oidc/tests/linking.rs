@@ -30,7 +30,7 @@ pub(super) async fn sign_in(pool: &PgPool, identity: &Identity) -> anyhow::Resul
 }
 
 async fn account(pool: &PgPool) -> (Uuid, String) {
-    let ids = crate::server_fns::test_seed::seed(pool, BuiltInProfile::Member).await;
+    let ids = crate::testing::seed(pool, BuiltInProfile::Member).await;
     (ids.user_id, format!("{}@test.com", ids.user_id))
 }
 

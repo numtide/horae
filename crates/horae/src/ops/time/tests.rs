@@ -6,7 +6,7 @@ use sqlx::PgPool;
 use super::*;
 use crate::ops::testing::Recorder;
 use crate::ops::{self, Caller};
-use crate::server_fns::test_seed::{SeedIds, seed};
+use crate::testing::{SeedIds, seed};
 
 mod activity;
 mod entries;
@@ -256,7 +256,7 @@ async fn a_start_without_time_write_is_refused(pool: PgPool) {
     for missing in ["state", "grant"] {
         let ids = trackable(&pool, BuiltInProfile::Member).await;
         match missing {
-            "state" => crate::server_fns::test_seed::clear_state(&pool, ids.user_id).await,
+            "state" => crate::testing::clear_state(&pool, ids.user_id).await,
             _ => {
                 sqlx::query!(
                     "UPDATE person_permission_states

@@ -1,6 +1,6 @@
 use super::canonical_read_tests::project_team;
 use super::*;
-use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
+use crate::testing::{SeedIds, seed, time_entry};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;

@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::{SeedIds, wait_for_blocked};
+use crate::testing::{SeedIds, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use std::time::Duration;
 use uuid::Uuid;

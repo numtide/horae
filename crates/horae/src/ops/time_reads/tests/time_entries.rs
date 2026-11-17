@@ -1,7 +1,7 @@
 use super::*;
 use crate::models::scoped_time::{TimeEntryPage, TimeEntryQuery};
 use crate::ops::{self, Caller, OpError};
-use crate::server_fns::test_seed::time_entry;
+use crate::testing::time_entry;
 use horae_core::types::EntryState;
 
 /// `list_visible_time_entries` without the session.

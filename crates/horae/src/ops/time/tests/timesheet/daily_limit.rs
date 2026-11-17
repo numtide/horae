@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::{
+use crate::testing::{
     assert_minutes_cannot_rise, legacy_minutes, wait_for_blocked, wait_for_waiters,
 };
 

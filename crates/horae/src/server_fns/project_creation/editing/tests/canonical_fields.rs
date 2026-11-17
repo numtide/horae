@@ -1,12 +1,12 @@
 use super::*;
 use crate::models::project_creation::{ProjectFieldAccess, ProtectedProjectField};
-use crate::server_fns::test_seed::SeedIds;
+use crate::testing::SeedIds;
 use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
 
 pub(super) async fn canonical_actor(pool: &PgPool, owner: &SeedIds, grants: &PermissionSelection) {
     let grants: Vec<String> =
         serde_json::from_value(serde_json::to_value(grants).unwrap()).unwrap();
-    crate::server_fns::test_seed::clear_state(pool, owner.user_id).await;
+    crate::testing::clear_state(pool, owner.user_id).await;
     sqlx::query!(
         "INSERT INTO person_permission_states
          (id, org_id, user_id, catalog_version, grants, is_administrator, source)

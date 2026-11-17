@@ -1,7 +1,7 @@
 //! Exercise grouped reports through the registered route and real sessions.
 
 use super::*;
-use crate::server_fns::test_seed::{SeedIds, seed, time_entry};
+use crate::testing::{SeedIds, seed, time_entry};
 
 pub(super) async fn check(pool: &PgPool, api: &Api) {
     const ENDPOINT: &str = "list_visible_time_report_groups";
@@ -53,7 +53,7 @@ pub(super) async fn check(pool: &PgPool, api: &Api) {
         StatusCode::OK
     );
     // A person without permission state cannot read anything.
-    crate::server_fns::test_seed::clear_state(pool, ids.user_id).await;
+    crate::testing::clear_state(pool, ids.user_id).await;
     assert_eq!(
         api.call(ENDPOINT, request.clone(), Some(&cookie), false)
             .await

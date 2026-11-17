@@ -1,5 +1,16 @@
 use super::*;
-use crate::server_fns::project_managers::calls::execute_in_transaction;
+
+/// The project editor's delegation step, inside a transaction that holds
+/// the `AccessChange` gate as the editor's does.
+async fn execute_in_transaction(
+    tx: &mut ops::Tx,
+    org: Uuid,
+    actor: Uuid,
+    command: &ProjectManagersCommand,
+) -> Result<ProjectManagersOutcome, OpError> {
+    let actor = ops::Actor::load(tx, Caller::session(org, actor)).await?;
+    ops::projects::managers::replace(tx, &actor, command).await
+}
 
 async fn composed_edit(pool: &PgPool, commit: bool) {
     let ids = fixture(pool).await;

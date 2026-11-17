@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::ops::testing::Recorder;
-use crate::server_fns::test_seed::{built_in_profile, seed};
+use crate::testing::{built_in_profile, seed};
 use sqlx::PgPool;
 
 fn person(email: &str) -> NewPerson {

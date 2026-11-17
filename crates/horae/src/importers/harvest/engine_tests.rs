@@ -20,7 +20,7 @@ mod lookup_cache;
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn imported_project_task_activity_preserves_archival(pool: PgPool) {
-    let ids = crate::server_fns::test_seed::seed(
+    let ids = crate::testing::seed(
         &pool,
         horae_core::permissions::catalog::BuiltInProfile::Administrator,
     )
@@ -637,7 +637,7 @@ async fn submission_barrier_blocks_imported_time_entries(pool: PgPool) {
         )
         .await
     });
-    crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+    crate::testing::wait_for_blocked(&pool, blocker).await;
     submission.commit().await.unwrap();
     let report = tokio::time::timeout(std::time::Duration::from_secs(5), run.join_next())
         .await
@@ -1764,7 +1764,7 @@ async fn csv_lines_for_a_new_project_of_an_archived_client_fail_and_retry(pool: 
 /// client. The run still finishes with the other rows.
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn an_import_waiting_for_a_client_archive_creates_no_project_under_it(pool: PgPool) {
-    let rr = crate::server_fns::test_seed::repeatable_read_pool(&pool).await;
+    let rr = crate::testing::repeatable_read_pool(&pool).await;
     for (n, (isolation, import_pool)) in [("default", &pool), ("repeatable read", &rr)]
         .into_iter()
         .enumerate()
@@ -1804,7 +1804,7 @@ async fn an_import_waiting_for_a_client_archive_creates_no_project_under_it(pool
             super::csv_source::import_csv(&run_pool, org, "USD", csv.as_bytes(), ImportMode::Commit)
                 .await
         });
-        crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+        crate::testing::wait_for_blocked(&pool, blocker).await;
         archive.commit().await.unwrap();
         let report = tokio::time::timeout(std::time::Duration::from_secs(10), import)
             .await

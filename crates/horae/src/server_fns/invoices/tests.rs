@@ -1,5 +1,5 @@
 use super::*;
-use crate::server_fns::test_seed::{seed, time_entry};
+use crate::testing::{seed, time_entry};
 use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 
@@ -10,7 +10,7 @@ mod imported_rates;
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn assignment_gate_allows_inflight_invoice_organization_fks_to_finish(pool: PgPool) {
-    use crate::server_fns::test_seed::wait_for_blocked;
+    use crate::testing::wait_for_blocked;
     let ids = seed(&pool, BuiltInProfile::Administrator).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
     sqlx::query!(
@@ -20,11 +20,6 @@ async fn assignment_gate_allows_inflight_invoice_organization_fks_to_finish(pool
     .execute(&pool)
     .await
     .unwrap();
-    let actor = sqlx::query_as!(User,
-        r#"SELECT id, org_id, email, name, oidc_subject,
-        cost_rate_cents, billable_rate_cents, active, created_at AS "created_at: chrono::DateTime<chrono::Utc>"
-        FROM users WHERE id=$1"#, ids.user_id,
-    ).fetch_one(&pool).await.unwrap();
     let mut barrier = pool.begin().await.unwrap();
     let blocker = sqlx::query_scalar!("SELECT pg_backend_pid() AS \"pid!\"")
         .fetch_one(&mut *barrier)
@@ -56,15 +51,16 @@ async fn assignment_gate_allows_inflight_invoice_organization_fks_to_finish(pool
     ).fetch_one(&pool).await.unwrap();
     let db = pool.clone();
     requests.spawn(async move {
-        crate::server_fns::projects::insert_assignment(
+        crate::testing::insert_assignment(
             &db,
-            &actor,
+            ids.org_id,
             ids.project_id,
             ids.user_id,
             ProjectRole::Freelancer,
         )
         .await
         .map(|_| ())
+        .map_err(server_err)
     });
     wait_for_blocked(&pool, writer).await;
     barrier.commit().await.unwrap();
@@ -119,7 +115,7 @@ async fn invoice_preview_keeps_time_rates_and_defaults_in_one_snapshot(pool: PgP
         )
         .await
     });
-    crate::server_fns::test_seed::wait_for_blocked(&pool, pid).await;
+    crate::testing::wait_for_blocked(&pool, pid).await;
     sqlx::query!(
         "UPDATE projects SET rate_cents = 20000 WHERE id = $1",
         ids.project_id
@@ -427,7 +423,7 @@ async fn invoice_defaults_apply_exact_adjustments_and_payment_terms(pool: PgPool
 async fn invoice_defaults_conflict_rolls_back_all_claims(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let first_entry = time_entry(&pool, &ids, EntryState::Open).await;
-    let other = crate::server_fns::test_seed::SeedIds {
+    let other = crate::testing::SeedIds {
         project_id: uuid::Uuid::now_v7(),
         ..ids
     };
@@ -623,7 +619,7 @@ async fn invoice_defaults_are_invoice_owned_and_only_drafts_are_editable(pool: P
 async fn invoice_defaults_selection_rejects_unavailable_projects_before_claiming(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
-    let unselected = crate::server_fns::test_seed::SeedIds {
+    let unselected = crate::testing::SeedIds {
         project_id: uuid::Uuid::now_v7(),
         ..ids
     };
@@ -710,7 +706,7 @@ async fn invoice_defaults_edit_rechecks_status_after_waiting_for_a_concurrent_se
         )
         .await
     });
-    crate::server_fns::test_seed::wait_for_blocked(&pool, blocker).await;
+    crate::testing::wait_for_blocked(&pool, blocker).await;
     sqlx::query!(
         "UPDATE invoices SET status = 'sent' WHERE id = $1",
         invoice.id
@@ -733,7 +729,7 @@ async fn invoice_defaults_edit_rechecks_status_after_waiting_for_a_concurrent_se
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn invoice_defaults_overflow_leaves_dates_and_exact_total(pool: PgPool) {
-    let ids = crate::server_fns::test_seed::seed_tenant(&pool).await;
+    let ids = crate::testing::seed_tenant(&pool).await;
     let id = uuid::Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO invoices (id,org_id,client_id,number,issued_on,due_on,currency,total_cents)
@@ -1622,7 +1618,7 @@ async fn invoicing_uses_and_freezes_effective_minutes(pool: PgPool) {
 
 async fn assert_reporting_minutes(
     pool: &PgPool,
-    ids: &crate::server_fns::test_seed::SeedIds,
+    ids: &crate::testing::SeedIds,
     minutes: i64,
     cents: i64,
 ) {
@@ -2002,7 +1998,7 @@ async fn invoice_transitions_reject_invalid_states_and_foreign_organizations(poo
 async fn a_legacy_entry_over_the_limit_is_invoiced_and_voided(pool: PgPool) {
     let ids = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let entry = time_entry(&pool, &ids, EntryState::Open).await;
-    crate::server_fns::test_seed::legacy_minutes(&pool, entry, 20_000).await;
+    crate::testing::legacy_minutes(&pool, entry, 20_000).await;
     let day = "2026-09-07".parse().unwrap();
     let invoice = generate_invoice_for_period(&pool, ids.org_id, ids.client_id, day, day)
         .await
@@ -2024,7 +2020,7 @@ async fn a_legacy_entry_over_the_limit_is_invoiced_and_voided(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!((stored.minutes, stored.state), (20_000, EntryState::Open));
-    crate::server_fns::test_seed::assert_minutes_cannot_rise(&pool, entry).await;
+    crate::testing::assert_minutes_cannot_rise(&pool, entry).await;
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

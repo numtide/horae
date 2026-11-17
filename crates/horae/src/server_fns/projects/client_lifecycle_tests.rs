@@ -2,9 +2,7 @@
 //! prerequisite; specs/012-clients-design/increments/lifecycle LC-005).
 
 use super::*;
-use crate::server_fns::test_seed::{
-    SeedIds, repeatable_read_pool, seed, time_entry, wait_for_blocked,
-};
+use crate::testing::{SeedIds, repeatable_read_pool, seed, time_entry, wait_for_blocked};
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::types::EntryState;
 use sqlx::PgPool;

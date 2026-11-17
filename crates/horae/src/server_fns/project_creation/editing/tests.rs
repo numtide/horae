@@ -4,7 +4,7 @@ use crate::models::project_creation::{
     InvoiceDefaultsInput, ProjectMemberInput, ProjectTaskInput, ReportVisibility, SecondTaxInput,
     TaskSource,
 };
-use crate::server_fns::test_seed::seed;
+use crate::testing::seed;
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::project::{BudgetMode, RateMode};
 use sqlx::PgPool;
@@ -121,9 +121,7 @@ fn edit_request(project: EditableProject) -> ProjectEditRequest {
     }
 }
 
-async fn configured_fixture(
-    pool: &PgPool,
-) -> (crate::server_fns::test_seed::SeedIds, EditableProject) {
+async fn configured_fixture(pool: &PgPool) -> (crate::testing::SeedIds, EditableProject) {
     let owner = seed(pool, BuiltInProfile::Administrator).await;
     let form = ProjectForm {
         client_id: Some(owner.client_id),
@@ -184,7 +182,7 @@ async fn configured_fixture(
 /// assignment's `lead` role alone is not a designation.
 pub(super) async fn designate(
     pool: &PgPool,
-    ids: &crate::server_fns::test_seed::SeedIds,
+    ids: &crate::testing::SeedIds,
     project: Uuid,
     manager: Uuid,
 ) {
@@ -292,7 +290,7 @@ async fn concurrent_edits_have_one_winner_and_association_writes_invalidate_open
 async fn save_preserves_recorded_time_and_rejects_removing_its_task_or_person(pool: PgPool) {
     let (mut owner, original) = configured_fixture(&pool).await;
     owner.project_id = original.id;
-    let entry_id = crate::server_fns::test_seed::time_entry(&pool, &owner, EntryState::Open).await;
+    let entry_id = crate::testing::time_entry(&pool, &owner, EntryState::Open).await;
     let history = sqlx::query_scalar!(
         "SELECT to_jsonb(t) FROM time_entries t WHERE id=$1",
         entry_id
