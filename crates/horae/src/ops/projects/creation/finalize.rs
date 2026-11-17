@@ -1,45 +1,34 @@
 use super::*;
-use crate::models::project_creation::{ProjectFormField, ReportVisibility, TaskSource};
-use crate::ops::projects::form::{optional_amount, optional_hours};
-use horae_core::project::{BudgetMode, FeeSchedule, MonthlyFeeDay, RateMode};
+use crate::models::Project;
+use crate::models::project_creation::{ProjectFormField, ReportVisibility, TaskAccess, TaskSource};
+use crate::ops::projects::form::{
+    optional_amount, optional_hours, validate_project_form, with_field,
+};
+use crate::plugin::event::project_payload;
+use horae_core::project::{FeeSchedule, MonthlyFeeDay, RateMode};
+use horae_core::types::{BudgetKind, ProjectRole};
 use std::collections::HashSet;
-use uuid::Uuid;
 
-pub(super) async fn finalize_draft_record(
-    pool: &sqlx::PgPool,
-    actor_id: Uuid,
-    org_id: Uuid,
+/// Creates the project the creator's draft describes and completes the draft.
+/// A completed draft answers its project again, so a retried request creates
+/// nothing new.
+///
+/// Run it in `ops::begin_gated` with the `AccessChange` gate: it designates
+/// the project's managers, an access change. Without `ProjectWriteAll` the
+/// creator is designated too, or they could not edit what they created.
+///
+/// `project_created` goes to the outbox inside this transaction rather than
+/// in [`Done`], so its delivery survives a crash right after the commit.
+pub(crate) async fn finalize(
+    tx: &mut Tx,
+    actor: &Actor,
     draft_id: Uuid,
     expected_revision: i64,
     form: &ProjectForm,
     email_available: bool,
-) -> Result<Uuid, ServerFnError> {
-    let mut tx = pool.begin().await.map_err(storage_error)?;
-    let result = finalize_in(
-        &mut tx,
-        actor_id,
-        org_id,
-        draft_id,
-        expected_revision,
-        form,
-        email_available,
-    )
-    .await;
-    // A refusal rolls back before it is answered: until then the gate stops
-    // every access check in the organization.
-    crate::ops::commit_or_roll_back(tx, result, storage_error).await
-}
-
-async fn finalize_in(
-    tx: &mut crate::ops::Tx,
-    actor_id: Uuid,
-    org_id: Uuid,
-    draft_id: Uuid,
-    expected_revision: i64,
-    form: &ProjectForm,
-    email_available: bool,
-) -> Result<Uuid, ServerFnError> {
-    let actor = lock_creation_actor(tx, actor_id, org_id, OrganizationLock::AccessChange).await?;
+) -> Result<Done<Uuid>, OpError> {
+    let private = require_creator(actor)?;
+    let (org_id, actor_id) = (actor.org_id(), actor.id());
     let draft = sqlx::query!(
         "SELECT revision, completed_project_id, discarded_at FROM project_drafts
          WHERE id = $1 AND org_id = $2 AND creator_id = $3 FOR UPDATE",
@@ -49,25 +38,24 @@ async fn finalize_in(
     )
     .fetch_optional(&mut **tx)
     .await
-    .map_err(storage_error)?
-    .ok_or_else(|| not_found("Project draft not found"))?;
+    .map_err(storage)?
+    .ok_or_else(|| OpError::not_found("Project draft not found"))?;
     if let Some(project_id) = draft.completed_project_id {
-        return Ok(project_id);
+        return Ok(Done::new(project_id));
     }
     if draft.discarded_at.is_some() || draft.revision != expected_revision {
-        return Err(conflict(
+        return Err(OpError::conflict(
             "Draft changed or was discarded. Reload before creating the project.",
         ));
     }
-    let private = PrivateFields::of(&actor);
     let payload = validate_draft_form(form, private)?;
     let client_id = form.client_id.ok_or_else(|| {
         with_field(
-            err(BAD_REQUEST, "Client is required"),
+            OpError::bad_input("Client is required"),
             ProjectFormField::Client,
         )
     })?;
-    let client = lock_creation_client(tx, client_id, org_id)
+    let client = lock_client(tx, client_id, org_id)
         .await
         .map_err(|error| with_field(error, ProjectFormField::Client))?;
     let currency = form.currency.as_deref().unwrap_or(&client.currency);
@@ -77,7 +65,7 @@ async fn finalize_in(
     )
     .fetch_one(&mut **tx)
     .await
-    .map_err(storage_error)?;
+    .map_err(storage)?;
     // Person and task rates inherit only in the organization's currency, so
     // any other currency needs explicit rates. Refusing on the currency alone
     // keeps the answer the same whether or not anyone has a rate.
@@ -86,7 +74,7 @@ async fn finalize_in(
         && matches!(form.rate_mode, RateMode::Person | RateMode::Task)
         && !currency.trim().eq_ignore_ascii_case(&org_currency)
     {
-        return Err(forbidden(
+        return Err(OpError::forbidden(
             "Creating an hourly project in a currency other than the organization's requires permission to edit billable rates",
         ));
     }
@@ -104,7 +92,7 @@ async fn finalize_in(
         project_id, org_id, client_id, form.name.trim(), code, form.project_type as ProjectType,
         currency, settings.starts_on as Option<chrono::NaiveDate>, settings.ends_on as Option<chrono::NaiveDate>, settings.rate_cents,
         settings.budget_kind as BudgetKind, settings.budget_cents, settings.budget_minutes,
-    ).fetch_one(&mut **tx).await.map_err(storage_error)?;
+    ).fetch_one(&mut **tx).await.map_err(storage)?;
 
     let (fee_mode, fee_amount, monthly_day) = match &settings.fee {
         None => (None, None, None),
@@ -135,22 +123,22 @@ async fn finalize_in(
         fee_mode, fee_amount, monthly_day, settings.terms_days, settings.po_number,
         settings.discount_bps, settings.tax1_bps, settings.tax2.as_ref().map(|(name, _)| name.as_str()),
         settings.tax2.as_ref().map(|(_, bps)| *bps),
-    ).execute(&mut **tx).await.map_err(storage_error)?;
+    ).execute(&mut **tx).await.map_err(storage)?;
     if !form.admin_notes.trim().is_empty() {
         sqlx::query!(
             "INSERT INTO project_private_settings (id, org_id, project_id, admin_notes) VALUES ($1,$2,$3,$4)",
             Uuid::now_v7(), org_id, project_id, form.admin_notes.trim(),
-        ).execute(&mut **tx).await.map_err(storage_error)?;
+        ).execute(&mut **tx).await.map_err(storage)?;
     }
     if let Some(FeeSchedule::Milestones { milestones }) = &settings.fee {
         for (position, milestone) in milestones.iter().enumerate() {
             let position =
-                i16::try_from(position).map_err(|_| err(BAD_REQUEST, "Too many milestones"))?;
+                i16::try_from(position).map_err(|_| OpError::bad_input("Too many milestones"))?;
             sqlx::query!(
                 "INSERT INTO project_fee_milestones (id,org_id,project_id,name,due_on,amount_cents,position)
                  VALUES ($1,$2,$3,$4,$5,$6,$7)",
                 Uuid::now_v7(), org_id, project_id, milestone.name, milestone.due_on as chrono::NaiveDate, milestone.amount_cents, position,
-            ).execute(&mut **tx).await.map_err(storage_error)?;
+            ).execute(&mut **tx).await.map_err(storage)?;
         }
     }
     // Consistent ordering avoids inverted row locks when projects reuse tags.
@@ -161,7 +149,7 @@ async fn finalize_in(
             "INSERT INTO project_tags (id,org_id,name) VALUES ($1,$2,$3)
              ON CONFLICT (org_id, lower(btrim(name))) DO UPDATE SET name = project_tags.name RETURNING id",
             Uuid::now_v7(), org_id, name,
-        ).fetch_one(&mut **tx).await.map_err(storage_error)?;
+        ).fetch_one(&mut **tx).await.map_err(storage)?;
         sqlx::query!(
             "INSERT INTO project_tag_links (id,org_id,project_id,tag_id) VALUES ($1,$2,$3,$4)",
             Uuid::now_v7(),
@@ -171,7 +159,7 @@ async fn finalize_in(
         )
         .execute(&mut **tx)
         .await
-        .map_err(storage_error)?;
+        .map_err(storage)?;
     }
     save_members(tx, org_id, project_id, form, currency == org_currency).await?;
     let mut manager_ids: Vec<Uuid> = form
@@ -182,20 +170,12 @@ async fn finalize_in(
         .collect();
     // Without `ProjectWriteAll` the creator edits only managed projects, so
     // creating one designates them too, whether or not they are on the team.
-    if !actor.has(horae_core::permissions::catalog::Permission::ProjectWriteAll)
-        && !manager_ids.contains(&actor_id)
-    {
+    if !actor.has(Permission::ProjectWriteAll) && !manager_ids.contains(&actor_id) {
         manager_ids.push(actor_id);
     }
     if !manager_ids.is_empty() {
-        crate::ops::projects::managers::designate_created(
-            tx,
-            org_id,
-            actor_id,
-            project_id,
-            manager_ids,
-        )
-        .await?;
+        super::super::managers::designate_created(tx, org_id, actor_id, project_id, manager_ids)
+            .await?;
     }
     save_tasks(tx, org_id, project_id, form, currency).await?;
 
@@ -204,36 +184,37 @@ async fn finalize_in(
         org_id,
         project: project_payload(&project),
     };
+    let recording_failed = || OpError::Internal("Could not record project creation".into());
     crate::jobs::enqueue_outbox(
         tx,
         org_id,
         "project_created",
-        serde_json::to_value(event).map_err(|_| server_err("Could not record project creation"))?,
+        serde_json::to_value(event).map_err(|_| recording_failed())?,
     )
     .await
-    .map_err(|_| server_err("Could not record project creation"))?;
+    .map_err(|_| recording_failed())?;
     sqlx::query!(
         "UPDATE project_drafts SET payload = $2, completed_project_id = $3, updated_at = now() WHERE id = $1",
         draft_id, payload, project_id,
-    ).execute(&mut **tx).await.map_err(storage_error)?;
-    Ok(project_id)
+    ).execute(&mut **tx).await.map_err(storage)?;
+    Ok(Done::new(project_id))
 }
 
 async fn save_members(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: &mut Tx,
     org_id: Uuid,
     project_id: Uuid,
     form: &ProjectForm,
     uses_org_currency: bool,
-) -> Result<(), ServerFnError> {
+) -> Result<(), OpError> {
     let person_rates =
         form.project_type == ProjectType::TimeAndMaterials && form.rate_mode == RateMode::Person;
     for member in &form.team {
         let person = sqlx::query!(
             "SELECT billable_rate_cents FROM users WHERE id = $1 AND org_id = $2 AND active FOR SHARE",
             member.user_id, org_id,
-        ).fetch_optional(&mut **tx).await.map_err(storage_error)?
-            .ok_or_else(|| with_field(not_found("Select active teammates in this organization"), ProjectFormField::Person(member.user_id)))?;
+        ).fetch_optional(&mut **tx).await.map_err(storage)?
+            .ok_or_else(|| with_field(OpError::not_found("Select active teammates in this organization"), ProjectFormField::Person(member.user_id)))?;
         let rate = if person_rates {
             optional_amount(&member.billable_rate, "Person rate")?
         } else {
@@ -244,8 +225,7 @@ async fn save_members(
             && person.billable_rate_cents.is_some()
             && !uses_org_currency
         {
-            return Err(err(
-                BAD_REQUEST,
+            return Err(OpError::bad_input(
                 "Person rate: enter an explicit rate in the project currency",
             ));
         }
@@ -257,12 +237,12 @@ async fn save_members(
         sqlx::query!(
             "INSERT INTO assignments (id,project_id,user_id,role,rate_cents) VALUES ($1,$2,$3,$4,$5)",
             Uuid::now_v7(), project_id, member.user_id, project_role as ProjectRole, rate,
-        ).execute(&mut **tx).await.map_err(storage_error)?;
+        ).execute(&mut **tx).await.map_err(storage)?;
         if let Some(cost) = optional_amount(&member.cost_rate, "Cost rate")? {
             sqlx::query!(
                 "INSERT INTO project_member_costs (id,org_id,project_id,user_id,cost_rate_cents) VALUES ($1,$2,$3,$4,$5)",
                 Uuid::now_v7(), org_id, project_id, member.user_id, cost,
-            ).execute(&mut **tx).await.map_err(storage_error)?;
+            ).execute(&mut **tx).await.map_err(storage)?;
         }
         if form.budget_mode == BudgetMode::HoursPerPerson
             && let Some(minutes) = optional_hours(&member.budget)?
@@ -270,19 +250,19 @@ async fn save_members(
             sqlx::query!(
                     "INSERT INTO project_member_budgets (id,org_id,project_id,user_id,budget_minutes) VALUES ($1,$2,$3,$4,$5)",
                     Uuid::now_v7(), org_id, project_id, member.user_id, minutes,
-            ).execute(&mut **tx).await.map_err(storage_error)?;
+            ).execute(&mut **tx).await.map_err(storage)?;
         }
     }
     Ok(())
 }
 
 async fn save_tasks(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: &mut Tx,
     org_id: Uuid,
     project_id: Uuid,
     form: &ProjectForm,
     currency: &str,
-) -> Result<(), ServerFnError> {
+) -> Result<(), OpError> {
     let task_rates =
         form.project_type == ProjectType::TimeAndMaterials && form.rate_mode == RateMode::Task;
     let mut attached = HashSet::new();
@@ -292,19 +272,19 @@ async fn save_tasks(
                 let row = sqlx::query!(
                     "SELECT id, default_rate_cents, default_rate_currency FROM tasks WHERE id = $1 AND org_id = $2 AND active FOR SHARE",
                     task_id, org_id,
-                ).fetch_optional(&mut **tx).await.map_err(storage_error)?
-                    .ok_or_else(|| with_field(not_found("Select active tasks in this organization"), ProjectFormField::Task(task.id)))?;
+                ).fetch_optional(&mut **tx).await.map_err(storage)?
+                    .ok_or_else(|| with_field(OpError::not_found("Select active tasks in this organization"), ProjectFormField::Task(task.id)))?;
                 (row.id, row.default_rate_cents, row.default_rate_currency)
             }
             TaskSource::New { name } => {
                 let existing = sqlx::query!(
                     "SELECT id, active, default_rate_cents, default_rate_currency FROM tasks WHERE org_id = $1 AND lower(btrim(name)) = lower(btrim($2)) ORDER BY id LIMIT 1 FOR SHARE",
                     org_id, name,
-                ).fetch_optional(&mut **tx).await.map_err(storage_error)?;
+                ).fetch_optional(&mut **tx).await.map_err(storage)?;
                 if let Some(row) = existing {
                     if !row.active {
                         return Err(with_field(
-                            conflict(
+                            OpError::conflict(
                                 "A task with this name is archived. Reactivate it or choose another name.",
                             ),
                             ProjectFormField::TaskName(task.id),
@@ -322,14 +302,14 @@ async fn save_tasks(
                     )
                     .execute(&mut **tx)
                     .await
-                    .map_err(storage_error)?;
+                    .map_err(storage)?;
                     (id, None, None)
                 }
             }
         };
         if !attached.insert(task_id) {
             return Err(with_field(
-                err(BAD_REQUEST, "A task can only be selected once"),
+                OpError::bad_input("A task can only be selected once"),
                 ProjectFormField::Task(task.id),
             ));
         }
@@ -342,8 +322,7 @@ async fn save_tasks(
                     .is_some_and(|source| source.eq_ignore_ascii_case(currency.trim()))
             {
                 return Err(with_field(
-                    err(
-                        BAD_REQUEST,
+                    OpError::bad_input(
                         "Task rate: currency is unknown or incompatible; enter an explicit rate in the project currency",
                     ),
                     ProjectFormField::TaskRate(task.id),
@@ -356,7 +335,7 @@ async fn save_tasks(
         sqlx::query!(
             "INSERT INTO project_tasks (project_id,task_id,billable,rate_cents) VALUES ($1,$2,$3,$4)",
             project_id, task_id, task.billable && form.project_type != ProjectType::NonBillable, rate,
-        ).execute(&mut **tx).await.map_err(storage_error)?;
+        ).execute(&mut **tx).await.map_err(storage)?;
         let minutes = if form.budget_mode == BudgetMode::HoursPerTask {
             optional_hours(&task.budget)?
         } else {
@@ -370,7 +349,7 @@ async fn save_tasks(
         sqlx::query!(
             "INSERT INTO project_task_settings (id,org_id,project_id,task_id,restricted,budget_minutes,budget_cents) VALUES ($1,$2,$3,$4,$5,$6,$7)",
             Uuid::now_v7(), org_id, project_id, task_id, matches!(task.access, TaskAccess::Restricted { .. }), minutes, cents,
-        ).execute(&mut **tx).await.map_err(storage_error)?;
+        ).execute(&mut **tx).await.map_err(storage)?;
         if let TaskAccess::Restricted { user_ids } = &task.access {
             let mut allowed = HashSet::new();
             for user_id in user_ids {
@@ -380,7 +359,7 @@ async fn save_tasks(
                 sqlx::query!(
                     "INSERT INTO project_task_members (id,org_id,project_id,task_id,user_id) VALUES ($1,$2,$3,$4,$5)",
                     Uuid::now_v7(), org_id, project_id, task_id, user_id,
-                ).execute(&mut **tx).await.map_err(storage_error)?;
+                ).execute(&mut **tx).await.map_err(storage)?;
             }
         }
     }

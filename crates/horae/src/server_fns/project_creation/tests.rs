@@ -4,10 +4,11 @@ use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::{
-    OrganizationLock, PrivateFields, lock_creation_actor, lock_creation_client, validate_draft_form,
-};
 use crate::models::project_creation::{ProjectForm, ProjectMemberInput};
+use crate::ops::OpError;
+use crate::ops::projects::creation::{
+    PrivateFields, lock_client as lock_creation_client, validate_draft_form,
+};
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn selected_catalog_is_scoped_deduplicated_and_redacts_manager_costs(pool: PgPool) {
@@ -1244,10 +1245,7 @@ fn billable_settings_in_a_draft_need_the_billable_rate_grant() {
     ] {
         assert!(matches!(
             validate_draft_form(&form, without),
-            Err(super::ServerFnError::ServerError {
-                code: super::FORBIDDEN,
-                ..
-            })
+            Err(OpError::Forbidden(_))
         ));
         assert!(validate_draft_form(&form, with).is_ok());
         let mut pruned = form.clone();
@@ -1318,39 +1316,26 @@ async fn creation_refuses_billable_rates_without_the_grant_and_prunes_old_drafts
 async fn creation_actor_is_revalidated_inside_the_transaction(pool: PgPool) {
     let admin = seed(&pool, BuiltInProfile::Administrator).await;
     let member = seed(&pool, BuiltInProfile::Member).await;
-    let mut tx = pool.begin().await.unwrap();
-    assert!(
-        lock_creation_actor(
-            &mut tx,
-            admin.user_id,
-            admin.org_id,
-            OrganizationLock::Shared
+    let refused = |result: Result<_, super::ServerFnError>| {
+        matches!(
+            result,
+            Err(super::ServerFnError::ServerError {
+                code: super::FORBIDDEN,
+                ..
+            })
         )
-        .await
-        .unwrap()
-        .administrator()
-    );
+    };
     assert!(
-        lock_creation_actor(
-            &mut tx,
-            member.user_id,
-            member.org_id,
-            OrganizationLock::Shared
-        )
-        .await
-        .is_err()
+        super::load_draft_record(&pool, admin.user_id, admin.org_id)
+            .await
+            .is_ok()
     );
-    assert!(
-        lock_creation_actor(
-            &mut tx,
-            admin.user_id,
-            member.org_id,
-            OrganizationLock::Shared
-        )
-        .await
-        .is_err()
-    );
-    tx.rollback().await.unwrap();
+    assert!(refused(
+        super::load_draft_record(&pool, member.user_id, member.org_id).await
+    ));
+    assert!(refused(
+        super::load_draft_record(&pool, admin.user_id, member.org_id).await
+    ));
     sqlx::query!(
         "UPDATE users SET active = false WHERE id = $1",
         admin.user_id
@@ -1358,17 +1343,9 @@ async fn creation_actor_is_revalidated_inside_the_transaction(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let mut tx = pool.begin().await.unwrap();
-    assert!(
-        lock_creation_actor(
-            &mut tx,
-            admin.user_id,
-            admin.org_id,
-            OrganizationLock::Shared
-        )
-        .await
-        .is_err()
-    );
+    assert!(refused(
+        super::load_draft_record(&pool, admin.user_id, admin.org_id).await
+    ));
 }
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]

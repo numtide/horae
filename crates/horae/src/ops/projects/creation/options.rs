@@ -3,19 +3,21 @@ use crate::models::project_creation::{
     CreationOptions, CreationPerson, CreationSearch, CreationSelection, CreationTask,
 };
 
-pub(super) async fn load_selected_catalog(
-    pool: &sqlx::PgPool,
-    actor_id: uuid::Uuid,
-    org_id: uuid::Uuid,
-    task_ids: &[uuid::Uuid],
-    user_ids: &[uuid::Uuid],
-) -> Result<CreationSelection, ServerFnError> {
+/// The selected active tasks and people, at most 500 of each, independently
+/// of the catalog's pages.
+pub(crate) async fn selection(
+    tx: &mut Tx,
+    actor: &Actor,
+    task_ids: &[Uuid],
+    user_ids: &[Uuid],
+) -> Result<CreationSelection, OpError> {
     if task_ids.len() > 500 || user_ids.len() > 500 {
-        return Err(err(BAD_REQUEST, "Select at most 500 tasks and 500 people"));
+        return Err(OpError::bad_input(
+            "Select at most 500 tasks and 500 people",
+        ));
     }
-    let mut tx = pool.begin().await.map_err(storage_error)?;
-    let actor = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
-    let private = PrivateFields::of(&actor);
+    let private = require_creator(actor)?;
+    let org_id = actor.org_id();
     let tasks = sqlx::query_as!(
         CreationTask,
         "SELECT id, name, billable_default as billable,
@@ -26,9 +28,9 @@ pub(super) async fn load_selected_catalog(
         task_ids,
         private.read_billable,
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut **tx)
     .await
-    .map_err(storage_error)?;
+    .map_err(storage)?;
     let people = sqlx::query_as!(
         CreationPerson,
         "SELECT id, name, CASE WHEN $4 THEN billable_rate_cents END as billable_rate_cents,
@@ -39,58 +41,53 @@ pub(super) async fn load_selected_catalog(
         private.read_costs,
         private.read_billable,
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut **tx)
     .await
-    .map_err(storage_error)?;
-    tx.commit().await.map_err(storage_error)?;
+    .map_err(storage)?;
     Ok(CreationSelection { tasks, people })
 }
 
-pub(super) async fn load_selected_client(
-    pool: &sqlx::PgPool,
-    actor_id: uuid::Uuid,
-    org_id: uuid::Uuid,
-    client_id: uuid::Uuid,
-) -> Result<Option<CreationClient>, ServerFnError> {
-    let mut tx = pool.begin().await.map_err(storage_error)?;
-    let actor = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
-    let client = sqlx::query_as!(CreationClient,
+/// A draft's client, active or archived, without searching the catalog.
+pub(crate) async fn client(
+    tx: &mut Tx,
+    actor: &Actor,
+    client_id: Uuid,
+) -> Result<Option<CreationClient>, OpError> {
+    let private = require_creator(actor)?;
+    sqlx::query_as!(CreationClient,
         "SELECT id, name, currency, active, CASE WHEN $3 THEN default_rate_cents END as default_rate_cents
          FROM clients WHERE org_id = $1 AND id = $2",
-        org_id, client_id, PrivateFields::of(&actor).read_billable,
-    ).fetch_optional(&mut *tx).await.map_err(storage_error)?;
-    tx.commit().await.map_err(storage_error)?;
-    Ok(client)
+        actor.org_id(), client_id, private.read_billable,
+    ).fetch_optional(&mut **tx).await.map_err(storage)
 }
 
-pub(super) async fn load_creation_options(
-    pool: &sqlx::PgPool,
-    actor_id: uuid::Uuid,
-    org_id: uuid::Uuid,
+/// One page of each catalog the form searches, with the organization's
+/// currency and the code that follows the last numeric one.
+pub(crate) async fn options(
+    tx: &mut Tx,
+    actor: &Actor,
     search: &CreationSearch,
     email_available: bool,
-) -> Result<CreationOptions, ServerFnError> {
+) -> Result<CreationOptions, OpError> {
     for catalog in [&search.clients, &search.tasks, &search.people] {
         if catalog.query.chars().count() > 100
             || catalog.query.contains('\0')
             || catalog.offset > 10000
         {
-            return Err(err(
-                BAD_REQUEST,
+            return Err(OpError::bad_input(
                 "Narrow the catalog search to at most 100 characters",
             ));
         }
     }
-    let mut tx = pool.begin().await.map_err(storage_error)?;
-    let actor = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
-    let private = PrivateFields::of(&actor);
+    let private = require_creator(actor)?;
+    let org_id = actor.org_id();
     let organization_currency = sqlx::query_scalar!(
         "SELECT default_currency FROM organizations WHERE id = $1",
         org_id,
     )
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await
-    .map_err(storage_error)?;
+    .map_err(storage)?;
     // Read one extra item to distinguish a complete catalog from a page.
     // Archived clients are explicitly labelled rather than silently replaced.
     let mut clients = sqlx::query_as!(
@@ -104,9 +101,9 @@ pub(super) async fn load_creation_options(
         i64::from(search.clients.offset),
         private.read_billable,
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut **tx)
     .await
-    .map_err(storage_error)?;
+    .map_err(storage)?;
     let mut tasks = sqlx::query_as!(
         CreationTask,
         "SELECT id, name, billable_default as billable,
@@ -119,9 +116,9 @@ pub(super) async fn load_creation_options(
         i64::from(search.tasks.offset),
         private.read_billable,
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut **tx)
     .await
-    .map_err(storage_error)?;
+    .map_err(storage)?;
     // A project holds at most 500 tasks, so that bounds the common ones too.
     let common_tasks = sqlx::query_as!(
         CreationTask,
@@ -133,9 +130,9 @@ pub(super) async fn load_creation_options(
         org_id,
         private.read_billable,
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut **tx)
     .await
-    .map_err(storage_error)?;
+    .map_err(storage)?;
     let mut people = sqlx::query_as!(
         CreationPerson,
         "SELECT id, name, CASE WHEN $5 THEN billable_rate_cents END as billable_rate_cents,
@@ -148,17 +145,17 @@ pub(super) async fn load_creation_options(
         private.read_costs,
         private.read_billable,
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut **tx)
     .await
-    .map_err(storage_error)?;
+    .map_err(storage)?;
     let previous_code = sqlx::query_scalar!(
         "SELECT code FROM projects WHERE org_id = $1 AND code IS NOT NULL AND btrim(code) <> ''
          ORDER BY created_at DESC, id DESC LIMIT 1",
         org_id,
     )
-    .fetch_optional(&mut *tx)
+    .fetch_optional(&mut **tx)
     .await
-    .map_err(storage_error)?
+    .map_err(storage)?
     .flatten();
     let suggested_code = previous_code.as_deref().and_then(|code| {
         if code.is_empty() || !code.bytes().all(|byte| byte.is_ascii_digit()) {
@@ -172,7 +169,6 @@ pub(super) async fn load_creation_options(
     clients.truncate(50);
     tasks.truncate(50);
     people.truncate(50);
-    tx.commit().await.map_err(storage_error)?;
     Ok(CreationOptions {
         organization_currency,
         can_edit_cost_rates: private.write_costs,

@@ -136,6 +136,20 @@ pub(crate) fn internal(error: impl std::fmt::Display) -> OpError {
     OpError::Internal(error.to_string())
 }
 
+/// A storage failure while loading, saving or creating a project: a lost
+/// race (serialization failure or deadlock) is a conflict to reload and retry.
+pub(crate) fn storage(error: sqlx::Error) -> OpError {
+    if error
+        .as_database_error()
+        .and_then(|error| error.code())
+        .is_some_and(|code| matches!(code.as_ref(), "40001" | "40P01"))
+    {
+        return OpError::conflict("The project changed while saving. Reload before retrying.");
+    }
+    tracing::error!(code = ?error.as_database_error().and_then(|error| error.code()), "Project creation database operation failed");
+    OpError::Internal("Could not save or load the project. Please retry.".into())
+}
+
 /// Names the form field to blame (see [`OpError::with_field`]).
 pub(crate) fn with_field(error: OpError, field: ProjectFormField) -> OpError {
     error.with_field(field)

@@ -215,22 +215,6 @@ impl Actor {
     }
 }
 
-impl Caller {
-    /// [`Actor::expect_requester`] before the actor is loaded, for adapters
-    /// that refuse a stale page before opening their transaction.
-    pub fn expect_requester(
-        &self,
-        expected: Option<PermissionRequester>,
-        refusal: &str,
-    ) -> Result<PermissionRequester, OpError> {
-        let requester = PermissionRequester {
-            org_id: self.org_id,
-            user_id: self.user_id,
-        };
-        expect(requester, expected, refusal)
-    }
-}
-
 fn expect(
     requester: PermissionRequester,
     expected: Option<PermissionRequester>,

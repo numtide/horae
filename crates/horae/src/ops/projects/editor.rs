@@ -13,7 +13,7 @@ use horae_core::project::{BudgetMode, MonthlyFeeDay, RateMode};
 use horae_core::types::{BudgetKind, ProjectRole, ProjectType};
 use uuid::Uuid;
 
-use super::form::internal;
+use super::form::{internal, storage};
 use super::{EDITING_REQUIRED, authorize_write};
 use crate::models::project_creation::{
     CreationClient, CreationPerson, CreationSelection, CreationTask, EditableProject, FeeMode,
@@ -30,20 +30,6 @@ mod save;
 mod task_activity;
 
 pub(crate) use save::save;
-
-/// A storage failure while loading or saving a project: a lost race
-/// (serialization failure or deadlock) is a conflict to reload and retry.
-fn storage(error: sqlx::Error) -> OpError {
-    if error
-        .as_database_error()
-        .and_then(|error| error.code())
-        .is_some_and(|code| matches!(code.as_ref(), "40001" | "40P01"))
-    {
-        return OpError::conflict("The project changed while saving. Reload before retrying.");
-    }
-    tracing::error!(code = ?error.as_database_error().and_then(|error| error.code()), "Project creation database operation failed");
-    OpError::Internal("Could not save or load the project. Please retry.".into())
-}
 
 fn apply_manager_flags(
     form: &mut ProjectForm,

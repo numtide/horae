@@ -2,9 +2,7 @@
 
 use super::*;
 #[cfg(feature = "server")]
-use crate::db::{OrganizationLock, lock_organization};
-#[cfg(feature = "server")]
-use crate::models::project_creation::TaskAccess;
+use crate::db::OrganizationLock;
 use crate::models::project_creation::{
     CreationClient, CreationOptions, CreationSearch, CreationSelection, DraftSaved,
     EditableProject, ProjectDraft, ProjectEditRequest, ProjectEditorCatalog,
@@ -13,24 +11,23 @@ use crate::models::project_creation::{
 use crate::models::project_people::{
     ProjectPeopleContext, ProjectPeopleQuery, ProjectPeopleResult,
 };
-#[cfg(feature = "server")]
-use crate::plugin::event::project_payload;
 
 #[cfg(feature = "server")]
-use crate::ops::projects::form::{form_payload, validate_project_form};
+use crate::ops::projects::creation;
 #[cfg(feature = "server")]
-use crate::ops::{self, Caller, EventSink, OpError, SnapshotLimits, WriteIsolation};
-#[cfg(feature = "server")]
-mod finalize;
-#[cfg(feature = "server")]
-use finalize::finalize_draft_record;
+use crate::ops::{
+    self, Caller, Done, EventSink, NoEvents, OpError, SnapshotLimits, WriteIsolation, WriteTx,
+};
+// The tests below reach these through `use super::*`.
+#[cfg(all(test, feature = "server"))]
+use crate::{
+    db::lock_organization, models::project_creation::TaskAccess,
+    ops::projects::form::validate_project_form,
+};
+
 /// The project editor as its tests call it.
 #[cfg(all(test, feature = "server"))]
 pub(super) mod editing;
-#[cfg(feature = "server")]
-mod options;
-#[cfg(feature = "server")]
-use options::{load_creation_options, load_selected_catalog, load_selected_client};
 
 #[cfg(all(test, feature = "server"))]
 mod assignment_tests;
@@ -265,35 +262,22 @@ pub async fn discard_project_draft(
     .await
 }
 
+/// Begins a creation step holding the organization `gate`: `Shared` for the
+/// drafts and catalogs, `AccessChange` to finalize, which designates managers.
 #[cfg(feature = "server")]
-fn storage_error(error: sqlx::Error) -> ServerFnError {
-    if error
-        .as_database_error()
-        .and_then(|error| error.code())
-        .is_some_and(|code| matches!(code.as_ref(), "40001" | "40P01"))
-    {
-        return conflict("The project changed while saving. Reload before retrying.");
-    }
-    tracing::error!(code = ?error.as_database_error().and_then(|error| error.code()), "Project creation database operation failed");
-    server_err("Could not save or load the project. Please retry.")
-}
-
-/// Names the form field a creation refusal blames, as
-/// [`OpError::with_field`] does for the operations.
-#[cfg(feature = "server")]
-fn with_field(
-    mut error: ServerFnError,
-    field: crate::models::project_creation::ProjectFormField,
-) -> ServerFnError {
-    if let ServerFnError::ServerError {
-        code: BAD_REQUEST | NOT_FOUND | CONFLICT,
-        details,
-        ..
-    } = &mut error
-    {
-        *details = Some(serde_json::json!({ "field": field }));
-    }
-    error
+async fn begin_creation(
+    pool: &sqlx::PgPool,
+    actor_id: uuid::Uuid,
+    org_id: uuid::Uuid,
+    gate: OrganizationLock,
+) -> Result<WriteTx, OpError> {
+    ops::begin_gated(
+        pool,
+        Caller::session(org_id, actor_id),
+        gate,
+        WriteIsolation::ReadCommitted,
+    )
+    .await
 }
 
 /// The project form's client dialog (`clients::create_project_client`) as the
@@ -319,36 +303,76 @@ async fn create_client_record(
 }
 
 #[cfg(feature = "server")]
+async fn load_selected_catalog(
+    pool: &sqlx::PgPool,
+    actor_id: uuid::Uuid,
+    org_id: uuid::Uuid,
+    task_ids: &[uuid::Uuid],
+    user_ids: &[uuid::Uuid],
+) -> Result<CreationSelection, ServerFnError> {
+    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared).await?;
+    let result = creation::selection(&mut write.tx, &write.actor, task_ids, user_ids).await;
+    Ok(write.commit(result.map(Done::new), &NoEvents).await?)
+}
+
+#[cfg(feature = "server")]
+async fn load_selected_client(
+    pool: &sqlx::PgPool,
+    actor_id: uuid::Uuid,
+    org_id: uuid::Uuid,
+    client_id: uuid::Uuid,
+) -> Result<Option<CreationClient>, ServerFnError> {
+    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared).await?;
+    let result = creation::client(&mut write.tx, &write.actor, client_id).await;
+    Ok(write.commit(result.map(Done::new), &NoEvents).await?)
+}
+
+#[cfg(feature = "server")]
+async fn load_creation_options(
+    pool: &sqlx::PgPool,
+    actor_id: uuid::Uuid,
+    org_id: uuid::Uuid,
+    search: &CreationSearch,
+    email_available: bool,
+) -> Result<CreationOptions, ServerFnError> {
+    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared).await?;
+    let result = creation::options(&mut write.tx, &write.actor, search, email_available).await;
+    Ok(write.commit(result.map(Done::new), &NoEvents).await?)
+}
+
+#[cfg(feature = "server")]
+async fn finalize_draft_record(
+    pool: &sqlx::PgPool,
+    actor_id: uuid::Uuid,
+    org_id: uuid::Uuid,
+    draft_id: uuid::Uuid,
+    expected_revision: i64,
+    form: &ProjectForm,
+    email_available: bool,
+) -> Result<uuid::Uuid, ServerFnError> {
+    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::AccessChange).await?;
+    let result = creation::finalize(
+        &mut write.tx,
+        &write.actor,
+        draft_id,
+        expected_revision,
+        form,
+        email_available,
+    )
+    .await;
+    // `project_created` is already in the outbox: nothing to dispatch here.
+    Ok(write.commit(result, &NoEvents).await?)
+}
+
+#[cfg(feature = "server")]
 async fn load_draft_record(
     pool: &sqlx::PgPool,
     actor_id: uuid::Uuid,
     org_id: uuid::Uuid,
 ) -> Result<Option<ProjectDraft>, ServerFnError> {
-    let mut tx = pool.begin().await.map_err(storage_error)?;
-    let actor = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
-    let private = PrivateFields::of(&actor);
-    let row = sqlx::query!(
-        r#"SELECT id, revision, updated_at as "updated_at: chrono::DateTime<chrono::Utc>", payload FROM project_drafts
-         WHERE org_id = $1 AND creator_id = $2
-           AND completed_project_id IS NULL AND discarded_at IS NULL"#,
-        org_id, actor_id,
-    ).fetch_optional(&mut *tx).await.map_err(storage_error)?;
-    let result = row
-        .map(|row| {
-            let mut form: ProjectForm = serde_json::from_value(row.payload)
-                .map_err(|_| server_err("This project draft cannot be read"))?;
-            // A creator may have lost a grant since saving private fields.
-            private.prune(&mut form);
-            Ok(ProjectDraft {
-                id: row.id,
-                revision: row.revision,
-                saved_at: row.updated_at,
-                form,
-            })
-        })
-        .transpose();
-    tx.commit().await.map_err(storage_error)?;
-    result
+    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared).await?;
+    let result = creation::load_draft(&mut write.tx, &write.actor).await;
+    Ok(write.commit(result.map(Done::new), &NoEvents).await?)
 }
 
 #[cfg(feature = "server")]
@@ -360,64 +384,16 @@ async fn save_draft_record(
     expected_revision: i64,
     form: &ProjectForm,
 ) -> Result<DraftSaved, ServerFnError> {
-    if expected_revision < 0 || expected_revision == i64::MAX || draft_id.get_version_num() != 7 {
-        return Err(err(BAD_REQUEST, "Invalid draft identity or revision"));
-    }
-    let mut tx = pool.begin().await.map_err(storage_error)?;
-    let actor = lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
-    let payload = validate_draft_form(form, PrivateFields::of(&actor))?;
-    if expected_revision == 0 {
-        // Both a repeated request ID and competing initial tabs are safe: the
-        // ownership/state check below decides which conflict can be retried.
-        sqlx::query!(
-            "INSERT INTO project_drafts (id, org_id, creator_id, payload)
-             VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
-            draft_id,
-            org_id,
-            actor_id,
-            payload,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(storage_error)?;
-    }
-    let row = sqlx::query!(
-        r#"SELECT revision, updated_at as "updated_at: chrono::DateTime<chrono::Utc>", payload, completed_project_id, discarded_at
-         FROM project_drafts WHERE id = $1 AND org_id = $2 AND creator_id = $3 FOR UPDATE"#,
-        draft_id, org_id, actor_id,
-    ).fetch_optional(&mut *tx).await.map_err(storage_error)?
-        .ok_or_else(|| if expected_revision == 0 {
-            conflict("A draft is already open. Reload the current draft before saving.")
-        } else {
-            not_found("Project draft not found")
-        })?;
-    if row.completed_project_id.is_some() || row.discarded_at.is_some() {
-        return Err(conflict(
-            "This draft has already been completed or discarded",
-        ));
-    }
-    let saved = if row.revision == expected_revision + 1 && row.payload == payload {
-        // A response may be lost after COMMIT; repeating that exact write
-        // acknowledges the same revision without writing again.
-        DraftSaved {
-            id: draft_id,
-            revision: row.revision,
-            saved_at: row.updated_at,
-        }
-    } else {
-        if row.revision != expected_revision {
-            return Err(conflict(
-                "Draft changed in another tab. Reload before saving.",
-            ));
-        }
-        sqlx::query_as!(DraftSaved,
-            r#"UPDATE project_drafts SET payload = $2, revision = revision + 1, updated_at = now()
-             WHERE id = $1 RETURNING id, revision, updated_at as "saved_at: chrono::DateTime<chrono::Utc>""#,
-            draft_id, payload,
-        ).fetch_one(&mut *tx).await.map_err(storage_error)?
-    };
-    tx.commit().await.map_err(storage_error)?;
-    Ok(saved)
+    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared).await?;
+    let result = creation::save_draft(
+        &mut write.tx,
+        &write.actor,
+        draft_id,
+        expected_revision,
+        form,
+    )
+    .await;
+    Ok(write.commit(result, &NoEvents).await?)
 }
 
 #[cfg(feature = "server")]
@@ -428,189 +404,10 @@ async fn discard_draft_record(
     draft_id: uuid::Uuid,
     expected_revision: i64,
 ) -> Result<(), ServerFnError> {
-    let mut tx = pool.begin().await.map_err(storage_error)?;
-    lock_creation_actor(&mut tx, actor_id, org_id, OrganizationLock::Shared).await?;
-    let affected = sqlx::query!(
-        "UPDATE project_drafts SET discarded_at = now(), updated_at = now()
-         WHERE id = $1 AND org_id = $2 AND creator_id = $3 AND revision = $4
-           AND completed_project_id IS NULL AND discarded_at IS NULL",
-        draft_id,
-        org_id,
-        actor_id,
-        expected_revision,
-    )
-    .execute(&mut *tx)
-    .await
-    .map_err(storage_error)?
-    .rows_affected();
-    if affected != 1 {
-        let owned = sqlx::query_scalar!(
-            r#"SELECT EXISTS(SELECT 1 FROM project_drafts WHERE id = $1 AND org_id = $2 AND creator_id = $3) as "owned!""#,
-            draft_id, org_id, actor_id,
-        ).fetch_one(&mut *tx).await.map_err(storage_error)?;
-        if !owned {
-            return Err(not_found("Project draft not found"));
-        }
-        return Err(conflict(
-            "Draft is unavailable or changed. Reload before discarding.",
-        ));
-    }
-    tx.commit().await.map_err(storage_error)?;
-    Ok(())
-}
-
-#[cfg(feature = "server")]
-fn validate_draft_form(
-    form: &ProjectForm,
-    private: PrivateFields,
-) -> Result<serde_json::Value, ServerFnError> {
-    if !private.write_notes && !form.admin_notes.is_empty() {
-        return Err(forbidden(
-            "Saving private notes requires permission to edit every project",
-        ));
-    }
-    if !private.write_costs && form.team.iter().any(|member| !member.cost_rate.is_empty()) {
-        return Err(forbidden(
-            "Saving cost rates requires permission to edit cost rates",
-        ));
-    }
-    if !private.write_billable && PrivateFields::has_billable_settings(form) {
-        return Err(forbidden(
-            "Setting rates, fees, money budgets or invoice defaults requires permission to edit billable rates",
-        ));
-    }
-    Ok(form_payload(form)?)
-}
-
-/// What a creator may put in a draft's protected fields: cost rates with
-/// `CostRateWriteAll`, private notes with `ProjectWriteAll`, and billable
-/// settings (see [`Self::has_billable_settings`]) with `BillableRateWriteAll`.
-/// Blank rates inherit and untouched invoice defaults are the form's own, so
-/// creating a time-and-materials or non-billable project needs no such grant.
-///
-/// The catalogs the form offers show the people's, clients' and tasks'
-/// billable rates only with `BillableRateReadAll`: a project being created has
-/// no managers yet, so `BillableRateReadManaged` does not apply.
-#[cfg(feature = "server")]
-#[derive(Clone, Copy)]
-struct PrivateFields {
-    read_costs: bool,
-    read_billable: bool,
-    write_costs: bool,
-    write_notes: bool,
-    write_billable: bool,
-}
-
-#[cfg(feature = "server")]
-impl PrivateFields {
-    fn of(actor: &crate::ops::Actor) -> Self {
-        use horae_core::permissions::catalog::Permission;
-        Self {
-            read_costs: actor.has(Permission::CostRateReadAll),
-            read_billable: actor.has(Permission::BillableRateReadAll),
-            write_costs: actor.has(Permission::CostRateWriteAll),
-            write_notes: actor.has(Permission::ProjectWriteAll),
-            write_billable: actor.has(Permission::BillableRateWriteAll),
-        }
-    }
-
-    /// What the editor protects as `billable`, except the project type and
-    /// rate mode a new project must choose: rates, a fixed fee, a budget in
-    /// money and invoice defaults that differ from the organization's.
-    fn has_billable_settings(form: &ProjectForm) -> bool {
-        use horae_core::project::BudgetMode;
-        !form.project_rate.is_empty()
-            || form
-                .team
-                .iter()
-                .any(|member| !member.billable_rate.is_empty())
-            || form.tasks.iter().any(|task| !task.rate.is_empty())
-            || (form.project_type == ProjectType::FixedFee
-                && (!form.fee_amount.is_empty() || !form.milestones.is_empty()))
-            || matches!(
-                form.budget_mode,
-                BudgetMode::TotalFees | BudgetMode::FeesPerTask
-            )
-            || form.invoice_defaults
-                != crate::models::project_creation::InvoiceDefaultsInput::default()
-    }
-
-    /// Clears what the creator may no longer write, as when a saved draft is
-    /// reopened after its creator lost a grant.
-    fn prune(self, form: &mut ProjectForm) {
-        if !self.write_notes {
-            form.admin_notes.clear();
-        }
-        if !self.write_costs {
-            for member in &mut form.team {
-                member.cost_rate.clear();
-            }
-        }
-        if !self.write_billable {
-            use horae_core::project::BudgetMode;
-            form.project_rate.clear();
-            for member in &mut form.team {
-                member.billable_rate.clear();
-            }
-            for task in &mut form.tasks {
-                task.rate.clear();
-            }
-            form.fee_amount.clear();
-            form.milestones.clear();
-            if matches!(
-                form.budget_mode,
-                BudgetMode::TotalFees | BudgetMode::FeesPerTask
-            ) {
-                form.budget_mode = BudgetMode::None;
-                form.budget_value.clear();
-                for task in &mut form.tasks {
-                    task.budget.clear();
-                }
-            }
-            form.invoice_defaults = Default::default();
-        }
-    }
-}
-
-/// Takes the organization `gate`, then loads the actor (whose own locks must
-/// come after the gate: a gate is never upgraded) and requires
-/// `ProjectCreateAll`. The gate is why creation authorizes here rather than
-/// through `ops::begin`.
-#[cfg(feature = "server")]
-pub(super) async fn lock_creation_actor(
-    tx: &mut crate::ops::Tx,
-    actor_id: uuid::Uuid,
-    org_id: uuid::Uuid,
-    gate: OrganizationLock,
-) -> Result<crate::ops::Actor, ServerFnError> {
-    use horae_core::permissions::catalog::Permission;
-    lock_organization(tx, org_id, gate)
-        .await
-        .map_err(storage_error)?;
-    let actor = crate::ops::Actor::load(tx, crate::ops::Caller::session(org_id, actor_id)).await?;
-    if !actor.has(Permission::ProjectCreateAll) {
-        return Err(forbidden("Project creation access required"));
-    }
-    Ok(actor)
-}
-
-#[cfg(feature = "server")]
-async fn lock_creation_client(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    client_id: uuid::Uuid,
-    org_id: uuid::Uuid,
-) -> Result<CreationClient, ServerFnError> {
-    sqlx::query_as!(
-        CreationClient,
-        "SELECT id, name, currency, active, default_rate_cents FROM clients
-         WHERE id = $1 AND org_id = $2 AND active FOR SHARE",
-        client_id,
-        org_id,
-    )
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(storage_error)?
-    .ok_or_else(|| not_found("Select an active client in this organization"))
+    let mut write = begin_creation(pool, actor_id, org_id, OrganizationLock::Shared).await?;
+    let result =
+        creation::discard_draft(&mut write.tx, &write.actor, draft_id, expected_revision).await;
+    Ok(write.commit(result, &NoEvents).await?)
 }
 
 #[cfg(all(test, feature = "server"))]
