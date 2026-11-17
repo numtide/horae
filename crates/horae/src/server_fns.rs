@@ -262,6 +262,8 @@ mod auth;
 mod clients;
 mod importers;
 mod invoices;
+#[cfg(all(test, feature = "server"))]
+mod op_error_tests;
 mod organization;
 #[cfg(all(test, feature = "server"))]
 mod parse_tests;
