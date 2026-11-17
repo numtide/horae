@@ -1,9 +1,8 @@
 use super::*;
-use crate::models::permission_editor::PermissionRequester;
-use crate::models::permissions::PersonPermissions;
 use crate::models::project_creation::{ProjectEditorAccess, ProjectFieldAccess};
+use horae_core::permissions::catalog::Permission;
 use horae_core::permissions::{
-    Actor, ManagementAssignments,
+    ManagementAssignments,
     rates::{
         BillableRateOwner, BillableRateResource, RateAction, billable_rate_access, cost_rate_access,
     },
@@ -21,17 +20,15 @@ fn field_access(read: bool, write: bool) -> ProjectFieldAccess {
 
 /// Project access is already held; catalog defaults retain their own field owners.
 pub(super) async fn redact(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    org_id: Uuid,
-    actor_id: Uuid,
-    permissions: &PersonPermissions,
+    tx: &mut Tx,
+    actor: &Actor,
     project: &mut EditableProject,
-) -> Result<(), ServerFnError> {
-    let managers = crate::server_fns::permissions::project_management::read_in_transaction(
-        tx, org_id, actor_id, project.id,
-    )
-    .await
-    .map_err(crate::server_fns::project_managers::map_error)?;
+) -> Result<(), OpError> {
+    let (org_id, actor_id) = (actor.org_id(), actor.id());
+    let grants = actor
+        .grants()
+        .ok_or_else(|| OpError::forbidden(EDITING_REQUIRED))?;
+    let managers = super::super::managers::current(tx, actor, project.id).await?;
     apply_manager_flags(&mut project.form, &managers);
     let designated = sqlx::query_scalar!(
         "SELECT EXISTS(SELECT 1 FROM project_management_assignments
@@ -42,7 +39,7 @@ pub(super) async fn redact(
     )
     .fetch_one(&mut **tx)
     .await
-    .map_err(storage_error)?
+    .map_err(storage)?
         == Some(true);
     let selected_people: Vec<_> = project
         .selection
@@ -59,12 +56,8 @@ pub(super) async fn redact(
     )
     .fetch_all(&mut **tx)
     .await
-    .map_err(storage_error)?;
-    let actor = Actor {
-        id: actor_id,
-        org_id,
-        active: true,
-    };
+    .map_err(storage)?;
+    let identity = actor.identity();
     let assignments = ManagementAssignments {
         actor_id,
         org_id,
@@ -77,17 +70,17 @@ pub(super) async fn redact(
     };
     let billable = |action, owner| {
         billable_rate_access(
-            &permissions.grants,
+            grants,
             action,
-            &actor,
+            identity,
             &BillableRateResource { org_id, owner },
             &assignments,
         )
     };
     let read_billable = billable(RateAction::Read, BillableRateOwner::Project(project.id));
     let write_billable = billable(RateAction::Write, BillableRateOwner::Project(project.id));
-    let read_cost = cost_rate_access(&permissions.grants, RateAction::Read, &actor, org_id);
-    let write_cost = cost_rate_access(&permissions.grants, RateAction::Write, &actor, org_id);
+    let read_cost = cost_rate_access(grants, RateAction::Read, identity, org_id);
+    let write_cost = cost_rate_access(grants, RateAction::Write, identity, org_id);
     if !read_billable {
         project.form.project_rate.clear();
         for member in &mut project.form.team {
@@ -130,9 +123,7 @@ pub(super) async fn redact(
         }
     }
     // Private notes belong to whoever may edit every project.
-    let notes = permissions
-        .grants
-        .contains(horae_core::permissions::catalog::Permission::ProjectWriteAll);
+    let notes = actor.has(Permission::ProjectWriteAll);
     if !notes {
         project.form.admin_notes.clear();
     }
@@ -151,10 +142,7 @@ pub(super) async fn redact(
     project.client.default_rate_cents = None;
     project.access = Some(ProjectEditorAccess {
         managers,
-        requester: PermissionRequester {
-            org_id,
-            user_id: actor_id,
-        },
+        requester: actor.requester(),
         billable: field_access(read_billable, write_billable),
         costs: field_access(read_cost, write_cost),
         private_notes: field_access(notes, notes),

@@ -2,7 +2,9 @@ use super::canonical_fields::{canonical_actor, keep_protected};
 use super::*;
 use crate::models::project_creation::{ProjectFieldAccess, ProtectedProjectField};
 use crate::models::project_managers::{ProjectManagersCommand, ProjectManagersCommandKind};
-use crate::server_fns::{permissions::project_management, test_seed::wait_for_blocked};
+use crate::server_fns::{
+    project_managers::calls as project_management, test_seed::wait_for_blocked,
+};
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 use tokio::task::JoinSet;
 
@@ -162,16 +164,22 @@ async fn revoked_while_waiting(pool: &PgPool, operation: Operation) {
         wait_for_blocked(pool, pid).await;
         revoke.commit().await.unwrap();
         let result = pending.join_next().await.unwrap().unwrap();
-        assert!(
-            matches!(
-                result,
-                Err(ServerFnError::ServerError { code: CONFLICT, .. })
-            ),
-            "{operation:?}/{revocation:?} must discard the pre-revocation snapshot: {result:?}"
-        );
-        let fresh = operation
-            .run(pool, owner.org_id, owner.user_id, &request)
-            .await;
+        let fresh = if matches!(operation, Operation::Read) {
+            // A snapshot read takes a new snapshot once the revocation
+            // commits, so the waiting read answers as a fresh one does.
+            result
+        } else {
+            assert!(
+                matches!(
+                    result,
+                    Err(ServerFnError::ServerError { code: CONFLICT, .. })
+                ),
+                "{operation:?}/{revocation:?} must discard the pre-revocation snapshot: {result:?}"
+            );
+            operation
+                .run(pool, owner.org_id, owner.user_id, &request)
+                .await
+        };
         if matches!(
             (operation, revocation),
             (Operation::Read, Revocation::FinancialAccess)

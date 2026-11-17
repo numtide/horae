@@ -81,14 +81,29 @@ pub(crate) fn unauthorized(msg: impl std::fmt::Display) -> ServerFnError {
 impl From<crate::ops::OpError> for ServerFnError {
     fn from(error: crate::ops::OpError) -> Self {
         use crate::ops::OpError;
-        let code = match &error {
+        let code = match error.kind() {
             OpError::NotFound(_) => NOT_FOUND,
             OpError::Forbidden(_) => FORBIDDEN,
             OpError::Conflict(_) => CONFLICT,
             OpError::Invalid { .. } => BAD_REQUEST,
-            OpError::Internal(_) => INTERNAL_ERROR,
+            OpError::Internal(_) | OpError::Detailed { .. } => INTERNAL_ERROR,
         };
-        err(code, error)
+        // Only an error with a detail carries `details`; the rest answer as before.
+        let details = error.detail().map(|detail| {
+            let mut details = serde_json::Map::new();
+            if let Some(field) = &detail.field {
+                details.insert("field".into(), field.clone());
+            }
+            if let Some(reason) = detail.reason {
+                details.insert("reason".into(), reason.into());
+            }
+            serde_json::Value::Object(details)
+        });
+        ServerFnError::ServerError {
+            message: error.to_string(),
+            code,
+            details,
+        }
     }
 }
 
@@ -260,7 +275,7 @@ mod organization;
 #[cfg(all(test, feature = "server"))]
 mod parse_tests;
 mod permission_editor;
-#[cfg(feature = "server")]
+#[cfg(all(test, feature = "server"))]
 pub(crate) mod permissions;
 // Temporary: the server_fns tests still provision through this path.
 #[cfg(all(test, feature = "server"))]
@@ -268,7 +283,7 @@ pub(crate) use crate::ops::permissions::provisioning;
 mod plugins;
 mod profile;
 mod project_creation;
-mod project_managers;
+pub(crate) mod project_managers;
 mod projects;
 mod reports;
 mod time_entries;

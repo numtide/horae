@@ -206,7 +206,7 @@ async fn designated(pool: &PgPool, project: Uuid) -> Vec<Uuid> {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn finalization_designates_eligible_managers_like_the_editor(pool: PgPool) {
-    use crate::server_fns::permissions::project_management;
+    use crate::server_fns::project_managers::calls as project_management;
     // Project Manager creates projects but edits only the ones it manages.
     let creator = seed(&pool, BuiltInProfile::ProjectManager).await;
     let teammate = member(&pool, creator.org_id, true).await;
@@ -306,7 +306,7 @@ async fn finalization_designates_eligible_managers_like_the_editor(pool: PgPool)
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn creators_without_project_write_all_manage_what_they_create(pool: PgPool) {
-    use crate::server_fns::permissions::project_management;
+    use crate::server_fns::project_managers::calls as project_management;
     for (profile, designates) in [
         (BuiltInProfile::ProjectManager, true),
         (BuiltInProfile::ExecutiveManager, false),

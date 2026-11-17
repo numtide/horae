@@ -4,12 +4,12 @@ use super::*;
 use crate::models::project_creation::ProjectTaskActivity;
 
 pub(super) async fn apply(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: &mut Tx,
     org_id: Uuid,
     before: &EditableProject,
     form: &ProjectForm,
     edits: &[ProjectTaskActivity],
-) -> Result<(), ServerFnError> {
+) -> Result<(), OpError> {
     // The editor already holds current project-write authority, the organization
     // access gate and the parent project lock. Financial fields are independent.
     let mut edits: Vec<_> = edits.iter().collect();
@@ -21,8 +21,7 @@ pub(super) async fn apply(
         if !before.form.tasks.iter().any(|task| task.source == source)
             || !form.tasks.iter().any(|task| task.source == source)
         {
-            return Err(err(
-                BAD_REQUEST,
+            return Err(OpError::bad_input(
                 "Activity changes require a retained project task",
             ));
         }
@@ -33,10 +32,10 @@ pub(super) async fn apply(
         )
         .fetch_optional(&mut **tx)
         .await
-        .map_err(storage_error)?
-        .ok_or_else(|| not_found("Task not found"))?;
+        .map_err(storage)?
+        .ok_or_else(|| OpError::not_found("Task not found"))?;
         if edit.active && !task_active {
-            return Err(conflict(
+            return Err(OpError::conflict(
                 "Restore the task in the task catalog before restoring it on this project",
             ));
         }
@@ -50,9 +49,9 @@ pub(super) async fn apply(
             )
             .fetch_one(&mut **tx)
             .await
-            .map_err(storage_error)?;
+            .map_err(storage)?;
             if running {
-                return Err(conflict(
+                return Err(OpError::conflict(
                     "A running timer prevents archiving this project task",
                 ));
             }
@@ -60,7 +59,7 @@ pub(super) async fn apply(
         sqlx::query!(
             "UPDATE project_tasks SET active=$3 WHERE project_id=$1 AND task_id=$2 AND active IS DISTINCT FROM $3",
             before.id, edit.task_id, edit.active,
-        ).execute(&mut **tx).await.map_err(storage_error)?;
+        ).execute(&mut **tx).await.map_err(storage)?;
     }
     Ok(())
 }

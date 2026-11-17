@@ -1,6 +1,6 @@
 use super::*;
 use crate::models::project_creation::{
-    ProjectEditorAccess, ProjectFieldAccess, ProtectedProjectField,
+    ProjectEditRequest, ProjectEditorAccess, ProjectFieldAccess, ProtectedProjectField,
 };
 use std::collections::HashSet;
 
@@ -20,13 +20,13 @@ impl RequiredWrites {
         &self,
         access: &ProjectEditorAccess,
         task_catalog: bool,
-    ) -> Result<(), ServerFnError> {
+    ) -> Result<(), OpError> {
         if (self.billable && access.billable != ProjectFieldAccess::Editable)
             || (self.costs && access.costs != ProjectFieldAccess::Editable)
             || (self.private_notes && access.private_notes != ProjectFieldAccess::Editable)
             || (self.task_catalog && !task_catalog)
         {
-            return Err(forbidden(
+            return Err(OpError::forbidden(
                 "Current authority for every protected project change is required",
             ));
         }
@@ -34,12 +34,12 @@ impl RequiredWrites {
     }
 }
 
-pub(super) fn validate_intent(request: &ProjectEditRequest) -> Result<(), ServerFnError> {
+pub(super) fn validate_intent(request: &ProjectEditRequest) -> Result<(), OpError> {
     if request.task_activity.len() > request.form.tasks.len() {
-        return Err(err(BAD_REQUEST, "Too many task activity changes"));
+        return Err(OpError::bad_input("Too many task activity changes"));
     }
     if request.unchanged.len() > 1505 {
-        return Err(err(BAD_REQUEST, "Too many preserved project fields"));
+        return Err(OpError::bad_input("Too many preserved project fields"));
     }
     let mut seen = HashSet::new();
     for field in &request.unchanged {
@@ -53,18 +53,18 @@ pub(super) fn validate_intent(request: &ProjectEditRequest) -> Result<(), Server
             _ => true,
         };
         if !exists || !seen.insert(*field) {
-            return Err(err(BAD_REQUEST, "Invalid preserved project field"));
+            return Err(OpError::bad_input("Invalid preserved project field"));
         }
     }
     Ok(())
 }
 
-fn require_write(allowed: bool, required: &mut bool) -> Result<(), ServerFnError> {
+fn require_write(allowed: bool, required: &mut bool) -> Result<(), OpError> {
     if allowed {
         *required = true;
         Ok(())
     } else {
-        Err(forbidden(
+        Err(OpError::forbidden(
             "Current authority for every protected project change is required",
         ))
     }
@@ -80,7 +80,7 @@ pub(super) fn merge(
     request: &ProjectEditRequest,
     before: &ProjectForm,
     access: &ProjectEditorAccess,
-) -> Result<(ProjectForm, RequiredWrites), ServerFnError> {
+) -> Result<(ProjectForm, RequiredWrites), OpError> {
     use ProtectedProjectField::*;
     let keep = |field| request.unchanged.contains(&field);
     let billable_write = access.billable == ProjectFieldAccess::Editable;

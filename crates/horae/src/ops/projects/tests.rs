@@ -1,6 +1,8 @@
 use super::*;
 
 mod budgets;
+mod managers;
+mod people;
 
 #[test]
 fn lock_order_bounds_sorts_and_drops_repeats() {

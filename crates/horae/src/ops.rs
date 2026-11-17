@@ -349,7 +349,6 @@ pub(crate) async fn begin_read_snapshot(
 #[derive(Clone, Copy)]
 pub(crate) enum WriteIsolation {
     ReadCommitted,
-    #[cfg_attr(not(test), expect(dead_code, reason = "for the project editor's save"))]
     Serializable,
 }
 

@@ -1,14 +1,24 @@
-use super::project_management::{ProjectManagersCommand, ProjectManagersError, execute};
-use super::*;
+//! The manager editor through its adapters, as the person a test names.
+
+use crate::models::project_managers::ProjectManagersCommand;
+use crate::ops::OpError;
+use crate::ops::permissions::load_person_permissions;
+use crate::server_fns::project_managers::calls::execute;
 use crate::server_fns::test_seed::{SeedIds, seed, wait_for_blocked};
-use horae_core::permissions::catalog::BuiltInProfile;
+use horae_core::permissions::catalog::{BuiltInProfile, Permission, PermissionSelection};
 use sqlx::PgPool;
 use std::time::Duration;
+use uuid::Uuid;
 
-#[path = "project_management_read.rs"]
+const EDITING: &str = "Current project editing authority is required";
+const INELIGIBLE: &str = "The manager selection is not eligible";
+const STALE: &str = "Permission state has changed; confirm again";
+const UNAVAILABLE: &str = "Project managers are unavailable";
+
+#[path = "managers_read.rs"]
 mod reader_tests;
 
-#[path = "project_management_transaction.rs"]
+#[path = "managers_transaction.rs"]
 mod transaction_tests;
 
 async fn permissions(pool: &PgPool, org: Uuid, user: Uuid, grants: &[Permission]) {
@@ -186,9 +196,13 @@ async fn deactivation_before_check_denies_delegation(pool: &PgPool, subject: Act
     deactivate.commit().await.unwrap();
     let result = pending.await.unwrap();
     match subject {
-        ActivitySubject::Actor => assert!(matches!(result, Err(ProjectManagersError::Forbidden))),
+        ActivitySubject::Actor => {
+            assert!(matches!(result, Err(OpError::Forbidden(message)) if message == EDITING))
+        }
         ActivitySubject::AddedManager => {
-            assert!(matches!(result, Err(ProjectManagersError::Ineligible)))
+            assert!(
+                matches!(result, Err(OpError::Invalid { message, .. }) if message == INELIGIBLE)
+            )
         }
     }
     assert_eq!(revision(pool, ids.org_id).await, 0);
@@ -368,7 +382,7 @@ async fn designation_is_required_before_managed_editor_can_delegate(pool: PgPool
     let command = request(ids.project_id, &[editor]);
     assert!(matches!(
         execute(&pool, ids.org_id, editor, &command).await,
-        Err(ProjectManagersError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
     execute(&pool, ids.org_id, ids.user_id, &command)
         .await
@@ -383,7 +397,7 @@ async fn designation_is_required_before_managed_editor_can_delegate(pool: PgPool
     );
     assert!(matches!(
         execute(&pool, ids.org_id, editor, &remove_self).await,
-        Err(ProjectManagersError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
     assert!(managers(&pool, ids.org_id, ids.project_id).await.is_empty());
 }
@@ -403,7 +417,7 @@ async fn mixed_invalid_addition_preserves_entire_previous_set(pool: PgPool) {
     initial.manager_ids = vec![valid, invalid];
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &initial).await,
-        Err(ProjectManagersError::Ineligible)
+        Err(OpError::Invalid { message, .. }) if message == INELIGIBLE
     ));
     assert_eq!(
         managers(&pool, ids.org_id, ids.project_id).await,
@@ -497,7 +511,7 @@ async fn canonical_actor_grants_activity_and_tenant_are_required(pool: PgPool) {
     for actor in [reader, foreign.user_id, Uuid::now_v7()] {
         assert!(matches!(
             execute(&pool, ids.org_id, actor, &command).await,
-            Err(ProjectManagersError::Forbidden)
+            Err(OpError::Forbidden(message)) if message == EDITING
         ));
     }
     sqlx::query!("UPDATE users SET active = false WHERE id = $1", ids.user_id)
@@ -506,7 +520,7 @@ async fn canonical_actor_grants_activity_and_tenant_are_required(pool: PgPool) {
         .unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &command).await,
-        Err(ProjectManagersError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
     assert_eq!(revision(&pool, ids.org_id).await, 0);
 }
@@ -530,7 +544,7 @@ async fn foreign_missing_inactive_and_malformed_additions_fail_without_disclosur
                 &request(ids.project_id, &[target])
             )
             .await,
-            Err(ProjectManagersError::Ineligible)
+            Err(OpError::Invalid { message, .. }) if message == INELIGIBLE
         ));
     }
     let malformed = person(&pool, ids.org_id, &[Permission::ProjectReadManaged]).await;
@@ -549,12 +563,12 @@ async fn foreign_missing_inactive_and_malformed_additions_fail_without_disclosur
             &request(ids.project_id, &[malformed])
         )
         .await,
-        Err(ProjectManagersError::Storage(_))
+        Err(OpError::Internal(message)) if message == UNAVAILABLE
     ));
     for project in [foreign.project_id, Uuid::now_v7()] {
         assert!(matches!(
             execute(&pool, ids.org_id, ids.user_id, &request(project, &[])).await,
-            Err(ProjectManagersError::NotFound)
+            Err(OpError::NotFound(message)) if message == "Project not found"
         ));
     }
     assert_eq!(revision(&pool, ids.org_id).await, 0);
@@ -573,13 +587,13 @@ async fn stale_duplicate_and_exhausted_revisions_never_replace_the_set(pool: PgP
             &request(ids.project_id, &[ids.user_id, ids.user_id])
         )
         .await,
-        Err(ProjectManagersError::Duplicate)
+        Err(OpError::Invalid { message, .. }) if message == "A manager may only be selected once"
     ));
     let mut command = request(ids.project_id, &[ids.user_id]);
     command.expected_access_revision = 1;
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &command).await,
-        Err(ProjectManagersError::Stale)
+        Err(OpError::Conflict(message)) if message == STALE
     ));
     sqlx::query!(
         "UPDATE organizations SET access_revision = $2 WHERE id = $1",
@@ -592,7 +606,7 @@ async fn stale_duplicate_and_exhausted_revisions_never_replace_the_set(pool: PgP
     command.expected_access_revision = i64::MAX;
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &command).await,
-        Err(ProjectManagersError::RevisionExhausted)
+        Err(OpError::Internal(message)) if message == UNAVAILABLE
     ));
     assert!(managers(&pool, ids.org_id, ids.project_id).await.is_empty());
 }
@@ -609,13 +623,13 @@ async fn receipt_conflicts_precede_decoding_and_replay_requires_current_authorit
     changed.manager_ids.clear();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &changed).await,
-        Err(ProjectManagersError::RequestConflict)
+        Err(OpError::Conflict(message)) if message == "The request identifier was used for different intent"
     ));
     sqlx::query!("UPDATE permission_change_receipts SET intent = '{}'::jsonb, result = '{}'::jsonb WHERE request_id = $1", command.request_id)
         .execute(&pool).await.unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &command).await,
-        Err(ProjectManagersError::RequestConflict)
+        Err(OpError::Conflict(message)) if message == "The request identifier was used for different intent"
     ));
     permissions(
         &pool,
@@ -626,7 +640,7 @@ async fn receipt_conflicts_precede_decoding_and_replay_requires_current_authorit
     .await;
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &command).await,
-        Err(ProjectManagersError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
     assert_eq!(revision(&pool, ids.org_id).await, result.access_revision);
 }
@@ -650,7 +664,7 @@ async fn audit_failure_rolls_back_removal_addition_and_revision(pool: PgPool) {
         .execute(&pool).await.unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &command).await,
-        Err(ProjectManagersError::Database(_))
+        Err(OpError::Internal(_))
     ));
     assert_eq!(revision(&pool, ids.org_id).await, 1);
     assert_eq!(
@@ -680,7 +694,8 @@ async fn concurrent_replacements_commit_only_one_current_revision(pool: PgPool) 
     );
     assert!(matches!(
         (&a, &b),
-        (Ok(_), Err(ProjectManagersError::Stale)) | (Err(ProjectManagersError::Stale), Ok(_))
+        (Ok(_), Err(OpError::Conflict(message))) | (Err(OpError::Conflict(message)), Ok(_))
+            if message == STALE
     ));
     assert_eq!(revision(&pool, ids.org_id).await, 1);
     assert_eq!(managers(&pool, ids.org_id, ids.project_id).await.len(), 1);
@@ -723,7 +738,7 @@ async fn revocation_winning_gate_denies_waiting_delegation(pool: PgPool) {
     revoke.commit().await.unwrap();
     assert!(matches!(
         pending.await.unwrap(),
-        Err(ProjectManagersError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
     assert!(managers(&pool, org, ids.project_id).await.is_empty());
 }
@@ -775,7 +790,7 @@ async fn legacy_project_lock_returns_busy_instead_of_forming_an_org_fk_cycle(poo
         .unwrap()
         .unwrap();
     assert!(
-        matches!(result, Err(ProjectManagersError::Busy)),
+        matches!(&result, Err(OpError::Conflict(message)) if message == "The project is being edited; retry the complete request"),
         "{result:?}"
     );
     tokio::time::timeout(Duration::from_secs(5), editor_wait)
@@ -955,7 +970,7 @@ async fn historical_replay_does_not_reapply_removed_or_now_ineligible_designatio
     .unwrap();
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &command).await,
-        Err(ProjectManagersError::ReceiptVersion)
+        Err(OpError::Internal(message)) if message == UNAVAILABLE
     ));
 }
 
@@ -976,7 +991,7 @@ async fn managed_scope_never_uses_another_project_or_tracking_membership(pool: P
     let mut command = request(ids.project_id, &[editor]);
     assert!(matches!(
         execute(&pool, ids.org_id, editor, &command).await,
-        Err(ProjectManagersError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
     execute(&pool, ids.org_id, ids.user_id, &command)
         .await
@@ -996,7 +1011,7 @@ async fn managed_scope_never_uses_another_project_or_tracking_membership(pool: P
     command.project_id = other_project;
     assert!(matches!(
         execute(&pool, ids.org_id, editor, &command).await,
-        Err(ProjectManagersError::Forbidden)
+        Err(OpError::Forbidden(message)) if message == EDITING
     ));
 }
 
@@ -1026,8 +1041,9 @@ async fn legacy_user_share_locks_allow_manager_and_receipt_foreign_keys(pool: Pg
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn actual_template_command_receipt_cannot_be_reused_for_project_delegation(pool: PgPool) {
-    use super::calls::request_conflict;
-    use super::calls::templates::{TemplateAction, TemplateCommand};
+    use crate::server_fns::permissions::calls;
+    use calls::request_conflict;
+    use calls::templates::{TemplateAction, TemplateCommand};
     let ids = fixture(&pool).await;
     sqlx::query!(
         "UPDATE person_permission_states SET is_administrator = true WHERE user_id = $1",
@@ -1044,7 +1060,7 @@ async fn actual_template_command_receipt_cannot_be_reused_for_project_delegation
             grants: BuiltInProfile::Member.selection().iter().collect(),
         },
     };
-    super::calls::templates::execute(&pool, ids.org_id, ids.user_id, &command)
+    calls::templates::execute(&pool, ids.org_id, ids.user_id, &command)
         .await
         .unwrap();
     let mut delegation = request(ids.project_id, &[ids.user_id]);
@@ -1052,7 +1068,7 @@ async fn actual_template_command_receipt_cannot_be_reused_for_project_delegation
     delegation.request_id = command.request_id;
     assert!(matches!(
         execute(&pool, ids.org_id, ids.user_id, &delegation).await,
-        Err(ProjectManagersError::RequestConflict)
+        Err(OpError::Conflict(message)) if message == "The request identifier was used for different intent"
     ));
     delegation.request_id = Uuid::now_v7();
     execute(&pool, ids.org_id, ids.user_id, &delegation)
@@ -1061,7 +1077,7 @@ async fn actual_template_command_receipt_cannot_be_reused_for_project_delegation
     let mut other = command;
     other.request_id = delegation.request_id;
     assert!(matches!(
-        super::calls::templates::execute(&pool, ids.org_id, ids.user_id, &other).await,
+        calls::templates::execute(&pool, ids.org_id, ids.user_id, &other).await,
         Err(e) if e == request_conflict()
     ));
 }

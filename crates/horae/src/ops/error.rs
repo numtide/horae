@@ -22,9 +22,71 @@ pub(crate) enum OpError {
     /// Storage failed. The cause is logged where it happened, not returned.
     #[error("{0}")]
     Internal(String),
+    /// Another error with what a client acts on besides its status and
+    /// message. Built with [`OpError::with_field`] and [`OpError::with_reason`];
+    /// match on [`OpError::kind`] to see the error underneath.
+    #[error("{error}")]
+    Detailed {
+        error: Box<OpError>,
+        detail: ErrorDetail,
+    },
+}
+
+/// The machine-readable part of an error, in the spirit of problem+json's
+/// per-field errors: the input to blame and a stable reason. Adapters pass it
+/// on only when it is present, so errors without one answer as before.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct ErrorDetail {
+    /// The input to blame, as the client names it: a plain name or a
+    /// structured identity such as a form row.
+    pub field: Option<serde_json::Value>,
+    /// A stable code the client branches on, independent of the message.
+    pub reason: Option<&'static str>,
 }
 
 impl OpError {
+    /// Names the input to blame. Only invalid input, a missing record or a
+    /// conflict can blame one; any other error is returned unchanged.
+    pub fn with_field(self, field: impl serde::Serialize) -> Self {
+        if !matches!(
+            self.kind(),
+            Self::Invalid { .. } | Self::NotFound(_) | Self::Conflict(_)
+        ) {
+            return self;
+        }
+        let field = serde_json::to_value(field).ok();
+        self.detailed(|detail| detail.field = field)
+    }
+
+    /// Adds a stable reason the client branches on.
+    pub fn with_reason(self, reason: &'static str) -> Self {
+        self.detailed(|detail| detail.reason = Some(reason))
+    }
+
+    fn detailed(self, change: impl FnOnce(&mut ErrorDetail)) -> Self {
+        let (error, mut detail) = match self {
+            Self::Detailed { error, detail } => (error, detail),
+            error => (Box::new(error), ErrorDetail::default()),
+        };
+        change(&mut detail);
+        Self::Detailed { error, detail }
+    }
+
+    /// The error without its detail, to match on what went wrong.
+    pub fn kind(&self) -> &Self {
+        match self {
+            Self::Detailed { error, .. } => error.kind(),
+            error => error,
+        }
+    }
+
+    pub fn detail(&self) -> Option<&ErrorDetail> {
+        match self {
+            Self::Detailed { detail, .. } => Some(detail),
+            _ => None,
+        }
+    }
+
     pub fn not_found(message: impl Into<String>) -> Self {
         Self::NotFound(message.into())
     }
@@ -66,5 +128,66 @@ impl From<sqlx::Error> for OpError {
         }
         tracing::error!(%error, "Operation storage failed");
         Self::Internal("Could not complete the request. Please retry.".into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dioxus::prelude::ServerFnError;
+    use serde_json::json;
+
+    fn answer(error: OpError) -> (u16, String, Option<serde_json::Value>) {
+        match ServerFnError::from(error) {
+            ServerFnError::ServerError {
+                code,
+                message,
+                details,
+            } => (code, message, details),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_error_without_detail_answers_without_details() {
+        assert_eq!(
+            answer(OpError::conflict("Changed")),
+            (409, "Changed".into(), None)
+        );
+    }
+
+    #[test]
+    fn a_field_and_a_reason_reach_details_with_the_same_status_and_message() {
+        let error = OpError::bad_input("Bad")
+            .with_field(json!({ "person": "row" }))
+            .with_reason("stale_page");
+        assert_eq!(error.kind(), &OpError::bad_input("Bad"));
+        assert_eq!(
+            answer(error),
+            (
+                400,
+                "Bad".into(),
+                Some(json!({ "field": { "person": "row" }, "reason": "stale_page" }))
+            )
+        );
+        assert_eq!(
+            answer(OpError::conflict("Reload").with_reason("stale_page")),
+            (
+                409,
+                "Reload".into(),
+                Some(json!({ "reason": "stale_page" }))
+            )
+        );
+    }
+
+    #[test]
+    fn only_input_errors_blame_a_field() {
+        for error in [OpError::forbidden("No"), OpError::Internal("Down".into())] {
+            assert_eq!(error.clone().with_field("name"), error);
+        }
+        assert_eq!(
+            answer(OpError::not_found("Gone").with_field("client")),
+            (404, "Gone".into(), Some(json!({ "field": "client" })))
+        );
     }
 }

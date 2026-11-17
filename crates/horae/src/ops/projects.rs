@@ -1,5 +1,6 @@
-//! Project operations: the project and task reads, and archiving and
-//! restoring (FR-011).
+//! Project operations: the project and task reads, archiving and restoring
+//! (FR-011), the project editor ([`editor`]), its managers ([`managers`])
+//! and the people its form offers ([`people`]).
 //!
 //! Every decision goes through [`Actor::has`], on the actor's stored grants.
 
@@ -16,6 +17,10 @@ use crate::plugin::event::{ActiveTransition, active_transition};
 
 pub(crate) mod budgets;
 mod detail;
+pub(crate) mod editor;
+pub(crate) mod form;
+pub(crate) mod managers;
+pub(crate) mod people;
 mod reads;
 mod task_catalog;
 
@@ -31,6 +36,8 @@ pub(crate) use task_catalog::page as task_catalog;
 
 const NOT_FOUND: &str = "Project not found";
 const WRITE_REQUIRED: &str = "Project editing access required";
+/// The editor's, its managers' and its people's refusal.
+const EDITING_REQUIRED: &str = "Current project editing authority is required";
 const RESTORE_CLIENT_FIRST: &str = "Restore the client before restoring this project.";
 
 const REQUESTER_CHANGED: &str = "Project requester has changed";
@@ -151,6 +158,22 @@ fn redact_money(actor: &Actor, designated: bool, mut project: Project) -> Projec
         project.budget_amount_cents = None;
     }
     project
+}
+
+/// Refuses anyone who may not edit `project_id`: editing needs
+/// `ProjectWriteAll`, or `ProjectWriteManaged` on a project the actor
+/// manages. It does not check that the project exists.
+async fn authorize_write(tx: &mut Tx, actor: &Actor, project_id: Uuid) -> Result<(), OpError> {
+    let has = |permission| actor.has(permission);
+    // Only a managed-only writer depends on the designation.
+    let managed = projects::writes_any(has)
+        && !projects::writes(has, false)
+        && is_designated(tx, actor, project_id).await?;
+    if projects::writes(has, managed) {
+        Ok(())
+    } else {
+        Err(OpError::forbidden(EDITING_REQUIRED))
+    }
 }
 
 async fn is_designated(tx: &mut Tx, actor: &Actor, project_id: Uuid) -> Result<bool, OpError> {

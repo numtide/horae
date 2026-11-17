@@ -1,4 +1,4 @@
-use super::super::validation::{optional_amount, optional_hours, with_field};
+use super::super::form::{optional_amount, optional_hours, with_field};
 use super::*;
 use crate::models::project_creation::{
     ProjectFormField, ProjectMemberInput, ProtectedProjectField,
@@ -11,21 +11,21 @@ use std::collections::HashSet;
 /// Saves the team and tasks. Returns the plugin events for the people added
 /// to or removed from the team, to dispatch once the edit commits.
 pub(super) async fn save(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: &mut Tx,
     org_id: Uuid,
     before: &EditableProject,
     form: &ProjectForm,
     may_write_costs: bool,
     may_write_tasks: bool,
     unchanged: &[ProtectedProjectField],
-) -> Result<Vec<AppEvent>, ServerFnError> {
+) -> Result<Vec<AppEvent>, OpError> {
     let org_currency = sqlx::query_scalar!(
         "SELECT default_currency FROM organizations WHERE id=$1",
         org_id
     )
     .fetch_one(&mut **tx)
     .await
-    .map_err(storage_error)?;
+    .map_err(storage)?;
     let occurred_at = chrono::Utc::now();
     let mut events = Vec::new();
     let mut members: Vec<_> = form.team.iter().collect();
@@ -66,19 +66,19 @@ pub(super) async fn save(
             )
             .fetch_one(&mut **tx)
             .await
-            .map_err(storage_error)?
+            .map_err(storage)?
             .unwrap_or(false);
             if history {
                 return Err(with_field(
-                    conflict("A teammate with recorded time cannot be removed."),
+                    OpError::conflict("A teammate with recorded time cannot be removed."),
                     ProjectFormField::Person(member.user_id),
                 ));
             }
             if !may_write_costs {
                 let private_cost = sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM project_member_costs WHERE project_id=$1 AND org_id=$2 AND user_id=$3)", before.id, org_id, member.user_id)
-                    .fetch_one(&mut **tx).await.map_err(storage_error)?.unwrap_or(false);
+                    .fetch_one(&mut **tx).await.map_err(storage)?.unwrap_or(false);
                 if private_cost {
-                    return Err(forbidden(
+                    return Err(OpError::forbidden(
                         "Current cost editing authority is required to remove this assignment.",
                     ));
                 }
@@ -91,7 +91,7 @@ pub(super) async fn save(
             )
             .fetch_optional(&mut **tx)
             .await
-            .map_err(storage_error)?;
+            .map_err(storage)?;
             if let Some(removed) = removed {
                 events.push(AppEvent::AssignmentRemoved {
                     occurred_at,
@@ -110,14 +110,14 @@ pub(super) async fn save(
 }
 
 async fn save_member(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: &mut Tx,
     org_id: Uuid,
     before: &EditableProject,
     form: &ProjectForm,
     member: &ProjectMemberInput,
     cost_edit: RateEdit,
     org_currency: &str,
-) -> Result<Option<AssignmentPayload>, ServerFnError> {
+) -> Result<Option<AssignmentPayload>, OpError> {
     let previous = before
         .form
         .team
@@ -130,10 +130,10 @@ async fn save_member(
     )
     .fetch_optional(&mut **tx)
     .await
-    .map_err(storage_error)?
+    .map_err(storage)?
     .ok_or_else(|| {
         with_field(
-            not_found("Teammate not found"),
+            OpError::not_found("Teammate not found"),
             ProjectFormField::Person(member.user_id),
         )
     })?;
@@ -145,7 +145,7 @@ async fn save_member(
     });
     if !person.active && !unchanged_assignment {
         return Err(with_field(
-            conflict(
+            OpError::conflict(
                 "This teammate is inactive. Keep its existing assignment unchanged or remove it if it has no recorded time.",
             ),
             ProjectFormField::Person(member.user_id),
@@ -173,10 +173,7 @@ async fn save_member(
         && super::save::project_currency(before) != org_currency
     {
         return Err(with_field(
-            err(
-                BAD_REQUEST,
-                "Enter an explicit person rate in the project currency.",
-            ),
+            OpError::bad_input("Enter an explicit person rate in the project currency."),
             ProjectFormField::PersonRate(member.user_id),
         ));
     }
@@ -203,14 +200,14 @@ async fn save_member(
     )
     .fetch_one(&mut **tx)
     .await
-    .map_err(storage_error)?;
+    .map_err(storage)?;
     match cost_edit {
         RateEdit::Unchanged => {}
         RateEdit::Set(cost) => {
             sqlx::query!("INSERT INTO project_member_costs (id,org_id,project_id,user_id,cost_rate_cents) VALUES ($1,$2,$3,$4,$5)
                 ON CONFLICT (project_id,user_id) DO UPDATE SET cost_rate_cents=EXCLUDED.cost_rate_cents",
                 Uuid::now_v7(), org_id, before.id, member.user_id, cost,
-            ).execute(&mut **tx).await.map_err(storage_error)?;
+            ).execute(&mut **tx).await.map_err(storage)?;
         }
         RateEdit::Reset => {
             sqlx::query!(
@@ -221,7 +218,7 @@ async fn save_member(
             )
             .execute(&mut **tx)
             .await
-            .map_err(storage_error)?;
+            .map_err(storage)?;
         }
     }
     Ok(saved.inserted.then_some(AssignmentPayload {
@@ -233,12 +230,12 @@ async fn save_member(
 }
 
 async fn save_member_budget(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: &mut Tx,
     org_id: Uuid,
     project_id: Uuid,
     member: &ProjectMemberInput,
     budget_mode: BudgetMode,
-) -> Result<(), ServerFnError> {
+) -> Result<(), OpError> {
     let budget = if budget_mode == BudgetMode::HoursPerPerson {
         optional_hours(&member.budget)?
     } else {
@@ -248,7 +245,7 @@ async fn save_member_budget(
         sqlx::query!("INSERT INTO project_member_budgets (id,org_id,project_id,user_id,budget_minutes) VALUES ($1,$2,$3,$4,$5)
             ON CONFLICT (project_id,user_id) DO UPDATE SET budget_minutes=EXCLUDED.budget_minutes",
             Uuid::now_v7(), org_id, project_id, member.user_id, minutes,
-        ).execute(&mut **tx).await.map_err(storage_error)?;
+        ).execute(&mut **tx).await.map_err(storage)?;
     } else {
         sqlx::query!(
             "DELETE FROM project_member_budgets WHERE project_id=$1 AND org_id=$2 AND user_id=$3",
@@ -258,37 +255,37 @@ async fn save_member_budget(
         )
         .execute(&mut **tx)
         .await
-        .map_err(storage_error)?;
+        .map_err(storage)?;
     }
     Ok(())
 }
 
 async fn save_tasks(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: &mut Tx,
     org_id: Uuid,
     before: &EditableProject,
     form: &ProjectForm,
     may_write_tasks: bool,
     unchanged: &[ProtectedProjectField],
-) -> Result<(), ServerFnError> {
+) -> Result<(), OpError> {
     let mut selected = HashSet::new();
     for task in &form.tasks {
         let task_id = match &task.source {
             TaskSource::Existing { task_id } => *task_id,
             TaskSource::New { name } => {
                 let existing = sqlx::query!("SELECT id, active FROM tasks WHERE org_id=$1 AND lower(btrim(name))=lower(btrim($2)) ORDER BY id LIMIT 1 FOR SHARE", org_id, name)
-                    .fetch_optional(&mut **tx).await.map_err(storage_error)?;
+                    .fetch_optional(&mut **tx).await.map_err(storage)?;
                 if let Some(existing) = existing {
                     if !existing.active {
                         return Err(with_field(
-                            conflict("A task with this name is archived."),
+                            OpError::conflict("A task with this name is archived."),
                             ProjectFormField::TaskName(task.id),
                         ));
                     }
                     existing.id
                 } else {
                     if !may_write_tasks {
-                        return Err(forbidden(
+                        return Err(OpError::forbidden(
                             "Current task catalog editing authority is required",
                         ));
                     }
@@ -302,14 +299,14 @@ async fn save_tasks(
                     )
                     .execute(&mut **tx)
                     .await
-                    .map_err(storage_error)?;
+                    .map_err(storage)?;
                     id
                 }
             }
         };
         if !selected.insert(task_id) {
             return Err(with_field(
-                err(BAD_REQUEST, "A task can only be selected once"),
+                OpError::bad_input("A task can only be selected once"),
                 ProjectFormField::Task(task.id),
             ));
         }
@@ -320,19 +317,16 @@ async fn save_tasks(
             .find(|item| item.source == (TaskSource::Existing { task_id }));
         if previous.is_some() && matches!(task.source, TaskSource::New { .. }) {
             return Err(with_field(
-                err(
-                    BAD_REQUEST,
-                    "Select this existing project task by its identity.",
-                ),
+                OpError::bad_input("Select this existing project task by its identity."),
                 ProjectFormField::Task(task.id),
             ));
         }
         let catalog = sqlx::query!("SELECT active, default_rate_cents, default_rate_currency FROM tasks WHERE id=$1 AND org_id=$2 FOR SHARE", task_id, org_id)
-            .fetch_optional(&mut **tx).await.map_err(storage_error)?
-            .ok_or_else(|| with_field(not_found("Task not found"), ProjectFormField::Task(task.id)))?;
+            .fetch_optional(&mut **tx).await.map_err(storage)?
+            .ok_or_else(|| with_field(OpError::not_found("Task not found"), ProjectFormField::Task(task.id)))?;
         if !catalog.active && previous != Some(task) {
             return Err(with_field(
-                conflict(
+                OpError::conflict(
                     "This task is archived. Keep its existing settings unchanged or remove it if it has no recorded time.",
                 ),
                 ProjectFormField::Task(task.id),
@@ -361,10 +355,7 @@ async fn save_tasks(
                     })
             {
                 return Err(with_field(
-                    err(
-                        BAD_REQUEST,
-                        "Enter an explicit task rate in the project currency.",
-                    ),
+                    OpError::bad_input("Enter an explicit task rate in the project currency."),
                     ProjectFormField::TaskRate(task.id),
                 ));
             }
@@ -378,7 +369,7 @@ async fn save_tasks(
         sqlx::query!("INSERT INTO project_tasks (project_id,task_id,billable,rate_cents) VALUES ($1,$2,$3,$4)
             ON CONFLICT (project_id,task_id) DO UPDATE SET billable=EXCLUDED.billable, rate_cents=EXCLUDED.rate_cents",
             before.id, task_id, billable, rate,
-        ).execute(&mut **tx).await.map_err(storage_error)?;
+        ).execute(&mut **tx).await.map_err(storage)?;
         let minutes = if form.budget_mode == BudgetMode::HoursPerTask {
             optional_hours(&task.budget)?
         } else {
@@ -400,18 +391,18 @@ async fn save_tasks(
                   budget_minutes=CASE WHEN $8 THEN project_task_settings.budget_minutes ELSE EXCLUDED.budget_minutes END,
                   budget_cents=CASE WHEN $8 THEN project_task_settings.budget_cents ELSE EXCLUDED.budget_cents END",
                 Uuid::now_v7(), org_id, before.id, task_id, matches!(task.access, TaskAccess::Restricted { .. }), minutes, cents, keep_budget,
-            ).execute(&mut **tx).await.map_err(storage_error)?;
+            ).execute(&mut **tx).await.map_err(storage)?;
         }
         let allowed: &[Uuid] = match &task.access {
             TaskAccess::Everyone => &[],
             TaskAccess::Restricted { user_ids } => user_ids,
         };
         sqlx::query!("DELETE FROM project_task_members WHERE project_id=$1 AND org_id=$2 AND task_id=$3 AND NOT(user_id=ANY($4))", before.id, org_id, task_id, allowed)
-            .execute(&mut **tx).await.map_err(storage_error)?;
+            .execute(&mut **tx).await.map_err(storage)?;
         for user_id in allowed {
             sqlx::query!("INSERT INTO project_task_members (id,org_id,project_id,task_id,user_id) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (project_id,task_id,user_id) DO NOTHING",
                 Uuid::now_v7(), org_id, before.id, task_id, user_id,
-            ).execute(&mut **tx).await.map_err(storage_error)?;
+            ).execute(&mut **tx).await.map_err(storage)?;
         }
     }
     for previous in &before.form.tasks {
@@ -426,11 +417,11 @@ async fn save_tasks(
             )
             .fetch_one(&mut **tx)
             .await
-            .map_err(storage_error)?
+            .map_err(storage)?
             .unwrap_or(false);
             if history {
                 return Err(with_field(
-                    conflict("A task with recorded time cannot be removed."),
+                    OpError::conflict("A task with recorded time cannot be removed."),
                     ProjectFormField::Task(previous.id),
                 ));
             }
@@ -441,7 +432,7 @@ async fn save_tasks(
             )
             .execute(&mut **tx)
             .await
-            .map_err(storage_error)?;
+            .map_err(storage)?;
         }
     }
     Ok(())
