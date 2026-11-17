@@ -51,7 +51,7 @@ const WRITE_REQUIRED: &str = "Permission to manage all invoices is required";
 const PREPARE_REQUIRED: &str = "Preparing or editing an invoice requires permission to manage all invoices and view everyone's billable rates";
 
 /// Whether the actor holds every `required` grant.
-pub(crate) fn holds(actor: &Actor, required: &[Permission]) -> bool {
+fn holds(actor: &Actor, required: &[Permission]) -> bool {
     invoices::holds(|permission| actor.has(permission), required)
 }
 
