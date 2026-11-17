@@ -1,5 +1,4 @@
 use super::*;
-use crate::models::user::User;
 use crate::testing::wait_for_blocked;
 use std::time::Duration;
 
@@ -191,11 +190,6 @@ async fn assignment_cascade_allows_an_inflight_entry_project_fk_to_finish(pool: 
     let entry = editable_entry(&pool, true).await;
     restrict_task(&pool, &entry).await;
     grant_task(&pool, &entry).await;
-    let actor = sqlx::query_as!(User,
-        r#"SELECT id, org_id, email, name, oidc_subject,
-        cost_rate_cents, billable_rate_cents, active, created_at AS "created_at: chrono::DateTime<chrono::Utc>"
-        FROM users WHERE id=$1"#, entry.user_id,
-    ).fetch_one(&pool).await.unwrap();
     let assignment = sqlx::query_scalar!(
         "SELECT id FROM assignments WHERE project_id=$1 AND user_id=$2",
         entry.project_id,
@@ -239,9 +233,9 @@ async fn assignment_cascade_allows_an_inflight_entry_project_fk_to_finish(pool: 
         "SELECT pid AS \"pid!\" FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid))", blocker,
     ).fetch_one(&pool).await.unwrap();
     let db = pool.clone();
-    // Assignments have no operation in `ops` yet; the adapter's helper removes one.
+    // Assignments have no operation in `ops` yet; the test fixture removes one.
     requests.spawn(async move {
-        crate::server_fns::remove_assignment(&db, &actor, assignment)
+        crate::testing::remove_assignment(&db, entry.org_id, assignment)
             .await
             .map(|removed| assert!(removed.is_some()))
             .map_err(|error| error.to_string())
