@@ -316,7 +316,7 @@ async fn refused_activation_changes_release_the_gate(pool: PgPool) {
         set_task_active_record(&pool, member.org_id, member.user_id, member.task_id, false).await;
     assert_eq!(
         refused.err().map(|error| error.to_string()),
-        Some(forbidden("Current task editing authority is required").to_string())
+        Some(err(FORBIDDEN, "Current task editing authority is required").to_string())
     );
     assert!(
         organization_lockable(&pool, member.org_id),
@@ -348,7 +348,7 @@ async fn refused_activation_changes_release_the_gate(pool: PgPool) {
     let refused = set_task_active_record(&pool, ids.org_id, ids.user_id, ids.task_id, false).await;
     assert_eq!(
         refused.err().map(|error| error.to_string()),
-        Some(conflict("A running timer prevents archiving this task").to_string())
+        Some(err(CONFLICT, "A running timer prevents archiving this task").to_string())
     );
     assert!(organization_lockable(&pool, ids.org_id), "running timer");
 }

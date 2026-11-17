@@ -194,10 +194,10 @@ fn a_page_bound_to_someone_else_is_refused_with_the_domain_text() {
         user_id: Uuid::now_v7(),
         ..own
     };
-    assert_eq!(caller.expect_requester(None, "changed"), Ok(own));
-    assert_eq!(caller.expect_requester(Some(own), "changed"), Ok(own));
+    assert_eq!(super::expect(own, None, "changed"), Ok(own));
+    assert_eq!(super::expect(own, Some(own), "changed"), Ok(own));
     assert_eq!(
-        caller.expect_requester(Some(other), "changed"),
+        super::expect(own, Some(other), "changed"),
         Err(OpError::forbidden("changed"))
     );
 }

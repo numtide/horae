@@ -9,8 +9,6 @@ use crate::models::ProjectTagLink;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::project::ProjectOverview;
 use crate::models::task::TaskRateEdit;
-#[cfg(feature = "server")]
-use crate::plugin::event::task_payload;
 
 mod detail_view;
 pub use detail_view::get_project_detail_view;
@@ -19,10 +17,12 @@ mod task_catalog;
 pub use task_catalog::load_task_catalog;
 
 #[cfg(feature = "server")]
+use crate::ops::projects::task_writes::{self, TaskDetails};
+#[cfg(feature = "server")]
 use crate::ops::projects::{ProjectRead, TaskRead};
 #[cfg(feature = "server")]
 use crate::ops::{self, Caller};
-#[cfg(feature = "server")]
+#[cfg(all(test, feature = "server"))]
 use horae_core::permissions::catalog::Permission;
 
 #[cfg(all(test, feature = "server"))]
@@ -101,9 +101,6 @@ async fn fetch_project_overview(
     let result = ops::projects::overview(&mut read.tx, &read.actor, expected_requester).await;
     Ok(read.finish(result).await?)
 }
-
-#[cfg(feature = "server")]
-const TASK_REQUESTER_CHANGED: &str = "Task requester has changed";
 
 #[server]
 pub async fn list_projects(
@@ -355,93 +352,44 @@ pub async fn create_task(
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
     let caller = session_caller().await?;
-    caller.expect_requester(Some(expected_requester), TASK_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
-    let (task, event) = create_catalog_task(
-        &state.db,
-        caller.org_id,
-        caller.user_id,
-        &name,
+    let details = TaskDetails {
+        name,
         billable_default,
         is_default,
-        &rate,
+        rate,
+    };
+    Ok(task_create(
+        &state.db,
+        &*state.plugins,
+        caller,
+        expected_requester,
+        &details,
     )
-    .await?;
-
-    state
-        .plugins
-        .dispatch(crate::plugin::AppEvent::TaskCreated {
-            occurred_at: chrono::Utc::now(),
-            org_id: caller.org_id,
-            task: event,
-        });
-    Ok(task)
+    .await?)
 }
 
-/// Begins a task write holding the organization `gate` and requires
-/// `TaskWriteAll`.
+/// Begins a task write holding the organization `gate`.
 #[cfg(feature = "server")]
 async fn begin_task_write(
     db: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    actor_id: uuid::Uuid,
+    caller: Caller,
     gate: OrganizationLock,
-) -> Result<(crate::ops::Tx, crate::ops::Actor), ServerFnError> {
-    let write = crate::ops::begin_gated(
-        db,
-        crate::ops::Caller::session(org_id, actor_id),
-        gate,
-        crate::ops::WriteIsolation::ReadCommitted,
-    )
-    .await?;
-    if !write.actor.has(Permission::TaskWriteAll) {
-        let refusal = forbidden("Current task editing authority is required");
-        return Err(write.refuse(refusal).await);
-    }
-    Ok((write.tx, write.actor))
+) -> Result<ops::WriteTx, ops::OpError> {
+    ops::begin_gated(db, caller, gate, ops::WriteIsolation::ReadCommitted).await
 }
 
-/// Adds a task to the organization catalog. Projects link tasks through the
-/// project editor, as Harvest links them through task assignments.
 #[cfg(feature = "server")]
-async fn create_catalog_task(
+async fn task_create(
     db: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    actor_id: uuid::Uuid,
-    name: &str,
-    billable_default: bool,
-    is_default: bool,
-    rate: &TaskRateEdit,
-) -> Result<(Task, crate::plugin::event::TaskPayload), ServerFnError> {
-    let name = name.trim();
-    if name.is_empty() {
-        return Err(conflict("Task name cannot be empty"));
-    }
-    let (mut tx, actor) = begin_task_write(db, org_id, actor_id, OrganizationLock::Shared).await?;
-    let (amount, currency) = authorize_task_rate(&mut tx, org_id, &actor, rate).await?;
-    let id = uuid::Uuid::now_v7();
-    let mut task = sqlx::query_as!(
-        Task,
-        "INSERT INTO tasks (id, org_id, name, billable_default, default_rate_cents, default_rate_currency, is_default)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, org_id, name, billable_default, default_rate_cents, active",
-        id,
-        org_id,
-        name,
-        billable_default,
-        amount,
-        currency,
-        is_default,
-    )
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(server_err)?;
-    let event = task_payload(&task);
-    if !actor.has(Permission::BillableRateReadAll) {
-        task.default_rate_cents = None;
-    }
-    tx.commit().await.map_err(server_err)?;
-    Ok((task, event))
+    events: &dyn ops::EventSink,
+    caller: Caller,
+    expected: PermissionRequester,
+    details: &TaskDetails,
+) -> Result<Task, ops::OpError> {
+    let mut write = begin_task_write(db, caller, OrganizationLock::Shared).await?;
+    let result = task_writes::create(&mut write.tx, &write.actor, expected, details).await;
+    write.commit(result, events).await
 }
 
 #[server]
@@ -454,133 +402,37 @@ pub async fn update_task(
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
     let caller = session_caller().await?;
-    caller.expect_requester(Some(expected_requester), TASK_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
-    let (task, event) = update_task_record(
-        &state.db,
-        caller.org_id,
-        caller.user_id,
-        task_id,
-        &name,
-        billable_default,
-        is_default,
-        &rate,
-    )
-    .await?;
-    if let Some(payload) = event {
-        state
-            .plugins
-            .dispatch(crate::plugin::AppEvent::TaskUpdated {
-                occurred_at: chrono::Utc::now(),
-                org_id: caller.org_id,
-                task: payload,
-            });
-    }
-    Ok(task)
-}
-
-#[cfg(feature = "server")]
-#[allow(clippy::too_many_arguments)]
-async fn update_task_record(
-    db: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    actor_id: uuid::Uuid,
-    task_id: uuid::Uuid,
-    name: &str,
-    billable_default: bool,
-    is_default: bool,
-    rate: &TaskRateEdit,
-) -> Result<(Task, Option<crate::plugin::event::TaskPayload>), ServerFnError> {
-    let name = name.trim();
-    if name.is_empty() {
-        return Err(conflict("Task name cannot be empty"));
-    }
-    let (mut tx, actor) = begin_task_write(db, org_id, actor_id, OrganizationLock::Shared).await?;
-    let (amount, currency) = authorize_task_rate(&mut tx, org_id, &actor, rate).await?;
-    let preserve = matches!(rate, TaskRateEdit::Preserve {});
-    let before = lock_task(&mut tx, org_id, task_id).await?;
-
-    let task = sqlx::query_as!(
-        Task,
-        "UPDATE tasks
-            SET name = $3, billable_default = $4, is_default = $8,
-                default_rate_cents = CASE WHEN $5 THEN default_rate_cents ELSE $6 END,
-                default_rate_currency = CASE WHEN $5 THEN default_rate_currency ELSE $7 END
-          WHERE id = $1 AND org_id = $2
-            AND (name, billable_default, is_default, default_rate_cents, default_rate_currency)
-                IS DISTINCT FROM ($3, $4, $8,
-                    CASE WHEN $5 THEN default_rate_cents ELSE $6 END,
-                    CASE WHEN $5 THEN default_rate_currency ELSE $7 END)
-         RETURNING id, org_id, name, billable_default, default_rate_cents, active",
-        task_id,
-        org_id,
+    let details = TaskDetails {
         name,
         billable_default,
-        preserve,
-        amount,
-        currency,
         is_default,
+        rate,
+    };
+    Ok(task_update(
+        &state.db,
+        &*state.plugins,
+        caller,
+        expected_requester,
+        task_id,
+        &details,
     )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?;
-
-    // Service events retain their committed payload; session responses must not
-    // inherit that service authority over a hidden global rate.
-    let event = task.as_ref().map(task_payload);
-    let mut task = task.unwrap_or(before);
-    if !actor.has(Permission::BillableRateReadAll) {
-        task.default_rate_cents = None;
-    }
-    tx.commit().await.map_err(server_err)?;
-    Ok((task, event))
+    .await?)
 }
 
 #[cfg(feature = "server")]
-async fn authorize_task_rate(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    org_id: uuid::Uuid,
-    actor: &crate::ops::Actor,
-    rate: &TaskRateEdit,
-) -> Result<(Option<i64>, Option<String>), ServerFnError> {
-    use horae_core::permissions::rates::RateEdit;
-
-    let intent = match rate {
-        TaskRateEdit::Preserve {} => RateEdit::Unchanged,
-        TaskRateEdit::Clear {} => RateEdit::Reset,
-        TaskRateEdit::Set { amount_cents, .. } => RateEdit::Set(*amount_cents),
-    };
-    intent
-        .authorize(actor.has(Permission::BillableRateWriteAll))
-        .map_err(|_| forbidden("Current global billable-rate editing authority is required"))?;
-    if let TaskRateEdit::Set {
-        amount_cents,
-        currency,
-    } = rate
-    {
-        if *amount_cents < 0 {
-            return Err(err(BAD_REQUEST, "Task rate must not be negative"));
-        }
-        let current = sqlx::query_scalar!(
-            "SELECT upper(btrim(default_currency)) AS \"currency!\" FROM organizations WHERE id=$1",
-            org_id
-        )
-        .fetch_one(&mut **tx)
-        .await
-        .map_err(server_err)?;
-        if current.len() != 3
-            || !current.bytes().all(|byte| byte.is_ascii_uppercase())
-            || !currency.trim().eq_ignore_ascii_case(&current)
-        {
-            return Err(conflict(
-                "Task rate currency changed. Reload the task and enter its rate again",
-            ));
-        }
-        Ok((Some(*amount_cents), Some(current)))
-    } else {
-        Ok((None, None))
-    }
+async fn task_update(
+    db: &sqlx::PgPool,
+    events: &dyn ops::EventSink,
+    caller: Caller,
+    expected: PermissionRequester,
+    task_id: uuid::Uuid,
+    details: &TaskDetails,
+) -> Result<Task, ops::OpError> {
+    let mut write = begin_task_write(db, caller, OrganizationLock::Shared).await?;
+    let result = task_writes::update(&mut write.tx, &write.actor, expected, task_id, details).await;
+    write.commit(result, events).await
 }
 
 /// Activate or deactivate an org-level task. Deactivated tasks are hidden from
@@ -592,148 +444,127 @@ pub async fn set_task_active(
     expected_requester: PermissionRequester,
 ) -> Result<Task, ServerFnError> {
     let caller = session_caller().await?;
-    caller.expect_requester(Some(expected_requester), TASK_REQUESTER_CHANGED)?;
     let state = crate::state::global_state().await;
     let task_id = parse_uuid(&task_id, "task_id")?;
-    let (task, event) =
-        set_task_active_record(&state.db, caller.org_id, caller.user_id, task_id, active).await?;
-    if let Some(event) = event {
-        state.plugins.dispatch(event);
-    }
-    Ok(task)
-}
-
-#[cfg(feature = "server")]
-async fn set_task_active_record(
-    db: &sqlx::PgPool,
-    org_id: uuid::Uuid,
-    actor_id: uuid::Uuid,
-    task_id: uuid::Uuid,
-    active: bool,
-) -> Result<(Task, Option<crate::plugin::AppEvent>), ServerFnError> {
-    // Tracking writers hold the shared gate through entry insertion.
-    let (mut tx, actor) =
-        begin_task_write(db, org_id, actor_id, OrganizationLock::AccessChange).await?;
-    // The gate stops every access check in the organization: a refusal rolls
-    // back before it is answered.
-    let result = set_task_active_in(&mut tx, &actor, org_id, task_id, active).await;
-    crate::ops::commit_or_roll_back(tx, result, server_err).await
-}
-
-#[cfg(feature = "server")]
-async fn set_task_active_in(
-    tx: &mut sqlx::PgConnection,
-    actor: &crate::ops::Actor,
-    org_id: uuid::Uuid,
-    task_id: uuid::Uuid,
-    active: bool,
-) -> Result<(Task, Option<crate::plugin::AppEvent>), ServerFnError> {
-    if !active {
-        // Link updates invalidate editors through their parent project trigger.
-        // Take every parent before the task/link locks, in stable order.
-        sqlx::query_scalar!(
-            "SELECT p.id FROM projects p JOIN project_tasks pt ON pt.project_id=p.id
-             JOIN tasks t ON t.id=pt.task_id AND t.org_id=p.org_id
-             WHERE p.org_id=$1 AND t.id=$2 ORDER BY p.id FOR NO KEY UPDATE OF p",
-            org_id,
-            task_id,
-        )
-        .fetch_all(&mut *tx)
-        .await
-        .map_err(server_err)?;
-    }
-    let before = lock_task(tx, org_id, task_id).await?;
-
-    if !active {
-        let running = sqlx::query_scalar!(
-            r#"SELECT EXISTS(SELECT 1 FROM time_entries
-                WHERE org_id=$1 AND task_id=$2 AND is_running) AS "running!""#,
-            org_id,
-            task_id,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(server_err)?;
-        if running {
-            // Do not reveal an entry or its owner to a task-only administrator.
-            return Err(conflict("A running timer prevents archiving this task"));
-        }
-    }
-
-    let task = sqlx::query_as!(
-        Task,
-        "UPDATE tasks SET active = $3
-          WHERE id = $1 AND org_id = $2
-            AND active IS DISTINCT FROM $3
-         RETURNING id, org_id, name, billable_default, default_rate_cents, active",
+    Ok(task_set_active(
+        &state.db,
+        &*state.plugins,
+        caller,
+        expected_requester,
         task_id,
-        org_id,
         active,
     )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?;
-
-    let transition = task.as_ref().and_then(|updated| {
-        crate::plugin::event::active_transition(Some(before.active), updated.active)
-    });
-    if !active {
-        sqlx::query!(
-            "UPDATE project_tasks pt SET active=false FROM projects p
-             WHERE pt.project_id=p.id AND p.org_id=$1 AND pt.task_id=$2 AND pt.active",
-            org_id,
-            task_id,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(server_err)?;
-    }
-    let mut task = task.unwrap_or(before);
-    let event = transition.map(|transition| {
-        let occurred_at = chrono::Utc::now();
-        let task = task_payload(&task);
-        match transition {
-            crate::plugin::event::ActiveTransition::Reactivated => {
-                crate::plugin::AppEvent::TaskReactivated {
-                    occurred_at,
-                    org_id,
-                    task,
-                }
-            }
-            crate::plugin::event::ActiveTransition::Deactivated => {
-                crate::plugin::AppEvent::TaskDeactivated {
-                    occurred_at,
-                    org_id,
-                    task,
-                }
-            }
-        }
-    });
-    if !actor.has(Permission::BillableRateReadAll) {
-        task.default_rate_cents = None;
-    }
-    Ok((task, event))
+    .await?)
 }
 
+/// Holds the `AccessChange` gate: tracking writers hold the shared gate
+/// through entry insertion.
 #[cfg(feature = "server")]
-async fn lock_task(
-    tx: &mut sqlx::PgConnection,
-    org_id: uuid::Uuid,
+async fn task_set_active(
+    db: &sqlx::PgPool,
+    events: &dyn ops::EventSink,
+    caller: Caller,
+    expected: PermissionRequester,
     task_id: uuid::Uuid,
-) -> Result<Task, ServerFnError> {
-    // Share the row lock between detail edits and activation changes, including no-ops.
-    sqlx::query_as!(
-        Task,
-        "SELECT id, org_id, name, billable_default, default_rate_cents, active
-         FROM tasks WHERE id = $1 AND org_id = $2 FOR UPDATE",
-        task_id,
-        org_id,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(server_err)?
-    .ok_or_else(|| not_found("Task not found"))
+    active: bool,
+) -> Result<Task, ops::OpError> {
+    let mut write = begin_task_write(db, caller, OrganizationLock::AccessChange).await?;
+    let result =
+        task_writes::set_active(&mut write.tx, &write.actor, expected, task_id, active).await;
+    write.commit(result, events).await
 }
+
+/// The task writes as the tests drive them: as the person `actor_id`, bound
+/// to their own session, with the payload of the event each committed.
+#[cfg(all(test, feature = "server"))]
+mod task_records {
+    use super::*;
+    use crate::ops::testing::Recorder;
+    use crate::plugin::AppEvent;
+    use crate::plugin::event::TaskPayload;
+
+    fn session(org_id: uuid::Uuid, actor_id: uuid::Uuid) -> (Caller, PermissionRequester) {
+        let requester = PermissionRequester {
+            org_id,
+            user_id: actor_id,
+        };
+        (Caller::session(org_id, actor_id), requester)
+    }
+
+    fn details(
+        name: &str,
+        billable_default: bool,
+        is_default: bool,
+        rate: &TaskRateEdit,
+    ) -> TaskDetails {
+        TaskDetails {
+            name: name.into(),
+            billable_default,
+            is_default,
+            rate: rate.clone(),
+        }
+    }
+
+    pub(in crate::server_fns) async fn create_catalog_task(
+        db: &sqlx::PgPool,
+        org_id: uuid::Uuid,
+        actor_id: uuid::Uuid,
+        name: &str,
+        billable_default: bool,
+        is_default: bool,
+        rate: &TaskRateEdit,
+    ) -> Result<(Task, TaskPayload), ServerFnError> {
+        let events = Recorder::default();
+        let (caller, requester) = session(org_id, actor_id);
+        let details = details(name, billable_default, is_default, rate);
+        let task = task_create(db, &events, caller, requester, &details).await?;
+        let payload = events.take().into_iter().find_map(|event| match event {
+            AppEvent::TaskCreated { task, .. } => Some(task),
+            _ => None,
+        });
+        Ok((
+            task,
+            payload.expect("a created task announces task_created"),
+        ))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(in crate::server_fns) async fn update_task_record(
+        db: &sqlx::PgPool,
+        org_id: uuid::Uuid,
+        actor_id: uuid::Uuid,
+        task_id: uuid::Uuid,
+        name: &str,
+        billable_default: bool,
+        is_default: bool,
+        rate: &TaskRateEdit,
+    ) -> Result<(Task, Option<TaskPayload>), ServerFnError> {
+        let events = Recorder::default();
+        let (caller, requester) = session(org_id, actor_id);
+        let details = details(name, billable_default, is_default, rate);
+        let task = task_update(db, &events, caller, requester, task_id, &details).await?;
+        let payload = events.take().into_iter().find_map(|event| match event {
+            AppEvent::TaskUpdated { task, .. } => Some(task),
+            _ => None,
+        });
+        Ok((task, payload))
+    }
+
+    pub(in crate::server_fns) async fn set_task_active_record(
+        db: &sqlx::PgPool,
+        org_id: uuid::Uuid,
+        actor_id: uuid::Uuid,
+        task_id: uuid::Uuid,
+        active: bool,
+    ) -> Result<(Task, Option<AppEvent>), ServerFnError> {
+        let events = Recorder::default();
+        let (caller, requester) = session(org_id, actor_id);
+        let task = task_set_active(db, &events, caller, requester, task_id, active).await?;
+        Ok((task, events.take().pop()))
+    }
+}
+#[cfg(all(test, feature = "server"))]
+use task_records::{create_catalog_task, set_task_active_record, update_task_record};
 
 // ── Assignments ─────────────────────────────────────────────────────────────
 

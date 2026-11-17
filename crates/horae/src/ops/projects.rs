@@ -1,6 +1,7 @@
 //! Project operations: the project and task reads, archiving and restoring
-//! (FR-011), the project editor ([`editor`]), its managers ([`managers`])
-//! and the people its form offers ([`people`]).
+//! (FR-011), creating a project ([`creation`]), the project editor
+//! ([`editor`]), its managers ([`managers`]), the people its form offers
+//! ([`people`]) and the task catalog's writes ([`task_writes`]).
 //!
 //! Every decision goes through [`Actor::has`], on the actor's stored grants.
 
@@ -16,6 +17,7 @@ use crate::plugin::AppEvent;
 use crate::plugin::event::{ActiveTransition, active_transition};
 
 pub(crate) mod budgets;
+pub(crate) mod creation;
 mod detail;
 pub(crate) mod editor;
 pub(crate) mod form;
@@ -23,6 +25,7 @@ pub(crate) mod managers;
 pub(crate) mod people;
 mod reads;
 mod task_catalog;
+pub(crate) mod task_writes;
 
 pub(crate) use budgets::progress as budget_progress;
 pub(crate) use detail::view as detail_view;

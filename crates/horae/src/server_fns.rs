@@ -1,8 +1,9 @@
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
-pub(crate) use horae_core::types::{
-    BudgetKind, EntryState, InvoiceStatus, ProjectRole, ProjectType,
-};
+pub(crate) use horae_core::types::{EntryState, InvoiceStatus};
+// The tests reach these through `use super::*`.
+#[cfg(all(test, feature = "server"))]
+pub(crate) use horae_core::types::{BudgetKind, ProjectRole, ProjectType};
 
 #[cfg(feature = "server")]
 pub(crate) use crate::models::User;
@@ -62,14 +63,6 @@ pub(crate) fn server_err(msg: impl std::fmt::Display) -> ServerFnError {
 #[cfg(feature = "server")]
 pub(crate) fn not_found(msg: impl std::fmt::Display) -> ServerFnError {
     err(NOT_FOUND, msg)
-}
-#[cfg(feature = "server")]
-pub(crate) fn forbidden(msg: impl std::fmt::Display) -> ServerFnError {
-    err(FORBIDDEN, msg)
-}
-#[cfg(feature = "server")]
-pub(crate) fn conflict(msg: impl std::fmt::Display) -> ServerFnError {
-    err(CONFLICT, msg)
 }
 #[cfg(feature = "server")]
 pub(crate) fn unauthorized(msg: impl std::fmt::Display) -> ServerFnError {

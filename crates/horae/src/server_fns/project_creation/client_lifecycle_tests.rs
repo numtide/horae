@@ -87,9 +87,11 @@ async fn prepare(pool: &PgPool, ids: &SeedIds, writer: Writer) -> (Uuid, Project
     (target, request, draft)
 }
 
-/// A writer that waits for an archive of its client must write nothing, at
-/// READ COMMITTED (it then reads the archived client) and at REPEATABLE READ
-/// (its share lock on a client changed after its snapshot fails to serialize).
+/// A writer that waits for an archive of its client must write nothing,
+/// whatever the session's default isolation: finalization runs at READ
+/// COMMITTED (it then reads the archived client), the editor's save at
+/// SERIALIZABLE (its share lock on a client changed after its snapshot fails
+/// to serialize).
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 #[serial_test::serial]
 async fn creation_and_reassignment_waiting_for_a_client_archive_write_nothing(pool: PgPool) {
@@ -112,16 +114,15 @@ async fn creation_and_reassignment_waiting_for_a_client_archive_write_nothing(po
                 .await
                 .unwrap()
                 .unwrap();
-            let expected = match (writer, isolation) {
-                // Finalization reads the committed archive and refuses the client.
-                (Writer::Finalize, "default") => {
-                    (NOT_FOUND, "Select an active client in this organization")
-                }
-                // Otherwise the share lock meets a client changed after the
-                // snapshot, which `storage_error` reports as a conflict to reload.
-                // The editor's save always sets SERIALIZABLE itself
-                // (`editing/save.rs`), whatever the session default.
-                _ => (
+            let expected = match writer {
+                // Finalization begins at READ COMMITTED whatever the session
+                // default (`ops::begin_gated`), so it reads the committed
+                // archive and refuses the client.
+                Writer::Finalize => (NOT_FOUND, "Select an active client in this organization"),
+                // The editor's save always sets SERIALIZABLE itself, so its
+                // share lock meets a client changed after the snapshot, which
+                // `ops::projects::form::storage` reports as a conflict to reload.
+                Writer::Reassign => (
                     CONFLICT,
                     "The project changed while saving. Reload before retrying.",
                 ),

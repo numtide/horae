@@ -19,7 +19,7 @@
 //! and [`WriteTx::commit`] dispatches them in memory after the commit, so a
 //! crash between the two loses them. Two writers instead insert their event
 //! into the outbox (`jobs::enqueue_outbox`) inside their own transaction:
-//! `finalize_project_draft` (`project_created`) and the Harvest importer
+//! `projects::creation::finalize` (`project_created`) and the Harvest importer
 //! (`user_created`). Their delivery survives a crash right after the commit,
 //! which is why they stay on the outbox rather than moving to [`Done`].
 
@@ -246,12 +246,6 @@ impl WriteTx {
             events.dispatch(event);
         }
         Ok(done.value)
-    }
-
-    /// Rolls back a write the adapter refuses outside its operation, and
-    /// returns the adapter's error.
-    pub async fn refuse<E>(self, error: E) -> E {
-        roll_back(self.tx, error).await
     }
 }
 
