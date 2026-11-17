@@ -1128,7 +1128,7 @@ mod tests {
                 &pool,
                 ids.org_id,
                 "EUR",
-                axum::body::Body::from(csv.clone()),
+                crate::importers::harvest::csv_source::csv_body(csv.clone()),
                 horae_core::importers::harvest::types::ImportMode::Commit,
             )
             .await

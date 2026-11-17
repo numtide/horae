@@ -301,7 +301,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         )
         .route(
             "/api/import/harvest/jobs/{job_id}/errors",
-            get(crate::jobs::report::download),
+            get(crate::http::import_errors::download),
         )
         .route(
             "/test/login/{id}",
@@ -323,13 +323,13 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             }),
         )
         .with_state(FullstackState::headless())
-        .merge(crate::importers::harvest::callback_router())
+        .merge(crate::http::harvest_oauth::callback_router())
         .route(
             "/test/harvest-attempt",
             get(|session: Session| async move {
                 axum::Json(
                     session
-                        .get::<String>(crate::importers::harvest::OAUTH_STATE_KEY)
+                        .get::<String>(crate::http::harvest_oauth::OAUTH_STATE_KEY)
                         .await
                         .unwrap()
                         .map(|encoded| {

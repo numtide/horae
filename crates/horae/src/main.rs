@@ -13,6 +13,8 @@ mod db;
 #[cfg(feature = "server")]
 mod harvest;
 #[cfg(feature = "server")]
+mod http;
+#[cfg(feature = "server")]
 mod importers;
 #[cfg(feature = "server")]
 mod init;
@@ -349,10 +351,10 @@ fn main() -> anyhow::Result<()> {
                         get(reports::export_invoice_pdf),
                     )
                     .merge(auth::router(cfg.dev_login))
-                    .merge(importers::harvest::callback_router())
+                    .merge(http::harvest_oauth::callback_router())
                     .route(
                         "/api/import/harvest/jobs/{job_id}/errors",
-                        get(jobs::report::download),
+                        get(http::import_errors::download),
                     )
                     .merge(harvest::router(pool.clone()))
                     // Redirect signed-out page loads to /auth/login. Layered inside

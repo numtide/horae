@@ -1,12 +1,13 @@
-//! Bridge the async request body to the blocking CSV parser with a one-row queue.
+//! Bridge the async upload stream to the blocking CSV parser with a one-row queue.
 
 use std::collections::VecDeque;
-use std::future::poll_fn;
 use std::io::{self, Read};
 use std::sync::Arc;
 
 use anyhow::Context;
-use axum::body::{Body, Bytes, HttpBody};
+use bytes::Bytes;
+use futures_util::StreamExt;
+use futures_util::stream::BoxStream;
 use horae_core::importers::harvest::types::{EntityType, ImportMode, RowOutcome, SourceKind};
 use tokio::sync::{Mutex, mpsc};
 use uuid::Uuid;
@@ -57,8 +58,16 @@ async fn read_batch(
     }
 }
 
+/// The uploaded CSV, chunk by chunk. A failed chunk aborts the import.
+pub(crate) type CsvBody = BoxStream<'static, io::Result<Bytes>>;
+
+/// An upload already held in memory, as a single chunk.
+pub(crate) fn csv_body(bytes: impl Into<Bytes>) -> CsvBody {
+    futures_util::stream::iter([Ok(bytes.into())]).boxed()
+}
+
 struct BodyReader<'a> {
-    body: Body,
+    body: CsvBody,
     remaining: Bytes,
     runtime: tokio::runtime::Handle,
     rows: &'a mpsc::Sender<Record>,
@@ -75,16 +84,14 @@ impl Read for BodyReader<'_> {
         while self.remaining.is_empty() {
             // A disconnected consumer must wake a parser waiting for a slow
             // upload as well as one waiting to send its next parsed record.
-            let frame = self.runtime.block_on(async {
+            let chunk = self.runtime.block_on(async {
                 tokio::select! {
                     _ = self.rows.closed() => Err(io::Error::other("CSV import cancelled")),
-                    frame = poll_fn(|cx| std::pin::Pin::new(&mut self.body).poll_frame(cx)) => Ok(frame),
+                    chunk = self.body.next() => Ok(chunk),
                 }
             })?;
-            let Some(frame) = frame else { return Ok(0) };
-            if let Ok(bytes) = frame.map_err(io::Error::other)?.into_data() {
-                self.remaining = bytes;
-            }
+            let Some(chunk) = chunk else { return Ok(0) };
+            self.remaining = chunk?;
         }
         let count = output.len().min(self.remaining.len());
         output[..count].copy_from_slice(&self.remaining.split_to(count));
@@ -92,14 +99,14 @@ impl Read for BodyReader<'_> {
     }
 }
 
-/// Import an unbuffered HTTP body. Only normal EOF permits a commit; a broken
+/// Import an unbuffered upload. Only normal EOF permits a commit; a broken
 /// upload or cancelled parser rolls back the whole run, including parent rows.
 #[cfg(test)]
 pub async fn import_body(
     pool: &sqlx::PgPool,
     org_id: Uuid,
     default_currency: &str,
-    body: Body,
+    body: CsvBody,
     mode: ImportMode,
 ) -> Result<ImportReport, CsvError> {
     import_body_with_lease(pool, org_id, default_currency, body, mode, None).await
@@ -111,7 +118,7 @@ pub(crate) async fn import_body_with_lease(
     pool: &sqlx::PgPool,
     org_id: Uuid,
     default_currency: &str,
-    body: Body,
+    body: CsvBody,
     mode: ImportMode,
     lease: Option<&crate::jobs::JobLease>,
 ) -> Result<ImportReport, CsvError> {

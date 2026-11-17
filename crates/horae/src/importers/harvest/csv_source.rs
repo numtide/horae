@@ -23,8 +23,10 @@ use super::report::ImportReport;
 
 mod upload;
 #[cfg(test)]
+pub(crate) use upload::CsvBody;
+#[cfg(test)]
 pub use upload::import_body;
-pub(crate) use upload::import_body_with_lease;
+pub(crate) use upload::{csv_body, import_body_with_lease};
 
 /// Columns that must be present for the file to be a recognizable export.
 const REQUIRED: &[&str] = &["date", "client", "project", "task", "hours"];
@@ -311,7 +313,7 @@ pub async fn import_csv(
         pool,
         org_id,
         default_currency,
-        axum::body::Body::from(bytes.to_vec()),
+        csv_body(bytes.to_vec()),
         mode,
     )
     .await

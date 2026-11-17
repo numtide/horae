@@ -24,7 +24,7 @@ pub(super) async fn api_id(pool: &PgPool, kind: &str, horae_id: Uuid) -> i64 {
         "user" => ids::Kind::User,
         other => panic!("no API kind {other}"),
     };
-    ids::number(pool, kind, horae_id).await
+    crate::importers::harvest::ids::number(pool, kind, horae_id).await
 }
 
 pub(super) async fn signed_in(pool: &PgPool, user_id: Uuid) -> Router {

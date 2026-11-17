@@ -1,9 +1,8 @@
 //! A CSV creates missing people from rows with an email, never from a name.
 
-use axum::body::Body;
 use horae_core::importers::harvest::types::{PersonErrorKind, PersonOutcome};
 
-use super::super::csv_source::{import_body, import_body_with_lease};
+use super::super::csv_source::{csv_body, import_body, import_body_with_lease};
 use super::*;
 
 const HEADER: &str = "Date,Client,Project,Task,Hours,First Name,Last Name,Email\n";
@@ -32,7 +31,7 @@ async fn import(
     csv: &str,
     mode: ImportMode,
 ) -> super::super::report::ImportReport {
-    import_body(pool, org, "USD", Body::from(csv.to_owned()), mode)
+    import_body(pool, org, "USD", csv_body(csv.to_owned()), mode)
         .await
         .unwrap()
 }
@@ -145,7 +144,7 @@ async fn a_durable_preview_keeps_a_simulated_person_across_batches(pool: PgPool)
             &pool,
             org,
             "USD",
-            Body::from(csv),
+            csv_body(csv),
             ImportMode::DryRun,
             Some(&lease),
         )

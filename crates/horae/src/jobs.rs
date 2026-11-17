@@ -967,7 +967,7 @@ async fn run_worker(state: &AppState, mut stop: tokio::sync::watch::Receiver<boo
     }
 }
 
-async fn cleanup(pool: &sqlx::PgPool) -> anyhow::Result<()> {
+pub(crate) async fn cleanup(pool: &sqlx::PgPool) -> anyhow::Result<()> {
     sqlx::query!(
         r#"DELETE FROM horae_job_uploads u
              USING horae_jobs j
@@ -1104,7 +1104,7 @@ async fn execute(state: &AppState, worker_id: &str, job: ClaimedJob) -> anyhow::
                     &state.db,
                     job.org_id,
                     &currency,
-                    axum::body::Body::from(upload.body),
+                    crate::importers::harvest::csv_source::csv_body(upload.body),
                     *mode,
                     Some(&lease),
                 )
@@ -1512,7 +1512,7 @@ mod tests {
             &pool,
             foreign,
             "USD",
-            axum::body::Body::empty(),
+            crate::importers::harvest::csv_source::csv_body(Vec::new()),
             ImportMode::Commit,
             Some(&lease),
         )
