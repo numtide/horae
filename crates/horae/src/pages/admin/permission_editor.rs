@@ -1,11 +1,11 @@
 use dioxus::prelude::*;
-use horae_core::permissions::catalog::{BuiltInProfile, Permission};
+use horae_core::permissions::catalog::{BuiltInProfile, Permission, profile_label};
 use uuid::Uuid;
 
 use crate::components::controls::Checkbox;
 use crate::components::form::FormGroup;
 use crate::components::modal::Modal;
-use crate::components::permission_description::{permission_description, profile_label};
+use crate::components::permission_description::permission_description;
 use crate::models::permission_editor::{
     PermissionRequester, ProfileAction, ProfilePreview, ProfileSource,
 };

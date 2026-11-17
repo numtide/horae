@@ -1,17 +1,6 @@
 //! Shared presentation copy; these labels never authorize an operation.
 
-use horae_core::permissions::catalog::{BuiltInProfile, Permission};
-
-pub fn profile_label(profile: BuiltInProfile) -> &'static str {
-    match profile {
-        BuiltInProfile::Member => "Member",
-        BuiltInProfile::ProjectManager => "Project Manager",
-        BuiltInProfile::PeopleAdmin => "People Admin",
-        BuiltInProfile::Accounting => "Accounting",
-        BuiltInProfile::ExecutiveManager => "Executive Manager",
-        BuiltInProfile::Administrator => "Administrator",
-    }
-}
+use horae_core::permissions::catalog::Permission;
 
 pub fn permission_description(permission: Permission) -> &'static str {
     use Permission::*;

@@ -48,8 +48,7 @@ pub(crate) async fn overview(
         can_create: actor.has(Permission::ProjectCreateAll),
         can_import: actor.administrator(),
         can_change_status: writes_any(|permission| actor.has(permission)),
-        // The Clients page's `ClientReadScope::can_read`.
-        can_open_clients: actor.has(Permission::ClientReadAll),
+        can_open_clients: crate::ops::clients::reads_catalog(actor),
         projects: project_rows(tx, actor, None, true, ProjectRead::Overview).await?,
     })
 }

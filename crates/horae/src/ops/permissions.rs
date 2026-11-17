@@ -8,6 +8,7 @@
 
 use horae_core::permissions::catalog::{
     PERMISSION_CATALOG_VERSION, Permission, PermissionSelection, StoredPermissionError,
+    profile_label,
 };
 use serde::{Deserialize, de::IntoDeserializer};
 use sqlx::PgConnection;
@@ -201,9 +202,7 @@ pub(crate) async fn profile_name(
     source: PermissionSource,
 ) -> Result<Option<String>, sqlx::Error> {
     match source {
-        PermissionSource::BuiltIn(profile) => Ok(Some(
-            crate::components::permission_description::profile_label(profile).to_owned(),
-        )),
+        PermissionSource::BuiltIn(profile) => Ok(Some(profile_label(profile).to_owned())),
         PermissionSource::Template { id, .. } => {
             sqlx::query_scalar!(
                 "SELECT name FROM permission_templates WHERE org_id = $1 AND id = $2",

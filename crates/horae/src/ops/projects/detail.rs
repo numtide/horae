@@ -74,8 +74,7 @@ pub(crate) async fn view_on(
     )
     .fetch_all(&mut **tx)
     .await?;
-    // The Clients page's `ClientReadScope::can_read`, applied to this reader.
-    let can_open_client = actor.has(Permission::ClientReadAll);
+    let can_open_client = crate::ops::clients::reads_catalog(actor);
     let budget = super::budgets::headline(tx, actor, project_id, today).await?;
     Ok(ProjectDetailView {
         requester,

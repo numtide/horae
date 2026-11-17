@@ -464,6 +464,18 @@ impl BuiltInProfile {
     }
 }
 
+/// The profile's display name. Presentation copy; it never authorizes anything.
+pub fn profile_label(profile: BuiltInProfile) -> &'static str {
+    match profile {
+        BuiltInProfile::Member => "Member",
+        BuiltInProfile::ProjectManager => "Project Manager",
+        BuiltInProfile::PeopleAdmin => "People Admin",
+        BuiltInProfile::Accounting => "Accounting",
+        BuiltInProfile::ExecutiveManager => "Executive Manager",
+        BuiltInProfile::Administrator => "Administrator",
+    }
+}
+
 #[cfg(test)]
 mod tests;
 

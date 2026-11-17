@@ -25,10 +25,15 @@ const CURRENCY_NEEDS_RATE_WRITE: &str =
     "Changing a client's currency requires permission to edit billable rates";
 const ARCHIVE_PROJECTS_FIRST: &str = "Archive this client's projects before archiving the client.";
 
+/// Whether the actor may read the client catalog, and so open the Clients page.
+pub(crate) fn reads_catalog(actor: &Actor) -> bool {
+    horae_core::permissions::clients::reads_catalog(|permission| actor.has(permission))
+}
+
 /// FR-035: the client default is a global rate. Reading it needs the client
 /// catalog plus everyone's billable rates; managed-rate grants never apply.
 fn reads_default_rate(actor: &Actor) -> bool {
-    actor.has(Permission::ClientReadAll) && actor.has(Permission::BillableRateReadAll)
+    reads_catalog(actor) && actor.has(Permission::BillableRateReadAll)
 }
 
 fn writes_default_rate(actor: &Actor) -> bool {
@@ -303,7 +308,7 @@ pub(crate) async fn details(
     actor: &Actor,
     client_id: Uuid,
 ) -> Result<ClientDetails, OpError> {
-    if !actor.has(Permission::ClientReadAll) {
+    if !reads_catalog(actor) {
         return Err(OpError::not_found(NOT_FOUND));
     }
     let row = sqlx::query!(
@@ -343,7 +348,7 @@ pub(crate) async fn detail_view(
     Ok(ClientDetailView {
         requester,
         can_manage: actor.has(Permission::ClientWriteAll),
-        can_read_invoices: super::invoices::holds(actor, super::invoices::READ),
+        can_read_invoices: super::invoices::authorize_read(actor, super::invoices::READ).is_ok(),
         details,
     })
 }
@@ -377,9 +382,8 @@ pub(crate) async fn invoices(
     actor: &Actor,
     client_id: Uuid,
 ) -> Result<Vec<Invoice>, OpError> {
-    if !super::invoices::holds(actor, super::invoices::READ) {
-        return Err(OpError::forbidden(INVOICES_REQUIRED));
-    }
+    super::invoices::authorize_read(actor, super::invoices::READ)
+        .map_err(|_| OpError::forbidden(INVOICES_REQUIRED))?;
     details(tx, actor, client_id).await?;
     Ok(super::invoices::list(tx, actor.org_id(), None, Some(client_id)).await?)
 }
@@ -395,7 +399,7 @@ pub(crate) async fn list(
     if !actor.is_active() {
         return Err(OpError::forbidden("Account is not active"));
     }
-    let catalog = actor.has(Permission::ClientReadAll);
+    let catalog = reads_catalog(actor);
     Ok(sqlx::query_as!(
         Client,
         r#"SELECT c.id, c.org_id, c.name, c.currency,
@@ -438,7 +442,7 @@ pub(crate) struct ClientReadScope {
 impl ClientReadScope {
     fn of(actor: &Actor) -> Self {
         Self {
-            catalog: actor.has(Permission::ClientReadAll),
+            catalog: reads_catalog(actor),
             projects_all: actor.has(Permission::ProjectReadAll),
             projects_managed: actor.has(Permission::ProjectReadManaged),
         }
