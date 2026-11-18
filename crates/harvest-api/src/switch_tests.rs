@@ -14,7 +14,7 @@ async fn app(pool: &PgPool, enabled: bool, user_id: Uuid) -> Router {
     horae_api::session::set_session_user_id(&session, user_id)
         .await
         .unwrap();
-    mount(enabled, pool.clone())
+    mount(enabled, pool.clone(), crate::pagination_tests::limiter())
         .merge(horae_api::harvest_oauth::callback_router())
         .layer(Extension(session))
 }

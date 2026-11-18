@@ -1,7 +1,9 @@
 //! Harvest API v2 compatibility through the router: integer ids, exact
 //! decimals, error bodies and path aliases (specs/021-harvest-api-compat).
 
-use super::pagination_tests::{api_id, page, request, signed_in};
+mod tokens;
+
+use super::pagination_tests::{api_id, limiter, page, request, signed_in};
 use super::*;
 use crate::testing::{seed, time_entry};
 use horae_core::permissions::catalog::BuiltInProfile;
@@ -113,7 +115,7 @@ async fn a_malformed_id_is_a_422_with_a_message(pool: PgPool) {
 
 #[sqlx::test(migrator = "crate::db::MIGRATOR")]
 async fn signed_out_requests_get_the_oauth_error_body(pool: PgPool) {
-    let app = router(pool);
+    let app = router(pool, limiter());
 
     let (status, body) = request(&app, "/harvest/v2/users/me").await;
 

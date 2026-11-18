@@ -27,12 +27,17 @@ pub(super) async fn api_id(pool: &PgPool, kind: &str, horae_id: Uuid) -> i64 {
     crate::importers::harvest::ids::number(pool, kind, horae_id).await
 }
 
+/// A limiter at the default limit, as the binary's.
+pub(super) fn limiter() -> Arc<RateLimiter> {
+    Arc::new(RateLimiter::new(Default::default()))
+}
+
 pub(super) async fn signed_in(pool: &PgPool, user_id: Uuid) -> Router {
     let session = Session::new(None, Arc::new(MemoryStore::default()), None);
     horae_api::session::set_session_user_id(&session, user_id)
         .await
         .unwrap();
-    router(pool.clone()).layer(Extension(session))
+    router(pool.clone(), limiter()).layer(Extension(session))
 }
 
 pub(super) async fn request(app: &Router, uri: &str) -> (StatusCode, String) {
@@ -382,7 +387,7 @@ async fn harvest_pagination_router_preserves_session_and_tenant_guards(pool: PgP
     let other = seed(&pool, BuiltInProfile::ExecutiveManager).await;
     let own_entry = time_entry(&pool, &ids, EntryState::Open).await;
     let other_entry = time_entry(&pool, &other, EntryState::Open).await;
-    let unsigned = router(pool.clone());
+    let unsigned = router(pool.clone(), limiter());
     assert_eq!(
         request(&unsigned, "/harvest/v2/time_entries").await.0,
         StatusCode::UNAUTHORIZED

@@ -84,3 +84,13 @@ async fn only_an_administrator_lists_the_organizations_tokens(pool: PgPool) {
     let error = list_org(&pool, caller(&member)).await.unwrap_err();
     assert_eq!(code(&error), FORBIDDEN);
 }
+
+#[sqlx::test(migrator = "crate::db::MIGRATOR")]
+async fn a_member_reads_the_organizations_harvest_account_id(pool: PgPool) {
+    let admin = seed(&pool, BuiltInProfile::Administrator).await;
+    let member = add_person(&pool, &admin, BuiltInProfile::Member).await;
+    let stored = crate::ops::api_tokens::fetch_harvest_account_id(&pool, admin.org_id)
+        .await
+        .unwrap();
+    assert_eq!(account_id(&pool, caller(&member)).await.unwrap(), stored);
+}

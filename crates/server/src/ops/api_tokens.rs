@@ -272,5 +272,26 @@ pub async fn authenticate(pool: &PgPool, token: &str) -> Result<Option<Caller>, 
     Ok(Some(Caller::token(found.org_id, found.user_id, found.id)))
 }
 
+/// The organization's account id in the Harvest-compatible API, which its
+/// clients send as `Harvest-Account-Id` (spec 021 R-3), for the token page.
+pub async fn harvest_account_id(tx: &mut Tx, actor: &Actor) -> Result<i64, OpError> {
+    require_active(actor)?;
+    Ok(fetch_harvest_account_id(&mut **tx, actor.org_id()).await?)
+}
+
+/// [`harvest_account_id`] without an actor, for the Harvest API's
+/// authentication, which checks it before any transaction.
+pub async fn fetch_harvest_account_id(
+    executor: impl sqlx::PgExecutor<'_>,
+    org_id: Uuid,
+) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar!(
+        "SELECT api_account_id FROM organizations WHERE id = $1",
+        org_id
+    )
+    .fetch_one(executor)
+    .await
+}
+
 #[cfg(test)]
 mod tests;

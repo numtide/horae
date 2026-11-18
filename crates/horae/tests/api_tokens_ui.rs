@@ -40,6 +40,8 @@ struct Probe {
     revokes: Rc<RefCell<Vec<String>>>,
     /// The next create's refusal, if any.
     refusal: Rc<RefCell<Option<ServerFnError>>>,
+    /// The Harvest account id, `None` while the Harvest API is off.
+    harvest_account: Option<i64>,
 }
 
 fn row(name: &str) -> ApiTokenRow {
@@ -144,6 +146,19 @@ fn html(dom: &VirtualDom) -> String {
 }
 
 #[tokio::test]
+async fn the_harvest_account_id_shows_only_while_the_harvest_api_is_on() {
+    let off = html(&mount(&Probe::default()));
+    assert!(!off.contains("api-harvest-account"), "{off}");
+
+    let on = html(&mount(&Probe {
+        harvest_account: Some(4217),
+        ..Probe::default()
+    }));
+    assert!(on.contains("api-harvest-account"), "{on}");
+    assert!(on.contains("4217"), "{on}");
+}
+
+#[tokio::test]
 async fn an_empty_list_says_so_and_create_waits_for_a_name() {
     let dom = mount(&Probe::default());
     let html = html(&dom);
@@ -239,6 +254,10 @@ async fn revoking_asks_first_and_then_shows_the_token_revoked() {
 
 mod server_fns {
     use super::*;
+
+    pub async fn harvest_account_id() -> Result<Option<i64>, ServerFnError> {
+        Ok(use_context::<Probe>().harvest_account)
+    }
 
     pub async fn list_api_tokens() -> Result<Vec<ApiTokenRow>, ServerFnError> {
         Ok(use_context::<Probe>().rows.borrow().clone())
