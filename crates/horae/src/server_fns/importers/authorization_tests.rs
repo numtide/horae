@@ -264,6 +264,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         .into(),
         Default::default(),
         None,
+        crate::version::current(),
     )
     .await;
     let upload_pool = pool.clone();
@@ -312,7 +313,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         .route(
             "/test/login/{id}",
             post(|session: Session, Path(id): Path<Uuid>| async move {
-                crate::auth::session::set_session_user_id(&session, id)
+                crate::auth::http::session::set_session_user_id(&session, id)
                     .await
                     .unwrap();
                 StatusCode::NO_CONTENT
@@ -401,7 +402,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             },
         ))
         .layer(
-            crate::auth::make_session_layer(pool.clone(), false)
+            crate::auth::http::make_session_layer(pool.clone(), false)
                 .await
                 .unwrap(),
         );

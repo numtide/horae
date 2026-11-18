@@ -15,7 +15,7 @@ pub const OAUTH_STATE_KEY: &str = "harvest_oauth_state";
 
 /// The plain Axum route the browser is redirected to after authorizing on
 /// Harvest — a redirect target, so it cannot be a `#[server]` fn (Constitution
-/// IV). Registered beside `auth::router()`.
+/// IV). Registered beside `auth::http::router()`.
 pub fn callback_router() -> axum::Router {
     use axum::routing::get;
     axum::Router::new().route("/auth/harvest/callback", get(oauth_callback))
@@ -66,7 +66,7 @@ async fn oauth_callback(
         return dest_err(ConnectFailure::State);
     };
     // Only an authenticated admin may land a connection on their org.
-    let connected = match crate::auth::session::get_session_user_id(&session).await {
+    let connected = match crate::auth::http::session::get_session_user_id(&session).await {
         Some(user_id) => complete_connect(user_id, code, &attempt).await,
         None => Err(anyhow::anyhow!("no authenticated session")),
     };

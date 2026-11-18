@@ -35,7 +35,7 @@ pub(crate) mod xlsx_cells;
 /// (FR-002). Returns the caller's `(user_id, org_id)`: the org comes free from
 /// the same row and is what the export queries scope on.
 async fn require_session(session: &Session) -> Result<(uuid::Uuid, uuid::Uuid), StatusCode> {
-    let user_id = crate::auth::session::get_session_user_id(session)
+    let user_id = crate::auth::http::session::get_session_user_id(session)
         .await
         .ok_or(StatusCode::UNAUTHORIZED)?;
     let state = crate::state::global_state().await;

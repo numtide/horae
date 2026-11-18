@@ -87,6 +87,6 @@ pub async fn get_server_version() -> Result<String, ServerFnError> {
     let caller = session_caller().await?;
     let state = crate::state::global_state().await;
     let read = ops::begin_read(&state.db, caller).await.map_err(op_error)?;
-    let result = ops::profile::server_version(&read.actor);
+    let result = ops::profile::server_version(&read.actor, state);
     read.finish(result).await.map_err(op_error)
 }

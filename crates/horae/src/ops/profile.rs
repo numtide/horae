@@ -57,14 +57,17 @@ pub(crate) async fn permissions(tx: &mut Tx, actor: &Actor) -> Result<OwnPermiss
 }
 
 /// The running server's version label, for administrators only.
-pub(crate) fn server_version(actor: &Actor) -> Result<String, OpError> {
+pub(crate) fn server_version(
+    actor: &Actor,
+    state: &crate::state::AppState,
+) -> Result<String, OpError> {
     if !actor.is_active() {
         return Err(OpError::forbidden(IDENTITY_REQUIRED));
     }
     if !actor.administrator() {
         return Err(OpError::forbidden("Administrator authority is required"));
     }
-    Ok(crate::version::current())
+    Ok(state.version.clone())
 }
 
 /// Changes the actor's display name and time zone (`None` follows the

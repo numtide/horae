@@ -17,10 +17,17 @@ async fn read(pool: &PgPool, org_id: Uuid, user_id: Uuid) -> Result<OwnPermissio
     read.finish(result).await
 }
 
+const VERSION: &str = "v9.9.9";
+
 /// `get_server_version` past its session lookup.
 async fn version(pool: &PgPool, ids: &SeedIds) -> Result<String, OpError> {
+    let state = crate::state::AppState::new(
+        pool.clone(),
+        std::sync::Arc::new(crate::plugin::PluginRegistry::empty()),
+    )
+    .with_version(VERSION.into());
     let read = begin_read(pool, Caller::session(ids.org_id, ids.user_id)).await?;
-    let result = server_version(&read.actor);
+    let result = server_version(&read.actor, &state);
     read.finish(result).await
 }
 
@@ -111,7 +118,7 @@ async fn own_permissions_name_the_profile_or_template(pool: PgPool) {
 #[serial_test::serial]
 async fn server_version_follows_the_stored_administrator_identity(pool: PgPool) {
     let admin = with_state(&pool, BuiltInProfile::Administrator, true).await;
-    assert_eq!(version(&pool, &admin).await, Ok(crate::version::current()));
+    assert_eq!(version(&pool, &admin).await, Ok(VERSION.to_owned()));
     // Every grant without the identity is not enough.
     let member = with_state(&pool, BuiltInProfile::Administrator, false).await;
     assert_eq!(
