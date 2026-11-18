@@ -136,73 +136,69 @@ fn valid_grants(version: i32, grants: &[Permission]) -> bool {
         .is_ok_and(|version| PermissionSelection::from_stored(version, grants).is_ok())
 }
 
-impl PersonSnapshot {
-    fn valid(&self, version: u32) -> bool {
-        let source_valid = match self.source {
-            HistoricalSource::Template {
-                applied_revision, ..
-            } => applied_revision >= 0,
-            _ => true,
-        };
-        self.revision >= 0
-            && source_valid
-            && PermissionSelection::from_stored(version, &self.grants).is_ok()
-    }
+fn valid_snapshot(snapshot: &PersonSnapshot, version: u32) -> bool {
+    let source_valid = match snapshot.source {
+        HistoricalSource::Template {
+            applied_revision, ..
+        } => applied_revision >= 0,
+        _ => true,
+    };
+    snapshot.revision >= 0
+        && source_valid
+        && PermissionSelection::from_stored(version, &snapshot.grants).is_ok()
 }
 
-impl HistoricalAudit {
-    fn valid(&self) -> bool {
-        match self {
-            Self::Template(audit) => {
-                revision_step(audit.previous_access_revision, audit.access_revision, true)
-                    && matches!(
-                        (&audit.before, &audit.after),
-                        (Some(_), None) | (None, Some(_))
-                    )
-                    && audit.before.iter().chain(&audit.after).all(|snapshot| {
-                        snapshot.revision >= 0
-                            && valid_grants(snapshot.catalog_version, &snapshot.grants)
-                    })
-                    && audit.detached_people.iter().all(|person| {
-                        audit
-                            .before
-                            .as_ref()
-                            .is_some_and(|template| template.id == person.previous_template_id)
-                            && person.previous_applied_revision >= 0
-                            && revision_step(person.previous_revision, person.revision, true)
-                            && valid_grants(person.catalog_version, &person.grants)
-                    })
-            }
-            Self::Profile(audit) => {
-                revision_step(
-                    audit.previous_access_revision,
-                    audit.access_revision,
-                    audit.change.is_some(),
-                ) && audit.change.as_ref().is_none_or(|change| {
-                    change.before.valid(change.catalog_version)
-                        && change.after.valid(change.catalog_version)
-                        && revision_step(change.before.revision, change.after.revision, true)
-                        && change
-                            .removed_projects
-                            .iter()
-                            .chain(&change.removed_people)
-                            .all(|link| link.revision >= 0)
+fn valid_audit(audit: &HistoricalAudit) -> bool {
+    match audit {
+        HistoricalAudit::Template(audit) => {
+            revision_step(audit.previous_access_revision, audit.access_revision, true)
+                && matches!(
+                    (&audit.before, &audit.after),
+                    (Some(_), None) | (None, Some(_))
+                )
+                && audit.before.iter().chain(&audit.after).all(|snapshot| {
+                    snapshot.revision >= 0
+                        && valid_grants(snapshot.catalog_version, &snapshot.grants)
                 })
-            }
-            Self::ProjectManagers(audit) => {
-                revision_step(
-                    audit.previous_access_revision,
-                    audit.access_revision,
-                    audit.change.is_some(),
-                ) && audit.change.as_ref().is_none_or(|change| {
-                    (!change.added.is_empty() || !change.removed.is_empty())
-                        && change
-                            .added
-                            .iter()
-                            .chain(&change.removed)
-                            .all(|link| link.revision >= 0)
+                && audit.detached_people.iter().all(|person| {
+                    audit
+                        .before
+                        .as_ref()
+                        .is_some_and(|template| template.id == person.previous_template_id)
+                        && person.previous_applied_revision >= 0
+                        && revision_step(person.previous_revision, person.revision, true)
+                        && valid_grants(person.catalog_version, &person.grants)
                 })
-            }
+        }
+        HistoricalAudit::Profile(audit) => {
+            revision_step(
+                audit.previous_access_revision,
+                audit.access_revision,
+                audit.change.is_some(),
+            ) && audit.change.as_ref().is_none_or(|change| {
+                valid_snapshot(&change.before, change.catalog_version)
+                    && valid_snapshot(&change.after, change.catalog_version)
+                    && revision_step(change.before.revision, change.after.revision, true)
+                    && change
+                        .removed_projects
+                        .iter()
+                        .chain(&change.removed_people)
+                        .all(|link| link.revision >= 0)
+            })
+        }
+        HistoricalAudit::ProjectManagers(audit) => {
+            revision_step(
+                audit.previous_access_revision,
+                audit.access_revision,
+                audit.change.is_some(),
+            ) && audit.change.as_ref().is_none_or(|change| {
+                (!change.added.is_empty() || !change.removed.is_empty())
+                    && change
+                        .added
+                        .iter()
+                        .chain(&change.removed)
+                        .all(|link| link.revision >= 0)
+            })
         }
     }
 }
@@ -224,7 +220,7 @@ pub(crate) fn decode(
         serde_json::from_value(document).map(HistoricalAudit::Template)
     }
     .map_err(|_| INVALID_DOCUMENT)?;
-    if !decoded.valid() {
+    if !valid_audit(&decoded) {
         return Err(INVALID_DOCUMENT);
     }
     Ok(decoded)

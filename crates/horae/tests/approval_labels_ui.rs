@@ -16,24 +16,21 @@ use horae_core::permissions::catalog::{PERMISSION_CATALOG_VERSION, Permission};
 use horae_core::week::week_bounds;
 use uuid::Uuid;
 
-#[path = "../src/models/approval.rs"]
-pub mod approval_model;
+pub use horae_types::{
+    approval as approval_model, own_permissions as own_permissions_model, user as user_model,
+};
 #[path = "../src/components/avatar.rs"]
 pub mod avatar;
 #[path = "../src/components/badge.rs"]
 pub mod badge;
 #[path = "../src/components/controls.rs"]
 pub mod controls;
-#[path = "../src/models/own_permissions.rs"]
-pub mod own_permissions_model;
 #[path = "../src/components/session.rs"]
 pub mod session;
 #[path = "../src/components/table.rs"]
 pub mod table;
 #[path = "../src/components/today.rs"]
 pub mod today;
-#[path = "../src/models/user.rs"]
-pub mod user_model;
 mod components {
     pub use super::{avatar, badge, controls, session, table, today};
 }

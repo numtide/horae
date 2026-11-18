@@ -23,10 +23,6 @@ pub struct ProjectManagers {
     pub managers: Vec<ProjectManager>,
 }
 
-#[allow(
-    dead_code,
-    reason = "Only the server builds it until the project-manager UI calls its server function."
-)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectManagersCommand {
@@ -44,10 +40,6 @@ pub enum ProjectManagersCommandKind {
     ReplaceProjectManagers,
 }
 
-#[allow(
-    dead_code,
-    reason = "Only the server builds it until the project-manager UI calls its server function."
-)]
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectManagersOutcome {

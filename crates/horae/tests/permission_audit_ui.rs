@@ -17,10 +17,7 @@ pub mod permission_description;
 mod components {
     pub use super::permission_description;
 }
-#[path = "../src/models/permission_audit.rs"]
-pub mod permission_audit;
-#[path = "../src/models/permission_editor.rs"]
-pub mod permission_editor;
+pub use horae_types::{permission_audit, permission_editor};
 mod models {
     pub use super::{permission_audit, permission_editor};
 }

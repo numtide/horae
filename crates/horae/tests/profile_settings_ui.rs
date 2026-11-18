@@ -23,12 +23,7 @@ pub mod session;
 mod components {
     pub use super::{form, select_field, session};
 }
-#[allow(dead_code)]
-#[path = "../src/models/own_permissions.rs"]
-pub mod own_permissions_model;
-#[allow(dead_code)]
-#[path = "../src/models/user.rs"]
-pub mod user_model;
+pub use horae_types::{own_permissions as own_permissions_model, user as user_model};
 mod models {
     pub use super::{own_permissions_model as own_permissions, user_model as user};
 }

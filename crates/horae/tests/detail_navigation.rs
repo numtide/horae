@@ -38,40 +38,22 @@ pub mod toast;
 mod components {
     pub use super::{badge, combobox, controls, form, icons, menu, modal, session, table, toast};
 }
-#[path = "../src/models/assignment.rs"]
-mod assignment;
-#[path = "../src/models/client.rs"]
-pub mod client;
 #[path = "../src/pages/clients.rs"]
 mod clients;
 #[path = "../src/pages/new_project/edit_return.rs"]
 mod edit_return;
-#[path = "../src/models/invoice.rs"]
-pub mod invoice;
 #[path = "../src/pages/invoices.rs"]
 mod invoices;
-#[path = "../src/models/organization.rs"]
-pub mod organization;
-#[path = "../src/models/own_permissions.rs"]
-pub mod own_permissions;
-#[path = "../src/models/permission_editor.rs"]
-pub mod permission_editor;
-#[path = "../src/models/project.rs"]
-pub mod project;
-#[path = "../src/models/project_creation.rs"]
-pub mod project_creation;
-#[path = "../src/models/project_managers.rs"]
-pub mod project_managers;
 #[path = "../src/pages/projects.rs"]
 mod projects;
-#[path = "../src/models/task.rs"]
-pub mod task;
-#[path = "../src/models/user.rs"]
-pub mod user;
+pub use horae_types::{
+    assignment, client, invoice, organization, own_permissions, permission_editor, project,
+    project_creation, task, user,
+};
 mod models {
     pub use super::{
         client, invoice, organization, own_permissions, permission_editor, project,
-        project_creation, project_managers, user,
+        project_creation, user,
     };
     pub use super::{
         client::Client,

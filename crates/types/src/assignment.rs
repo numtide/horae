@@ -4,13 +4,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "Only membership test helpers build it; the project editor uses ProjectForm."
-    )
-)]
 pub struct Assignment {
     pub id: Uuid,
     pub project_id: Uuid,

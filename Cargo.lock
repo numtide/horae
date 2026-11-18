@@ -3259,6 +3259,7 @@ dependencies = [
  "gloo-timers",
  "horae-core",
  "horae-harvest",
+ "horae-types",
  "openidconnect",
  "proptest",
  "rust_xlsxwriter",
@@ -3324,6 +3325,17 @@ dependencies = [
  "tracing",
  "ureq 2.12.1",
  "url",
+]
+
+[[package]]
+name = "horae-types"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "horae-core",
+ "serde",
+ "serde_json",
+ "uuid",
 ]
 
 [[package]]
