@@ -1,6 +1,6 @@
 use super::*;
+use crate::http::reports::limits::time;
 use crate::models::permission_editor::PermissionRequester;
-use crate::reports::limits::time;
 
 async fn fixture(pool: &PgPool) -> SeedIds {
     let ids = scoped(pool, BuiltInProfile::Member, &[Permission::TimeReadOwn]).await;
@@ -310,14 +310,14 @@ async fn active_projects_only_workbooks_retain_source_after_archiving(pool: PgPo
     let body = detailed
         .scope
         .render(
-            crate::reports::bounded::ExportPermit::acquire().unwrap(),
+            crate::http::reports::bounded::ExportPermit::acquire().unwrap(),
             &pool,
-            move || crate::reports::entries_xlsx(&detailed.rows),
+            move || crate::http::reports::entries_xlsx(&detailed.rows),
         )
         .await
         .unwrap();
     assert!(
-        axum::body::to_bytes(body, crate::reports::bounded::MAX_OUTPUT_BYTES)
+        axum::body::to_bytes(body, crate::http::reports::bounded::MAX_OUTPUT_BYTES)
             .await
             .unwrap()
             .starts_with(b"PK")
@@ -325,14 +325,16 @@ async fn active_projects_only_workbooks_retain_source_after_archiving(pool: PgPo
     let body = grouped
         .scope
         .render(
-            crate::reports::bounded::ExportPermit::acquire().unwrap(),
+            crate::http::reports::bounded::ExportPermit::acquire().unwrap(),
             &pool,
-            move || crate::reports::groups::workbook(&grouped.rows, TimeReportGrouping::Client),
+            move || {
+                crate::http::reports::groups::workbook(&grouped.rows, TimeReportGrouping::Client)
+            },
         )
         .await
         .unwrap();
     assert!(
-        axum::body::to_bytes(body, crate::reports::bounded::MAX_OUTPUT_BYTES)
+        axum::body::to_bytes(body, crate::http::reports::bounded::MAX_OUTPUT_BYTES)
             .await
             .unwrap()
             .starts_with(b"PK")

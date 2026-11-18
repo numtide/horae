@@ -29,8 +29,6 @@ mod plugin;
 #[cfg(feature = "server")]
 mod render;
 #[cfg(feature = "server")]
-mod reports;
-#[cfg(feature = "server")]
 mod scheduler;
 #[cfg(feature = "server")]
 mod seed;
@@ -322,35 +320,35 @@ fn main() -> anyhow::Result<()> {
                             )
                         }),
                     )
-                    .route("/api/reports/export/csv", get(reports::export_csv))
-                    .route("/api/reports/export/xlsx", get(reports::export_xlsx))
+                    .route("/api/reports/export/csv", get(http::reports::export_csv))
+                    .route("/api/reports/export/xlsx", get(http::reports::export_xlsx))
                     .route(
                         "/api/reports/time/grouped/csv",
-                        get(reports::export_time_groups_csv),
+                        get(http::reports::export_time_groups_csv),
                     )
                     .route(
                         "/api/reports/time/grouped/xlsx",
-                        get(reports::export_time_groups_xlsx),
+                        get(http::reports::export_time_groups_xlsx),
                     )
                     .route(
                         "/api/projects/export/csv",
-                        get(reports::export_projects_csv),
+                        get(http::reports::export_projects_csv),
                     )
                     .route(
                         "/api/projects/export/xlsx",
-                        get(reports::export_projects_xlsx),
+                        get(http::reports::export_projects_xlsx),
                     )
                     .route(
                         "/api/invoices/{id}/export/csv",
-                        get(reports::export_invoice_csv),
+                        get(http::reports::export_invoice_csv),
                     )
                     .route(
                         "/api/invoices/{id}/export/xlsx",
-                        get(reports::export_invoice_xlsx),
+                        get(http::reports::export_invoice_xlsx),
                     )
                     .route(
                         "/api/invoices/{id}/export/pdf",
-                        get(reports::export_invoice_pdf),
+                        get(http::reports::export_invoice_pdf),
                     )
                     .merge(auth::router(cfg.dev_login))
                     .merge(http::harvest_oauth::callback_router())

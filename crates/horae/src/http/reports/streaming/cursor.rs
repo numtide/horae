@@ -34,7 +34,7 @@ pub(super) struct InvoiceRow {
 
 impl InvoiceRow {
     pub fn metadata(&self) -> [String; 5] {
-        crate::reports::invoice_metadata(
+        crate::http::reports::invoice_metadata(
             &self.currency,
             self.issued_on,
             self.due_on,
@@ -71,13 +71,13 @@ impl InvoiceRow {
                         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
                     &self
                         .minutes
-                        .map(|minutes| crate::reports::format_hours2(minutes.into()))
+                        .map(|minutes| crate::http::reports::format_hours2(minutes.into()))
                         .unwrap_or_default(),
                     &self
                         .rate_cents
-                        .map(crate::reports::format_cents_plain)
+                        .map(crate::http::reports::format_cents_plain)
                         .unwrap_or_default(),
-                    &crate::reports::format_cents_plain(
+                    &crate::http::reports::format_cents_plain(
                         self.amount_cents.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
                     ),
                 ]

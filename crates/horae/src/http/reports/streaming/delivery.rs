@@ -1,5 +1,5 @@
+use crate::http::reports::limits::time::{authorize_current, authorize_rows};
 use crate::models::permission_editor::PermissionRequester;
-use crate::reports::limits::time::{authorize_current, authorize_rows};
 use horae_core::permissions::catalog::PermissionSelection;
 
 use super::*;
@@ -74,7 +74,7 @@ impl Authority {
             .await
             .map_err(database_error)?;
         if matches!(self.purpose, Purpose::Projects) {
-            crate::reports::limits::authorize_project_rows(
+            crate::http::reports::limits::authorize_project_rows(
                 connection,
                 self.org_id,
                 self.actor_id,
@@ -87,9 +87,10 @@ impl Authority {
         // Purpose::Invoice: the actor locks the organization, then the person,
         // and must still hold the whole-invoice read grant.
         let actor =
-            crate::reports::limits::load_actor(connection, self.org_id, self.actor_id).await?;
+            crate::http::reports::limits::load_actor(connection, self.org_id, self.actor_id)
+                .await?;
         crate::ops::invoices::authorize_read(&actor, crate::ops::invoices::READ)
-            .map_err(crate::reports::op_status)?;
+            .map_err(crate::http::op_status)?;
         release_authority(connection).await
     }
 
@@ -183,7 +184,7 @@ impl CsvBuffer {
         sender: &mpsc::Sender<Vec<u8>>,
         connection: &mut PgConnection,
         authority: &Authority,
-        row: &crate::reports::ProjectExportRow,
+        row: &crate::http::reports::ProjectExportRow,
     ) -> Result<(), StatusCode> {
         if row.has_monetary_budget() {
             self.monetary_project_ids.push(row.id);

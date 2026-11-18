@@ -3,20 +3,20 @@
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
 
 use super::*;
+use crate::http::reports::bounded::ExportPermit;
 use crate::models::DetailedReportRow;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::TimeReportQuery;
 use crate::ops::time_reads::reports::billable_filter;
-use crate::reports::bounded::ExportPermit;
 
-pub(in crate::reports) mod groups;
+pub(in crate::http::reports) mod groups;
 
-pub(in crate::reports) struct TimeExport {
+pub(in crate::http::reports) struct TimeExport {
     pub rows: Vec<DetailedReportRow>,
     pub scope: TimeExportScope,
 }
 
-pub(in crate::reports) struct TimeExportScope {
+pub(in crate::http::reports) struct TimeExportScope {
     requester: PermissionRequester,
     contexts: Vec<(Uuid, Uuid)>,
 }
@@ -45,7 +45,7 @@ async fn begin(
 /// The actor's time-read grants. The caller configures the transaction and
 /// owns the lifetime of the actor's locks: the organization and the person
 /// stay locked `FOR SHARE` until it ends.
-pub(in crate::reports) async fn authorize_current(
+pub(in crate::http::reports) async fn authorize_current(
     connection: &mut PgConnection,
     requester: PermissionRequester,
 ) -> Result<PermissionSelection, StatusCode> {
@@ -53,7 +53,7 @@ pub(in crate::reports) async fn authorize_current(
     crate::ops::time_reads::time_reads(&actor).ok_or(StatusCode::FORBIDDEN)
 }
 
-pub(in crate::reports) async fn entries(
+pub(in crate::http::reports) async fn entries(
     pool: &PgPool,
     org_id: Uuid,
     actor_id: Uuid,
@@ -181,7 +181,7 @@ async fn read_entries(
 }
 
 impl TimeExportScope {
-    pub(in crate::reports) async fn render(
+    pub(in crate::http::reports) async fn render(
         self,
         permit: ExportPermit,
         pool: &PgPool,
@@ -195,7 +195,7 @@ impl TimeExportScope {
     }
 }
 
-pub(in crate::reports) async fn authorize_rows(
+pub(in crate::http::reports) async fn authorize_rows(
     connection: &mut PgConnection,
     requester: PermissionRequester,
     grants: &PermissionSelection,

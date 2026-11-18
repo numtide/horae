@@ -3,7 +3,7 @@
 //! time (specs/004-invoice-timesheet-exports plan, "Acceptance Increment").
 
 use super::*;
-use crate::reports::xlsx_cells::{assert_cell, assert_text_cell, xlsx_part};
+use crate::http::reports::xlsx_cells::{assert_cell, assert_text_cell, xlsx_part};
 
 const CLIENTS: [&str; 2] = ["Export client A", "Export client B"];
 /// Project name and the index of its client.

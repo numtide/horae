@@ -1,8 +1,8 @@
 use super::*;
+use crate::http::reports::bounded::ExportPermit;
 use crate::models::permission_editor::PermissionRequester;
 use crate::models::time_report::TimeReportAccess;
 use crate::ops::{Caller, OpError};
-use crate::reports::bounded::ExportPermit;
 use crate::testing::wait_for_blocked;
 use horae_core::permissions::catalog::BuiltInProfile;
 use horae_core::permissions::catalog::{Permission, PermissionSelection};
@@ -117,11 +117,11 @@ async fn render(pool: &PgPool, export: time::TimeExport) -> Result<Vec<u8>, Stat
     let body = export
         .scope
         .render(ExportPermit::acquire().unwrap(), pool, move || {
-            crate::reports::entries_xlsx(&export.rows)
+            crate::http::reports::entries_xlsx(&export.rows)
         })
         .await?;
     Ok(
-        axum::body::to_bytes(body, crate::reports::bounded::MAX_OUTPUT_BYTES)
+        axum::body::to_bytes(body, crate::http::reports::bounded::MAX_OUTPUT_BYTES)
             .await
             .unwrap()
             .to_vec(),
@@ -172,7 +172,7 @@ async fn scoped_xlsx_member_reads_own_rows_without_financial_or_directory_access
         .await
         .unwrap();
     assert_eq!(rows.len(), 1);
-    let workbook = crate::reports::entries_xlsx(&rows).unwrap();
+    let workbook = crate::http::reports::entries_xlsx(&rows).unwrap();
     assert_text_cell(&workbook, "B2", "Widget");
 }
 
@@ -297,7 +297,7 @@ async fn scoped_xlsx_reauthorizes_captured_project_not_reassigned_source(pool: P
                     .render(ExportPermit::acquire().unwrap(), &pool, move || {
                         started.send(()).unwrap();
                         wait.recv_timeout(Duration::from_secs(5)).unwrap();
-                        crate::reports::entries_xlsx(&export.rows)
+                        crate::http::reports::entries_xlsx(&export.rows)
                     })
                     .await
             })
@@ -333,10 +333,12 @@ async fn scoped_xlsx_reauthorizes_captured_project_not_reassigned_source(pool: P
         release.send(()).unwrap();
         let result = pending.await.unwrap();
         if retain_original_access {
-            let bytes =
-                axum::body::to_bytes(result.unwrap(), crate::reports::bounded::MAX_OUTPUT_BYTES)
-                    .await
-                    .unwrap();
+            let bytes = axum::body::to_bytes(
+                result.unwrap(),
+                crate::http::reports::bounded::MAX_OUTPUT_BYTES,
+            )
+            .await
+            .unwrap();
             assert_text_cell(&bytes, "B2", "Widget");
             assert!(!xlsx_part(&bytes, "xl/sharedStrings.xml").contains("New project data"));
         } else {
@@ -682,7 +684,7 @@ async fn scoped_xlsx_revoked_grants_after_render_deny_other_peoples_captured_row
                 .render(ExportPermit::acquire().unwrap(), &pool, move || {
                     started.send(()).unwrap();
                     wait.recv_timeout(Duration::from_secs(5)).unwrap();
-                    crate::reports::entries_xlsx(&export.rows)
+                    crate::http::reports::entries_xlsx(&export.rows)
                 })
                 .await
         })

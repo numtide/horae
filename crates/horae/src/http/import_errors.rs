@@ -45,7 +45,7 @@ async fn download_response(
     let ops::importers::ErrorDetails { end, tail } = read
         .finish(result)
         .await
-        .map_err(crate::reports::op_status)?
+        .map_err(super::op_status)?
         .ok_or(StatusCode::NOT_FOUND)?;
     Ok((
         [
@@ -69,7 +69,7 @@ async fn download_access(
 ) -> Result<ops::ReadTx, StatusCode> {
     ops::begin_read(pool, ops::Caller::session(org_id, actor_id))
         .await
-        .map_err(crate::reports::op_status)
+        .map_err(super::op_status)
 }
 
 fn download_body(
@@ -102,7 +102,7 @@ fn download_body(
                     // Release authority and the connection before client-paced output.
                     let page = read.finish(page).await.map_err(|error| match error {
                         ops::OpError::Forbidden(_) => {
-                            std::io::Error::other(crate::reports::op_status(error).to_string())
+                            std::io::Error::other(super::op_status(error).to_string())
                         }
                         _ => std::io::Error::other("report archive is incomplete"),
                     })?;

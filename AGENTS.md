@@ -131,11 +131,11 @@ For custom PostgreSQL enum types, use type overrides in the SQL:
 
 ## Architecture
 
-**One app crate (`crates/horae/`), two build targets, feature-gated.** `crates/horae/src/main.rs` defines three `main()`s behind `cfg`: `server` (Axum + Tokio + the CLI), `web` (`dioxus::launch`, compiled to WASM), and a stub that errors if neither feature is set. Server-only modules (`auth`, `cli`, `config`, `db`, `harvest`, `reports`, `seed`, `state`) are `#[cfg(feature = "server")]`; the shared UI modules (`app`, `route`, `pages`, `components`, `server_fns`, `models`) compile for both targets. This is why a bare `cargo build`/`test` (empty default features) won't do what you expect.
+**One app crate (`crates/horae/`), two build targets, feature-gated.** `crates/horae/src/main.rs` defines three `main()`s behind `cfg`: `server` (Axum + Tokio + the CLI), `web` (`dioxus::launch`, compiled to WASM), and a stub that errors if neither feature is set. Server-only modules (`auth`, `cli`, `config`, `db`, `harvest`, `http`, `seed`, `state`) are `#[cfg(feature = "server")]`; the shared UI modules (`app`, `route`, `pages`, `components`, `server_fns`, `models`) compile for both targets. This is why a bare `cargo build`/`test` (empty default features) won't do what you expect.
 
 **The `core` crate (`horae-core`) is pure domain logic** — duration parsing, rounding, money, totals, the entry state machine — with no I/O dependencies (only serde/uuid/chrono/thiserror). Correctness-critical code belongs here and is unit-tested in isolation; the Horae Constitution forbids sqlx/axum/dioxus deps in `core`.
 
-**The server layers custom Axum routes on top of the Dioxus fullstack router** (`Commands::Serve` in `main.rs`): it calls `.serve_dioxus_application()`, then `.merge`s `/health`, CSV/XLSX export (`reports.rs`), the auth router (`auth::router()`), and the read-only Harvest-compatible API (`harvest::router()`, `/harvest/v2/*`), all under a Postgres-backed session layer. So there are **two API surfaces**:
+**The server layers custom Axum routes on top of the Dioxus fullstack router** (`Commands::Serve` in `main.rs`): it calls `.serve_dioxus_application()`, then `.merge`s `/health`, CSV/XLSX export (`http/reports.rs`), the auth router (`auth::router()`), and the read-only Harvest-compatible API (`harvest::router()`, `/harvest/v2/*`), all under a Postgres-backed session layer. So there are **two API surfaces**:
 
 - Dioxus `#[server]` functions in `server_fns.rs` — session-authenticated; the SPA uses these for all mutations.
 - Plain Axum routes — health, exports, auth, and the read-only Harvest v2 API.

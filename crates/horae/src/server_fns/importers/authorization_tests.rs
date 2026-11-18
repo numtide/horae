@@ -269,35 +269,41 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
     let upload_pool = pool.clone();
     let router = Router::new()
         .register_server_functions()
-        .route("/api/reports/export/csv", get(crate::reports::export_csv))
+        .route(
+            "/api/reports/export/csv",
+            get(crate::http::reports::export_csv),
+        )
         .route(
             "/api/reports/time/grouped/csv",
-            get(crate::reports::export_time_groups_csv),
+            get(crate::http::reports::export_time_groups_csv),
         )
         .route(
             "/api/reports/time/grouped/xlsx",
-            get(crate::reports::export_time_groups_xlsx),
+            get(crate::http::reports::export_time_groups_xlsx),
         )
         .route(
             "/api/projects/export/csv",
-            get(crate::reports::export_projects_csv),
+            get(crate::http::reports::export_projects_csv),
         )
         .route(
             "/api/invoices/{id}/export/csv",
-            get(crate::reports::export_invoice_csv),
+            get(crate::http::reports::export_invoice_csv),
         )
-        .route("/api/reports/export/xlsx", get(crate::reports::export_xlsx))
+        .route(
+            "/api/reports/export/xlsx",
+            get(crate::http::reports::export_xlsx),
+        )
         .route(
             "/api/projects/export/xlsx",
-            get(crate::reports::export_projects_xlsx),
+            get(crate::http::reports::export_projects_xlsx),
         )
         .route(
             "/api/invoices/{id}/export/xlsx",
-            get(crate::reports::export_invoice_xlsx),
+            get(crate::http::reports::export_invoice_xlsx),
         )
         .route(
             "/api/invoices/{id}/export/pdf",
-            get(crate::reports::export_invoice_pdf),
+            get(crate::http::reports::export_invoice_pdf),
         )
         .route(
             "/api/import/harvest/jobs/{job_id}/errors",
