@@ -30,13 +30,9 @@ pub mod table;
 mod components {
     pub use super::{badge, controls, form, menu, modal, permission_description, table};
 }
-#[path = "../src/models/people.rs"]
-pub mod people_model;
-#[path = "../src/models/permission_editor.rs"]
-pub mod permission_editor_model;
-#[path = "../src/models/user.rs"]
-#[allow(dead_code)]
-pub mod user_model;
+pub use horae_types::{
+    people as people_model, permission_editor as permission_editor_model, user as user_model,
+};
 mod models {
     pub use super::people_model as people;
     pub use super::permission_editor_model as permission_editor;

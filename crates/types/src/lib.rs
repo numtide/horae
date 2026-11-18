@@ -6,8 +6,8 @@ pub mod jobs;
 pub mod organization;
 pub mod own_permissions;
 pub mod people;
-pub(crate) mod permission_audit;
-pub(crate) mod permission_editor;
+pub mod permission_audit;
+pub mod permission_editor;
 pub mod project;
 pub mod project_creation;
 pub mod project_managers;
@@ -19,7 +19,6 @@ pub mod time_report;
 pub mod user;
 
 pub use approval::{Approval, ApprovalSummary};
-#[cfg(test)]
 pub use assignment::Assignment;
 pub use client::Client;
 pub use invoice::{Invoice, InvoiceWithLines};

@@ -43,11 +43,13 @@ mod timezone;
 
 mod app;
 mod components;
-mod models;
 mod pages;
 mod route;
 mod server_fns;
 mod version;
+
+// The UI↔server types live in their own crate; keep the `crate::models` paths.
+use horae_types as models;
 
 #[cfg(feature = "server")]
 fn main() -> anyhow::Result<()> {

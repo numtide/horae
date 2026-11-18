@@ -30,7 +30,7 @@ pub mod menu;
 pub mod modal;
 
 mod models {
-    include!("../src/models/jobs.rs");
+    pub use horae_types::jobs::*;
 
     pub mod user {
         #[derive(Debug, Clone, PartialEq)]

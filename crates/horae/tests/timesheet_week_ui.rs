@@ -19,13 +19,7 @@ use futures_util::FutureExt;
 use tokio::sync::Notify;
 use uuid::Uuid;
 
-// Included at the root: `scoped_time` names its siblings through `super`.
-#[path = "../src/models/people.rs"]
-pub mod people;
-#[path = "../src/models/permission_editor.rs"]
-pub mod permission_editor;
-#[path = "../src/models/scoped_time.rs"]
-pub mod scoped_time;
+pub use horae_types::{people, permission_editor, scoped_time};
 mod models {
     pub use super::{people, permission_editor, scoped_time};
 }

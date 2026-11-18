@@ -54,23 +54,21 @@ struct TemplateAudit {
     detached_people: Vec<DetachedPerson>,
 }
 
-impl TemplateCommand {
-    fn canonical(&self) -> Result<Self, OpError> {
-        let action = match &self.action {
-            TemplateAction::Create { name, grants } => TemplateAction::Create {
-                name: validate_template_name(name)
-                    .map_err(|error| OpError::invalid("name", error))?
-                    .to_owned(),
-                grants: selection(grants)?.iter().collect(),
-            },
-            action @ TemplateAction::Delete { .. } => action.clone(),
-        };
-        Ok(Self {
-            request_id: self.request_id,
-            expected_access_revision: self.expected_access_revision,
-            action,
-        })
-    }
+fn canonical(command: &TemplateCommand) -> Result<TemplateCommand, OpError> {
+    let action = match &command.action {
+        TemplateAction::Create { name, grants } => TemplateAction::Create {
+            name: validate_template_name(name)
+                .map_err(|error| OpError::invalid("name", error))?
+                .to_owned(),
+            grants: selection(grants)?.iter().collect(),
+        },
+        action @ TemplateAction::Delete { .. } => action.clone(),
+    };
+    Ok(TemplateCommand {
+        request_id: command.request_id,
+        expected_access_revision: command.expected_access_revision,
+        action,
+    })
 }
 
 /// Creates or deletes a template under the organization's `AccessChange`
@@ -87,7 +85,7 @@ pub(crate) async fn save(
     require_administrator(actor)?;
     let (org_id, actor_id) = (actor.org_id(), actor.id());
     let current_revision = access_revision(tx, org_id).await?;
-    let intent = request.canonical()?;
+    let intent = canonical(request)?;
     let intent_json = serde_json::to_value(&intent).map_err(unavailable)?;
     if let Some(receipt) = sqlx::query!(
         "SELECT format_version, intent, result FROM permission_change_receipts

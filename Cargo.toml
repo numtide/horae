@@ -2,6 +2,7 @@
 members = [
   "crates/horae",
   "crates/core",
+  "crates/types",
   "crates/harvest",
   "crates/dioxus-lint",
 ]
