@@ -1,5 +1,5 @@
 use super::*;
-use crate::importers::harvest::csv_source::import_body;
+use crate::importers::harvest::csv_source::{csv_body, import_body};
 use horae_core::importers::harvest::types::ImportMode;
 use horae_core::permissions::catalog::BuiltInProfile;
 
@@ -26,7 +26,7 @@ async fn imported_legacy_project_keeps_exact_rates_and_totals_on_retry(pool: PgP
             &pool,
             ids.org_id,
             "EUR",
-            axum::body::Body::from(csv.clone()),
+            csv_body(csv.clone()),
             ImportMode::Commit,
         )
         .await
@@ -134,15 +134,9 @@ async fn imported_task_rates_require_matching_currency_only_for_new_configured_l
              2026-09-07,Acme,Widget,Dev,{}@test.com,1,Yes,{source_rate},{currency}\n",
             ids.user_id,
         );
-        let result = import_body(
-            &pool,
-            ids.org_id,
-            "EUR",
-            axum::body::Body::from(csv),
-            ImportMode::Commit,
-        )
-        .await
-        .unwrap();
+        let result = import_body(&pool, ids.org_id, "EUR", csv_body(csv), ImportMode::Commit)
+            .await
+            .unwrap();
         assert_eq!(
             result.error_count(),
             expected_errors,
@@ -202,15 +196,9 @@ async fn rejected_import_rate_does_not_poison_the_next_row_or_its_catalog_rate(p
          2026-09-07,Acme,Widget,Fresh,{}@test.com,1,Yes,80,USD\n",
         ids.user_id, ids.user_id,
     );
-    let result = import_body(
-        &pool,
-        ids.org_id,
-        "EUR",
-        axum::body::Body::from(csv),
-        ImportMode::Commit,
-    )
-    .await
-    .unwrap();
+    let result = import_body(&pool, ids.org_id, "EUR", csv_body(csv), ImportMode::Commit)
+        .await
+        .unwrap();
     assert_eq!(
         (result.error_count(), result.summary.time_entries.created),
         (1, 1)

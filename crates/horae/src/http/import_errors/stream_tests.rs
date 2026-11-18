@@ -6,6 +6,7 @@ use horae_core::permissions::catalog::BuiltInProfile;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::jobs::report::CHUNK_BYTES;
 use crate::ops::testing::{assign_profile, revoke};
 use crate::{config::JobPolicy, jobs};
 
@@ -57,7 +58,7 @@ async fn archived_job(pool: &PgPool) -> ArchivedJob {
         EntityType::TimeEntry,
         &RowOutcome::Errored {
             source_location: "CSV row 1".into(),
-            reason: "x".repeat(super::CHUNK_BYTES * 33),
+            reason: "x".repeat(CHUNK_BYTES * 33),
             person: None,
             entry_kind: None,
         },
@@ -249,7 +250,7 @@ async fn download_preparation_is_tenant_bound_and_releases_failed_transactions(p
         let response = super::download_response(&single, job.org, job.actor, job.id)
             .await
             .unwrap();
-        let body = axum::body::to_bytes(response.into_body(), super::CHUNK_BYTES * 40)
+        let body = axum::body::to_bytes(response.into_body(), CHUNK_BYTES * 40)
             .await
             .unwrap();
         let errors: Vec<RowError> = serde_json::Deserializer::from_slice(&body)
@@ -482,10 +483,7 @@ async fn download_keeps_its_snapshot_when_later_progress_archives_the_inline_tai
 async fn download_reports_missing_fragments_after_its_buffered_page(pool: PgPool) {
     let job = archived_job(&pool).await;
     let mut stream = job.body(&pool).into_data_stream();
-    assert_eq!(
-        stream.next().await.unwrap().unwrap().len(),
-        super::CHUNK_BYTES
-    );
+    assert_eq!(stream.next().await.unwrap().unwrap().len(), CHUNK_BYTES);
 
     let mut tx = pool.begin().await.unwrap();
     assert!(
@@ -505,10 +503,7 @@ async fn download_reports_missing_fragments_after_its_buffered_page(pool: PgPool
     jobs::cleanup(&pool).await.unwrap();
 
     for _ in 1..16 {
-        assert_eq!(
-            stream.next().await.unwrap().unwrap().len(),
-            super::CHUNK_BYTES
-        );
+        assert_eq!(stream.next().await.unwrap().unwrap().len(), CHUNK_BYTES);
     }
     let error = stream
         .next()
@@ -547,16 +542,10 @@ async fn download_reads_only_when_consumed_and_releases_its_connection(pool: PgP
     let mut stream = job.body(&pool).into_data_stream();
     assert_eq!(acquisitions.load(Ordering::SeqCst), 0);
     for _ in 0..16 {
-        assert_eq!(
-            stream.next().await.unwrap().unwrap().len(),
-            super::CHUNK_BYTES
-        );
+        assert_eq!(stream.next().await.unwrap().unwrap().len(), CHUNK_BYTES);
         assert_eq!(acquisitions.load(Ordering::SeqCst), 1);
     }
-    assert_eq!(
-        stream.next().await.unwrap().unwrap().len(),
-        super::CHUNK_BYTES
-    );
+    assert_eq!(stream.next().await.unwrap().unwrap().len(), CHUNK_BYTES);
     assert_eq!(acquisitions.load(Ordering::SeqCst), 2);
     drop(stream);
     tokio::time::timeout(Duration::from_secs(5), pool.close())

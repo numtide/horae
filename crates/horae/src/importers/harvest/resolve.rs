@@ -356,7 +356,7 @@ pub(super) async fn free_harvest_id(
     if harvest_id <= handed_out.saturating_add(HARVEST_ID_GUARD) {
         return Ok(None);
     }
-    let holder = crate::harvest::ids::record(&mut *conn, org_id, entity.into(), harvest_id).await?;
+    let holder = super::ids::record(&mut *conn, org_id, entity.into(), harvest_id).await?;
     Ok(holder.is_none().then_some(harvest_id))
 }
 

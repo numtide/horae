@@ -48,7 +48,7 @@ async fn api_id(
     let horae_id = provenance::lookup(pool, org, entity, harvest_import_id)
         .await
         .unwrap()?;
-    Some(crate::harvest::ids::number(pool, entity.into(), horae_id).await)
+    Some(crate::importers::harvest::ids::number(pool, entity.into(), horae_id).await)
 }
 
 /// Native records that already have each of the import's Harvest ids.

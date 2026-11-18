@@ -1,5 +1,9 @@
 use super::{finalize_draft_record, save_draft_record};
-use crate::importers::harvest::{VecSource, csv_source::import_body, run_import};
+use crate::importers::harvest::{
+    VecSource,
+    csv_source::{csv_body, import_body},
+    run_import,
+};
 use crate::models::project_creation::{
     FeeMode, InvoiceDefaultsInput, MilestoneInput, ProjectForm, ProjectMemberInput,
     ProjectTaskInput, SecondTaxInput, TaskAccess, TaskSource,
@@ -22,15 +26,9 @@ async fn imported_catalog_rate_cannot_be_relabelled_as_workspace_currency(pool: 
          2026-09-07,Foreign client,Foreign project,Imported task,{}@test.com,1,Yes,80,USD\n",
         ids.user_id,
     );
-    let report = import_body(
-        &pool,
-        ids.org_id,
-        "EUR",
-        axum::body::Body::from(csv),
-        ImportMode::Commit,
-    )
-    .await
-    .unwrap();
+    let report = import_body(&pool, ids.org_id, "EUR", csv_body(csv), ImportMode::Commit)
+        .await
+        .unwrap();
     assert!(report.row_errors.is_empty(), "{:?}", report.row_errors);
     let task = sqlx::query!(
         "SELECT id, default_rate_cents FROM tasks WHERE org_id = $1 AND name = 'Imported task'",
@@ -306,7 +304,7 @@ async fn imports_preserve_finalized_project_configuration_and_restricted_access(
                             "Date,Client,Project,Project Code,Task,Email,Hours,Billable?,Invoiced?,Billable Rate,Cost Rate,Currency\n\
                              2026-09-07, acme ,Remote rename,CFG-1, dev ,{email},1.25,Yes,Yes,99,999,GBP\n"
                         );
-                        import_body(&pool, ids.org_id, "EUR", axum::body::Body::from(csv), mode)
+                        import_body(&pool, ids.org_id, "EUR", csv_body(csv), mode)
                             .await
                             .unwrap()
                     }

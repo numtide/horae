@@ -45,7 +45,7 @@ async fn large_report_streams_over_http_without_buffering_the_archive(pool: PgPo
     let router = Router::new()
         .route(
             "/api/import/harvest/jobs/{job_id}/errors",
-            get(crate::jobs::report::download),
+            get(crate::http::import_errors::download),
         )
         .route(
             "/test/login/{id}",

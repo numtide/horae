@@ -18,6 +18,7 @@ server = [
   "dep:tokio",
   "dep:chrono-tz",
   "dep:axum",
+  "dep:bytes",
   "dep:tower-http",
   "dep:sqlx",
   "dep:tower-sessions",
@@ -60,6 +61,7 @@ wasm-bindgen = "=0.2.126"
 horae-harvest = { path = "../harvest", optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 axum = { version = "0.8", features = ["macros", "multipart"], optional = true }
+bytes = { version = "1", optional = true }
 tower-http = { version = "0.6", features = [
   "fs",
   "compression-gzip",

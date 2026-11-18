@@ -1,14 +1,17 @@
-//! Exercise the actual HTTP-body/parser/SQL bridge, including incomplete uploads.
+//! Exercise the actual upload-stream/parser/SQL bridge, including incomplete uploads.
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::body::{Body, Bytes};
+use bytes::Bytes;
 use tokio::sync::{Notify, mpsc};
 use tracing::instrument::WithSubscriber;
 use tracing_subscriber::prelude::*;
 
-use super::super::{csv_source::import_body, report::ImportReport};
+use super::super::{
+    csv_source::{CsvBody, csv_body, import_body},
+    report::ImportReport,
+};
 use super::*;
 
 const HEADER: &str = "Date,Client,Project,Task,Hours,Email,Notes\n";
@@ -60,7 +63,7 @@ async fn durable_csv_waits_for_input_without_an_open_transaction(pool: PgPool) {
             let observed = waiting.clone();
             // Requesting another frame follows at least two consumed rows in
             // this batch: the parser cannot enqueue all three into a size-one channel.
-            let body = Body::from_stream(
+            let body = futures_util::StreamExt::boxed(
                 futures_util::stream::once(
                     async move { Ok::<_, std::io::Error>(Bytes::from(source)) },
                 )
@@ -132,7 +135,7 @@ async fn durable_csv_discards_incomplete_preparation_and_resumes_its_checkpoint(
             .await
             .unwrap();
             let (lease, _stop) = jobs::claim_lease_for_test(&pool).await;
-            let body = Body::from_stream(futures_util::stream::iter([
+            let body = futures_util::StreamExt::boxed(futures_util::stream::iter([
                 Ok(Bytes::from(source.clone())),
                 Err(std::io::Error::other("upload connection lost")),
             ]));
@@ -157,7 +160,7 @@ async fn durable_csv_discards_incomplete_preparation_and_resumes_its_checkpoint(
             assert_eq!(job.processed_count, if completed == 0 { 0 } else { 504 });
 
             let report =
-                import_body_with_lease(&pool, org, "USD", Body::from(source), mode, Some(&lease))
+                import_body_with_lease(&pool, org, "USD", csv_body(source), mode, Some(&lease))
                     .await
                     .unwrap();
             assert!(report.reconciles());
@@ -192,12 +195,12 @@ async fn durable_csv_report_metadata_is_bounded_after_recovery(pool: PgPool) {
             &pool,
             org,
             "USD",
-            Body::from(body.clone()),
+            csv_body(body.clone()),
             ImportMode::DryRun,
         )
         .await
         .unwrap();
-        let report = measured_csv_job(&pool, org, Body::from(body), mode).await;
+        let report = measured_csv_job(&pool, org, csv_body(body), mode).await;
         assert_eq!(report.summary.time_entries.errored, 999);
         assert_eq!(report.summary.time_entries.created, 1);
         assert!(report.reconciles());
@@ -263,12 +266,12 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Applied {
     }
 }
 
-fn upload_channel() -> (mpsc::Sender<std::io::Result<Bytes>>, Body) {
+fn upload_channel() -> (mpsc::Sender<std::io::Result<Bytes>>, CsvBody) {
     let (send, receive) = mpsc::channel(1);
     let stream = futures_util::stream::unfold(receive, |mut receive| async {
         receive.recv().await.map(|bytes| (bytes, receive))
     });
-    (send, Body::from_stream(stream))
+    (send, futures_util::StreamExt::boxed(stream))
 }
 
 async fn entry_count(pool: &PgPool, org: Uuid) -> i64 {
@@ -327,7 +330,7 @@ async fn durable_csv_preview_matches_existing_and_new_rows_with_one_connection(p
         &pool,
         org,
         "USD",
-        Body::from(format!("{HEADER}{}", ROW.repeat(600))),
+        csv_body(format!("{HEADER}{}", ROW.repeat(600))),
         ImportMode::Commit,
     )
     .await
@@ -339,15 +342,9 @@ async fn durable_csv_preview_matches_existing_and_new_rows_with_one_connection(p
         new_row.repeat(650),
         ROW.repeat(551)
     );
-    let expected = import_body(
-        &pool,
-        org,
-        "USD",
-        Body::from(csv.clone()),
-        ImportMode::DryRun,
-    )
-    .await
-    .unwrap();
+    let expected = import_body(&pool, org, "USD", csv_body(csv.clone()), ImportMode::DryRun)
+        .await
+        .unwrap();
     assert_eq!(expected.summary.time_entries.skipped, 600);
     assert_eq!(expected.summary.time_entries.created, 1051);
     assert_eq!(expected.summary.time_entries.errored, 1);
@@ -373,7 +370,7 @@ async fn durable_csv_preview_matches_existing_and_new_rows_with_one_connection(p
             &single,
             org,
             "USD",
-            Body::from(csv.clone()),
+            csv_body(csv.clone()),
             ImportMode::DryRun,
             Some(&lease),
         ),
@@ -394,7 +391,7 @@ async fn durable_csv_preview_matches_existing_and_new_rows_with_one_connection(p
         jobs::status(&pool, org, id).await.unwrap().unwrap().status,
         "succeeded"
     );
-    let committed = import_body(&pool, org, "USD", Body::from(csv), ImportMode::Commit)
+    let committed = import_body(&pool, org, "USD", csv_body(csv), ImportMode::Commit)
         .await
         .unwrap();
     assert_eq!(committed.summary, expected.summary);
@@ -434,7 +431,7 @@ async fn durable_csv_preview_crosses_batch_boundaries_without_committing_domain_
             &pool,
             org,
             "USD",
-            Body::from(csv),
+            csv_body(csv),
             ImportMode::DryRun,
             Some(&lease),
         )
@@ -597,16 +594,10 @@ async fn interrupted_csv_batches(pool: PgPool, interruption: BatchInterruption, 
             .processed_count,
         504
     );
-    let report = import_body_with_lease(
-        &pool,
-        org,
-        "USD",
-        Body::from(resumed_csv),
-        mode,
-        Some(&lease),
-    )
-    .await
-    .unwrap();
+    let report =
+        import_body_with_lease(&pool, org, "USD", csv_body(resumed_csv), mode, Some(&lease))
+            .await
+            .unwrap();
     assert_eq!(
         entry_count(&pool, org).await,
         if mode == ImportMode::Commit { 1000 } else { 0 }
@@ -674,7 +665,7 @@ async fn csv_applies_before_eof_but_transport_failure_rolls_back_everything(pool
         &pool,
         org,
         "USD",
-        Body::from(format!("{HEADER}{ROW}")),
+        csv_body(format!("{HEADER}{ROW}")),
         ImportMode::Commit,
     )
     .await
@@ -687,31 +678,19 @@ async fn csv_preview_errors_and_repeated_rows_match_commit_and_reimport(pool: Pg
     let org = seed_org(&pool).await;
     seed_user(&pool, org, "dev@acme.com").await;
     let csv = format!("{HEADER}{ROW}bad-date,A,P,T,1,dev@acme.com,\n{ROW}");
-    let preview = import_body(
-        &pool,
-        org,
-        "USD",
-        Body::from(csv.clone()),
-        ImportMode::DryRun,
-    )
-    .await
-    .unwrap();
+    let preview = import_body(&pool, org, "USD", csv_body(csv.clone()), ImportMode::DryRun)
+        .await
+        .unwrap();
     assert_eq!(entry_count(&pool, org).await, 0);
-    let commit = import_body(
-        &pool,
-        org,
-        "USD",
-        Body::from(csv.clone()),
-        ImportMode::Commit,
-    )
-    .await
-    .unwrap();
+    let commit = import_body(&pool, org, "USD", csv_body(csv.clone()), ImportMode::Commit)
+        .await
+        .unwrap();
     assert_eq!(preview.summary, commit.summary);
     assert_eq!(preview.row_errors, commit.row_errors);
     assert_eq!(commit.summary.time_entries.created, 2);
     assert_eq!(commit.row_errors.len(), 1);
     assert_eq!(commit.row_errors[0].source_location, "CSV line 3");
-    let retry = import_body(&pool, org, "USD", Body::from(csv), ImportMode::Commit)
+    let retry = import_body(&pool, org, "USD", csv_body(csv), ImportMode::Commit)
         .await
         .unwrap();
     assert_eq!(retry.summary.time_entries.created, 0);
@@ -743,7 +722,7 @@ async fn cancelling_a_csv_waiting_for_more_bytes_releases_its_session(pool: PgPo
     tokio::time::timeout(HANG_GUARD, applied.0.notified())
         .await
         .unwrap();
-    let overlap = import_body(&pool, org, "USD", Body::empty(), ImportMode::Commit)
+    let overlap = import_body(&pool, org, "USD", csv_body(Vec::new()), ImportMode::Commit)
         .await
         .unwrap_err();
     assert!(overlap.to_string().contains("already running"), "{overlap}");
@@ -758,7 +737,7 @@ async fn cancelling_a_csv_waiting_for_more_bytes_releases_its_session(pool: PgPo
             &single,
             org,
             "USD",
-            Body::from(format!("{HEADER}{ROW}")),
+            csv_body(format!("{HEADER}{ROW}")),
             ImportMode::Commit,
         )
         .await
@@ -783,7 +762,7 @@ async fn durable_csv_cancel_joins_parser_and_preserves_committed_rows(pool: PgPo
         &pool,
         org,
         "USD",
-        Body::from(format!("{HEADER}{ROW}")),
+        csv_body(format!("{HEADER}{ROW}")),
         ImportMode::Commit,
     )
     .await
@@ -862,7 +841,7 @@ async fn durable_csv_cancel_joins_parser_and_preserves_committed_rows(pool: PgPo
             &pool,
             org,
             "USD",
-            Body::from(csv),
+            csv_body(csv),
             ImportMode::Commit,
             Some(&lease),
         )
@@ -955,7 +934,7 @@ async fn durable_csv_stale_commit_is_fenced_without_a_heartbeat(pool: PgPool) {
         &pool,
         org,
         "USD",
-        Body::from(csv),
+        csv_body(csv),
         ImportMode::Commit,
         Some(&current),
     )
@@ -968,9 +947,9 @@ async fn durable_csv_stale_commit_is_fenced_without_a_heartbeat(pool: PgPool) {
     );
 }
 
-fn scale_body(records: u64, parents: u64) -> Body {
+fn scale_body(records: u64, parents: u64) -> CsvBody {
     let start = chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
-    Body::from_stream(futures_util::stream::iter((0..records.div_ceil(100)).map(
+    futures_util::StreamExt::boxed(futures_util::stream::iter((0..records.div_ceil(100)).map(
         move |page| {
             use std::fmt::Write;
             let mut chunk = if page == 0 {
@@ -1119,24 +1098,34 @@ async fn csv_measurement_pool(pool: &PgPool) -> PgPool {
         .unwrap()
 }
 
-async fn measured_csv_job(pool: &PgPool, org: Uuid, body: Body, mode: ImportMode) -> ImportReport {
+async fn measured_csv_job(
+    pool: &PgPool,
+    org: Uuid,
+    body: CsvBody,
+    mode: ImportMode,
+) -> ImportReport {
     use super::super::{csv_source::import_body_with_lease, job_report};
     use crate::{config::JobPolicy, jobs};
 
     // Include the production upload buffering and database read, not just the
     // streaming parser. Do not retain another copy while the worker is running.
-    let upload = axum::body::to_bytes(body, 50 * 1024 * 1024).await.unwrap();
+    let upload =
+        futures_util::TryStreamExt::try_fold(body, Vec::new(), |mut upload, chunk| async move {
+            upload.extend_from_slice(&chunk);
+            Ok(upload)
+        })
+        .await
+        .unwrap();
     let id = jobs::enqueue_csv(
         pool,
         org,
         mode,
-        upload.to_vec(),
+        upload,
         &Uuid::now_v7().to_string(),
         JobPolicy { max_attempts: 1 },
     )
     .await
     .unwrap();
-    drop(upload);
     // Prior completed jobs remain valid; only subsequent transitions fail.
     sqlx::query!(
         "ALTER TABLE horae_jobs ADD CONSTRAINT reject_job_completion CHECK (status <> 'succeeded') NOT VALID"
@@ -1168,15 +1157,9 @@ async fn measured_csv_job(pool: &PgPool, org: Uuid, body: Body, mode: ImportMode
             )
             .fetch_one(pool)
             .await?;
-            let report = import_body_with_lease(
-                pool,
-                org,
-                "USD",
-                Body::from(upload.body),
-                mode,
-                Some(&lease),
-            )
-            .await?;
+            let report =
+                import_body_with_lease(pool, org, "USD", csv_body(upload.body), mode, Some(&lease))
+                    .await?;
             job_report(&report)
         })
         .await
@@ -1269,15 +1252,16 @@ async fn csv_sql_backpressure_stops_reading_later_input_rows(pool: PgPool) {
     let read = Arc::new(AtomicUsize::new(0));
     let progress = Arc::new(Notify::new());
     let (observed, notice) = (read.clone(), progress.clone());
-    let body = Body::from_stream(futures_util::stream::iter((0..100).map(move |index| {
-        observed.fetch_add(1, Ordering::Release);
-        notice.notify_one();
-        Ok::<_, std::io::Error>(Bytes::from(if index == 0 {
-            format!("{HEADER}{ROW}")
-        } else {
-            ROW.to_owned()
-        }))
-    })));
+    let body =
+        futures_util::StreamExt::boxed(futures_util::stream::iter((0..100).map(move |index| {
+            observed.fetch_add(1, Ordering::Release);
+            notice.notify_one();
+            Ok::<_, std::io::Error>(Bytes::from(if index == 0 {
+                format!("{HEADER}{ROW}")
+            } else {
+                ROW.to_owned()
+            }))
+        })));
     let run_pool = pool.clone();
     let run =
         tokio::spawn(
