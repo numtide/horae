@@ -30,6 +30,8 @@ pub mod rates;
 
 #[cfg(test)]
 mod channel_tests;
+#[cfg(test)]
+mod tests;
 
 const NOT_FOUND: &str = "Person not found";
 const WRITE_REQUIRED: &str = "Permission to manage people is required";
@@ -114,6 +116,85 @@ pub async fn list(
          ORDER BY name ASC",
         include_inactive,
         actor.org_id(),
+    )
+    .fetch_all(&mut **tx)
+    .await?)
+}
+
+/// A person as [`list`] shows them, and when their account last changed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PersonRecord {
+    pub id: Uuid,
+    pub name: String,
+    pub email: String,
+    pub active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Which people [`page`] lists, and where its page starts.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PersonQuery {
+    /// Active people, or archived ones (which need `PeopleReadAll`).
+    pub active: bool,
+    /// Only people whose `updated_at` is at or after it.
+    pub updated_since: Option<DateTime<Utc>>,
+    /// The last id of the previous page.
+    pub after: Option<Uuid>,
+    pub limit: u32,
+}
+
+/// The people of [`list`] in `id` order: up to `limit + 1` rows, the extra
+/// one saying that another page follows.
+pub async fn page(
+    tx: &mut Tx,
+    actor: &Actor,
+    query: &PersonQuery,
+) -> Result<Vec<PersonRecord>, OpError> {
+    if !query.active && !actor.has(Permission::PeopleReadAll) {
+        return Err(OpError::forbidden(READ_REQUIRED));
+    }
+    records(tx, actor, None, Some(query)).await
+}
+
+/// One person of [`page`]. An archived person is not found without
+/// `PeopleReadAll`.
+pub async fn get(tx: &mut Tx, actor: &Actor, person_id: Uuid) -> Result<PersonRecord, OpError> {
+    records(tx, actor, Some(person_id), None)
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(|| OpError::not_found(NOT_FOUND))
+}
+
+/// [`list`]'s rules, for one person or a page of them.
+async fn records(
+    tx: &mut Tx,
+    actor: &Actor,
+    person_id: Option<Uuid>,
+    query: Option<&PersonQuery>,
+) -> Result<Vec<PersonRecord>, OpError> {
+    if !actor.is_active() {
+        return Err(OpError::forbidden(ACTIVE_REQUIRED));
+    }
+    Ok(sqlx::query_as!(
+        PersonRecord,
+        r#"SELECT id, name, email, active,
+                  created_at as "created_at: DateTime<Utc>",
+                  updated_at as "updated_at: DateTime<Utc>"
+           FROM users
+           WHERE org_id = $1 AND (active OR $2)
+             AND ($3::uuid IS NULL OR id = $3) AND ($4::bool IS NULL OR active = $4)
+             AND ($5::timestamptz IS NULL OR updated_at >= $5)
+             AND id > $6
+           ORDER BY id LIMIT $7"#,
+        actor.org_id(),
+        actor.has(Permission::PeopleReadAll),
+        person_id,
+        query.map(|query| query.active),
+        query.and_then(|query| query.updated_since) as Option<DateTime<Utc>>,
+        query.and_then(|query| query.after).unwrap_or(Uuid::nil()),
+        query.map_or(1, |query| i64::from(query.limit) + 1),
     )
     .fetch_all(&mut **tx)
     .await?)

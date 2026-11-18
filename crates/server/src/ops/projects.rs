@@ -23,8 +23,8 @@ pub mod editor;
 pub mod form;
 pub mod managers;
 pub mod people;
-mod reads;
-mod task_catalog;
+pub mod reads;
+pub mod task_catalog;
 pub mod task_writes;
 
 pub use budgets::progress as budget_progress;
