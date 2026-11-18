@@ -45,7 +45,7 @@ pub async fn harvest_connect_start() -> Result<String, ServerFnError> {
     // JSON text so arbitrary-precision JSON numbers round-trip as integers.
     let encoded = serde_json::to_string(&attempt).map_err(server_err)?;
     session
-        .insert(crate::http::harvest_oauth::OAUTH_STATE_KEY, &encoded)
+        .insert(horae_api::harvest_oauth::OAUTH_STATE_KEY, &encoded)
         .await
         .map_err(server_err)?;
 

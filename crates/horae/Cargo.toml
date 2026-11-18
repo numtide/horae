@@ -14,6 +14,7 @@ server = [
   "serde_json/arbitrary_precision",
   "horae-core/sqlx",
   "dep:horae-server",
+  "dep:horae-api",
   "dep:horae-harvest",
   "dioxus/server",
   "dep:tokio",
@@ -21,10 +22,7 @@ server = [
   "dep:tower-http",
   "dep:sqlx",
   "dep:tower-sessions",
-  "dep:tower-sessions-sqlx-store",
   "dep:tracing-subscriber",
-  "dep:csv",
-  "dep:rust_xlsxwriter",
 ]
 web = ["dioxus/web", "dep:gloo-timers"]
 
@@ -48,6 +46,7 @@ wasm-bindgen = "=0.2.126"
 
 # server-only
 horae-server = { path = "../server", optional = true }
+horae-api = { path = "../api", optional = true }
 horae-harvest = { path = "../harvest", optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 axum = { version = "0.8", features = ["macros", "multipart"], optional = true }
@@ -65,20 +64,17 @@ sqlx = { version = "0.8", features = [
   "migrate",
 ], optional = true }
 tower-sessions = { version = "0.14", optional = true }
-tower-sessions-sqlx-store = { version = "0.15", features = [
-  "postgres",
-], optional = true }
 tracing-subscriber = { version = "0.3", features = [
   "env-filter",
 ], optional = true }
-csv = { version = "1", optional = true }
-rust_xlsxwriter = { version = "0.80", optional = true }
 
 # web-only
 gloo-timers = { version = "0.3", features = ["futures"], optional = true }
 
 [dev-dependencies]
+csv = "1"
 dioxus-html = { version = "0.7", features = ["serialize"] }
+horae-api = { path = "../api", features = ["test-support"] }
 horae-harvest = { path = "../harvest", features = ["test-support"] }
 horae-server = { path = "../server", features = ["test-support"] }
 # The OAuth tests parse the authorize URL with the `url` it re-exports.

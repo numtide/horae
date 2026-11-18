@@ -3254,13 +3254,13 @@ dependencies = [
  "dioxus-html",
  "futures-util",
  "gloo-timers",
+ "horae-api",
  "horae-core",
  "horae-harvest",
  "horae-server",
  "horae-types",
  "openidconnect",
  "proptest",
- "rust_xlsxwriter",
  "serde",
  "serde_json",
  "serial_test",
@@ -3270,11 +3270,37 @@ dependencies = [
  "tower",
  "tower-http",
  "tower-sessions",
- "tower-sessions-sqlx-store",
  "tracing",
  "tracing-subscriber",
  "uuid",
  "wasm-bindgen",
+ "zip",
+]
+
+[[package]]
+name = "horae-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "csv",
+ "futures-util",
+ "horae-core",
+ "horae-server",
+ "horae-types",
+ "rust_xlsxwriter",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "sqlx",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tower-sessions",
+ "tower-sessions-sqlx-store",
+ "tracing",
+ "uuid",
  "zip",
 ]
 

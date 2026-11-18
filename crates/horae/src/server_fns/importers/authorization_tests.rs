@@ -271,48 +271,48 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
         .register_server_functions()
         .route(
             "/api/reports/export/csv",
-            get(crate::http::reports::export_csv),
+            get(horae_api::exports::export_csv),
         )
         .route(
             "/api/reports/time/grouped/csv",
-            get(crate::http::reports::export_time_groups_csv),
+            get(horae_api::exports::export_time_groups_csv),
         )
         .route(
             "/api/reports/time/grouped/xlsx",
-            get(crate::http::reports::export_time_groups_xlsx),
+            get(horae_api::exports::export_time_groups_xlsx),
         )
         .route(
             "/api/projects/export/csv",
-            get(crate::http::reports::export_projects_csv),
+            get(horae_api::exports::export_projects_csv),
         )
         .route(
             "/api/invoices/{id}/export/csv",
-            get(crate::http::reports::export_invoice_csv),
+            get(horae_api::exports::export_invoice_csv),
         )
         .route(
             "/api/reports/export/xlsx",
-            get(crate::http::reports::export_xlsx),
+            get(horae_api::exports::export_xlsx),
         )
         .route(
             "/api/projects/export/xlsx",
-            get(crate::http::reports::export_projects_xlsx),
+            get(horae_api::exports::export_projects_xlsx),
         )
         .route(
             "/api/invoices/{id}/export/xlsx",
-            get(crate::http::reports::export_invoice_xlsx),
+            get(horae_api::exports::export_invoice_xlsx),
         )
         .route(
             "/api/invoices/{id}/export/pdf",
-            get(crate::http::reports::export_invoice_pdf),
+            get(horae_api::exports::export_invoice_pdf),
         )
         .route(
             "/api/import/harvest/jobs/{job_id}/errors",
-            get(crate::http::import_errors::download),
+            get(horae_api::import_errors::download),
         )
         .route(
             "/test/login/{id}",
             post(|session: Session, Path(id): Path<Uuid>| async move {
-                crate::auth::http::session::set_session_user_id(&session, id)
+                horae_api::session::set_session_user_id(&session, id)
                     .await
                     .unwrap();
                 StatusCode::NO_CONTENT
@@ -329,13 +329,13 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             }),
         )
         .with_state(FullstackState::headless())
-        .merge(crate::http::harvest_oauth::callback_router())
+        .merge(horae_api::harvest_oauth::callback_router())
         .route(
             "/test/harvest-attempt",
             get(|session: Session| async move {
                 axum::Json(
                     session
-                        .get::<String>(crate::http::harvest_oauth::OAUTH_STATE_KEY)
+                        .get::<String>(horae_api::harvest_oauth::OAUTH_STATE_KEY)
                         .await
                         .unwrap()
                         .map(|encoded| {
@@ -401,7 +401,7 @@ async fn job_endpoints_enforce_session_role_and_organization(pool: PgPool) {
             },
         ))
         .layer(
-            crate::auth::http::make_session_layer(pool.clone(), false)
+            horae_api::make_session_layer(pool.clone(), false)
                 .await
                 .unwrap(),
         );

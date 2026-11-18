@@ -47,7 +47,9 @@ perSystem.self.default.overrideAttrs (old: {
     database_test_threads=$((NIX_BUILD_CORES < 8 ? NIX_BUILD_CORES : 8))
     # horae-server: the backend's own tests (operations, jobs, importers, …).
     cargo test -p horae-server -- --test-threads "$database_test_threads"
-    # horae: server functions, HTTP routes, the CLI and the UI.
+    # horae-api: the HTTP routes (exports, import error downloads, /auth/*).
+    cargo test -p horae-api -- --test-threads "$database_test_threads"
+    # horae: server functions, the Harvest API, the CLI and the UI.
     cargo test -p horae --features server -- --test-threads "$database_test_threads"
 
     pg_ctl -D "$PGDATA" stop

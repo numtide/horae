@@ -14,7 +14,7 @@ title = "Horae — Time Tracking"
 
 [web.watcher]
 reload_html = true
-watch_path = ["src", "assets"]
+watch_path = ["src", "assets", "../api/src"]
 
 [web.resource]
 dev.script = []
